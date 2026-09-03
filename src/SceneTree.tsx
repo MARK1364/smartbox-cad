@@ -9,8 +9,8 @@ import { ProjectDocument } from '../A1_core/project-document';
 import { UIController } from '../A1_core/ui-controller';
 import { ContextManager } from '../A1_core/context-manager';
 import { CAMStateStore } from '../C1_cnc/core/cam-state-store';
-import { DrawingProjectExtractor } from '../E2_export/drawing-project-extractor';
-import { CADTreeNode, GrooveFeature2D } from '../E2_export/drawing-types';
+import { DrawingProjectExtractor } from '../E3_export/drawing-project-extractor';
+import { CADTreeNode, GrooveFeature2D } from '../E3_export/drawing-types';
 import { CAD_TREE_START_RENAME } from './module-data/tree-context-menu';
 import { PMIStore } from '../A8_pmi/pmi-data';
 import {

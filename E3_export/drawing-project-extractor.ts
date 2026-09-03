@@ -1,5 +1,5 @@
 /**
- * E2_export - drawing-project-extractor.ts
+ * E3_export - drawing-project-extractor.ts
  * Ekstraktor 100% natywnego drzewa obiektów 3D oraz generator rzutów Multi-Kadrów z wymiarami PMI.
  */
 

@@ -1,5 +1,5 @@
 import { ContextManager } from '../../A1_core/context-manager.js';
-import { DrawingProjectExtractor } from '../../E2_export/drawing-project-extractor.js';
+import { DrawingProjectExtractor } from '../../E3_export/drawing-project-extractor.js';
 import { E3LibraryExtractor } from '../../E3_export';
 import { syncGeometrySnapshots } from '../../E3_export/e3-geometry-snapshot.js';
 import {

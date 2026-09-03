@@ -14,3 +14,5 @@ export * from './e3-3d-scene-engine';
 export * from './e3-multi-viewport-engine';
 export * from './E3Studio';
 export * from './E3MultiStudio';
+export * from './drawing-types';
+export * from './drawing-project-extractor';

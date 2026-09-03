@@ -6,7 +6,7 @@
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer.js';
 import { NestingEngine } from '../../n1_nesting/core/nesting-engine.js';
-import { DrawingProjectExtractor } from '../../E2_export/drawing-project-extractor.js';
+import { DrawingProjectExtractor } from '../../E3_export/drawing-project-extractor.js';
 import { persistProjectSnapshot } from './session';
 import { filterPanelsByScope, filterAccessoriesByScope, filterNestingPartsByScope } from './scope-filter';
 import type {

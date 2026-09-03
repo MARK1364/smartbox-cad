@@ -71,7 +71,6 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('index.html', import.meta.url)),
         nesting: fileURLToPath(new URL('nesting.html', import.meta.url)),
-        drawing: fileURLToPath(new URL('drawing.html', import.meta.url)),
         e3_drawing: fileURLToPath(new URL('e3_drawing.html', import.meta.url)),
         draw: fileURLToPath(new URL('draw.html', import.meta.url)),
         report: fileURLToPath(new URL('report.html', import.meta.url)),

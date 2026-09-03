@@ -27,7 +27,7 @@ import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOpera
 import { ConnectorVisualizer } from '../C2_connectors/connector-visualizer';
 import { isSolverSmartFrameIsolationActive, applyPanelViewSolverVisibility, isSolverTabActive } from '../S2_solver/solver-visibility';
 import { ExportUI, ExportEngine } from '../E1_export';
-import { DrawingProjectExtractor } from '../E2_export';
+import { DrawingProjectExtractor } from '../E3_export';
 import { E3LibraryExtractor } from '../E3_export';
 import { Vec3 } from '../A1_core/cad-math/vec3';
 import { SceneTree } from './SceneTree';
@@ -1469,7 +1469,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             }}
             onClick={() => {
               DrawingProjectExtractor.instance.syncLiveSceneTree();
-              window.open(new URL('./drawing.html', window.location.href).href, '_blank');
+              window.open(new URL('./e3_drawing.html', window.location.href).href, '_blank');
             }}
             title="Otwórz Studio Rysunków 2D (w nowej karcie)"
           >
@@ -1992,27 +1992,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             </div>
             <span className="tab-btn-title">Eksport</span>
             <span className="tab-btn-desc">Rysunki</span>
-          </button>
-
-          {/* Row 2, Item 7: Eksport 2 (E2) - Studio Rysunków 2D */}
-          <button 
-            className="tab-btn" 
-            onClick={() => {
-              DrawingProjectExtractor.instance.syncLiveSceneTree();
-              window.open(new URL('./drawing.html', window.location.href).href, '_blank');
-            }}
-            title="Studio Rysunków 2D — Otwórz dedykowaną podstronę 2D (w nowej karcie)"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Eksport 2</span>
-            <span className="tab-btn-desc">Rysunki 2D</span>
           </button>
 
           {/* Row 2, Item 8: Eksport 3 (E3) - Dedykowana Podstrona Studia Rysunków */}

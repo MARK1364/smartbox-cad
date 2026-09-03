@@ -8,7 +8,7 @@ import { E3LibraryItem } from './e3-library-types';
 import { ContextManager } from '../A1_core/context-manager';
 import { NodeType } from '../A1_core/cad-node/node-type';
 import { CADNode } from '../A1_core/cad-node/cad-node';
-import { DrawingProjectExtractor, LIVE_PROJECT_STORAGE_KEY } from '../E2_export/drawing-project-extractor';
+import { DrawingProjectExtractor, LIVE_PROJECT_STORAGE_KEY } from './drawing-project-extractor';
 import { syncGeometrySnapshots } from './e3-geometry-snapshot';
 
 export const E3_LIBRARY_STORAGE_KEY = 'smartbox_cad_e3_library_v1';

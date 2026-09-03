@@ -1,6 +1,6 @@
 /**
- * E2_export - drawing-types.ts
- * Typy danych dla 2D Drawing Studio z obsługą Multi-Kadrów 3D i wymiarów PMI.
+ * E3_export - drawing-types.ts
+ * Typy danych dla 2D Drawing Studio i E3 z obsługą Multi-Kadrów 3D i wymiarów PMI.
  */
 
 export type PaperFormat =

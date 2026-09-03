@@ -18,7 +18,7 @@ import {
     updateLibraryOperationsById,
 } from '../operacje-apply.js';
 import { pocketFromEdgeDims, snapDimHandleToEdge, dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound } from '../operacje-placement.js';
-import { DrawingProjectExtractor } from '../../E2_export/drawing-project-extractor.js';
+import { DrawingProjectExtractor } from '../../E3_export/drawing-project-extractor.js';
 import '../../A1_core/project-domain.js';
 
 function makePanel(w = 600, h = 720, t = 18) {

@@ -8,7 +8,7 @@
 import type { CuttingPanelContract, AccessoryItem, ContainerScopeItem } from '../../R1_reports/report-data-normalizer';
 import type { NestingPart, ContainerScopeInfo, SheetConfig } from '../../n1_nesting/core/nesting-types';
 import type { CAMFeature } from '../../C1_cnc/dto/cam-dto';
-import type { CADTreeNode } from '../../E2_export/drawing-types';
+import type { CADTreeNode } from '../../E3_export/drawing-types';
 
 export type ModuleId = 'report' | 'nesting' | 'cnc' | 'draw';
 

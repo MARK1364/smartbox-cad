@@ -13,8 +13,8 @@ import {
     E3SavedSheet,
     E3SavedModelSnapshot,
 } from './e3-library-types';
-import { LIVE_PMI_STORAGE_KEY, DrawingProjectExtractor } from '../E2_export/drawing-project-extractor';
-import type { DrawingPMIDimension } from '../E2_export/drawing-types';
+import { LIVE_PMI_STORAGE_KEY, DrawingProjectExtractor } from './drawing-project-extractor';
+import type { DrawingPMIDimension } from './drawing-types';
 import { resolveGeometrySnapshot, type E3PartPose } from './e3-geometry-snapshot';
 
 declare const BABYLON: any;

@@ -11,7 +11,7 @@ import { Vec3 } from '../A1_core/cad-math/vec3';
 import { cadToRender, cadMatrixToRenderMatrix } from '../A1_core/cad-math/coord-system';
 import { nmToMm } from '../A1_core/cad-math/units';
 import { ContextManager } from '../A1_core/context-manager';
-import { toMm } from '../E2_export/drawing-project-extractor';
+import { toMm } from './drawing-project-extractor';
 
 export const E3_GEOMETRY_STORAGE_KEY = 'smartbox_cad_e3_geometry_v1';
 const PROJECT_STORAGE_KEY = 'smartpanel_project_current_v3';

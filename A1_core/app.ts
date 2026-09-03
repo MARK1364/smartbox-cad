@@ -43,7 +43,7 @@ import { attachViewportExtension } from '../S3_scena/viewport-document-extension
 import { attachMaterialsExtension } from '../A7_material/materials-document-extension.js';
 import { attachDrawingsExtension } from './drawings-document-extension.js';
 import { shouldPromoteSubgeometryToEntity } from './selection-mode.js';
-import { DrawingProjectExtractor } from '../E2_export/drawing-project-extractor.js';
+import { DrawingProjectExtractor } from '../E3_export/drawing-project-extractor.js';
 import { showCadTreeContextMenu } from '../src/module-data/tree-context-menu.js';
 declare const BABYLON: any;
 
