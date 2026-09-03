@@ -102,10 +102,10 @@ function BelkaSelectMenu<T extends string>({
 }
 
 const DISPLAY_MODES: SelectOption<DisplayMode>[] = [
-    { id: 'shaded', label: 'Cieniowany', title: 'Cieniowanie powierzchni', itemId: 'toolShaded', icon: <DisplayCubeIcon mode="shaded" /> },
-    { id: 'edges', label: 'Krawędzie', title: 'Cieniowanie z krawędziami', itemId: 'toolEdges', icon: <DisplayCubeIcon mode="edges" /> },
+    { id: 'edges', label: 'Krawędzie', title: 'Cieniowanie z krawędziami (domyślny)', itemId: 'toolEdges', icon: <DisplayCubeIcon mode="edges" /> },
     { id: 'wireframe', label: 'Szkielet', title: 'Tylko krawędzie', itemId: 'toolWireframe', icon: <DisplayCubeIcon mode="wireframe" /> },
     { id: 'xray', label: 'Półprzezroczyste', title: 'Półprzezroczyste bryły', itemId: 'toolXRay', icon: <DisplayCubeIcon mode="xray" /> },
+    { id: 'shaded', label: 'Cieniowany', title: 'Cieniowanie powierzchni', itemId: 'toolShaded', icon: <DisplayCubeIcon mode="shaded" /> },
 ];
 
 const PROJECTION_MODES: SelectOption<ProjectionMode>[] = [

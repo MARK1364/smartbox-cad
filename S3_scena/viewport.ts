@@ -525,11 +525,9 @@ export class Viewport {
         }
 
         if (isEdge) {
-            if (currentMode === 'shaded') {
-                mesh.setEnabled(false);
-            } else {
-                mesh.setEnabled(true);
-            }
+            mesh.setEnabled(true);
+            mesh.isVisible = true;
+            mesh.isPickable = true;
         }
     }
 

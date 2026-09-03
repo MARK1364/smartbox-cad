@@ -55,7 +55,7 @@ function CncStandaloneApp() {
     const [livePanel, setLivePanel] = useState<any>(null);
     const [scene, setScene] = useState<any>(null);
     const [sceneError, setSceneError] = useState<string | null>(null);
-    const [renderMode, setRenderMode] = useState<'shaded' | 'edges' | 'wireframe' | 'xray'>('shaded');
+    const [renderMode, setRenderMode] = useState<'shaded' | 'edges' | 'wireframe' | 'xray'>('edges');
     const [gridVisible, setGridVisible] = useState(true);
     const [lcsVisible, setLcsVisible] = useState(false);
     const [viewMenuOpen, setViewMenuOpen] = useState(false);
