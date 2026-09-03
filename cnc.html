@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartBox CNC — Obróbka formatki</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        #cnc-root { width: 100%; height: 100%; }
+        /* CNC = CAD shell bez drzewa po lewej */
+        body.cnc-page #panel-edycji.cnc-panel-edycji {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0;
+        }
+        body.cnc-page .cnc-panel-edycji-body {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+        }
+        body.cnc-page .cnc-panel-embedded .btn.btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        /* Formularz CAM w tokenach CAD (zamiast Blender N-Panel) */
+        body.cnc-page .cnc-panel-embedded input[type="text"],
+        body.cnc-page .cnc-panel-embedded input[type="number"],
+        body.cnc-page .cnc-panel-embedded select {
+            background: rgba(0, 0, 0, 0.4) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            color: #f8fafc !important;
+            border-radius: 6px !important;
+            font-size: 0.82rem !important;
+        }
+        body.cnc-page .cnc-panel-embedded button:not(.btn) {
+            border-radius: 6px !important;
+            font-weight: 600;
+        }
+        body.cnc-page .view-cube-container {
+            right: 352px;
+        }
+    </style>
+  <script type="module" crossorigin src="./assets/cnc-DvfmLwX5.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/context-manager-BA_Oe6M5.js">
+  <link rel="modulepreload" crossorigin href="./assets/drawing-project-extractor-DGSR4UQV.js">
+  <link rel="modulepreload" crossorigin href="./assets/report-data-normalizer-DxtTDKtk.js">
+  <link rel="modulepreload" crossorigin href="./assets/nesting-engine-CH-InO7u.js">
+  <link rel="modulepreload" crossorigin href="./assets/cad-extract-BV9WkmMn.js">
+  <link rel="modulepreload" crossorigin href="./assets/BelkaDisplayModeMenu-eBTs2-Uh.js">
+  <link rel="modulepreload" crossorigin href="./assets/select-profile-tool-BSDaLvUE.js">
+  <link rel="stylesheet" crossorigin href="./assets/context-manager-Bred-DKP.css">
+</head>
+<body class="cnc-page">
+    <div id="cnc-root"></div>
+</body>
+</html>
