@@ -564,11 +564,11 @@ export class PanelView {
             };
 
             const wMm = getValMm(this.model.width, 600);
-            const hMm = getValMm(this.model.height, isRod ? 25 : 42);
-            const tMm = getValMm(this.model.thickness, isRod ? 25 : 15);
+            const hMm = getValMm(this.model.height, isRod ? 25 : 45);
+            const tMm = getValMm(this.model.thickness, isRod ? 25 : 5);
             
             const len = isRod ? wMm : (wMm < hMm && wMm > 0 ? wMm : tMm);
-            const dia = isRod ? (hMm > 1 && hMm < 500 ? hMm : 25) : (hMm > 1 && hMm < 500 ? hMm : 42);
+            const dia = isRod ? (hMm > 1 && hMm < 500 ? hMm : 25) : (hMm > 1 && hMm < 500 ? hMm : 45);
             
             const cylinderMesh = BABYLON.MeshBuilder.CreateCylinder(`face_cylinder_${this.model.id}`, {
                 height: Math.max(1, len),

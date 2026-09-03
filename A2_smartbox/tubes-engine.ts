@@ -72,8 +72,8 @@ export class TubesEngine extends BaseEngine {
             features: []
         });
 
-        const holderThick = 15;
-        const holderDia = 42;
+        const holderThick = leftRule.thickness !== undefined ? leftRule.thickness : 5;
+        const holderDia = leftRule.diameter !== undefined ? leftRule.diameter : 45;
         parts.push({
             name: leftRule.name || 'Uchwyt_Lewy',
             role: leftRule.role || 'HOLDER',

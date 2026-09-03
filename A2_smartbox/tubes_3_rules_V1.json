@@ -63,8 +63,8 @@
               "object": "Cylinder",
               "role": "HOLDER",
               "report_type": "akcesoria",
-              "thickness": 15,
-              "diameter": 42,
+              "thickness": 5,
+              "diameter": 45,
               "custom_properties": {
                 "material": "Aluminium_Chrome",
                 "shape": "CYLINDER",
@@ -85,8 +85,8 @@
               "object": "Cylinder",
               "role": "HOLDER",
               "report_type": "akcesoria",
-              "thickness": 15,
-              "diameter": 42,
+              "thickness": 5,
+              "diameter": 45,
               "custom_properties": {
                 "material": "Aluminium_Chrome",
                 "shape": "CYLINDER",
@@ -137,7 +137,9 @@
     "ROZETA_FI25": {
       "name": "Rozeta drazka fi25",
       "type": "HOLDER",
-      "brand": "GTV"
+      "brand": "GTV",
+      "diameter": 45,
+      "thickness": 5
     }
   },
   "ui_config": {
