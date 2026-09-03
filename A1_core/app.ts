@@ -143,8 +143,23 @@ function rebuildGeometry(successMessage = 'Gotowy') {
                 if (view.root && view.root.parent) view.root.parent = null;
             }
 
-            const meshData = panelBuilder.build(panel);
-            view.updateMesh(meshData);
+            const roleUpper = String((panel as any)?.role || '').toUpperCase();
+            const nameLower = String(panel.name || '').toLowerCase();
+            const shapeUpper = String((panel as any)?.custom_properties?.shape || (panel as any)?.customProperties?.shape || '').toUpperCase();
+
+            const isCyl = roleUpper === 'TUBE_ROD' || 
+                          roleUpper === 'HOLDER' || 
+                          roleUpper.includes('TUBE') ||
+                          roleUpper.includes('HOLDER') ||
+                          shapeUpper === 'CYLINDER' ||
+                          nameLower.includes('drazek') ||
+                          nameLower.includes('uchwyt') ||
+                          nameLower.includes('rozeta');
+
+            if (!isCyl) {
+                const meshData = panelBuilder.build(panel);
+                view.updateMesh(meshData);
+            }
             view.lastWidth = panel.width;
             view.lastHeight = panel.height;
             view.lastThickness = panel.thickness;

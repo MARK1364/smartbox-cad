@@ -142,6 +142,27 @@ export class PanelView {
      * @param {Object} meshData Słownik {faceName: {positions, indices, normals}}
      */
     updateMesh(meshData) {
+        const roleUpper = String(this.model?.role || '').toUpperCase();
+        const nameLower = String(this.model?.name || '').toLowerCase();
+        const shapeUpper = String(this.model?.custom_properties?.shape || this.model?.customProperties?.shape || '').toUpperCase();
+
+        const isCylinder = roleUpper === 'TUBE_ROD' || 
+                           roleUpper === 'HOLDER' || 
+                           roleUpper.includes('TUBE') || 
+                           roleUpper.includes('HOLDER') || 
+                           shapeUpper === 'CYLINDER' || 
+                           nameLower.includes('drazek') || 
+                           nameLower.includes('uchwyt') || 
+                           nameLower.includes('rozeta');
+
+        if (isCylinder) {
+            const cyl = this.faceMeshes['cylinder_body'];
+            if (!cyl || cyl.isDisposed()) {
+                this._rebuildMeshes();
+            }
+            return;
+        }
+
         this._disposeCurrentMeshes();
 
         for (const [faceName, dataRaw] of Object.entries(meshData)) {

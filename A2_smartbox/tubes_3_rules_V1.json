@@ -52,6 +52,7 @@
               "diameter": 25,
               "custom_properties": {
                 "material": "Aluminium_Chrome",
+                "shape": "CYLINDER",
                 "is_smartbox_child": true
               }
             },
@@ -64,6 +65,11 @@
               "report_type": "akcesoria",
               "thickness": 15,
               "diameter": 42,
+              "custom_properties": {
+                "material": "Aluminium_Chrome",
+                "shape": "CYLINDER",
+                "is_smartbox_child": true
+              },
               "features": [
                 {
                   "type": "Hardware_Instance",
@@ -81,6 +87,11 @@
               "report_type": "akcesoria",
               "thickness": 15,
               "diameter": 42,
+              "custom_properties": {
+                "material": "Aluminium_Chrome",
+                "shape": "CYLINDER",
+                "is_smartbox_child": true
+              },
               "features": [
                 {
                   "type": "Hardware_Instance",
