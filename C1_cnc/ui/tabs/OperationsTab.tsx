@@ -181,10 +181,19 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
                             <div>
                                 <label className="block text-gray-400 mb-1">Głębokość obróbki (Z mm):</label>
                                 <input
-                                    type="number"
+                                    type="text"
+                                    inputMode="decimal"
                                     className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white font-mono"
-                                    value={tempFeatureEdit.depth || 18}
-                                    onChange={(e) => setTempFeatureEdit({ ...tempFeatureEdit, depth: parseFloat(e.target.value) || 0 })}
+                                    value={tempFeatureEdit.depth ?? 18}
+                                    onChange={(e) => {
+                                        const raw = e.target.value;
+                                        if (raw === '' || raw === '-') {
+                                            setTempFeatureEdit({ ...tempFeatureEdit, depth: raw as any });
+                                        } else {
+                                            const val = parseFloat(raw);
+                                            setTempFeatureEdit({ ...tempFeatureEdit, depth: isNaN(val) ? 0 : val });
+                                        }
+                                    }}
                                 />
                             </div>
 

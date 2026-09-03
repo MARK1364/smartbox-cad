@@ -1143,10 +1143,18 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', alignItems: 'center' }}>
                                 <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>Głębokość / Z (mm)</label>
                                 <input 
-                                    type="number" 
-                                    step="0.5"
+                                    type="text" 
+                                    inputMode="decimal"
                                     value={tempFeatureEdit.depth ?? 0}
-                                    onChange={(e) => setTempFeatureEdit({ ...tempFeatureEdit, depth: parseFloat(e.target.value) || 0 })} 
+                                    onChange={(e) => {
+                                        const raw = e.target.value;
+                                        if (raw === '' || raw === '-') {
+                                            setTempFeatureEdit({ ...tempFeatureEdit, depth: raw as any });
+                                        } else {
+                                            const val = parseFloat(raw);
+                                            setTempFeatureEdit({ ...tempFeatureEdit, depth: isNaN(val) ? 0 : val });
+                                        }
+                                    }} 
                                     style={{ background: '#333', border: '1px solid #222', color: '#eee', padding: '4px', fontSize: '11px', borderRadius: '3px', textAlign: 'center' }} 
                                 />
                             </div>
