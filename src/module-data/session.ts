@@ -79,7 +79,8 @@ export function readModuleSession<T>(module: ModuleId): T | null {
 }
 
 export function openModulePage(module: ModuleId): Window | null {
-    const opened = window.open(MODULE_PAGES[module], MODULE_WINDOW_NAMES[module]);
+    const pageUrl = new URL(MODULE_PAGES[module], window.location.href).href;
+    const opened = window.open(pageUrl, MODULE_WINDOW_NAMES[module]);
     getModuleWindowStore()[module] = opened;
     return opened;
 }
