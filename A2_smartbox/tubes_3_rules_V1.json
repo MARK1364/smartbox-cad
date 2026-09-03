@@ -62,7 +62,8 @@
               "object": "Cylinder",
               "role": "HOLDER",
               "report_type": "akcesoria",
-              "thickness": 18,
+              "thickness": 15,
+              "diameter": 42,
               "features": [
                 {
                   "type": "Hardware_Instance",
@@ -78,7 +79,8 @@
               "object": "Cylinder",
               "role": "HOLDER",
               "report_type": "akcesoria",
-              "thickness": 18,
+              "thickness": 15,
+              "diameter": 42,
               "features": [
                 {
                   "type": "Hardware_Instance",
