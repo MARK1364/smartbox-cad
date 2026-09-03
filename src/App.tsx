@@ -370,9 +370,12 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   mesh.metadata?.type === 'c2_connector_symbol'
               );
               if (isConnectorSymbol) {
-                  mesh.setEnabled(!isolate);
-                  mesh.visibility = isolate ? 0.0 : 1.0;
-                  mesh.isVisible = !isolate;
+                  const currentMode = (ContextManager.instance as any).viewport?.currentRenderMode || renderMode || 'edges';
+                  const showInMode = currentMode === 'wireframe' || currentMode === 'xray';
+                  const shouldShow = !isolate && showInMode;
+                  mesh.setEnabled(shouldShow);
+                  mesh.visibility = shouldShow ? 1.0 : 0.0;
+                  mesh.isVisible = shouldShow;
                   return;
               }
 

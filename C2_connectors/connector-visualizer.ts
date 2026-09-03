@@ -177,7 +177,7 @@ export class ConnectorVisualizer {
         mat.zOffset = -3;
         mesh.material = mat;
         mesh.isPickable = false;
-        mesh.renderingGroupId = 1;
+        mesh.renderingGroupId = 0;
         this._eligibleMeshes.push(mesh);
 
         if (withEdge) {
@@ -186,7 +186,7 @@ export class ConnectorVisualizer {
             const lines = BABYLON.MeshBuilder.CreateLines('c2_patch_edge', { points: linePts }, scene);
             lines.color = new BABYLON.Color3(COLOR_EDGE.r, COLOR_EDGE.g, COLOR_EDGE.b);
             lines.isPickable = false;
-            lines.renderingGroupId = 1;
+            lines.renderingGroupId = 0;
             this._eligibleMeshes.push(lines);
         }
     }
@@ -223,7 +223,7 @@ export class ConnectorVisualizer {
         mat.emissiveColor = new BABYLON.Color3(col.r * 0.35, col.g * 0.35, col.b * 0.35);
         cyl.material = mat;
         cyl.isPickable = false;
-        cyl.renderingGroupId = 1;
+        cyl.renderingGroupId = 0;
         cyl.metadata = { type: 'c2_connector_symbol' };
         this._connectorMeshes.push(cyl);
     }

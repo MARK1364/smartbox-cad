@@ -529,6 +529,16 @@ export class Viewport {
             mesh.isVisible = true;
             mesh.isPickable = true;
         }
+
+        const isConnectorSymbol = name.startsWith('c2_conn') || 
+                                  name.startsWith('c2_patch') || 
+                                  mesh.metadata?.type === 'c2_connector_symbol';
+        if (isConnectorSymbol) {
+            const showInMode = currentMode === 'wireframe' || currentMode === 'xray';
+            mesh.setEnabled(showInMode);
+            mesh.visibility = showInMode ? 1.0 : 0.0;
+            mesh.isVisible = showInMode;
+        }
     }
 
     /**
