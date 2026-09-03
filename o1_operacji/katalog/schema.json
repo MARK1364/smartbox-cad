@@ -1,0 +1,22 @@
+{
+  "$id": "web/o1_operacji/katalog/schema.json",
+  "title": "Biblioteka operacji na formatce (O1)",
+  "description": "Przepisy wcięć / kieszeni / wycięć. JSON jest źródłem prawdy. Instancja ląduje na PanelModel.features (source=library). Jednostki liniowe: metry.",
+  "units": "m",
+  "kinds": ["POCKET", "THROUGH"],
+  "fill": ["none", "glass"],
+  "face_hint": ["OUTER", "INNER", "ANY"],
+  "item": {
+    "id": "string — stabilny klucz, ten sam co feature.params.library_id",
+    "name": "string — nazwa w UI i drzewie",
+    "kind": "POCKET (wgłębienie) | THROUGH (na wylot)",
+    "placement": "frame (odsadzenia l/r/t/b) | edge_dims (prostokąt + dwie linie do krawędzi jak Creo)",
+    "insets": "l/r/t/b od krawędzi ściany (metry) — asocjacyjne przy zmianie W/H; dla frame",
+    "size": "w/h prostokąta (metry) — dla edge_dims",
+    "from": "u=left|right, v=bottom|top, du/dv odległości od krawędzi do środka prostokąta (metry)",
+    "depth": "głębokość kieszeni (metry); ignorowane gdy through=true",
+    "through": "true = głębokość = grubość płyty",
+    "fill": "none | glass",
+    "face_hint": "OUTER=FACE_Z_MINUS, INNER=FACE_Z_PLUS, ANY=wybrana ściana"
+  }
+}

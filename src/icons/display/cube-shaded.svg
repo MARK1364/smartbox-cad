@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Kostka cieniowana -->
+  <path d="M12 2.8 L20.6 7.6 L12 12.4 L3.4 7.6 Z" fill="#f1f5f9"/>
+  <path d="M3.4 7.6 L12 12.4 L12 21.2 L3.4 16.4 Z" fill="#94a3b8"/>
+  <path d="M20.6 7.6 L12 12.4 L12 21.2 L20.6 16.4 Z" fill="#64748b"/>
+  <path d="M12 3.6 L18.8 7.6 L12 11.4 L5.2 7.6 Z" fill="#ffffff" fill-opacity="0.28"/>
+</svg>

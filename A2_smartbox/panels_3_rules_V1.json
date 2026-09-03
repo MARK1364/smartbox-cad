@@ -1,0 +1,443 @@
+{
+  "metadata": {
+    "module_type": "SMART_BOX_PANELS",
+    "version": "3.0.0",
+    "side_references_smartbox": "OUTER"
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "LEFT_SIDE_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+            "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        },
+      "RIGHT_SIDE_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+            "wcs_axis_directions": { "X": "-", "Y": "+", "Z": "+" }
+        },
+        "TOP_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+            "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        },
+        "BOTTOM_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+            "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Blendy_SB",
+      "type": "Assembly",
+      "subcomponents": {
+        "PANEL_LEFT": {
+          "name": "Blenda_lewa",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "LEFT_SIDE_PANEL",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            90.0,
+            0.0,
+            -90.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        },
+        "PANEL_RIGHT": {
+          "name": "Blenda_prawa",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "RIGHT_SIDE_PANEL",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            90.0,
+            0.0,
+            -90.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        },
+        "PANEL_TOP": {
+          "name": "Blenda_gora",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "TOP_PANEL",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        },
+        "PANEL_BOTTOM": {
+          "name": "Panel_Cokol",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "BOTTOM_PANEL",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            90.0,
+            0.0,
+            0.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        }
+      }
+    }
+  },
+  "machining_library": {},
+  "hardware_library": {},
+  "ui_config": {
+    "panel": {
+      "label": {
+        "pl": "Ustawienia Blend V2",
+        "en": "Panel Settings V2",
+        "de": "Blenden Einstellungen V2"
+      },
+      "parent": "VIEW3D_PT_SmartBox_Core",
+      "box_type_filter": "PANELS"
+    },
+    "fields": {
+      "side_panel_mode": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Montaż blend",
+          "en": "Panel mount mode",
+          "de": "Blenden Montage"
+        },
+        "tooltip": {
+          "pl": "Określa zakres wysokości blendy bocznej",
+          "en": "Defines side panel height range"
+        },
+        "items": {
+          "FULL": {
+            "pl": "Cokół+korpus+blenda_G",
+            "en": "Plinth+body+top"
+          },
+          "KORPUS_BLENDA_G": {
+            "pl": "Korpus+blenda_G",
+            "en": "Body+top"
+          },
+          "COKOL_KORPUS": {
+            "pl": "Cokół+Korpus",
+            "en": "Plinth+body"
+          },
+          "KORPUS": {
+            "pl": "Korpus",
+            "en": "Body only"
+          }
+        },
+        "default": "FULL"
+      },
+      "enable_left": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Blenda lewa",
+          "en": "Left panel",
+          "de": "Linke Blende"
+        },
+        "tooltip": {
+          "pl": "Włącz blendę lewą",
+          "en": "Enable left panel"
+        },
+        "default": true,
+        "row": "left_panel_row"
+      },
+      "override_rear_left": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Auto",
+          "en": "Auto"
+        },
+        "tooltip": {
+          "pl": "Automatyczna głębokość blendy lewej",
+          "en": "Auto depth for left panel"
+        },
+        "default": true,
+        "row": "left_panel_row",
+        "show_if": {
+          "field": "enable_left",
+          "value": true
+        }
+      },
+      "panel_depth_left": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Głębokość lewa",
+          "en": "Left depth",
+          "de": "Linke Tiefe"
+        },
+        "default": 0.1,
+        "min": 0.05,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "override_rear_left",
+          "value": false
+        }
+      },
+      "enable_right": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Blenda prawa",
+          "en": "Right panel",
+          "de": "Rechte Blende"
+        },
+        "default": true,
+        "row": "right_panel_row"
+      },
+      "override_rear_right": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Auto",
+          "en": "Auto"
+        },
+        "default": true,
+        "row": "right_panel_row",
+        "show_if": {
+          "field": "enable_right",
+          "value": true
+        }
+      },
+      "panel_depth_right": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Głębokość prawa",
+          "en": "Right depth"
+        },
+        "default": 0.1,
+        "min": 0.05,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "override_rear_right",
+          "value": false
+        }
+      },
+      "enable_top": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Blenda górna",
+          "en": "Top panel",
+          "de": "Obere Blende"
+        },
+        "default": true,
+        "row": "top_panel_row"
+      },
+      "override_rear_top": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Auto",
+          "en": "Auto"
+        },
+        "default": true,
+        "row": "top_panel_row",
+        "show_if": {
+          "field": "enable_top",
+          "value": true
+        }
+      },
+      "panel_depth_top": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Głębokość górna",
+          "en": "Top depth"
+        },
+        "default": 0.1,
+        "min": 0.05,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "override_rear_top",
+          "value": false
+        }
+      },
+      "enable_bottom": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Cokół",
+          "en": "Plinth",
+          "de": "Sockel"
+        },
+        "default": true
+      },
+      "plinth_height": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wysokość cokołu",
+          "en": "Plinth height",
+          "de": "Sockelhöhe"
+        },
+        "tooltip": {
+          "pl": "Wysokość cokołu w metrach",
+          "en": "Plinth height in meters"
+        },
+        "default": 0.097,
+        "min": 0.05,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "enable_bottom",
+          "value": true
+        }
+      },
+      "plinth_recess": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Cofnięcie cokołu",
+          "en": "Plinth recess",
+          "de": "Sockelrücksprung"
+        },
+        "default": 0.02,
+        "min": 0.0,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "enable_bottom",
+          "value": true
+        }
+      },
+      "plinth_gap": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Szczelina cokołu",
+          "en": "Plinth gap",
+          "de": "Sockelspalt"
+        },
+        "default": 0.003,
+        "min": 0.0,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "enable_bottom",
+          "value": true
+        }
+      }
+    },
+    "operators": {
+      "generate": {
+        "bl_idname": "object.generate_panels_v1",
+        "label": {
+          "pl": "Generuj / Odśwież",
+          "en": "Generate / Refresh",
+          "de": "Generieren / Aktualisieren"
+        },
+        "icon": "FILE_REFRESH"
+      }
+    }
+  },
+  "messages": {
+    "hints": {
+      "STEP_1_SELECT_BASE": {
+        "pl": "Krok 1: Zaznacz moduły, do których chcesz dodać blendy.",
+        "en": "Step 1: Select the modules to which you want to add panels."
+      },
+      "STEP_2_CONFIGURE": {
+        "pl": "Krok 2: Określ rodzaj blend (boczna, górna, cokół).",
+        "en": "Step 2: Specify the panel type (side, top, plinth)."
+      },
+      "STEP_3_APPLY": {
+        "pl": "Krok 3: Kliknij 'Generuj Blendy'.",
+        "en": "Step 3: Click 'Generate Panels'."
+      }
+    }
+  }
+}

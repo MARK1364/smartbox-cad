@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Szkielet: tylko 9 widocznych krawędzi, bez ścian -->
+  <g stroke="#e2e8f0" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2.8 L3.4 7.6"/>
+    <path d="M12 2.8 L20.6 7.6"/>
+    <path d="M3.4 7.6 L12 12.4"/>
+    <path d="M20.6 7.6 L12 12.4"/>
+    <path d="M3.4 7.6 L3.4 16.4"/>
+    <path d="M20.6 7.6 L20.6 16.4"/>
+    <path d="M12 12.4 L12 21.2"/>
+    <path d="M3.4 16.4 L12 21.2"/>
+    <path d="M20.6 16.4 L12 21.2"/>
+  </g>
+</svg>

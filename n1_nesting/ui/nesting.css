@@ -1,0 +1,618 @@
+/* Nesting — layout CAD: workspace lewo, panel edycji prawo */
+
+.nesting-app-page {
+    --bg-main: #212121;
+    --bg-workspace: #ebeef2; /* jak scene.clearColor 0.92/0.93/0.95 */
+    --bg-panel: rgba(43, 43, 43, 0.95);
+    --bg-panel-hover: rgba(53, 53, 53, 0.98);
+    --text-main: #e2e8f0;
+    --text-muted: #94a3b8;
+    --text-workspace: #334155;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-medium: rgba(255, 255, 255, 0.15);
+    --success: #10b981;
+    --error: #ef4444;
+    --board-bg: #d1d5db;
+    --part-bg: rgba(59, 130, 246, 0.28);
+    --part-border: rgba(37, 99, 235, 0.9);
+    --panel-width: 340px;
+    --radius: 10px;
+
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    background-color: var(--bg-workspace);
+    color: var(--text-main);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Panel edycji — prawa strona (jak #panel-edycji w CAD) */
+.nesting-app-page .sidebar,
+.nesting-app-page .panel-edycji,
+.nesting-app-page .nesting-panel-edycji {
+    order: 2;
+    width: var(--panel-width);
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin: 12px 12px 12px 0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    z-index: 10;
+    overflow: hidden;
+    max-height: calc(100% - 24px);
+}
+
+.nesting-form-header {
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.nesting-form-header h2 {
+    margin: 0 0 4px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.01em;
+}
+
+.nesting-form-header .subtitle {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.nesting-app-page .sidebar > .panel,
+.nesting-app-page .sidebar > .actions,
+.nesting-app-page .sidebar > .status-msg {
+    margin-left: 12px;
+    margin-right: 12px;
+}
+
+.nesting-app-page .sidebar > .panel:first-of-type {
+    margin-top: 12px;
+}
+
+.nesting-app-page .panel {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.nesting-app-page .panel h3 {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.45px;
+    font-weight: 600;
+}
+
+.nesting-machine-toggle {
+    display: flex;
+    background: var(--bg-main);
+    border: 1px solid var(--border-medium);
+    border-radius: 6px;
+    padding: 3px;
+    gap: 3px;
+}
+
+.nesting-machine-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 7px 8px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.nesting-machine-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+.nesting-machine-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+}
+
+.nesting-app-page .input-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+}
+
+.nesting-app-page .input-group:last-child {
+    margin-bottom: 0;
+}
+
+.nesting-app-page .input-group label {
+    font-size: 0.72rem;
+    margin-bottom: 4px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.nesting-app-page .input-group input,
+.nesting-app-page .input-group select,
+.nesting-inline-select {
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-medium);
+    color: var(--text-main);
+    padding: 7px 9px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.82rem;
+    transition: border-color 0.15s;
+}
+
+.nesting-app-page .input-group input:focus,
+.nesting-app-page .input-group select:focus,
+.nesting-inline-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.nesting-app-page .row {
+    display: flex;
+    gap: 8px;
+}
+
+.nesting-app-page .row .input-group {
+    flex: 1;
+}
+
+.nesting-app-page .mt-2 {
+    margin-top: 6px;
+}
+
+.nesting-app-page .list-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 160px;
+    margin-bottom: 10px;
+}
+
+.nesting-app-page .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 0;
+    border: none;
+}
+
+.nesting-app-page .panel-header h3 {
+    margin: 0;
+}
+
+.nesting-app-page .btn-icon {
+    background: var(--accent);
+    color: white;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.nesting-app-page .btn-icon:hover {
+    background: var(--accent-hover);
+}
+
+.nesting-app-page .table-container {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-main);
+    min-height: 0;
+}
+
+.nesting-app-page .table-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.nesting-app-page .table-container::-webkit-scrollbar-thumb {
+    background: var(--border-medium);
+    border-radius: 3px;
+}
+
+.nesting-app-page .excel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+
+.nesting-app-page .excel-table th {
+    background: rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    padding: 6px 4px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.nesting-app-page .excel-table td {
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    padding: 0;
+}
+
+.nesting-app-page .excel-table input,
+.nesting-app-page .excel-table select {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    padding: 5px 3px;
+    font-family: inherit;
+    font-size: 0.75rem;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.nesting-app-page .excel-table input[type="number"] {
+    text-align: right;
+    -moz-appearance: textfield;
+}
+
+.nesting-app-page .excel-table input[type="number"]::-webkit-outer-spin-button,
+.nesting-app-page .excel-table input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.nesting-app-page .excel-table input:focus,
+.nesting-app-page .excel-table select:focus {
+    background: rgba(59, 130, 246, 0.12);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.nesting-app-page .excel-table tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.nesting-app-page .btn-remove-row {
+    background: transparent;
+    border: none;
+    color: #f87171;
+    cursor: pointer;
+    font-size: 1rem;
+    width: 100%;
+    padding: 4px 0;
+}
+
+.nesting-app-page .actions {
+    flex-shrink: 0;
+    margin-bottom: 8px;
+}
+
+.nesting-app-page .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.nesting-app-page .btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.nesting-app-page .btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.nesting-app-page .btn-secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-main);
+    border: 1px solid var(--border-medium);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.nesting-app-page .btn-secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.nesting-app-page .btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.nesting-app-page .status-msg {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    min-height: 1.2em;
+    margin-bottom: 12px;
+    padding: 0 2px;
+}
+
+.nesting-app-page .status-msg.success {
+    color: var(--success);
+}
+
+.nesting-app-page .status-msg.error {
+    color: var(--error);
+}
+
+/* Workspace — lewa strona (tło jak scena CAD) */
+.nesting-app-page .workspace {
+    order: 1;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-workspace);
+}
+
+.nesting-app-page .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.55);
+}
+
+.nesting-app-page .stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.nesting-app-page .stats strong {
+    color: #1e293b;
+}
+
+.nesting-app-page .boards-container {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: flex-start;
+    background: var(--bg-workspace);
+}
+
+.nesting-app-page .board-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.nesting-app-page .board-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.board-mat-badge {
+    margin-left: 8px;
+    background: rgba(37, 99, 235, 0.12);
+    color: #1d4ed8;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.nesting-app-page .part-edit-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 820px;
+    max-width: 100%;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(37, 99, 235, 0.35);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: #1e293b;
+}
+
+.nesting-app-page .board-stage {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+
+.nesting-app-page .board-labels-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: 6px;
+}
+
+.nesting-app-page .nesting-html-label {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    box-sizing: border-box;
+    padding: 2px;
+    overflow: hidden;
+}
+
+.nesting-app-page .nesting-html-label-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.15;
+    max-width: 100%;
+    color: #111;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+}
+
+.nesting-app-page .nesting-html-label-project {
+    color: #222;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.nesting-app-page .nesting-html-label-panel {
+    color: #111;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.nesting-app-page .nesting-html-label-dims {
+    color: #333;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.nesting-app-page .board-svg {
+    background: var(--board-bg);
+    border: 1px solid rgba(15, 23, 42, 0.18);
+    border-radius: 6px;
+    display: block;
+    transform: none !important;
+}
+
+.nesting-app-page .board-bg {
+    fill: #c4c9d1;
+}
+
+.nesting-app-page .board-trim {
+    fill: none;
+    stroke: rgba(15, 23, 42, 0.28);
+    stroke-dasharray: 8 6;
+    stroke-width: 2;
+}
+
+.nesting-app-page .part-rect {
+    fill: var(--part-bg);
+    stroke: var(--part-border);
+    stroke-width: 2;
+}
+
+.nesting-app-page .part-rect.selected {
+    fill: rgba(37, 99, 235, 0.45);
+    stroke: #1d4ed8;
+    stroke-width: 3;
+}
+
+.nesting-app-page .part-rect.colliding {
+    fill: rgba(239, 68, 68, 0.35);
+    stroke: #dc2626;
+}
+
+.nesting-app-page .board-svg text {
+    fill: #111111;
+    stroke: none !important;
+    paint-order: normal;
+    text-rendering: geometricPrecision;
+    shape-rendering: geometricPrecision;
+}
+
+.nesting-app-page .svg-text {
+    fill: #111111;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: 700;
+    pointer-events: none;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    stroke: none !important;
+    paint-order: normal;
+    text-rendering: geometricPrecision;
+}
+
+.nesting-app-page .svg-text-project {
+    fill: #222222;
+    font-weight: 600;
+}
+
+.nesting-app-page .svg-dims {
+    fill: #333333;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: 600;
+    pointer-events: none;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    stroke: none !important;
+    paint-order: normal;
+    text-rendering: geometricPrecision;
+}
+
+.nesting-app-page .workspace .btn-secondary {
+    background: rgba(255, 255, 255, 0.85);
+    color: #1e293b;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+}
+
+.nesting-app-page .workspace .btn-secondary:hover:not(:disabled) {
+    background: #fff;
+}
+
+.nesting-inline-select {
+    background-color: #fff !important;
+    color: #1e293b !important;
+    border: 1px solid rgba(15, 23, 42, 0.18) !important;
+}

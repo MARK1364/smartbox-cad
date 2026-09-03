@@ -1,0 +1,58 @@
+{
+  "name": "Coplanar faces – dwie ściany równoległe",
+  "description": "Dwa panele które mają mieć równoległe ściany. Solver powinien obrócić panel B tak by jego ściana była równoległa do ściany panelu A.",
+  "contract": {
+    "constraints": [
+      {
+        "constraint_id": "c1",
+        "bind_type": "COPLANAR",
+        "enabled": true,
+        "obj_a_id": "panelA",
+        "obj_b_id": "panelB",
+        "vert_a": -1,
+        "vert_b": -1,
+        "face_a": 0,
+        "face_b": 0,
+        "ground_mode": "VERTEX",
+        "ground_pos": [0,0,0],
+        "ground_normal": [0,0,1],
+        "offset": 0.0
+      }
+    ],
+    "ground_distance_map": {"panelA": 0}
+  },
+  "initial_states": {
+    "panelA": {
+      "id": "panelA",
+      "location": [0,0,0],
+      "rotation": [1,0,0,0],
+      "local_vertices": {},
+      "local_faces": {
+        "0": [[0, 0, 0.5], [0, 0, 1]]
+      }
+    },
+    "panelB": {
+      "id": "panelB",
+      "location": [0, 0, 2],
+      "rotation": [0.70710678, 0.70710678, 0, 0],
+      "local_vertices": {},
+      "local_faces": {
+        "0": [[0, 0, -0.5], [0, 0, -1]]
+      }
+    }
+  },
+  "expected_results": {
+    "panelA": {
+      "location": [0, 0, 0],
+      "rotation": [1, 0, 0, 0]
+    },
+    "panelB": {
+      "location": [0, 0, 0],
+      "rotation": [0.0, 1.0, 0.0, 0.0]
+    }
+  },
+  "tolerances": {
+    "position": 0.0001,
+    "angle_deg": 0.5
+  }
+}

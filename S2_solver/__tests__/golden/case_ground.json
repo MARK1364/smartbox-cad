@@ -1,0 +1,43 @@
+{
+  "name": "Ground vertex – obiekt mocowany do punktu",
+  "description": "Pojedynczy obiekt z wierzchołkiem mocowanym do konkretnego punktu w przestrzeni. Solver powinien przesunąć cały obiekt tak by wierzchołek był dokładnie w target position.",
+  "contract": {
+    "constraints": [
+      {
+        "constraint_id": "g1",
+        "bind_type": "GROUND",
+        "enabled": true,
+        "obj_a_id": "box",
+        "obj_b_id": "",
+        "vert_a": 0,
+        "vert_b": -1,
+        "face_a": -1,
+        "face_b": -1,
+        "ground_mode": "VERTEX",
+        "ground_pos": [5.0, 10.0, 3.0],
+        "ground_normal": [0,0,1],
+        "offset": 0.0
+      }
+    ],
+    "ground_distance_map": {"box": 0}
+  },
+  "initial_states": {
+    "box": {
+      "id": "box",
+      "location": [0,0,0],
+      "rotation": [1,0,0,0],
+      "local_vertices": { "0": [1.0, 2.0, 3.0] },
+      "local_faces": {}
+    }
+  },
+  "expected_results": {
+    "box": {
+      "location": [4.0, 8.0, 0.0],
+      "rotation": [1,0,0,0]
+    }
+  },
+  "tolerances": {
+    "position": 0.0001,
+    "angle_deg": 0.01
+  }
+}

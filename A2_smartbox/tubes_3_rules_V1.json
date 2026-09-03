@@ -1,0 +1,140 @@
+{
+  "metadata": {
+    "module_type": "SMART_BOX_TUBES",
+    "version": "3.0.0",
+    "side_references_smartbox": "INNER"
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "TOP_SHELF": {
+          "description": "Półka nad drążkiem",
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Rurka_SB",
+      "type": "Assembly",
+      "subcomponents": {
+        "ROD_SYSTEM": {
+          "name": "Drazek_Zestaw",
+          "type": "Assembly",
+          "subcomponents": {
+            "ROD": {
+              "name": "Drazek_fi25",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cylinder",
+              "role": "TUBE_ROD",
+              "report_type": "akcesoria",
+              "diameter": 25,
+              "custom_properties": {
+                "material": "Aluminium_Chrome",
+                "is_smartbox_child": true
+              }
+            },
+            "HOLDER_LEFT": {
+              "name": "Uchwyt_Lewy",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cylinder",
+              "role": "HOLDER",
+              "report_type": "akcesoria",
+              "thickness": 18,
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "library_id": "ROZETA_FI25",
+                  "side": "LEFT"
+                }
+              ]
+            },
+            "HOLDER_RIGHT": {
+              "name": "Uchwyt_Prawy",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cylinder",
+              "role": "HOLDER",
+              "report_type": "akcesoria",
+              "thickness": 18,
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "library_id": "ROZETA_FI25",
+                  "side": "RIGHT"
+                }
+              ]
+            }
+          }
+        },
+        "SHELF": {
+          "name": "Polka_Nad_Drazkiem",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF_PANEL",
+          "report_type": "plyty",
+          "thickness": 18,
+          "lcs": {
+            "mapping": { "X": "x", "Y": "y", "Z": "z" },
+            "rotation": [90, 0, 0],
+            "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+          },
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        }
+      }
+    }
+  },
+  "machining_library": {
+    "TUBE_HOLDER_DRILLING": {
+      "side_mount": {
+        "holes": [
+          { "name": "Hole_1", "pos": [-16, 0, 0], "dia": 3.5, "depth": 12 },
+          { "name": "Hole_2", "pos": [16, 0, 0], "dia": 3.5, "depth": 12 }
+        ]
+      }
+    }
+  },
+  "hardware_library": {
+    "ROZETA_FI25": {
+      "name": "Rozeta drazka fi25",
+      "type": "HOLDER",
+      "brand": "GTV"
+    }
+  },
+  "ui_config": {
+    "panel": {
+      "label": {
+        "pl": "Drążek",
+        "en": "Tube",
+        "de": "Kleiderstange"
+      },
+      "box_type_filter": "TUBES"
+    }
+  }
+}

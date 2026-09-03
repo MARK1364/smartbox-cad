@@ -1,0 +1,878 @@
+{
+  "metadata": {
+    "module_type": "SMART_BOX_SHELVES",
+    "version": "3.0.0",
+    "side_references_smartbox": "INNER"
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "SHELF": {
+          "description": "Półki - oklejony FRONT",
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Polki_SB",
+      "type": "Assembly",
+      "subcomponents": {
+        "ROW_HOLES_32": {
+          "name": "System_32",
+          "type": "Part",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "DRILLING_PATTERN",
+          "report_type": "akcesoria",
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SYSTEM_32"
+              }
+            }
+          ]
+        },
+        "SHELF_1": {
+          "name": "Polka_1",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SINGLE"
+              }
+            },
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "TRIPLE"
+              }
+            }
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "y",
+              "Z": "z"
+            },
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          }
+        },
+        "SHELF_2": {
+          "name": "Polka_2",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SINGLE"
+              }
+            },
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "TRIPLE"
+              }
+            }
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "y",
+              "Z": "z"
+            },
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          }
+        },
+        "SHELF_3": {
+          "name": "Polka_3",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SINGLE"
+              }
+            },
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "TRIPLE"
+              }
+            }
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "y",
+              "Z": "z"
+            },
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          }
+        },
+        "SHELF_4": {
+          "name": "Polka_4",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SINGLE"
+              }
+            },
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "TRIPLE"
+              }
+            }
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "y",
+              "Z": "z"
+            },
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          }
+        },
+        "SHELF_5": {
+          "name": "Polka_5",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SINGLE"
+              }
+            },
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "TRIPLE"
+              }
+            }
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "y",
+              "Z": "z"
+            },
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          }
+        },
+        "SHELF_6": {
+          "name": "Polka_6",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SINGLE"
+              }
+            },
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "TRIPLE"
+              }
+            }
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "y",
+              "Z": "z"
+            },
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          }
+        },
+        "SHELF_7": {
+          "name": "Polka_7",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SINGLE"
+              }
+            },
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "TRIPLE"
+              }
+            }
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "y",
+              "Z": "z"
+            },
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          }
+        },
+        "SHELF_8": {
+          "name": "Polka_8",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "features": [
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "SINGLE"
+              }
+            },
+            {
+              "type": "Machining",
+              "operation": "Hole",
+              "parameters": {
+                "template_id": "TRIPLE"
+              }
+            }
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "y",
+              "Z": "z"
+            },
+            "rotation": [
+              90,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          }
+        }
+      }
+    }
+  },
+  "machining_library": {
+    "SYSTEM_32": {
+      "corpus_holes": [
+        {
+          "name": "System32_Korpus",
+          "side": "corpus_system32",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder",
+          "pattern_rule": "LINEAR_Y_32MM"
+        }
+      ]
+    },
+    "SINGLE": {
+      "corpus_holes": [
+        {
+          "name": "Otwór_Prawy_Tył",
+          "side": "right_back",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Prawy_Przód",
+          "side": "right_front",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Lewy_Tył",
+          "side": "left_back",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Lewy_Przód",
+          "side": "left_front",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        }
+      ],
+      "front_holes": [
+        {
+          "name": "Otwór_Środek_Przód",
+          "side": "front_center",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        }
+      ],
+      "back_holes": [
+        {
+          "name": "Otwór_Środek_Tył",
+          "side": "back_center",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        }
+      ]
+    },
+    "TRIPLE": {
+      "triple_z_offset": 0.032,
+      "corpus_holes": [
+        {
+          "name": "Otwór_Prawy_Tył_Dół",
+          "side": "right_back",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Prawy_Tył_Góra",
+          "side": "right_back",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Prawy_Przód_Dół",
+          "side": "right_front",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Prawy_Przód_Góra",
+          "side": "right_front",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Lewy_Tył_Dół",
+          "side": "left_back",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Lewy_Tył_Góra",
+          "side": "left_back",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Lewy_Przód_Dół",
+          "side": "left_front",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Lewy_Przód_Góra",
+          "side": "left_front",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        }
+      ],
+      "front_holes": [
+        {
+          "name": "Otwór_Środek_Przód_Dół",
+          "side": "front_center",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Środek_Przód_Góra",
+          "side": "front_center",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        }
+      ],
+      "back_holes": [
+        {
+          "name": "Otwór_Środek_Tył_Dół",
+          "side": "back_center",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        },
+        {
+          "name": "Otwór_Środek_Tył_Góra",
+          "side": "back_center",
+          "dia": 0.005,
+          "depth": 0.012,
+          "object": "Cylinder"
+        }
+      ]
+    }
+  },
+  "hardware_library": {},
+  "ui_config": {
+    "panel": {
+      "label": {
+        "pl": "Półki V2",
+        "en": "Shelves V2",
+        "de": "Regale V2"
+      },
+      "parent": "VIEW3D_PT_SmartBox_Core",
+      "box_type_filter": "SHELVES"
+    },
+    "fields": {
+      "shelf_count": {
+        "type": "INT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Ilość półek",
+          "en": "Shelf count",
+          "de": "Regalanzahl"
+        },
+        "tooltip": {
+          "pl": "Liczba półek w korpusie",
+          "en": "Number of shelves in the cabinet"
+        },
+        "default": 3,
+        "min": 0,
+        "max": 10
+      },
+      "hole_offset_front": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Ods. boczne przód",
+          "en": "Front side offset",
+          "de": "Vorderer Seitenabstand"
+        },
+        "tooltip": {
+          "pl": "Odsunięcie otworów bocznych od przedniej krawędzi",
+          "en": "Side hole offset from front edge"
+        },
+        "default": 0.037,
+        "min": 0.01,
+        "max": 0.2,
+        "unit": "LENGTH"
+      },
+      "hole_offset_back": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Ods. boczne tył",
+          "en": "Back side offset",
+          "de": "Hinterer Seitenabstand"
+        },
+        "tooltip": {
+          "pl": "Odsunięcie otworów bocznych od tylnej krawędzi",
+          "en": "Side hole offset from back edge"
+        },
+        "default": 0.037,
+        "min": 0.01,
+        "max": 0.2,
+        "unit": "LENGTH"
+      },
+      "hole_pattern": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Wzór otworów",
+          "en": "Hole pattern",
+          "de": "Lochmuster"
+        },
+        "tooltip": {
+          "pl": "Typ rozmieszczenia otworów na półki",
+          "en": "Shelf pin hole pattern type"
+        },
+        "items": {
+          "single": {
+            "pl": "Pojedynczy otw.",
+            "en": "Single hole",
+            "de": "Einzelloch"
+          },
+          "triple": {
+            "pl": "Potrójny otw.",
+            "en": "Triple holes",
+            "de": "Dreifachloch"
+          },
+          "row": {
+            "pl": "System 32",
+            "en": "System 32",
+            "de": "System 32"
+          }
+        },
+        "default": "single"
+      },
+      "system_32_spacing": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Rozstaw otw.",
+          "en": "Hole spacing",
+          "de": "Lochabstand"
+        },
+        "tooltip": {
+          "pl": "Odległość między otworami systemowymi (System 32 = 32mm)",
+          "en": "Distance between system holes"
+        },
+        "default": 0.032,
+        "min": 0.016,
+        "max": 0.064,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "hole_pattern",
+          "value": "row"
+        }
+      },
+      "system_32_start_offset": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Dystans od dołu",
+          "en": "Start offset from bottom",
+          "de": "Abstand von unten"
+        },
+        "tooltip": {
+          "pl": "Dystans pierwszego rzędu otworów od dolnej krawędzi",
+          "en": "First hole row distance from bottom edge"
+        },
+        "default": 0.15,
+        "min": 0.05,
+        "max": 0.3,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "hole_pattern",
+          "value": "row"
+        }
+      },
+      "system_32_hole_count": {
+        "type": "INT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Ilość otw.",
+          "en": "Hole count",
+          "de": "Lochanzahl"
+        },
+        "tooltip": {
+          "pl": "Ilość rzędów otworów systemowych",
+          "en": "Number of system hole rows"
+        },
+        "default": 10,
+        "min": 1,
+        "max": 20,
+        "show_if": {
+          "field": "hole_pattern",
+          "value": "row"
+        }
+      },
+      "triple_z_offset": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Rozstaw otw. triple",
+          "en": "Triple hole spacing"
+        },
+        "tooltip": {
+          "pl": "Odsuniecie otworow gornego i dolnego od srodkowego (TRIPLE)",
+          "en": "Offset of top/bottom holes from center hole (TRIPLE)"
+        },
+        "default": 0.032,
+        "min": 0.008,
+        "max": 0.1,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "hole_pattern",
+          "value": "triple"
+        }
+      },
+      "front_holes_enabled": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Otw. przód",
+          "en": "Front holes",
+          "de": "Vorderlöcher"
+        },
+        "tooltip": {
+          "pl": "Włącz otwory na przedniej krawędzi półek",
+          "en": "Enable holes on front edge of shelves"
+        },
+        "default": false
+      },
+      "front_holes_offset_x": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Offset X przód",
+          "en": "Front X offset",
+          "de": "Vorder X-Versatz"
+        },
+        "tooltip": {
+          "pl": "Przesunięcie otworu przedniego w osi X",
+          "en": "Front hole X axis offset"
+        },
+        "default": 0,
+        "min": -0.2,
+        "max": 0.2,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "front_holes_enabled",
+          "value": true
+        }
+      },
+      "back_holes_enabled": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Otw. plecy",
+          "en": "Back holes",
+          "de": "Rücklöcher"
+        },
+        "tooltip": {
+          "pl": "Włącz otwory na tylnej krawędzi półek",
+          "en": "Enable holes on back edge of shelves"
+        },
+        "default": false
+      },
+      "back_holes_offset_x": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Offset X tył",
+          "en": "Back X offset",
+          "de": "Hinter X-Versatz"
+        },
+        "tooltip": {
+          "pl": "Przesunięcie otworu tylnego w osi X",
+          "en": "Back hole X axis offset"
+        },
+        "default": 0,
+        "min": -0.2,
+        "max": 0.2,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "back_holes_enabled",
+          "value": true
+        }
+      }
+    },
+    "operators": {
+      "generate": {
+        "bl_idname": "object.generate_shelves_v1",
+        "label": {
+          "pl": "Odśwież Półki",
+          "en": "Refresh Shelves",
+          "de": "Regale aktualisieren"
+        },
+        "icon": "FILE_REFRESH"
+      }
+    }
+  },
+  "messages": {
+    "hints": {
+      "STEP_1_SELECT_BASE": {
+        "pl": "Krok 1: Zaznacz korpus, w którym chcesz umieścić półki.",
+        "en": "Step 1: Select the cabinet body where you want to place shelves."
+      },
+      "STEP_2_ADJUST_COUNT": {
+        "pl": "Krok 2: Ustaw pożądaną ilość półek i ich cofnięcie.",
+        "en": "Step 2: Set the desired number of shelves and their setback."
+      },
+      "STEP_3_APPLY": {
+        "pl": "Krok 3: Kliknij 'Generuj Półki', aby zakończyć.",
+        "en": "Step 3: Click 'Generate Shelves' to finish."
+      }
+    },
+    "errors": {
+      "MISSING_BASE_OBJECT": {
+        "pl": "Brak obiektu bazowego SmartBox w kontekście.",
+        "en": "Missing base SmartBox object in context."
+      }
+    },
+    "warnings": {
+      "MAX_SHELVES_EXCEEDED": {
+        "pl": "Przekroczono maksymalną dopuszczalną ilość półek (maks. 8).",
+        "en": "Maximum allowed number of shelves exceeded (max 8)."
+      }
+    },
+    "tooltips": {
+      "shelf_count": {
+        "pl": "Ilość półek do wygenerowania w module.",
+        "en": "Number of shelves to generate in the module."
+      },
+      "shelf_setback": {
+        "pl": "Cofnięcie półki względem przedniej krawędzi korpusu (domyślnie 5mm).",
+        "en": "Shelf setback relative to the front corpus edge (default 5mm)."
+      }
+    }
+  }
+}

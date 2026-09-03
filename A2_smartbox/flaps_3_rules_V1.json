@@ -1,0 +1,319 @@
+{
+  "metadata": {
+    "module_type": "SMART_BOX_FLAPS",
+    "version": "3.0.0",
+    "side_references_smartbox": "INNER"
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "FLAP": {
+          "description": "Klapa - oklejona DOOKOŁA",
+          "edge_banding": {
+            "+X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Klapy_SB",
+      "type": "Assembly",
+      "subcomponents": {
+        "FLAP": {
+          "name": "Klapa",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "FLAP",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            90,
+            0,
+            0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        },
+        "HINGE_TL": {
+          "name": "Hinge_TL",
+          "type": "Part",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "HINGE_LOCATOR",
+          "report_type": "akcesoria",
+          "base_rotation": [
+            0,
+            0,
+            0
+          ],
+          "features": [
+            {
+              "type": "Hardware_Instance",
+              "library_id": "BLUM_71B3550",
+              "side": "TOP_LEFT"
+            }
+          ]
+        },
+        "HINGE_TR": {
+          "name": "Hinge_TR",
+          "type": "Part",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "HINGE_LOCATOR",
+          "report_type": "akcesoria",
+          "base_rotation": [
+            0,
+            0,
+            0
+          ],
+          "features": [
+            {
+              "type": "Hardware_Instance",
+              "library_id": "BLUM_71B3550",
+              "side": "TOP_RIGHT"
+            }
+          ]
+        },
+        "HINGE_TC": {
+          "name": "Hinge_TC",
+          "type": "Part",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "HINGE_LOCATOR",
+          "report_type": "akcesoria",
+          "base_rotation": [
+            0,
+            0,
+            0
+          ],
+          "features": [
+            {
+              "type": "Hardware_Instance",
+              "library_id": "BLUM_71B3550",
+              "side": "TOP_CENTER"
+            }
+          ]
+        },
+        "HINGE_BL": {
+          "name": "Hinge_BL",
+          "type": "Part",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "HINGE_LOCATOR",
+          "report_type": "akcesoria",
+          "base_rotation": [
+            0,
+            0,
+            0
+          ],
+          "features": [
+            {
+              "type": "Hardware_Instance",
+              "library_id": "BLUM_71B3550",
+              "side": "BOTTOM_LEFT"
+            }
+          ]
+        },
+        "HINGE_BR": {
+          "name": "Hinge_BR",
+          "type": "Part",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "HINGE_LOCATOR",
+          "report_type": "akcesoria",
+          "base_rotation": [
+            0,
+            0,
+            0
+          ],
+          "features": [
+            {
+              "type": "Hardware_Instance",
+              "library_id": "BLUM_71B3550",
+              "side": "BOTTOM_RIGHT"
+            }
+          ]
+        },
+        "HINGE_BC": {
+          "name": "Hinge_BC",
+          "type": "Part",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "HINGE_LOCATOR",
+          "report_type": "akcesoria",
+          "base_rotation": [
+            0,
+            0,
+            0
+          ],
+          "features": [
+            {
+              "type": "Hardware_Instance",
+              "library_id": "BLUM_71B3550",
+              "side": "BOTTOM_CENTER"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "ui_config": {
+    "panel": {
+      "label": {
+        "pl": "Ustawienia Klap V2",
+        "en": "Flaps V2",
+        "de": "Klappen V2"
+      },
+      "parent": "VIEW3D_PT_SmartBox_Core",
+      "box_type_filter": "FLAPS"
+    },
+    "fields": {
+      "flap_type": {
+        "type": "ENUM",
+        "widget": "RADIO",
+        "label": {
+          "pl": "Typ klapy",
+          "en": "Flap type",
+          "de": "Klappentyp"
+        },
+        "items": {
+          "TOP": {
+            "pl": "Góra",
+            "en": "Top",
+            "de": "Oben"
+          },
+          "BOTTOM": {
+            "pl": "Dół (Barek)",
+            "en": "Bottom (Bar)",
+            "de": "Unten (Bar)"
+          }
+        },
+        "default": "TOP"
+      },
+      "ov_top": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Nałożenie góra",
+          "en": "Overlap top"
+        },
+        "default": 0.014,
+        "unit": "LENGTH"
+      },
+      "ov_bottom": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Nałożenie dół",
+          "en": "Overlap bottom"
+        },
+        "default": 0.015,
+        "unit": "LENGTH"
+      },
+      "ov_left": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Nałożenie lewo",
+          "en": "Overlap left"
+        },
+        "default": 0.016,
+        "unit": "LENGTH"
+      },
+      "ov_right": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Nałożenie prawo",
+          "en": "Overlap right"
+        },
+        "default": 0.016,
+        "unit": "LENGTH"
+      },
+      "hinge_left_offset": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Zawias lewy od krawędzi",
+          "en": "Left hinge from edge"
+        },
+        "default": 0.08,
+        "min": 0.05,
+        "unit": "LENGTH"
+      },
+      "hinge_right_offset": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Zawias prawy od krawędzi",
+          "en": "Right hinge from edge"
+        },
+        "default": 0.08,
+        "min": 0.05,
+        "unit": "LENGTH"
+      },
+      "use_center_hinge": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Środkowy zawias",
+          "en": "Center hinge",
+          "de": "Mittelscharnier"
+        },
+        "default": false
+      }
+    },
+    "operators": {
+      "generate": {
+        "bl_idname": "object.generate_flaps_v1",
+        "label": {
+          "pl": "Generuj klapy V2",
+          "en": "Generate Flaps V2"
+        },
+        "icon": "FILE_REFRESH"
+      }
+    }
+  },
+  "messages": {
+    "hints": {
+      "STEP_1_SELECT_BASE": {
+        "pl": "Krok 1: Zaznacz szafkę wiszącą.",
+        "en": "Step 1: Select the upper cabinet."
+      },
+      "STEP_2_CONFIGURE": {
+        "pl": "Krok 2: Wybierz system podnośników do klap.",
+        "en": "Step 2: Choose the flap lift system."
+      },
+      "STEP_3_APPLY": {
+        "pl": "Krok 3: Kliknij 'Generuj Klapy'.",
+        "en": "Step 3: Click 'Generate Flaps'."
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$id": "web/Biblioteki/okucia/schema.json",
+  "title": "Biblioteka okuć (web)",
+  "description": "Kontrakt katalogu okuć. JSON jest źródłem prawdy dla wiercenia i gabarytów. GLB jest tylko wizualizacją viewportu — nie używać mesha do CNC. Jednostki liniowe: metry. LCS okucia musi być ten sam dla machining i visual.origin.",
+  "units": "m",
+  "lcs": {
+    "HINGE": "origin = CUP_CENTER; oś montażu zgodna z puszka na INNER frontu",
+    "RAIL": "origin = RAIL_FRONT; x_positions od przodu prowadnicy"
+  },
+  "types": ["HINGE", "RAIL"],
+  "files": {
+    "zawiasy.json": "type HINGE, jednostki: metry",
+    "../szuflady.json": "wspólny konfig mm. Korpus: otwory_pozycje, dystans_otworow_od_dolu, promien, glebokosc. Front: otwory_front_pozycje (od spodu skrzynki), dystans_otworow_front_od_boku, glebokosc_front. Klocek prowadnicy 35×27 mm — stała CAD do GLB."
+  },
+  "item": {
+    "id": "string — stabilny klucz, ten sam co Hardware_Instance.library_id",
+    "type": "HINGE | RAIL",
+    "name": "string",
+    "brand": "string",
+    "art_no": "string (SKU)",
+    "price_id": "klucz w R1_reports/prices.json, nie cena",
+    "usable_in": ["DOORS", "FLAPS"] ,
+    "mount": "offsety montażu w LCS mebla/okucia (metry)",
+    "machining": "front_holes / corpus_holes — dia, depth, edge_dist, y_offset, front_dist, z_offset",
+    "lengths": "tylko RAIL: mapa długości mm → otwory korpusu, art_no, price_id",
+    "visual": {
+      "glb": "ścieżka względna od web/Biblioteki/okucia/",
+      "origin": "CUP_CENTER | RAIL_FRONT",
+      "units": "m"
+    }
+  }
+}

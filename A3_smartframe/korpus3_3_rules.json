@@ -1,0 +1,1200 @@
+{
+  "metadata": {
+    "module_type": "SMARTFRAME_KORPUS3",
+    "version": "3.0.0",
+    "description": "Korpus wielostrefowy (1/2/3). Silnik: korpus3_2_engine | UI: korpus3_1_addon. Dół/Środek FIXED, Góra FILL. Referencje namespace B/M/T_side."
+  },
+  "parameters": {
+    "defaults": {
+      "width": 1,
+      "height": 2.2,
+      "depth": 0.6,
+      "bottom_height": 0.5,
+      "middle_height": 1.2
+    },
+    "validation": {
+      "min_dimension": 0.1,
+      "max_dimension": 5
+    },
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "LEFT_SIDE_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_origin_corner": {
+            "X": "-",
+            "Y": "-",
+            "Z": "+"
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          },
+          "wcs_axis_rotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        "RIGHT_SIDE_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_origin_corner": {
+            "X": "+",
+            "Y": "-",
+            "Z": "+"
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          },
+          "wcs_axis_rotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        "TOP_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_origin_corner": {
+            "X": "-",
+            "Y": "-",
+            "Z": "-"
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          },
+          "wcs_axis_rotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        "BOTTOM_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_origin_corner": {
+            "X": "-",
+            "Y": "-",
+            "Z": "+"
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          },
+          "wcs_axis_rotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        "BACK_PANEL": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_origin_corner": {
+            "X": "-",
+            "Y": "-",
+            "Z": "+"
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          },
+          "wcs_axis_rotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Korpus3_Global",
+      "type": "Assembly",
+      "subtype": "Empty",
+      "object": "Arrows",
+      "subcomponents": {
+        "SEKCJA_B": {
+          "name": "Sekcja_Dolna",
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "ZONE",
+          "zone": {
+            "stack_axis": "Z",
+            "size_mode": "FIXED",
+            "size": 0.5,
+            "prefix": "B_"
+          },
+          "subcomponents": {
+            "B_BOK_L": {
+              "name": "Dol_Bok_L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "LEFT_SIDE_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "y",
+                  "Y": "x",
+                  "Z": "z"
+                },
+                "rotation": [
+                  0,
+                  0,
+                  -90
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "B_BOK_P": {
+              "name": "Dol_Bok_P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "RIGHT_SIDE_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "y",
+                  "Y": "x",
+                  "Z": "z"
+                },
+                "rotation": [
+                  0,
+                  0,
+                  90
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "B_WIENIEC_D": {
+              "name": "Dol_Wieniec_D",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOTTOM_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "B_WIENIEC_D_T2": {
+              "name": "Dol_Wieniec_D_T2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOTTOM_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "B_WIENIEC_G": {
+              "name": "Dol_Wieniec_G",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "TOP_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  -90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "B_WIENIEC_G_T2": {
+              "name": "Dol_Wieniec_G_T2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "TOP_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  -90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "B_PLECY": {
+              "name": "Dol_Plecy",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BACK_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.003,
+              "custom_properties": {
+                "material": "HDF_3",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "z",
+                  "Z": "y"
+                },
+                "rotation": [
+                  180,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            }
+          }
+        },
+        "SEKCJA_M": {
+          "name": "Sekcja_Srodkowa",
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "ZONE",
+          "zone": {
+            "stack_axis": "Z",
+            "size_mode": "FIXED",
+            "size": 1.2,
+            "prefix": "M_"
+          },
+          "subcomponents": {
+            "M_BOK_L": {
+              "name": "Srodek_Bok_L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "LEFT_SIDE_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "y",
+                  "Y": "x",
+                  "Z": "z"
+                },
+                "rotation": [
+                  0,
+                  0,
+                  -90
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "M_BOK_P": {
+              "name": "Srodek_Bok_P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "RIGHT_SIDE_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "y",
+                  "Y": "x",
+                  "Z": "z"
+                },
+                "rotation": [
+                  0,
+                  0,
+                  90
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "M_WIENIEC_D": {
+              "name": "Srodek_Wieniec_D",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOTTOM_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "M_WIENIEC_D_T2": {
+              "name": "Srodek_Wieniec_D_T2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOTTOM_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "M_WIENIEC_G": {
+              "name": "Srodek_Wieniec_G",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "TOP_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  -90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "M_WIENIEC_G_T2": {
+              "name": "Srodek_Wieniec_G_T2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "TOP_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  -90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "M_PLECY": {
+              "name": "Srodek_Plecy",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BACK_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.003,
+              "custom_properties": {
+                "material": "HDF_3",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "z",
+                  "Z": "y"
+                },
+                "rotation": [
+                  180,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            }
+          }
+        },
+        "SEKCJA_T": {
+          "name": "Sekcja_Gorna_Pawlacz",
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "ZONE",
+          "zone": {
+            "stack_axis": "Z",
+            "size_mode": "FILL",
+            "prefix": "T_"
+          },
+          "subcomponents": {
+            "T_BOK_L": {
+              "name": "Gora_Bok_L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "LEFT_SIDE_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "y",
+                  "Y": "x",
+                  "Z": "z"
+                },
+                "rotation": [
+                  0,
+                  0,
+                  -90
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "T_BOK_P": {
+              "name": "Gora_Bok_P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "RIGHT_SIDE_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "y",
+                  "Y": "x",
+                  "Z": "z"
+                },
+                "rotation": [
+                  0,
+                  0,
+                  90
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "T_WIENIEC_D": {
+              "name": "Gora_Wieniec_D",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOTTOM_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "T_WIENIEC_D_T2": {
+              "name": "Gora_Wieniec_D_T2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOTTOM_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "T_WIENIEC_G": {
+              "name": "Gora_Wieniec_G",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "TOP_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  -90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "T_WIENIEC_G_T2": {
+              "name": "Gora_Wieniec_G_T2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "TOP_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "y",
+                  "Z": "z"
+                },
+                "rotation": [
+                  -90,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            },
+            "T_PLECY": {
+              "name": "Gora_Plecy",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BACK_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.003,
+              "custom_properties": {
+                "material": "HDF_3",
+                "is_smartbox_child": true
+              },
+              "lcs": {
+                "mapping": {
+                  "X": "x",
+                  "Y": "z",
+                  "Z": "y"
+                },
+                "rotation": [
+                  180,
+                  0,
+                  0
+                ],
+                "faces": {
+                  "INNER": "FACE_Z_PLUS",
+                  "OUTER": "FACE_Z_MINUS"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "machining_library": {
+    "WPUST_PLECY": {
+      "type": "GROOVE",
+      "apply_boolean": false,
+      "y_dim_ref": "plecy_thickness",
+      "z_dim_ref": "panel_thickness_minus_offset_lip",
+      "corpus_grooves": [
+        {
+          "name": "Wpust_Plecy_Dol_Bok_L",
+          "part_key": "B_BOK_L",
+          "object": "Cube",
+          "orientation": "vertical",
+          "rot": [
+            0,
+            0,
+            90
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Dol_Bok_P",
+          "part_key": "B_BOK_P",
+          "object": "Cube",
+          "orientation": "vertical",
+          "rot": [
+            0,
+            0,
+            90
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Dol_Wieniec_D",
+          "part_key": "B_WIENIEC_D",
+          "object": "Cube",
+          "orientation": "horizontal",
+          "rot": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Dol_Wieniec_G",
+          "part_key": "B_WIENIEC_G",
+          "object": "Cube",
+          "orientation": "horizontal",
+          "rot": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Srodek_Bok_L",
+          "part_key": "M_BOK_L",
+          "object": "Cube",
+          "orientation": "vertical",
+          "rot": [
+            0,
+            0,
+            90
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Srodek_Bok_P",
+          "part_key": "M_BOK_P",
+          "object": "Cube",
+          "orientation": "vertical",
+          "rot": [
+            0,
+            0,
+            90
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Srodek_Wieniec_D",
+          "part_key": "M_WIENIEC_D",
+          "object": "Cube",
+          "orientation": "horizontal",
+          "rot": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Srodek_Wieniec_G",
+          "part_key": "M_WIENIEC_G",
+          "object": "Cube",
+          "orientation": "horizontal",
+          "rot": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Gora_Bok_L",
+          "part_key": "T_BOK_L",
+          "object": "Cube",
+          "orientation": "vertical",
+          "rot": [
+            0,
+            0,
+            90
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Gora_Bok_P",
+          "part_key": "T_BOK_P",
+          "object": "Cube",
+          "orientation": "vertical",
+          "rot": [
+            0,
+            0,
+            90
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Gora_Wieniec_D",
+          "part_key": "T_WIENIEC_D",
+          "object": "Cube",
+          "orientation": "horizontal",
+          "rot": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "Wpust_Plecy_Gora_Wieniec_G",
+          "part_key": "T_WIENIEC_G",
+          "object": "Cube",
+          "orientation": "horizontal",
+          "rot": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  },
+  "ui_config": {
+    "fields": {
+      "middle_height": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Sekcja Środkowa",
+          "en": "Middle Zone"
+        },
+        "default": 1.2,
+        "min": 0.1,
+        "max": 2.5,
+        "unit": "LENGTH",
+        "box": "zones_box"
+      },
+      "bottom_height": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Sekcja Dolna",
+          "en": "Bottom Zone"
+        },
+        "default": 0.5,
+        "min": 0.1,
+        "max": 2,
+        "unit": "LENGTH",
+        "box": "zones_box"
+      }
+    },
+    "operators": {
+      "generate": {
+        "bl_idname": "object.generate_korpus3",
+        "label": {
+          "pl": "Aktualizuj Korpus 3",
+          "en": "Update Korpus 3"
+        },
+        "icon": "FILE_REFRESH"
+      }
+    }
+  },
+  "cabinet_construction_rules": {
+    "defaults": {
+      "back_inset": 0.01,
+      "back_groove_depth": 0.006,
+      "plecy_margin_defaults": {
+        "mode": "fixed",
+        "fixed": {
+          "top": -0.007,
+          "bottom": -0.007,
+          "left": -0.007,
+          "right": -0.007
+        }
+      }
+    }
+  },
+  "side_references": {
+    "B_side.X_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "B_BOK_L",
+        "surface": "INNER"
+      }
+    },
+    "B_side.X_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "B_BOK_P",
+        "surface": "INNER"
+      }
+    },
+    "B_side.Y_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "symbolic"
+      }
+    },
+    "B_side.Y_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "B_PLECY",
+        "surface": "INNER"
+      }
+    },
+    "B_side.Z_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "B_WIENIEC_D",
+        "surface": "INNER"
+      }
+    },
+    "B_side.Z_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "B_WIENIEC_G",
+        "surface": "INNER"
+      }
+    },
+    "M_side.X_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "M_BOK_L",
+        "surface": "INNER"
+      }
+    },
+    "M_side.X_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "M_BOK_P",
+        "surface": "INNER"
+      }
+    },
+    "M_side.Y_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "symbolic"
+      }
+    },
+    "M_side.Y_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "M_PLECY",
+        "surface": "INNER"
+      }
+    },
+    "M_side.Z_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "M_WIENIEC_D",
+        "surface": "INNER"
+      }
+    },
+    "M_side.Z_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "M_WIENIEC_G",
+        "surface": "INNER"
+      }
+    },
+    "T_side.X_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "T_BOK_L",
+        "surface": "INNER"
+      }
+    },
+    "T_side.X_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "T_BOK_P",
+        "surface": "INNER"
+      }
+    },
+    "T_side.Y_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "symbolic"
+      }
+    },
+    "T_side.Y_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "T_PLECY",
+        "surface": "INNER"
+      }
+    },
+    "T_side.Z_MIN_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "T_WIENIEC_D",
+        "surface": "INNER"
+      }
+    },
+    "T_side.Z_MAX_INNER": {
+      "kind": "plane",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "T_WIENIEC_G",
+        "surface": "INNER"
+      }
+    }
+  }
+}

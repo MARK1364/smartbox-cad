@@ -1,0 +1,73 @@
+{
+  "metadata": {
+    "module_type": "SMART_BOX_SHELF",
+    "version": "3.0.0",
+    "side_references_smartbox": "INNER"
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "SHELF_BOARD": {
+          "description": "Wieniec - oklejony FRONT (Y-)",
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Wieniec_SB",
+      "type": "Assembly",
+      "subcomponents": {
+        "SHELF": {
+          "name": "Wieniec",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "SHELF_BOARD",
+          "report_type": "plyty",
+          "thickness": 18,
+          "lcs": {
+            "mapping": { "X": "x", "Y": "y", "Z": "z" },
+            "rotation": [90, 0, 0],
+            "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+          },
+          "custom_properties": {
+            "material": "MDF_SUROWY_18"
+          }
+        }
+      }
+    }
+  },
+  "machining_library": {},
+  "hardware_library": {},
+  "ui_config": {
+    "panel": {
+      "label": {
+        "pl": "Wieniec",
+        "en": "Cornice",
+        "de": "Kranz"
+      },
+      "box_type_filter": "SHELF"
+    }
+  }
+}

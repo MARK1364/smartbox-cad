@@ -1,0 +1,117 @@
+{
+  "_comment": "Kontrakt referencji ścian SmartFrame → SmartBox. Definiuje ściany wewnętrzne (INNER) i zewnętrzne (OUTER) korpusu. INNER → półki/drzwi/szuflady. OUTER → panels/blendy które otulają cały smartframe z zewnątrz.",
+  "version": "1.1",
+  "side_references": {
+    "side.X_MIN_INNER": {
+      "kind": "plane",
+      "space": "INNER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "BOK_L",
+        "surface": "INNER"
+      }
+    },
+    "side.X_MAX_INNER": {
+      "kind": "plane",
+      "space": "INNER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "BOK_P",
+        "surface": "INNER"
+      }
+    },
+    "side.Y_MIN_INNER": {
+      "kind": "plane",
+      "space": "INNER",
+      "provenance": {
+        "source_type": "symbolic",
+        "part_key": null,
+        "surface": null
+      }
+    },
+    "side.Y_MAX_INNER": {
+      "kind": "plane",
+      "space": "INNER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "PLECY",
+        "surface": "INNER"
+      }
+    },
+    "side.Z_MIN_INNER": {
+      "kind": "plane",
+      "space": "INNER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "WIENIEC_D",
+        "surface": "INNER"
+      }
+    },
+    "side.Z_MAX_INNER": {
+      "kind": "plane",
+      "space": "INNER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "WIENIEC_G",
+        "surface": "INNER"
+      }
+    }
+  },
+  "side_references_outer": {
+    "_comment": "Referencje OUTER: panels/blendy otulające smartframe z zewnątrz. Wskazują na zewnętrzne powierzchnie tych samych płyt co INNER, ale z odwróconą surface. Dla korpusu wielostrefowego (B/M/T): szukany part_key bez prefiksu → kod znajdzie skrajną płytę przez SmartID-suffix lub role+position.",
+    "side.X_MIN_OUTER": {
+      "kind": "plane",
+      "space": "OUTER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "BOK_L",
+        "surface": "OUTER"
+      }
+    },
+    "side.X_MAX_OUTER": {
+      "kind": "plane",
+      "space": "OUTER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "BOK_P",
+        "surface": "OUTER"
+      }
+    },
+    "side.Y_MIN_OUTER": {
+      "kind": "plane",
+      "space": "OUTER",
+      "provenance": {
+        "source_type": "symbolic",
+        "part_key": null,
+        "surface": null
+      }
+    },
+    "side.Y_MAX_OUTER": {
+      "kind": "plane",
+      "space": "OUTER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "PLECY",
+        "surface": "OUTER"
+      }
+    },
+    "side.Z_MIN_OUTER": {
+      "kind": "plane",
+      "space": "OUTER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "WIENIEC_D",
+        "surface": "OUTER"
+      }
+    },
+    "side.Z_MAX_OUTER": {
+      "kind": "plane",
+      "space": "OUTER",
+      "provenance": {
+        "source_type": "component",
+        "part_key": "WIENIEC_G",
+        "surface": "OUTER"
+      }
+    }
+  }
+}

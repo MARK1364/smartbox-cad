@@ -1,0 +1,1085 @@
+{
+  "metadata": {
+    "module_type": "SMART_BOX_DRAWERS",
+    "version": "3.0.0",
+    "side_references_smartbox": "INNER"
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "FRONT": {
+          "edge_banding": {
+            "+X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+            "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        },
+        "SPACER": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+            "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Drawers_SB",
+      "type": "Assembly",
+      "subcomponents": {
+        "SZUFLADA_1": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_1",
+          "subcomponents": {
+            "1_FRONT": {
+              "name": "Front_1",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "1_BOX": {
+              "name": "Skrzynka_1",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "1_PROWADNICA_L": {
+              "name": "Prowadnica_1L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "M94"
+                }
+              ]
+            },
+            "1_PROWADNICA_R": {
+              "name": "Prowadnica_1P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "M94"
+                }
+              ]
+            }
+          }
+        },
+        "SZUFLADA_2": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_2",
+          "subcomponents": {
+            "2_FRONT": {
+              "name": "Front_2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "2_BOX": {
+              "name": "Skrzynka_2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "2_PROWADNICA_L": {
+              "name": "Prowadnica_2L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "D214"
+                }
+              ]
+            },
+            "2_PROWADNICA_R": {
+              "name": "Prowadnica_2P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "D214"
+                }
+              ]
+            }
+          }
+        },
+        "SZUFLADA_3": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_3",
+          "subcomponents": {
+            "3_FRONT": {
+              "name": "Front_3",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "3_BOX": {
+              "name": "Skrzynka_3",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "3_PROWADNICA_L": {
+              "name": "Prowadnica_3L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "D214"
+                }
+              ]
+            },
+            "3_PROWADNICA_R": {
+              "name": "Prowadnica_3P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "D214"
+                }
+              ]
+            }
+          }
+        },
+        "SZUFLADA_4": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_4",
+          "subcomponents": {
+            "4_FRONT": {
+              "name": "Front_4",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "4_BOX": {
+              "name": "Skrzynka_4",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "4_PROWADNICA_L": {
+              "name": "Prowadnica_4L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "D214"
+                }
+              ]
+            },
+            "4_PROWADNICA_R": {
+              "name": "Prowadnica_4P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "D214"
+                }
+              ]
+            }
+          }
+        },
+        "SZUFLADA_5": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_5",
+          "subcomponents": {
+            "5_FRONT": {
+              "name": "Front_5",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "5_BOX": {
+              "name": "Skrzynka_5",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "5_PROWADNICA_L": {
+              "name": "Prowadnica_5L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "D214"
+                }
+              ]
+            },
+            "5_PROWADNICA_R": {
+              "name": "Prowadnica_5P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "D214"
+                }
+              ]
+            }
+          }
+        },
+        "DYSTANSE_ASSEMBLY": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "DYSTANSE_ASSEMBLY",
+          "subcomponents": {
+            "SPACER_L": {
+              "name": "Dystans_L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "SPACER",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                0.0,
+                90.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            },
+            "SPACER_R": {
+              "name": "Dystans_P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "SPACER",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                0.0,
+                90.0,
+                0.0
+              ],
+              "custom_properties": {
+                "is_smartbox_child": true
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "ui_config": {
+    "panel": {
+      "label": {
+        "pl": "Ustawienia Szuflad V2",
+        "en": "Drawers V2"
+      },
+      "parent": "VIEW3D_PT_SmartBox_Core",
+      "box_type_filter": "DRAWERS"
+    },
+    "fields": {
+      "count": {
+        "type": "INT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Ilość szuflad",
+          "en": "Drawer count"
+        },
+        "default": 3,
+        "min": 0,
+        "max": 5,
+        "box": "main_settings",
+        "box_label": {
+          "pl": "Ustawienia ogólne"
+        },
+        "box_icon": "SETTINGS"
+      },
+      "rail_manufacturer": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Producent prowadnic",
+          "en": "Rail manufacturer"
+        },
+        "split": 0.65,
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "box": "main_settings"
+      },
+      "front_height_auto": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Wysokości frontów: Auto",
+          "en": "Auto front heights"
+        },
+        "default": true,
+        "box": "main_settings"
+      },
+      "common_gap": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Szczelina (wspólna)",
+          "en": "Common gap"
+        },
+        "default": 0.003,
+        "min": 0.0,
+        "max": 0.05,
+        "unit": "LENGTH",
+        "box": "main_settings",
+        "show_if": {
+          "field": "front_height_auto",
+          "value": true
+        }
+      },
+      "front_height_1": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wys. frontu 1"
+        },
+        "default": 0.15,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "box_label": {
+          "pl": "Wysokości frontów"
+        },
+        "box_icon": "ARROW_LEFTRIGHT",
+        "show_if": {
+          "field": "front_height_auto",
+          "value": false
+        }
+      },
+      "gap_1": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Szczelina 1"
+        },
+        "default": 0.003,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "show_if": [
+          {
+            "field": "front_height_auto",
+            "value": false
+          },
+          {
+            "field": "count",
+            "value": [
+              2,
+              3,
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "front_height_2": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wys. frontu 2"
+        },
+        "default": 0.15,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "show_if": [
+          {
+            "field": "front_height_auto",
+            "value": false
+          },
+          {
+            "field": "count",
+            "value": [
+              2,
+              3,
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "gap_2": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Szczelina 2"
+        },
+        "default": 0.003,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "show_if": [
+          {
+            "field": "front_height_auto",
+            "value": false
+          },
+          {
+            "field": "count",
+            "value": [
+              3,
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "front_height_3": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wys. frontu 3"
+        },
+        "default": 0.15,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "show_if": [
+          {
+            "field": "front_height_auto",
+            "value": false
+          },
+          {
+            "field": "count",
+            "value": [
+              3,
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "gap_3": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Szczelina 3"
+        },
+        "default": 0.003,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "show_if": [
+          {
+            "field": "front_height_auto",
+            "value": false
+          },
+          {
+            "field": "count",
+            "value": [
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "front_height_4": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wys. frontu 4"
+        },
+        "default": 0.15,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "show_if": [
+          {
+            "field": "front_height_auto",
+            "value": false
+          },
+          {
+            "field": "count",
+            "value": [
+              4,
+              5
+            ]
+          }
+        ]
+      },
+      "gap_4": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Szczelina 4"
+        },
+        "default": 0.003,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "show_if": [
+          {
+            "field": "front_height_auto",
+            "value": false
+          },
+          {
+            "field": "count",
+            "value": [
+              5
+            ]
+          }
+        ]
+      },
+      "front_height_5": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wys. frontu 5"
+        },
+        "default": 0.15,
+        "unit": "LENGTH",
+        "box": "fronts",
+        "show_if": [
+          {
+            "field": "front_height_auto",
+            "value": false
+          },
+          {
+            "field": "count",
+            "value": [
+              5
+            ]
+          }
+        ]
+      },
+      "rail_length_1": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 1: dl."
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "box_label": {
+          "pl": "Okucia i prowadnice"
+        },
+        "box_icon": "MOD_PARTICLE_INSTANCE",
+        "show_if": {
+          "field": "count",
+          "value": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      "rail_system_1": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 1: system"
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      "rail_length_2": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 2: dl."
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      "rail_system_2": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 2: system"
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            2,
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      "rail_length_3": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 3: dl."
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      "rail_system_3": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 3: system"
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            3,
+            4,
+            5
+          ]
+        }
+      },
+      "rail_length_4": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 4: dl."
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            4,
+            5
+          ]
+        }
+      },
+      "rail_system_4": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 4: system"
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            4,
+            5
+          ]
+        }
+      },
+      "rail_length_5": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 5: dl."
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            5
+          ]
+        }
+      },
+      "rail_system_5": {
+        "type": "ENUM",
+        "widget": "DROPDOWN",
+        "label": {
+          "pl": "Prowadnica 5: system"
+        },
+        "dynamic_source": "okucia:RAIL",
+        "filter_type": "RAIL",
+        "split": 0.45,
+        "box": "rails",
+        "show_if": {
+          "field": "count",
+          "value": [
+            5
+          ]
+        }
+      },
+      "overlap_top": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Nałożenie górne"
+        },
+        "default": 0.015,
+        "unit": "LENGTH",
+        "box": "overlaps",
+        "box_label": {
+          "pl": "Nałożenia frontu"
+        },
+        "box_icon": "FULLSCREEN_ENTER"
+      },
+      "overlap_bottom": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Nałożenie dolne"
+        },
+        "default": 0.015,
+        "unit": "LENGTH",
+        "box": "overlaps"
+      },
+      "overlap_left": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Nałożenie lewe"
+        },
+        "default": 0.015,
+        "unit": "LENGTH",
+        "box": "overlaps"
+      },
+      "overlap_right": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Nałożenie prawe"
+        },
+        "default": 0.015,
+        "unit": "LENGTH",
+        "box": "overlaps"
+      },
+      "enable_spacer_L": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Dystans lewy",
+          "en": "Left spacer"
+        },
+        "tooltip": {
+          "pl": "Tworzy dodatkowy panel",
+          "en": "Creates an additional panel"
+        },
+        "default": false,
+        "box": "spacers",
+        "box_label": {
+          "pl": "Dystanse boczne"
+        },
+        "box_icon": "ARROW_LEFTRIGHT"
+      },
+      "enable_spacer_R": {
+        "type": "BOOL",
+        "widget": "CHECKBOX",
+        "label": {
+          "pl": "Dystans prawy",
+          "en": "Right spacer"
+        },
+        "default": false,
+        "tooltip": {
+          "pl": "Tworzy dodatkowy panel",
+          "en": "Creates an additional panel"
+        },
+        "box": "spacers"
+      }
+    },
+    "operators": {
+      "generate": {
+        "bl_idname": "object.generate_drawers_v1",
+        "label": {
+          "pl": "Generuj / Odśwież",
+          "en": "Generate / Refresh"
+        },
+        "icon": "FILE_REFRESH"
+      }
+    }
+  },
+  "messages": {
+    "hints": {
+      "STEP_1_SELECT_BASE": {
+        "pl": "Krok 1: Zaznacz szafkę na szuflady.",
+        "en": "Step 1: Select the cabinet for drawers."
+      },
+      "STEP_2_CONFIGURE": {
+        "pl": "Krok 2: Wybierz system prowadnic i ustaw wysokości frontów.",
+        "en": "Step 2: Choose the runner system and set front heights."
+      },
+      "STEP_3_APPLY": {
+        "pl": "Krok 3: Kliknij 'Generuj Szuflady'.",
+        "en": "Step 3: Click 'Generate Drawers'."
+      }
+    }
+  }
+}

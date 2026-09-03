@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPanel Web — Interaktywny CAD Stolarski</title>
+    <meta name="description" content="SmartPanel Web — szybki obiektowy CAD stolarski z interaktywnym widokiem 3D">
+
+    <!-- Babylon.js -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <!-- Babylon.js GUI (wymagany przez Inspector) -->
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.js"></script>
+    <!-- Babylon.js Inspector -->
+    <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <script>
+        window.addEventListener("error", function(e) {
+            console.error("Global Error:", e.error);
+            const errDiv = document.createElement("div");
+            errDiv.style.position = "fixed";
+            errDiv.style.top = "10px";
+            errDiv.style.left = "10px";
+            errDiv.style.zIndex = "99999";
+            errDiv.style.background = "red";
+            errDiv.style.color = "white";
+            errDiv.style.padding = "20px";
+            errDiv.innerHTML = "<h3>Wystąpił krytyczny błąd JS:</h3><p>" + e.message + "</p><pre>" + (e.error && e.error.stack ? e.error.stack : '') + "</pre>";
+            document.body.appendChild(errDiv);
+        });
+        window.addEventListener("unhandledrejection", function(e) {
+            console.error("Unhandled Rejection:", e.reason);
+            const errDiv = document.createElement("div");
+            errDiv.style.position = "fixed";
+            errDiv.style.top = "150px";
+            errDiv.style.left = "10px";
+            errDiv.style.zIndex = "99999";
+            errDiv.style.background = "orange";
+            errDiv.style.color = "black";
+            errDiv.style.padding = "20px";
+            errDiv.innerHTML = "<h3>Unhandled Promise Rejection:</h3><p>" + e.reason + "</p>";
+            document.body.appendChild(errDiv);
+        });
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

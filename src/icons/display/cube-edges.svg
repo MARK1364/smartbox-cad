@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Kostka krawędziowa: cień + obrys -->
+  <path d="M12 2.8 L20.6 7.6 L12 12.4 L3.4 7.6 Z" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1.15" stroke-linejoin="round"/>
+  <path d="M3.4 7.6 L12 12.4 L12 21.2 L3.4 16.4 Z" fill="#94a3b8" stroke="#cbd5e1" stroke-width="1.15" stroke-linejoin="round"/>
+  <path d="M20.6 7.6 L12 12.4 L12 21.2 L20.6 16.4 Z" fill="#64748b" stroke="#cbd5e1" stroke-width="1.15" stroke-linejoin="round"/>
+</svg>

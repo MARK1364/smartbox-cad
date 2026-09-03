@@ -1,0 +1,20 @@
+{
+  "scope": { "type": "PROJECT", "id": "ALL", "name": "Fixture testowy" },
+  "panels": [
+    {
+      "part_id": "BOK_L",
+      "role": "BOK",
+      "material": "W1100_ST9_18",
+      "thickness_mm": 18,
+      "length_mm": 720,
+      "width_mm": 560,
+      "edge_config": {},
+      "is_x_longer": true,
+      "furniture_name": "Szafka test",
+      "qty": 2
+    }
+  ],
+  "accessories": [],
+  "furnitures": ["Szafka test"],
+  "containers": []
+}

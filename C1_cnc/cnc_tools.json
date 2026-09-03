@@ -1,0 +1,111 @@
+[
+    {
+        "id": "tool_4_drill_8",
+        "name": "Wiertło fi 8 mm",
+        "number": 4,
+        "diameter": 8.0,
+        "type": "drill",
+        "allowedAxes": ["Z"],
+        "parameters": {
+            "feedRate": 1000,
+            "spindleRpm": 3000
+        }
+    },
+    {
+        "id": "tool_2_drill_5",
+        "name": "Wiertło fi 5 mm",
+        "number": 2,
+        "diameter": 5.0,
+        "type": "drill",
+        "allowedAxes": ["Z"],
+        "parameters": {
+            "feedRate": 1000,
+            "spindleRpm": 3000
+        }
+    },
+    {
+        "id": "tool_9_drill_7",
+        "name": "Wiertło fi 7 mm",
+        "number": 9,
+        "diameter": 7.0,
+        "type": "drill",
+        "allowedAxes": ["Z"],
+        "parameters": {
+            "feedRate": 1000,
+            "spindleRpm": 3000
+        }
+    },
+    {
+        "id": "tool_7_drill_8_h",
+        "name": "Wiertło poziome fi 8 mm",
+        "number": 7,
+        "diameter": 8.0,
+        "type": "drill",
+        "allowedAxes": ["X", "Y"],
+        "parameters": {
+            "feedRate": 1000,
+            "spindleRpm": 3000
+        }
+    },
+    {
+        "id": "tool_8_drill_5_h",
+        "name": "Wiertło poziome fi 5 mm",
+        "number": 8,
+        "diameter": 5.0,
+        "type": "drill",
+        "allowedAxes": ["X", "Y"],
+        "parameters": {
+            "feedRate": 1000,
+            "spindleRpm": 3000
+        }
+    },
+    {
+        "id": "tool_6_drill_3",
+        "name": "Wiertło fi 3 mm",
+        "number": 6,
+        "diameter": 3.0,
+        "type": "drill",
+        "allowedAxes": ["Z"],
+        "parameters": {
+            "feedRate": 800,
+            "spindleRpm": 3000
+        }
+    },
+    {
+        "id": "tool_2_drill_35",
+        "name": "Wiertło fi 35 mm (Puszka)",
+        "number": 2,
+        "diameter": 35.0,
+        "type": "drill",
+        "allowedAxes": ["Z"],
+        "parameters": {
+            "feedRate": 500,
+            "spindleRpm": 1500
+        }
+    },
+    {
+        "id": "tool_1_saw_150",
+        "name": "Piła nutująca 150x3 mm",
+        "number": 1,
+        "diameter": 150.0,
+        "type": "groove",
+        "allowedAxes": ["X"],
+        "parameters": {
+            "thickness": 3.0,
+            "feedRate": 1000,
+            "spindleRpm": 4000
+        }
+    },
+    {
+        "id": "tool_4_mill_8",
+        "name": "Frez fi 8 mm",
+        "number": 4,
+        "diameter": 8.0,
+        "type": "mill",
+        "allowedAxes": ["X", "Y", "Z"],
+        "parameters": {
+            "feedRate": 1200,
+            "spindleRpm": 6000
+        }
+    }
+]

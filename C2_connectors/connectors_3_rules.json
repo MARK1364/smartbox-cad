@@ -1,0 +1,196 @@
+{
+  "connector_types": {
+    "kolki_d8x35": {
+      "name": "Kołek ø8×35",
+      "description": "Kołek drewniany ø8mm × 35mm",
+      "diameter": 0.008,
+      "length": 0.035,
+      "price": 0.15
+    },
+    "konfirmat_5x50": {
+      "name": "Konfirmat 7/5×50",
+      "description": "Wkręt konfirmat: ø7 mm w boczku (łeb/trzon), ø5 mm w wieńcu (gwint), długość 50 mm",
+      "diameter": 0.005,
+      "length": 0.050,
+      "price": 0.25
+    },
+    "minifix": {
+      "name": "Minifix",
+      "description": "Złącze meblowe Minifix",
+      "diameter": 0.015,
+      "length": 0.012,
+      "price": 1.20
+    }
+  },
+
+  "placement_rules": {
+    "standard_od_lewej": {
+      "name": "Od przodu",
+      "description": "Kołki i konfirmaty od przodu formatki (−Y → +Y), co 32mm do 608mm",
+      "sides": [
+        {
+          "direction": "front",
+          "positions": [
+            { "offset_mm": 32,  "type": "kolki_d8x35" },
+            { "offset_mm": 64,  "type": "konfirmat_5x50" },
+            { "offset_mm": 96,  "type": "kolki_d8x35" },
+            { "offset_mm": 128, "type": "konfirmat_5x50" },
+            { "offset_mm": 160, "type": "kolki_d8x35" },
+            { "offset_mm": 192, "type": "konfirmat_5x50" },
+            { "offset_mm": 224, "type": "kolki_d8x35" },
+            { "offset_mm": 256, "type": "konfirmat_5x50" },
+            { "offset_mm": 288, "type": "kolki_d8x35" },
+            { "offset_mm": 320, "type": "konfirmat_5x50" },
+            { "offset_mm": 352, "type": "kolki_d8x35" },
+            { "offset_mm": 384, "type": "konfirmat_5x50" },
+            { "offset_mm": 416, "type": "kolki_d8x35" },
+            { "offset_mm": 448, "type": "konfirmat_5x50" },
+            { "offset_mm": 480, "type": "kolki_d8x35" },
+            { "offset_mm": 512, "type": "konfirmat_5x50" },
+            { "offset_mm": 544, "type": "kolki_d8x35" },
+            { "offset_mm": 576, "type": "konfirmat_5x50" },
+            { "offset_mm": 608, "type": "kolki_d8x35" }
+          ]
+        }
+      ]
+    },
+
+    "standard_od_prawej": {
+      "name": "Od tyłu",
+      "description": "Kołki i konfirmaty od tyłu formatki (+Y → −Y), co 32mm do 608mm",
+      "sides": [
+        {
+          "direction": "back",
+          "positions": [
+            { "offset_mm": 32,  "type": "kolki_d8x35" },
+            { "offset_mm": 64,  "type": "konfirmat_5x50" },
+            { "offset_mm": 96,  "type": "kolki_d8x35" },
+            { "offset_mm": 128, "type": "konfirmat_5x50" },
+            { "offset_mm": 160, "type": "kolki_d8x35" },
+            { "offset_mm": 192, "type": "konfirmat_5x50" },
+            { "offset_mm": 224, "type": "kolki_d8x35" },
+            { "offset_mm": 256, "type": "konfirmat_5x50" },
+            { "offset_mm": 288, "type": "kolki_d8x35" },
+            { "offset_mm": 320, "type": "konfirmat_5x50" },
+            { "offset_mm": 352, "type": "kolki_d8x35" },
+            { "offset_mm": 384, "type": "konfirmat_5x50" },
+            { "offset_mm": 416, "type": "kolki_d8x35" },
+            { "offset_mm": 448, "type": "konfirmat_5x50" },
+            { "offset_mm": 480, "type": "kolki_d8x35" },
+            { "offset_mm": 512, "type": "konfirmat_5x50" },
+            { "offset_mm": 544, "type": "kolki_d8x35" },
+            { "offset_mm": 576, "type": "konfirmat_5x50" },
+            { "offset_mm": 608, "type": "kolki_d8x35" }
+          ]
+        }
+      ]
+    },
+
+    "symetrycznie": {
+      "name": "Symetrycznie (przód+tył)",
+      "description": "Od przodu i tyłu jednocześnie, co 32mm do 608mm. Pierwszy otwór ustawia parametr odsunięcia.",
+      "sides": [
+        {
+          "direction": "front",
+          "positions": [
+            { "offset_mm": 32,  "type": "kolki_d8x35" },
+            { "offset_mm": 64,  "type": "konfirmat_5x50" },
+            { "offset_mm": 96,  "type": "kolki_d8x35" },
+            { "offset_mm": 128, "type": "konfirmat_5x50" },
+            { "offset_mm": 160, "type": "kolki_d8x35" },
+            { "offset_mm": 192, "type": "konfirmat_5x50" },
+            { "offset_mm": 224, "type": "kolki_d8x35" },
+            { "offset_mm": 256, "type": "konfirmat_5x50" },
+            { "offset_mm": 288, "type": "kolki_d8x35" },
+            { "offset_mm": 320, "type": "konfirmat_5x50" },
+            { "offset_mm": 352, "type": "kolki_d8x35" },
+            { "offset_mm": 384, "type": "konfirmat_5x50" },
+            { "offset_mm": 416, "type": "kolki_d8x35" },
+            { "offset_mm": 448, "type": "konfirmat_5x50" },
+            { "offset_mm": 480, "type": "kolki_d8x35" },
+            { "offset_mm": 512, "type": "konfirmat_5x50" },
+            { "offset_mm": 544, "type": "kolki_d8x35" },
+            { "offset_mm": 576, "type": "konfirmat_5x50" },
+            { "offset_mm": 608, "type": "kolki_d8x35" }
+          ]
+        },
+        {
+          "direction": "back",
+          "positions": [
+            { "offset_mm": 608, "type": "kolki_d8x35" },
+            { "offset_mm": 576, "type": "konfirmat_5x50" },
+            { "offset_mm": 544, "type": "kolki_d8x35" },
+            { "offset_mm": 512, "type": "konfirmat_5x50" },
+            { "offset_mm": 480, "type": "kolki_d8x35" },
+            { "offset_mm": 448, "type": "konfirmat_5x50" },
+            { "offset_mm": 416, "type": "kolki_d8x35" },
+            { "offset_mm": 384, "type": "konfirmat_5x50" },
+            { "offset_mm": 352, "type": "kolki_d8x35" },
+            { "offset_mm": 320, "type": "konfirmat_5x50" },
+            { "offset_mm": 288, "type": "kolki_d8x35" },
+            { "offset_mm": 256, "type": "konfirmat_5x50" },
+            { "offset_mm": 224, "type": "kolki_d8x35" },
+            { "offset_mm": 192, "type": "konfirmat_5x50" },
+            { "offset_mm": 160, "type": "kolki_d8x35" },
+            { "offset_mm": 128, "type": "konfirmat_5x50" },
+            { "offset_mm": 96,  "type": "kolki_d8x35" },
+            { "offset_mm": 64,  "type": "konfirmat_5x50" },
+            { "offset_mm": 32,  "type": "kolki_d8x35" }
+          ]
+        }
+      ]
+    },
+
+    "mimosrody_od_lewej": {
+      "name": "Mimośrody od przodu",
+      "description": "Kołki i minifix od przodu formatki (−Y → +Y), co 32mm do 608mm",
+      "sides": [
+        {
+          "direction": "front",
+          "positions": [
+            { "offset_mm": 32,  "type": "kolki_d8x35" },
+            { "offset_mm": 64,  "type": "minifix" },
+            { "offset_mm": 96,  "type": "kolki_d8x35" },
+            { "offset_mm": 128, "type": "minifix" },
+            { "offset_mm": 160, "type": "kolki_d8x35" },
+            { "offset_mm": 192, "type": "minifix" },
+            { "offset_mm": 224, "type": "kolki_d8x35" },
+            { "offset_mm": 256, "type": "minifix" },
+            { "offset_mm": 288, "type": "kolki_d8x35" },
+            { "offset_mm": 320, "type": "minifix" },
+            { "offset_mm": 352, "type": "kolki_d8x35" },
+            { "offset_mm": 384, "type": "minifix" },
+            { "offset_mm": 416, "type": "kolki_d8x35" },
+            { "offset_mm": 448, "type": "minifix" },
+            { "offset_mm": 480, "type": "kolki_d8x35" },
+            { "offset_mm": 512, "type": "minifix" },
+            { "offset_mm": 544, "type": "kolki_d8x35" },
+            { "offset_mm": 576, "type": "minifix" },
+            { "offset_mm": 608, "type": "kolki_d8x35" }
+          ]
+        }
+      ]
+    }
+  },
+
+  "drilling_specs": {
+    "kolki_d8x35": {
+      "panel_a": { "diameter_mm": 8, "depth_mm": 23, "face_type": "EDGE" },
+      "panel_b": { "diameter_mm": 8, "depth_mm": 12, "face_type": "FACE" }
+    },
+    "konfirmat_5x50": {
+      "panel_a": { "diameter_mm": 5, "depth_mm": 38, "face_type": "EDGE" },
+      "panel_b": { "diameter_mm": 7, "depth_mm": 18, "face_type": "FACE", "through": true }
+    },
+    "minifix": {
+      "panel_a": { "diameter_mm": 8, "depth_mm": 34, "face_type": "EDGE" },
+      "panel_b_bolt": { "diameter_mm": 5, "depth_mm": 11, "face_type": "FACE" },
+      "panel_b_housing": { "diameter_mm": 15, "depth_mm": 12.5, "face_type": "FACE", "offset_from_edge_mm": 34 }
+    }
+  },
+
+  "default_settings": {
+    "placement_rule": "standard_od_lewej",
+    "first_offset_mm": 32
+  }
+}

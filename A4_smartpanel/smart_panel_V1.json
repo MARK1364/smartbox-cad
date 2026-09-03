@@ -1,0 +1,87 @@
+{
+  "metadata": {
+    "name": "CORE_TECHNOLOGY_LIBRARY",
+    "version": "4.1",
+    "author": "SmartBox"
+  },
+  "materials_database": {
+    "PLYTY_18": {
+      "category_name": "Płyta Wiórowa",
+      "default_thickness_mm": 18.0,
+      "density_kg_m3": 680.0,
+      "items": {
+        "W1100_ST9_18": { "name": "Biały Alpejski", "code": "W1100 ST9" },
+        "H1110_ST9_18": { "name": "Sosna Sealand", "code": "H110 ST9" },
+        "H1113_ST10_18": { "name": "Dąb Kansas brązowy", "code": "H1113 ST10" },
+        "H1115_ST12_18": { "name": "Bamenda szarobeżowa", "code": "H1115 ST12" },
+        "H1115_ST9_18": { "name": "Bamenda szarobeżowa", "code": "H1115 ST9" },
+        "H1122_ST22_18": { "name": "Whitewood", "code": "H1122 ST22" },
+        "H1123_ST22_18": { "name": "Graphitewood", "code": "H1123 ST22" },
+        "H1137_ST12_18": { "name": "Dąb Sorano czarnobrązowy", "code": "H1137 ST12" },
+        "H1145_ST10_18": { "name": "Dąb Bardolino naturalny", "code": "H1145 ST10" },
+        "H1146_ST10_18": { "name": "Dąb Bardolino szary", "code": "H1146 ST10" },
+        "H1150_ST10_18": { "name": "Dąb Arizona szary", "code": "H1150 ST10" }
+      }
+    },
+    "PLYTY_10": {
+      "category_name": "Płyta Wiórowa",
+      "default_thickness_mm": 10.0,
+      "density_kg_m3": 680.0,
+      "items": {
+        "W1100_ST9_10": { "name": "Biały Alpejski", "code": "W1100 ST9" },
+        "H1110_ST9_10": { "name": "Sosna Sealand", "code": "H110 ST9" },
+        "H1113_ST10_10": { "name": "Dąb Kansas brązowy", "code": "H1113 ST10" },
+        "H1115_ST12_10": { "name": "Bamenda szarobeżowa", "code": "H1115 ST12" },
+        "H1115_ST9_10": { "name": "Bamenda szarobeżowa", "code": "H1115 ST9" },
+        "H1122_ST22_10": { "name": "Whitewood", "code": "H1122 ST22" },
+        "H1123_ST22_10": { "name": "Graphitewood", "code": "H1123 ST22" },
+        "H1137_ST12_10": { "name": "Dąb Sorano czarnobrązowy", "code": "H1137 ST12" },
+        "H1145_ST10_10": { "name": "Dąb Bardolino naturalny", "code": "H1145 ST10" },
+        "H1146_ST10_10": { "name": "Dąb Bardolino szary", "code": "H1146 ST10" },
+        "H1150_ST10_10": { "name": "Dąb Arizona szary", "code": "H1150 ST10" }
+      }
+    },
+    "MDF_18MM": {
+      "category_name": "MDF",
+      "default_thickness_mm": 18.0,
+      "density_kg_m3": 780.0,
+      "items": {
+        "MDF_SUROWY_18": { "name": "MDF Surowy" }
+      }
+    },
+    "HDF_3": {
+      "category_name": "HDF",
+      "default_thickness_mm": 3.0,
+      "density_kg_m3": 880.0,
+      "items": {
+        "HDF_BIALY_3": { "name": "HDF Biały 3mm", "code": "HDF_WHITE_3" },
+        "HDF_CZARNY_3": { "name": "HDF Czarny", "code": "HDF_BLACK" }
+      }
+    },
+    "SZKLO_4": {
+      "category_name": "Szkło",
+      "default_thickness_mm": 4.0,
+      "density_kg_m3": 2500.0,
+      "items": {
+        "LACOBEL_CZARNY": { "name": "Lacobel Czarny", "code": "LACOBEL_U9990" },
+        "LACOBEL_BIALY": { "name": "Lacobel Biały", "code": "LACOBEL_U1015" },
+        "SZKLO_MATOWE": { "name": "Szkło Matowe" },
+        "SZKLO_DYMNE": { "name": "Szkło Dymne" }
+      }
+    },
+    "LUSTRA_4": {
+      "category_name": "Lustro",
+      "default_thickness_mm": 4.0,
+      "density_kg_m3": 2500.0,
+      "items": {
+        "LUSTRO_SREBRNE_4": { "name": "Lustro Srebrne" }
+      }
+    }
+  },
+  "edge_banding_types": {
+    "0.008x0.022": {
+      "name": "Okleina 0.8x22mm",
+      "prices_services": "EDGE_BANDING_08x22"
+    }
+  }
+}

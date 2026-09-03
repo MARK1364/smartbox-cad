@@ -1,0 +1,70 @@
+{
+  "version": "1.0.0",
+  "units": "m",
+  "items": {
+    "BLUM_71B3550": {
+      "id": "BLUM_71B3550",
+      "type": "HINGE",
+      "name": "Blum CLIP top BLUMOTION 110st Standard",
+      "brand": "Blum",
+      "art_no": "71B3550",
+      "price_id": "HINGE_BLUM_71B3550",
+      "machining_template_id": "BLUM_110_STANDARD",
+      "usable_in": ["DOORS", "FLAPS"],
+      "mount": {
+        "cup_x_from_inner_side": 0.0215,
+        "corpus_y_from_front": 0.037
+      },
+      "machining": {
+        "front_holes": [
+          {
+            "name": "Puszka_35",
+            "dia": 0.035,
+            "depth": 0.015,
+            "edge_dist": 0.0215,
+            "object": "Cylinder"
+          },
+          {
+            "name": "Wkret_1",
+            "dia": 0.003,
+            "depth": 0.01,
+            "edge_dist": 0.031,
+            "y_offset": 0.0225,
+            "object": "Cylinder"
+          },
+          {
+            "name": "Wkret_2",
+            "dia": 0.003,
+            "depth": 0.01,
+            "edge_dist": 0.031,
+            "y_offset": -0.0225,
+            "object": "Cylinder"
+          }
+        ],
+        "corpus_holes": [
+          {
+            "name": "Prowadnik_otw_G",
+            "dia": 0.005,
+            "depth": 0.012,
+            "front_dist": 0.037,
+            "z_offset": 0.016,
+            "object": "Cylinder"
+          },
+          {
+            "name": "Prowadnik_otw_D",
+            "dia": 0.005,
+            "depth": 0.012,
+            "front_dist": 0.037,
+            "z_offset": -0.016,
+            "object": "Cylinder"
+          }
+        ]
+      },
+      "visual": {
+        "glb": "models/zawiasy/BLUM_71B3550.glb",
+        "origin": "CUP_CENTER",
+        "units": "m"
+      }
+    }
+  }
+}

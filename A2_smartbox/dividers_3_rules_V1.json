@@ -1,0 +1,285 @@
+{
+  "metadata": {
+    "module_type": "SMART_BOX_DIVIDERS",
+    "version": "3.0.0",
+    "side_references_smartbox": "INNER"
+  },
+  "parameters": {
+    "defaults": {
+      "thickness": 0.018
+    },
+    "validation": {
+      "max_instances": 5
+    },
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "DIVIDER_PLATE": {
+          "description": "Przegrody - oklejony FRONT",
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+            "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Przegrody_SB",
+      "type": "Assembly",
+      "subcomponents": {
+        "DIVIDERS_1": {
+          "name": "Przegroda_1",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0.0,
+            -90.0,
+            0.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        },
+        "DIVIDERS_2": {
+          "name": "Przegroda_2",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0.0,
+            -90.0,
+            0.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        },
+        "DIVIDERS_3": {
+          "name": "Przegroda_3",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0.0,
+            -90.0,
+            0.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        },
+        "DIVIDERS_4": {
+          "name": "Przegroda_4",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0.0,
+            -90.0,
+            0.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        },
+        "DIVIDERS_5": {
+          "name": "Przegroda_5",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0.0,
+            -90.0,
+            0.0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_smartbox_child": true
+          }
+        }
+      }
+    }
+  },
+  "machining_library": {},
+  "hardware_library": {},
+  "ui_config": {
+    "panel": {
+      "label": {
+        "pl": "Ustawienia Przegród V2",
+        "en": "Dividers V2",
+        "de": "Trennwände V2"
+      },
+      "parent": "VIEW3D_PT_SmartBox_Core",
+      "box_type_filter": "DIVIDERS"
+    },
+    "fields": {
+      "count": {
+        "type": "INT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Ilość przegród",
+          "en": "Divider count",
+          "de": "Trennwandanzahl"
+        },
+        "tooltip": {
+          "pl": "Liczba pionowych przegród wewnętrznych",
+          "en": "Number of vertical internal dividers"
+        },
+        "default": 2,
+        "min": 0,
+        "max": 5
+      },
+      "spacing_mode": {
+        "type": "ENUM",
+        "widget": "RADIO",
+        "label": {
+          "pl": "Rozstaw",
+          "en": "Spacing mode",
+          "de": "Abstandsmodus"
+        },
+        "items": {
+          "EQUAL": {
+            "pl": "Równy",
+            "en": "Equal",
+            "de": "Gleich"
+          },
+          "CUSTOM": {
+            "pl": "Własny",
+            "en": "Custom",
+            "de": "Benutzerdefiniert"
+          }
+        },
+        "default": "EQUAL"
+      },
+      "section_1_width": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wnęka 1",
+          "en": "Section 1"
+        },
+        "default": 0.2,
+        "min": 0.01,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "spacing_mode",
+          "value": "CUSTOM"
+        }
+      },
+      "section_2_width": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wnęka 2",
+          "en": "Section 2"
+        },
+        "default": 0.2,
+        "min": 0.01,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "spacing_mode",
+          "value": "CUSTOM"
+        }
+      },
+      "section_3_width": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wnęka 3",
+          "en": "Section 3"
+        },
+        "default": 0.2,
+        "min": 0.01,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "spacing_mode",
+          "value": "CUSTOM"
+        }
+      },
+      "section_4_width": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wnęka 4",
+          "en": "Section 4"
+        },
+        "default": 0.2,
+        "min": 0.01,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "spacing_mode",
+          "value": "CUSTOM"
+        }
+      },
+      "section_5_width": {
+        "type": "FLOAT",
+        "widget": "DRAG_NUMBER",
+        "label": {
+          "pl": "Wnęka 5",
+          "en": "Section 5"
+        },
+        "default": 0.2,
+        "min": 0.01,
+        "unit": "LENGTH",
+        "show_if": {
+          "field": "spacing_mode",
+          "value": "CUSTOM"
+        }
+      }
+    },
+    "operators": {}
+  },
+  "messages": {
+    "hints": {
+      "STEP_1_SELECT_BASE": {
+        "pl": "Krok 1: Zaznacz szafkę, w której chcesz wstawić przegrody.",
+        "en": "Step 1: Select the cabinet where you want to insert dividers."
+      },
+      "STEP_2_ADJUST_COUNT": {
+        "pl": "Krok 2: Określ ilość i rozmieszczenie przegród pionowych.",
+        "en": "Step 2: Specify the number and arrangement of vertical dividers."
+      },
+      "STEP_3_APPLY": {
+        "pl": "Krok 3: Kliknij 'Generuj Przegrody'.",
+        "en": "Step 3: Click 'Generate Dividers'."
+      }
+    }
+  }
+}

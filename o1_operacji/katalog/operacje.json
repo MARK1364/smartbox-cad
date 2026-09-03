@@ -1,0 +1,46 @@
+{
+  "items": {
+    "ramka_60": {
+      "id": "ramka_60",
+      "name": "Ramka 60",
+      "kind": "POCKET",
+      "face_hint": "OUTER",
+      "insets": { "l": 0.06, "r": 0.06, "t": 0.06, "b": 0.06 },
+      "depth": 0.006,
+      "through": false,
+      "fill": "none"
+    },
+    "przetloczenie": {
+      "id": "przetloczenie",
+      "name": "Przetłoczenie",
+      "kind": "POCKET",
+      "face_hint": "OUTER",
+      "insets": { "l": 0.08, "r": 0.08, "t": 0.08, "b": 0.08 },
+      "depth": 0.002,
+      "through": false,
+      "fill": "none"
+    },
+    "wyciecie_szklo": {
+      "id": "wyciecie_szklo",
+      "name": "Wycięcie pod szkło",
+      "kind": "THROUGH",
+      "face_hint": "OUTER",
+      "insets": { "l": 0.06, "r": 0.06, "t": 0.06, "b": 0.06 },
+      "depth": 0,
+      "through": true,
+      "fill": "glass"
+    },
+    "rewizja": {
+      "id": "rewizja",
+      "name": "Rewizja",
+      "kind": "THROUGH",
+      "face_hint": "OUTER",
+      "placement": "edge_dims",
+      "size": { "w": 0.12, "h": 0.08 },
+      "from": { "u": "left", "v": "bottom", "du": 0.1, "dv": 0.08 },
+      "depth": 0,
+      "through": true,
+      "fill": "none"
+    }
+  }
+}

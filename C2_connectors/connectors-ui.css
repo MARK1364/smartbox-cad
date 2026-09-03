@@ -1,0 +1,209 @@
+/* Panel złączy C2 — układ jak VIEW3D_PT_Connectors */
+
+.c2-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    padding: 0 12px 12px;
+    color: var(--text-primary, #e4e4e7);
+    font-size: 13px;
+    gap: 10px;
+}
+
+.c2-tools-hint {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-muted, #71717a);
+}
+
+.c2-box {
+    background: rgba(39, 39, 42, 0.55);
+    border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-sm, 6px);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.c2-box__title {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary, #a1a1aa);
+}
+
+.c2-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 26px;
+    font-size: 12px;
+    color: var(--text-secondary, #a1a1aa);
+}
+
+.c2-field > span {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.c2-field select,
+.c2-field input[type='number'] {
+    background: rgba(24, 24, 27, 0.9);
+    color: var(--text-primary, #fafafa);
+    border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
+    border-radius: 4px;
+    height: 26px;
+    padding: 2px 6px;
+    box-sizing: border-box;
+}
+
+.c2-field select {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.c2-field input[type='number'] {
+    flex: 0 0 52px;
+    width: 52px;
+    text-align: right;
+}
+
+.c2-field__value {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.c2-field__unit {
+    font-size: 11px;
+    color: var(--text-muted, #71717a);
+}
+
+.c2-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: rgba(39, 39, 42, 0.9);
+    border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
+    border-radius: 6px;
+    color: var(--text-primary, #fafafa);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.c2-btn:hover {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+.c2-btn--primary {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(59, 130, 246, 0.45);
+    font-weight: 600;
+}
+
+.c2-btn--primary.is-active {
+    background: rgba(59, 130, 246, 0.45);
+    border-color: rgba(59, 130, 246, 0.85);
+    box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.45);
+}
+
+.c2-multi {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    border: 1px dashed rgba(59, 130, 246, 0.45);
+    border-radius: 6px;
+}
+
+.c2-multi__title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #93c5fd;
+}
+
+.c2-empty {
+    font-size: 12px;
+    color: var(--text-muted, #64748b);
+}
+
+.c2-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+}
+
+.c2-row__name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.c2-row__actions {
+    display: flex;
+    gap: 2px;
+}
+
+.c2-row__actions button {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary, #a1a1aa);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 13px;
+}
+
+.c2-row__actions button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.c2-row__actions button:not(:disabled):hover {
+    color: #fff;
+}
+
+.c2-pos {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-primary, #fafafa);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 3px 0;
+    text-align: left;
+}
+
+.c2-pos.is-off {
+    opacity: 0.45;
+}
+
+.c2-pos__check {
+    width: 16px;
+}
+
+.c2-pos__off {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary, #a1a1aa);
+    width: 48px;
+}
+
+.c2-side__label {
+    font-size: 11px;
+    color: #93c5fd;
+    margin: 6px 0 2px;
+}

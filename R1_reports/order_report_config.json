@@ -1,0 +1,30 @@
+{
+    "report_title": "Zamówienie-USŁUGA CIĘCIA/OKLEINOWANIA",
+    "header": {
+        "left_fields": [
+            {"label": "Zamawiający", "key": "customer"},
+            {"label": "Symbol płyty", "key": "material_name"},
+            {"label": "Okleina", "key": "edge_banding_name"}
+        ],
+        "right_fields": [
+            {"label": "NIP", "key": "nip"},
+            {"label": "Telefon", "key": "phone"},
+            {"label": "Grubość", "key": "material_thickness"},
+            {"label": "Grubość", "key": "edge_thickness"}
+        ]
+    },
+    "table": {
+        "columns": [
+            {"label": "LP", "key": "lp", "width": "50px", "align": "center"},
+            {"label": "Długość", "key": "length", "width": "100px", "align": "center"},
+            {"label": "Krawędź", "key": "edge_length", "width": "80px", "align": "center"},
+            {"label": "Szerokość", "key": "width", "width": "100px", "align": "center"},
+            {"label": "Krawędź", "key": "edge_width", "width": "80px", "align": "center"},
+            {"label": "Sztuk", "key": "qty", "width": "60px", "align": "center"},
+            {"label": "Uwagi", "key": "remarks", "width": "auto", "align": "left"}
+        ],
+        "rows_count": 30,
+        "row_height": "25px",
+        "font_size": "11px"
+    }
+}

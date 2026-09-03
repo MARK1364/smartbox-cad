@@ -1,0 +1,57 @@
+{
+  "name": "Vertex bind – cubeA jest ground (nieruchomy)",
+  "description": "Dwie kostki, cubeA jest ground (dist=0). cubeB przesuwa się SAM do cubeA. To jest intuicyjne zachowanie - ground się nie rusza.",
+  "contract": {
+    "constraints": [
+      {
+        "constraint_id": "c1",
+        "bind_type": "VERTEX",
+        "enabled": true,
+        "obj_a_id": "cubeA",
+        "obj_b_id": "cubeB",
+        "vert_a": 0,
+        "vert_b": 1,
+        "face_a": -1,
+        "face_b": -1,
+        "ground_mode": "VERTEX",
+        "ground_pos": [0,0,0],
+        "ground_normal": [0,0,1],
+        "offset": 0.0
+      }
+    ],
+    "ground_distance_map": {
+      "cubeA": 0,
+      "cubeB": 1
+    }
+  },
+  "initial_states": {
+    "cubeA": {
+      "id": "cubeA",
+      "location": [0,0,0],
+      "rotation": [1,0,0,0],
+      "local_vertices": { "0": [-0.5, -0.5, -0.5] },
+      "local_faces": {}
+    },
+    "cubeB": {
+      "id": "cubeB",
+      "location": [2,0,0],
+      "rotation": [1,0,0,0],
+      "local_vertices": { "1": [0.5, -0.5, -0.5] },
+      "local_faces": {}
+    }
+  },
+  "expected_results": {
+    "cubeA": {
+      "location": [0, 0, 0],
+      "rotation": [1,0,0,0]
+    },
+    "cubeB": {
+      "location": [-1.0, 0, 0],
+      "rotation": [1,0,0,0]
+    }
+  },
+  "tolerances": {
+    "position": 0.0001,
+    "angle_deg": 0.01
+  }
+}
