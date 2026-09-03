@@ -496,8 +496,10 @@ export class Viewport {
         if (!mesh) return;
         const currentMode = mode || this.currentRenderMode || 'edges';
 
-        const name = mesh.name || '';
-        const isFace = name.startsWith('face_') || mesh.metadata?.faceName;
+        const isFace = name.startsWith('face_') || 
+                       name.startsWith('cylinder_') || 
+                       mesh.metadata?.faceName || 
+                       mesh.metadata?.type === 'face';
         const isFeature = mesh.metadata?.type === 'feature' || 
                           name.startsWith('hole_') || 
                           name.startsWith('pocket_') || 

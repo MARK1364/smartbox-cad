@@ -549,7 +549,7 @@ export class PanelView {
             const len = isRod ? wMm : (wMm < hMm && wMm > 0 ? wMm : tMm);
             const dia = isRod ? (hMm > 1 && hMm < 500 ? hMm : 25) : (hMm > 1 && hMm < 500 ? hMm : 42);
             
-            const cylinderMesh = BABYLON.MeshBuilder.CreateCylinder(`cylinder_${this.model.id}`, {
+            const cylinderMesh = BABYLON.MeshBuilder.CreateCylinder(`face_cylinder_${this.model.id}`, {
                 height: Math.max(1, len),
                 diameter: Math.max(1, dia),
                 tessellation: 36
@@ -557,6 +557,9 @@ export class PanelView {
             
             cylinderMesh.rotation.z = Math.PI / 2;
             cylinderMesh.parent = this.root;
+            cylinderMesh.isVisible = true;
+            cylinderMesh.visibility = 1.0;
+            cylinderMesh.isPickable = true;
             
             if (typeof cylinderMesh.enableEdgesRendering === 'function') {
                 cylinderMesh.enableEdgesRendering();
@@ -572,10 +575,15 @@ export class PanelView {
             
             const idMgr = IDManager.getInstance();
             const smartId = idMgr.register(EntityType.FACE, this.model.smartId?.fullPath || this.model.id, 'cylinder_body');
-            cylinderMesh.metadata = { type: 'face', smartId, panelModel: this.model };
+            cylinderMesh.metadata = { type: 'face', faceName: 'cylinder_body', smartId, panelModel: this.model };
             
             this.faceMeshes['cylinder_body'] = cylinderMesh;
             this.faceMaterials['cylinder_body'] = mat;
+
+            const vp = ContextManager.instance.viewport;
+            if (vp && typeof vp.applyRenderModeToMesh === 'function') {
+                vp.applyRenderModeToMesh(cylinderMesh);
+            }
             return;
         }
 
