@@ -167,6 +167,13 @@ export class PanelModel {
         zoneId = undefined as string | undefined,
         zonePrefix = undefined as string | undefined,
     } = {}) {
+        if ((thickness <= 3_500_000 || role === 'BACK_PANEL') && materialId === 'W1100_ST9_18' && materialName === 'Biały Alpejski') {
+            materialId = 'HDF_BIALY_3';
+            materialName = 'HDF Biały 3mm';
+            materialCode = 'HDF 3mm';
+            color = { r: 0.94, g: 0.94, b: 0.94 };
+        }
+
         this.width = width;
         this.height = height;
         this.thickness = thickness;

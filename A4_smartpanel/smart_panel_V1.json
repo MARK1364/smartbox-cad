@@ -54,6 +54,7 @@
       "default_thickness_mm": 3.0,
       "density_kg_m3": 880.0,
       "items": {
+        "HDF_3": { "name": "HDF Surowy 3mm", "code": "HDF_RAW_3" },
         "HDF_BIALY_3": { "name": "HDF Biały 3mm", "code": "HDF_WHITE_3" },
         "HDF_CZARNY_3": { "name": "HDF Czarny", "code": "HDF_BLACK" }
       }
