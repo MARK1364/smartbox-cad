@@ -516,6 +516,53 @@ export class PanelView {
     }
 
     _rebuildMeshes() {
+        const isCylinder = this.model?.role === 'TUBE_ROD' || 
+                           this.model?.role === 'HOLDER' || 
+                           this.model?.custom_properties?.shape === 'CYLINDER' || 
+                           String(this.model?.name || '').toLowerCase().includes('drazek') || 
+                           String(this.model?.name || '').toLowerCase().includes('uchwyt') || 
+                           String(this.model?.name || '').toLowerCase().includes('rozeta');
+
+        if (isCylinder) {
+            this._disposeCurrentMeshes();
+            this._disposeFeatureMarkers();
+            
+            const isRod = this.model.role === 'TUBE_ROD' || String(this.model.name || '').toLowerCase().includes('drazek');
+            const wMm = unit.toBabylon(this.model.width);
+            const hMm = unit.toBabylon(this.model.height);
+            
+            const len = wMm > 0 ? wMm : 600;
+            const dia = hMm > 0 ? hMm : (isRod ? 25 : 42);
+            
+            const cylinderMesh = BABYLON.MeshBuilder.CreateCylinder(`cylinder_${this.model.id}`, {
+                height: len,
+                diameter: dia,
+                tessellation: 32
+            }, this.scene);
+            
+            cylinderMesh.rotation.z = Math.PI / 2;
+            cylinderMesh.parent = this.root;
+            
+            if (typeof cylinderMesh.enableEdgesRendering === 'function') {
+                cylinderMesh.enableEdgesRendering();
+                cylinderMesh.edgesWidth = 1.5;
+                cylinderMesh.edgesColor = new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
+            }
+            
+            const mat = new BABYLON.StandardMaterial(`mat_cyl_${this.model.id}`, this.scene);
+            mat.diffuseColor = new BABYLON.Color3(0.85, 0.85, 0.88);
+            mat.specularColor = new BABYLON.Color3(0.6, 0.6, 0.6);
+            cylinderMesh.material = mat;
+            
+            const idMgr = IDManager.getInstance();
+            const smartId = idMgr.register(EntityType.FACE, this.model.smartId?.fullPath || this.model.id, 'cylinder_body');
+            cylinderMesh.metadata = { type: 'face', smartId, panelModel: this.model };
+            
+            this.faceMeshes['cylinder_body'] = cylinderMesh;
+            this.faceMaterials['cylinder_body'] = mat;
+            return;
+        }
+
         try {
             const ctxBuilder = (ContextManager.instance as any)?.panelBuilder;
             const builder = (ctxBuilder && typeof ctxBuilder.build === 'function')
