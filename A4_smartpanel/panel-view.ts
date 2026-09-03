@@ -516,18 +516,24 @@ export class PanelView {
     }
 
     _rebuildMeshes() {
-        const isCylinder = this.model?.role === 'TUBE_ROD' || 
-                           this.model?.role === 'HOLDER' || 
-                           this.model?.custom_properties?.shape === 'CYLINDER' || 
-                           String(this.model?.name || '').toLowerCase().includes('drazek') || 
-                           String(this.model?.name || '').toLowerCase().includes('uchwyt') || 
-                           String(this.model?.name || '').toLowerCase().includes('rozeta');
+        const roleUpper = String(this.model?.role || '').toUpperCase();
+        const nameLower = String(this.model?.name || '').toLowerCase();
+        const shapeUpper = String(this.model?.custom_properties?.shape || this.model?.customProperties?.shape || '').toUpperCase();
+
+        const isCylinder = roleUpper === 'TUBE_ROD' || 
+                           roleUpper === 'HOLDER' || 
+                           roleUpper.includes('TUBE') ||
+                           roleUpper.includes('HOLDER') ||
+                           shapeUpper === 'CYLINDER' || 
+                           nameLower.includes('drazek') || 
+                           nameLower.includes('uchwyt') || 
+                           nameLower.includes('rozeta');
 
         if (isCylinder) {
             this._disposeCurrentMeshes();
             this._disposeFeatureMarkers();
             
-            const isRod = this.model.role === 'TUBE_ROD' || String(this.model.name || '').toLowerCase().includes('drazek');
+            const isRod = roleUpper === 'TUBE_ROD' || roleUpper.includes('TUBE') || nameLower.includes('drazek');
             const wMm = unit.toBabylon(this.model.width);
             const hMm = unit.toBabylon(this.model.height);
             
@@ -537,7 +543,7 @@ export class PanelView {
             const cylinderMesh = BABYLON.MeshBuilder.CreateCylinder(`cylinder_${this.model.id}`, {
                 height: len,
                 diameter: dia,
-                tessellation: 32
+                tessellation: 36
             }, this.scene);
             
             cylinderMesh.rotation.z = Math.PI / 2;
@@ -546,12 +552,13 @@ export class PanelView {
             if (typeof cylinderMesh.enableEdgesRendering === 'function') {
                 cylinderMesh.enableEdgesRendering();
                 cylinderMesh.edgesWidth = 1.5;
-                cylinderMesh.edgesColor = new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
+                cylinderMesh.edgesColor = new BABYLON.Color4(0.15, 0.15, 0.15, 0.9);
             }
             
             const mat = new BABYLON.StandardMaterial(`mat_cyl_${this.model.id}`, this.scene);
             mat.diffuseColor = new BABYLON.Color3(0.85, 0.85, 0.88);
-            mat.specularColor = new BABYLON.Color3(0.6, 0.6, 0.6);
+            mat.specularColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+            mat.specularPower = 64;
             cylinderMesh.material = mat;
             
             const idMgr = IDManager.getInstance();

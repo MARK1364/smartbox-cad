@@ -230,7 +230,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             if (defaultEdgeBanding && (!panel.edgeBanding || Object.keys(panel.edgeBanding).length === 0)) {
                 panel.setEdgeBanding(defaultEdgeBanding);
             }
-            if (part.customProperties) (panel as any).custom_properties = { ...part.customProperties };
+            if (part.customProperties || part.custom_properties) (panel as any).custom_properties = { ...(part.customProperties || part.custom_properties) };
             assignPlanFeatures(panel, part.features || [], true);
         } else {
             panel = new PanelModel({
@@ -243,7 +243,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             if (defaultEdgeBanding) {
                 panel.setEdgeBanding(defaultEdgeBanding);
             }
-            if (part.customProperties) (panel as any).custom_properties = { ...part.customProperties };
+            if (part.customProperties || part.custom_properties) (panel as any).custom_properties = { ...(part.customProperties || part.custom_properties) };
             assignPlanFeatures(panel, part.features || [], false);
 
             panelNode = CADNode.create(NodeType.PART, panel.name, panel.id);

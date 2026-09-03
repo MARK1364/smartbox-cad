@@ -48,7 +48,20 @@ export function buildMeshFromPanel(model: any) {
         'FACE_Z_MINUS'
     ];
     
-    if (model.role === 'DRILLING_PATTERN') {
+    const roleUpper = String(model.role || '').toUpperCase();
+    const nameLower = String(model.name || '').toLowerCase();
+    const shapeUpper = String(model.custom_properties?.shape || model.customProperties?.shape || '').toUpperCase();
+
+    const isCylinder = roleUpper === 'TUBE_ROD' || 
+                       roleUpper === 'HOLDER' || 
+                       roleUpper.includes('TUBE') ||
+                       roleUpper.includes('HOLDER') ||
+                       shapeUpper === 'CYLINDER' || 
+                       nameLower.includes('drazek') || 
+                       nameLower.includes('uchwyt') || 
+                       nameLower.includes('rozeta');
+
+    if (model.role === 'DRILLING_PATTERN' || isCylinder) {
         return { edges: [], vertices: [] };
     }
 
