@@ -534,15 +534,24 @@ export class PanelView {
             this._disposeFeatureMarkers();
             
             const isRod = roleUpper === 'TUBE_ROD' || roleUpper.includes('TUBE') || nameLower.includes('drazek');
-            const wMm = unit.toBabylon(this.model.width);
-            const hMm = unit.toBabylon(this.model.height);
             
-            const len = wMm > 0 ? wMm : 600;
-            const dia = hMm > 0 ? hMm : (isRod ? 25 : 42);
+            const getValMm = (v: any, fallback: number) => {
+                if (v === null || v === undefined) return fallback;
+                const n = typeof v === 'number' ? v : parseFloat(v);
+                if (isNaN(n) || n <= 0) return fallback;
+                return n > 10000 ? n / 1_000_000 : n;
+            };
+
+            const wMm = getValMm(this.model.width, 600);
+            const hMm = getValMm(this.model.height, isRod ? 25 : 42);
+            const tMm = getValMm(this.model.thickness, isRod ? 25 : 15);
+            
+            const len = isRod ? wMm : (wMm < hMm && wMm > 0 ? wMm : tMm);
+            const dia = isRod ? (hMm > 1 && hMm < 500 ? hMm : 25) : (hMm > 1 && hMm < 500 ? hMm : 42);
             
             const cylinderMesh = BABYLON.MeshBuilder.CreateCylinder(`cylinder_${this.model.id}`, {
-                height: len,
-                diameter: dia,
+                height: Math.max(1, len),
+                diameter: Math.max(1, dia),
                 tessellation: 36
             }, this.scene);
             
