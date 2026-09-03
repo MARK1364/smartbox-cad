@@ -1469,7 +1469,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             }}
             onClick={() => {
               DrawingProjectExtractor.instance.syncLiveSceneTree();
-              window.open('/drawing.html', '_blank');
+              window.open('./drawing.html', '_blank');
             }}
             title="Otwórz Studio Rysunków 2D (w nowej karcie)"
           >
@@ -1999,7 +1999,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             className="tab-btn" 
             onClick={() => {
               DrawingProjectExtractor.instance.syncLiveSceneTree();
-              window.open('/drawing.html', '_blank');
+              window.open('./drawing.html', '_blank');
             }}
             title="Studio Rysunków 2D — Otwórz dedykowaną podstronę 2D (w nowej karcie)"
           >
@@ -2030,7 +2030,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               }
               DrawingProjectExtractor.instance.syncLiveSceneTree();
               E3LibraryExtractor.instance.syncLibrary();
-              window.open('/e3_drawing.html', '_blank');
+              window.open('./e3_drawing.html', '_blank');
             }}
             title="Studio Rysunków E3 — Otwórz dedykowaną podstronę CAD (w nowej karcie)"
           >

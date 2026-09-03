@@ -8,10 +8,10 @@ export const MODULE_SESSION_KEYS: Record<ModuleId, string> = {
 };
 
 export const MODULE_PAGES: Record<ModuleId, string> = {
-    report: '/report.html',
-    nesting: '/nesting.html',
-    cnc: '/cnc.html',
-    draw: '/draw.html',
+    report: './report.html',
+    nesting: './nesting.html',
+    cnc: './cnc.html',
+    draw: './draw.html',
 };
 
 /** Nazwa okna CAD — powrót z CAM/modułów fokusuje tę kartę, bez nowego pustego projektu. */
