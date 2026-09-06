@@ -1,27 +1,16 @@
 /**
  * solver-core.ts — iteracyjny solver więzów geometrycznych.
- * Port z @@BLENDER/S2_solver/core/solver_core.py
  *
- * ETAP PORTU: pełny solver więzów (GROUND, VERTEX, COPLANAR, FLUSH)
- * + wykrywanie konfliktów (`solveWithConflictResolution`).
+ * Pełny solver więzów (GROUND, VERTEX, COPLANAR, FLUSH)
+ * + wykrywanie i rozwiązywanie konfliktów (`solveWithConflictResolution`).
  *
- * JEDNOSTKI: milimetry. Python pracuje w metrach, bo tak wymaga Blender, ale
- * jego własne stałe są autorsko zapisane w mm (`RESIDUAL_THRESHOLD_MM = 0.005`).
+ * JEDNOSTKI: milimetry (mm) oraz radiany (rad).
+ * Rozdzielenie progów zbieżności na `linearMm` i `angularRad`:
+ *   - linearMm: 0.005 mm
+ *   - angularRad: 5e-6 rad
  *
- * JEDYNE ZAMIERZONE ODSTĘPSTWO OD PYTHONA — rozdzielenie progu zbieżności.
- * Python porównuje jeden `convergence_threshold` naprzemiennie z długościami
- * i z kątami w radianach, co przy zmianie jednostki długości rozjechałoby próg
- * kątowy 1000-krotnie. Rozdzielamy go więc na `linearMm` i `angularRad`,
- * dobrane tak, by odtwarzały zachowanie Pythona co do wartości:
- *
- *   Python 5e-6 m  →  { linearMm: 0.005,  angularRad: 5e-6 }
- *   Python 1e-4 m  →  { linearMm: 0.1,    angularRad: 1e-4 }
- *
- * Warunek końca pętli jest równoważny: `max(długości, kąty) < próg` w Pythonie
- * znaczy dokładnie tyle, co „wszystkie długości < próg liniowy ORAZ wszystkie
- * kąty < próg kątowy" tutaj. Reszta matematyki jest jednorodna względem skali:
- * rotacje zależą tylko od znormalizowanych normalnych, a translacje i `offset`
- * skalują się liniowo.
+ * Warunek zbieżności: wszystkie błędy translacji < próg liniowy ORAZ wszystkie
+ * błędy orientacji < próg kątowy.
  */
 
 import {
@@ -393,6 +382,8 @@ export function computeConstraintResidual(
         const posB = getVertexWorldPosition(stateB, bind.vertB);
         return { linearMm: vec3Len(vec3Sub(posA, posB)), angularRad: 0 };
     }
+
+
 
     if (bind.bindType === 'COPLANAR' || bind.bindType === 'FLUSH') {
         if (!stateA || !stateB) {

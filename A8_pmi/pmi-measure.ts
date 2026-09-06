@@ -1,7 +1,7 @@
 /**
  * PMI Measure (miarka) — czysta matematyka.
  *
- * Odpowiednik narzędzia `4.Pomiar` z `@@BLENDER/A8_pmi/pmi_core.py`:
+ * Narzędzie `Pomiar`:
  * odcinek między dwoma punktami bez linii wymiarowej CAD.
  * Długość zawsze; składowe dX/dY/dZ tylko gdy pomiar nie leży na jednej osi CAD.
  */
@@ -63,7 +63,7 @@ export function shouldShowDeltas(deltas: MeasureDeltas, eps = MEASURE_DELTA_EPS)
 }
 
 /**
- * Schodki XYZ w przestrzeni Babylon (jak w Blenderze: X, potem Y, potem Z CAD).
+ * Schodki XYZ w przestrzeni Babylon (X, potem Y, potem Z CAD).
  * CAD X = Babylon X, CAD Y = Babylon Z, CAD Z = Babylon Y.
  */
 export function measureDeltaSegments(p1: Vec3, p2: Vec3, eps = MEASURE_DELTA_EPS): MeasureDeltaSegment[] {
@@ -220,7 +220,7 @@ export function measurementPathLength(p1: Vec3, p2: Vec3, via: Vec3 | null = nul
 
 
 /**
- * Najkrótsza droga między dwoma elementami — jak w Blenderze przy Ctrl.
+ * Najkrótsza droga między dwoma elementami przy Ctrl.
  * Zwraca nowe pozycje końców odcinka pomiaru.
  */
 export function projectMeasureElements(

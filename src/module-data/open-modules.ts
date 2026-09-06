@@ -1,7 +1,7 @@
 import { ContextManager } from '../../A1_core/context-manager.js';
-import { DrawingProjectExtractor } from '../../E3_export/drawing-project-extractor.js';
-import { E3LibraryExtractor } from '../../E3_export';
-import { syncGeometrySnapshots } from '../../E3_export/e3-geometry-snapshot.js';
+import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
+import { E3LibraryExtractor } from '../../R2_rys';
+import { syncGeometrySnapshots } from '../../R2_rys/e3-geometry-snapshot.js';
 import {
     writeModuleSession,
     openModulePage,

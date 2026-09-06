@@ -9,19 +9,45 @@
       "enabled": true,
       "role_overrides": {
         "SHELF": {
-          "description": "Półki - oklejony FRONT",
+          "description": "Półki - oklejony FRONT (+Y)",
           "edge_banding": {
             "+X": {
               "active": false,
               "type_id": "none"
             },
             "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
               "active": true,
               "type_id": "0.008x0.022"
             },
-            "+Y": {
+            "-Y": {
               "active": false,
               "type_id": "none"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        },
+        "SHELF_PANEL": {
+          "description": "Półki - oklejony FRONT (+Y)",
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
             },
             "-Y": {
               "active": false,

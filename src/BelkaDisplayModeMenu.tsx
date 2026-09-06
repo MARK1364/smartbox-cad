@@ -34,6 +34,7 @@ function BelkaSelectMenu<T extends string>({
     id,
     title,
     value,
+    label,
     options,
     open,
     onOpenChange,
@@ -42,6 +43,7 @@ function BelkaSelectMenu<T extends string>({
     id: string;
     title: string;
     value: string;
+    label?: string;
     options: SelectOption<T>[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -68,7 +70,7 @@ function BelkaSelectMenu<T extends string>({
                 onClick={() => onOpenChange(!open)}
             >
                 {current.icon}
-                <span>{current.label}</span>
+                <span>{label || current.label}</span>
                 <Chevron />
             </button>
             {open && (
@@ -127,8 +129,9 @@ export function BelkaDisplayModeMenu({
     return (
         <BelkaSelectMenu
             id="belka-tryb-wyswietlania"
-            title="Tryb wyświetlania"
+            title="Widok (Tryb wyświetlania)"
             value={mode}
+            label="Widok"
             options={DISPLAY_MODES}
             open={open}
             onOpenChange={onOpenChange}
@@ -158,5 +161,94 @@ export function BelkaProjectionMenu({
             onOpenChange={onOpenChange}
             onChange={onChange}
         />
+    );
+}
+
+export function BelkaInfoMenu({
+    open,
+    onOpenChange,
+    onToggleInspector,
+    onDumpSceneTree,
+    onOpenSSOT,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onToggleInspector: () => void;
+    onDumpSceneTree: () => void;
+    onOpenSSOT?: () => void;
+}) {
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) onOpenChange(false);
+        };
+        window.addEventListener('mousedown', onDown);
+        return () => window.removeEventListener('mousedown', onDown);
+    }, [open, onOpenChange]);
+
+    return (
+        <div ref={ref} id="belka-info" style={{ position: 'relative', display: 'inline-block' }}>
+            <button
+                type="button"
+                id="toolInfo"
+                className={`tool-btn ${open ? 'active' : ''}`}
+                title="Informacje i narzędzia diagnostyczne"
+                onClick={() => onOpenChange(!open)}
+            >
+                <span style={{ fontSize: '0.9rem' }}>ℹ️</span>
+                <span>Info</span>
+                <Chevron />
+            </button>
+            {open && (
+                <div className="belka-dropdown-panel" role="menu" aria-label="Informacje i narzędzia diagnostyczne">
+                    <button
+                        type="button"
+                        id="toolInspector"
+                        role="menuitem"
+                        className="belka-dropdown-item"
+                        title="Przełącz widoczność Babylon.js Inspector (Skrót: Ctrl+I)"
+                        onClick={() => {
+                            onToggleInspector();
+                            onOpenChange(false);
+                        }}
+                    >
+                        <span style={{ width: 16, textAlign: 'center' }}>🔍</span>
+                        Inspector (Ctrl+I)
+                    </button>
+                    <button
+                        type="button"
+                        id="toolSceneTree"
+                        role="menuitem"
+                        className="belka-dropdown-item"
+                        title="Wypisz drzewo hierarchii CADNode oraz Babylon.js w konsoli F12"
+                        onClick={() => {
+                            onDumpSceneTree();
+                            onOpenChange(false);
+                        }}
+                    >
+                        <span style={{ width: 16, textAlign: 'center' }}>🌳</span>
+                        SceneTree (Konsola)
+                    </button>
+                    {onOpenSSOT && (
+                        <button
+                            type="button"
+                            id="toolJsonSSOT"
+                            role="menuitem"
+                            className="belka-dropdown-item"
+                            title="Wyświetl drzewo JSON SSOT (Single Source of Truth) projektu"
+                            onClick={() => {
+                                onOpenSSOT();
+                                onOpenChange(false);
+                            }}
+                        >
+                            <span style={{ width: 16, textAlign: 'center' }}>📄</span>
+                            JSON SSOT
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }

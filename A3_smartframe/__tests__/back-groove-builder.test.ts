@@ -25,8 +25,8 @@ function panelStatesFromPlan(
         const state: PanelState = {
             id: part.key || part.name,
             role: part.role,
-            dim_nm: { x: mapped.x, y: mapped.y, z: mapped.z },
-            localMatrix: Mat4.fromTRS(new Vec3(part.loc.x, part.loc.y, part.loc.z), rotQuat),
+            dim_nm: { x: mmToNm(mapped.x), y: mmToNm(mapped.y), z: mmToNm(mapped.z) },
+            localMatrix: Mat4.fromTRS(new Vec3(mmToNm(part.loc.x), mmToNm(part.loc.y), mmToNm(part.loc.z)), rotQuat),
             zonePrefix: part.zonePrefix
         };
         if (part.role === 'BACK_PANEL') {
@@ -47,9 +47,9 @@ describe('buildBackGrooves overlap depth', () => {
     it('sets groove depth on sides and rails from 11 mm back overlay', () => {
         const engine = new Korpus3Engine();
         const plan = engine.plan({
-            width: mmToNm(1000),
-            height: mmToNm(2000),
-            depth: mmToNm(600),
+            width: 1000,
+            height: 2000,
+            depth: 600,
             zoneCount: 1
         });
 
@@ -67,15 +67,15 @@ describe('buildBackGrooves overlap depth', () => {
         const right = 11;
         const engine = new Korpus3Engine();
         const plan = engine.plan({
-            width: mmToNm(1000),
-            height: mmToNm(2000),
-            depth: mmToNm(600),
+            width: 1000,
+            height: 2000,
+            depth: 600,
             zoneCount: 1,
             offsets: {
-                'Dol_Plecy_-X': mmToNm(left),
-                'Dol_Plecy_+X': mmToNm(right),
-                'Dol_Plecy_-Y': mmToNm(11),
-                'Dol_Plecy_+Y': mmToNm(11)
+                'Dol_Plecy_-X': left,
+                'Dol_Plecy_+X': right,
+                'Dol_Plecy_-Y': 11,
+                'Dol_Plecy_+Y': 11
             }
         });
 
@@ -95,12 +95,12 @@ describe('buildBackGrooves overlap depth', () => {
     it('verifies exact multi-zone groove lengths matching back panels', () => {
         const engine = new Korpus3Engine();
         const plan = engine.plan({
-            width: mmToNm(1000),
-            height: mmToNm(2000),
-            depth: mmToNm(600),
+            width: 1000,
+            height: 2000,
+            depth: 600,
             zoneCount: 3,
-            bottomHeight: mmToNm(500),
-            middleHeight: mmToNm(700)
+            bottomHeight: 500,
+            middleHeight: 700
         });
 
         const panels = panelStatesFromPlan(plan);
@@ -115,16 +115,80 @@ describe('buildBackGrooves overlap depth', () => {
         expect(tGroove).toBeDefined();
 
         // Każda strefa ma inną, rzeczywistą długość wpustu odpowiadającą swoim plecom:
-        expect(bGroove!.width_nm).toBeCloseTo(mmToNm(486));
-        expect(bGroove!.length_nm).toBeCloseTo(mmToNm(3));
+        expect(bGroove!.width_nm).toBeCloseTo(mmToNm(3));
+        expect(bGroove!.length_nm).toBeCloseTo(mmToNm(486));
         expect(bGroove!.depth_nm).toBeCloseTo(mmToNm(11));
 
-        expect(mGroove!.width_nm).toBeCloseTo(mmToNm(686));
-        expect(mGroove!.length_nm).toBeCloseTo(mmToNm(3));
+        expect(mGroove!.width_nm).toBeCloseTo(mmToNm(3));
+        expect(mGroove!.length_nm).toBeCloseTo(mmToNm(686));
         expect(mGroove!.depth_nm).toBeCloseTo(mmToNm(11));
 
-        expect(tGroove!.width_nm).toBeCloseTo(mmToNm(786));
-        expect(tGroove!.length_nm).toBeCloseTo(mmToNm(3));
+        expect(tGroove!.width_nm).toBeCloseTo(mmToNm(3));
+        expect(tGroove!.length_nm).toBeCloseTo(mmToNm(786));
+        expect(tGroove!.depth_nm).toBeCloseTo(mmToNm(11));
+    });
+
+    it('associatively changes groove depth to 17 mm when back offset is changed from 11 to 17 mm', () => {
+        const engine = new Korpus3Engine();
+        const plan = engine.plan({
+            width: 1000,
+            height: 2000,
+            depth: 600,
+            zoneCount: 1,
+            offsets: {
+                'Plecy_-X': 17,
+                'Plecy_+X': 17
+            }
+        });
+
+        const panels = panelStatesFromPlan(plan, {
+            'Plecy_-X': 17,
+            'Plecy_+X': 17
+        });
+        const intents = buildBackGrooves(panels);
+        const leftIntent = intents.find((i) => i.targetNodeId === 'BOK_L' || i.targetNodeId === 'B_BOK_L');
+        const rightIntent = intents.find((i) => i.targetNodeId === 'BOK_P' || i.targetNodeId === 'B_BOK_P');
+
+        expect(leftIntent).toBeDefined();
+        expect(leftIntent!.feature?.params.depth_nm).toBeCloseTo(mmToNm(17));
+        expect(rightIntent).toBeDefined();
+        expect(rightIntent!.feature?.params.depth_nm).toBeCloseTo(mmToNm(17));
+    });
+
+    it('isolates back offsets per zone in multi-zone cabinet (e.g. changing Dol_Plecy does NOT change Srodek_Plecy or Gora_Plecy)', () => {
+        const engine = new Korpus3Engine();
+        const plan = engine.plan({
+            width: 1000,
+            height: 2000,
+            depth: 600,
+            zoneCount: 3,
+            bottomHeight: 500,
+            middleHeight: 700,
+            offsets: {
+                'Dol_Plecy_-X': 17,
+                'Dol_Plecy_+X': 17
+            }
+        });
+
+        const panels = panelStatesFromPlan(plan, {
+            'Dol_Plecy_-X': 17,
+            'Dol_Plecy_+X': 17
+        });
+        const intents = buildBackGrooves(panels);
+
+        const bGroove = intents.find((i) => i.targetNodeId === 'B_BOK_L')?.feature?.params;
+        const mGroove = intents.find((i) => i.targetNodeId === 'M_BOK_L')?.feature?.params;
+        const tGroove = intents.find((i) => i.targetNodeId === 'T_BOK_L')?.feature?.params;
+
+        expect(bGroove).toBeDefined();
+        expect(mGroove).toBeDefined();
+        expect(tGroove).toBeDefined();
+
+        // Dolna strefa ma 17 mm:
+        expect(bGroove!.depth_nm).toBeCloseTo(mmToNm(17));
+
+        // Środkowa i górna strefa pozostają domyślne 11 mm:
+        expect(mGroove!.depth_nm).toBeCloseTo(mmToNm(11));
         expect(tGroove!.depth_nm).toBeCloseTo(mmToNm(11));
     });
 });

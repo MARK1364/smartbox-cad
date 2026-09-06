@@ -535,4 +535,84 @@ export class DrawingSheet {
         `);
         printWindow.document.close();
     }
+
+    public toSvgString(): string {
+        return this.generateSvg();
+    }
+
+    public downloadSvg(filename?: string): void {
+        const name = filename || `Arkusz_CAD_${this.paperFormat}_${new Date().toISOString().replace(/[:.]/g, '-')}.svg`;
+        const svgContent = this.generateSvg();
+        const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    public async downloadRaster(formatOrFilename: string = 'png', filenameOrFormat?: string, quality = 0.95): Promise<void> {
+        let fmt: 'png' | 'jpeg' = 'png';
+        let fname: string | undefined = undefined;
+        if (formatOrFilename === 'jpeg' || formatOrFilename === 'png') {
+            fmt = formatOrFilename;
+            fname = filenameOrFormat;
+        } else if (formatOrFilename.endsWith('.jpg') || formatOrFilename.endsWith('.jpeg')) {
+            fmt = 'jpeg';
+            fname = formatOrFilename;
+        } else {
+            fname = formatOrFilename;
+            if (filenameOrFormat === 'jpeg' || filenameOrFormat === 'image/jpeg') fmt = 'jpeg';
+        }
+
+        if (fmt === 'jpeg') {
+            await this.downloadJpg(fname, quality);
+        } else {
+            await this.downloadPng(fname);
+        }
+    }
+
+    public printOrSavePdf(): void {
+        this.printSvg();
+    }
+
+    public static printMultiSheet(sheets: DrawingSheet[]): void {
+        if (!sheets || sheets.length === 0) return;
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        const pagesHtml = sheets.map((sheet) => {
+            const svgContent = sheet.generateSvg();
+            return `
+                <div class="page" style="page-break-after: always; width: ${sheet.paperW}mm; height: ${sheet.paperH}mm; display: flex; align-items: center; justify-content: center;">
+                    ${svgContent}
+                </div>
+            `;
+        }).join('\n');
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Drukuj Arkusze CAD</title>
+                <style>
+                    @page { margin: 0; }
+                    body { margin: 0; padding: 0; background: #ffffff; }
+                    .page:last-child { page-break-after: auto; }
+                    svg { width: 100%; height: 100%; display: block; }
+                </style>
+            </head>
+            <body>
+                ${pagesHtml}
+                <script>
+                    window.onload = () => { window.print(); };
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
 }

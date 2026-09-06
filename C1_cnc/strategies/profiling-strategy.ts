@@ -25,7 +25,8 @@ export class ProfilingStrategy implements MachiningStrategy {
         if (!('points' in feature) && !('startPoint' in feature)) return [];
 
         let points: Vector3D[] = [];
-        let totalDepth = 18.0;
+        let totalDepth = 0;
+        let targetZ = 0;
         let compMode: 'OFF' | 'LEFT' | 'RIGHT' = 'OFF';
         let leadIn = customParams?.leadInMm ?? 5.0;
         let leadOut = customParams?.leadOutMm ?? 5.0;
@@ -34,7 +35,9 @@ export class ProfilingStrategy implements MachiningStrategy {
         if ('points' in feature) {
             const contour = feature as ContourFeature;
             points = contour.points;
-            totalDepth = Math.abs(contour.depth || 18.0);
+            targetZ = typeof contour.depth === 'number' ? contour.depth : (points[0]?.z ?? 0);
+            const startZ = points[0]?.z ?? targetZ;
+            totalDepth = Math.max(0, startZ - targetZ);
             if (contour.compensation === 'Left') compMode = 'LEFT';
             if (contour.compensation === 'Right') compMode = 'RIGHT';
             if (contour.leadIn !== undefined) leadIn = contour.leadIn;
@@ -44,6 +47,7 @@ export class ProfilingStrategy implements MachiningStrategy {
             const groove = feature as any;
             points = [groove.startPoint, groove.endPoint];
             totalDepth = Math.abs(groove.depth || 10.0);
+            targetZ = (groove.startPoint?.z || 0) - totalDepth;
         }
 
         if (points.length < 2) return [];
@@ -51,10 +55,10 @@ export class ProfilingStrategy implements MachiningStrategy {
         const feed = customParams?.feedRate || tool.parameters.feedRate || 1200;
         const rpm = customParams?.spindleRpm || tool.parameters.spindleRpm || 18000;
         const toolRadius = tool.diameter / 2;
-        const stepdown = customParams?.stepdownMm && customParams.stepdownMm > 0 ? customParams.stepdownMm : totalDepth;
+        const stepdown = customParams?.stepdownMm && customParams.stepdownMm > 0 ? customParams.stepdownMm : (totalDepth > 0 ? totalDepth : 1);
 
         // Liczba przejść na głębokość
-        const passesCount = Math.ceil(totalDepth / stepdown);
+        const passesCount = totalDepth > 0 ? Math.ceil(totalDepth / stepdown) : 1;
 
         const effectivePts = generateEffectiveContourPath(
             points,
@@ -69,7 +73,7 @@ export class ProfilingStrategy implements MachiningStrategy {
 
         commands.push({
             type: 'COMMENT',
-            comment: `Profil Konturu, Głębokość: ${totalDepth}mm (${passesCount} przejścia)`,
+            comment: `Profil Konturu, Poziom Z: ${targetZ}mm (${passesCount} przejść)`,
             featureId: feature.featureId
         });
 
@@ -100,7 +104,7 @@ export class ProfilingStrategy implements MachiningStrategy {
         }
 
         const startPt = effectivePts[0];
-        const safeZ = startPt.z + 10.0;
+        const safeZ = Math.max(startPt.z, targetZ) + 10.0;
 
         // Najazd szybki nad punkt startowy
         commands.push({
@@ -109,15 +113,14 @@ export class ProfilingStrategy implements MachiningStrategy {
         });
 
         // Wykonanie przejść na głębokość
-        let currentDepth = 0;
         for (let pass = 1; pass <= passesCount; pass++) {
-            currentDepth = Math.min(totalDepth, pass * stepdown);
-            const targetZ = startPt.z - currentDepth;
+            const currentDepth = totalDepth > 0 ? Math.min(totalDepth, pass * stepdown) : 0;
+            const passZ = totalDepth > 0 ? (startPt.z - currentDepth) : targetZ;
 
             // Zjazd w materiał na pozycję startową danej warstwy
             commands.push({
                 type: 'GOTO',
-                point: { x: startPt.x, y: startPt.y, z: targetZ }
+                point: { x: startPt.x, y: startPt.y, z: passZ }
             });
 
             // Ruch po kolejnych punktach konturu
@@ -125,7 +128,7 @@ export class ProfilingStrategy implements MachiningStrategy {
                 const pt = effectivePts[i];
                 commands.push({
                     type: 'GOTO',
-                    point: { x: pt.x, y: pt.y, z: targetZ }
+                    point: { x: pt.x, y: pt.y, z: passZ }
                 });
             }
         }

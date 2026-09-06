@@ -13,9 +13,9 @@ import dividersRules from './dividers_3_rules_V1.json';
 import { BaseEngine, type ModuleDims } from './base-engine.js';
 import { rulesMToMm } from '../A1_core/cad-math/units.js';
 
-const SIDE_L_LCS = {
-    mapping: { X: 'y', Y: 'x', Z: 'z' },
-    rotation: [0, 0, -90],
+const DIVIDER_LCS = {
+    mapping: { X: 'x', Y: 'y', Z: 'z' },
+    rotation: [90, 0, 90],
     faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
 };
 
@@ -113,12 +113,12 @@ export class DividersEngine extends BaseEngine {
         };
         const layout = resolveDividerLayout(params, dims);
         const roleOverride = (dividersRules as any).parameters?.smart_panel_integration?.role_overrides?.DIVIDER_PLATE;
-        // JSON okleja -X (FRONT w rotacji Blendera). W web LCS boku FRONT to -Y.
+        // FRONT w orientacji LCS formatki to +Y (identycznie jak w półkach — skierowane do przodu szafy)
         const edgeBanding = {
             "+X": { active: false, type_id: "none" },
             "-X": { active: false, type_id: "none" },
-            "+Y": { active: false, type_id: "none" },
-            "-Y": { active: true, type_id: roleOverride?.edge_banding?.["-X"]?.type_id || "0.008x0.022" }
+            "+Y": { active: true, type_id: roleOverride?.edge_banding?.["-X"]?.type_id || "0.008x0.022" },
+            "-Y": { active: false, type_id: "none" }
         };
 
         return {
@@ -128,7 +128,7 @@ export class DividersEngine extends BaseEngine {
                 role: 'DIVIDER_PLATE',
                 dim: { x: layout.height, y: layout.depth, z: layout.thickness },
                 loc: { x: slot.xCenter, y: 0, z: layout.height / 2 },
-                lcs: SIDE_L_LCS,
+                lcs: DIVIDER_LCS,
                 edge_banding: edgeBanding,
                 features: []
             }))

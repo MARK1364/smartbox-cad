@@ -11,6 +11,7 @@ import { CADNode } from '../A1_core/cad-node/cad-node.js';
 import { PanelModel, type FaceName } from '../A4_smartpanel/panel-model.js';
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
+import { Mat4 } from '../A1_core/cad-math/mat4.js';
 
 export interface FaceHitRef {
     nodeId: string;
@@ -90,87 +91,457 @@ function collectScenePanelFaces(document: ProjectDocument): PanelFaceInfo[] {
         const wNm = panel.width || mmToNm(800);
         const hNm = panel.height || mmToNm(600);
         const tNm = panel.thickness || mmToNm(18);
-        const worldMat = node.getWorldMatrix();
+        const role = String((panel as any).role || '').toUpperCase();
 
-        const facesConfig: Array<{ face: FaceName; centerLocal: Vec3; normalLocal: Vec3; cornersLocal: Vec3[] }> = [
-            // FACE_Z_PLUS (wewnętrzna formatki)
-            {
-                face: 'FACE_Z_PLUS',
-                centerLocal: new Vec3(0, 0, tNm / 2),
-                normalLocal: new Vec3(0, 0, 1),
-                cornersLocal: [
-                    new Vec3(-wNm / 2, -hNm / 2, tNm / 2),
-                    new Vec3(wNm / 2, -hNm / 2, tNm / 2),
-                    new Vec3(wNm / 2, hNm / 2, tNm / 2),
-                    new Vec3(-wNm / 2, hNm / 2, tNm / 2)
-                ]
-            },
-            // FACE_Z_MINUS (zewnętrzna formatki)
-            {
-                face: 'FACE_Z_MINUS',
-                centerLocal: new Vec3(0, 0, -tNm / 2),
-                normalLocal: new Vec3(0, 0, -1),
-                cornersLocal: [
-                    new Vec3(-wNm / 2, -hNm / 2, -tNm / 2),
-                    new Vec3(wNm / 2, -hNm / 2, -tNm / 2),
-                    new Vec3(wNm / 2, hNm / 2, -tNm / 2),
-                    new Vec3(-wNm / 2, hNm / 2, -tNm / 2)
-                ]
-            },
-            // FACE_X_PLUS (krawędź +X)
-            {
-                face: 'FACE_X_PLUS',
-                centerLocal: new Vec3(wNm / 2, 0, 0),
-                normalLocal: new Vec3(1, 0, 0),
-                cornersLocal: [
-                    new Vec3(wNm / 2, -hNm / 2, -tNm / 2),
-                    new Vec3(wNm / 2, hNm / 2, -tNm / 2),
-                    new Vec3(wNm / 2, hNm / 2, tNm / 2),
-                    new Vec3(wNm / 2, -hNm / 2, tNm / 2)
-                ]
-            },
-            // FACE_X_MINUS (krawędź -X)
-            {
-                face: 'FACE_X_MINUS',
-                centerLocal: new Vec3(-wNm / 2, 0, 0),
-                normalLocal: new Vec3(-1, 0, 0),
-                cornersLocal: [
-                    new Vec3(-wNm / 2, -hNm / 2, -tNm / 2),
-                    new Vec3(-wNm / 2, hNm / 2, -tNm / 2),
-                    new Vec3(-wNm / 2, hNm / 2, tNm / 2),
-                    new Vec3(-wNm / 2, -hNm / 2, tNm / 2)
-                ]
-            },
-            // FACE_Y_PLUS (krawędź +Y)
-            {
-                face: 'FACE_Y_PLUS',
-                centerLocal: new Vec3(0, hNm / 2, 0),
-                normalLocal: new Vec3(0, 1, 0),
-                cornersLocal: [
-                    new Vec3(-wNm / 2, hNm / 2, -tNm / 2),
-                    new Vec3(wNm / 2, hNm / 2, -tNm / 2),
-                    new Vec3(wNm / 2, hNm / 2, tNm / 2),
-                    new Vec3(-wNm / 2, hNm / 2, tNm / 2)
-                ]
-            },
-            // FACE_Y_MINUS (krawędź -Y)
-            {
-                face: 'FACE_Y_MINUS',
-                centerLocal: new Vec3(0, -hNm / 2, 0),
-                normalLocal: new Vec3(0, -1, 0),
-                cornersLocal: [
-                    new Vec3(-wNm / 2, -hNm / 2, -tNm / 2),
-                    new Vec3(wNm / 2, -hNm / 2, -tNm / 2),
-                    new Vec3(wNm / 2, -hNm / 2, tNm / 2),
-                    new Vec3(-wNm / 2, -hNm / 2, tNm / 2)
-                ]
-            }
-        ];
+        type FaceCfg = { face: FaceName; centerLocal: Vec3; normalLocal: Vec3; cornersLocal: Vec3[] };
+        const localTx = node.localMatrix.data[12];
+        const localTy = node.localMatrix.data[13];
+        const localTz = node.localMatrix.data[14];
+        let facesConfig: FaceCfg[] = [];
+
+        if (role === 'LEFT_SIDE_PANEL' || role === 'SIDE_LEFT' || role === 'BOK_L' || (role === 'MANUAL_PANEL' && localTx < 0)) {
+            const hx = tNm / 2;
+            const hy = wNm / 2; // głębokość w osi Y
+            const hz = hNm / 2; // wysokość w osi Z
+            facesConfig = [
+                {
+                    face: 'FACE_Z_PLUS', // inner (do wnętrza szafy)
+                    centerLocal: new Vec3(hx, 0, 0),
+                    normalLocal: new Vec3(1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(hx, -hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Z_MINUS', // outer
+                    centerLocal: new Vec3(-hx, 0, 0),
+                    normalLocal: new Vec3(-1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(-hx, hy, -hz),
+                        new Vec3(-hx, hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_PLUS', // tył
+                    centerLocal: new Vec3(0, hy, 0),
+                    normalLocal: new Vec3(0, 1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_MINUS', // przód
+                    centerLocal: new Vec3(0, -hy, 0),
+                    normalLocal: new Vec3(0, -1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, -hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_PLUS', // góra
+                    centerLocal: new Vec3(0, 0, hz),
+                    normalLocal: new Vec3(0, 0, 1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, hz), new Vec3(hx, -hy, hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_MINUS', // dół
+                    centerLocal: new Vec3(0, 0, -hz),
+                    normalLocal: new Vec3(0, 0, -1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, hy, -hz), new Vec3(-hx, hy, -hz)
+                    ]
+                }
+            ];
+        } else if (role === 'RIGHT_SIDE_PANEL' || role === 'SIDE_RIGHT' || role === 'BOK_P' || (role === 'MANUAL_PANEL' && localTx > 0)) {
+            const hx = tNm / 2;
+            const hy = wNm / 2; // głębokość w osi Y
+            const hz = hNm / 2; // wysokość w osi Z
+            facesConfig = [
+                {
+                    face: 'FACE_Z_PLUS', // inner (do wnętrza szafy)
+                    centerLocal: new Vec3(-hx, 0, 0),
+                    normalLocal: new Vec3(-1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(-hx, hy, -hz),
+                        new Vec3(-hx, hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Z_MINUS', // outer
+                    centerLocal: new Vec3(hx, 0, 0),
+                    normalLocal: new Vec3(1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(hx, -hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_PLUS', // tył
+                    centerLocal: new Vec3(0, hy, 0),
+                    normalLocal: new Vec3(0, 1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_MINUS', // przód
+                    centerLocal: new Vec3(0, -hy, 0),
+                    normalLocal: new Vec3(0, -1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, -hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_PLUS', // góra
+                    centerLocal: new Vec3(0, 0, hz),
+                    normalLocal: new Vec3(0, 0, 1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, hz), new Vec3(hx, -hy, hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_MINUS', // dół
+                    centerLocal: new Vec3(0, 0, -hz),
+                    normalLocal: new Vec3(0, 0, -1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, hy, -hz), new Vec3(-hx, hy, -hz)
+                    ]
+                }
+            ];
+        } else if (role === 'VERTICAL_DIVIDER' || role === 'DIVIDER' || role === 'PRZEGRODA') {
+            const hx = tNm / 2;
+            const hy = wNm / 2;
+            const hz = hNm / 2;
+            facesConfig = [
+                {
+                    face: 'FACE_Z_MINUS', // lewa strona przegrody
+                    centerLocal: new Vec3(-hx, 0, 0),
+                    normalLocal: new Vec3(-1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(-hx, hy, -hz),
+                        new Vec3(-hx, hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Z_PLUS', // prawa strona przegrody
+                    centerLocal: new Vec3(hx, 0, 0),
+                    normalLocal: new Vec3(1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(hx, -hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_PLUS',
+                    centerLocal: new Vec3(0, hy, 0),
+                    normalLocal: new Vec3(0, 1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_MINUS',
+                    centerLocal: new Vec3(0, -hy, 0),
+                    normalLocal: new Vec3(0, -1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, -hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_PLUS',
+                    centerLocal: new Vec3(0, 0, hz),
+                    normalLocal: new Vec3(0, 0, 1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, hz), new Vec3(hx, -hy, hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_MINUS',
+                    centerLocal: new Vec3(0, 0, -hz),
+                    normalLocal: new Vec3(0, 0, -1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, hy, -hz), new Vec3(-hx, hy, -hz)
+                    ]
+                }
+            ];
+        } else if (role === 'TOP_PANEL' || role === 'WIENIEC_G') {
+            const hx = wNm / 2;
+            const hy = hNm / 2;
+            const hz = tNm / 2;
+            facesConfig = [
+                {
+                    face: 'FACE_Z_PLUS', // inner (do wnętrza szafy, w dół)
+                    centerLocal: new Vec3(0, 0, -hz),
+                    normalLocal: new Vec3(0, 0, -1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, hy, -hz), new Vec3(-hx, hy, -hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Z_MINUS', // outer (góra szafy)
+                    centerLocal: new Vec3(0, 0, hz),
+                    normalLocal: new Vec3(0, 0, 1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, hz), new Vec3(hx, -hy, hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_PLUS',
+                    centerLocal: new Vec3(hx, 0, 0),
+                    normalLocal: new Vec3(1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(hx, -hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_MINUS',
+                    centerLocal: new Vec3(-hx, 0, 0),
+                    normalLocal: new Vec3(-1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(-hx, hy, -hz),
+                        new Vec3(-hx, hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_PLUS',
+                    centerLocal: new Vec3(0, hy, 0),
+                    normalLocal: new Vec3(0, 1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_MINUS',
+                    centerLocal: new Vec3(0, -hy, 0),
+                    normalLocal: new Vec3(0, -1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, -hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                }
+            ];
+        } else if (role === 'BOTTOM_PANEL' || role === 'WIENIEC_D' || role === 'SHELF' || role === 'SHELF_PANEL' || role === 'POLKA') {
+            const hx = wNm / 2;
+            const hy = hNm / 2;
+            const hz = tNm / 2;
+            facesConfig = [
+                {
+                    face: 'FACE_Z_PLUS', // inner / góra półki (w górę)
+                    centerLocal: new Vec3(0, 0, hz),
+                    normalLocal: new Vec3(0, 0, 1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, hz), new Vec3(hx, -hy, hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Z_MINUS', // outer / spód półki (w dół)
+                    centerLocal: new Vec3(0, 0, -hz),
+                    normalLocal: new Vec3(0, 0, -1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, hy, -hz), new Vec3(-hx, hy, -hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_PLUS',
+                    centerLocal: new Vec3(hx, 0, 0),
+                    normalLocal: new Vec3(1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(hx, -hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_MINUS',
+                    centerLocal: new Vec3(-hx, 0, 0),
+                    normalLocal: new Vec3(-1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(-hx, hy, -hz),
+                        new Vec3(-hx, hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_PLUS',
+                    centerLocal: new Vec3(0, hy, 0),
+                    normalLocal: new Vec3(0, 1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_MINUS',
+                    centerLocal: new Vec3(0, -hy, 0),
+                    normalLocal: new Vec3(0, -1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, -hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                }
+            ];
+        } else if (role === 'BACK_PANEL' || role === 'PLECY') {
+            const hx = wNm / 2;
+            const hy = tNm / 2;
+            const hz = hNm / 2;
+            facesConfig = [
+                {
+                    face: 'FACE_Z_PLUS', // inner (do wnętrza szafy, w stronę przodu)
+                    centerLocal: new Vec3(0, -hy, 0),
+                    normalLocal: new Vec3(0, -1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, -hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Z_MINUS', // outer (tył zewnętrzny)
+                    centerLocal: new Vec3(0, hy, 0),
+                    normalLocal: new Vec3(0, 1, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_PLUS',
+                    centerLocal: new Vec3(hx, 0, 0),
+                    normalLocal: new Vec3(1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(hx, -hy, -hz), new Vec3(hx, hy, -hz),
+                        new Vec3(hx, hy, hz), new Vec3(hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_X_MINUS',
+                    centerLocal: new Vec3(-hx, 0, 0),
+                    normalLocal: new Vec3(-1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(-hx, hy, -hz),
+                        new Vec3(-hx, hy, hz), new Vec3(-hx, -hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_PLUS',
+                    centerLocal: new Vec3(0, 0, hz),
+                    normalLocal: new Vec3(0, 0, 1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, hz), new Vec3(hx, -hy, hz),
+                        new Vec3(hx, hy, hz), new Vec3(-hx, hy, hz)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_MINUS',
+                    centerLocal: new Vec3(0, 0, -hz),
+                    normalLocal: new Vec3(0, 0, -1),
+                    cornersLocal: [
+                        new Vec3(-hx, -hy, -hz), new Vec3(hx, -hy, -hz),
+                        new Vec3(hx, hy, -hz), new Vec3(-hx, hy, -hz)
+                    ]
+                }
+            ];
+        } else {
+            // Domyślny uniwersalny panel manualny (LCS z AGENTS.md)
+            facesConfig = [
+                {
+                    face: 'FACE_Z_PLUS',
+                    centerLocal: new Vec3(0, 0, tNm / 2),
+                    normalLocal: new Vec3(0, 0, 1),
+                    cornersLocal: [
+                        new Vec3(-wNm / 2, -hNm / 2, tNm / 2),
+                        new Vec3(wNm / 2, -hNm / 2, tNm / 2),
+                        new Vec3(wNm / 2, hNm / 2, tNm / 2),
+                        new Vec3(-wNm / 2, hNm / 2, tNm / 2)
+                    ]
+                },
+                {
+                    face: 'FACE_Z_MINUS',
+                    centerLocal: new Vec3(0, 0, -tNm / 2),
+                    normalLocal: new Vec3(0, 0, -1),
+                    cornersLocal: [
+                        new Vec3(-wNm / 2, -hNm / 2, -tNm / 2),
+                        new Vec3(wNm / 2, -hNm / 2, -tNm / 2),
+                        new Vec3(wNm / 2, hNm / 2, -tNm / 2),
+                        new Vec3(-wNm / 2, hNm / 2, -tNm / 2)
+                    ]
+                },
+                {
+                    face: 'FACE_X_PLUS',
+                    centerLocal: new Vec3(wNm / 2, 0, 0),
+                    normalLocal: new Vec3(1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(wNm / 2, -hNm / 2, -tNm / 2),
+                        new Vec3(wNm / 2, hNm / 2, -tNm / 2),
+                        new Vec3(wNm / 2, hNm / 2, tNm / 2),
+                        new Vec3(wNm / 2, -hNm / 2, tNm / 2)
+                    ]
+                },
+                {
+                    face: 'FACE_X_MINUS',
+                    centerLocal: new Vec3(-wNm / 2, 0, 0),
+                    normalLocal: new Vec3(-1, 0, 0),
+                    cornersLocal: [
+                        new Vec3(-wNm / 2, -hNm / 2, -tNm / 2),
+                        new Vec3(-wNm / 2, hNm / 2, -tNm / 2),
+                        new Vec3(-wNm / 2, hNm / 2, tNm / 2),
+                        new Vec3(-wNm / 2, -hNm / 2, tNm / 2)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_PLUS',
+                    centerLocal: new Vec3(0, hNm / 2, 0),
+                    normalLocal: new Vec3(0, 1, 0),
+                    cornersLocal: [
+                        new Vec3(-wNm / 2, hNm / 2, -tNm / 2),
+                        new Vec3(wNm / 2, hNm / 2, -tNm / 2),
+                        new Vec3(wNm / 2, hNm / 2, tNm / 2),
+                        new Vec3(-wNm / 2, hNm / 2, tNm / 2)
+                    ]
+                },
+                {
+                    face: 'FACE_Y_MINUS',
+                    centerLocal: new Vec3(0, -hNm / 2, 0),
+                    normalLocal: new Vec3(0, -1, 0),
+                    cornersLocal: [
+                        new Vec3(-wNm / 2, -hNm / 2, -tNm / 2),
+                        new Vec3(wNm / 2, -hNm / 2, -tNm / 2),
+                        new Vec3(wNm / 2, -hNm / 2, tNm / 2),
+                        new Vec3(-wNm / 2, -hNm / 2, tNm / 2)
+                    ]
+                }
+            ];
+        }
+
+        // Dla paneli korpusu transformacją do świata jest pozycja lokalna (cornerX, cornerY, cornerZ) przetransformowana przez rodzica (korpus)
+        const parentNode = node.parent;
+        const isCabinetPanel = !!(role && parentNode && parentNode.id !== document.rootNode.id);
+        const transformMat = isCabinetPanel
+            ? (parentNode?.getWorldMatrix() || Mat4.identity()).multiply(Mat4.fromTranslation(localTx, localTy, localTz))
+            : node.getWorldMatrix();
 
         for (const fc of facesConfig) {
-            const worldCenterNm = worldMat.transformPoint(fc.centerLocal);
-            const worldNormal = worldMat.transformDirection(fc.normalLocal).normalize();
-            const cornersWorld = fc.cornersLocal.map(c => worldMat.transformPoint(c));
+            const worldCenterNm = transformMat.transformPoint(fc.centerLocal);
+            const worldNormal = transformMat.transformDirection(fc.normalLocal).normalize();
+            const cornersWorld = fc.cornersLocal.map(c => transformMat.transformPoint(c));
 
             const minX = nmToMm(Math.min(...cornersWorld.map(c => c.x)));
             const maxX = nmToMm(Math.max(...cornersWorld.map(c => c.x)));
@@ -300,6 +671,18 @@ export function probeBayFromCADPoint(
         return null; // Wnęka musi być co najmniej ograniczona z 4 stron (lewo, prawo, dół, góra)
     }
 
+    // Zabezpieczenie przed kliknięciem na pojedynczą formatkę od zewnątrz:
+    // Wnęka musi być przestrzenią pomiędzy osobnymi formatkami (lewa !== prawa, dół !== góra)
+    if (hitLeft.info.node.id === hitRight.info.node.id || hitBottom.info.node.id === hitTop.info.node.id) {
+        return null;
+    }
+    if (hitLeft.info.node.id === hitBottom.info.node.id || hitLeft.info.node.id === hitTop.info.node.id) {
+        return null;
+    }
+    if (hitRight.info.node.id === hitBottom.info.node.id || hitRight.info.node.id === hitTop.info.node.id) {
+        return null;
+    }
+
     const leftX = hitLeft.info.worldCenterMm.x;
     const rightX = hitRight.info.worldCenterMm.x;
     const bottomZ = hitBottom.info.worldCenterMm.z;
@@ -318,6 +701,10 @@ export function probeBayFromCADPoint(
     const height = Math.max(10, topZ - bottomZ);
     const depth = Math.max(10, backY - frontPlaneY);
 
+    if (width < 60 || height < 60) {
+        return null;
+    }
+
     const centerX = (leftX + rightX) / 2;
     const centerY = (frontPlaneY + backY) / 2;
     const centerZ = (bottomZ + topZ) / 2;
@@ -331,6 +718,25 @@ export function probeBayFromCADPoint(
             break;
         }
         curr = curr.parent;
+    }
+
+    // Znajdź właściwą ścianę przedniej krawędzi (normalna skierowana w przód: normal.y < -0.5)
+    let frontFaceName: FaceName = 'FACE_X_PLUS';
+    const leftNodeFaces = faces.filter(f => f.node.id === hitLeft!.info.node.id);
+    const leftFrontFace = leftNodeFaces.find(f => f.worldNormal.y < -0.5);
+    if (leftFrontFace) {
+        frontFaceName = leftFrontFace.face;
+    } else if (hitFront) {
+        frontFaceName = hitFront.info.face;
+    }
+
+    // Znajdź właściwą ścianę tylnej krawędzi (normalna skierowana w tył: normal.y > 0.5)
+    let backFaceName: FaceName = 'FACE_Z_PLUS';
+    if (hitBack) {
+        backFaceName = hitBack.info.face;
+    } else {
+        const leftBackFace = leftNodeFaces.find(f => f.worldNormal.y > 0.5);
+        if (leftBackFace) backFaceName = leftBackFace.face;
     }
 
     const frontRefNode = hitFront ? hitFront.info.node : hitLeft.info.node;
@@ -377,20 +783,231 @@ export function probeBayFromCADPoint(
             back: {
                 nodeId: backRefNode.id,
                 nodeName: hitBack ? hitBack.info.node.name : 'Tylna krawędź',
-                face: hitBack ? hitBack.info.face : 'FACE_Z_PLUS',
-                faceName: hitBack ? hitBack.info.face : 'FACE_Z_PLUS',
+                face: backFaceName,
+                faceName: backFaceName,
                 worldPointMm: { x: centerX, y: backY, z: centerZ },
                 planeCoordMm: backY
             },
             front: {
                 nodeId: frontRefNode.id,
                 nodeName: hitFront ? hitFront.info.node.name : 'Przednia krawędź',
-                face: hitFront ? hitFront.info.face : 'FACE_Y_MINUS',
-                faceName: hitFront ? hitFront.info.face : 'FACE_Y_MINUS',
+                face: frontFaceName,
+                faceName: frontFaceName,
                 worldPointMm: { x: centerX, y: frontPlaneY, z: centerZ },
                 planeCoordMm: frontPlaneY
             },
             frontPlaneYMm: frontPlaneY
+        }
+    };
+}
+
+/**
+ * Wykrywa zewnętrzny obrys (gabaryt i ściany zewnętrzne) korpusu szafki dla modułów zewnętrznych (np. Blendy / Obudowa).
+ * Szuka skrajnych paneli korpusu (boki zewnętrzne, wieniec dolny/górny, plecy/front) i wylicza pełny gabaryt zewnętrzny W x H x D.
+ */
+export function detectCabinetOuterHull(
+    document: ProjectDocument,
+    target?: string | CADNode | { x: number; y: number; z: number }
+): DetectedBay | null {
+    if (!document) return null;
+
+    const allNodes: CADNode[] = [];
+    const traverse = (node: CADNode) => {
+        allNodes.push(node);
+        for (const child of node.children) traverse(child);
+    };
+    traverse(document.rootNode);
+
+    // 1. Znajdź docelowy korpus (kontener) lub węzeł
+    let cabinetNode: CADNode | null = null;
+
+    if (typeof target === 'string') {
+        const found = document.findNode(target) || allNodes.find(n => n.name === target || n.id === target);
+        if (found) {
+            let curr: CADNode | null = found;
+            while (curr && curr.id !== document.rootNode.id) {
+                if (curr.domainData?.type === 'container' || (curr.domainData as any)?.generatorParams) {
+                    cabinetNode = curr;
+                    break;
+                }
+                curr = curr.parent;
+            }
+            if (!cabinetNode) cabinetNode = found;
+        }
+    } else if (target && typeof (target as any).id === 'string' && (target as any).children) {
+        let curr: CADNode | null = target as CADNode;
+        while (curr && curr.id !== document.rootNode.id) {
+            if (curr.domainData?.type === 'container' || (curr.domainData as any)?.generatorParams) {
+                cabinetNode = curr;
+                break;
+            }
+            curr = curr.parent;
+        }
+        if (!cabinetNode) cabinetNode = target as CADNode;
+    }
+
+    const faces = collectScenePanelFaces(document);
+    if (faces.length === 0) return null;
+
+    // Zbierz wszystkie kontenery korpusów w scenie
+    const containers = allNodes.filter(n =>
+        n.domainData?.type === 'container' &&
+        !(n.domainData as any)?.generatorParams?.boxType &&
+        !String((n.domainData as any)?.generatorParams?.type || '').startsWith('smartbox_')
+    );
+
+    if (!cabinetNode) {
+        if (target && typeof (target as any).x === 'number') {
+            const pt = target as { x: number; y: number; z: number };
+            let bestDist = Infinity;
+            for (const c of containers) {
+                const cFaces = faces.filter(f => {
+                    let p: CADNode | null = f.node;
+                    while (p) {
+                        if (p.id === c.id) return true;
+                        p = p.parent;
+                    }
+                    return false;
+                });
+                if (cFaces.length === 0) continue;
+                const minX = Math.min(...cFaces.map(f => f.minBoundsMm.x));
+                const maxX = Math.max(...cFaces.map(f => f.maxBoundsMm.x));
+                const minY = Math.min(...cFaces.map(f => f.minBoundsMm.y));
+                const maxY = Math.max(...cFaces.map(f => f.maxBoundsMm.y));
+                const minZ = Math.min(...cFaces.map(f => f.minBoundsMm.z));
+                const maxZ = Math.max(...cFaces.map(f => f.maxBoundsMm.z));
+
+                const cX = (minX + maxX) / 2;
+                const cY = (minY + maxY) / 2;
+                const cZ = (minZ + maxZ) / 2;
+                const dist = Math.hypot(pt.x - cX, pt.y - cY, pt.z - cZ);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    cabinetNode = c;
+                }
+            }
+        }
+
+        if (!cabinetNode && containers.length > 0) {
+            cabinetNode = containers[0];
+        }
+    }
+
+    // Filtruj ściany tylko dla wybranego korpusu (lub wszystkie sceny jeśli brak kontenera)
+    const targetFaces = cabinetNode
+        ? faces.filter(f => {
+            let p: CADNode | null = f.node;
+            while (p) {
+                if (p.id === cabinetNode!.id) return true;
+                p = p.parent;
+            }
+            return false;
+        })
+        : faces;
+
+    if (targetFaces.length === 0) return null;
+
+    // Skrajne współrzędne geometrii w świecie
+    const minX = Math.min(...targetFaces.map(f => f.minBoundsMm.x));
+    const maxX = Math.max(...targetFaces.map(f => f.maxBoundsMm.x));
+    const minY = Math.min(...targetFaces.map(f => f.minBoundsMm.y));
+    const maxY = Math.max(...targetFaces.map(f => f.maxBoundsMm.y));
+    const minZ = Math.min(...targetFaces.map(f => f.minBoundsMm.z));
+    const maxZ = Math.max(...targetFaces.map(f => f.maxBoundsMm.z));
+
+    const cabData = cabinetNode?.domainData as any;
+    const width = cabData?.width ? nmToMm(cabData.width) : Math.max(10, maxX - minX);
+    const height = cabData?.height ? nmToMm(cabData.height) : Math.max(10, maxZ - minZ);
+    const depth = cabData?.depth ? nmToMm(cabData.depth) : Math.max(10, maxY - minY);
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+
+    // Znajdź skrajne panele referencyjne (zewnętrzne lica)
+    // Lewy bok: szukamy formatki przy minX i jej zewnętrznej ściany (FACE_Z_MINUS)
+    let leftFace = targetFaces.find(f => Math.abs(f.minBoundsMm.x - minX) < 1 && f.worldNormal.x < -0.5);
+    if (!leftFace) leftFace = targetFaces.find(f => Math.abs(f.worldCenterMm.x - minX) < 20 && f.face === 'FACE_Z_MINUS') || targetFaces[0];
+
+    // Prawy bok: szukamy formatki przy maxX i jej zewnętrznej ściany (FACE_Z_MINUS)
+    let rightFace = targetFaces.find(f => Math.abs(f.maxBoundsMm.x - maxX) < 1 && f.worldNormal.x > 0.5);
+    if (!rightFace) rightFace = targetFaces.find(f => Math.abs(f.worldCenterMm.x - maxX) < 20 && f.face === 'FACE_Z_MINUS') || targetFaces[0];
+
+    // Dół: wieniec dolny / spód szafki przy minZ
+    let bottomFace = targetFaces.find(f => Math.abs(f.minBoundsMm.z - minZ) < 1 && f.worldNormal.z < -0.5);
+    if (!bottomFace) bottomFace = targetFaces.find(f => Math.abs(f.worldCenterMm.z - minZ) < 20 && f.face === 'FACE_Z_MINUS') || targetFaces[0];
+
+    // Góra: wieniec górny / wierzch szafki przy maxZ
+    let topFace = targetFaces.find(f => Math.abs(f.maxBoundsMm.z - maxZ) < 1 && f.worldNormal.z > 0.5);
+    if (!topFace) topFace = targetFaces.find(f => Math.abs(f.worldCenterMm.z - maxZ) < 20 && f.face === 'FACE_Z_MINUS') || targetFaces[0];
+
+    // Przód: frontPlaneY (minY)
+    let frontFace = targetFaces.find(f => Math.abs(f.minBoundsMm.y - minY) < 1 && f.worldNormal.y < -0.5);
+    if (!frontFace) frontFace = targetFaces.find(f => Math.abs(f.worldCenterMm.y - minY) < 20) || leftFace;
+
+    // Tył: szukaj pleców (BACK_PANEL, PLECY) lub tylnej krawędzi przy maxY
+    let backFace = targetFaces.find(f => (f.node.name.includes('Plecy') || f.node.name.includes('Back') || f.panel.role === 'BACK_PANEL' || String((f.panel as any).role || '').includes('PLECY')));
+    if (!backFace) backFace = targetFaces.find(f => Math.abs(f.maxBoundsMm.y - maxY) < 1 && f.worldNormal.y > 0.5);
+    if (!backFace) backFace = targetFaces.find(f => Math.abs(f.worldCenterMm.y - maxY) < 20) || leftFace;
+
+    const isBackPanel = backFace.node.name.includes('Plecy') || backFace.node.name.includes('Back') || backFace.panel.role === 'BACK_PANEL' || String((backFace.panel as any).role || '').includes('PLECY');
+    const backFaceName: FaceName = isBackPanel ? 'FACE_Z_MINUS' : 'FACE_Y_PLUS';
+
+    return {
+        boundsMm: { width, height, depth },
+        boundsNm: { width: mmToNm(width), height: mmToNm(height), depth: mmToNm(depth) },
+        centerWorldMm: { x: centerX, y: centerY, z: centerZ },
+        parentCabinetId: cabinetNode?.id,
+        boundary: {
+            left: {
+                nodeId: leftFace.node.id,
+                nodeName: leftFace.node.name || 'Bok Lewy (Zewnętrzny)',
+                face: 'FACE_Z_MINUS',
+                faceName: 'FACE_Z_MINUS',
+                worldPointMm: { x: minX, y: centerY, z: centerZ },
+                planeCoordMm: minX
+            },
+            right: {
+                nodeId: rightFace.node.id,
+                nodeName: rightFace.node.name || 'Bok Prawy (Zewnętrzny)',
+                face: 'FACE_Z_MINUS',
+                faceName: 'FACE_Z_MINUS',
+                worldPointMm: { x: maxX, y: centerY, z: centerZ },
+                planeCoordMm: maxX
+            },
+            bottom: {
+                nodeId: bottomFace.node.id,
+                nodeName: bottomFace.node.name || 'Dół (Zewnętrzny)',
+                face: 'FACE_Z_MINUS',
+                faceName: 'FACE_Z_MINUS',
+                worldPointMm: { x: centerX, y: centerY, z: minZ },
+                planeCoordMm: minZ
+            },
+            top: {
+                nodeId: topFace.node.id,
+                nodeName: topFace.node.name || 'Góra (Zewnętrzny)',
+                face: 'FACE_Z_MINUS',
+                faceName: 'FACE_Z_MINUS',
+                worldPointMm: { x: centerX, y: centerY, z: maxZ },
+                planeCoordMm: maxZ
+            },
+            back: {
+                nodeId: backFace.node.id,
+                nodeName: backFace.node.name || 'Tył (Zewnętrzny)',
+                face: backFaceName,
+                faceName: backFaceName,
+                worldPointMm: { x: centerX, y: maxY, z: centerZ },
+                planeCoordMm: maxY
+            },
+            front: {
+                nodeId: frontFace.node.id,
+                nodeName: frontFace.node.name || 'Przód (Zewnętrzny)',
+                face: 'FACE_Y_MINUS',
+                faceName: 'FACE_Y_MINUS',
+                worldPointMm: { x: centerX, y: minY, z: centerZ },
+                planeCoordMm: minY
+            },
+            frontPlaneYMm: minY
         }
     };
 }
@@ -402,13 +1019,25 @@ export function probeBayFromCADPoint(
  * - Dół (-Y) / Góra (+Y)
  * - Tył (+Z) / Przód (-Z)
  * 
- * Działa w 100% na geometrii siatek 3D (bez zgadywania ról i bez modeli matematycznych).
+ * Dla trybu 'external' (np. blendy/obudowa) wyznacza zewnętrzny gabaryt całego korpusu.
  */
 export function probeBayFromSceneRay(
     scene: any,
     pickResult: any,
-    document: ProjectDocument
+    document: ProjectDocument,
+    mode: 'internal' | 'external' = 'internal'
 ): DetectedBay | null {
+    if (mode === 'external') {
+        const pickedMesh = pickResult?.pickedMesh;
+        const targetId = pickedMesh?.metadata?.panelModel?.id || pickedMesh?.parent?.name || pickedMesh?.name;
+        const targetPoint = pickResult?.pickedPoint ? {
+            x: pickResult.pickedPoint.x,
+            y: pickResult.pickedPoint.z, // Babylon Z = CAD Y
+            z: pickResult.pickedPoint.y  // Babylon Y = CAD Z
+        } : undefined;
+        return detectCabinetOuterHull(document, targetId || targetPoint);
+    }
+
     const B = typeof (window as any).BABYLON !== 'undefined' ? (window as any).BABYLON : (globalThis as any).BABYLON;
     if (!scene || !pickResult || !pickResult.hit || !pickResult.pickedPoint || !B) return null;
 
@@ -536,6 +1165,26 @@ export function probeBayFromSceneRay(
     const topInfo = resolveNode(hitTop, 'FACE_Z_MINUS');
     const backInfo = resolveNode(hitBack, 'FACE_Z_PLUS');
     const frontInfo = resolveNode(hitFront, 'FACE_Y_MINUS');
+
+    // Minimalne wymiary wnęki (min 60 mm szerokości i wysokości)
+    if (width < 60 || height < 60) {
+        return null;
+    }
+
+    // Zabezpieczenie przed upuszczeniem/kliknięciem na pojedynczą formatkę od zewnątrz:
+    // Wnęka musi być przestrzenią pomiędzy osobnymi formatkami (lewa !== prawa, dół !== góra)
+    if (!leftInfo.id || !rightInfo.id || !bottomInfo.id || !topInfo.id) {
+        return null;
+    }
+    if (leftInfo.id === rightInfo.id || bottomInfo.id === topInfo.id) {
+        return null;
+    }
+    if (leftInfo.id === bottomInfo.id || leftInfo.id === topInfo.id) {
+        return null;
+    }
+    if (rightInfo.id === bottomInfo.id || rightInfo.id === topInfo.id) {
+        return null;
+    }
 
     // Znajdź kontener korpusu nadrzędnego
     let parentCabinetId: string | undefined = undefined;

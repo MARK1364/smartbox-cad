@@ -8,7 +8,7 @@
 import type { DocumentExtension, ProjectDocument } from './project-document.js';
 import { ExportEngine } from '../E1_export/export-engine.js';
 import type { SavedExportView } from '../E1_export/export-types.js';
-import { ExportEngineV3 } from '../E3_export/export-engine.js';
+import { ExportEngineV3 } from '../R2_rys/export-engine.js';
 
 export const DRAWINGS_DOCUMENT_SECTION = 'drawings';
 export const DRAWINGS_EXTENSION_VERSION = 1;

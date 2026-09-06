@@ -9,8 +9,8 @@ import { ProjectDocument } from '../A1_core/project-document';
 import { UIController } from '../A1_core/ui-controller';
 import { ContextManager } from '../A1_core/context-manager';
 import { CAMStateStore } from '../C1_cnc/core/cam-state-store';
-import { DrawingProjectExtractor } from '../E3_export/drawing-project-extractor';
-import { CADTreeNode, GrooveFeature2D } from '../E3_export/drawing-types';
+import { DrawingProjectExtractor } from '../R2_rys/drawing-project-extractor';
+import { CADTreeNode, GrooveFeature2D } from '../R2_rys/drawing-types';
 import { CAD_TREE_START_RENAME } from './module-data/tree-context-menu';
 import { PMIStore } from '../A8_pmi/pmi-data';
 import {
@@ -29,6 +29,7 @@ import { ConnectorStore } from '../C2_connectors/connector-store';
 import { ConnectorTreeRow } from '../C2_connectors/connector-tree-row';
 import { canReparentManualPanel, reparentManualPanel } from '../A1_core/app-commands';
 import { CAD_EDIT_LIBRARY_OPERATION } from '../o1_operacji';
+import { CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
 
 export const TREE_ICONS = {
   project: (
@@ -68,6 +69,18 @@ export const TREE_ICONS = {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="3 6 5 6 21 6"></polyline>
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    </svg>
+  ),
+  freeze: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="12" y1="2" x2="12" y2="22"></line>
+      <line x1="2" y1="12" x2="22" y2="12"></line>
+      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+      <line x1="19.07" y1="4.93" x2="4.93" y2="19.07"></line>
+      <polyline points="9 3 12 2 15 3"></polyline>
+      <polyline points="9 21 12 22 15 21"></polyline>
+      <polyline points="3 9 2 12 3 15"></polyline>
+      <polyline points="21 9 22 12 21 15"></polyline>
     </svg>
   ),
   chevronDown: (
@@ -310,18 +323,25 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     setHighlightedConstraintId(id);
   };
 
+  const formatFaceLabel = (rawFace?: string) => {
+    if (!rawFace) return '';
+    const f = String(rawFace).toUpperCase();
+    if (f === 'FACE_Z_MINUS' || f === 'FRONT' || f === 'OUTER' || f === 'ZEWN') return 'Zewnętrzna';
+    if (f === 'FACE_Z_PLUS' || f === 'BACK' || f === 'INNER' || f === 'WEWN') return 'Wewnętrzna';
+    if (f === 'FACE_X_MINUS' || f === 'LEFT') return 'Bok L';
+    if (f === 'FACE_X_PLUS' || f === 'RIGHT') return 'Bok P';
+    if (f === 'FACE_Y_MINUS' || f === 'BOTTOM') return 'Dół';
+    if (f === 'FACE_Y_PLUS' || f === 'TOP') return 'Góra';
+    return rawFace;
+  };
+
   const selectGrooveInTree = (panel: CADTreeNode, g: GrooveFeature2D) => {
     setSelectedFeatureId(g.id);
     setSelectedNodeId(panel.id);
     onSelectNode?.(panel);
     if (isDrawMode) return;
     UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.id });
-    UIController.instance?.emitTree('select-feature', { id: g.id, panelId: panel.id });
-    if (g.source === 'library' && g.libraryId) {
-      window.dispatchEvent(new CustomEvent(CAD_EDIT_LIBRARY_OPERATION, {
-        detail: { library_id: g.libraryId, featureId: g.id, panelId: panel.id },
-      }));
-    }
+    UIController.instance?.emitTree('select-feature', { id: g.id, panelId: panel.id, face: g.face });
   };
 
   const renderFeatures = (panel: CADTreeNode) => {
@@ -342,28 +362,108 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     return (
       <div className="tree-children">
-        {holes.map((h, idx) => (
-          <div key={h.id || `hole_${idx}`} className="tree-node" style={{ opacity: 0.9 }}>
-            <div className="tree-node-content">
-              <span style={{ width: '10px', display: 'inline-block', flexShrink: 0 }} />
-              {TREE_ICONS.tool}
-              <span className="node-name-text">Otwór ⌀{h.diameter}x{h.depth}</span>
-              <span style={{ opacity: 0.5, fontSize: '10px', marginLeft: '4px' }}>[{h.face || 'FRONT'}]</span>
+        {holes.map((h, idx) => {
+          const faceText = formatFaceLabel(h.face);
+          const isFrozen = h.frozen === true;
+          return (
+            <div
+              key={h.id || `hole_${idx}`}
+              className="tree-node is-engine-op"
+              style={{ opacity: isFrozen ? 0.45 : 0.9 }}
+              onContextMenu={(e) => {
+                if (isDrawMode) return;
+                e.preventDefault();
+                e.stopPropagation();
+                UIController.instance?.emitTree('contextmenu-tree-node', {
+                  type: 'feature',
+                  id: h.id || `hole_${idx}`,
+                  name: `Otwór ⌀${h.diameter}x${h.depth}`,
+                  panelId: panel.id,
+                  face: h.face,
+                  isSmart: false,
+                  source: 'engine',
+                  frozen: isFrozen,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              }}
+            >
+              <div
+                className="tree-node-content"
+                onClick={() => {
+                  if (h.id) {
+                    setSelectedFeatureId(h.id);
+                    setSelectedNodeId(panel.id);
+                    onSelectNode?.(panel);
+                    if (!isDrawMode) {
+                      UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.id });
+                      UIController.instance?.emitTree('select-feature', { id: h.id, panelId: panel.id, face: h.face });
+                    }
+                  }
+                }}
+              >
+                <span style={{ width: '10px', display: 'inline-block', flexShrink: 0 }} />
+                {TREE_ICONS.tool}
+                <span className="node-name-text">Otwór ⌀{h.diameter}x{h.depth}</span>
+                <span style={{ opacity: 0.55, fontSize: '10px', marginLeft: '4px' }}>[{faceText || 'FRONT'}]</span>
+              </div>
+              {!isDrawMode && (
+                <div className="tree-node-actions">
+                  <button
+                    type="button"
+                    className="tree-action-btn btn-freeze"
+                    title={isFrozen ? 'Odmroź obróbkę (silnik)' : 'Zamroź obróbkę (silnik)'}
+                    style={{ color: isFrozen ? '#38bdf8' : undefined }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      UIController.instance?.emitTree('toggle-freeze-feature', {
+                        id: h.id || `hole_${idx}`,
+                        featureId: h.id || `hole_${idx}`,
+                        panelId: panel.id,
+                      });
+                    }}
+                  >
+                    {TREE_ICONS.freeze}
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
         {grooves.map((g, idx) => {
           const isSmart = g.source === 'library';
+          const isFrozen = g.frozen === true;
           const isSelected = selectedFeatureId === g.id ? 'selected' : '';
           const label = isSmart ? (g.name || 'Operacja') : (g.name || 'Wpust');
-          const details = isSmart
+          const faceText = formatFaceLabel(g.face);
+          const dims = isSmart
             ? `${Math.round(g.width)}×${Math.round(g.height)}×${Math.round(g.depth)}`
             : `${Math.round(g.width)}×${Math.round(g.depth)}`;
+          const details = faceText ? `${faceText} · ${dims}` : dims;
           return (
             <div
               key={g.id || `grv_${idx}`}
               className={`tree-node ${isSelected} ${isSmart ? 'is-smart-op' : 'is-engine-op'}`}
-              title={isSmart ? 'Operacja Smart — kliknij, aby edytować' : 'Wpust silnika — sterowany parametrami korpusu'}
+              style={{ opacity: isFrozen ? 0.45 : undefined }}
+              title={isSmart ? 'Operacja Smart — kliknij PPM, aby edytować operację' : 'Wpust silnika — sterowany parametrami korpusu'}
+              onContextMenu={(e) => {
+                if (isDrawMode) return;
+                e.preventDefault();
+                e.stopPropagation();
+                UIController.instance?.emitTree('contextmenu-tree-node', {
+                  type: 'feature',
+                  id: g.id,
+                  name: label,
+                  panelId: panel.id,
+                  libraryId: g.libraryId || (isSmart ? 'przetloczenie' : undefined),
+                  face: g.face,
+                  isSmart,
+                  source: g.source || (isSmart ? 'library' : 'engine'),
+                  frozen: isFrozen,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                });
+              }}
             >
               <div
                 className="tree-node-content"
@@ -374,19 +474,38 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 <span className="node-name-text">{label}</span>
                 <span style={{ opacity: 0.55, fontSize: '10px', marginLeft: '4px' }}>[{details}]</span>
               </div>
-              {!isDrawMode && isSmart && (
+              {!isDrawMode && (
                 <div className="tree-node-actions">
-                  <button
-                    type="button"
-                    className="tree-action-btn btn-delete"
-                    title="Usuń operację"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      UIController.instance?.emitTree('delete-feature', { id: g.id, panelId: panel.id });
-                    }}
-                  >
-                    {TREE_ICONS.trash}
-                  </button>
+                  {isSmart ? (
+                    <button
+                      type="button"
+                      className="tree-action-btn btn-delete"
+                      title="Usuń operację"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        UIController.instance?.emitTree('delete-feature', { id: g.id, panelId: panel.id });
+                      }}
+                    >
+                      {TREE_ICONS.trash}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="tree-action-btn btn-freeze"
+                      title={isFrozen ? 'Odmroź wpust (silnik)' : 'Zamroź wpust (silnik)'}
+                      style={{ color: isFrozen ? '#38bdf8' : undefined }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        UIController.instance?.emitTree('toggle-freeze-feature', {
+                          id: g.id,
+                          featureId: g.id,
+                          panelId: panel.id,
+                        });
+                      }}
+                    >
+                      {TREE_ICONS.freeze}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -400,6 +519,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const isPanelCollapsed = isNodeCollapsed(panel.id, true);
     const isEditing = editingNode?.type === 'part' && editingNode?.id === panel.id;
     const isSelected = selectedNodeId === panel.id ? 'selected' : '';
+    const isManual = panel.isManual === true;
+    const isFrozen = panel.frozen === true;
 
     const opCount = (panel.holes?.length || 0) + (panel.grooves?.length || 0);
     const cncPrograms = (CAMStateStore as any)?.instance?.getPrograms ? (CAMStateStore as any).instance.getPrograms(panel.id) : [];
@@ -409,7 +530,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
       <div key={panel.id} className="tree-children">
         <div
           className={`tree-node ${isSelected}`}
-          style={{ cursor: 'grab', opacity: panel.visible === false ? 0.45 : 1 }}
+          style={{ cursor: 'grab', opacity: panel.visible === false || isFrozen ? 0.45 : 1 }}
           draggable={!editingNode}
           onDragStart={(e) => {
             e.stopPropagation();
@@ -451,6 +572,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 id: panel.id,
                 uuid: panel.id,
                 name: panel.name || 'Formatka',
+                isManual,
+                frozen: isFrozen,
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
@@ -498,16 +621,30 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               >
                 {panel.visible === false ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
               </button>
-              <button
-                className="tree-action-btn btn-delete"
-                title="Usuń formatkę"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  UIController.instance?.emitTree('delete-part', { id: panel.id, uuid: panel.id });
-                }}
-              >
-                {TREE_ICONS.trash}
-              </button>
+              {isManual ? (
+                <button
+                  className="tree-action-btn btn-delete"
+                  title="Usuń formatkę"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    UIController.instance?.emitTree('delete-part', { id: panel.id, uuid: panel.id });
+                  }}
+                >
+                  {TREE_ICONS.trash}
+                </button>
+              ) : (
+                <button
+                  className="tree-action-btn btn-freeze-part"
+                  title={isFrozen ? 'Odmroź formatkę (silnik)' : 'Zamroź formatkę (silnik)'}
+                  style={{ color: isFrozen ? '#38bdf8' : undefined }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    UIController.instance?.emitTree('toggle-freeze-part', { id: panel.id, uuid: panel.id });
+                  }}
+                >
+                  {TREE_ICONS.freeze}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -599,7 +736,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.stopPropagation();
               UIController.instance?.emitTree('select-container', { id: container.id });
               UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: (container.type === 'DRAWERS' || container.type === 'SHELVES' || /smartbox/i.test(container.name || ''))
+                type: (container.type === 'DRAWERS' || container.type === 'SHELVES' || /smartbox/i.test(container.name || '') || container.name?.endsWith('_SB') || (container as any).generatorParams?.type?.startsWith('smartbox'))
                   ? 'smartbox'
                   : 'container',
                 id: container.id,

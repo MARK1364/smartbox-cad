@@ -536,6 +536,49 @@ export class DrawingSheet {
         printWindow.document.close();
     }
 
+    public toSvgString(): string {
+        return this.generateSvg();
+    }
+
+    public downloadSvg(filename?: string): void {
+        const name = filename || `Arkusz_CAD_${this.paperFormat}_${new Date().toISOString().replace(/[:.]/g, '-')}.svg`;
+        const svgContent = this.generateSvg();
+        const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    public async downloadRaster(formatOrFilename: string = 'png', filenameOrFormat?: string, quality = 0.95): Promise<void> {
+        let fmt: 'png' | 'jpeg' = 'png';
+        let fname: string | undefined = undefined;
+        if (formatOrFilename === 'jpeg' || formatOrFilename === 'png') {
+            fmt = formatOrFilename;
+            fname = filenameOrFormat;
+        } else if (formatOrFilename.endsWith('.jpg') || formatOrFilename.endsWith('.jpeg')) {
+            fmt = 'jpeg';
+            fname = formatOrFilename;
+        } else {
+            fname = formatOrFilename;
+            if (filenameOrFormat === 'jpeg' || filenameOrFormat === 'image/jpeg') fmt = 'jpeg';
+        }
+
+        if (fmt === 'jpeg') {
+            await this.downloadJpg(fname, quality);
+        } else {
+            await this.downloadPng(fname);
+        }
+    }
+
+    public printOrSavePdf(): void {
+        this.printSvg();
+    }
+
     public static printMultiSheet(sheets: DrawingSheet[]): void {
         if (!sheets || sheets.length === 0) return;
 

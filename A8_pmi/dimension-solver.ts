@@ -1,7 +1,6 @@
 /**
- * Dimension Solver v2 — TypeScript port
+ * Dimension Solver v2
  *
- * Port 1:1 z `@@BLENDER/A8_pmi/dimension_solver.py`.
  * Single source of truth for ALL dimension mathematics.
  * Brak zależności od Babylon.js — czysta matematyka wektorowa.
  *
@@ -39,7 +38,7 @@ export function v3Lerp(a: Vec3, b: Vec3, t: number): Vec3 {
 }
 
 // ============================================================================
-// MINIMAL 4x4 MATRIX (column-major like mathutils.Matrix)
+// MINIMAL 4x4 MATRIX (column-major)
 // ============================================================================
 
 /** Column-major 4x4 matrix stored as flat 16 floats */
@@ -338,23 +337,23 @@ function toWorldPoint(frame: ProjectionFrame, pLocal: Vec3): Vec3 {
     return mat4TransformPoint(frame.matrixWorld, pLocal);
 }
 
-function isFrameDegenerate(frame: ProjectionFrame, cfg: SolverConfig): boolean {
+export function isFrameDegenerate(frame: ProjectionFrame, cfg: SolverConfig): boolean {
     const x = frame.axisXWorld, y = frame.axisYWorld, z = frame.axisZWorld;
     if (v3Len(x) <= cfg.epsLen || v3Len(y) <= cfg.epsLen || v3Len(z) <= cfg.epsLen) return true;
     const xn = v3Normalize(x), yn = v3Normalize(y);
     return Math.abs(v3Dot(xn, yn)) >= (1.0 - cfg.epsAng);
 }
 
-function orthoBendPoint(anchorLocal: Vec3, dimPtLocal: Vec3): Vec3 {
+export function orthoBendPoint(anchorLocal: Vec3, dimPtLocal: Vec3): Vec3 {
     return v3(anchorLocal.x, dimPtLocal.y, anchorLocal.z);
 }
 
-function buildOrthoSegments(anchorLocal: Vec3, dimPtLocal: Vec3): Vec3[] {
+export function buildOrthoSegments(anchorLocal: Vec3, dimPtLocal: Vec3): Vec3[] {
     const step = orthoBendPoint(anchorLocal, dimPtLocal);
     return [v3Copy(anchorLocal), v3Copy(step), v3Copy(step), v3Copy(dimPtLocal)];
 }
 
-function solveHelperSide(opts: {
+export function solveHelperSide(opts: {
     anchorLocal: Vec3;
     edgeDirLocal: Vec3 | null;
     normalLocal: Vec3 | null;
@@ -362,10 +361,12 @@ function solveHelperSide(opts: {
     cfg: SolverConfig;
     forceStraight: boolean;
 }): HelperSolve {
-    if (opts.forceStraight) {
+    const { anchorLocal, edgeDirLocal, normalLocal, dimPtLocal, cfg, forceStraight } = opts;
+
+    if (forceStraight) {
         return {
-            segmentsLocal: [v3Copy(opts.anchorLocal), v3Copy(opts.dimPtLocal)],
-            bendLocal: v3Copy(opts.anchorLocal),
+            segmentsLocal: [v3Copy(anchorLocal), v3Copy(dimPtLocal)],
+            bendLocal: v3Copy(anchorLocal),
             usedBroken: false,
             usedNormalFallback: false,
             usedOrthoFallback: false,
@@ -373,15 +374,81 @@ function solveHelperSide(opts: {
         };
     }
 
-    // P2: orthogonal elbow
-    const bend = orthoBendPoint(opts.anchorLocal, opts.dimPtLocal);
+    let reason: FallbackReason = FallbackReason.NONE;
+
+    // 1. Próba ucieczki wzdłuż zadanej krawędzi (Edge Direction)
+    if (edgeDirLocal && v3Len(edgeDirLocal) > cfg.epsLen) {
+        const eDir = v3Normalize(edgeDirLocal);
+        if (Math.abs(eDir.x) >= 1.0 - cfg.epsParallel) {
+            reason = FallbackReason.EDGE_PARALLEL_TO_MEASURE;
+        } else if (Math.abs(eDir.y) > cfg.epsParallel) {
+            const dy = dimPtLocal.y - anchorLocal.y;
+            const t = dy / eDir.y;
+            if (t < -cfg.epsLen) {
+                reason = FallbackReason.NEGATIVE_T_CLAMPED;
+            } else {
+                const bend = v3Add(anchorLocal, v3Scale(eDir, Math.max(0, t)));
+                const isStraight = v3Len(v3Sub(bend, dimPtLocal)) <= cfg.epsLen;
+                if (isStraight) {
+                    return {
+                        segmentsLocal: [v3Copy(anchorLocal), v3Copy(dimPtLocal)],
+                        bendLocal: v3Copy(anchorLocal),
+                        usedBroken: false,
+                        usedNormalFallback: false,
+                        usedOrthoFallback: false,
+                        reason: FallbackReason.NONE,
+                    };
+                }
+                return {
+                    segmentsLocal: [v3Copy(anchorLocal), v3Copy(bend), v3Copy(bend), v3Copy(dimPtLocal)],
+                    bendLocal: bend,
+                    usedBroken: true,
+                    usedNormalFallback: false,
+                    usedOrthoFallback: false,
+                    reason: FallbackReason.NONE,
+                };
+            }
+        } else {
+            reason = FallbackReason.EDGE_PARALLEL_TO_OFFSET;
+        }
+    } else {
+        reason = FallbackReason.EDGE_MISSING;
+    }
+
+    // 2. Próba ucieczki po normalnej ściany (Face Normal)
+    if (normalLocal && v3Len(normalLocal) > cfg.epsLen) {
+        const nDir = v3Normalize(normalLocal);
+        if (Math.abs(nDir.x) >= 1.0 - cfg.epsParallel) {
+            reason = FallbackReason.NORMAL_PARALLEL_TO_MEASURE;
+        } else if (Math.abs(nDir.y) > cfg.epsParallel) {
+            const dy = dimPtLocal.y - anchorLocal.y;
+            const t = dy / nDir.y;
+            if (t >= -cfg.epsLen) {
+                const bend = v3Add(anchorLocal, v3Scale(nDir, Math.max(0, t)));
+                const isStraight = v3Len(v3Sub(bend, dimPtLocal)) <= cfg.epsLen;
+                return {
+                    segmentsLocal: isStraight
+                        ? [v3Copy(anchorLocal), v3Copy(dimPtLocal)]
+                        : [v3Copy(anchorLocal), v3Copy(bend), v3Copy(bend), v3Copy(dimPtLocal)],
+                    bendLocal: isStraight ? v3Copy(anchorLocal) : bend,
+                    usedBroken: !isStraight,
+                    usedNormalFallback: true,
+                    usedOrthoFallback: false,
+                    reason: FallbackReason.NONE,
+                };
+            }
+        }
+    }
+
+    // 3. Fallback: Orthogonal elbow
+    const bend = orthoBendPoint(anchorLocal, dimPtLocal);
     return {
-        segmentsLocal: buildOrthoSegments(opts.anchorLocal, opts.dimPtLocal),
+        segmentsLocal: buildOrthoSegments(anchorLocal, dimPtLocal),
         bendLocal: bend,
         usedBroken: false,
         usedNormalFallback: false,
         usedOrthoFallback: true,
-        reason: FallbackReason.NONE,
+        reason,
     };
 }
 
@@ -415,7 +482,7 @@ function composeStatus(s1: HelperSolve, s2: HelperSolve): StatusCode {
     return StatusCode.OK_STRAIGHT;
 }
 
-function orthoElbowNeeded(anchor: Vec3, dim: Vec3, eps: number): boolean {
+export function orthoElbowNeeded(anchor: Vec3, dim: Vec3, eps: number): boolean {
     const dy = Math.abs(dim.y - anchor.y);
     const dz = Math.abs(dim.z - anchor.z);
     if (dy <= eps && dz <= eps) return false;

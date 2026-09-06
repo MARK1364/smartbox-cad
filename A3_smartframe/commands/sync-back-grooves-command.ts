@@ -6,7 +6,7 @@ import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
 import { buildBackGrooves, PanelState } from '../back-groove-builder.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
-import { mmToNm } from '../../A1_core/cad-math/units.js';
+import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { defaultBackOverlapMm, readBackEdgeOffset } from '../back-overlap.js';
 
 export class SyncBackGroovesCommand implements Command {
@@ -46,10 +46,10 @@ export class SyncBackGroovesCommand implements Command {
                 if (child.role === 'BACK_PANEL') {
                     const panelName = child.name || 'Plecy';
                     state.backMarginsNm = {
-                        left: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '-X', defaultOverlapMm)),
-                        right: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '+X', defaultOverlapMm)),
-                        bottom: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '-Y', defaultOverlapMm)),
-                        top: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '+Y', defaultOverlapMm))
+                        left: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '-X', defaultOverlapMm, child.zonePrefix)),
+                        right: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '+X', defaultOverlapMm, child.zonePrefix)),
+                        bottom: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '-Y', defaultOverlapMm, child.zonePrefix)),
+                        top: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '+Y', defaultOverlapMm, child.zonePrefix))
                     };
                 }
                 panelStates.push(state);
@@ -123,6 +123,11 @@ export class SyncBackGroovesCommand implements Command {
                         face: intent.feature.face === '+Z' ? 'FACE_Z_PLUS' : 'FACE_Z_MINUS',
                         params: {
                             isBackGroove: true,
+                            u: nmToMm(p.u_nm),
+                            v: nmToMm(p.v_nm),
+                            width: nmToMm(p.width_nm),
+                            length: nmToMm(p.length_nm),
+                            depth: nmToMm(p.depth_nm),
                             u_nm: p.u_nm,
                             v_nm: p.v_nm,
                             width_nm: p.width_nm,

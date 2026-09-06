@@ -1,8 +1,7 @@
 /**
  * constraint-validation.ts — walidacja więzów przed dragiem i solve.
  *
- * Port potrzebnych reguł z @@BLENDER/S2_solver/solver_constraint.py
- * (`validate_bind`, `check_ground_conflicts`). Nie zmienia serializacji.
+ * Reguły sprawdzania spójności więzów (`validate_bind`, `check_ground_conflicts`).
  */
 
 import type { ProjectDocument } from '../A1_core/project-document.js';

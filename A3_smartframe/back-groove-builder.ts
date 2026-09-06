@@ -8,6 +8,7 @@ export interface PanelState {
     dim_nm: { x: number; y: number; z: number };
     localMatrix: Mat4; // Matrix from Panel LCS to Container Space
     zonePrefix?: string;
+    backMarginsNm?: { left?: number; right?: number; top?: number; bottom?: number };
 }
 
 interface AABB {
@@ -85,14 +86,13 @@ export function buildBackGrooves(panels: PanelState[]): GrooveIntent[] {
 
     const allowedRoles = [
         'LEFT_SIDE_PANEL', 'RIGHT_SIDE_PANEL', 'SIDE_LEFT', 'SIDE_RIGHT',
-        'TOP_PANEL', 'BOTTOM_PANEL', 'SHELF_PANEL', 'HORIZONTAL_DIVIDER', 'VERTICAL_DIVIDER', 'DIVIDER', 'SIDE_PANEL'
+        'TOP_PANEL', 'BOTTOM_PANEL', 'SHELF_PANEL', 'HORIZONTAL_DIVIDER', 'VERTICAL_DIVIDER', 'DIVIDER', 'SIDE_PANEL',
+        'PARTITION', 'PRZEGRODA', 'MANUAL_PANEL', 'BOK_L', 'BOK_P', 'WIENIEC_D', 'WIENIEC_G'
     ];
 
     for (const backPanel of backPanels) {
         const backPos = backPanel.localMatrix.decompose().translation;
         const backDim = backPanel.dim_nm; // { x: Width, y: Height, z: Thickness }
-        const penetrationDepth_nm = 11_000_000; // 11mm
-
         for (const target of panels) {
             if (target.role === 'BACK_PANEL') continue;
             if (!allowedRoles.includes(target.role)) continue;
@@ -108,6 +108,7 @@ export function buildBackGrooves(panels: PanelState[]): GrooveIntent[] {
             let v_nm = 0;
             let width_nm = 0;
             let length_nm = 0;
+            let penetrationDepth_nm = 11_000_000;
             let face: '+Z' | '-Z' = '+Z'; // Domyślnie rowek od wewnętrznej strony (Zależy od tego, który to bok, ale z reguły to '+Z' bo środek korpusu)
 
             if (isSideOrDivider) {
@@ -122,6 +123,9 @@ export function buildBackGrooves(panels: PanelState[]): GrooveIntent[] {
 
                 // U: Pozycja od krawędzi (zależnie czy to lewy czy prawy bok, u=0 jest z tyłu lub z przodu)
                 const isLeft = target.role.includes('LEFT') || targetPos.x < backPos.x;
+                penetrationDepth_nm = isLeft
+                    ? (backPanel.backMarginsNm?.left ?? 11_000_000)
+                    : (backPanel.backMarginsNm?.right ?? 11_000_000);
                 
                 if (isLeft) {
                     // Dla lewego boczka (+Z do wewnątrz), u=0 jest Z TYŁU szafki.
@@ -148,6 +152,9 @@ export function buildBackGrooves(panels: PanelState[]): GrooveIntent[] {
                 length_nm = backDim.z; // Szerokość wpustu = Grubość pleców (3mm)
 
                 const isBottom = target.role.includes('BOTTOM') || targetPos.z < backPos.z;
+                penetrationDepth_nm = isBottom
+                    ? (backPanel.backMarginsNm?.bottom ?? 11_000_000)
+                    : (backPanel.backMarginsNm?.top ?? 11_000_000);
 
                 // U: Pozycja od lewej krawędzi wieńca (wzdłuż osi X wieńca)
                 // Obie formatki mają oś X skierowaną tak samo (RotX zachowuje kierunek X), więc u=0 zawsze leży po LEWEJ

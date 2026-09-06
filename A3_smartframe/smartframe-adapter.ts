@@ -4,15 +4,17 @@ import { isManualPanel, PanelModel } from '../A4_smartpanel/panel-model.js';
 import { mergeEngineAndLibraryFeatures, refreshLibraryOperationsOnPanel } from '../o1_operacji/operacje-apply.js';
 import { ContainerModel } from '../A1_core/container-model.js';
 import { ContextManager } from '../A1_core/context-manager.js';
-import { SyncBackGroovesCommand } from '../A1_core/commands/sync-back-grooves-command.js';
+import { SyncBackGroovesCommand } from './commands/sync-back-grooves-command.js';
 import { SyncShelfDrillingsCommand } from '../A1_core/commands/sync-shelf-drillings-command.js';
 import { SyncDoorDrillingsCommand } from '../A1_core/commands/sync-door-drillings-command.js';
 import { SyncDrawerDrillingsCommand } from '../A1_core/commands/sync-drawer-drillings-command.js';
+import { SyncFlapsDrillingsCommand } from '../A1_core/commands/sync-flaps-drillings-command.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { Quat } from '../A1_core/cad-math/quat.js';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import { NodeType } from '../A1_core/cad-node/node-type.js';
 import { CADNode } from '../A1_core/cad-node/cad-node.js';
+import { update_smartbox_core } from '../A2_smartbox/smartbox-core.js';
 
 // Silnik — singleton na poziomie modułu (ładuje reguły raz)
 const engine = new Korpus3Engine();
@@ -227,10 +229,18 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
 
             (panel as any).key = part.key;
             panel.zonePrefix = part.zonePrefix;
-            if (defaultEdgeBanding && (!panel.edgeBanding || Object.keys(panel.edgeBanding).length === 0)) {
+            (panel as any).zoneId = part.zoneId;
+            (panel as any).lcs = lcs;
+            const hasActiveEdgeBanding = panel.edgeBanding && Object.values(panel.edgeBanding).some((e: any) => e?.active);
+            if (defaultEdgeBanding && (!panel.edgeBanding || Object.keys(panel.edgeBanding).length === 0 || !hasActiveEdgeBanding)) {
                 panel.setEdgeBanding(defaultEdgeBanding);
             }
-            if (part.customProperties || part.custom_properties) (panel as any).custom_properties = { ...(part.customProperties || part.custom_properties) };
+            if (part.customProperties || part.custom_properties) {
+                (panel as any).custom_properties = {
+                    ...(part.customProperties || part.custom_properties),
+                    ...((panel as any).custom_properties || {})
+                };
+            }
             assignPlanFeatures(panel, part.features || [], true);
         } else {
             panel = new PanelModel({
@@ -240,6 +250,8 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             panel.role = part.role;
             (panel as any).key = part.key;
             panel.zonePrefix = part.zonePrefix;
+            (panel as any).zoneId = part.zoneId;
+            (panel as any).lcs = lcs;
             if (defaultEdgeBanding) {
                 panel.setEdgeBanding(defaultEdgeBanding);
             }
@@ -266,7 +278,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
         const currentChildren = [...cntNode.children];
         for (const childNode of currentChildren) {
             const p = childNode.domainData as any;
-            if (!p || p.type === 'container' || p.name?.endsWith('_SB') || isManualPanel(p)) {
+            if (!p || p.type === 'container' || p.name?.endsWith('_SB') || p.name?.startsWith('smartbox_') || childNode.name?.startsWith('smartbox_') || isManualPanel(p)) {
                 continue;
             }
             const panelId = p.smartId?.fullPath || p.id;
@@ -282,31 +294,55 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
 export function runEngineAndApply(
     container: any,
     w: number, h: number, d: number,
-    zCount: 1 | 2 | 3,
-    hB: number, hM: number,
-    backOffsetMm: number,
+    zCount: 1 | 2 | 3 = 1,
+    hB?: number, hM?: number,
+    backOffsetMm?: number,
     offsets?: Record<string, number>
 ) {
+    const wMm = w > 50000 ? nmToMm(w) : w;
+    const hMm = h > 50000 ? nmToMm(h) : h;
+    const dMm = d > 50000 ? nmToMm(d) : d;
+    const hBMm = hB && hB > 50000 ? nmToMm(hB) : (hB ?? 0);
+    const hMMm = hM && hM > 50000 ? nmToMm(hM) : (hM ?? 0);
+    const bOffset = backOffsetMm ?? container?.generatorParams?.backOffset ?? 3;
+
+    if (container) {
+        container.width = mmToNm(wMm);
+        container.height = mmToNm(hMm);
+        container.depth = mmToNm(dMm);
+    }
+
+    const topPanelMode = container?.generatorParams?.topPanelMode || 'FULL';
+    const traverseWidth = container?.generatorParams?.traverseWidth || 80;
+
     const plan = engine.plan({ 
-        width: w, height: h, depth: d, 
-        zoneCount: zCount, bottomHeight: hB, middleHeight: hM, 
-        backOffsetMm, offsets,
-        container
+        width: wMm, height: hMm, depth: dMm, 
+        zoneCount: zCount, bottomHeight: hBMm, middleHeight: hMMm, 
+        backOffsetMm: bOffset, offsets,
+        container,
+        topPanelMode,
+        traverseWidth
     });
     applyPlanToContainer(container, plan);
 
     // Po zastosowaniu planu węzły istnieją w dokumencie. Wyliczamy rowki matematycznie na podstawie macierzy:
-    const syncCmd = new SyncBackGroovesCommand(container.id);
-    ContextManager.instance.commandHistory.execute(syncCmd);
-
-    const syncDrillingsCmd = new SyncShelfDrillingsCommand(container.id);
-    ContextManager.instance.commandHistory.execute(syncDrillingsCmd);
-
-    const syncDoorDrillingsCmd = new SyncDoorDrillingsCommand(container.id);
-    ContextManager.instance.commandHistory.execute(syncDoorDrillingsCmd);
-
-    const syncDrawerDrillingsCmd = new SyncDrawerDrillingsCommand(container.id);
-    ContextManager.instance.commandHistory.execute(syncDrawerDrillingsCmd);
+    const doc = ContextManager.instance.document;
+    if (doc) {
+        const cntNode = doc.findNode(container.id);
+        if (cntNode) {
+            for (const childNode of cntNode.children) {
+                const childData = childNode.domainData as any;
+                if (childData && (childData.type === 'container' || childData.generatorParams?.type?.startsWith('smartbox_') || childData.generatorParams?.boxType)) {
+                    update_smartbox_core(childData, doc);
+                }
+            }
+        }
+        new SyncBackGroovesCommand(container.id).execute(doc);
+        new SyncShelfDrillingsCommand(container.id).execute(doc);
+        new SyncDoorDrillingsCommand(container.id).execute(doc);
+        new SyncDrawerDrillingsCommand(container.id).execute(doc);
+        new SyncFlapsDrillingsCommand(container.id).execute(doc);
+    }
 }
 
 export async function initializeSmartFrameEngine(): Promise<void> {
@@ -320,7 +356,7 @@ export function rebuildSmartFrameContainer(container: any): boolean {
     const zCount = (params?.zoneCount || 1) as 1 | 2 | 3;
     const bHeight = params?.bottomHeight ?? undefined;
     const mHeight = params?.middleHeight ?? undefined;
-    const bOffset = params?.backOffset ?? 0;
+    const bOffset = params?.backOffset ?? 3;
     const offs = params?.offsets || {};
 
     runEngineAndApply(
@@ -334,6 +370,21 @@ export function rebuildSmartFrameContainer(container: any): boolean {
         bOffset,
         offs
     );
+
+    const rebuild = (typeof window !== 'undefined') ? (window as any).__rebuildGeometry : null;
+    if (typeof rebuild === 'function') {
+        try { rebuild(); } catch {}
+    }
+
+    if (typeof window !== 'undefined' && window.document) {
+        window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+    }
+
+    const doc = ContextManager.instance.document;
+    if (doc) {
+        doc.notifyDocumentChanged();
+    }
+
     return true;
 }
 
@@ -346,6 +397,7 @@ interface KorpusParams {
     middleHeight: number;
     backOffset: number;
     offsets?: Record<string, number>;
+    position?: { x: number; y: number; z?: number };
 }
 
 /** Tworzy nową, niezależną instancję kontenera korpusu */
@@ -362,18 +414,30 @@ export function createNewKorpus(docTarget: any, params: KorpusParams) {
         name: `Korpus (SmartFrame) ${existingCount + 1}`
     });
     
+    const bOffset = params.backOffset ?? 3;
+
     nc.generatorParams = {
         type: 'korpus3_2',
         zoneCount: params.zoneCount,
         bottomHeight: params.bottomHeight,
         middleHeight: params.middleHeight,
-        backOffset: params.backOffset,
+        backOffset: bOffset,
         offsets: params.offsets || {}
     };
 
 
     const ncNode = CADNode.create(NodeType.ASSEMBLY, nc.name, nc.id);
     ncNode.domainData = nc;
+    if (params.position) {
+        ncNode.setLocalTransform(
+            new Vec3(
+                mmToNm(params.position.x),
+                mmToNm(params.position.y),
+                mmToNm(params.position.z || 0)
+            ),
+            Quat.IDENTITY
+        );
+    }
 
     doc.addNode(doc.rootNode.id, ncNode);
 
@@ -381,7 +445,7 @@ export function createNewKorpus(docTarget: any, params: KorpusParams) {
         nc,
         params.width, params.height, params.depth,
         params.zoneCount, params.bottomHeight, params.middleHeight,
-        params.backOffset, params.offsets || {}
+        bOffset, params.offsets || {}
     );
 
     doc.setActiveEntity(nc);
@@ -402,6 +466,8 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams) {
     const container = getActiveContainer(doc);
     if (!container) return;
 
+    const bOffset = params.backOffset ?? 3;
+
     container.width  = mmToNm(w_mm);
     container.height = mmToNm(h_mm);
     container.depth  = mmToNm(d_mm);
@@ -411,14 +477,14 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams) {
         zoneCount: params.zoneCount,
         bottomHeight: params.bottomHeight,
         middleHeight: params.middleHeight,
-        backOffset: params.backOffset,
+        backOffset: bOffset,
         offsets: params.offsets || {}
     });
     runEngineAndApply(
         container,
         w_mm, h_mm, d_mm,
         params.zoneCount, params.bottomHeight, params.middleHeight,
-        params.backOffset, params.offsets || {}
+        bOffset, params.offsets || {}
     );
     document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
 }

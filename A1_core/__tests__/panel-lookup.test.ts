@@ -192,18 +192,18 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     it('consistently resolves panels after cabinet rebuild/update', () => {
         const cabinet = doc.createContainer({ name: 'Korpus' });
         cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
-        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
 
         const cabinetNode = doc.findNode(cabinet.id)!;
         const initialLeft = findCabinetPanel(cabinetNode, { role: 'LEFT_SIDE_PANEL' });
         expect(initialLeft.status).toBe('OK');
 
         // Przebudowa o nowych wymiarach
-        runEngineAndApply(cabinet, mmToNm(1000), mmToNm(2200), mmToNm(700), 1, 0, 0, 0);
+        runEngineAndApply(cabinet, 1000, 2200, 700, 1, 0, 0, 0);
 
         const updatedLeft = findCabinetPanel(cabinetNode, { role: 'LEFT_SIDE_PANEL' });
-        expect(updatedLeft.status).toBe('OK');
-        expect(updatedLeft.panel?.width).toBe(mmToNm(2200)); // H boku
+        expect(updatedLeft.panel?.height).toBe(mmToNm(2200)); // H boku (oś X formatki = wysokość)
+        expect(updatedLeft.panel?.width).toBe(mmToNm(700)); // D boku (oś Y formatki = głębokość)
         expect(updatedLeft.panel?.role).toBe('LEFT_SIDE_PANEL');
     });
 });

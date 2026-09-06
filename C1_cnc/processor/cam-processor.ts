@@ -250,21 +250,21 @@ export class CAMProcessor {
                         contour.reverseDirection || false
                     );
 
-                    // Frezowanie 2.5D: Z jest stałe na całej ścieżce (kontrolowane przez depth).
-                    // Spłaszczamy Z punktów do 0, głębokość aplikuje symulator jako offset.
-                    const flatZ = 0;
+                    // Poziom Z profilu: jeśli podano contour.depth, używamy jej jako bezwzględnej wysokości Z w WCS.
+                    // W przeciwnym razie zachowujemy Z z punktów (np. ze wskazanej krawędzi 3D).
+                    const targetZ = typeof contour.depth === 'number' ? contour.depth : (effectivePts[0].z || 0);
 
                     const start = {
                         x: effectivePts[0].x,
                         y: effectivePts[0].y,
-                        z: flatZ
+                        z: targetZ
                     };
                     const moves = effectivePts.slice(1).map(pt => ({
                         type: 'line' as const,
                         endPoint: {
                             x: pt.x,
                             y: pt.y,
-                            z: flatZ
+                            z: typeof contour.depth === 'number' ? targetZ : pt.z
                         }
                     }));
 
@@ -274,7 +274,7 @@ export class CAMProcessor {
                         position: start,
                         parameters: {
                             width: tool.diameter,
-                            depth: typeof contour.depth === 'number' ? (contour.depth < 0 ? contour.depth : -contour.depth) : -18.0,
+                            depth: 0, // Z jest już bezpośrednio w position.z i moves.endPoint.z
                             feedRate: feed,
                             spindleRpm: rpm,
                             moves

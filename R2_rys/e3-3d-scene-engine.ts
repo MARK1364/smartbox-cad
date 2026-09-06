@@ -91,6 +91,8 @@ export class E3SceneEngine {
         );
         this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
         this.camera.attachControl(canvas, false); // MMB do pan/zoom
+        this.camera.inertia = 0;
+        this.camera.panningInertia = 0;
 
         this._updateCameraBounds(canvas);
 

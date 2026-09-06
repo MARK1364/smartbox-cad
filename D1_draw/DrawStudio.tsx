@@ -27,9 +27,9 @@ import {
 import { DrawProjectionEngine, getProjectedAngleFromSource } from './draw-projection';
 import { DrawDimensionsEngine } from './draw-dimensions';
 import { DrawSheetSVGGenerator } from './draw-sheet-svg';
-import { DrawingProjectExtractor, SYNC_CHANNEL_NAME } from '../E3_export/drawing-project-extractor';
-import { CADTreeNode } from '../E3_export/drawing-types';
-import { loadGeometrySnapshots } from '../E3_export/e3-geometry-snapshot';
+import { DrawingProjectExtractor, SYNC_CHANNEL_NAME } from '../R2_rys/drawing-project-extractor';
+import { CADTreeNode } from '../R2_rys/drawing-types';
+import { loadGeometrySnapshots } from '../R2_rys/e3-geometry-snapshot';
 import { SceneTree } from '../src/SceneTree';
 
 type ActiveTool = 'select' | 'projected_view' | 'smart_dim';

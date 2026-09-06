@@ -11,7 +11,6 @@ import type { ProjectFileIO } from './project-file-io.js';
 
 export interface IAppAPI {
     addSmartPanel?: () => void;
-    addSmartBox?: () => void;
     createNewKorpus?: (params?: any) => void;
     rebuildContainer?: (containerId: string) => void;
     undo?: () => void;
@@ -54,6 +53,7 @@ export class ContextManager {
     public containerViews: Map<any, any> = new Map();
     public sceneSyncAdapter: SceneSyncAdapter = new SceneSyncAdapter();
     public smartBoxBayController: any = null;
+    public smartFrameDragController: any = null;
     
     // Zmienne używane z poziomu Reacta i UI
     public activeTab = 'tab-a4-smartpanel';

@@ -1,21 +1,13 @@
 /**
  * math3d.ts — czysta matematyka 3D dla solvera więzów.
- * Port 1:1 z @@BLENDER/S2_solver/core/math3d.py
  *
- * Zero importów: brak Babylona, brak A1_core/cad-math. Ten plik musi dać się
- * uruchomić w Node bez żadnego kontekstu aplikacji (golden testy).
+ * Zero zależności: czysta matematyka wektorowa i kwaternionowa.
  *
- * Konwencje przeniesione z Pythona bez zmian:
+ * Konwencje typów:
  *   Vec3 = [x, y, z]
- *   Quat = [w, x, y, z]   ← UWAGA: inna kolejność niż A1_core/cad-math/Quat (x,y,z,w).
- *                            Konwersja należy do adaptera, nie do rdzenia.
+ *   Quat = [w, x, y, z]   (waga jako pierwszy element)
  *
- * Jednostki: funkcje są jednorodne względem skali (poza normalizacjami, które
- * są skalo-niezmienne), więc działają tak samo w metrach i w milimetrach.
- * Rdzeń solvera pracuje w mm.
- *
- * Pythonowe helpery `_as_vec3` / `_as_quat` pominięto — pełniły rolę rzutowania
- * dowolnego iterowalnego na krotkę, co w TS zapewnia system typów.
+ * Jednostki: funkcje są jednorodne względem skali. Rdzeń solvera pracuje w mm.
  */
 
 export type Vec3 = [number, number, number];

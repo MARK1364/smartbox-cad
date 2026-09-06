@@ -1,8 +1,6 @@
 /**
  * PMI Viewport Listener — TypeScript / Babylon.js
  *
- * Odpowiednik `PMI_OT_viewport_listener` z `pmi_core.py`.
- *
  * Obsługuje wskazywanie wymiarów bezpośrednio w widoku 3D:
  *   - LMB na wymiarze     → zaznaczenie
  *   - LMB ponownie (<350ms) → edycja odsunięcia (przeciągnij, puść aby zatwierdzić)

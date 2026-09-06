@@ -211,7 +211,7 @@ export class PanelView {
             if (typeof mesh.enableEdgesRendering === 'function') {
                 mesh.enableEdgesRendering();
                 mesh.edgesWidth = 2.0;
-                mesh.edgesColor = new BABYLON.Color4(0.35, 0.30, 0.25, 0.6);
+                mesh.edgesColor = new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
             }
 
             // Zapewniamy działanie hover'a
@@ -237,7 +237,7 @@ export class PanelView {
             
             // ZAWSZE resetujemy kolor bazowy do czystego stanu (zapobiega utrwaleniu koloru zaznaczenia/hovera po rebuildzie)
             if (isFeature) {
-                mat.diffuseColor = new BABYLON.Color3(0.20, 0.16, 0.12);
+                mat.diffuseColor = new BABYLON.Color3(baseAlpineWhite.r * 0.94, baseAlpineWhite.g * 0.94, baseAlpineWhite.b * 0.94);
             } else {
                 const col = FACE_COLORS[faceName] || baseAlpineWhite;
                 mat.diffuseColor = new BABYLON.Color3(col.r, col.g, col.b);
@@ -500,8 +500,10 @@ export class PanelView {
             const isEdgeFace = !!edgeKey;
 
             if (isFeature) {
-                mat.diffuseColor = new BABYLON.Color3(0.20, 0.16, 0.12);
-                mat.alpha = 1.0;
+                mat.diffuseColor = new BABYLON.Color3(baseColor.r * 0.94, baseColor.g * 0.94, baseColor.b * 0.94);
+                mat.alpha = alpha;
+                mat.specularPower = specularPower;
+                mesh.edgesColor = new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
             } else if (isEdgeFace) {
                 const edgeSlot = eb[edgeKey];
                 const isEdgeBanded = edgeSlot?.active === true || (edgeSlot?.active !== false && edgeSlot?.type_id && edgeSlot.type_id !== 'none');
@@ -808,28 +810,8 @@ export class PanelView {
     }
 
     _renderPocket(feature) {
-        const faceData = this.model.getFace(feature.face);
-        const { u, v, width, height } = feature.params;
-        const w = width || 100;
-        const h = height || 100;
-
-        // Prostokątny obrys kieszeni
-        const halfW = w / 2;
-        const halfH = h / 2;
-        const lines = [[
-            this._facePoint(faceData, u - halfW, v - halfH, 0.5),
-            this._facePoint(faceData, u + halfW, v - halfH, 0.5),
-            this._facePoint(faceData, u + halfW, v + halfH, 0.5),
-            this._facePoint(faceData, u - halfW, v + halfH, 0.5),
-            this._facePoint(faceData, u - halfW, v - halfH, 0.5)
-        ]];
-        const rect = BABYLON.MeshBuilder.CreateLineSystem(`pocket_${feature.id}`, {
-            lines
-        }, this.scene);
-        rect.color = new BABYLON.Color3(0.2, 0.6, 1);
-        rect.isPickable = false;
-        rect.parent = this.root;
-        this._featureMarkers.push(rect);
+        // Fizyczna kieszeń i jej krawędzie są w 100% generowane w geometrii 3D formatki przez mesh_builder.ts
+        void feature;
     }
 
     _renderEdgeDimLines(feature, faceData, u, v, w, len, grooveMesh) {
@@ -1084,24 +1066,10 @@ export class PanelView {
         const w = params.width || 3;
         const len = params.length || params.height || 600;
 
-        const lines = [[
-            this._facePoint(faceData, u, v, 0.5),
-            this._facePoint(faceData, u + w, v, 0.5),
-            this._facePoint(faceData, u + w, v + len, 0.5),
-            this._facePoint(faceData, u, v + len, 0.5),
-            this._facePoint(faceData, u, v, 0.5)
-        ]];
-        const rect = BABYLON.MeshBuilder.CreateLineSystem(`groove_${feature.id}`, {
-            lines,
-            updatable: true,
-        }, this.scene);
-        rect.color = new BABYLON.Color3(0.95, 0.45, 0.1);
-        rect.isPickable = false;
-        rect.parent = this.root;
-        this._featureMarkers.push(rect);
-
+        // Fizyczny wpust i jego krawędzie są w 100% wycinane w siatce 3D formatki przez mesh_builder.ts.
+        // Wyświetlamy linie pomocnicze wymiarów krawędziowych tylko w trybie edge_dims (rewizja).
         if (params.placement === 'edge_dims') {
-            this._renderEdgeDimLines(feature, faceData, u, v, w, len, rect);
+            this._renderEdgeDimLines(feature, faceData, u, v, w, len, null);
         }
     }
 

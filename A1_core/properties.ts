@@ -62,6 +62,10 @@ export interface GrooveProperties {
     v: number;
     frameMm?: number;
     frameHMm?: number;
+    insetLMm?: number;
+    insetRMm?: number;
+    insetTMm?: number;
+    insetBMm?: number;
     editable: boolean;
     source: 'library' | 'engine';
     libraryId?: string;
@@ -161,6 +165,7 @@ export class PropertiesManager {
      */
     showProperties(data: PropertiesData): void {
         this._current = data;
+        document.dispatchEvent(new CustomEvent('smartbox-open-properties', { detail: data }));
         document.dispatchEvent(new CustomEvent('smartbox-properties-update', { detail: data }));
     }
 
@@ -266,6 +271,15 @@ export class PropertiesManager {
         // Podświetl mesh w scenie 3D
         if (featureMesh && facePicker) {
             facePicker._selectFeature(featureMesh, featureMesh.metadata?.smartId || null, null, false);
+        } else if (pv && pv.faceMeshes && facePicker && foundFeature.face) {
+            const rawFace = String(foundFeature.face);
+            const normFace = rawFace === 'FACE_Z_MINUS' || rawFace === 'front' || rawFace === 'outer'
+                ? 'FACE_Z_MINUS'
+                : (rawFace === 'FACE_Z_PLUS' || rawFace === 'back' || rawFace === 'inner' ? 'FACE_Z_PLUS' : rawFace);
+            const faceMesh = pv.faceMeshes[normFace] || pv.faceMeshes[rawFace];
+            if (faceMesh) {
+                facePicker._selectFace(faceMesh, null, null, parentPanel, false);
+            }
         }
 
         const dia = safeMm(foundFeature.params?.diameter || foundFeature.dim?.x, 5);
@@ -313,6 +327,10 @@ export class PropertiesManager {
                 v: vVal,
                 frameMm: safeMm(foundFeature.params?.insets?.l, 0),
                 frameHMm: safeMm(foundFeature.params?.insets?.b ?? foundFeature.params?.insets?.t, 0),
+                insetLMm: safeMm(foundFeature.params?.insets?.l, 60),
+                insetRMm: safeMm(foundFeature.params?.insets?.r, 60),
+                insetTMm: safeMm(foundFeature.params?.insets?.t, 60),
+                insetBMm: safeMm(foundFeature.params?.insets?.b, 60),
                 editable: isLibrary,
                 source: isLibrary ? 'library' : 'engine',
                 libraryId: isLibrary ? String(foundFeature.params.library_id) : undefined,

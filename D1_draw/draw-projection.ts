@@ -18,7 +18,7 @@ import {
     resolveGeometrySnapshot,
     E3GeometrySnapshot,
     E3PartPose,
-} from '../E3_export/e3-geometry-snapshot';
+} from '../R2_rys/e3-geometry-snapshot';
 
 export interface ProjectablePart {
     id: string;

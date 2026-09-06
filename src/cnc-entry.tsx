@@ -229,10 +229,10 @@ function CncStandaloneApp() {
                             setDisplayMenuOpen(false);
                             setProjMenuOpen(false);
                         }}
-                        title="Widok — włącz/wyłącz elementy graficzne"
+                        title="Podgląd — włącz/wyłącz elementy graficzne"
                     >
                         {eyeIcon}
-                        <span>Widok</span>
+                        <span>Podgląd</span>
                         <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3" style={{ marginLeft: 2, opacity: 0.8 }}>
                             <path d="M6 9l6 6 6-6" />
                         </svg>

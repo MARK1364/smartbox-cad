@@ -18,7 +18,7 @@ import {
     updateLibraryOperationsById,
 } from '../operacje-apply.js';
 import { pocketFromEdgeDims, snapDimHandleToEdge, dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound } from '../operacje-placement.js';
-import { DrawingProjectExtractor } from '../../E3_export/drawing-project-extractor.js';
+import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
 import '../../A1_core/project-domain.js';
 
 function makePanel(w = 600, h = 720, t = 18) {
@@ -32,13 +32,11 @@ function makePanel(w = 600, h = 720, t = 18) {
 }
 
 describe('o1_operacji katalog', () => {
-    it('ładuje ramkę, przetłoczenie i wycięcie pod szkło', () => {
+    it('ładuje przetłoczenie / wycięcie i rewizję', () => {
         const ids = listOperations().map((r) => r.id);
-        expect(ids).toEqual(['ramka_60', 'przetloczenie', 'wyciecie_szklo', 'rewizja']);
-        expect(getOperation('ramka_60')?.insets.l).toBe(60);
-        expect(getOperation('ramka_60')?.depthMm).toBe(6);
-        expect(getOperation('wyciecie_szklo')?.through).toBe(true);
-        expect(getOperation('wyciecie_szklo')?.fill).toBe('glass');
+        expect(ids).toEqual(['przetloczenie', 'rewizja']);
+        expect(getOperation('przetloczenie')?.insets.l).toBe(60);
+        expect(getOperation('przetloczenie')?.depthMm).toBe(3);
         expect(getOperation('rewizja')?.placement).toBe('edge_dims');
         expect(getOperation('rewizja')?.sizeMm).toEqual({ w: 120, h: 80 });
         expect(getOperation('rewizja')?.edge.uMm).toBe(100);
@@ -47,8 +45,8 @@ describe('o1_operacji katalog', () => {
 });
 
 describe('o1_operacji builder', () => {
-    it('liczy kieszeń ramki 60 na froncie 600×720', () => {
-        const recipe = getOperation('ramka_60')!;
+    it('liczy kieszeń przetłoczenia na froncie 600×720', () => {
+        const recipe = getOperation('przetloczenie')!;
         const panel = makePanel();
         const feat = buildOperationFeature(recipe, panel, 'FACE_Z_MINUS');
         expect(feat).not.toBeNull();
@@ -58,22 +56,22 @@ describe('o1_operacji builder', () => {
         expect(feat!.params.v).toBe(60);
         expect(feat!.params.width).toBe(480);
         expect(feat!.params.length).toBe(600);
-        expect(feat!.params.depth).toBe(6);
+        expect(feat!.params.depth).toBe(3);
         expect(feat!.face).toBe('FACE_Z_MINUS');
     });
 
-    it('wycięcie na wylot bierze grubość płyty', () => {
-        const recipe = getOperation('wyciecie_szklo')!;
+    it('wycięcie na wylot bierze grubość płyty przy through=true', () => {
+        const recipe = getOperation('przetloczenie')!;
         const panel = makePanel(600, 720, 18);
-        const feat = buildOperationFeature(recipe, panel, 'FACE_Z_MINUS');
+        const feat = applyLibraryOperation(panel, 'przetloczenie', 'FACE_Z_MINUS', { through: true, fill: 'glass' });
         expect(feat!.params.depth).toBe(18);
         expect(feat!.params.through).toBe(true);
         expect(feat!.params.fill).toBe('glass');
     });
 
-    it('odrzuca płytę mniejszą niż ramka', () => {
+    it('odrzuca płytę mniejszą niż przetłoczenie', () => {
         expect(pocketRectMm(100, 100, { l: 60, r: 60, t: 60, b: 60 })).toBeNull();
-        const recipe = getOperation('ramka_60')!;
+        const recipe = getOperation('przetloczenie')!;
         const panel = makePanel(80, 80, 18);
         expect(buildOperationFeature(recipe, panel, 'FACE_Z_MINUS')).toBeNull();
     });
@@ -82,7 +80,7 @@ describe('o1_operacji builder', () => {
 describe('o1_operacji apply / merge', () => {
     it('zostawia operację z biblioteki przy cechach silnika', () => {
         const panel = makePanel();
-        applyLibraryOperation(panel, 'ramka_60', 'FACE_Z_MINUS');
+        applyLibraryOperation(panel, 'przetloczenie', 'FACE_Z_MINUS');
         expect(panel.features).toHaveLength(1);
         expect(isLibraryOperation(panel.features[0])).toBe(true);
 
@@ -96,7 +94,7 @@ describe('o1_operacji apply / merge', () => {
 
     it('po zmianie wysokości przelicza długość kieszeni', () => {
         const panel = makePanel(600, 720, 18);
-        applyLibraryOperation(panel, 'ramka_60', 'FACE_Z_MINUS');
+        applyLibraryOperation(panel, 'przetloczenie', 'FACE_Z_MINUS');
         expect(panel.features[0].params.length).toBe(600);
 
         panel.setDimensions(mmToNm(600), mmToNm(900), mmToNm(18));
@@ -105,9 +103,9 @@ describe('o1_operacji apply / merge', () => {
         expect(panel.features[0].params.width).toBe(480);
     });
 
-    it('osobno szerokość i wysokość ramki', () => {
+    it('osobno szerokość i wysokość przetłoczenia', () => {
         const panel = makePanel(600, 720, 18);
-        applyLibraryOperation(panel, 'ramka_60', 'FACE_Z_MINUS', { frameWMm: 40, frameHMm: 80, depthMm: 6 });
+        applyLibraryOperation(panel, 'przetloczenie', 'FACE_Z_MINUS', { frameWMm: 40, frameHMm: 80, depthMm: 3 });
         expect(panel.features[0].params.insets.l).toBe(40);
         expect(panel.features[0].params.insets.r).toBe(40);
         expect(panel.features[0].params.insets.t).toBe(80);
@@ -118,7 +116,7 @@ describe('o1_operacji apply / merge', () => {
         expect(panel.features[0].params.length).toBe(560);
     });
 
-    it('zmienia ramkę 60→10 bez zaznaczonej formatki', () => {
+    it('zmienia przetłoczenie 60→10 bez zaznaczonej formatki', () => {
         const doc = new ProjectDocument({ name: 'O1 live' });
         ContextManager.instance.document = doc;
         const panel = doc.createPanel({
@@ -128,10 +126,10 @@ describe('o1_operacji apply / merge', () => {
             thickness: mmToNm(18),
             engineManaged: false,
         }) as PanelModel;
-        applyLibraryOperation(panel, 'ramka_60', 'FACE_Z_MINUS');
+        applyLibraryOperation(panel, 'przetloczenie', 'FACE_Z_MINUS');
         expect(panel.features[0].params.u).toBe(60);
 
-        const n = updateLibraryOperationsById('ramka_60', { frameMm: 10, depthMm: 6 });
+        const n = updateLibraryOperationsById('przetloczenie', { frameMm: 10, depthMm: 3 });
         expect(n).toBe(1);
         expect(panel.features[0].params.u).toBe(10);
         expect(panel.features[0].params.width).toBe(580);
@@ -140,7 +138,7 @@ describe('o1_operacji apply / merge', () => {
 
     it('buduje fizyczną kieszeń w siatce (dziura + krawędzie wgłębienia)', () => {
         const panel = makePanel(600, 720, 18);
-        applyLibraryOperation(panel, 'ramka_60', 'FACE_Z_MINUS', { frameMm: 60, depthMm: 6 });
+        applyLibraryOperation(panel, 'przetloczenie', 'FACE_Z_MINUS', { frameMm: 60, depthMm: 3 });
         const mesh = buildMeshFromPanel(panel);
         const grooveEdges = (mesh.edges || []).filter((e: any) => String(e.key || '').startsWith('e_groove_'));
         expect(grooveEdges.length).toBe(12);
@@ -150,7 +148,7 @@ describe('o1_operacji apply / merge', () => {
 });
 
 describe('applyPlanToContainer zachowuje operację z biblioteki', () => {
-    it('nie kasuje ramki przy przebudowie silnika', () => {
+    it('nie kasuje przetłoczenia przy przebudowie silnika', () => {
         const doc = new ProjectDocument({ name: 'O1' });
         ContextManager.instance.document = doc;
         const cabinet = doc.createContainer({
@@ -167,7 +165,7 @@ describe('applyPlanToContainer zachowuje operację z biblioteki', () => {
             thickness: mmToNm(18),
         }, cabinet.id) as PanelModel;
         (front as any).key = 'FRONT';
-        applyLibraryOperation(front, 'ramka_60', 'FACE_Z_MINUS');
+        applyLibraryOperation(front, 'przetloczenie', 'FACE_Z_MINUS');
         expect(front.features.some(isLibraryOperation)).toBe(true);
 
         applyPlanToContainer(cabinet, {
@@ -189,11 +187,11 @@ describe('applyPlanToContainer zachowuje operację z biblioteki', () => {
 });
 
 describe('wpust silnika vs operacja Smart', () => {
-    it('ramka jest edytowalna, wpust z korpusu nie', () => {
-        const ramka = applyLibraryOperation(makePanel(), 'ramka_60', 'FACE_Z_MINUS');
-        expect(isLibraryOperation(ramka)).toBe(true);
-        expect(isEngineGroove(ramka)).toBe(false);
-        expect(featureOperationLabel(ramka)).toBe('Ramka 60');
+    it('przetłoczenie jest edytowalne, wpust z korpusu nie', () => {
+        const przetloczenie = applyLibraryOperation(makePanel(), 'przetloczenie', 'FACE_Z_MINUS');
+        expect(isLibraryOperation(przetloczenie)).toBe(true);
+        expect(isEngineGroove(przetloczenie)).toBe(false);
+        expect(featureOperationLabel(przetloczenie)).toBe('Przetłoczenie / Wycięcie');
 
         const wpust = {
             id: 'g1',
@@ -206,7 +204,7 @@ describe('wpust silnika vs operacja Smart', () => {
         expect(featureOperationLabel(wpust)).toBe('Wpust');
     });
 
-    it('w drzewie drzwi ramka jest library, wpust engine', () => {
+    it('w drzewie drzwi przetłoczenie jest library, wpust engine', () => {
         const doc = new ProjectDocument({ name: 'Drzwi tree' });
         ContextManager.instance.document = doc;
         const cabinet = doc.createContainer({
@@ -222,7 +220,7 @@ describe('wpust silnika vs operacja Smart', () => {
             height: mmToNm(720),
             thickness: mmToNm(18),
         }, cabinet.id) as PanelModel;
-        applyLibraryOperation(front, 'ramka_60', 'FACE_Z_MINUS');
+        applyLibraryOperation(front, 'przetloczenie', 'FACE_Z_MINUS');
         front.features.push({
             id: 'wpust_plecy',
             type: 'groove',
@@ -245,7 +243,7 @@ describe('wpust silnika vs operacja Smart', () => {
         const grooves = door.grooves || [];
         const smart = grooves.find((g: any) => g.source === 'library');
         const engine = grooves.find((g: any) => g.source === 'engine');
-        expect(smart?.name).toBe('Ramka 60');
+        expect(smart?.name).toBe('Przetłoczenie / Wycięcie');
         expect(smart?.editable).toBe(true);
         expect(engine?.name).toBe('Wpust');
         expect(engine?.editable).toBe(false);

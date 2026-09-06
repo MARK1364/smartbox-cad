@@ -182,13 +182,17 @@ export function resolveOperationFace(
     recipe: OperationRecipe,
     explicitFace?: string | null,
 ): FaceName {
-    if (explicitFace) return normalizeFaceName(explicitFace);
+    if (explicitFace) {
+        const norm = normalizeFaceName(explicitFace);
+        if (norm === 'FACE_Z_MINUS' || norm === 'FACE_Z_PLUS') return norm;
+    }
     const picker = ContextManager.instance?.facePicker as any;
     const sel = picker?.selectedFace;
     const pickedFace = sel?.metadata?.faceName;
     const pickedPanel = sel?.metadata?.panelModel;
     if (pickedFace && pickedPanel && (pickedPanel.id === panel.id || pickedPanel === panel)) {
-        return normalizeFaceName(pickedFace);
+        const norm = normalizeFaceName(pickedFace);
+        if (norm === 'FACE_Z_MINUS' || norm === 'FACE_Z_PLUS') return norm;
     }
     return faceHintToFace(recipe.face_hint);
 }
@@ -253,9 +257,16 @@ export function applyLibraryOperationFromPick(
 ): OperationFeature | null {
     const md = pick?.pickedMesh?.metadata;
     const panel = md?.panelModel as PanelModel | undefined;
-    const face = md?.faceName || null;
+    const rawFace = md?.faceName || null;
     if (!panel) return null;
-    return applyLibraryOperation(panel, libraryId, face, overrides);
+    if (rawFace) {
+        const norm = normalizeFaceName(rawFace);
+        // Zablokuj nakładanie na boczne płaszczyzny krawędziowe (z ABS)
+        if (norm !== 'FACE_Z_MINUS' && norm !== 'FACE_Z_PLUS') {
+            return null;
+        }
+    }
+    return applyLibraryOperation(panel, libraryId, rawFace, overrides);
 }
 
 export function bindOperationEdge(

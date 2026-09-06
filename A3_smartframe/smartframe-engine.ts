@@ -39,6 +39,8 @@ export interface CabinetPlanParams {
     backOffsetMm?: number;
     offsets?: Record<string, number>;
     container?: any;
+    topPanelMode?: 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V';
+    traverseWidth?: number;
 }
 
 export interface CabinetPlanResult {
@@ -55,6 +57,24 @@ const ACTIVE_ZONES: Record<number, string[]> = {
 
 import { ContextManager } from '../A1_core/context-manager.js';
 import { nmToMm, rulesMToMm } from '../A1_core/cad-math/units.js';
+import { readBackEdgeOffset } from './back-overlap.js';
+
+export function applyLcsMapping(dim: { x: number; y: number; z: number }, lcs?: any): { x: number; y: number; z: number } {
+    if (!lcs || !lcs.mapping) return { x: dim.x, y: dim.y, z: dim.z };
+    const map = lcs.mapping as any;
+    const getVal = (k: string) => {
+        const clean = String(k || '').replace(/[+-]/g, '').toUpperCase();
+        if (clean === 'X') return dim.x;
+        if (clean === 'Y') return dim.y;
+        if (clean === 'Z') return dim.z;
+        return (dim as any)[k] ?? dim.x;
+    };
+    return {
+        x: map.X ? getVal(map.X) : dim.x,
+        y: map.Y ? getVal(map.Y) : dim.y,
+        z: map.Z ? getVal(map.Z) : dim.z,
+    };
+}
 
 function getRootSubcomponents(rules: any): Record<string, any> {
     if (!rules || !rules.model_tree) return {};
@@ -136,6 +156,8 @@ export class BaseCabinetEngine {
             sb_depth: number;
             back_offset_mm: number;
             back_groove_depth: number;
+            top_panel_mode?: 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V';
+            traverse_width?: number;
         },
         zoneLayout: ZoneLayout[],
         prefix: string,
@@ -147,7 +169,12 @@ export class BaseCabinetEngine {
                 const layout = zoneLayout.find(z => z.zoneKey === key);
                 if (!layout) continue;
                 const pfx = comp.zone?.prefix || "";
-                const ctx = { ...context, sb_height: layout.size };
+                const isTopZone = key === zoneLayout[zoneLayout.length - 1]?.zoneKey;
+                const ctx = {
+                    ...context,
+                    sb_height: layout.size,
+                    top_panel_mode: isTopZone ? context.top_panel_mode : 'FULL'
+                };
                 this._buildSubcomponents(
                     comp.subcomponents || {},
                     resultList,
@@ -157,7 +184,13 @@ export class BaseCabinetEngine {
                     key
                 );
             } else {
-                if (key.endsWith("_T2")) continue;
+                const isT2 = key.endsWith("_T2");
+                const isTopT2 = isT2 && (key.includes("WIENIEC_G") || comp.role === "TOP_PANEL");
+                if (isT2 && !isTopT2) continue;
+                if (isTopT2) {
+                    const mode = context.top_panel_mode || 'FULL';
+                    if (mode === 'FULL') continue;
+                }
                 const cleanKey = prefix && key.startsWith(prefix) ? key.slice(prefix.length) : key;
                 const geom = this._resolveGeometry(cleanKey, comp, {
                     ...context,
@@ -177,7 +210,7 @@ export class BaseCabinetEngine {
                     zonePrefix: prefix,
                     zoneId,
                     customProperties: comp.custom_properties || {},
-                    lcs: comp.lcs || null
+                    lcs: (geom as any).lcs || comp.lcs || null
                 });
             }
         }
@@ -194,6 +227,8 @@ export class BaseCabinetEngine {
             back_groove_depth: number;
             zonePrefix?: string;
             zoneId?: string;
+            top_panel_mode?: 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V';
+            traverse_width?: number;
         }
     ) {
         const W = ctx.sb_width;
@@ -250,25 +285,73 @@ export class BaseCabinetEngine {
                 loc: { x: midShift + (pYPlus - pYMinus) / 2, y: (pXPlus - pXMinus) / 2, z: thickness / 2 - shiftZ }
             };
         }
-        if (matchedKey === "WIENIEC_G" || matchedKey === "TOP" || role === "TOP_PANEL") {
-            return {
-                thickness,
-                dim: { x: innerWidth + pYMinus + pYPlus, y: D + pXMinus + pXPlus, z: thickness },
-                loc: { x: midShift + (pYPlus - pYMinus) / 2, y: (pXPlus - pXMinus) / 2, z: H - thickness / 2 + shiftZ }
-            };
+        const isWieniecG = matchedKey === "WIENIEC_G" || matchedKey === "TOP" || (role === "TOP_PANEL" && !key.endsWith("_T2"));
+        const isWieniecGT2 = matchedKey === "WIENIEC_G_T2" || (role === "TOP_PANEL" && key.endsWith("_T2"));
+
+        if (isWieniecG || isWieniecGT2) {
+            const mode = ctx.top_panel_mode || 'FULL';
+            const trWidth = ctx.traverse_width || 80;
+
+            if (mode === 'TRAVERSE_H') {
+                const isFront = !isWieniecGT2;
+                const baseY = isFront ? (-D / 2 + trWidth / 2) : (D / 2 - trWidth / 2);
+                return {
+                    thickness,
+                    dim: { x: innerWidth + pYMinus + pYPlus, y: trWidth + pXMinus + pXPlus, z: thickness },
+                    loc: {
+                        x: midShift + (pYPlus - pYMinus) / 2,
+                        y: baseY + (pXPlus - pXMinus) / 2,
+                        z: H - thickness / 2 + shiftZ
+                    }
+                };
+            } else if (mode === 'TRAVERSE_V') {
+                const isFront = !isWieniecGT2;
+                const baseY = isFront ? (-D / 2 + thickness / 2) : (D / 2 - thickness / 2);
+                return {
+                    thickness,
+                    dim: { x: innerWidth + pYMinus + pYPlus, y: thickness + pXMinus + pXPlus, z: trWidth },
+                    loc: {
+                        x: midShift + (pYPlus - pYMinus) / 2,
+                        y: baseY + (pXPlus - pXMinus) / 2,
+                        z: H - trWidth / 2 + shiftZ
+                    },
+                    lcs: {
+                        mapping: { X: 'x', Y: 'z', Z: 'y' },
+                        rotation: [180, 0, 0],
+                        faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
+                    }
+                };
+            } else {
+                if (isWieniecGT2) return null;
+                return {
+                    thickness,
+                    dim: { x: innerWidth + pYMinus + pYPlus, y: D + pXMinus + pXPlus, z: thickness },
+                    loc: { x: midShift + (pYPlus - pYMinus) / 2, y: (pXPlus - pXMinus) / 2, z: H - thickness / 2 + shiftZ }
+                };
+            }
         }
         if (matchedKey === "PLECY" || matchedKey === "BACK" || role === "BACK_PANEL") {
-            const grooveDepth = ctx.back_groove_depth || 11;
+            const defaultGroove = ctx.back_groove_depth || 11;
+            const overlapLeft   = readBackEdgeOffset(this.offsets, name, '-X', defaultGroove, pfx);
+            const overlapRight  = readBackEdgeOffset(this.offsets, name, '+X', defaultGroove, pfx);
+            const overlapBottom = readBackEdgeOffset(this.offsets, name, '-Y', defaultGroove, pfx);
+            const overlapTop    = readBackEdgeOffset(this.offsets, name, '+Y', defaultGroove, pfx);
+
             const bottomThick = this._getNodeThickness("WIENIEC_D", pfx) || this._getNodeThickness("BOTTOM", pfx) || 18;
             const topThick    = this._getNodeThickness("WIENIEC_G", pfx) || this._getNodeThickness("TOP", pfx) || 18;
             const innerH      = H - bottomThick - topThick;
-            const backW       = innerWidth + 2 * grooveDepth + pYMinus + pYPlus;
-            const backH       = innerH + 2 * grooveDepth + pYPlus + pYMinus;
+
+            const backW       = innerWidth + overlapLeft + overlapRight;
+            const backH       = innerH + overlapBottom + overlapTop;
             const backY       = D / 2 + thickness / 2 - backOffset + shiftY;
             return {
                 thickness,
                 dim: { x: backW, y: thickness, z: backH },
-                loc: { x: (pYMinus - pYPlus) / 2 + midShift, y: backY, z: pYMinus + backH / 2 + bottomThick - grooveDepth }
+                loc: {
+                    x: midShift + (overlapRight - overlapLeft) / 2,
+                    y: backY,
+                    z: bottomThick - overlapBottom + backH / 2
+                }
             };
         }
 
@@ -354,19 +437,28 @@ export class BaseCabinetEngine {
         const rawGroove = defaults.back_groove_depth ?? 0.011;
         const grooveDepth = rulesMToMm(rawGroove);
 
+        const rawInset = defaults.back_inset !== undefined ? rulesMToMm(defaults.back_inset) : 3;
+        const topPanelMode = params.topPanelMode || params.container?.generatorParams?.topPanelMode || 'FULL';
+        const traverseWidth = params.traverseWidth || params.container?.generatorParams?.traverseWidth || 80;
+
         const ctx = {
             sb_width: params.width,
             sb_height: params.height,
             sb_depth: params.depth,
-            back_offset_mm: params.backOffsetMm ?? 0,
-            back_groove_depth: grooveDepth
+            back_offset_mm: params.backOffsetMm ?? rawInset,
+            back_groove_depth: grooveDepth,
+            top_panel_mode: topPanelMode,
+            traverse_width: traverseWidth
         };
 
         const tree = this.rules.model_tree || {};
         const rootKey = Object.keys(tree)[0];
         const subcomps = tree[rootKey]?.subcomponents || {};
         const parts: CabinetGeometryPart[] = [];
-        this._buildSubcomponents(subcomps, parts, ctx, zoneLayout, "", "");
+        const isSingleZone = zoneLayout.length === 1 && zoneLayout[0].zoneKey === "SEKCJA_B";
+        const initialPrefix = isSingleZone ? "B_" : "";
+        const initialZoneId = isSingleZone ? "SEKCJA_B" : "";
+        this._buildSubcomponents(subcomps, parts, ctx, zoneLayout, initialPrefix, initialZoneId);
         return parts;
     }
 }

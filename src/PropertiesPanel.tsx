@@ -17,6 +17,7 @@ import { ContextManager } from '../A1_core/context-manager';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput';
 import { isPanelModel } from '../A1_core/domain-data';
 import { updateLibraryOperationParams } from '../o1_operacji';
+import { AssociativeDimInputs } from '../A4_smartpanel/associative-dim-ui';
 
 type TabName = 'item' | 'properties' | 'custom';
 
@@ -31,10 +32,16 @@ export const PropertiesPanel: React.FC = () => {
 
     // ─── Event listeners ───
     useEffect(() => {
+        const handleOpen = (e: any) => {
+            if (e.detail) {
+                setData(e.detail as PropertiesData);
+            }
+            setVisible(true);
+        };
+
         const handleUpdate = (e: any) => {
             if (e.detail) {
                 setData(e.detail as PropertiesData);
-                setVisible(true);
             }
         };
 
@@ -48,11 +55,13 @@ export const PropertiesPanel: React.FC = () => {
             }
         };
 
+        document.addEventListener('smartbox-open-properties', handleOpen);
         document.addEventListener('smartbox-properties-update', handleUpdate);
         document.addEventListener('smartbox-toggle-item-panel', handleToggle);
         document.addEventListener('keydown', handleKeyDown);
 
         return () => {
+            document.removeEventListener('smartbox-open-properties', handleOpen);
             document.removeEventListener('smartbox-properties-update', handleUpdate);
             document.removeEventListener('smartbox-toggle-item-panel', handleToggle);
             document.removeEventListener('keydown', handleKeyDown);
@@ -96,6 +105,10 @@ export const PropertiesPanel: React.FC = () => {
     }, [data]);
 
     const applyGrooveEdit = useCallback((overrides: {
+        insetLMm?: number;
+        insetRMm?: number;
+        insetTMm?: number;
+        insetBMm?: number;
         frameWMm?: number;
         frameHMm?: number;
         widthMm?: number;
@@ -263,13 +276,19 @@ export const PropertiesPanel: React.FC = () => {
                                     <label>Szerokość (W):</label>
                                     <span className="item-highlight">{data.panelProps.width} mm</span>
                                 </div>
-                                <div className="item-field">
-                                    <label>Grubość (T):</label>
-                                    <span className="item-highlight">{data.panelProps.thickness} mm</span>
-                                </div>
+                                {data.panelId && ContextManager.instance.document?.findNode(data.panelId)?.domainData && (
+                                    <AssociativeDimInputs panel={ContextManager.instance.document.findNode(data.panelId)!.domainData as any} axis="width" />
+                                )}
                                 <div className="item-field">
                                     <label>Wysokość (H):</label>
                                     <span className="item-highlight">{data.panelProps.height} mm</span>
+                                </div>
+                                {data.panelId && ContextManager.instance.document?.findNode(data.panelId)?.domainData && (
+                                    <AssociativeDimInputs panel={ContextManager.instance.document.findNode(data.panelId)!.domainData as any} axis="height" />
+                                )}
+                                <div className="item-field">
+                                    <label>Grubość (T):</label>
+                                    <span className="item-highlight">{data.panelProps.thickness} mm</span>
                                 </div>
                             </>
                         )}
@@ -378,31 +397,69 @@ export const PropertiesPanel: React.FC = () => {
                                 ) : data.grooveProps.editable ? (
                                     <>
                                         <div className="item-field">
-                                            <label>Szerokość ramki:</label>
+                                            <label>Margines lewy (L):</label>
                                             <SmartNumericInput
-                                                value={data.grooveProps.frameMm || 60}
-                                                min={1}
+                                                value={data.grooveProps.insetLMm ?? data.grooveProps.frameMm ?? 60}
+                                                min={0}
                                                 max={500}
                                                 step={1}
                                                 unit="mm"
                                                 onChange={(val) => applyGrooveEdit({
-                                                    frameWMm: val,
-                                                    frameHMm: data.grooveProps!.frameHMm || val,
+                                                    insetLMm: val,
+                                                    insetRMm: data.grooveProps!.insetRMm ?? data.grooveProps!.frameMm ?? 60,
+                                                    insetTMm: data.grooveProps!.insetTMm ?? data.grooveProps!.frameHMm ?? 60,
+                                                    insetBMm: data.grooveProps!.insetBMm ?? data.grooveProps!.frameHMm ?? 60,
                                                     depthMm: data.grooveProps!.depth,
                                                 })}
                                             />
                                         </div>
                                         <div className="item-field">
-                                            <label>Wysokość ramki:</label>
+                                            <label>Margines prawy (P):</label>
                                             <SmartNumericInput
-                                                value={data.grooveProps.frameHMm || data.grooveProps.frameMm || 60}
-                                                min={1}
+                                                value={data.grooveProps.insetRMm ?? data.grooveProps.frameMm ?? 60}
+                                                min={0}
                                                 max={500}
                                                 step={1}
                                                 unit="mm"
                                                 onChange={(val) => applyGrooveEdit({
-                                                    frameWMm: data.grooveProps!.frameMm || val,
-                                                    frameHMm: val,
+                                                    insetLMm: data.grooveProps!.insetLMm ?? data.grooveProps!.frameMm ?? 60,
+                                                    insetRMm: val,
+                                                    insetTMm: data.grooveProps!.insetTMm ?? data.grooveProps!.frameHMm ?? 60,
+                                                    insetBMm: data.grooveProps!.insetBMm ?? data.grooveProps!.frameHMm ?? 60,
+                                                    depthMm: data.grooveProps!.depth,
+                                                })}
+                                            />
+                                        </div>
+                                        <div className="item-field">
+                                            <label>Margines góra (G):</label>
+                                            <SmartNumericInput
+                                                value={data.grooveProps.insetTMm ?? data.grooveProps.frameHMm ?? 60}
+                                                min={0}
+                                                max={500}
+                                                step={1}
+                                                unit="mm"
+                                                onChange={(val) => applyGrooveEdit({
+                                                    insetLMm: data.grooveProps!.insetLMm ?? data.grooveProps!.frameMm ?? 60,
+                                                    insetRMm: data.grooveProps!.insetRMm ?? data.grooveProps!.frameMm ?? 60,
+                                                    insetTMm: val,
+                                                    insetBMm: data.grooveProps!.insetBMm ?? data.grooveProps!.frameHMm ?? 60,
+                                                    depthMm: data.grooveProps!.depth,
+                                                })}
+                                            />
+                                        </div>
+                                        <div className="item-field">
+                                            <label>Margines dół (D):</label>
+                                            <SmartNumericInput
+                                                value={data.grooveProps.insetBMm ?? data.grooveProps.frameHMm ?? 60}
+                                                min={0}
+                                                max={500}
+                                                step={1}
+                                                unit="mm"
+                                                onChange={(val) => applyGrooveEdit({
+                                                    insetLMm: data.grooveProps!.insetLMm ?? data.grooveProps!.frameMm ?? 60,
+                                                    insetRMm: data.grooveProps!.insetRMm ?? data.grooveProps!.frameMm ?? 60,
+                                                    insetTMm: data.grooveProps!.insetTMm ?? data.grooveProps!.frameHMm ?? 60,
+                                                    insetBMm: val,
                                                     depthMm: data.grooveProps!.depth,
                                                 })}
                                             />
@@ -417,8 +474,10 @@ export const PropertiesPanel: React.FC = () => {
                                                 unit="mm"
                                                 disabled={!!data.grooveProps.through}
                                                 onChange={(val) => applyGrooveEdit({
-                                                    frameWMm: data.grooveProps!.frameMm,
-                                                    frameHMm: data.grooveProps!.frameHMm,
+                                                    insetLMm: data.grooveProps!.insetLMm ?? data.grooveProps!.frameMm ?? 60,
+                                                    insetRMm: data.grooveProps!.insetRMm ?? data.grooveProps!.frameMm ?? 60,
+                                                    insetTMm: data.grooveProps!.insetTMm ?? data.grooveProps!.frameHMm ?? 60,
+                                                    insetBMm: data.grooveProps!.insetBMm ?? data.grooveProps!.frameHMm ?? 60,
                                                     depthMm: val,
                                                 })}
                                             />

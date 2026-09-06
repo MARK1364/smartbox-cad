@@ -12,12 +12,16 @@ import { Mat4 } from './cad-math/mat4.js';
 import { nmToMm } from './cad-math/units.js';
 import { TransformNodeCommand } from './commands/transform-node-command.js';
 import { MacroCommand } from './commands/macro-command.js';
-import { SyncBackGroovesCommand } from './commands/sync-back-grooves-command.js';
+import { SyncBackGroovesCommand } from '../A3_smartframe/commands/sync-back-grooves-command.js';
 import { ConstraintStore } from '../S2_solver/constraint-store.js';
 import { ConstraintDragGroup } from '../S2_solver/constraint-drag-group.js';
 import { CadTranslateGizmo } from './cad-translate-gizmo.js';
 
 import { normalizeFaceName } from '../A4_smartpanel/panel-model.js';
+import { readOffsetMm } from '../A3_smartframe/back-overlap.js';
+import { findOwningKorpus } from '../A3_smartframe/korpus-offset-gizmo.js';
+import { SetKorpusTopPanelConfigCommand, TopPanelMode } from '../A3_smartframe/commands/set-korpus-top-panel-config-command.js';
+import { rebuildSmartFrameContainer } from '../A3_smartframe/smartframe-adapter.js';
 
 declare const BABYLON: any;
 
@@ -34,6 +38,10 @@ export class GizmoController {
     private rotationGizmo: any = null;
     private freeDragSphere: any = null;
     private matrixBeforeDrag: Mat4 | null = null;
+    private activeTopPanelEntity: any = null;
+    private activeTopPanelContainer: any = null;
+    private isTopPanelWidgetOpen = false;
+    private topPanelWidgetManualPos: { left: number; top: number } | null = null;
 
     private pushPullMapping: Record<string, Record<string, string>> = {
         'LEFT_SIDE_PANEL': {
@@ -96,7 +104,7 @@ export class GizmoController {
             'left': '-Y',
             'right': '+Y'
         },
-        'BACK_PANEL': { 'top': '+Y', 'bottom': '-Y', 'left': '-X', 'right': '+X', 'front': 'shiftY' }
+        'BACK_PANEL': { 'top': '+Y', 'bottom': '-Y', 'left': '-X', 'right': '+X', 'front': 'backOffset' }
     };
 
     private faceNormals: Record<string, any> = {};
@@ -127,6 +135,7 @@ export class GizmoController {
         if (!viewport || !viewport.scene) return;
 
         this.createFloatingInput();
+        this.createTopPanelWidget();
 
         viewport.scene.onBeforeRenderObservable.add(() => {
             if ((this.isDraggingFaceGizmo || this.isEditingFaceGizmo) && this.activeGizmoSphere && this.activeGizmoContainer && this.activeGizmoParamName) {
@@ -164,7 +173,16 @@ export class GizmoController {
                     }
 
                     if (document.activeElement !== input) {
-                        const currentVal = this.activeGizmoContainer.generatorParams.offsets?.[this.activeGizmoParamName] || 0;
+                        let currentVal: number;
+                        if (this.activeGizmoParamName === 'backOffset') {
+                            currentVal = this.activeGizmoContainer.generatorParams.backOffset !== undefined
+                                ? this.activeGizmoContainer.generatorParams.backOffset
+                                : 3;
+                        } else {
+                            const activeEntity = ContextManager.instance.document?.activeEntity;
+                            const role = (activeEntity as any)?.role;
+                            currentVal = readOffsetMm(this.activeGizmoContainer.generatorParams?.offsets, this.activeGizmoParamName, role);
+                        }
                         input.value = currentVal.toString();
                     }
                 }
@@ -173,6 +191,40 @@ export class GizmoController {
                 if (badge && badge.style.display !== 'none' && !this.isEditingFaceGizmo) {
                     badge.style.display = 'none';
                     this.badgeFixedPos = null;
+                }
+            }
+
+            if (this.activeTopPanelEntity && this.activeTopPanelContainer && this.isTopPanelWidgetOpen) {
+                const topWidget = document.getElementById('gizmo-top-panel-widget');
+                const view = ContextManager.instance.panelViews.get(this.activeTopPanelEntity);
+                const canvas = viewport.canvas;
+                if (topWidget && view?.root && canvas) {
+                    topWidget.style.display = 'flex';
+                    if (this.topPanelWidgetManualPos) {
+                        topWidget.style.left = `${this.topPanelWidgetManualPos.left}px`;
+                        topWidget.style.top = `${this.topPanelWidgetManualPos.top}px`;
+                    } else {
+                        const worldPos = view.root.getAbsolutePosition ? view.root.getAbsolutePosition().clone() : view.root.position.clone();
+                        const screenPos = BABYLON.Vector3.Project(
+                            worldPos,
+                            BABYLON.Matrix.Identity(),
+                            viewport.scene.getTransformMatrix(),
+                            viewport.scene.activeCamera.viewport.toGlobal(
+                                viewport.engine.getRenderWidth(),
+                                viewport.engine.getRenderHeight()
+                            )
+                        );
+                        const canvasRect = canvas.getBoundingClientRect();
+                        const curLeft = canvasRect.left + screenPos.x + 30;
+                        const curTop = canvasRect.top + screenPos.y - 120;
+                        topWidget.style.left = `${Math.max(10, curLeft)}px`;
+                        topWidget.style.top = `${Math.max(10, curTop)}px`;
+                    }
+                }
+            } else {
+                const topWidget = document.getElementById('gizmo-top-panel-widget');
+                if (topWidget && topWidget.style.display !== 'none') {
+                    topWidget.style.display = 'none';
                 }
             }
         });
@@ -250,7 +302,37 @@ export class GizmoController {
         badge.appendChild(unit);
         document.body.appendChild(badge);
 
+        badge.onmousedown = (e) => e.stopPropagation();
+        badge.onpointerdown = (e) => e.stopPropagation();
+        input.onmousedown = (e) => e.stopPropagation();
+        input.onpointerdown = (e) => e.stopPropagation();
+
         this.initFloatingInputEvents(input, badge);
+    }
+
+    private openFloatingInput(sphere: any, paramName: string, container: any, role?: string): void {
+        this.activeGizmoSphere = sphere;
+        this.activeGizmoParamName = paramName;
+        this.activeGizmoContainer = container;
+        this.isEditingFaceGizmo = true;
+        this.badgeFixedPos = null;
+
+        const isBackOffset = paramName === 'backOffset';
+        this.originalValueBeforeEdit = isBackOffset
+            ? (container.generatorParams?.backOffset !== undefined ? container.generatorParams.backOffset : 3)
+            : readOffsetMm(container.generatorParams?.offsets, paramName, role);
+
+        const badge = document.getElementById('gizmo-floating-input');
+        const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
+        if (badge && input) {
+            badge.style.display = 'flex';
+            input.value = this.originalValueBeforeEdit.toString();
+            input.style.width = `${Math.max(45, input.value.length * 9)}px`;
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 50);
+        }
     }
 
     /**
@@ -285,10 +367,15 @@ export class GizmoController {
             const val = this.evaluateMathExpression(input.value);
             if (val === null) return;
 
-            if (!this.activeGizmoContainer.generatorParams.offsets) {
-                this.activeGizmoContainer.generatorParams.offsets = {};
+            const isBackOffset = this.activeGizmoParamName === 'backOffset';
+            if (isBackOffset) {
+                this.activeGizmoContainer.generatorParams.backOffset = val;
+            } else {
+                if (!this.activeGizmoContainer.generatorParams.offsets) {
+                    this.activeGizmoContainer.generatorParams.offsets = {};
+                }
+                this.activeGizmoContainer.generatorParams.offsets[this.activeGizmoParamName] = val;
             }
-            this.activeGizmoContainer.generatorParams.offsets[this.activeGizmoParamName] = val;
 
             const doc = ContextManager.instance.document;
             if (doc) {
@@ -299,8 +386,8 @@ export class GizmoController {
                     zoneCount: this.activeGizmoContainer.generatorParams.zoneCount || 1,
                     bottomHeight: this.activeGizmoContainer.generatorParams.bottomHeight || 500,
                     middleHeight: this.activeGizmoContainer.generatorParams.middleHeight || 1200,
-                    backOffset: this.activeGizmoContainer.generatorParams.backOffset || 0,
-                    offsets: this.activeGizmoContainer.generatorParams.offsets
+                    backOffset: this.activeGizmoContainer.generatorParams.backOffset !== undefined ? this.activeGizmoContainer.generatorParams.backOffset : 3,
+                    offsets: this.activeGizmoContainer.generatorParams.offsets || {}
                 });
             }
         };
@@ -317,7 +404,15 @@ export class GizmoController {
             } else if (e.key === 'Escape') {
                 input.value = this.originalValueBeforeEdit.toString();
                 if (this.activeGizmoContainer && this.activeGizmoParamName) {
-                    this.activeGizmoContainer.generatorParams.offsets[this.activeGizmoParamName] = this.originalValueBeforeEdit;
+                    const isBackOffset = this.activeGizmoParamName === 'backOffset';
+                    if (isBackOffset) {
+                        this.activeGizmoContainer.generatorParams.backOffset = this.originalValueBeforeEdit;
+                    } else {
+                        if (!this.activeGizmoContainer.generatorParams.offsets) {
+                            this.activeGizmoContainer.generatorParams.offsets = {};
+                        }
+                        this.activeGizmoContainer.generatorParams.offsets[this.activeGizmoParamName] = this.originalValueBeforeEdit;
+                    }
                     const doc = ContextManager.instance.document;
                     if (doc) {
                         applyRealtimeUpdate(doc, {
@@ -327,8 +422,8 @@ export class GizmoController {
                             zoneCount: this.activeGizmoContainer.generatorParams.zoneCount || 1,
                             bottomHeight: this.activeGizmoContainer.generatorParams.bottomHeight || 500,
                             middleHeight: this.activeGizmoContainer.generatorParams.middleHeight || 1200,
-                            backOffset: this.activeGizmoContainer.generatorParams.backOffset || 0,
-                            offsets: this.activeGizmoContainer.generatorParams.offsets
+                            backOffset: this.activeGizmoContainer.generatorParams.backOffset !== undefined ? this.activeGizmoContainer.generatorParams.backOffset : 3,
+                            offsets: this.activeGizmoContainer.generatorParams.offsets || {}
                         });
                     }
                 }
@@ -359,11 +454,270 @@ export class GizmoController {
         };
     }
 
+    public toggleTopPanelWidget(): void {
+        this.isTopPanelWidgetOpen = !this.isTopPanelWidgetOpen;
+        const widget = document.getElementById('gizmo-top-panel-widget');
+        if (!widget) {
+            this.createTopPanelWidget();
+        }
+        if (this.isTopPanelWidgetOpen) {
+            this.updateTopPanelWidgetUI();
+            const w = document.getElementById('gizmo-top-panel-widget');
+            if (w) w.style.display = 'flex';
+        } else {
+            const w = document.getElementById('gizmo-top-panel-widget');
+            if (w) w.style.display = 'none';
+        }
+    }
+
+    public closeTopPanelWidget(): void {
+        this.isTopPanelWidgetOpen = false;
+        const widget = document.getElementById('gizmo-top-panel-widget');
+        if (widget) {
+            widget.style.display = 'none';
+        }
+    }
+
+    public createTopPanelWidget(): void {
+        if (typeof document === 'undefined') return;
+        if (document.getElementById('gizmo-top-panel-widget')) return;
+
+        const widget = document.createElement('div');
+        widget.id = 'gizmo-top-panel-widget';
+        widget.style.cssText = `
+            position: absolute;
+            display: none;
+            z-index: 1000;
+            pointer-events: auto;
+            background: rgba(20, 20, 24, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1.5px solid rgba(255, 102, 0, 0.85);
+            border-radius: 8px;
+            padding: 6px 10px 8px 10px;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7);
+            font-family: 'Outfit', 'Inter', sans-serif;
+            color: #fff;
+            user-select: none;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 240px;
+        `;
+
+        widget.innerHTML = `
+            <div id="top-panel-drag-header" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.12); cursor: move;">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <span style="font-size: 11px; opacity: 0.6;">⠿</span>
+                    <span style="font-size: 11px; font-weight: 700; color: #ff8833; text-transform: uppercase; letter-spacing: 0.5px;">Wieniec Górny</span>
+                </div>
+                <button id="top-panel-close-btn" type="button" title="Zamknij" style="background: transparent; border: none; color: #aaa; font-size: 13px; cursor: pointer; padding: 0 4px; line-height: 1; border-radius: 3px; transition: color 0.15s;">✕</button>
+            </div>
+            <div id="top-panel-btn-group" style="display: flex; gap: 4px;">
+                <button type="button" data-mode="FULL" title="Pojedynczy pełny wieniec" class="top-mode-btn" style="flex: 1; padding: 5px 6px; font-size: 11px; font-weight: 600; border-radius: 4px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: #ddd; cursor: pointer; transition: all 0.15s; white-space: nowrap;">▬ Pełny</button>
+                <button type="button" data-mode="TRAVERSE_H" title="Dwa trawersy poziomo (leżące na płasko)" class="top-mode-btn" style="flex: 1; padding: 5px 6px; font-size: 11px; font-weight: 600; border-radius: 4px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: #ddd; cursor: pointer; transition: all 0.15s; white-space: nowrap;">═ Traw. poz.</button>
+                <button type="button" data-mode="TRAVERSE_V" title="Dwa trawersy pionowo (stojące na sztorc)" class="top-mode-btn" style="flex: 1; padding: 5px 6px; font-size: 11px; font-weight: 600; border-radius: 4px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: #ddd; cursor: pointer; transition: all 0.15s; white-space: nowrap;">║ Traw. pion.</button>
+            </div>
+            <div id="top-panel-width-row" style="display: none; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px; font-size: 11px; color: #aaa;">
+                <span>Szerokość trawersu:</span>
+                <div style="display: flex; align-items: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 1px 4px;">
+                    <input id="top-panel-width-input" type="text" style="width: 42px; background: transparent; border: none; color: #fff; text-align: right; font-size: 11px; font-weight: bold; outline: none;" value="80" />
+                    <span style="font-size: 10px; color: #888; margin-left: 2px;">mm</span>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(widget);
+
+        widget.onmousedown = (e) => e.stopPropagation();
+        widget.onpointerdown = (e) => e.stopPropagation();
+
+        // Obsługa przeciągania okna po ekranie (draggability)
+        const header = widget.querySelector('#top-panel-drag-header') as HTMLElement;
+        if (header) {
+            let isDragging = false;
+            let startX = 0;
+            let startY = 0;
+            let startLeft = 0;
+            let startTop = 0;
+
+            const onPointerMove = (e: PointerEvent) => {
+                if (!isDragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                const newLeft = Math.max(0, startLeft + dx);
+                const newTop = Math.max(0, startTop + dy);
+                this.topPanelWidgetManualPos = { left: newLeft, top: newTop };
+                widget.style.left = `${newLeft}px`;
+                widget.style.top = `${newTop}px`;
+            };
+
+            const onPointerUp = () => {
+                if (isDragging) {
+                    isDragging = false;
+                    window.removeEventListener('pointermove', onPointerMove);
+                    window.removeEventListener('pointerup', onPointerUp);
+                }
+            };
+
+            header.onpointerdown = (e: PointerEvent) => {
+                if ((e.target as HTMLElement)?.id === 'top-panel-close-btn') return;
+                e.stopPropagation();
+                e.preventDefault();
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const rect = widget.getBoundingClientRect();
+                startLeft = rect.left;
+                startTop = rect.top;
+                this.topPanelWidgetManualPos = { left: startLeft, top: startTop };
+                window.addEventListener('pointermove', onPointerMove);
+                window.addEventListener('pointerup', onPointerUp);
+            };
+        }
+
+        // Przycisk zamykania
+        const closeBtn = widget.querySelector('#top-panel-close-btn') as HTMLElement;
+        if (closeBtn) {
+            closeBtn.onpointerdown = (e) => e.stopPropagation();
+            closeBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.closeTopPanelWidget();
+            };
+            closeBtn.onmouseenter = () => { closeBtn.style.color = '#ff6600'; };
+            closeBtn.onmouseleave = () => { closeBtn.style.color = '#aaa'; };
+        }
+
+        const btnGroup = widget.querySelector('#top-panel-btn-group');
+        if (btnGroup) {
+            btnGroup.querySelectorAll('.top-mode-btn').forEach((btn: any) => {
+                btn.onclick = (e: MouseEvent) => {
+                    e.stopPropagation();
+                    const mode = btn.getAttribute('data-mode') as TopPanelMode;
+                    this.setTopPanelMode(mode);
+                };
+            });
+        }
+
+        const widthInput = widget.querySelector('#top-panel-width-input') as HTMLInputElement;
+        if (widthInput) {
+            const commitWidth = () => {
+                const val = this.evaluateMathExpression(widthInput.value);
+                if (val !== null && val > 0 && val < 500) {
+                    this.setTopPanelTraverseWidth(val);
+                } else {
+                    const curW = this.activeTopPanelContainer?.generatorParams?.traverseWidth || 80;
+                    widthInput.value = curW.toString();
+                }
+            };
+            widthInput.onkeydown = (e: KeyboardEvent) => {
+                if (e.key === 'Enter') {
+                    commitWidth();
+                    widthInput.blur();
+                }
+            };
+            widthInput.onblur = () => commitWidth();
+        }
+    }
+
+    public updateTopPanelWidgetUI(): void {
+        const widget = document.getElementById('gizmo-top-panel-widget');
+        if (!widget || !this.activeTopPanelContainer) return;
+
+        const mode = (this.activeTopPanelContainer.generatorParams?.topPanelMode || 'FULL') as TopPanelMode;
+        const trWidth = this.activeTopPanelContainer.generatorParams?.traverseWidth || 80;
+
+        const btnGroup = widget.querySelector('#top-panel-btn-group');
+        if (btnGroup) {
+            btnGroup.querySelectorAll('.top-mode-btn').forEach((btn: any) => {
+                const btnMode = btn.getAttribute('data-mode');
+                if (btnMode === mode) {
+                    btn.style.background = '#ff6600';
+                    btn.style.borderColor = '#ff8833';
+                    btn.style.color = '#fff';
+                } else {
+                    btn.style.background = 'rgba(255,255,255,0.08)';
+                    btn.style.borderColor = 'rgba(255,255,255,0.15)';
+                    btn.style.color = '#ccc';
+                }
+            });
+        }
+
+        const widthRow = widget.querySelector('#top-panel-width-row') as HTMLElement;
+        const widthInput = widget.querySelector('#top-panel-width-input') as HTMLInputElement;
+        if (widthRow) {
+            widthRow.style.display = mode === 'FULL' ? 'none' : 'flex';
+        }
+        if (widthInput && document.activeElement !== widthInput) {
+            widthInput.value = trWidth.toString();
+        }
+    }
+
+    public setTopPanelMode(newMode: TopPanelMode): void {
+        const container = this.activeTopPanelContainer;
+        if (!container) return;
+        const curMode = (container.generatorParams?.topPanelMode || 'FULL') as TopPanelMode;
+        const curWidth = container.generatorParams?.traverseWidth || 80;
+        if (curMode === newMode) return;
+
+        const cmd = new SetKorpusTopPanelConfigCommand(
+            container.id,
+            { mode: curMode, width: curWidth },
+            { mode: newMode, width: curWidth }
+        );
+        const hist = ContextManager.instance.commandHistory;
+        if (hist) {
+            hist.execute(cmd);
+        } else {
+            if (!container.generatorParams) container.generatorParams = {};
+            container.generatorParams.topPanelMode = newMode;
+            container.generatorParams.traverseWidth = curWidth;
+            rebuildSmartFrameContainer(container);
+        }
+        setTimeout(() => {
+            this.updateFaceGizmo();
+        }, 60);
+    }
+
+    public setTopPanelTraverseWidth(newWidth: number): void {
+        const container = this.activeTopPanelContainer;
+        if (!container) return;
+        const curMode = (container.generatorParams?.topPanelMode || 'FULL') as TopPanelMode;
+        const curWidth = container.generatorParams?.traverseWidth || 80;
+        if (curWidth === newWidth) return;
+
+        const cmd = new SetKorpusTopPanelConfigCommand(
+            container.id,
+            { mode: curMode, width: curWidth },
+            { mode: curMode, width: newWidth }
+        );
+        const hist = ContextManager.instance.commandHistory;
+        if (hist) {
+            hist.execute(cmd);
+        } else {
+            if (!container.generatorParams) container.generatorParams = {};
+            container.generatorParams.topPanelMode = curMode;
+            container.generatorParams.traverseWidth = newWidth;
+            rebuildSmartFrameContainer(container);
+        }
+        setTimeout(() => {
+            this.updateFaceGizmo();
+        }, 60);
+    }
+
     public clearFaceGizmos(): void {
         for (const sphere of this.activeFaceGizmoSpheres) {
             try { sphere.dispose(); } catch {}
         }
         this.activeFaceGizmoSpheres = [];
+
+        this.activeTopPanelEntity = null;
+        this.activeTopPanelContainer = null;
+        this.isTopPanelWidgetOpen = false;
+        this.topPanelWidgetManualPos = null;
+        const topWidget = document.getElementById('gizmo-top-panel-widget');
+        if (topWidget) {
+            topWidget.style.display = 'none';
+        }
 
         if (this.positionGizmo) {
             this.positionGizmo.attachedNode = null;
@@ -477,6 +831,7 @@ export class GizmoController {
                         ContextManager.instance.sceneSyncAdapter.syncFromMesh(targetNode);
                     }
                     this._propagateConstraintDrag();
+                    ContextManager.instance.modalTransformManager?.updateLiveValues();
                     const cadNode = ctx.doc.findNode(ctx.entity.id);
                     if (cadNode) {
                         const eul = cadNode.localMatrix.decompose().rotation.toEulerXYZ();
@@ -553,25 +908,40 @@ export class GizmoController {
             return;
         }
 
-        if (activeEntity.type !== 'container') {
-            const view = panelViews.get(activeEntity);
-            if (!view || !view.faceMeshes) return;
+        if (activeEntity.type === 'container') {
+            return;
+        }
 
-            const role = (activeEntity as any).role;
-            if (!role || !this.pushPullMapping[role]) return;
+        const targetEntity = activeEntity;
+        const view = panelViews.get(targetEntity);
+        if (!view || !view.faceMeshes) return;
 
-            const mapping = this.pushPullMapping[role];
-            const rawContainer: any = doc.getContainers()[0];
-            const container: any = rawContainer?.domainData || rawContainer;
-            if (!container || !container.generatorParams) return;
+        const role = (targetEntity as any).role;
+        if (!role || !this.pushPullMapping[role]) return;
 
-            const panelName = activeEntity.name;
+        const mapping = this.pushPullMapping[role];
+        const rawContainer: any = doc.getContainers()[0];
+        const container: any = rawContainer?.domainData || rawContainer;
+        if (!container || !container.generatorParams) return;
 
-            for (const [faceName, suffix] of Object.entries(mapping)) {
-                const paramName = `${panelName}_${suffix}`;
-                const canonicalFace = normalizeFaceName(faceName);
-                const mesh = view.faceMeshes[canonicalFace] || view.faceMeshes[faceName];
-                if (!mesh) continue;
+        const panelName = targetEntity.name;
+
+        if (role === 'TOP_PANEL' || role.includes('TOP')) {
+            const owningKorpus = findOwningKorpus(doc, targetEntity.id) || container;
+            if (owningKorpus) {
+                this.activeTopPanelEntity = targetEntity;
+                this.activeTopPanelContainer = owningKorpus;
+                if (this.isTopPanelWidgetOpen) {
+                    this.updateTopPanelWidgetUI();
+                }
+            }
+        }
+
+        for (const [faceName, suffix] of Object.entries(mapping)) {
+            const paramName = suffix === 'backOffset' ? 'backOffset' : `${panelName}_${suffix}`;
+            const canonicalFace = normalizeFaceName(faceName);
+            const mesh = view.faceMeshes[canonicalFace] || view.faceMeshes[faceName];
+            if (!mesh) continue;
 
                 mesh.computeWorldMatrix(true);
                 const faceCenter = mesh.getBoundingInfo().boundingBox.centerWorld;
@@ -582,11 +952,17 @@ export class GizmoController {
 
                 const sphere = BABYLON.MeshBuilder.CreateSphere(`faceGizmoSphere_${faceName}`, { diameter: 30 }, viewport.scene);
                 sphere.metadata = { paramName: paramName };
-                sphere.position.copyFrom(faceCenter);
-                sphere.position.addInPlace(normal.scale(20));
 
-                // Centralna kulka przesuwania na środku płaszczyzny (front/back) -> ZAWSZE NIEBIESKA
-                const isCenterPlane = faceName === 'front' || faceName === 'back' || paramName.includes('shift');
+                // Centralna kulka przesuwania na środku płyty (front/back/shift/backOffset) -> ZAWSZE NIEBIESKA i W ŚRODKU LCS FORMATKI
+                const isCenterPlane = faceName === 'front' || faceName === 'back' || paramName.includes('shift') || paramName === 'backOffset';
+
+                if (isCenterPlane) {
+                    const worldPos = view.root.getAbsolutePosition ? view.root.getAbsolutePosition().clone() : view.root.position.clone();
+                    sphere.position.copyFrom(worldPos);
+                } else {
+                    sphere.position.copyFrom(faceCenter);
+                    sphere.position.addInPlace(normal.scale(20));
+                }
 
                 let diffuseColor: any;
                 let emissiveColor: any;
@@ -624,7 +1000,11 @@ export class GizmoController {
                     this.activeGizmoParamName = paramName;
                     this.activeGizmoContainer = container;
                     const c = container as any;
-                    this.originalValueBeforeEdit = (c.generatorParams.offsets && c.generatorParams.offsets[paramName]) ? c.generatorParams.offsets[paramName] : 0;
+                    if (paramName === 'backOffset') {
+                        this.originalValueBeforeEdit = c.generatorParams.backOffset !== undefined ? c.generatorParams.backOffset : 3;
+                    } else {
+                        this.originalValueBeforeEdit = readOffsetMm(c.generatorParams?.offsets, paramName, role);
+                    }
 
                     viewport.camera.detachControl();
                     originalValue = this.originalValueBeforeEdit;
@@ -637,6 +1017,24 @@ export class GizmoController {
                     const diffVec = sphere.position.subtract(startPos);
                     let delta = BABYLON.Vector3.Dot(diffVec, normal);
                     delta = Math.round(delta);
+
+                    if (paramName === 'backOffset') {
+                        const newValue = Math.max(0, originalValue + delta);
+                        if (c.generatorParams.backOffset === newValue) return;
+                        c.generatorParams.backOffset = newValue;
+
+                        applyRealtimeUpdate(doc, {
+                            width: nmToMm(c.width),
+                            height: nmToMm(c.height),
+                            depth: nmToMm(c.depth),
+                            zoneCount: c.generatorParams.zoneCount || 1,
+                            bottomHeight: c.generatorParams.bottomHeight || 500,
+                            middleHeight: c.generatorParams.middleHeight || 1200,
+                            backOffset: newValue,
+                            offsets: c.generatorParams.offsets || {}
+                        });
+                        return;
+                    }
 
                     const newValue = originalValue + delta;
                     if (!c.generatorParams.offsets) {
@@ -656,7 +1054,7 @@ export class GizmoController {
                         zoneCount: c.generatorParams.zoneCount || 1,
                         bottomHeight: c.generatorParams.bottomHeight || 500,
                         middleHeight: c.generatorParams.middleHeight || 1200,
-                        backOffset: c.generatorParams.backOffset || 0,
+                        backOffset: c.generatorParams.backOffset !== undefined ? c.generatorParams.backOffset : 3,
                         offsets: c.generatorParams.offsets
                     });
                 });
@@ -666,26 +1064,25 @@ export class GizmoController {
                     viewport.camera.attachControl(viewport.canvas, true);
                     
                     const lastParam = this.activeGizmoParamName;
+                    const lastContainer = this.activeGizmoContainer;
                     
                     this.updateFaceGizmo();
                     
-                    if (lastParam) {
+                    if (lastParam && lastContainer) {
                         const newSphere = this.activeFaceGizmoSpheres.find(s => s.metadata?.paramName === lastParam);
                         if (newSphere) {
-                            this.activeGizmoSphere = newSphere;
-                            this.activeGizmoParamName = lastParam;
-                            this.isEditingFaceGizmo = true; // Keep input visible
-                            
-                            setTimeout(() => {
-                                const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
-                                if (input) {
-                                    input.focus();
-                                    input.select();
-                                }
-                            }, 50);
+                            this.openFloatingInput(newSphere, lastParam, lastContainer, role);
                         }
                     }
                 });
+
+                sphere.actionManager = new BABYLON.ActionManager(viewport.scene);
+                sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                    BABYLON.ActionManager.OnPickTrigger,
+                    () => {
+                        this.openFloatingInput(sphere, paramName, container, role);
+                    }
+                ));
 
                 sphere.addBehavior(dragBehavior);
                 this.activeFaceGizmoSpheres.push(sphere);
@@ -709,18 +1106,22 @@ export class GizmoController {
                     shiftParam = 'shiftZ';
                     shiftAxis = new BABYLON.Vector3(0, 1, 0);  // Dla wieńca górnego i półek (+Z na zewnątrz korpusu w górę)
                 } else if (role.includes('BACK')) {
-                    shiftParam = 'shiftY';
-                    shiftAxis = new BABYLON.Vector3(0, 0, 1); // W świecie 3D (Z to Y w CAD)
+                    // Plecy mają już dedykowane niebieskie gizmo dla backOffset (brak duplikatu shiftY)
+                    shiftParam = '';
                 }
 
                 if (shiftParam) {
                     const paramName = `${panelName}_${shiftParam}`;
                     
+                    view.root.computeWorldMatrix(true);
+                    const worldPos = view.root.getAbsolutePosition ? view.root.getAbsolutePosition().clone() : view.root.position.clone();
+                    
                     const centerSphere = BABYLON.MeshBuilder.CreateSphere(`faceGizmoSphere_center`, { diameter: 24 }, viewport.scene);
                     centerSphere.metadata = { paramName: paramName };
-                    centerSphere.position.copyFrom(view.root.position);
+                    centerSphere.position.copyFrom(worldPos);
+                    centerSphere.setParent(view.root);
                     
-                    // Środkowa kula do przesuwania (shift) -> ZAWSZE NIEBIESKA
+                    // Środkowa kula do przesuwania (move / shift) -> ZAWSZE NIEBIESKA
                     const diffuseColor = new BABYLON.Color3(0.1, 0.45, 0.95);
                     const emissiveColor = new BABYLON.Color3(0.05, 0.3, 0.7);
 
@@ -742,10 +1143,11 @@ export class GizmoController {
                         this.activeGizmoParamName = paramName;
                         this.activeGizmoContainer = container;
                         const c = container as any;
-                        this.originalValueBeforeEdit = (c.generatorParams.offsets && c.generatorParams.offsets[paramName]) ? c.generatorParams.offsets[paramName] : 0;
+                        this.originalValueBeforeEdit = readOffsetMm(c.generatorParams?.offsets, paramName, role);
 
                         viewport.camera.detachControl();
                         originalValue = this.originalValueBeforeEdit;
+                        centerSphere.setParent(null);
                         startPos = centerSphere.position.clone();
                     });
 
@@ -773,7 +1175,7 @@ export class GizmoController {
                             zoneCount: c.generatorParams.zoneCount || 1,
                             bottomHeight: c.generatorParams.bottomHeight || 500,
                             middleHeight: c.generatorParams.middleHeight || 1200,
-                            backOffset: c.generatorParams.backOffset || 0,
+                            backOffset: c.generatorParams.backOffset !== undefined ? c.generatorParams.backOffset : 3,
                             offsets: c.generatorParams.offsets
                         });
                     });
@@ -783,33 +1185,60 @@ export class GizmoController {
                         viewport.camera.attachControl(viewport.canvas, true);
                         
                         const lastParam = this.activeGizmoParamName;
+                        const lastContainer = this.activeGizmoContainer;
                         this.updateFaceGizmo();
                         
-                        if (lastParam) {
+                        if (lastParam && lastContainer) {
                             const newSphere = this.activeFaceGizmoSpheres.find(s => s.metadata?.paramName === lastParam);
                             if (newSphere) {
-                                this.activeGizmoSphere = newSphere;
-                                this.activeGizmoParamName = lastParam;
-                                this.isEditingFaceGizmo = true; 
-                                
-                                setTimeout(() => {
-                                    const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
-                                    if (input) {
-                                        input.focus();
-                                        input.select();
-                                    }
-                                }, 50);
+                                this.openFloatingInput(newSphere, lastParam, lastContainer, role);
                             }
                         }
                     });
 
+                    centerSphere.actionManager = new BABYLON.ActionManager(viewport.scene);
+                    centerSphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                        BABYLON.ActionManager.OnPickTrigger,
+                        () => {
+                            this.openFloatingInput(centerSphere, paramName, container, role);
+                        }
+                    ));
+
                     centerSphere.addBehavior(centerDrag);
                     this.activeFaceGizmoSpheres.push(centerSphere);
+
+                    // --- GIZMO W KSZTAŁCIE KOSTKI (CUBE) DO KONFIGURACJI WIEŃCA GÓRNEGO ---
+                    if (role === 'TOP_PANEL' || role.includes('TOP')) {
+                        const topCube = BABYLON.MeshBuilder.CreateBox(
+                            'faceGizmo_topPanelConfigCube',
+                            { size: 18 },
+                            viewport.scene
+                        );
+                        topCube.metadata = { isTopConfigCube: true };
+                        topCube.position.copyFrom(worldPos);
+                        topCube.setParent(view.root);
+                        // Odsunięcie w osi lokalnej X (wzdłuż usłojenia formatki) obok niebieskiej kuli move (+34 mm)
+                        topCube.position = new BABYLON.Vector3(34, 0, 0);
+
+                        const cubeMat = new BABYLON.StandardMaterial('topConfigCubeMat', viewport.scene);
+                        cubeMat.diffuseColor = new BABYLON.Color3(1.0, 0.45, 0.05); // Pomarańczowy
+                        cubeMat.emissiveColor = new BABYLON.Color3(0.5, 0.2, 0.0);
+                        cubeMat.specularColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+                        topCube.material = cubeMat;
+
+                        topCube.actionManager = new BABYLON.ActionManager(viewport.scene);
+                        topCube.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                            BABYLON.ActionManager.OnPickTrigger,
+                            () => {
+                                this.toggleTopPanelWidget();
+                            }
+                        ));
+
+                        this.activeFaceGizmoSpheres.push(topCube);
+                    }
                 }
             }
-        }
     }
-
     private _resolveTargetMesh(entity: any): any {
         const viewport = ContextManager.instance.viewport;
         const panelViews = ContextManager.instance.panelViews;
@@ -868,6 +1297,7 @@ export class GizmoController {
 
         ContextManager.instance.sceneSyncAdapter.syncFromMesh(targetNode);
         this._propagateConstraintDrag();
+        ContextManager.instance.modalTransformManager?.updateLiveValues();
 
         const cadNode = ctx.doc.findNode(ctx.entity.id);
         if (cadNode) {

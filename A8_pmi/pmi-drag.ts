@@ -5,7 +5,7 @@
  * wymiaru (`DimensionTool`) oraz przy jego późniejszej edycji (`PMIEditOffsetTool`),
  * żeby oba tryby zachowywały się identycznie.
  *
- * Tryb FREE odpowiada Blenderowi (`_free_drag_bias_world`): bez biasu kursor
+ * Tryb FREE: bez biasu kursor
  * startujący blisko krawędzi daje zerową składową prostopadłą i wymiar „klei
  * się" do krawędzi. Blokada X/Y/Z liczy delta względem punktu startu drag.
  */
@@ -47,7 +47,7 @@ export function perpendicularToDimension(
 }
 
 /**
- * Bias dla trybu FREE (odpowiednik `_free_drag_bias_world` w Blenderze).
+ * Bias dla trybu FREE.
  * Przy starcie drag: offset = perp(hit-mid) + bias daje spójny punkt wyjścia.
  */
 export function computeFreeDragBias(
@@ -70,7 +70,7 @@ function dragPlaneNormal(scene: any): Vec3 | null {
         const fwd = camera.getForwardRay().direction;
         const len = Math.hypot(fwd.x, fwd.y, fwd.z);
         if (len > 1e-6) {
-            // Normalna w stronę kamery (jak view_dir w Blenderze).
+            // Normalna w stronę kamery.
             return v3(-fwd.x / len, -fwd.y / len, -fwd.z / len);
         }
     }
@@ -84,6 +84,8 @@ function dragPlaneNormal(scene: any): Vec3 | null {
     if (len <= 1e-6) return v3(0, 0, 1);
     return v3(dx / len, dy / len, dz / len);
 }
+
+export const MAX_OFFSET_DRAG_DISTANCE = 5000; // mm
 
 /**
  * Punkt przecięcia promienia spod kursora z płaszczyzną widoku.
@@ -111,13 +113,14 @@ export function pointerOnDragPlane(scene: any, planePoint: Vec3): Vec3 | null {
     const rayOrigin = v3(ray.origin.x, ray.origin.y, ray.origin.z);
     const rayDir = v3Normalize(v3(ray.direction.x, ray.direction.y, ray.direction.z));
 
-    if (dist !== null && dist > 0) {
+    if (dist !== null && dist > 0 && dist < 50000) {
         return v3Add(rayOrigin, v3Scale(rayDir, dist));
     }
 
     // Promień równoległy do płaszczyzny — rzutujemy punkt odniesienia na promień.
     const t = v3Dot(v3Sub(planePoint, rayOrigin), rayDir);
-    return v3Add(rayOrigin, v3Scale(rayDir, Math.max(t, 10)));
+    const safeT = Math.max(10, Math.min(t, 50000));
+    return v3Add(rayOrigin, v3Scale(rayDir, safeT));
 }
 
 /**
@@ -134,20 +137,26 @@ export function computeOffsetFromPointer(input: OffsetDragInput): Vec3 | null {
     const axisLen = axis ? v3Len(axis) : 0;
 
     if (axis && axisLen > 1e-6) {
-        // Blokada osi: delta względem punktu startu (jak forced_axis w Blenderze).
+        // Blokada osi: delta względem punktu startu.
         const axisNorm = v3Normalize(axis);
         const startHit = input.dragStartHitWorld ?? hit;
         const startOff = input.dragStartOffsetWorld ?? v3(0, 0, 0);
         const rawDelta = v3Sub(hit, startHit);
         const scalar = v3Dot(startOff, axisNorm) + v3Dot(rawDelta, axisNorm);
-        return v3Scale(axisNorm, scalar);
+        const clampedScalar = Math.max(-MAX_OFFSET_DRAG_DISTANCE, Math.min(MAX_OFFSET_DRAG_DISTANCE, scalar));
+        return v3Scale(axisNorm, clampedScalar);
     }
 
     // Tryb FREE: składowa prostopadła + bias startowy.
     const rel = v3Sub(hit, mid);
     const perp = perpendicularToDimension(rel, anchor1World, anchor2World);
     const bias = input.freeDragBiasWorld ?? v3(0, 0, 0);
-    return v3Add(perp, bias);
+    const rawOffset = v3Add(perp, bias);
+    const len = v3Len(rawOffset);
+    if (len > MAX_OFFSET_DRAG_DISTANCE) {
+        return v3Scale(v3Normalize(rawOffset), MAX_OFFSET_DRAG_DISTANCE);
+    }
+    return rawOffset;
 }
 
 /** Przygotowuje stan kotwicy dragu na początku przeciągania offsetu. */

@@ -1,10 +1,7 @@
 /**
- * Testy jednostkowe math3d — port @@BLENDER/S2_solver/tests/test_math3d.py
+ * Testy jednostkowe math3d.
  *
- * Uruchom: npx vitest run S2_solver  (z katalogu web/)
- *
- * Zachowane 1:1 wraz z tolerancjami z Pythona (places=N → precision N).
- * Testy są jednostkowo-neutralne: math3d jest jednorodne względem skali.
+ * Uruchom: npx vitest run S2_solver
  */
 
 import { describe, it, expect } from 'vitest';

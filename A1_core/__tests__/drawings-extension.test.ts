@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ProjectDocument } from '../project-document.js';
 import { attachDrawingsExtension, DRAWINGS_DOCUMENT_SECTION } from '../drawings-document-extension.js';
 import { ExportEngine } from '../../E1_export/export-engine.js';
-import { ExportEngineV3 } from '../../E3_export/export-engine.js';
+import { ExportEngineV3 } from '../../R2_rys/export-engine.js';
 
 const sampleSheet = {
     id: 'view_test_1',

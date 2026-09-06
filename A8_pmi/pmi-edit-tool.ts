@@ -3,7 +3,7 @@
  *
  * Przeciąganie odsunięcia istniejącego wymiaru. Wejście przez chwycenie
  * wymiaru na scenie (LMB w dół), zatwierdzenie puszczeniem przycisku,
- * wycofanie Esc/RMB. Odpowiednik `PMI_OT_edit_offset` z `pmi_ui.py`.
+ * wycofanie Esc/RMB.
  */
 
 declare const BABYLON: any;
@@ -180,7 +180,7 @@ export class PMIEditOffsetTool extends BaseState {
             const space = this.axisSpace === 'LOCAL' ? 'LOCAL' : 'GLOBAL';
             this.axisSpace = space;
             this.offsetAxisKey = key;
-            this.stickyGuideId = guideCandidateId(space, key);
+            this.stickyGuideId = guideCandidateId(space, key as 'X' | 'Y' | 'Z');
             this.setUIStatus(`Oś odsunięcia: ${space === 'LOCAL' ? 'L' : 'G'}:${key}`);
         }
         this.onPointerMove();

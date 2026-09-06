@@ -1,8 +1,6 @@
 /**
  * PMI Geometry Highlight — podświetlanie wykrytej geometrii pod kursorem
  * podczas wymiarowania (narożnik / krawędź / płaszczyzna).
- *
- * Odpowiednik hover_result + draw_geometry z pmi_ui.py / pmi_tool_base.py.
  */
 
 declare const BABYLON: any;

@@ -3,37 +3,9 @@
  * Typy danych dla 2D Drawing Studio i E3 z obsługą Multi-Kadrów 3D i wymiarów PMI.
  */
 
-export type PaperFormat =
-    | 'A4_LANDSCAPE'
-    | 'A4_PORTRAIT'
-    | 'A3_LANDSCAPE'
-    | 'A3_PORTRAIT'
-    | 'A2_LANDSCAPE'
-    | 'A2_PORTRAIT';
 
-export interface PaperDimensions {
-    width: number;  // mm
-    height: number; // mm
-    label: string;
-    description: string;
-}
 
-export const PAPER_FORMATS: Record<PaperFormat, PaperDimensions> = {
-    'A4_LANDSCAPE': { width: 297, height: 210, label: 'A4 Poziomo', description: '297 × 210 mm' },
-    'A4_PORTRAIT':  { width: 210, height: 297, label: 'A4 Pionowo', description: '210 × 297 mm' },
-    'A3_LANDSCAPE': { width: 420, height: 297, label: 'A3 Poziomo', description: '420 × 297 mm' },
-    'A3_PORTRAIT':  { width: 297, height: 420, label: 'A3 Pionowo', description: '297 × 420 mm' },
-    'A2_LANDSCAPE': { width: 594, height: 420, label: 'A2 Poziomo', description: '594 × 420 mm' },
-    'A2_PORTRAIT':  { width: 420, height: 594, label: 'A2 Pionowo', description: '420 × 594 mm' },
-};
-
-export const MARGIN_LEFT = 20;
-export const MARGIN_RIGHT = 5;
-export const MARGIN_TOP = 5;
-export const MARGIN_BOTTOM = 5;
-
-export const TITLE_BLOCK_WIDTH = 120;
-export const TITLE_BLOCK_HEIGHT = 30;
+import type { PaperFormat, TitleBlockInfo } from './export-types.js';
 
 export type DrawingModelScope = 'PROJECT' | 'CONTAINER' | 'SUBASSEMBLY' | 'PART';
 export type ProjectionAngle = 'FRONT' | 'TOP' | 'LEFT' | 'RIGHT' | 'BACK' | 'BOTTOM' | 'ISOMETRIC' | 'CUSTOM';
@@ -46,6 +18,7 @@ export interface HoleFeature2D {
     diameter: number;
     depth: number;
     face: 'FRONT' | 'BACK' | 'EDGE_X_MINUS' | 'EDGE_X_PLUS' | 'EDGE_Y_MINUS' | 'EDGE_Y_PLUS';
+    frozen?: boolean;
 }
 
 export interface GrooveFeature2D {
@@ -61,6 +34,7 @@ export interface GrooveFeature2D {
     libraryId?: string;
     face?: string;
     editable?: boolean;
+    frozen?: boolean;
 }
 
 export type CADNodeType = 'PROJECT' | 'CONTAINER' | 'ASSEMBLY' | 'SUBASSEMBLY' | 'DRAWERS' | 'SHELVES' | 'PART';
@@ -81,6 +55,9 @@ export interface CADTreeNode {
     holes?: HoleFeature2D[];
     grooves?: GrooveFeature2D[];
     visible?: boolean;
+    frozen?: boolean;
+    isManual?: boolean;
+    engineManaged?: boolean;
 }
 
 export interface PartDrawingGeometry {
@@ -167,16 +144,7 @@ export interface DrawingDimension2D {
     orientation: 'HORIZONTAL' | 'VERTICAL' | 'ALIGNED';
 }
 
-export interface TitleBlockInfo {
-    projectName: string;
-    furnitureName: string;
-    author: string;
-    date: string;
-    scale: string;
-    sheetNumber: string;
-    drawingNumber: string;
-    remarks: string;
-}
+
 
 export interface DrawingSheetModel {
     id: string;

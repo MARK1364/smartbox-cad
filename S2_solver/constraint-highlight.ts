@@ -1,8 +1,8 @@
 /**
- * constraint-highlight.ts — overlay 3D podświetlenia więzu (jak w Blenderze).
+ * constraint-highlight.ts — overlay 3D podświetlenia więzu.
  *
  * A = cyjan, B = żółty, GROUND = magenta. Overlay na klikniętej formatce;
- * solver rusza korpus, do którego formatka należy.
+ * solver przesuwa korpus, do którego formatka należy.
  */
 
 import { ContextManager } from '../A1_core/context-manager.js';

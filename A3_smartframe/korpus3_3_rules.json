@@ -1044,8 +1044,8 @@
   },
   "cabinet_construction_rules": {
     "defaults": {
-      "back_inset": 0.01,
-      "back_groove_depth": 0.006,
+      "back_inset": 0.003,
+      "back_groove_depth": 0.011,
       "plecy_margin_defaults": {
         "mode": "fixed",
         "fixed": {

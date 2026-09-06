@@ -382,10 +382,9 @@ export class SetEdgeBandingCommand implements Command {
             }
         }
 
-        if (typeof document.notifyDocumentChanged === 'function') {
-            document.notifyDocumentChanged();
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('smartbox-project-changed'));
         }
-        window.dispatchEvent(new CustomEvent('smartbox-project-changed'));
     }
 
     undo(document: ProjectDocument): void {
@@ -406,6 +405,8 @@ export class SetEdgeBandingCommand implements Command {
         if (typeof document.notifyDocumentChanged === 'function') {
             document.notifyDocumentChanged();
         }
-        window.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+        }
     }
 }

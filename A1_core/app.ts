@@ -11,7 +11,7 @@ import { GizmoController } from './gizmo-controller.js';
 import { ContextMenuHandler } from './context-menu-handler.js';
 import { initializeSmartFrameEngine, rebuildSmartFrameContainer } from '../A3_smartframe/smartframe-adapter.js';
 import { isManualPanel } from '../A4_smartpanel/panel-model.js';
-import { SyncBackGroovesCommand } from './commands/sync-back-grooves-command.js';
+import { SyncBackGroovesCommand } from '../A3_smartframe/commands/sync-back-grooves-command.js';
 import { update_smartbox_core } from '../A2_smartbox/smartbox-core.js';
 import { ContainerView } from '../A3_smartframe/container-view.js';
 import { PanelView } from '../A4_smartpanel/panel-view.js';
@@ -43,7 +43,7 @@ import { attachViewportExtension } from '../S3_scena/viewport-document-extension
 import { attachMaterialsExtension } from '../A7_material/materials-document-extension.js';
 import { attachDrawingsExtension } from './drawings-document-extension.js';
 import { shouldPromoteSubgeometryToEntity } from './selection-mode.js';
-import { DrawingProjectExtractor } from '../E3_export/drawing-project-extractor.js';
+import { DrawingProjectExtractor } from '../R2_rys/drawing-project-extractor.js';
 import { showCadTreeContextMenu } from '../src/module-data/tree-context-menu.js';
 declare const BABYLON: any;
 
@@ -433,15 +433,18 @@ async function main() {
             const panels = getAllPanels(ctx.document);
             const parent = panels.find((p: any) => p.features?.some((f: any) => f.id === data.id));
             if (parent) ctx.document.setActiveEntity(parent);
-            ctx.propertiesManager.inspectFeature(
+            const inspected = ctx.propertiesManager.inspectFeature(
                 data.id,
                 ctx.document,
                 ctx.panelViews,
                 () => getAllPanels(ctx.document),
                 ctx.facePicker,
                 (msg: string) => ctx.ui.setStatus(msg),
-                true
+                false
             );
+            if (inspected && data.openProperties === true) {
+                ctx.propertiesManager.showProperties(inspected);
+            }
         } else if (action === 'toggle-part-visibility' || action === 'toggle-container-visibility') {
             const entity = data.panelRef || getAllPanels(ctx.document).find((p: any) => p.id === data.id || p.smartId?.uid === data.uuid) || getAllContainers(ctx.document).find((c: any) => c.id === data.id);
             if (entity) {

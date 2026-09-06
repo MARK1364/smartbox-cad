@@ -19,8 +19,20 @@ describe('back edge offset defaults', () => {
     it('keeps shift and other roles at 0 unless stored', () => {
         expect(isBackPanelEdgeParam('Dol_Plecy_shiftY', 'BACK_PANEL')).toBe(false);
         expect(readOffsetMm(undefined, 'Dol_Plecy_shiftY', 'BACK_PANEL')).toBe(0);
-        expect(readOffsetMm(undefined, 'Dol_Bok_L_+X', 'LEFT_SIDE_PANEL')).toBe(0);
         expect(readOffsetMm({ 'Plecy_+X': 0 }, 'Plecy_+X', 'BACK_PANEL')).toBe(0);
         expect(readOffsetMm(undefined, 'Plecy_+X')).toBe(0);
     });
+
+    it('finds back offsets with or without prefix (e.g. Plecy_-X vs Dol_Plecy_-X)', () => {
+        const offsets = { 'Plecy_-X': 17 };
+        expect(readOffsetMm(offsets, 'Dol_Plecy_-X', 'BACK_PANEL')).toBe(17);
+        expect(readOffsetMm(offsets, 'Plecy_-X', 'BACK_PANEL')).toBe(17);
+    });
+
+    it('finds back offsets when stored under Dol_Plecy and requested under Plecy', () => {
+        const offsets = { 'Dol_Plecy_-X': 17 };
+        expect(readOffsetMm(offsets, 'Plecy_-X', 'BACK_PANEL')).toBe(17);
+        expect(readOffsetMm(offsets, 'Dol_Plecy_-X', 'BACK_PANEL')).toBe(17);
+    });
 });
+

@@ -11,8 +11,7 @@
  *
  *  3. HIERARCHIA — rdzeń traktuje `location`/`rotation` jako transformatę
  *     ŚWIATOWĄ (`localToWorldPoint` dodaje location bez udziału rodzica).
- *     Blender obchodził to, zabraniając wiązań na węzłach z rodzicem. Tutaj
- *     podajemy solverowi transformatę światową i przy zapisie przeliczamy ją
+ *     Podajemy solverowi transformatę światową i przy zapisie przeliczamy ją
  *     z powrotem na lokalną: localNew = parentWorld⁻¹ · worldNew. Dzięki temu
  *     więz działa na dowolnym poziomie zagnieżdżenia.
  *

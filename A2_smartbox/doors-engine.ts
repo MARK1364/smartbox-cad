@@ -14,7 +14,9 @@ export class DoorsEngine extends BaseEngine {
         const height = params.height || 720;
         const depth = params.depth || 500;
         const thickness = params.thickness || params.front_thickness || 18;
-        const doorType = (params.door_type || params.doorType || 'LEFT').toUpperCase();
+        let doorType = (params.door_type || params.doorType || 'LEFT').toUpperCase();
+        if (doorType === 'SINGLE_LEFT') doorType = 'LEFT';
+        if (doorType === 'SINGLE_RIGHT') doorType = 'RIGHT';
         const gap = params.gap !== undefined ? Number(params.gap) : 4;
 
         // Nałożenia frontu na korpus (w mm) - obsługują również wartości ujemne

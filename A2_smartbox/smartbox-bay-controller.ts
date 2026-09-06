@@ -1,7 +1,7 @@
 /**
  * smartbox-bay-controller.ts
  *
- * Scentralizowany kontroler stanu interakcji wstawiania modułów SmartBox do wnęki.
+ * Scentralizowany kontroler stanu interakcji wstawiania modułów SmartBox do wnęki / na zewnątrz korpusu.
  * Zastępuje właściwości na obiekcie globalnym window (__isSmartBoxBayPickerActive,
  * __draggedSmartBoxType, __pendingSmartBoxType).
  */
@@ -10,11 +10,13 @@ import { type DetectedBay, probeBayFromSceneRay } from './smartbox-bay-detector.
 import { highlightBayInScene, clearBayHighlight } from './smartbox-bay-visualizer.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
 
-export type BayPickerListener = (isActive: boolean) => void;
+export type SmartBoxPickerMode = 'internal' | 'external';
+export type BayPickerListener = (isActive: boolean, mode?: SmartBoxPickerMode) => void;
 export type BayDetectedListener = (bay: DetectedBay) => void;
 
 export class SmartBoxBayController {
     private _isPickerActive: boolean = false;
+    private _pickerMode: SmartBoxPickerMode = 'internal';
     private _draggedSmartBoxType: string | null = null;
     private _pendingSmartBoxType: string | null = null;
     private _lastDetectedBay: DetectedBay | null = null;
@@ -28,6 +30,10 @@ export class SmartBoxBayController {
         return this._isPickerActive;
     }
 
+    get pickerMode(): SmartBoxPickerMode {
+        return this._pickerMode;
+    }
+
     get lastDetectedBay(): DetectedBay | null {
         return this._lastDetectedBay;
     }
@@ -36,10 +42,13 @@ export class SmartBoxBayController {
         this._lastDetectedBay = bay;
     }
 
-    startPicker(pendingType?: string): void {
+    startPicker(pendingType?: string, mode: SmartBoxPickerMode = 'internal'): void {
         this._isPickerActive = true;
+        this._pickerMode = mode;
         if (pendingType) {
             this._pendingSmartBoxType = pendingType;
+        } else {
+            this._pendingSmartBoxType = mode === 'external' ? 'PANELS' : 'EMPTY';
         }
         this._notifyPickerState();
     }
@@ -51,26 +60,31 @@ export class SmartBoxBayController {
         this._notifyPickerState();
     }
 
-    togglePicker(pendingType?: string): void {
-        if (this._isPickerActive) {
+    togglePicker(pendingType?: string, mode: SmartBoxPickerMode = 'internal'): void {
+        if (this._isPickerActive && this._pickerMode === mode) {
             this.stopPicker();
         } else {
-            this.startPicker(pendingType);
+            this.startPicker(pendingType, mode);
         }
     }
 
     subscribePicker(callback: BayPickerListener): () => void {
         this._pickerSubscribers.add(callback);
-        callback(this._isPickerActive);
+        callback(this._isPickerActive, this._pickerMode);
         return () => this._pickerSubscribers.delete(callback);
     }
 
     private _notifyPickerState(): void {
         for (const sub of this._pickerSubscribers) {
-            try { sub(this._isPickerActive); } catch (err) { console.error(err); }
+            try { sub(this._isPickerActive, this._pickerMode); } catch (err) { console.error(err); }
         }
         if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('smartbox-bay-picker-state', { detail: this._isPickerActive }));
+            window.dispatchEvent(new CustomEvent('smartbox-bay-picker-state', {
+                detail: {
+                    isActive: this._isPickerActive,
+                    mode: this._pickerMode
+                }
+            }));
         }
     }
 
@@ -88,8 +102,15 @@ export class SmartBoxBayController {
         return this.isBayDrag();
     }
 
-    startDrag(smartBoxType: string = 'SHELVES'): void {
+    startDrag(smartBoxType: string = 'EMPTY', mode?: SmartBoxPickerMode): void {
         this._draggedSmartBoxType = smartBoxType;
+        if (mode) {
+            this._pickerMode = mode;
+        } else if (smartBoxType === 'PANELS') {
+            this._pickerMode = 'external';
+        } else {
+            this._pickerMode = 'internal';
+        }
     }
 
     endDrag(): void {
@@ -112,7 +133,8 @@ export class SmartBoxBayController {
         );
 
         if (pick && pick.hit && pick.pickedPoint) {
-            const bay = probeBayFromSceneRay(scene, pick, doc);
+            const mode = (this._draggedSmartBoxType === 'PANELS' || this._pickerMode === 'external') ? 'external' : 'internal';
+            const bay = probeBayFromSceneRay(scene, pick, doc, mode);
             if (bay) {
                 highlightBayInScene(scene, bay);
                 this._lastDetectedBay = bay;
@@ -124,10 +146,10 @@ export class SmartBoxBayController {
 
     onDropOnScene(): void {
         const bay = this._lastDetectedBay;
-        this.endDrag();
         if (bay) {
             this.notifyBayDetected(bay);
         }
+        this.endDrag();
         this._lastDetectedBay = null;
     }
 
@@ -149,3 +171,4 @@ export class SmartBoxBayController {
         return () => this._bayDetectedSubscribers.delete(callback);
     }
 }
+

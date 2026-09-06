@@ -14,3 +14,4 @@ export {
 
 export { ContainerView } from './container-view.js';
 export { SmartFrameUI } from './smartframe-ui';
+export { SmartFrameDragController } from './smartframe-drag-controller.js';

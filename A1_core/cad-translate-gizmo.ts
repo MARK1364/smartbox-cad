@@ -43,7 +43,7 @@ export class CadTranslateGizmo {
 
         for (const g of [this.xGizmo, this.yGizmo, this.zGizmo]) {
             if (g) {
-                g.updateGizmoRotationToMatchAttachedMesh = false;
+                g.updateGizmoRotationToMatchAttachedMesh = true;
                 g.updateGizmoPositionToMatchAttachedMesh = true;
             }
         }

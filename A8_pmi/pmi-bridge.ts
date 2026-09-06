@@ -2,7 +2,7 @@
  * PMI Bridge — TypeScript
  *
  * Adapter Babylon.js → Dimension Solver.
- * Port logiki z `pmi_bridge.py`. Tłumaczy kontekst Babylon.js na dane
+ * Tłumaczy kontekst Babylon.js na dane
  * wejściowe solvera i zwraca payload gotowy do renderingu.
  */
 
@@ -418,7 +418,7 @@ export function getRenderData(opts: {
     labelText?: string;
 }): BridgeRenderData | null {
     const worldThickness = opts.worldThickness ?? 0.8;
-    const fontSizeWorld = opts.fontSizeWorld ?? 14;
+    const fontSizeWorld = opts.fontSizeWorld ?? 120;
     const labelText = opts.labelText ?? '';
 
     const edgeVec = v3Sub(opts.anchor2World, opts.anchor1World);

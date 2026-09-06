@@ -20,7 +20,13 @@ export interface OperationApplyOverrides {
     frameMm?: number;
     frameWMm?: number;
     frameHMm?: number;
+    insetLMm?: number;
+    insetRMm?: number;
+    insetTMm?: number;
+    insetBMm?: number;
     depthMm?: number;
+    through?: boolean;
+    fill?: 'none' | 'glass';
     widthMm?: number;
     heightMm?: number;
     uMm?: number;
@@ -86,17 +92,41 @@ export function recipeWithOverrides(
                 next.insets.t = h;
                 next.insets.b = h;
             }
+            if (overrides?.insetLMm != null && Number.isFinite(overrides.insetLMm)) {
+                next.insets.l = Math.max(0, overrides.insetLMm);
+            }
+            if (overrides?.insetRMm != null && Number.isFinite(overrides.insetRMm)) {
+                next.insets.r = Math.max(0, overrides.insetRMm);
+            }
+            if (overrides?.insetTMm != null && Number.isFinite(overrides.insetTMm)) {
+                next.insets.t = Math.max(0, overrides.insetTMm);
+            }
+            if (overrides?.insetBMm != null && Number.isFinite(overrides.insetBMm)) {
+                next.insets.b = Math.max(0, overrides.insetBMm);
+            }
         }
     }
 
-    if (overrides?.depthMm != null && Number.isFinite(overrides.depthMm) && !recipe.through) {
+    if (overrides?.through !== undefined) {
+        next.through = overrides.through;
+        next.kind = overrides.through ? 'THROUGH' : 'POCKET';
+    } else if (p.through !== undefined) {
+        next.through = !!p.through;
+        next.kind = p.through ? 'THROUGH' : 'POCKET';
+    }
+
+    if (overrides?.fill !== undefined) {
+        next.fill = overrides.fill;
+    } else if (p.fill !== undefined) {
+        next.fill = p.fill;
+    }
+
+    if (next.through) {
+        next.kind = 'THROUGH';
+    } else if (overrides?.depthMm != null && Number.isFinite(overrides.depthMm)) {
         next.depthMm = Math.max(MIN_POCKET_MM, overrides.depthMm);
         next.kind = 'POCKET';
-        next.through = false;
-    } else if (p.through) {
-        next.through = true;
-        next.kind = 'THROUGH';
-    } else if (Number.isFinite(p.depth) && !recipe.through) {
+    } else if (Number.isFinite(p.depth)) {
         next.depthMm = Number(p.depth);
     }
     return next;

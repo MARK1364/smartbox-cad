@@ -8,6 +8,8 @@ import { ContainerModel } from '../../A1_core/container-model.js';
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
+import { Vec3 } from '../../A1_core/cad-math/vec3.js';
+import { Quat } from '../../A1_core/cad-math/quat.js';
 import type { KorpusCreateParams } from '../../A1_core/cabinet-port.js';
 import { runEngineAndApply } from '../smartframe-adapter.js';
 
@@ -36,35 +38,54 @@ export class CreateKorpusCommand implements Command {
             depth: mmToNm(this.params.depth),
             name: `Korpus (SmartFrame) ${existingCount + 1}`
         });
+        const bOffset = this.params.backOffset ?? 3;
         nc.generatorParams = {
             type: 'korpus3_2',
             zoneCount: this.params.zoneCount,
             bottomHeight: this.params.bottomHeight,
             middleHeight: this.params.middleHeight,
+            backOffset: bOffset,
             offsets: this.params.offsets || {}
         };
 
         const ncNode = CADNode.create(NodeType.ASSEMBLY, nc.name, nc.id);
         ncNode.domainData = nc;
+        if (this.params.position) {
+            ncNode.setLocalTransform(
+                new Vec3(
+                    mmToNm(this.params.position.x),
+                    mmToNm(this.params.position.y),
+                    mmToNm(this.params.position.z || 0)
+                ),
+                Quat.IDENTITY
+            );
+        }
         document.addNode(document.rootNode.id, ncNode);
         this.createdId = nc.id;
         this.affectedNodeIds.splice(0, this.affectedNodeIds.length, nc.id);
 
         runEngineAndApply(
             nc,
-            mmToNm(this.params.width),
-            mmToNm(this.params.height),
-            mmToNm(this.params.depth),
+            this.params.width,
+            this.params.height,
+            this.params.depth,
             this.params.zoneCount,
-            mmToNm(this.params.bottomHeight),
-            mmToNm(this.params.middleHeight),
+            this.params.bottomHeight,
+            this.params.middleHeight,
+            bOffset,
             this.params.offsets || {}
         );
 
         document.setActiveEntity(nc);
+        if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+            window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+        }
     }
 
     undo(document: ProjectDocument): void {
         if (this.createdId) document.removeNode(this.createdId);
+        if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+            window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+        }
     }
 }

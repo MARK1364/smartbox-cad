@@ -16,13 +16,35 @@ import { mmToNm } from '../A1_core/cad-math/units.js';
 import type { DetectedBay } from './smartbox-bay-detector.js';
 import { update_smartbox_core } from './smartbox-core.js';
 
+export type SmartBoxCategory = 'internal' | 'external';
+
 export interface SmartBoxOption {
     id: string;
     type: string;
     label: string;
+    category: SmartBoxCategory;
     icon?: string;
     description?: string;
 }
+
+export const SMARTBOX_INTERNAL_OPTIONS: SmartBoxOption[] = [
+    { id: 'SHELVES', type: 'smartbox_shelves', label: 'Półki', category: 'internal' },
+    { id: 'DOORS', type: 'smartbox_doors', label: 'Drzwi', category: 'internal' },
+    { id: 'DRAWERS', type: 'smartbox_drawers', label: 'Szuflady', category: 'internal' },
+    { id: 'FLAPS', type: 'smartbox_flaps', label: 'Klapy', category: 'internal' },
+    { id: 'DIVIDERS', type: 'smartbox_dividers', label: 'Przegrody', category: 'internal' },
+    { id: 'TUBES', type: 'smartbox_tubes', label: 'Drążek', category: 'internal' },
+    { id: 'SHELF', type: 'smartbox_shelf', label: 'Wieniec', category: 'internal' }
+];
+
+export const SMARTBOX_EXTERNAL_OPTIONS: SmartBoxOption[] = [
+    { id: 'PANELS', type: 'smartbox_panels', label: 'Blendy', category: 'external' }
+];
+
+export const SMARTBOX_ALL_OPTIONS: SmartBoxOption[] = [
+    ...SMARTBOX_INTERNAL_OPTIONS,
+    ...SMARTBOX_EXTERNAL_OPTIONS
+];
 
 export interface SmartBoxModalParams {
     shelfCount?: number;
@@ -36,6 +58,67 @@ export interface SmartBoxModalParams {
     tubeOffsetTopMm?: number;
 }
 
+export const SMARTBOX_CATEGORY_NAMES: Record<string, string> = {
+    'EMPTY': 'smartbox_',
+    'SHELVES': 'smartbox_polki',
+    'DRAWERS': 'smartbox_szuflady',
+    'DOORS': 'smartbox_drzwi',
+    'TUBES': 'smartbox_drazek',
+    'SHELF': 'smartbox_wieniec',
+    'DIVIDERS': 'smartbox_przegrody',
+    'FLAPS': 'smartbox_klapy',
+    'PANELS': 'smartbox_blendy'
+};
+
+import { Command } from '../A1_core/commands/command.js';
+import { SyncShelfDrillingsCommand } from '../A1_core/commands/sync-shelf-drillings-command.js';
+import { SyncDoorDrillingsCommand } from '../A1_core/commands/sync-door-drillings-command.js';
+import { SyncDrawerDrillingsCommand } from '../A1_core/commands/sync-drawer-drillings-command.js';
+import { SyncFlapsDrillingsCommand } from '../A1_core/commands/sync-flaps-drillings-command.js';
+import { ClearSmartBoxDrillingsCommand } from '../A1_core/commands/clear-smartbox-drillings-command.js';
+
+export class InsertSmartBoxCommand implements Command {
+    readonly id: string;
+    readonly label: string;
+    readonly timestamp: number;
+    readonly affectedNodeIds: string[] = [];
+
+    private _addCmd: AddNodeCommand;
+    private _targetParentId: string;
+    private _sbNode: CADNode;
+    private _sbContainer: ContainerModel;
+
+    constructor(targetParentId: string, sbNode: CADNode, label: string) {
+        this.id = `cmd_insert_smartbox_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        this.label = label;
+        this.timestamp = Date.now();
+        this._targetParentId = targetParentId;
+        this._sbNode = sbNode;
+        this._sbContainer = sbNode.domainData as ContainerModel;
+        this._addCmd = new AddNodeCommand(targetParentId, sbNode, undefined, label);
+        this.affectedNodeIds.push(sbNode.id);
+    }
+
+    execute(document: ProjectDocument): void {
+        this._addCmd.execute(document);
+        update_smartbox_core(this._sbContainer, document);
+    }
+
+    undo(document: ProjectDocument): void {
+        new ClearSmartBoxDrillingsCommand(this._sbNode.id).execute(document);
+        this._addCmd.undo(document);
+        new SyncShelfDrillingsCommand(this._targetParentId).execute(document);
+        new SyncDoorDrillingsCommand(this._targetParentId).execute(document);
+        new SyncDrawerDrillingsCommand(this._targetParentId).execute(document);
+        new SyncFlapsDrillingsCommand(this._targetParentId).execute(document);
+    }
+
+    redo(document: ProjectDocument): void {
+        this._addCmd.execute(document);
+        update_smartbox_core(this._sbContainer, document);
+    }
+}
+
 export function createSmartBoxInDetectedBay(
     document: ProjectDocument,
     bay: DetectedBay,
@@ -44,7 +127,7 @@ export function createSmartBoxInDetectedBay(
 ): CADNode | null {
     if (!document || !bay) return null;
 
-    const sbName = option.id === 'EMPTY' ? 'SmartBox' : `SmartBox_${option.label}`;
+    const sbName = SMARTBOX_CATEGORY_NAMES[option.id] || (option.id === 'EMPTY' ? 'smartbox_' : `smartbox_${(option.label || option.id).toLowerCase()}`);
     const parentId = bay.parentCabinetId;
     const targetParentId = parentId || document.rootNode.id;
 
@@ -63,18 +146,22 @@ export function createSmartBoxInDetectedBay(
     const backRef = bay.boundary.back;
     const frontRef = bay.boundary.front || leftRef;
 
+    const isExternal = option.category === 'external' || option.id === 'PANELS';
+
     sbContainer.generatorParams = {
         type: option.type,
         boxType: option.id,
         parentContainerId: parentId,
         boundary: bay.boundary,
+        targetZone: isExternal ? 'FULL' : undefined,
+        side_references_smartbox: isExternal ? 'OUTER' : 'INNER',
         customReferences: {
-            xMin: { partKey: leftRef.nodeName || 'Bok Lewy', face: leftRef.face || 'FACE_Z_PLUS', panelId: leftRef.nodeId },
-            xMax: { partKey: rightRef.nodeName || 'Bok Prawy', face: rightRef.face || 'FACE_Z_PLUS', panelId: rightRef.nodeId },
-            zMin: { partKey: bottomRef.nodeName || 'Dół', face: bottomRef.face || 'FACE_Z_PLUS', panelId: bottomRef.nodeId },
-            zMax: { partKey: topRef.nodeName || 'Góra', face: topRef.face || 'FACE_Z_MINUS', panelId: topRef.nodeId },
-            yMin: { partKey: frontRef.nodeName || 'Przód', face: frontRef.face || 'FACE_Y_MINUS', panelId: frontRef.nodeId },
-            yMax: { partKey: backRef.nodeName || 'Tył', face: backRef.face || 'FACE_Z_PLUS', panelId: backRef.nodeId }
+            xMin: { partKey: leftRef.nodeName || 'Bok Lewy', face: leftRef.face || leftRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: leftRef.nodeId },
+            xMax: { partKey: rightRef.nodeName || 'Bok Prawy', face: rightRef.face || rightRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: rightRef.nodeId },
+            zMin: { partKey: bottomRef.nodeName || 'Dół', face: bottomRef.face || bottomRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: bottomRef.nodeId },
+            zMax: { partKey: topRef.nodeName || 'Góra', face: topRef.face || topRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_MINUS'), panelId: topRef.nodeId },
+            yMin: { partKey: frontRef.nodeName || 'Przód', face: frontRef.face || frontRef.faceName || 'FACE_X_PLUS', panelId: frontRef.nodeId },
+            yMax: { partKey: backRef.nodeName || 'Tył', face: backRef.face || backRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: backRef.nodeId }
         },
         offsets: {
             xMin: 0,
@@ -112,15 +199,13 @@ export function createSmartBoxInDetectedBay(
 
     // 4. Dodanie do dokumentu przez CommandHistory (wsparcie Undo/Redo)
     const cmdHist = ContextManager.instance.commandHistory;
-    const addCmd = new AddNodeCommand(targetParentId, sbNode, undefined, `Wstawienie SmartBox: ${option.label}`);
+    const insertCmd = new InsertSmartBoxCommand(targetParentId, sbNode, `Wstawienie SmartBox: ${option.label}`);
     if (cmdHist) {
-        cmdHist.execute(addCmd);
+        cmdHist.execute(insertCmd);
     } else {
         document.addNode(targetParentId, sbNode);
+        update_smartbox_core(sbContainer, document);
     }
-
-    // 5. Wygenerowanie geometrii wewnętrznej (półki/szuflady) i synchronizacja nawierceń
-    update_smartbox_core(sbContainer, document);
 
     document.setActiveEntity(sbContainer);
     if (typeof window !== 'undefined') {

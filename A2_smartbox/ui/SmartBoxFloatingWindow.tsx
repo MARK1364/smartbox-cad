@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { update_smartbox_core, getDefaultReferenceProvenance, validateReferenceFaceOrientation } from '../smartbox-core.js';
+import { update_smartbox_core, validateReferenceFaceOrientation } from '../smartbox-core.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { UIController } from '../../A1_core/ui-controller.js';
 import { normalizeFaceName } from '../../A4_smartpanel/panel-model.js';
@@ -22,17 +22,20 @@ import { PanelsSubModule } from '../panels-adapter.js';
 import { FlapsSubModule } from '../flaps-adapter.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
 
-export const MODULE_TYPES: Record<string, { type: string; label: string }> = {
+export const MODULE_TYPES: Record<string, { type: string; label: string; category?: 'internal' | 'external' }> = {
     'EMPTY': { type: 'smartbox_empty', label: 'Wybierz moduł...' },
-    'SHELVES': { type: 'smartbox_shelves', label: 'Półki' },
-    'DOORS': { type: 'smartbox_doors', label: 'Drzwi' },
-    'DRAWERS': { type: 'smartbox_drawers', label: 'Szuflady' },
-    'FLAPS': { type: 'smartbox_flaps', label: 'Klapa' },
-    'TUBES': { type: 'smartbox_tubes', label: 'Drążek' },
-    'SHELF': { type: 'smartbox_shelf', label: 'Wieniec' },
-    'DIVIDERS': { type: 'smartbox_dividers', label: 'Przegrody' },
-    'PANELS': { type: 'smartbox_panels', label: 'Blendy' }
+    'SHELVES': { type: 'smartbox_shelves', label: 'Półki', category: 'internal' },
+    'DOORS': { type: 'smartbox_doors', label: 'Drzwi', category: 'internal' },
+    'DRAWERS': { type: 'smartbox_drawers', label: 'Szuflady', category: 'internal' },
+    'FLAPS': { type: 'smartbox_flaps', label: 'Klapy', category: 'internal' },
+    'TUBES': { type: 'smartbox_tubes', label: 'Drążek', category: 'internal' },
+    'SHELF': { type: 'smartbox_shelf', label: 'Wieniec', category: 'internal' },
+    'DIVIDERS': { type: 'smartbox_dividers', label: 'Przegrody', category: 'internal' },
+    'PANELS': { type: 'smartbox_panels', label: 'Blendy', category: 'external' }
 };
+
+export const INTERNAL_MODULE_TYPES = Object.entries(MODULE_TYPES).filter(([_, v]) => v.category === 'internal');
+export const EXTERNAL_MODULE_TYPES = Object.entries(MODULE_TYPES).filter(([_, v]) => v.category === 'external');
 
 interface Props {
     container: any;
@@ -319,9 +322,8 @@ export function SmartBoxFloatingWindow({ container, projectModel, onClose, isDoc
         const isCustom = !!customRefs[sideKey];
         const isDisabled = !!disabledRefsState[sideKey];
         const isPicking = pickingField === sideKey;
-        const prov = !isCustom && !isDisabled ? getDefaultReferenceProvenance(container, sideKey) : null;
 
-        let labelText = isCustom ? customRefs[sideKey].partKey : (prov ? prov.partKey : defaultName);
+        let labelText = isCustom ? customRefs[sideKey].partKey : defaultName;
         if (isPicking) labelText = 'Wskaż w 3D...';
         else if (isDisabled) labelText = 'Brak (wskaż w 3D)';
 
@@ -610,11 +612,20 @@ export function SmartBoxFloatingWindow({ container, projectModel, onClose, isDoc
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    {Object.entries(MODULE_TYPES).map(([k, opt]) => (
-                                        <option key={k} value={k}>
-                                            {opt.label}
-                                        </option>
-                                    ))}
+                                    <option value="EMPTY">Wybierz moduł...</option>
+                                    {(container?.generatorParams?.side_references_smartbox === 'OUTER' || boxType === 'PANELS') ? (
+                                        EXTERNAL_MODULE_TYPES.map(([k, opt]) => (
+                                            <option key={k} value={k}>
+                                                {opt.label}
+                                            </option>
+                                        ))
+                                    ) : (
+                                        INTERNAL_MODULE_TYPES.map(([k, opt]) => (
+                                            <option key={k} value={k}>
+                                                {opt.label}
+                                            </option>
+                                        ))
+                                    )}
                                 </select>
                             </div>
 

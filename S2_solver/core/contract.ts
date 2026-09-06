@@ -1,15 +1,11 @@
 /**
  * contract.ts — kontrakt danych solvera więzów.
- * Port 1:1 z @@BLENDER/S2_solver/core/contract.py
  *
- * Pythonowe dataclassy mają wartości domyślne, których TS nie odtworzy sam,
- * dlatego każdy typ ma fabrykę (`makeConstraintItem`, `makeObjectState`).
- * Domyślne wartości są celowo identyczne z Pythonem — również te zaskakujące,
- * jak `groundNormal = [0,0,0]` (golden runner nadpisuje je na [0,0,1] przy
- * wczytywaniu JSON-a).
+ * Fabryki obiektów (`makeConstraintItem`, `makeObjectState`) inicjalizują pełną
+ * strukturę stanu obiektu i więzów z bezpiecznymi wartościami domyślnymi.
  *
- * Jednostki: wszystkie długości w milimetrach (patrz nagłówek solver-core.ts).
- * Rotacje: kwaterniony [w, x, y, z] — jak w Pythonie, nie jak w A1_core/cad-math.
+ * Jednostki: wszystkie długości w milimetrach (mm).
+ * Rotacje: kwaterniony [w, x, y, z].
  */
 
 import type { Quat, Vec3 } from './math3d.js';

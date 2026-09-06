@@ -70,8 +70,6 @@ export interface SolverConstraint {
     /**
      * Punkt uziemienia [mm, WCS]. `null` znaczy „zatrzaśnij tam, gdzie element
      * jest teraz" — bridge dopisuje wtedy aktualną pozycję przy pierwszym solve.
-     * Blender używał w tej roli sentinela (0,0,0), co uniemożliwiało uziemienie
-     * w rzeczywistym początku układu.
      */
     groundPosMm: Vec3 | null;
     /** Normalna uziemienia [WCS] dla trybu FACE. `null` — jak wyżej. */

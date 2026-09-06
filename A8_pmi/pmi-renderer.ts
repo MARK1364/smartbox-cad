@@ -6,8 +6,6 @@
  * - Groty strzałek (triangulated cones)
  * - Etykiety tekstowe w 3D (Billboard DynamicTexture - 100% WebGPU/WebGL2 compatible)
  *
- * Odpowiednik pmi_ui.py (GPU draw) + cad_dimension.py (mesh).
- *
  * WYDAJNOŚĆ: `renderAll()` bywa wołane co klatkę (przeciąganie formatki gizmem),
  * więc siatki i tekstury są aktualizowane w miejscu. Kosztowną `DynamicTexture`
  * przebudowujemy dopiero, gdy zmieni się tekst albo kolor etykiety.
@@ -15,7 +13,7 @@
 
 declare const BABYLON: any;
 
-import { Vec3, v3, v3Add, v3Scale, v3Sub, v3Len } from './dimension-solver';
+import { Vec3, v3, v3Add, v3Scale, v3Sub, v3Len, v3Dot, v3Cross, v3Normalize } from './dimension-solver';
 import { BridgeRenderData, helperSegmentsFromRenderData } from './pmi-bridge';
 import { PMIAnnotation, PMIStore, formatDistance, formatMeasureText } from './pmi-data';
 import { beginResolveBatch, endResolveBatch } from './pmi-id-bridge';
@@ -39,7 +37,7 @@ const MEASURE_PREVIEW_ID = '__pmi_measure_preview__';
 const MEASURE_COLOR: Rgba = [1.0, 1.0, 0.0, 1.0];
 /** Miarki czytamy z daleka — etykieta ~4× większa niż wymiary CAD. */
 const MEASURE_LABEL_SCALE = 4;
-/** Kolory delt jak w Blenderze `pmi_ui.py` (linie przerywane XYZ). */
+/** Kolory delt (linie przerywane XYZ). */
 const MEASURE_DELTA_COLOR: Record<'X' | 'Y' | 'Z', Rgba> = {
     X: [1.0, 0.2, 0.2, 0.6],
     Y: [0.2, 1.0, 0.2, 0.6],
@@ -503,7 +501,8 @@ export class PMIRenderer {
         const charAspect = 0.65;
         const textWWorld = Math.max(text.length * textHWorld * charAspect, 8);
 
-        const cacheKey = `${text}|${textColor}|${textHWorld}`;
+        const alignToLine = !!PMIStore.instance.alignTextToLine;
+        const cacheKey = `${text}|${textColor}|${textHWorld}|${alignToLine}`;
 
         if (vis.textCacheKey !== cacheKey) {
             this.disposeTextLabel(vis);
@@ -515,10 +514,79 @@ export class PMIRenderer {
         vis.labelHeight = textHWorld;
         if (vis.textPlane && rd.p1DimWorld && rd.p2DimWorld) {
             const mid = v3Scale(v3Add(rd.p1DimWorld, rd.p2DimWorld), 0.5);
-            const textOffset = v3Scale(rd.upWorld, rd.arrowWid * 2 + textHWorld * 0.6);
-            const textPos = v3Add(mid, textOffset);
-            vis.labelPreferredWorld = textPos;
-            vis.textPlane.position = new BABYLON.Vector3(textPos.x, textPos.y, textPos.z);
+
+            if (alignToLine) {
+                vis.textPlane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_NONE;
+                let fwd = v3Normalize(rd.fwdWorld);
+                let up = v3Normalize(rd.upWorld);
+                let side = v3Cross(fwd, up);
+                if (v3Len(side) < 1e-6) {
+                    side = v3(0, 0, 1);
+                } else {
+                    side = v3Normalize(side);
+                }
+
+                const camera = this.scene?.activeCamera;
+                if (camera) {
+                    const camPos = (camera as any).globalPosition ?? camera.position;
+                    if (camPos) {
+                        const toCam = v3Normalize(v3Sub(v3(camPos.x, camPos.y, camPos.z), mid));
+                        // Babylon CreatePlane front face has normal (0, 0, -1) in local coords.
+                        // When axis3 = side, front normal in world is -side.
+                        // We want front face (-side) to face toward camera: dot(-side, toCam) > 0 <=> dot(side, toCam) < 0.
+                        if (v3Dot(side, toCam) > 0) {
+                            side = v3Scale(side, -1);
+                            fwd = v3Scale(fwd, -1);
+                        }
+                    }
+
+                    // Oblicz osie ekranowe kamery w przestrzeni świata
+                    let camUp = v3(0, 1, 0);
+                    let camRight = v3(1, 0, 0);
+                    try {
+                        const viewMat = camera.getViewMatrix();
+                        if (viewMat) {
+                            const invView = viewMat.clone().invert();
+                            camRight = v3Normalize(v3(invView.m[0], invView.m[1], invView.m[2]));
+                            camUp = v3Normalize(v3(invView.m[4], invView.m[5], invView.m[6]));
+                        }
+                    } catch {
+                        if (camera.upVector) {
+                            camUp = v3Normalize(v3(camera.upVector.x, camera.upVector.y, camera.upVector.z));
+                        }
+                    }
+
+                    const dotUp = v3Dot(up, camUp);
+                    const dotFwdUp = v3Dot(fwd, camUp);
+
+                    // Jeśli wektor góry tekstu celuje w dół ekranu lub linia pionowa czyta się od góry do dołu:
+                    // obracamy o 180° w płaszczyźnie wymiaru (odwracamy fwd i up), aby tekst był czytany poprawnie (od lewej do prawej, od dołu do góry)
+                    if (dotUp < -0.15 || (Math.abs(dotUp) <= 0.15 && dotFwdUp < -0.15)) {
+                        up = v3Scale(up, -1);
+                        fwd = v3Scale(fwd, -1);
+                    }
+                }
+
+                const textOffset = v3Scale(up, rd.arrowWid * 1.5 + textHWorld * 0.55);
+                const textPos = v3Add(mid, textOffset);
+                vis.labelPreferredWorld = textPos;
+                vis.textPlane.position = new BABYLON.Vector3(textPos.x, textPos.y, textPos.z);
+
+                const axis1 = new BABYLON.Vector3(fwd.x, fwd.y, fwd.z);
+                const axis2 = new BABYLON.Vector3(up.x, up.y, up.z);
+                const axis3 = new BABYLON.Vector3(side.x, side.y, side.z);
+                vis.textPlane.rotationQuaternion = null;
+                vis.textPlane.rotation = BABYLON.Vector3.RotationFromAxis(axis1, axis2, axis3);
+            } else {
+                const textOffset = v3Scale(rd.upWorld, rd.arrowWid * 2 + textHWorld * 0.6);
+                const textPos = v3Add(mid, textOffset);
+                vis.labelPreferredWorld = textPos;
+                vis.textPlane.position = new BABYLON.Vector3(textPos.x, textPos.y, textPos.z);
+
+                vis.textPlane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+                vis.textPlane.rotationQuaternion = null;
+                vis.textPlane.rotation = new BABYLON.Vector3(0, 0, 0);
+            }
         }
     }
 
@@ -530,8 +598,8 @@ export class PMIRenderer {
         textHWorld: number,
         annotationId: string | null,
     ): void {
-        const texWidth = 256;
-        const texHeight = 64;
+        const texWidth = 1024;
+        const texHeight = 256;
 
         const dt = new BABYLON.DynamicTexture(`pmi_tex_${vis.id}`, { width: texWidth, height: texHeight }, this.scene, false);
         dt.hasAlpha = true;
@@ -539,7 +607,7 @@ export class PMIRenderer {
         const ctx = dt.getContext();
         ctx.clearRect(0, 0, texWidth, texHeight);
 
-        ctx.font = 'bold 34px Consolas, monospace';
+        ctx.font = 'bold 136px Consolas, monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = textColor;

@@ -88,6 +88,7 @@ describe('SmartBox Bay Detector (3D Geometric Probe)', () => {
         const sbNode = createSmartBoxInDetectedBay(doc, bay, {
             id: 'SHELVES',
             type: 'smartbox_shelves',
+            category: 'internal',
             label: 'Półki',
             icon: '📚',
             description: 'Półki z nawiertami'
@@ -144,6 +145,7 @@ describe('SmartBox Bay Detector (3D Geometric Probe)', () => {
         const sbNode = createSmartBoxInDetectedBay(doc, bay, {
             id: 'SHELVES',
             type: 'smartbox_shelves',
+            category: 'internal',
             label: 'Półki',
             icon: '📚',
             description: 'Półki z nawiertami'
@@ -182,6 +184,7 @@ describe('SmartBox Bay Detector (3D Geometric Probe)', () => {
         const sbNode = createSmartBoxInDetectedBay(doc, bay, {
             id: 'SHELVES',
             type: 'smartbox_shelves',
+            category: 'internal',
             label: 'Półki',
             icon: '📚',
             description: 'Półki z nawiertami'
@@ -249,12 +252,12 @@ describe('SmartBox Bay Detector (3D Geometric Probe)', () => {
         };
 
         highlightBayInScene({} as any, bay);
-        expect(createdPlanes.length).toBe(5); // bottom, top, left, right, back
+        expect(createdPlanes.length).toBe(6); // bottom, top, left, right, back, front
         expect(createdPlanes.some(p => p.name === 'smartbox_plane_bottom')).toBe(true);
         expect(createdPlanes.some(p => p.name === 'smartbox_plane_left')).toBe(true);
 
         clearBayHighlight();
-        expect(disposedCount).toBe(5);
+        expect(disposedCount).toBe(6);
     });
 
     it('detects bay bounded by custom manual panel (e.g. wall thickening) without role or specific naming', () => {
@@ -294,6 +297,7 @@ describe('SmartBox Bay Detector (3D Geometric Probe)', () => {
         const sbNode = createSmartBoxInDetectedBay(doc, bay!, {
             id: 'SHELVES',
             type: 'smartbox_shelves',
+            category: 'internal',
             label: 'Półki',
             icon: '📚',
             description: 'Półki z nawiertami'
@@ -304,4 +308,54 @@ describe('SmartBox Bay Detector (3D Geometric Probe)', () => {
         expect(nmToMm(sbContainer.width)).toBeCloseTo(746, 0);
         expect(sbContainer.generatorParams.boundary.left.nodeId).toBe(thickeningNode.id);
     });
+
+    it('verifies that bay depth spans full cabinet and doors/shelves are placed at cabinet front', () => {
+        const cabinet = doc.createContainer({ name: 'Korpus Pelna Glebokosc' });
+        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
+        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+
+        const bay = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 1000 })!;
+        expect(bay).not.toBeNull();
+
+        // Przód to Y=-300 mm, Tył to Y=+300 mm (dla backOffset=0), głębokość wnęki 600 mm
+        expect(bay.boundary.front.planeCoordMm).toBeCloseTo(-300, 0);
+        expect(bay.boundary.back.planeCoordMm).toBeCloseTo(300, 0);
+        expect(bay.boundsMm.depth).toBeCloseTo(600, 0);
+
+        // 1. Wstawienie DRZWI (Front)
+        const doorNode = createSmartBoxInDetectedBay(doc, bay, {
+            id: 'DOORS',
+            type: 'smartbox_doors',
+            category: 'internal',
+            label: 'Drzwi',
+            icon: '🚪'
+        })!;
+        expect(doorNode).not.toBeNull();
+        const doorCADNode = doc.findNode(doorNode.id)!;
+        expect(doorCADNode.children.length).toBeGreaterThan(0);
+        const frontPartNode = doorCADNode.children[0];
+        const frontModel = frontPartNode.domainData as PanelModel;
+        expect(frontModel.role).toBe('FRONT');
+        
+        // Front musi być z przodu szafy (Y ~ -309 mm), a NIE w środku (Y=0)
+        const frontWorldY = nmToMm(frontPartNode.getWorldMatrix().decompose().translation.y);
+        expect(frontWorldY).toBeLessThan(-290);
+
+        // 2. Wstawienie PÓŁEK (Shelves)
+        const shelfNode = createSmartBoxInDetectedBay(doc, bay, {
+            id: 'SHELVES',
+            type: 'smartbox_shelves',
+            category: 'internal',
+            label: 'Półki',
+            icon: '📚'
+        })!;
+        expect(shelfNode).not.toBeNull();
+        const shelfCADNode = doc.findNode(shelfNode.id)!;
+        expect(shelfCADNode.children.length).toBeGreaterThan(0);
+        const shelfPartNode = shelfCADNode.children[0];
+        const shelfModel = shelfPartNode.domainData as PanelModel;
+        // Głębokość półki to ~590 mm (600 - 10 mm odsadzenia), a nie 300 mm
+        expect(nmToMm(shelfModel.height)).toBeGreaterThan(550);
+    });
 });
+

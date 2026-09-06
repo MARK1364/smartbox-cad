@@ -2,17 +2,15 @@
  * shelves-drilling-builder.ts
  *
  * Nawiercenia modułu PÓŁKI (smartbox_shelves).
- * Odpowiednik plan.cnc_features z @@BLENDER/A2_smartbox/shelves_2_engine_v1.py —
- * rzutuje otwory na BOK_L / BOK_P / PLECY korpusu.
- *
- * Para z shelves_3_rules_V1.json (machining_library: SINGLE, TRIPLE, SYSTEM_32).
- * Otwory boczne (narożniki) — rzut na BOK_L / BOK_P korpusu.
- * Otwory środkowe przód/tył — zawsze na półce (Polka), współrz. lokalne półki.
+ * Rzutuje otwory na boki / przegrody graniczne korpusu.
+ * Pełne wsparcie customReferences i geometrii — zero sztywnych ról.
  */
 
 import { ProjectDocument } from '../A1_core/project-document.js';
-import { ShelvesDrillingIntent } from './shelves-drilling-intent.js';
+import { NodeType } from '../A1_core/cad-node/node-type.js';
+import { ShelvesDrillingIntent, ShelvesDrillingFeature } from './shelves-drilling-intent.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
+import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { equalShelfCenterZ } from './shelves-engine.js';
 
 export function buildShelvesDrillings(document: ProjectDocument, cabinetContainerId?: string): ShelvesDrillingIntent[] {
@@ -40,24 +38,17 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
 
     if (sbContainers.length === 0) return intents;
 
-    // 3. Zbierz wszystkie formatki korpusu i ich pozycje
-    const allLeftSides: any[] = [];
-    const allRightSides: any[] = [];
-
+    // 3. Zbierz wszystkie formatki korpusu (wykluczając sam kontener korpusu)
+    const allCabinetPanels: any[] = [];
     const collectCabinetPanels = (node: any) => {
         if (!node) return;
         const data = node.domainData;
         const gp = data?.generatorParams;
         if (gp && (String(gp.type || '').startsWith('smartbox') || gp.boxType)) return;
-        if (data && (data.type === 'panel' || data.type === 'part')) {
-            const role = data.role || '';
-            const name = (data.name || '').toLowerCase();
-            const key = (data.key || '').toUpperCase();
 
-            if (role === 'LEFT_SIDE_PANEL' || role.includes('SIDE_LEFT') || (role.includes('BOK') && (name.includes('_l') || name.includes('bok_l') || key.includes('BOK_L')))) {
-                allLeftSides.push(node);
-            } else if (role === 'RIGHT_SIDE_PANEL' || role.includes('SIDE_RIGHT') || (role.includes('BOK') && (name.includes('_p') || name.includes('bok_p') || key.includes('BOK_P')))) {
-                allRightSides.push(node);
+        if (node !== cabinetNode && data?.type !== 'container' && node.type !== NodeType.ASSEMBLY) {
+            if (node.type === NodeType.PART || (data && (data.type === 'panel' || data.type === 'part' || data.role))) {
+                allCabinetPanels.push(node);
             }
         }
         if (node.children) {
@@ -68,7 +59,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
     };
     collectCabinetPanels(cabinetNode);
 
-    const getWorldZ = (node: any): number => {
+    const getPanelWorldZ = (node: any): number => {
         const worldPos = node.getWorldMatrix().decompose().translation;
         return nmToMm(worldPos.z);
     };
@@ -77,9 +68,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
     const getVForPanel = (targetNode: any, worldZ: number): number => {
         if (!targetNode) return worldZ;
         const dd = targetNode.domainData;
-        const rawH = dd?.height ?? dd?.width ?? 0;
+        const rawH = dd?.length ?? dd?.height ?? dd?.width ?? 0;
         const targetHeight = nmToMm(rawH);
-        const targetCenterZ = getWorldZ(targetNode);
+        const targetCenterZ = getPanelWorldZ(targetNode);
         const targetBottomZ = targetCenterZ - targetHeight / 2;
         return worldZ - targetBottomZ;
     };
@@ -101,7 +92,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
     };
 
     const isPanelMatchingZone = (panelNode: any, zonePfx: string) => {
-        if (zonePfx === 'FULL') return true;
+        if (!zonePfx || zonePfx === 'FULL') return true;
         const d = panelNode.domainData;
         if (!d) return false;
         
@@ -112,33 +103,100 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
         if (k.startsWith(`${zonePfx}_`)) return true;
         
         const n = (d.name || '').toLowerCase();
-        if (zonePfx === 'M' && (n.includes('srodek') || n.includes('srodk') || n.startsWith('m_') || n.startsWith('m-'))) return true;
-        if (zonePfx === 'B' && (n.includes('dol') || n.startsWith('b_') || n.startsWith('b-'))) return true;
-        if (zonePfx === 'T' && (n.includes('gora') || n.includes('gor') || n.startsWith('t_') || n.startsWith('t-') || n.includes('pawlacz'))) return true;
+        if (zonePfx === 'M' && (n.includes('srodek') || n.includes('srodk') || n.startsWith('m_') || n.startsWith('m-') || n.includes('_m_') || n.includes('_m'))) return true;
+        if (zonePfx === 'B' && (n.includes('dol') || n.startsWith('b_') || n.startsWith('b-') || n.includes('_b_') || n.includes('_b'))) return true;
+        if (zonePfx === 'T' && (n.includes('gora') || n.includes('gor') || n.startsWith('t_') || n.startsWith('t-') || n.includes('_t_') || n.includes('_t') || n.includes('pawlacz'))) return true;
         
         return false;
     };
 
-    const findPanelForWorldZ = (panelNodes: any[], worldZ: number) => {
-        for (const pNode of panelNodes) {
-            const h = nmToMm(pNode.domainData.height);
-            const centerZ = getWorldZ(pNode);
-            const pZMin = centerZ - h / 2;
-            const pZMax = centerZ + h / 2;
-            if (worldZ >= pZMin - 5 && worldZ <= pZMax + 5) {
-                return pNode;
+    const isVerticalSidePanel = (pNode: any) => {
+        const role = (pNode.domainData?.role || '').toUpperCase();
+        if (role.includes('SIDE') || role.includes('PARTITION') || role.includes('BOK') || role.includes('PRZEGRODA')) return true;
+        if (pNode.localMatrix) {
+            const dirY = Math.abs(pNode.localMatrix.transformDirection(new Vec3(1, 0, 0)).y);
+            return dirY > 0.5;
+        }
+        return true;
+    };
+
+    const resolveSidePanel = (
+        sbNode: any,
+        side: 'left' | 'right',
+        worldZ: number,
+        zonePrefix: string,
+        sbWidth: number
+    ): { node: any; face: ShelvesDrillingFeature['face'] } | null => {
+        const p = sbNode.domainData?.generatorParams || {};
+        const ref = side === 'left' ? p.customReferences?.xMin : p.customReferences?.xMax;
+
+        if (ref?.panelId) {
+            const node = document.findNode(ref.panelId);
+            if (node) {
+                return { node, face: (ref.face || 'FACE_Z_PLUS') as ShelvesDrillingFeature['face'] };
             }
         }
-        return panelNodes[0] || null;
+
+        const boundaryRef = side === 'left' ? p.boundary?.left : p.boundary?.right;
+        if (boundaryRef?.nodeId) {
+            const node = document.findNode(boundaryRef.nodeId);
+            if (node) {
+                return { node, face: (boundaryRef.face || 'FACE_Z_PLUS') as ShelvesDrillingFeature['face'] };
+            }
+        }
+
+        const sbWorldPos = sbNode.getWorldMatrix().decompose().translation;
+        const sbCenterX = nmToMm(sbWorldPos.x);
+        const sbLeftX = sbCenterX - sbWidth / 2;
+        const sbRightX = sbCenterX + sbWidth / 2;
+
+        let candidates: any[] = [];
+
+        if (zonePrefix && zonePrefix !== 'FULL') {
+            const zoneMatches = allCabinetPanels.filter((pNode) => {
+                if (!isVerticalSidePanel(pNode)) return false;
+                const panelX = nmToMm(pNode.getWorldMatrix().decompose().translation.x);
+                if (side === 'left' ? (panelX > sbCenterX + 5) : (panelX < sbCenterX - 5)) return false;
+                return isPanelMatchingZone(pNode, zonePrefix);
+            });
+            if (zoneMatches.length > 0) {
+                candidates = zoneMatches;
+            }
+        }
+
+        if (candidates.length === 0) {
+            candidates = allCabinetPanels.filter((pNode) => {
+                if (!isVerticalSidePanel(pNode)) return false;
+
+                const rawH = pNode.domainData?.height ?? pNode.domainData?.length ?? pNode.domainData?.width ?? 0;
+                const h = nmToMm(rawH);
+                const centerZ = getPanelWorldZ(pNode);
+                const pZMin = centerZ - h / 2;
+                const pZMax = centerZ + h / 2;
+                if (h > 0 && (worldZ < pZMin - 10 || worldZ > pZMax + 10)) return false;
+
+                const panelX = nmToMm(pNode.getWorldMatrix().decompose().translation.x);
+                return side === 'left' ? (panelX <= sbCenterX + 5) : (panelX >= sbCenterX - 5);
+            });
+        }
+
+        if (candidates.length === 0) return null;
+
+        const targetRefX = side === 'left' ? sbLeftX : sbRightX;
+        candidates.sort((a, b) => {
+            const distA = Math.abs(nmToMm(a.getWorldMatrix().decompose().translation.x) - targetRefX);
+            const distB = Math.abs(nmToMm(b.getWorldMatrix().decompose().translation.x) - targetRefX);
+            return distA - distB;
+        });
+
+        return { node: candidates[0], face: 'FACE_Z_PLUS' as ShelvesDrillingFeature['face'] };
     };
 
     // 4. Dla każdego SmartBoxa wylicz nawiercenia na formatkach korpusu
     for (const sbNode of sbContainers) {
         const sbData = (sbNode.domainData as any) || {};
         const p = sbData.generatorParams || {};
-        
-        const rawTargetZone = p.targetZone || 'B';
-        const zonePrefix = getZonePrefix(rawTargetZone);
+        const zonePrefix = getZonePrefix(p.targetZone || 'B');
 
         // Parametry SmartBoxa
         const count = p.shelfCount !== undefined ? p.shelfCount : 3;
@@ -168,7 +226,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
         const radius = holeDiameter / 2;
 
         const sbNodeResolved = typeof document.findNode === 'function' ? document.findNode(sbNode.id) : sbNode;
-        const sbBottomZ = getWorldZ(sbNodeResolved || sbNode);
+        const sbBottomZ = getPanelWorldZ(sbNodeResolved || sbNode);
         const effectiveWidth = sbWidth - 2 * offsetSide;
 
         /** Otwór środkowy przód/tył — zawsze dziecko półki, współrz. lokalne Polki. */
@@ -222,16 +280,23 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                     const worldZ = sbBottomZ + localZ;
                     const suffix = idx === 0 ? '' : (idx === 1 ? '_top' : '_bottom');
 
-                    // 1. Bok Lewy (BOK_L -> FACE_Z_PLUS)
-                    const leftNode = zonePrefix === 'FULL' 
-                        ? findPanelForWorldZ(allLeftSides, worldZ) 
-                        : (allLeftSides.find(n => isPanelMatchingZone(n, zonePrefix)) || allLeftSides[0]);
+                    // 1. Bok / Przegroda Lewa
+                    const leftTarget = resolveSidePanel(sbNode, 'left', worldZ, zonePrefix, sbWidth);
+                    if (leftTarget?.node) {
+                        const leftNode = leftTarget.node;
+                        const rawD = leftNode.domainData.width ?? leftNode.domainData.depth ?? leftNode.domainData.length ?? 0;
+                        const sideDepth = nmToMm(rawD) || sbDepth;
+                        const face = leftTarget.face || 'FACE_Z_PLUS';
 
-                    if (leftNode) {
-                        const sideDepth = nmToMm(leftNode.domainData.width || sbDepth);
-                        // BOK_L: U=0 to tył, U=sideDepth to przód
-                        const uFront = Math.max(0, sideDepth - (frontInset + offsetFront));
-                        const uBack = Math.max(0, backInset);
+                        const localXWorld = leftNode.localMatrix ? leftNode.localMatrix.transformDirection(new Vec3(1, 0, 0)) : new Vec3(0, -1, 0);
+                        const isRightOriented = localXWorld.y > 0.1;
+
+                        const uFront = isRightOriented
+                            ? Math.max(0, frontInset + offsetFront)
+                            : Math.max(0, sideDepth - (frontInset + offsetFront));
+                        const uBack = isRightOriented
+                            ? Math.max(0, sideDepth - backInset)
+                            : Math.max(0, backInset);
                         const vPos = getVForPanel(leftNode, worldZ);
 
                         intents.push({
@@ -239,8 +304,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                             feature: {
                                 id: `shelf_${i}_left_front${suffix}`,
                                 type: 'hole',
-                                face: 'FACE_Z_PLUS',
-                                side: 'FACE_Z_PLUS',
+                                face,
+                                side: face,
                                 params: {
                                     template_id: 'SINGLE',
                                     u: uFront,
@@ -259,8 +324,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                             feature: {
                                 id: `shelf_${i}_left_back${suffix}`,
                                 type: 'hole',
-                                face: 'FACE_Z_PLUS',
-                                side: 'FACE_Z_PLUS',
+                                face,
+                                side: face,
                                 params: {
                                     template_id: 'SINGLE',
                                     u: uBack,
@@ -275,16 +340,23 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                         });
                     }
 
-                    // 2. Bok Prawy (BOK_P -> FACE_Z_PLUS)
-                    const rightNode = zonePrefix === 'FULL' 
-                        ? findPanelForWorldZ(allRightSides, worldZ) 
-                        : (allRightSides.find(n => isPanelMatchingZone(n, zonePrefix)) || allRightSides[0]);
+                    // 2. Bok / Przegroda Prawa
+                    const rightTarget = resolveSidePanel(sbNode, 'right', worldZ, zonePrefix, sbWidth);
+                    if (rightTarget?.node) {
+                        const rightNode = rightTarget.node;
+                        const rawD = rightNode.domainData.width ?? rightNode.domainData.depth ?? rightNode.domainData.length ?? 0;
+                        const sideDepth = nmToMm(rawD) || sbDepth;
+                        const face = rightTarget.face || 'FACE_Z_PLUS';
 
-                    if (rightNode) {
-                        const sideDepth = nmToMm(rightNode.domainData.width || sbDepth);
-                        // BOK_P: U=0 to przód, U=sideDepth to tył
-                        const uFront = Math.max(0, frontInset + offsetFront);
-                        const uBack = Math.max(0, sideDepth - backInset);
+                        const localXWorld = rightNode.localMatrix ? rightNode.localMatrix.transformDirection(new Vec3(1, 0, 0)) : new Vec3(0, 1, 0);
+                        const isRightOriented = localXWorld.y > 0.1;
+
+                        const uFront = isRightOriented
+                            ? Math.max(0, frontInset + offsetFront)
+                            : Math.max(0, sideDepth - (frontInset + offsetFront));
+                        const uBack = isRightOriented
+                            ? Math.max(0, sideDepth - backInset)
+                            : Math.max(0, backInset);
                         const vPos = getVForPanel(rightNode, worldZ);
 
                         intents.push({
@@ -292,8 +364,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                             feature: {
                                 id: `shelf_${i}_right_front${suffix}`,
                                 type: 'hole',
-                                face: 'FACE_Z_PLUS',
-                                side: 'FACE_Z_PLUS',
+                                face,
+                                side: face,
                                 params: {
                                     template_id: 'SINGLE',
                                     u: uFront,
@@ -312,8 +384,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                             feature: {
                                 id: `shelf_${i}_right_back${suffix}`,
                                 type: 'hole',
-                                face: 'FACE_Z_PLUS',
-                                side: 'FACE_Z_PLUS',
+                                face,
+                                side: face,
                                 params: {
                                     template_id: 'SINGLE',
                                     u: uBack,
@@ -328,7 +400,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                         });
                     }
 
-                    // 3–4. Otwory środkowe przód/tył — zawsze na półce (Polka), układ lokalny półki
+                    // 3–4. Otwory środkowe przód/tył
                     const shelfNode = findShelfPanel(sbNodeResolved || sbNode, i);
                     if (shelfNode) {
                         const shelfWidth = nmToMm(shelfNode.domainData.width || effectiveWidth);
@@ -362,7 +434,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
             }
         }
 
-        // ─── B. WZORZEC SYSTEM 32 DLA BOKÓW I PLECÓW ───────────────────────────
+        // ─── B. WZORZEC SYSTEM 32 ───────────────────────────────────────────
         if (holePattern === 'SYSTEM_32' || holePattern === 'ROW') {
             const totalHoles = sys32HoleCount > 0 ? sys32HoleCount : 10;
 
@@ -371,16 +443,23 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                 if (localZ > sbHeight - 10) break;
                 const worldZ = sbBottomZ + localZ;
 
-                // 1. Bok Lewy (BOK_L -> FACE_Z_PLUS)
-                const leftNode = zonePrefix === 'FULL' 
-                    ? findPanelForWorldZ(allLeftSides, worldZ) 
-                    : (allLeftSides.find(n => isPanelMatchingZone(n, zonePrefix)) || allLeftSides[0]);
+                // 1. Lewa strona
+                const leftTarget = resolveSidePanel(sbNode, 'left', worldZ, zonePrefix, sbWidth);
+                if (leftTarget?.node) {
+                    const leftNode = leftTarget.node;
+                    const rawD = leftNode.domainData.width ?? leftNode.domainData.depth ?? leftNode.domainData.length ?? 0;
+                    const sideDepth = nmToMm(rawD) || sbDepth;
+                    const face = leftTarget.face || 'FACE_Z_PLUS';
 
-                if (leftNode) {
-                    const sideDepth = nmToMm(leftNode.domainData.width || sbDepth);
-                    // BOK_L: U=0 to tył, U=sideDepth to przód
-                    const uFront = Math.max(0, sideDepth - (frontInset + offsetFront));
-                    const uBack = Math.max(0, backInset);
+                    const localXWorld = leftNode.localMatrix ? leftNode.localMatrix.transformDirection(new Vec3(1, 0, 0)) : new Vec3(0, -1, 0);
+                    const isRightOriented = localXWorld.y > 0.1;
+
+                    const uFront = isRightOriented
+                        ? Math.max(0, frontInset + offsetFront)
+                        : Math.max(0, sideDepth - (frontInset + offsetFront));
+                    const uBack = isRightOriented
+                        ? Math.max(0, sideDepth - backInset)
+                        : Math.max(0, backInset);
                     const vPos = getVForPanel(leftNode, worldZ);
 
                     intents.push({
@@ -388,8 +467,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                         feature: {
                             id: `sys32_left_front_${k}`,
                             type: 'hole',
-                            face: 'FACE_Z_PLUS',
-                            side: 'FACE_Z_PLUS',
+                            face,
+                            side: face,
                             params: {
                                 template_id: 'SINGLE',
                                 u: uFront,
@@ -408,8 +487,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                         feature: {
                             id: `sys32_left_back_${k}`,
                             type: 'hole',
-                            face: 'FACE_Z_PLUS',
-                            side: 'FACE_Z_PLUS',
+                            face,
+                            side: face,
                             params: {
                                 template_id: 'SINGLE',
                                 u: uBack,
@@ -424,16 +503,23 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                     });
                 }
 
-                // 2. Bok Prawy (BOK_P -> FACE_Z_PLUS)
-                const rightNode = zonePrefix === 'FULL' 
-                    ? findPanelForWorldZ(allRightSides, worldZ) 
-                    : (allRightSides.find(n => isPanelMatchingZone(n, zonePrefix)) || allRightSides[0]);
+                // 2. Prawa strona
+                const rightTarget = resolveSidePanel(sbNode, 'right', worldZ, zonePrefix, sbWidth);
+                if (rightTarget?.node) {
+                    const rightNode = rightTarget.node;
+                    const rawD = rightNode.domainData.width ?? rightNode.domainData.depth ?? rightNode.domainData.length ?? 0;
+                    const sideDepth = nmToMm(rawD) || sbDepth;
+                    const face = rightTarget.face || 'FACE_Z_PLUS';
 
-                if (rightNode) {
-                    const sideDepth = nmToMm(rightNode.domainData.width || sbDepth);
-                    // BOK_P: U=0 to przód, U=sideDepth to tył
-                    const uFront = Math.max(0, frontInset + offsetFront);
-                    const uBack = Math.max(0, sideDepth - backInset);
+                    const localXWorld = rightNode.localMatrix ? rightNode.localMatrix.transformDirection(new Vec3(1, 0, 0)) : new Vec3(0, 1, 0);
+                    const isRightOriented = localXWorld.y > 0.1;
+
+                    const uFront = isRightOriented
+                        ? Math.max(0, frontInset + offsetFront)
+                        : Math.max(0, sideDepth - (frontInset + offsetFront));
+                    const uBack = isRightOriented
+                        ? Math.max(0, sideDepth - backInset)
+                        : Math.max(0, backInset);
                     const vPos = getVForPanel(rightNode, worldZ);
 
                     intents.push({
@@ -441,8 +527,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                         feature: {
                             id: `sys32_right_front_${k}`,
                             type: 'hole',
-                            face: 'FACE_Z_PLUS',
-                            side: 'FACE_Z_PLUS',
+                            face,
+                            side: face,
                             params: {
                                 template_id: 'SINGLE',
                                 u: uFront,
@@ -461,8 +547,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                         feature: {
                             id: `sys32_right_back_${k}`,
                             type: 'hole',
-                            face: 'FACE_Z_PLUS',
-                            side: 'FACE_Z_PLUS',
+                            face,
+                            side: face,
                             params: {
                                 template_id: 'SINGLE',
                                 u: uBack,

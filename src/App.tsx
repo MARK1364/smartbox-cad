@@ -5,7 +5,8 @@ import { SmartFrameUI } from '../A3_smartframe/smartframe-ui';
 import { SmartBoxUI } from '../A2_smartbox/smartbox-ui';
 import { SSOTUI } from './ssot-ui';
 import { PropertiesPanel } from './PropertiesPanel';
-import { BelkaDisplayModeMenu, BelkaProjectionMenu } from './BelkaDisplayModeMenu';
+import { FloatingOperationDialog, CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
+import { BelkaDisplayModeMenu, BelkaProjectionMenu, BelkaInfoMenu } from './BelkaDisplayModeMenu';
 import { MaterialsUI } from '../A7_material/materials-ui';
 import { AssignMaterialCommand, SetEdgeBandingCommand } from '../A7_material/material-commands';
 import { materialDatabase } from '../A7_material/material-database';
@@ -27,16 +28,39 @@ import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOpera
 import { ConnectorVisualizer } from '../C2_connectors/connector-visualizer';
 import { isSolverSmartFrameIsolationActive, applyPanelViewSolverVisibility, isSolverTabActive } from '../S2_solver/solver-visibility';
 import { ExportUI, ExportEngine } from '../E1_export';
-import { DrawingProjectExtractor } from '../E3_export';
-import { E3LibraryExtractor } from '../E3_export';
+import { DrawingProjectExtractor } from '../R2_rys';
+import { E3LibraryExtractor } from '../R2_rys';
 import { Vec3 } from '../A1_core/cad-math/vec3';
+import { Quat } from '../A1_core/cad-math/quat';
+import { mmToNm } from '../A1_core/cad-math/units';
+import { PanelModel } from '../A4_smartpanel/panel-model';
+import { CADNode } from '../A1_core/cad-node/cad-node';
+import { NodeType } from '../A1_core/cad-node/node-type';
+import { AddNodeCommand } from '../A1_core/commands/add-node-command';
 import { SceneTree } from './SceneTree';
 import { openCncFromCad, installModuleRefreshBridge } from './module-data/open-modules';
 import { CAD_WINDOW_NAME, installCadModuleBridge } from './module-data/session';
 import { CAD_TREE_START_RENAME } from './module-data/tree-context-menu';
 import { SmartBoxBayController } from '../A2_smartbox/smartbox-bay-controller';
-import { createSmartBoxInDetectedBay } from '../A2_smartbox/smartbox-bay-actions';
+import { SmartFrameDragController } from '../A3_smartframe/smartframe-drag-controller';
+import { createSmartBoxInDetectedBay, SMARTBOX_CATEGORY_NAMES } from '../A2_smartbox/smartbox-bay-actions';
 import { clearBayHighlight } from '../A2_smartbox/smartbox-bay-visualizer';
+import { ModalTransformManager, type ModalTransformMode } from '../A1_core/modal-transform';
+
+function useModalTransformState() {
+  const [mode, setMode] = useState<ModalTransformMode>(() => ModalTransformManager.instance.activeMode);
+
+  useEffect(() => {
+    const unsub = ModalTransformManager.instance.subscribe((currentMode) => {
+      setMode(currentMode);
+    });
+    return () => {
+      unsub();
+    };
+  }, []);
+
+  return mode;
+}
 
 // Hook to observe TooltipManager active tool hints
 function useToolHint() {
@@ -107,6 +131,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const projectModel = useProjectDocument();
   const uiState = useUIState();
   const activeHint = useToolHint();
+  const modalTransformMode = useModalTransformState();
   const [activeTab, setActiveTab] = useState(initialTab || 'tab-a3-smartframe');
   const [renderMode, setRenderModeState] = useState('edges');
   const [gridVisible, setGridVisible] = useState(true);
@@ -160,15 +185,22 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     }
   };
 
-  // Stan rozwijanego menu Widok (dropdown)
+  // Stan rozwijanego menu Widok, Podgląd, Projekcja oraz Plik (dropdown)
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
   const [projMenuOpen, setProjMenuOpen] = useState(false);
+  const [infoMenuOpen, setInfoMenuOpen] = useState(false);
+  const [ssotModalOpen, setSsotModalOpen] = useState(false);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const uiRegionHint = useUiRegionEdgeHint();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
+        setFileMenuOpen(false);
+      }
       if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
         setViewMenuOpen(false);
       }
@@ -342,7 +374,8 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           scene.activeCamera.allowUpAndDownInputs = true;
           scene.activeCamera.angularSensibilityX = 200;
           scene.activeCamera.angularSensibilityY = 200;
-          scene.activeCamera.inertia = 0.5;
+          scene.activeCamera.inertia = 0;
+          scene.activeCamera.panningInertia = 0;
       }
 
       // 3. Izolowanie pozostałych siatek w scenie Babylon.js i obsługa podłogi
@@ -511,9 +544,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   };
 
   // Dimensions inputs state
-  const [widthVal, setWidthVal] = useState('');
-  const [heightVal, setHeightVal] = useState('');
-  const [thicknessVal, setThicknessVal] = useState('');
+  const [widthVal, setWidthVal] = useState('600');
+  const [heightVal, setHeightVal] = useState('720');
+  const [thicknessVal, setThicknessVal] = useState('18');
 
   // Load app.ts once mounted; nazwij okno CAD + mostek zamykania kart CNC/modułów
   useEffect(() => {
@@ -539,9 +572,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   // Sync inputs with uiState / activeEntity dimensions
   useEffect(() => {
     if (uiState) {
-      setWidthVal(uiState.inputWidthValue || '');
-      setHeightVal(uiState.inputHeightValue || '');
-      setThicknessVal(uiState.inputThicknessValue || '');
+      setWidthVal(uiState.inputWidthValue || '600');
+      setHeightVal(uiState.inputHeightValue || '720');
+      setThicknessVal(uiState.inputThicknessValue || '18');
     }
   }, [uiState, projectModel?.activeEntity]);
 
@@ -557,8 +590,20 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
   useEffect(() => {
     const onEditOp = () => setActiveTab('tab-o1-operacji');
+    const onEditSmartFrame = () => setActiveTab('tab-a3-smartframe');
+    const onSwitchTab = (e: any) => {
+      if (e.detail?.tabId) setActiveTab(e.detail.tabId);
+    };
+
     window.addEventListener(CAD_EDIT_LIBRARY_OPERATION, onEditOp);
-    return () => window.removeEventListener(CAD_EDIT_LIBRARY_OPERATION, onEditOp);
+    window.addEventListener('cad-edit-smartframe-korpus', onEditSmartFrame);
+    window.addEventListener('cad-switch-tab', onSwitchTab as EventListener);
+
+    return () => {
+      window.removeEventListener(CAD_EDIT_LIBRARY_OPERATION, onEditOp);
+      window.removeEventListener('cad-edit-smartframe-korpus', onEditSmartFrame);
+      window.removeEventListener('cad-switch-tab', onSwitchTab as EventListener);
+    };
   }, []);
 
     const handleInputChange = (field: 'width' | 'height' | 'thickness', val: string) => {
@@ -660,6 +705,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     if (!ContextManager.instance.smartBoxBayController) {
       ContextManager.instance.smartBoxBayController = new SmartBoxBayController();
     }
+    if (!ContextManager.instance.smartFrameDragController) {
+      ContextManager.instance.smartFrameDragController = new SmartFrameDragController();
+    }
 
     const handleBayDetected = (bayOrEvt: any) => {
       const bay = bayOrEvt?.detail || bayOrEvt;
@@ -670,14 +718,33 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       if (doc) {
         const scene = ContextManager.instance.viewport?.scene;
         if (scene) clearBayHighlight(scene);
+
+        const typeMap: Record<string, { type: string; label: string }> = {
+          'EMPTY': { type: 'smartbox_empty', label: '' },
+          'SHELVES': { type: 'smartbox_shelves', label: 'polki' },
+          'DRAWERS': { type: 'smartbox_drawers', label: 'szuflady' },
+          'DOORS': { type: 'smartbox_doors', label: 'drzwi' },
+          'TUBES': { type: 'smartbox_tubes', label: 'drazek' },
+          'SHELF': { type: 'smartbox_shelf', label: 'wieniec' },
+          'DIVIDERS': { type: 'smartbox_dividers', label: 'przegrody' },
+          'FLAPS': { type: 'smartbox_flaps', label: 'klapy' },
+          'PANELS': { type: 'smartbox_panels', label: 'blendy' }
+        };
+        const opt = typeMap[optId] || { type: `smartbox_${optId.toLowerCase()}`, label: optId.toLowerCase() };
+
         const sbNode = createSmartBoxInDetectedBay(doc, bay, {
           id: optId,
-          type: `smartbox_${optId.toLowerCase()}`,
-          label: optId,
+          type: opt.type,
+          category: optId === 'PANELS' ? 'external' : 'internal',
+          label: opt.label,
           icon: '',
           description: ''
         });
         if (sbNode) {
+          if (ctrl) {
+            ctrl.setPendingSmartBoxType(null);
+            ctrl.endDrag();
+          }
           setActiveTab('tab-a2-smartbox');
           doc.setActiveEntity(sbNode.domainData || sbNode);
         }
@@ -1157,8 +1224,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                                   width_mm: draggedEdge.width_mm,
                                   price_per_mb: draggedEdge.price_per_mb || 3.50
                                 }, 'SINGLE');
-                                if (doc && doc.executeCommand) doc.executeCommand(cmd);
-                                else if (doc) cmd.execute(doc);
+                                if (ContextManager.instance.commandHistory) {
+                                  ContextManager.instance.commandHistory.execute(cmd);
+                                } else if (doc && (doc as any).executeCommand) {
+                                  (doc as any).executeCommand(cmd);
+                                } else if (doc) {
+                                  cmd.execute(doc);
+                                }
                               }}
                             >
                               <div 
@@ -1190,8 +1262,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                                         e.stopPropagation();
                                         const doc = ContextManager.instance.document || UIController.instance?.document;
                                         const cmd = new SetEdgeBandingCommand(panel.id, key, { active: false, type_id: 'none' }, 'SINGLE');
-                                        if (doc && doc.executeCommand) doc.executeCommand(cmd);
-                                        else if (doc) cmd.execute(doc);
+                                        if (ContextManager.instance.commandHistory) {
+                                          ContextManager.instance.commandHistory.execute(cmd);
+                                        } else if (doc && (doc as any).executeCommand) {
+                                          (doc as any).executeCommand(cmd);
+                                        } else if (doc) {
+                                          cmd.execute(doc);
+                                        }
                                       }}
                                     >
                                       ✕
@@ -1213,8 +1290,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                                           width_mm: defaultEdge.width_mm,
                                           price_per_mb: defaultEdge.price_per_mb || 3.50
                                         }, 'SINGLE');
-                                        if (doc && doc.executeCommand) doc.executeCommand(cmd);
-                                        else if (doc) cmd.execute(doc);
+                                        if (ContextManager.instance.commandHistory) {
+                                          ContextManager.instance.commandHistory.execute(cmd);
+                                        } else if (doc && (doc as any).executeCommand) {
+                                          (doc as any).executeCommand(cmd);
+                                        } else if (doc) {
+                                          cmd.execute(doc);
+                                        }
                                       }}
                                     >
                                       ➕
@@ -1438,69 +1520,36 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       {/* ─── Pasek menu (Plik, Cofnij…) — nie belka widokowa ── */}
       <div id="pasek-menu" className="pasek-menu" onMouseDown={handleTopBarMouseDown}>
         <div className="menu-left" style={{ display: 'flex', alignItems: 'center' }}>
-          <div className="menu-item dropdown">
-            <button className="menu-btn" style={{ padding: '6px 12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div ref={fileMenuRef} className={`menu-item dropdown ${fileMenuOpen ? 'open' : ''}`} style={{ position: 'relative' }}>
+            <button 
+              type="button"
+              className={`menu-btn ${fileMenuOpen ? 'active' : ''}`}
+              style={{ padding: '6px 12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+              onClick={() => {
+                setFileMenuOpen(!fileMenuOpen);
+                setViewMenuOpen(false);
+                setDisplayMenuOpen(false);
+                setProjMenuOpen(false);
+              }}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
               Plik
             </button>
-            <div className="dropdown-content">
-              <a href="#" id="menuNew" onClick={(e) => { e.preventDefault(); callAPI('newProject'); }}>Nowy projekt</a>
-              <a href="#" id="menuOpen" onClick={(e) => { e.preventDefault(); callAPI('openProject'); }}>Otwórz...</a>
-              <a href="#" id="menuSave" onClick={(e) => { e.preventDefault(); callAPI('saveProject'); }}>Zapisz</a>
-              <a href="#" id="menuSaveAs" onClick={(e) => { e.preventDefault(); callAPI('saveProjectAs'); }}>Zapisz jako...</a>
-              <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
-              <a href="#" id="menuExportStep" onClick={(e) => { e.preventDefault(); callAPI('exportStep'); }}>Eksport do STEP</a>
-              <a href="#" id="menuExportStl" onClick={(e) => { e.preventDefault(); callAPI('exportStl'); }}>Eksport do STL</a>
-            </div>
+            {fileMenuOpen && (
+              <div className="dropdown-content">
+                <a href="#" id="menuNew" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('newProject'); }}>Nowy projekt</a>
+                <a href="#" id="menuOpen" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('openProject'); }}>Otwórz...</a>
+                <a href="#" id="menuSave" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProject'); }}>Zapisz</a>
+                <a href="#" id="menuSaveAs" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProjectAs'); }}>Zapisz jako...</a>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
+                <a href="#" id="menuExportStep" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStep'); }}>Eksport do STEP</a>
+                <a href="#" id="menuExportStl" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStl'); }}>Eksport do STL</a>
+              </div>
+            )}
           </div>
-          <div className="menu-brand" style={{ marginLeft: '12px' }}>SmartPanel CAD 3D</div>
+          <div className="menu-brand" style={{ marginLeft: '10px', marginRight: '6px' }}>SmartPanel CAD 3D</div>
 
-          <button
-            className="menu-btn"
-            style={{
-              marginLeft: '6px',
-              padding: '4px 10px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: 'rgba(37, 99, 235, 0.25)',
-              color: '#93c5fd',
-              border: '1px solid rgba(59, 130, 246, 0.4)',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-            onClick={() => {
-              DrawingProjectExtractor.instance.syncLiveSceneTree();
-              window.open(new URL('./e3_drawing.html', window.location.href).href, '_blank');
-            }}
-            title="Otwórz Studio Rysunków 2D (w nowej karcie)"
-          >
-            📐 Rysunki 2D
-          </button>
-
-          <button
-            className="menu-btn"
-            style={{
-              marginLeft: '6px',
-              padding: '4px 10px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: activeTab === 'tab-e1-export' ? '#2563eb' : 'rgba(255,255,255,0.08)',
-              color: '#fff',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-            onClick={() => setActiveTab('tab-e1-export')}
-            title="Eksport i Druk Arkuszy CAD"
-          >
-            🖨️ Eksport / Druk
-          </button>
-
-          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.12)', margin: '0 10px' }}></div>
+          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.12)', margin: '0 8px' }}></div>
 
           <button 
             id="btnUndo" 
@@ -1524,6 +1573,195 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path>
             </svg>
           </button>
+
+          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.12)', margin: '0 10px' }}></div>
+
+          {/* ─── Pasek Narzędzi CAD ─── */}
+          <div className="topbar-tools">
+            <button 
+              className={`topbar-tool-btn ${activeTab === 'tab-a3-smartframe' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-a3-smartframe')}
+              title="SmartFrame — Prosty korpus szafy i mebla"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
+                <rect x="6" y="4.5" width="12" height="14" rx="0.5" fill="currentColor" fillOpacity="0.08" />
+                <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
+              </svg>
+              <span>Korpus</span>
+            </button>
+
+            <button 
+              className={`topbar-tool-btn ${activeTab === 'tab-a2-smartbox' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-a2-smartbox')}
+              title="SmartBox — Korpus z półkami i przegrodami (konfigurator wnętrz)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
+                <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
+                <line x1="6" y1="8.5" x2="18" y2="8.5" />
+                <line x1="6" y1="13.5" x2="18" y2="13.5" />
+                <line x1="12" y1="8.5" x2="12" y2="18.5" />
+              </svg>
+              <span>SmartBox</span>
+            </button>
+
+            <button 
+              className={`topbar-tool-btn ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-a4-smartpanel')}
+              title="SmartPanel — Płaska formatka / płyta meblowa"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 6L21 11L12 16L3 11Z" fill="currentColor" fillOpacity="0.2" />
+                <path d="M3 11v3.5l9 5v-3.5z" fill="currentColor" fillOpacity="0.1" />
+                <path d="M12 16v3.5l9-5V11z" fill="currentColor" fillOpacity="0.3" />
+                <path d="M12 6l9 5v3.5l-9 5-9-5V11z" />
+              </svg>
+              <span>Panel</span>
+            </button>
+
+            <button 
+              className={`topbar-tool-btn ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-s2-solver')}
+              title="Relacje — Więzy geometryczne i relacje 3D"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+              <span>Relacje</span>
+            </button>
+
+            <button 
+              className={`topbar-tool-btn ${activeTab === 'tab-a7-material' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-a7-material')}
+              title="Materiały — Dekory płyt, obrzeża i wycena"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+              <span>Materiały</span>
+            </button>
+
+            <button
+              className={`topbar-tool-btn ${activeTab === 'tab-c2-connectors' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tab-c2-connectors')}
+              title="Złącza — Kołki, konfirmaty i minifix na styku płaszczyzn (wieniec–bok)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="6" height="16" rx="0.5" />
+                <rect x="13" y="14" width="8" height="6" rx="0.5" />
+                <line x1="9" y1="8" x2="17" y2="8" />
+                <circle cx="13" cy="8" r="1.4" fill="currentColor" />
+              </svg>
+              <span>Złącza</span>
+            </button>
+
+            <button
+              className={`topbar-tool-btn ${activeTab === 'tab-o1-operacji' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tab-o1-operacji')}
+              title="Operacje — ramka, przetłoczenie, szkło, rewizja na formatce"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="3" width="16" height="18" rx="1" />
+                <rect x="7.5" y="6.5" width="9" height="11" rx="0.5" fill="currentColor" fillOpacity="0.2" />
+              </svg>
+              <span>Operacje</span>
+            </button>
+
+            <button 
+              className={`topbar-tool-btn ${activeTab === 'tab-a8-pmi' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-a8-pmi')}
+              title="Wymiary — Linie wymiarowe 3D i koty (PMI)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="4" x2="3" y2="20" />
+                <line x1="21" y1="4" x2="21" y2="20" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <polyline points="7 9 3 12 7 15" />
+                <polyline points="17 9 21 12 17 15" />
+              </svg>
+              <span>Wymiary</span>
+            </button>
+
+            <button 
+              className={`topbar-tool-btn ${activeTab === 'tab-e1-export' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-e1-export')}
+              title="Eksport — Rysunki techniczne CAD, formaty A4/A3/A2, rzuty ISO 7200 i arkusze SVG"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+              <span>Eksport</span>
+            </button>
+
+            <button 
+              className="topbar-tool-btn"
+              onClick={() => {
+                const doc = ContextManager.instance.document;
+                if (doc) {
+                  try {
+                    const json = doc.serialize();
+                    localStorage.setItem('smartpanel_project_current_v3', JSON.stringify(json));
+                  } catch (e) {
+                    console.warn('Błąd zapisu projektu do storage:', e);
+                  }
+                }
+                DrawingProjectExtractor.instance.syncLiveSceneTree();
+                E3LibraryExtractor.instance.syncLibrary();
+                window.open(new URL('./e3_drawing.html', window.location.href).href, '_blank');
+              }}
+              title="Rys 2D — Otwórz dedykowaną podstronę CAD (w nowej karcie)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18" />
+                <path d="M9 21V9" />
+              </svg>
+              <span>Rys 2D</span>
+            </button>
+          </div>
+
+          {/* ─── Narzędzia transformacji 3D (G i R) z brązowym tłem ─── */}
+          <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.12)', margin: '0 8px' }}></div>
+          <div className="topbar-transform-group" title="Narzędzia transformacji 3D (Blender-style)">
+            <button
+              type="button"
+              className={`topbar-transform-btn ${modalTransformMode === 'translate' ? 'active' : ''}`}
+              onClick={() => ModalTransformManager.instance.toggleTransform('translate')}
+              title="Przesuń obiekt w przestrzeni 3D (skrót klawiszowy: G)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="5 9 2 12 5 15" />
+                <polyline points="9 5 12 2 15 5" />
+                <polyline points="15 19 12 22 9 19" />
+                <polyline points="19 9 22 12 19 15" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <line x1="12" y1="2" x2="12" y2="22" />
+              </svg>
+              <kbd className="topbar-key-badge">G</kbd>
+              <span>Przesuń</span>
+            </button>
+
+            <button
+              type="button"
+              className={`topbar-transform-btn ${modalTransformMode === 'rotate' ? 'active' : ''}`}
+              onClick={() => ModalTransformManager.instance.toggleTransform('rotate')}
+              title="Obróć obiekt w przestrzeni 3D wokół osi (skrót klawiszowy: R)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+              </svg>
+              <kbd className="topbar-key-badge">R</kbd>
+              <span>Obróć</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1577,6 +1815,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             if (next) {
               setViewMenuOpen(false);
               setProjMenuOpen(false);
+              setInfoMenuOpen(false);
             }
           }}
           onChange={(m) => {
@@ -1592,11 +1831,12 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               setViewMenuOpen(!viewMenuOpen);
               setDisplayMenuOpen(false);
               setProjMenuOpen(false);
+              setInfoMenuOpen(false);
             }}
-            title="Widok - włącz/wyłącz elementy graficzne"
+            title="Podgląd - włącz/wyłącz elementy graficzne"
           >
             {icons.eyeShow}
-            <span>Widok</span>
+            <span>Podgląd</span>
             <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3" style={{ marginLeft: '2px', opacity: 0.8 }}><path d="M6 9l6 6 6-6"></path></svg>
           </button>
           
@@ -1655,6 +1895,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             if (next) {
               setViewMenuOpen(false);
               setDisplayMenuOpen(false);
+              setInfoMenuOpen(false);
             }
           }}
           onChange={(next) => {
@@ -1682,22 +1923,24 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           title="Wymiarowanie CAD — tworzenie wymiaru (ustawienia w panelu PMI)"
         >📏 Wymiaruj</button>
         <span className="tool-separator"></span>
-        <button 
-          className="tool-btn" 
-          id="toolInspector" 
-          onClick={() => {
+        <BelkaInfoMenu
+          open={infoMenuOpen}
+          onOpenChange={(next) => {
+            setInfoMenuOpen(next);
+            if (next) {
+              setViewMenuOpen(false);
+              setDisplayMenuOpen(false);
+              setProjMenuOpen(false);
+            }
+          }}
+          onToggleInspector={() => {
             if ((window as any).toggleInspector) {
               (window as any).toggleInspector();
             } else if (UIController.instance?.viewport) {
               UIController.instance.viewport.toggleInspector();
             }
           }}
-          title="Przełącz widoczność Babylon.js Inspector (Skrót: Ctrl+I)"
-        >🔍 Inspector</button>
-        <button 
-          className="tool-btn" 
-          id="toolSceneTree" 
-          onClick={() => {
+          onDumpSceneTree={() => {
             let res = '';
             if ((window as any).debugCADSceneTree) {
               res = (window as any).debugCADSceneTree();
@@ -1706,8 +1949,8 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             }
             alert("🌳 Drzewo Sceny CAD & Babylon zostało wypisane w Konsoli (F12)!\n\nFragment wyniku:\n" + (res ? res.substring(0, 400) + '...' : 'Gotowe'));
           }}
-          title="Wypisz drzewo hierarchii CADNode oraz Babylon.js w konsoli F12"
-        >🌳 SceneTree</button>
+          onOpenSSOT={() => setSsotModalOpen(true)}
+        />
 
         {activeTab === 'tab-e1-export' && (
           <>
@@ -1812,374 +2055,53 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         aria-label="Panel edycji"
         data-ui-name="Panel edycji"
       >
-        <div className="panel-tabs">
-          {/* Row 1, Item 1: SmartFrame (Korpus) */}
-          <button 
-            className={`tab-btn ${activeTab === 'tab-a3-smartframe' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('tab-a3-smartframe')}
-            title="SmartFrame — Prosty korpus szafy i mebla"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
-                <rect x="6" y="4.5" width="12" height="14" rx="0.5" fill="currentColor" fillOpacity="0.08" />
-                <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Korpus</span>
-            <span className="tab-btn-desc">Szafa</span>
-          </button>
-
-          {/* Row 1, Item 2: SmartBox (Wnętrze z półkami) */}
-          <button 
-            className={`tab-btn ${activeTab === 'tab-a2-smartbox' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('tab-a2-smartbox')}
-            title="SmartBox — Korpus z półkami i przegrodami (konfigurator wnętrz)"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
-                <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
-                <line x1="6" y1="8.5" x2="18" y2="8.5" />
-                <line x1="6" y1="13.5" x2="18" y2="13.5" />
-                <line x1="12" y1="8.5" x2="12" y2="18.5" />
-                <rect x="6" y="4.5" width="12" height="4" fill="currentColor" fillOpacity="0.18" />
-                <rect x="6" y="8.5" width="6" height="5" fill="currentColor" fillOpacity="0.28" />
-                <rect x="12" y="8.5" width="6" height="5" fill="currentColor" fillOpacity="0.18" />
-                <rect x="6" y="13.5" width="6" height="5" fill="currentColor" fillOpacity="0.18" />
-                <rect x="12" y="13.5" width="6" height="5" fill="currentColor" fillOpacity="0.28" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">SmartBox</span>
-            <span className="tab-btn-desc">Półki</span>
-          </button>
-
-          {/* Row 1, Item 3: SmartPanel (Formatka / Płaski sześcian) */}
-          <button 
-            className={`tab-btn ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('tab-a4-smartpanel')}
-            title="SmartPanel — Płaska formatka / płyta meblowa"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 6L21 11L12 16L3 11Z" fill="currentColor" fillOpacity="0.2" />
-                <path d="M3 11v3.5l9 5v-3.5z" fill="currentColor" fillOpacity="0.1" />
-                <path d="M12 16v3.5l9-5V11z" fill="currentColor" fillOpacity="0.3" />
-                <path d="M12 6l9 5v3.5l-9 5-9-5V11z" />
-                <line x1="12" y1="16" x2="12" y2="19.5" />
-                <line x1="3" y1="11" x2="12" y2="16" />
-                <line x1="21" y1="11" x2="12" y2="16" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Panel</span>
-            <span className="tab-btn-desc">Płyta</span>
-          </button>
-
-          {/* Row 1, Item 4: Solver */}
-          <button 
-            className={`tab-btn ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('tab-s2-solver')}
-            title="Solver — Więzy geometryczne i relacje 3D"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Solver</span>
-            <span className="tab-btn-desc">Więzy 3D</span>
-          </button>
-
-          {/* Row 1, Item 5: Materiały */}
-          <button 
-            className={`tab-btn ${activeTab === 'tab-a7-material' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('tab-a7-material')}
-            title="Materiały — Dekory płyt, obrzeża i wycena"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Materiały</span>
-            <span className="tab-btn-desc">Dekory</span>
-          </button>
-
-          {/* Row 2: C2 Złącza */}
-          <button
-            className={`tab-btn ${activeTab === 'tab-c2-connectors' ? 'active' : ''}`}
-            onClick={() => setActiveTab('tab-c2-connectors')}
-            title="Złącza — Kołki, konfirmaty i minifix na styku płaszczyzn (wieniec–bok)"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="6" height="16" rx="0.5" />
-                <rect x="13" y="14" width="8" height="6" rx="0.5" />
-                <line x1="9" y1="8" x2="17" y2="8" />
-                <circle cx="13" cy="8" r="1.4" fill="currentColor" />
-                <line x1="9" y1="17" x2="13" y2="17" />
-                <circle cx="11" cy="17" r="1.4" fill="currentColor" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Złącza</span>
-            <span className="tab-btn-desc">Kołki</span>
-          </button>
-
-          <button
-            className={`tab-btn ${activeTab === 'tab-o1-operacji' ? 'active' : ''}`}
-            onClick={() => setActiveTab('tab-o1-operacji')}
-            title="Operacje — ramka, przetłoczenie, szkło, rewizja na formatce"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="3" width="16" height="18" rx="1" />
-                <rect x="7.5" y="6.5" width="9" height="11" rx="0.5" fill="currentColor" fillOpacity="0.2" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Operacje</span>
-            <span className="tab-btn-desc">Wcięcia</span>
-          </button>
-
-          {/* Row 2, Item 4: Wymiary (PMI) */}
-          <button 
-            className={`tab-btn ${activeTab === 'tab-a8-pmi' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('tab-a8-pmi')}
-            title="Wymiary — Linie wymiarowe 3D i koty (PMI)"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="3" y1="4" x2="3" y2="20" />
-                <line x1="21" y1="4" x2="21" y2="20" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <polyline points="7 9 3 12 7 15" />
-                <polyline points="17 9 21 12 17 15" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Wymiary</span>
-            <span className="tab-btn-desc">PMI 3D</span>
-          </button>
-
-          {/* Row 2, Item 5: JSON SSOT */}
-          <button 
-            className={`tab-btn ${activeTab === 'tab-json-ssot' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('tab-json-ssot')}
-            title="JSON SSOT — Single Source of Truth, drzewo danych projektu"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 3H6a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h2" />
-                <path d="M16 3h2a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 0-2 2v3a2 2 0 0 1-2 2h-2" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">JSON</span>
-            <span className="tab-btn-desc">SSOT</span>
-          </button>
-
-          {/* Row 2, Item 6: Eksport (E1) */}
-          <button 
-            className={`tab-btn ${activeTab === 'tab-e1-export' ? 'active' : ''}`} 
-            onClick={() => setActiveTab('tab-e1-export')}
-            title="Eksport — Rysunki techniczne CAD, formaty A4/A3/A2, rzuty ISO 7200 i arkusze SVG"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Eksport</span>
-            <span className="tab-btn-desc">Rysunki</span>
-          </button>
-
-          {/* Row 2, Item 8: Eksport 3 (E3) - Dedykowana Podstrona Studia Rysunków */}
-          <button 
-            className="tab-btn"
-            onClick={() => {
-              const doc = ContextManager.instance.document;
-              if (doc) {
-                try {
-                  const json = doc.serialize();
-                  localStorage.setItem('smartpanel_project_current_v3', JSON.stringify(json));
-                } catch (e) {
-                  console.warn('Błąd zapisu projektu do storage:', e);
-                }
-              }
-              DrawingProjectExtractor.instance.syncLiveSceneTree();
-              E3LibraryExtractor.instance.syncLibrary();
-              window.open(new URL('./e3_drawing.html', window.location.href).href, '_blank');
-            }}
-            title="Studio Rysunków E3 — Otwórz dedykowaną podstronę CAD (w nowej karcie)"
-          >
-            <div className="tab-btn-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M3 9h18" />
-                <path d="M9 21V9" />
-              </svg>
-            </div>
-            <span className="tab-btn-title">Eksport 3</span>
-            <span className="tab-btn-desc">Studio E3</span>
-          </button>
-        </div>
-
         {/* Tab 1: A4 SmartPanel */}
         <div className={`tab-content ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} id="tab-a4-smartpanel">
           <div className="panel-header">
             <h2>SmartPanel</h2>
-            <p className="subtitle">Właściwości płyty</p>
+            <p className="subtitle">Wstawianie i formatki</p>
           </div>
           
           <div className="panel-section">
-            <button 
-              className="btn btn-primary" 
-              id="btnAddSmartPanel" 
-              style={{ width: '100%', marginBottom: '10px', justifyContent: 'center', backgroundColor: '#2c8c6c' }}
+            <div
+              className="panel-drag-card"
+              draggable
+              onDragStart={(e) => {
+                const payload = { width: 720, height: 510, thickness: 18 };
+                e.dataTransfer.setData('application/cad-new-panel', JSON.stringify(payload));
+                e.dataTransfer.effectAllowed = 'copy';
+                (window as any).__draggedNewPanel = payload;
+              }}
+              onDragEnd={() => {
+                (window as any).__draggedNewPanel = null;
+              }}
               onClick={() => callAPI('addSmartPanel')}
-              title="Dodaje panel ręczny na scenę. Jeśli jest aktywny SmartFrame, zapyta czy dodać go do tego korpusu."
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '10px 12px',
+                background: 'var(--bg-secondary, #252528)',
+                border: '1px solid var(--border-color, #3a3a3e)',
+                borderRadius: '6px',
+                cursor: 'grab',
+                transition: 'all 0.15s ease',
+                userSelect: 'none',
+                marginBottom: '10px'
+              }}
+              title="Kliknij lub przeciągnij na scenę 3D, aby wstawić formatkę (720x510x18 mm)"
             >
-              <svg style={{ marginRight: '4px' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> 
-              Dodaj panel ręczny
-            </button>
-            <h3>Wymiary płyty</h3>
-            <div className="input-row">
-              <label htmlFor="inputWidth">Szerokość</label>
-              <SmartNumericInput
-                value={widthVal}
-                min={PANEL_DIM_MIN_MM}
-                max={PANEL_DIM_MAX_MM}
-                step={0.1}
-                disabled={uiState?.inputsDisabled || widthFromPlanes}
-                onChange={(val) => handleInputChange('width', String(val))}
-              />
-              <span className="unit">mm</span>
+              <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                  <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                  <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                  <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                </svg>
+              </span>
+              <span style={{ fontWeight: 600, fontSize: '13px', color: '#f3f4f6' }}>Dodaj formatkę</span>
             </div>
-            {selectedPart && !uiState?.inputsDisabled && (
-              <AssociativeDimInputs panel={selectedPart} axis="width" />
-            )}
-            <div className="input-row">
-              <label htmlFor="inputHeight">Wysokość</label>
-              <SmartNumericInput
-                value={heightVal}
-                min={PANEL_DIM_MIN_MM}
-                max={PANEL_DIM_MAX_MM}
-                step={0.1}
-                disabled={uiState?.inputsDisabled || heightFromPlanes}
-                onChange={(val) => handleInputChange('height', String(val))}
-              />
-              <span className="unit">mm</span>
-            </div>
-            {selectedPart && !uiState?.inputsDisabled && (
-              <AssociativeDimInputs panel={selectedPart} axis="height" />
-            )}
-            {selectedPanel?.type === 'container' && (
-            <div className="input-row">
-              <label htmlFor="inputThickness">{uiState?.inputThicknessLabel || 'Głębokość'}</label>
-              <SmartNumericInput
-                value={thicknessVal}
-                min={PANEL_DIM_MIN_MM}
-                max={PANEL_DIM_MAX_MM}
-                step={0.1}
-                disabled={uiState?.inputsDisabled}
-                onChange={(val) => handleInputChange('thickness', String(val))}
-              />
-              <span className="unit">mm</span>
-            </div>
-            )}
-          </div>
-
-          <div className="panel-section">
-            <h3>Zaznaczony element</h3>
-            <div 
-              className="face-info" 
-              id="faceInfo"
-              dangerouslySetInnerHTML={{ __html: uiState?.faceInfoHtml || '<span class="face-none">Kliknij element</span>' }}
-            />
-            <div className="coords" id="coordsInfo">{uiState?.coordsInfoText}</div>
-          </div>
-
-          <div className="panel-section">
-            <h3>Akcje</h3>
-            <div className="btn-group">
-              <button 
-                className="btn btn-primary" 
-                id="btnSketchMode" 
-                disabled={!isFaceSelected}
-                onClick={() => UIController.instance?.triggerSketchMode()}
-              >
-                <svg style={{ marginRight: '4px' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg> 
-                Tryb szkicu (S)
-              </button>
-              <button 
-                className="btn btn-primary" 
-                id="btnAddHole" 
-                disabled={!isFaceSelected}
-                onClick={() => UIController.instance?.triggerAddHole()}
-              >
-                <svg style={{ marginRight: '4px' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg> 
-                Dodaj otwór ⌀35
-              </button>
-              <button 
-                className="btn btn-primary" 
-                id="btnAddFillet" 
-                disabled={!isEdgeSelected}
-                style={{ backgroundColor: '#2c8c6c' }}
-                onClick={() => UIController.instance?.triggerAddFillet()}
-              >
-                <svg style={{ marginRight: '4px' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 20v-8a8 8 0 0 1 8-8h8"></path></svg> 
-                Zaokrąglij krawędź
-              </button>
-              <button 
-                className="btn btn-secondary" 
-                id="btnReset"
-                onClick={() => UIController.instance?.triggerReset()}
-              >
-                <svg style={{ marginRight: '4px' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg> 
-                Resetuj
-              </button>
-            </div>
-          </div>
-
-          <div className="panel-section">
-            <h3>Lista operacji</h3>
-            <ul className="feature-list" id="featureList">
-              {selectedPanel && selectedPanel.features && selectedPanel.features.length > 0 ? (
-                selectedPanel.features.map((f: any, idx: number) => {
-                  const smart = isLibraryOperation(f);
-                  const engineGroove = isEngineGroove(f);
-                  return (
-                    <li
-                      key={f.id || idx}
-                      className={smart ? 'is-smart-op' : (engineGroove ? 'is-engine-op' : undefined)}
-                      style={f.visible === false ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}
-                      title={engineGroove ? 'Wpust silnika — bez edycji' : (smart ? 'Operacja Smart' : undefined)}
-                      onClick={() => {
-                        if (!smart) return;
-                        window.dispatchEvent(new CustomEvent(CAD_EDIT_LIBRARY_OPERATION, {
-                          detail: { library_id: f.params.library_id, featureId: f.id, panelId: selectedPanel.id },
-                        }));
-                      }}
-                    >
-                      <span className="icon" style={{ marginRight: '4px' }}>
-                        {f.type === 'fillet' ? icons.tool : icons.opsFolder}
-                      </span>
-                      <span>
-                        {featureOperationLabel(f)} [{featureOperationDetails(f)}]
-                      </span>
-                    </li>
-                  );
-                })
-              ) : (
-                <span className="feature-empty">
-                  {!selectedPanel ? 'Brak aktywnej płyty' : 'Brak operacji'}
-                </span>
-              )}
-            </ul>
           </div>
         </div>
 
@@ -2206,15 +2128,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <MaterialsUI 
             projectModel={projectModel}
           />
-        </div>
-
-        {/* Tab 5: JSON SSOT */}
-        <div className={`tab-content ${activeTab === 'tab-json-ssot' ? 'active' : ''}`} id="tab-json-ssot" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-json-ssot' ? 'flex' : 'none', flexDirection: 'column' }}>
-          <div className="panel-header">
-            <h2>JSON SSOT</h2>
-            <p className="subtitle">Single Source of Truth sceny</p>
-          </div>
-          <SSOTUI projectModel={projectModel} />
         </div>
 
         {/* Tab: S2 Solver */}
@@ -2279,6 +2192,24 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             if (scene && doc) {
               bayCtrl.onPointerMoveOnScene(scene, x, y, doc);
             }
+            return;
+          }
+          const frameDragCtrl = ContextManager.instance.smartFrameDragController;
+          if (frameDragCtrl && frameDragCtrl.isDragging) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const scene = ContextManager.instance.viewport?.scene;
+            if (scene) {
+              frameDragCtrl.onPointerMoveOnScene(scene, x, y);
+            }
+            return;
+          }
+        }}
+        onDragLeave={() => {
+          const frameDragCtrl = ContextManager.instance.smartFrameDragController;
+          if (frameDragCtrl && frameDragCtrl.isDragging) {
+            frameDragCtrl.endDrag();
           }
         }}
         onDrop={(e) => {
@@ -2286,6 +2217,12 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           const bayCtrl = ContextManager.instance.smartBoxBayController;
           if (bayCtrl && (bayCtrl.isDragging || bayCtrl.isBayDrag())) {
             bayCtrl.onDropOnScene();
+            return;
+          }
+          const frameDragCtrl = ContextManager.instance.smartFrameDragController;
+          if (frameDragCtrl && frameDragCtrl.isDragging) {
+            const doc = ContextManager.instance.document || projectModel;
+            frameDragCtrl.onDropOnScene(doc);
             return;
           }
           const draggedOperation = (window as any).__draggedCadOperation || (() => {
@@ -2303,10 +2240,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
           if (draggedOperation && draggedOperation.library_id) {
             const pick = scene.pick(x, y);
-            applyLibraryOperationFromPick(pick, draggedOperation.library_id, {
-              frameMm: draggedOperation.frameMm,
-              frameWMm: draggedOperation.frameWMm,
-              frameHMm: draggedOperation.frameHMm,
+            const applied = applyLibraryOperationFromPick(pick, draggedOperation.library_id, {
+              insetLMm: draggedOperation.insetLMm,
+              insetRMm: draggedOperation.insetRMm,
+              insetTMm: draggedOperation.insetTMm,
+              insetBMm: draggedOperation.insetBMm,
+              through: draggedOperation.through,
+              fill: draggedOperation.fill,
               depthMm: draggedOperation.depthMm,
               widthMm: draggedOperation.widthMm,
               heightMm: draggedOperation.heightMm,
@@ -2314,6 +2254,81 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               vMm: draggedOperation.vMm,
             });
             (window as any).__draggedCadOperation = null;
+            if (applied) {
+              const panel = pick?.pickedMesh?.metadata?.panelModel;
+              if (panel) {
+                ContextManager.instance?.document?.setActiveEntity?.(panel);
+                window.dispatchEvent(new CustomEvent(CAD_OPEN_FLOATING_OPERATION, {
+                  detail: {
+                    library_id: draggedOperation.library_id,
+                    featureId: applied.id,
+                    panelId: panel.id,
+                    face: applied.face,
+                  },
+                }));
+              }
+            }
+            return;
+          }
+
+          const draggedNewPanel = (window as any).__draggedNewPanel || (() => {
+            try {
+              const raw = e.dataTransfer.getData('application/cad-new-panel');
+              return raw ? JSON.parse(raw) : null;
+            } catch { return null; }
+          })();
+
+          if (draggedNewPanel) {
+            const doc = ContextManager.instance.document || projectModel;
+            if (doc) {
+              const ray = scene.createPickingRay(x, y, (window as any).BABYLON?.Matrix?.Identity?.() || (scene.activeCamera?.getWorldMatrix?.() ? scene.activeCamera.getWorldMatrix() : null), scene.activeCamera);
+              let dropX = 0;
+              let dropZ = 0;
+              if (ray && (window as any).BABYLON) {
+                const groundPlane = (window as any).BABYLON.Plane.FromPositionAndNormal(new (window as any).BABYLON.Vector3(0, 0, 0), new (window as any).BABYLON.Vector3(0, 1, 0));
+                const dist = ray.intersectsPlane(groundPlane);
+                if (dist !== null && dist !== undefined) {
+                  const hitPoint = ray.origin.add(ray.direction.scale(dist));
+                  dropX = hitPoint.x;
+                  dropZ = hitPoint.z;
+                }
+              }
+              const pWidth = Number(draggedNewPanel.width) || 720;
+              const pHeight = Number(draggedNewPanel.height) || 510;
+              const pThickness = Number(draggedNewPanel.thickness) || 18;
+
+              const newPanel = new PanelModel({
+                width: mmToNm(pWidth),
+                height: mmToNm(pHeight),
+                thickness: mmToNm(pThickness),
+                name: 'Formatka ręczna',
+                role: 'MANUAL_PANEL',
+                engineManaged: false,
+              });
+
+              const pNode = CADNode.create(NodeType.PART, newPanel.name, newPanel.id);
+              pNode.domainData = newPanel;
+              pNode.setLocalTransform(
+                new Vec3(mmToNm(dropX), mmToNm(pHeight / 2), mmToNm(dropZ)),
+                Quat.IDENTITY
+              );
+
+              const cmdHist = ContextManager.instance.commandHistory;
+              if (cmdHist) {
+                cmdHist.execute(new AddNodeCommand(doc.rootNode.id, pNode, undefined, 'Wstawiono formatkę ręczną'));
+              } else {
+                doc.addNode(doc.rootNode.id, pNode);
+              }
+              doc.setActiveEntity(newPanel);
+              window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('cad-open-floating-panel-edit', {
+                  detail: { panelId: newPanel.id }
+                }));
+              }
+              UIController.instance?.setStatus(`Wstawiono formatkę (${pWidth}×${pHeight} mm) na scenę`);
+            }
+            (window as any).__draggedNewPanel = null;
             return;
           }
 
@@ -2400,8 +2415,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
             const scope = (window as any).__draggedEdgeScope || 'SINGLE';
             const cmd = new SetEdgeBandingCommand(nodeId, targetEdgeKey, edgeConfig, scope);
-            if (doc && doc.executeCommand) {
-              doc.executeCommand(cmd);
+            if (ContextManager.instance.commandHistory) {
+              ContextManager.instance.commandHistory.execute(cmd);
+            } else if (doc && (doc as any).executeCommand) {
+              (doc as any).executeCommand(cmd);
             } else if (doc) {
               cmd.execute(doc);
             }
@@ -2629,6 +2646,79 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         </div>
       )}
 
+      {/* ─── Modal Podglądu JSON SSOT ───────────────────── */}
+      {ssotModalOpen && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 100000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onClick={() => setSsotModalOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setSsotModalOpen(false);
+          }}
+          tabIndex={0}
+        >
+          <div 
+            style={{
+              backgroundColor: '#18181b',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '10px',
+              width: 'min(900px, 92vw)',
+              height: 'min(680px, 85vh)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 24px rgba(59, 130, 246, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              color: '#e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '14px 18px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'rgba(255, 255, 255, 0.03)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>📄</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#f8fafc' }}>JSON SSOT</h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>Single Source of Truth — aktualne drzewo modelu CAD</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSsotModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                }}
+                title="Zamknij (Esc)"
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, padding: '16px', display: 'flex', flexDirection: 'column' }}>
+              <SSOTUI projectModel={projectModel} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Bottom Console (Hover Info) ───────────────── */}
       <div id="bottomConsole" className="bottom-console">
         <span className="console-prefix">&gt;</span>
@@ -2636,6 +2726,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           {uiState?.consoleText || 'Gotowy. Najedź na element.'}
         </span>
       </div>
+
+      {/* Okno edycji operacji (pływające, swobodne okno nad sceną 3D) */}
+      <FloatingOperationDialog />
       
     </div>
   );

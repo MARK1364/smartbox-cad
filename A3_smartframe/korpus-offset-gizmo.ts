@@ -85,7 +85,7 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
             rebuildSmartFrameContainer(container);
             return;
         }
-        history.record(new SetKorpusOffsetCommand(container.id, paramName, oldValue, newValue));
+        history.execute(new SetKorpusOffsetCommand(container.id, paramName, oldValue, newValue));
     }
 };
 

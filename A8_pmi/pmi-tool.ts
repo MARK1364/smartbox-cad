@@ -16,7 +16,7 @@
  *    Kliknięcie w wierzchołek lub punkt ściany -> wybór punktu 1 -> wybór punktu 2
  *    -> przeciągnięcie odsunięcia -> LMB zatwierdza.
  *
- * SKRÓTY (odpowiednik modalu z `pmi_tool_base.py`):
+ * SKRÓTY:
  *   X / Y / Z              — wymuszenie osi odsunięcia
  *   Shift + X / Y / Z      — zablokowanie osi pomiaru
  *   Enter / LMB            — zatwierdzenie
@@ -92,7 +92,7 @@ export class DimensionTool extends BaseState {
     private currentOffsetAxisKey: string = '';
     private stickyGuideId: string | null = null;
 
-    /** Kotwica drag offsetu (odpowiednik `_drag_start_hit_world` / `_free_drag_bias_world`). */
+    /** Kotwica drag offsetu. */
     private dragStartHitWorld: Vec3 | null = null;
     private dragStartOffsetWorld: Vec3 = v3(0, 0, 0);
     private freeDragBiasWorld: Vec3 = v3(0, 0, 0);
@@ -103,7 +103,7 @@ export class DimensionTool extends BaseState {
     private lastClickTime = 0;
     private static readonly DOUBLE_CLICK_MS = 350;
 
-    /** Ctrl = precyzyjny wybór narożnika / krawędzi / płaszczyzny (jak w Blenderze). */
+    /** Ctrl = precyzyjny wybór narożnika / krawędzi / płaszczyzny. */
     private isCtrlPressed = false;
 
     private geometryHighlighter: PMIGeometryHighlighter | null = null;
@@ -126,9 +126,15 @@ export class DimensionTool extends BaseState {
     // STATE LIFECYCLE
     // ========================================================================
 
-    public onEnter(): void {
-        console.log('[DimensionTool] Aktywacja narzędzia wymiarowania');
+    private handleWindowKeyUp = (e: KeyboardEvent) => {
+        if (!e.ctrlKey) this.isCtrlPressed = false;
+    };
 
+    private handleWindowBlur = () => {
+        this.isCtrlPressed = false;
+    };
+
+    public onEnter(): void {
         const store = PMIStore.instance;
         this.currentAxisSpace = store.toolAxisSpace === 'ALIGNED' ? 'ALIGNED' : 'GLOBAL';
         this.currentMeasureAxisKey = store.toolMeasureAxis;
@@ -167,6 +173,11 @@ export class DimensionTool extends BaseState {
             }
         });
 
+        if (typeof window !== 'undefined') {
+            window.addEventListener('keyup', this.handleWindowKeyUp);
+            window.addEventListener('blur', this.handleWindowBlur);
+        }
+
         if (this.ctx.viewport) this.ctx.viewport.suppressDoubleTapZoom = true;
         if (this.ctx.canvas) {
             this.ctx.canvas.style.cursor = 'crosshair';
@@ -174,7 +185,10 @@ export class DimensionTool extends BaseState {
     }
 
     public onExit(): void {
-        console.log('[DimensionTool] Dezaktywacja narzędzia wymiarowania');
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('keyup', this.handleWindowKeyUp);
+            window.removeEventListener('blur', this.handleWindowBlur);
+        }
 
         const scene = this.ctx.viewport.scene;
         if (this.pointerObserver) {
@@ -295,7 +309,7 @@ export class DimensionTool extends BaseState {
                 const space = this.currentAxisSpace === 'LOCAL' ? 'LOCAL' : 'GLOBAL';
                 this.currentAxisSpace = space;
                 this.currentOffsetAxisKey = key;
-                this.stickyGuideId = guideCandidateId(space, key);
+                this.stickyGuideId = guideCandidateId(space, key as 'X' | 'Y' | 'Z');
                 this.setUIStatus(`Oś odsunięcia: ${space === 'LOCAL' ? 'L' : 'G'}:${key}`);
             }
         }
@@ -311,6 +325,13 @@ export class DimensionTool extends BaseState {
     // ========================================================================
 
     private onLeftClick(): void {
+        if (this.phase === 'DRAG_OFFSET') {
+            this.lastClickTime = 0;
+            // Drugie kliknięcie: zatwierdzenie wyciągniętego wymiaru
+            this.commitDimension();
+            return;
+        }
+
         const now = Date.now();
         if (now - this.lastClickTime < DimensionTool.DOUBLE_CLICK_MS) {
             this.lastClickTime = 0;
@@ -322,12 +343,6 @@ export class DimensionTool extends BaseState {
         }
         this.lastClickTime = now;
 
-        if (this.phase === 'DRAG_OFFSET') {
-            // Drugie kliknięcie: zatwierdzenie wyciągniętego wymiaru
-            this.commitDimension();
-            return;
-        }
-
         if (this.phase === 'PICK_P1') {
             // Krawędź pod kursorem ma pierwszeństwo przed snapem do punktu — inaczej
             // klik obok linii uciekał do najbliższego narożnika ściany.
@@ -337,7 +352,6 @@ export class DimensionTool extends BaseState {
                     this.pick1 = detectedEdge.p1;
                     this.pick2 = detectedEdge.p2;
                     this.beginOffsetDrag();
-                    console.log('[DimensionTool] Wykryto krawędź -> Przejście do DRAG_OFFSET');
                     return;
                 }
             }
@@ -1197,9 +1211,6 @@ export class DimensionTool extends BaseState {
         executePMICommand(new AddDimensionCommand(store, init));
 
         this.renderer.clearPreview();
-
-        const measurement = this.currentMeasurement();
-        console.log(`[DimensionTool] Wymiar zatwierdzony: ${formatDistance(measurement?.lengthMM ?? 0, store.unitMode, store.showUnits)}`);
 
         this.resetPicks();
         this.setUIStatus('Wymiar dodany! Kliknij kolejną krawędź lub punkt (Ctrl = precyzyjny element).');

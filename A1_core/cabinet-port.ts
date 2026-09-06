@@ -13,7 +13,9 @@ export interface KorpusCreateParams {
     zoneCount: 1 | 2 | 3;
     bottomHeight: number;
     middleHeight: number;
+    backOffset?: number;
     offsets?: Record<string, number>;
+    position?: { x: number; y: number; z?: number };
 }
 
 export interface CabinetModule {

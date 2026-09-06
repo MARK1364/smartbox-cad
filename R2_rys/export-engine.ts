@@ -468,7 +468,7 @@ export class ExportEngineV3 {
                 cam.beta = Math.PI / 2;
                 break;
             case 'isometric':
-                cam.alpha = Math.PI / 4;
+                cam.alpha = -Math.PI / 4;
                 cam.beta = Math.PI / 3;
                 break;
         }

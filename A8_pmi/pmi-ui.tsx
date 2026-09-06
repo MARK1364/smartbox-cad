@@ -50,6 +50,7 @@ export function PMIUI() {
     const [showUnits, setShowUnits] = useState<boolean>(store.showUnits);
     const [textSize, setTextSize] = useState<number>(store.textSizeMM);
     const [lineWidth, setLineWidth] = useState<number>(store.lineWidthMM);
+    const [alignTextToLine, setAlignTextToLine] = useState<boolean>(store.alignTextToLine);
     const [dimColor, setDimColor] = useState<string>(rgbaToHex(store.dimColor));
     const [selectedColor, setSelectedColor] = useState<string>(rgbaToHex(store.selectedColor));
     const [edgeSnapPx, setEdgeSnapPx] = useState<number>(store.edgeSnapPx);
@@ -164,6 +165,12 @@ export function PMIUI() {
     const handleLineWidthChange = (val: number) => {
         setLineWidth(val);
         store.lineWidthMM = val;
+        store.notifyChanged();
+    };
+
+    const handleAlignTextToLineChange = (val: boolean) => {
+        setAlignTextToLine(val);
+        store.alignTextToLine = val;
         store.notifyChanged();
     };
 
@@ -338,18 +345,28 @@ export function PMIUI() {
                     </div>
 
                     <div style={rowStyle}>
+                        <span style={labelStyle}>Tekst wzdłuż linii:</span>
+                        <input
+                            type="checkbox"
+                            checked={alignTextToLine}
+                            onChange={(e) => handleAlignTextToLineChange(e.target.checked)}
+                            style={{ accentColor: '#3b82f6', cursor: 'pointer', width: '14px', height: '14px' }}
+                        />
+                    </div>
+
+                    <div style={rowStyle}>
                         <span style={labelStyle}>Wielkość tekstu:</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <input
                                 type="range"
-                                min="8"
-                                max="30"
+                                min="10"
+                                max="300"
                                 step="1"
                                 value={textSize}
                                 onChange={(e) => handleTextSizeChange(Number(e.target.value))}
-                                style={{ width: '70px', accentColor: '#3b82f6', cursor: 'pointer' }}
+                                style={{ width: '80px', accentColor: '#3b82f6', cursor: 'pointer' }}
                             />
-                            <span style={{ color: '#60a5fa', fontWeight: 600, fontSize: '11px', minWidth: '38px', textAlign: 'right' }}>{textSize} mm</span>
+                            <span style={{ color: '#60a5fa', fontWeight: 600, fontSize: '11px', minWidth: '46px', textAlign: 'right' }}>{textSize} mm</span>
                         </div>
                     </div>
 

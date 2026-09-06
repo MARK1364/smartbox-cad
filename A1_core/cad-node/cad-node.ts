@@ -147,8 +147,8 @@ export class CADNode {
      * Ustawia lokalną transformację przez komponenty TRS.
      * Wywołuje kaskadę dirty-flag w dół drzewa i powiadamia listenery (np. SceneSyncAdapter).
      */
-    setLocalTransform(translation: Vec3, rotation: Quat, scale?: Vec3): void {
-        this._localMatrix = Mat4.fromTRS(translation, rotation, scale);
+    setLocalTransform(translation: Vec3, rotation: Quat = Quat.IDENTITY, scale: Vec3 = Vec3.ONE): void {
+        this._localMatrix = Mat4.fromTRS(translation, rotation || Quat.IDENTITY, scale || Vec3.ONE);
         this._invalidateWorldMatrix();
         this._recomputeWorldMatrixRecursive();
     }

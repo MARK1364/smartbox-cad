@@ -69,7 +69,8 @@ export class Mat4 {
      *   col1 (d[4..7])  = nowa oś Y
      *   col2 (d[8..11]) = nowa oś Z
      */
-    static fromQuaternion(q: Quat): Mat4 {
+    static fromQuaternion(q?: Quat): Mat4 {
+        if (!q) return Mat4.identity();
         const { x, y, z, w } = q;
         const x2 = x + x, y2 = y + y, z2 = z + z;
         const xx = x * x2, xy = x * y2, xz = x * z2;
@@ -106,12 +107,12 @@ export class Mat4 {
      */
     static fromTRS(
         translation: Vec3,
-        rotation: Quat,
+        rotation: Quat = Quat.IDENTITY,
         scale: Vec3 = Vec3.ONE
     ): Mat4 {
-        const r = Mat4.fromQuaternion(rotation);
+        const r = Mat4.fromQuaternion(rotation || Quat.IDENTITY);
         const d = r.data;
-        const sx = scale.x, sy = scale.y, sz = scale.z;
+        const sx = scale?.x ?? 1, sy = scale?.y ?? 1, sz = scale?.z ?? 1;
 
         // Skalujemy każdą kolumnę osi przez odpowiednią składową skali.
         // Translacja trafia do kolumny 3 (indeksy 12–14).

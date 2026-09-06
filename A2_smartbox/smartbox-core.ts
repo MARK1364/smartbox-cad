@@ -64,8 +64,7 @@ import { buildDrawersPlan } from './drawers-adapter.js';
 import { buildDividersPlan } from './dividers-adapter.js';
 import { buildPanelsPlan } from './panels-adapter.js';
 import { buildFlapsPlan } from './flaps-adapter.js';
-import korpusRules from '../A3_smartframe/korpus3_3_rules.json';
-import smartframeContract from '../A3_smartframe/reference_contract_smartframe.json';
+
 import { ContextManager } from '../A1_core/context-manager.js';
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
@@ -78,256 +77,94 @@ import { SyncFlapsDrillingsCommand } from '../A1_core/commands/sync-flaps-drilli
 import { ClearSmartBoxDrillingsCommand } from '../A1_core/commands/clear-smartbox-drillings-command.js';
 
 /**
- * Upewnia się, że nazwa kontenera SmartBox kończy się przyrostkiem _SB,
- * dokładnie tak jak funkcja ensure_smartbox_name(obj) w Pythonie.
+ * Upewnia się, że nazwa kontenera SmartBox i węzła w drzewie ma poprawny schemat:
+ * - dla pustego SmartBoxa (z samymi referencjami): smartbox_
+ * - po wybraniu konkretnej kategorii nazwa się dopełnia: smartbox_polki, smartbox_szuflady itp.
  */
 export function ensure_smartbox_name(container: any) {
     if (!container || !container.generatorParams) return;
     
-    // Mapowanie typów generatora na oczekiwane nazwy modułów (zgodnie z Python)
+    // Mapowanie typów generatora na oczekiwane nazwy kategorii
     const typeToName: Record<string, string> = {
-        'smartbox_empty': 'SmartBox',
-        'smartbox_shelves': 'Polki',
-        'smartbox_drawers': 'Drawers',
-        'smartbox_doors': 'Drzwi',
-        'smartbox_dividers': 'Przegrody',
-        'smartbox_flaps': 'Klapy',
-        'smartbox_tubes': 'Rurka',
-        'smartbox_shelf': 'Wieniec',
-        'smartbox_panels': 'Blendy'
+        'smartbox_empty': 'smartbox_',
+        'smartbox_shelves': 'smartbox_polki',
+        'smartbox_drawers': 'smartbox_szuflady',
+        'smartbox_doors': 'smartbox_drzwi',
+        'smartbox_dividers': 'smartbox_przegrody',
+        'smartbox_flaps': 'smartbox_klapy',
+        'smartbox_tubes': 'smartbox_drazek',
+        'smartbox_shelf': 'smartbox_wieniec',
+        'smartbox_panels': 'smartbox_blendy'
     };
 
-    const type = container.generatorParams.type;
-    const baseName = typeToName[type] || 'SmartBox';
+    const type = container.generatorParams.type || 'smartbox_empty';
+    const expectedName = typeToName[type] || 'smartbox_';
 
-    if (!container.name.endsWith("_SB")) {
-        container.name = baseName + "_SB";
-    } else {
-        // Jeśli ma już końcówkę _SB, ale np. zmieniono typ modułu
-        const currentBase = container.name.split('_SB')[0];
-        if (currentBase !== baseName && currentBase !== 'SmartBox') {
-            container.name = baseName + "_SB";
+    const currentName = container.name || '';
+    // Jeśli nazwa jest pusta, zaczyna się od smartbox_ lub SmartBox, albo kończy na _SB,
+    // to automatycznie dopełniamy/aktualizujemy do wybranej kategorii
+    const isAutoManaged = 
+        !currentName || 
+        currentName === 'smartbox_' ||
+        currentName.startsWith('smartbox_') || 
+        currentName.startsWith('SmartBox') || 
+        currentName.endsWith('_SB');
+
+    if (isAutoManaged && currentName !== expectedName) {
+        container.name = expectedName;
+        const doc = ContextManager.instance.document;
+        if (doc && container.id) {
+            const node = doc.findNode(container.id);
+            if (node) {
+                node.name = expectedName;
+            }
         }
     }
 }
 
 /**
- * Oblicza 6 płaszczyzn strefy korpusu (xMin, xMax, yMin, yMax, zMin, zMax)
- * w układzie lokalnym szafki (origin dolny-środek szafki).
+ * Rekurencyjne wyszukiwanie węzła CADNode po ID.
  */
-export function resolveZoneReferences(cabinet: any, zonePrefixRaw: string, space: 'INNER' | 'OUTER' = 'INNER') {
-    const W = nmToMm(cabinet.width);
-    const H = nmToMm(cabinet.height);
-    const D = nmToMm(cabinet.depth);
-
-    const params = cabinet.generatorParams || {};
-    const offsets = params.offsets || {};
-    const zoneCount = params.zoneCount || 1;
-    const bottomH = params.bottomHeight || 500;
-    const middleH = params.middleHeight || 1200;
-    const backOffset = params.backOffset || 0;
-
-    // 1. Obliczamy wysokość i pozycję bazową Z (wysokość w silniku) wybranej strefy
-    const rawZone = (zonePrefixRaw || '').toUpperCase();
-    let zonePrefix = 'B';
-    let zBase = 0;
-    let size = H;
-
-    if (rawZone === 'FULL' || rawZone === 'ALL' || zoneCount === 1) {
-        zonePrefix = 'B';
-        zBase = 0;
-        size = H;
-    } else if (rawZone === 'T' || rawZone === 'C' || rawZone === 'TOP') {
-        zonePrefix = 'T';
-        if (zoneCount === 3) {
-            zBase = bottomH + middleH;
-            size = Math.max(10, H - bottomH - middleH);
-        } else {
-            zBase = bottomH;
-            size = Math.max(10, H - bottomH);
+function findNodeById(root: any, nodeId: string): any | null {
+    if (!root || !nodeId) return null;
+    if (root.id === nodeId) return root;
+    if (root.children) {
+        for (const child of root.children) {
+            const found = findNodeById(child, nodeId);
+            if (found) return found;
         }
-    } else if (rawZone === 'M' || rawZone === 'MID' || rawZone === 'MIDDLE') {
-        zonePrefix = 'M';
-        if (zoneCount === 3) {
-            zBase = bottomH;
-            size = middleH;
-        } else {
-            zBase = bottomH;
-            size = Math.max(10, H - bottomH);
-        }
-    } else if (rawZone === 'B' || rawZone === 'A' || rawZone === 'BOTTOM') {
-        zonePrefix = 'B';
-        zBase = 0;
-        size = bottomH;
-    } else {
-        // Fallback
-        zonePrefix = 'B';
-        zBase = 0;
-        size = H;
     }
-
-    // 3. Obliczenie domyślnych współrzędnych przestrzeni (granice kontenera)
-    let xMin = -W / 2;
-    let xMax = W / 2;
-    let yMin = -D / 2;
-    let yMax = D / 2;
-    let zMin = zBase;
-    let zMax = zBase + size;
-
-    // 4. Nadpisanie z dynamicznych reguł JSON (Dziedziczenie: Baza -> Korpus)
-    const innerRefs = {
-        ...(smartframeContract as any).side_references,
-        ...(korpusRules as any).side_references
-    };
-    const outerRefs = {
-        ...(smartframeContract as any).side_references_outer,
-        ...(korpusRules as any).side_references_outer
-    };
-
-    const overrideFromJSON = (axis: 'x'|'y'|'z', isMin: boolean, fallback: number) => {
-        const sideStr = isMin ? 'MIN' : 'MAX';
-        let prefixToUse = zonePrefix;
-
-        if (rawZone === 'FULL' || rawZone === 'ALL') {
-            if (axis === 'z' && !isMin) {
-                if (zoneCount >= 2) prefixToUse = 'T';
-                else prefixToUse = 'B';
-            }
-        }
-
-        let ref: any;
-        if (space === 'OUTER') {
-            // Blendy: tylko globalne OUTER, bez referencji strefowych INNER.
-            ref = outerRefs[`side.${axis.toUpperCase()}_${sideStr}_OUTER`];
-        } else {
-            const zoneKey = `${prefixToUse}_side.${axis.toUpperCase()}_${sideStr}_INNER`;
-            const baseKey = `side.${axis.toUpperCase()}_${sideStr}_INNER`;
-            ref = innerRefs[zoneKey] || innerRefs[baseKey];
-        }
-        
-        if (ref && ref.provenance) {
-            if (ref.provenance.source_type === 'symbolic') {
-                return fallback;
-            }
-            const val = getCoordinateByProvenance(cabinet, ref.provenance, axis, isMin, prefixToUse);
-            if (val !== null) {
-                return val;
-            }
-        }
-        
-        console.warn(`[SmartBox] Brak poprawnej referencji LCS JSON dla osi ${axis} (${sideStr}). Użyto wymiaru granicznego szafki.`);
-        return fallback;
-    };
-
-    xMin = overrideFromJSON('x', true, xMin);
-    xMax = overrideFromJSON('x', false, xMax);
-    yMin = overrideFromJSON('y', true, yMin);
-    yMax = overrideFromJSON('y', false, yMax);
-    zMin = overrideFromJSON('z', true, zMin);
-    zMax = overrideFromJSON('z', false, zMax);
-
-    return { xMin, xMax, yMin, yMax, zMin, zMax };
+    return null;
 }
 
-function getCoordinateByProvenance(cabinet: any, prov: any, axis: 'x' | 'y' | 'z', isMin: boolean, zonePrefix: string): number | null {
-    if (prov.source_type !== 'component' || !prov.part_key) return null;
-    
-    const doc = ContextManager.instance.document;
-    const cabinetNode = doc?.findNode(cabinet.id);
-    if (!cabinetNode) return null;
-
-    const rawKey = prov.part_key;
-    // Wyciągnij klucz bazowy bez prefiksu strefy (np. "B_WIENIEC_D" -> "WIENIEC_D", "WIENIEC_D" -> "WIENIEC_D")
-    const baseKey = rawKey.replace(/^[A-Z]_/, '');
-    // Docelowy klucz z prefiksem strefy (np. "B_WIENIEC_D")
-    const targetKey = `${zonePrefix}_${baseKey}`;
-    const fallbackKey = rawKey;
-
-    // Słownik ról dla robustnego dopasowania
-    const roleMap: Record<string, string> = {
-        "BOK_L": "LEFT_SIDE_PANEL",
-        "BOK_P": "RIGHT_SIDE_PANEL",
-        "PLECY": "BACK_PANEL",
-        "WIENIEC_D": "BOTTOM_PANEL",
-        "WIENIEC_G": "TOP_PANEL"
-    };
-    const targetRole = roleMap[baseKey] || roleMap[rawKey];
-
-    // Rekurencyjne wyszukiwanie fizycznej płyty wygenerowanej w scenie 3D (obsługa pod-złożeń np. SEKCJA_M)
-    let panel: any = null;
-    let panelNode: any = null;
-
-    const findNodeRecursive = (node: any) => {
-        if (!node) return;
-        const p = node.domainData;
-        if (p && (
-            (p as any).key === targetKey || p.name === targetKey ||
-            (p as any).key === fallbackKey || p.name === fallbackKey ||
-            (p as any).key === baseKey || p.name === baseKey ||
-            (targetRole && p.role === targetRole)
-        )) {
-            // Preferuj dokładne dopasowanie z prefiksem
-            if (!panel || (p as any).key === targetKey || p.name === targetKey) {
-                panel = p;
-                panelNode = node;
-            }
-        }
-        if (node.children) {
-            for (const child of node.children) {
-                findNodeRecursive(child);
-            }
-        }
-    };
-    findNodeRecursive(cabinetNode);
-
-    if (!panel || !panelNode) return null;
-
-    const surface = prov.surface || 'INNER';
-    let faceName = '';
-    let lcs: any = null;
-    
-    if (korpusRules && (korpusRules as any).model_tree) {
-        const findLCS = (obj: any): any => {
-            for (let key in obj) {
-                if (typeof obj[key] === 'object' && obj[key] !== null) {
-                    if (
-                        key === targetKey || obj[key].role === targetKey ||
-                        key === fallbackKey || obj[key].role === fallbackKey ||
-                        key === baseKey || obj[key].role === baseKey ||
-                        (targetRole && obj[key].role === targetRole)
-                    ) {
-                        if (obj[key].lcs) return obj[key].lcs;
-                    }
-                    const res = findLCS(obj[key]);
-                    if (res) return res;
-                }
-            }
-            return null;
-        };
-        lcs = findLCS((korpusRules as any).model_tree);
+/**
+ * Rekurencyjne wyszukiwanie węzła CADNode po nazwie, kluczu lub smartId.
+ */
+function findNodeByKey(root: any, partKey: string): any | null {
+    if (!root || !partKey) return null;
+    const p = root.domainData;
+    if (p && (
+        (p as any).key === partKey ||
+        p.name === partKey ||
+        p.id === partKey ||
+        (p as any).smartId?.uid === partKey
+    )) {
+        return root;
     }
-
-    if (surface === 'INNER' || surface === 'OUTER') {
-        if (lcs && lcs.faces && lcs.faces[surface]) {
-            faceName = lcs.faces[surface];
-        } else {
-            // Złota Zasada LCS: INNER to zawsze FACE_Z_PLUS, OUTER to FACE_Z_MINUS
-            faceName = surface === 'INNER' ? 'FACE_Z_PLUS' : 'FACE_Z_MINUS';
+    if (root.children) {
+        for (const child of root.children) {
+            const found = findNodeByKey(child, partKey);
+            if (found) return found;
         }
-    } else {
-        faceName = surface;
     }
-    
-    // Węzły CAD (CADNode) i ich macierze używają natywnego, matematycznego układu XYZ (Z to wysokość).
-    // Dlatego nie wykonujemy tutaj żadnego mapowania osi dla silnika Babylon!
-    return getPanelFaceCoordinate(panel, panelNode, cabinetNode, faceName, axis, lcs, isMin, surface);
+    return null;
 }
 
-function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, faceName: string, axis: 'x' | 'y' | 'z', lcs: any = null, isMin?: boolean, surface?: string): number {
-    let pw = panel.width || 0;
-    let ph = panel.height || 0;
-    let pt = panel.thickness || 0;
-    
+function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, faceName: string, axis: 'x' | 'y' | 'z', lcs: any = null, isMax?: boolean, surface?: string): number {
+    const pw = panel.width || 0;
+    const ph = panel.height || 0;
+    const pt = panel.thickness || 0;
+
     let sizeX = nmToMm(pw);
     let sizeY = nmToMm(ph);
     let sizeZ = nmToMm(pt);
@@ -354,8 +191,79 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
         currentParent = currentParent.parent;
     }
 
-    // 3. Pobierz środek ściany w lokalnym układzie LCS formatki
-    // Złota Zasada LCS: Oś Z to ZAWSZE grubość materiału (od -thickness/2 do +thickness/2)
+    const roleUpper = String((panel as any).role || '').toUpperCase();
+    const localTxMm = nmToMm(panelNode.localMatrix.data[12]);
+    const localTyMm = nmToMm(panelNode.localMatrix.data[13]);
+    const localTzMm = nmToMm(panelNode.localMatrix.data[14]);
+
+    const isSide = roleUpper.includes('SIDE') || roleUpper.includes('BOK') || roleUpper.includes('DIVIDER') || roleUpper.includes('PRZEGRODA') ||
+        (roleUpper === 'MANUAL_PANEL' && Math.abs(panelNode.localMatrix.data[12]) > mmToNm(50));
+
+    if (isSide) {
+        if (axis === 'x') {
+            const isLeft = localTxMm < 0 || roleUpper.includes('LEFT') || roleUpper.includes('_L');
+            const isRight = localTxMm > 0 || roleUpper.includes('RIGHT') || roleUpper.includes('_P');
+            if (isLeft) {
+                if (canonicalFace === 'FACE_Z_PLUS') return localTxMm + sizeZ / 2;
+                if (canonicalFace === 'FACE_Z_MINUS') return localTxMm - sizeZ / 2;
+            } else if (isRight) {
+                if (canonicalFace === 'FACE_Z_PLUS') return localTxMm - sizeZ / 2;
+                if (canonicalFace === 'FACE_Z_MINUS') return localTxMm + sizeZ / 2;
+            } else {
+                if (canonicalFace === 'FACE_Z_PLUS') return localTxMm + sizeZ / 2;
+                if (canonicalFace === 'FACE_Z_MINUS') return localTxMm - sizeZ / 2;
+            }
+        } else if (axis === 'y') {
+            const depthMm = Math.min(sizeX, sizeY) > 50 && Math.max(sizeX, sizeY) > 200 ? Math.min(sizeX, sizeY) : sizeX;
+            if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_MINUS') {
+                return localTyMm - depthMm / 2; // Przód szafy
+            } else if (canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_PLUS') {
+                return localTyMm + depthMm / 2; // Tył szafy
+            } else {
+                return isMax ? (localTyMm + depthMm / 2) : (localTyMm - depthMm / 2);
+            }
+        } else if (axis === 'z') {
+            const heightMm = Math.max(sizeX, sizeY);
+            if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_PLUS') {
+                return localTzMm + heightMm / 2; // Góra boku
+            } else if (canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_MINUS') {
+                return localTzMm - heightMm / 2; // Dół boku
+            } else {
+                return isMax ? (localTzMm + heightMm / 2) : (localTzMm - heightMm / 2);
+            }
+        }
+    }
+
+    if ((roleUpper.includes('BOTTOM') || roleUpper.includes('WIENIEC_D')) && axis === 'z') {
+        if (canonicalFace === 'FACE_Z_PLUS') return localTzMm + sizeZ / 2;
+        if (canonicalFace === 'FACE_Z_MINUS') return localTzMm - sizeZ / 2;
+        return isMax ? (localTzMm + sizeZ / 2) : (localTzMm - sizeZ / 2);
+    }
+
+    if ((roleUpper.includes('TOP') || roleUpper.includes('WIENIEC_G')) && axis === 'z') {
+        if (canonicalFace === 'FACE_Z_PLUS') return localTzMm - sizeZ / 2;
+        if (canonicalFace === 'FACE_Z_MINUS') return localTzMm + sizeZ / 2;
+        return isMax ? (localTzMm + sizeZ / 2) : (localTzMm - sizeZ / 2);
+    }
+
+    if ((roleUpper.includes('BOTTOM') || roleUpper.includes('TOP') || roleUpper.includes('WIENIEC') || roleUpper.includes('SHELF')) && axis === 'y') {
+        const depthMm = Math.min(sizeX, sizeY) > 50 && Math.max(sizeX, sizeY) > 200 ? Math.min(sizeX, sizeY) : (sizeY > 50 ? sizeY : sizeX);
+        if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_MINUS') {
+            return localTyMm - depthMm / 2; // Przód szafy
+        } else if (canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_PLUS') {
+            return localTyMm + depthMm / 2; // Tył szafy
+        } else {
+            return isMax ? (localTyMm + depthMm / 2) : (localTyMm - depthMm / 2);
+        }
+    }
+
+    if ((roleUpper.includes('BACK') || roleUpper.includes('PLECY')) && axis === 'y') {
+        if (canonicalFace === 'FACE_Z_PLUS') return localTyMm - sizeZ / 2;
+        if (canonicalFace === 'FACE_Z_MINUS') return localTyMm + sizeZ / 2;
+        return isMax ? (localTyMm + sizeZ / 2) : (localTyMm - sizeZ / 2);
+    }
+
+    // 3. Uniwersalna transformacja dla paneli ogólnych (CAD Z-up)
     let localPoint = new Vec3(0, 0, 0);
     if (canonicalFace === 'FACE_Z_PLUS') {
         localPoint = new Vec3(0, 0, sizeZ / 2);
@@ -371,20 +279,15 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
         localPoint = new Vec3(0, -sizeY / 2, 0);
     }
 
-    // 4. Przelicz punkt przez macierz renderu w przestrzeni 3D
     const localPointNm = new Vec3(mmToNm(localPoint.x), mmToNm(localPoint.y), mmToNm(localPoint.z));
-    const renderMat = cadMatrixToRenderMatrix(absoluteMat);
-    const worldPointRender = renderMat.transformPoint(localPointNm);
+    const worldPointCAD = absoluteMat.transformPoint(localPointNm);
 
-    // Przeliczenie osi z nm na mm:
-    // Render (Babylon: X=szerokość, Y=wysokość, Z=głębokość)
-    // CAD    (CADNode: X=szerokość, Y=głębokość, Z=wysokość)
     if (axis === 'x') {
-        return nmToMm(worldPointRender.x);
+        return nmToMm(worldPointCAD.x);
     } else if (axis === 'y') {
-        return nmToMm(worldPointRender.z); // Render Z to CAD Y (głębokość szafy)
+        return nmToMm(worldPointCAD.y);
     } else {
-        return nmToMm(worldPointRender.y); // Render Y to CAD Z (wysokość szafy)
+        return nmToMm(worldPointCAD.z);
     }
 }
 
@@ -488,7 +391,9 @@ export function validateReferenceFaceOrientation(
 }
 
 /**
- * Przelicza pozycję, wymiary oraz generuje półki wewnątrz SmartBoxa.
+ * Przelicza pozycję, wymiary oraz generuje elementy wewnątrz SmartBoxa.
+ * Bazuje wyłącznie na customReferences (panelId + face) zapisanych przez bay detector.
+ * Brak fallbacków opartych na strefach (B/M/T) ani na JSON side_references.
  */
 export function update_smartbox_core(container: any, docTarget: any): boolean {
     if (!container || !docTarget) return false;
@@ -498,19 +403,17 @@ export function update_smartbox_core(container: any, docTarget: any): boolean {
     const params = container.generatorParams;
     if (!params) return false;
 
-    // Pilnuj nazewnictwa z końcówką _SB (zgodnie z Blenderem)
+    // Pilnuj spójnego nazewnictwa modułów SmartBox
     ensure_smartbox_name(container);
 
     // Znajdź nadrzędny korpus (SmartFrame)
     const cabinetId = params.parentContainerId;
     const containers = typeof doc.getContainers === 'function' ? doc.getContainers() : [];
     
-    // Szukamy węzła CADNode, a następnie wyciągamy z niego ContainerModel
     let cabinetNode = containers.find((e: any) => e.domainData && (e.domainData as any).id === cabinetId);
     let cabinet: any = cabinetNode ? cabinetNode.domainData : null;
 
     if (!cabinet) {
-        // Fallback: weź pierwszy lepszy korpus w scenie
         cabinetNode = containers.find((e: any) => (e.domainData && (e.domainData.generatorParams?.type === 'korpus3_2' || e.domainData.generatorParams?.type === 'korpus3_1')));
         cabinet = cabinetNode ? cabinetNode.domainData : null;
         
@@ -526,7 +429,6 @@ export function update_smartbox_core(container: any, docTarget: any): boolean {
         params.parentContainerId = cabinet.id;
     }
 
-    const zonePrefix = params.targetZone || 'B';
     const typeToBox: Record<string, string> = {
         smartbox_doors: 'DOORS',
         smartbox_shelf: 'SHELF',
@@ -540,124 +442,116 @@ export function update_smartbox_core(container: any, docTarget: any): boolean {
     };
     const boxType = params.boxType || typeToBox[params.type] || 'SHELVES';
 
-    // 1. Wylicz domyślne granice przestrzeni z referencji korpusu.
-    // Blendy to jedyny moduł OUTER — otula cały SmartFrame od zewnątrz (nie wnętrze strefy).
-    const useOuter = boxType === 'PANELS';
-    const refs = resolveZoneReferences(cabinet, useOuter ? 'FULL' : zonePrefix, useOuter ? 'OUTER' : 'INNER');
-
-    // 2. Pobierz ręczne referencje i offsety z parametrów
+    // 1. Referencje i offsety — wyłącznie z customReferences (bay detector)
     const customRefs = params.customReferences || {};
     const offsets = params.offsets || {};
 
-    const resolveRef = (sideKey: string, defaultVal: number, axis: 'x' | 'y' | 'z', isMax: boolean) => {
+    const foundCabinetNode = doc.findNode(cabinet.id);
+
+    /**
+     * Rozwiązuje koordynatę ściany referencyjnej po panelId (priorytet) lub partKey.
+     * Zwraca null jeśli brak referencji — wtedy używamy dotychczasowego rozmiaru kontenera.
+     */
+    const resolveRef = (sideKey: string, axis: 'x' | 'y' | 'z', isMax: boolean): number | null => {
         const offsetVal = parseFloat(offsets[sideKey]) || 0;
-
-        // Jeśli wybrano 'FULL' dla osi Z, używamy bezwzględnych wyliczonych granic wieńca dolnego (18mm) i górnego (2182mm)
-        if ((sideKey === 'zMin' || sideKey === 'zMax') && (useOuter || params.targetZone === 'FULL' || params.targetZone === 'ALL')) {
-            return isMax ? (defaultVal - offsetVal) : (defaultVal + offsetVal);
-        }
-
         const refConfig = customRefs[sideKey];
-        let baseVal = defaultVal;
-        
-        if (refConfig && refConfig.partKey && refConfig.face) {
-            const doc = ContextManager.instance.document;
-            const cabinetNode = doc?.findNode(cabinet.id);
-            if (cabinetNode) {
-                // Rekurencyjne szukanie płyty w szafce (obsługa customowych referencji w zagnieżdżonych strefach)
-                let panel: any = null;
-                let panelNode: any = null;
-                
-                const findCustomNode = (node: any) => {
-                    if (!node) return;
-                    const p = node.domainData;
-                    if (p && ((p as any).key === refConfig.partKey || p.name === refConfig.partKey || p.id === refConfig.partKey || (p as any).smartId?.uid === refConfig.partKey)) {
-                        panel = p;
-                        panelNode = node;
-                    }
-                    if (!panel && node.children) {
-                        for (const child of node.children) {
-                            findCustomNode(child);
-                        }
-                    }
-                };
-                findCustomNode(cabinetNode);
-                
-                if (panel && panelNode) {
-                    baseVal = getPanelFaceCoordinate(panel, panelNode, cabinetNode, refConfig.face, axis);
-                }
-            }
+        if (!refConfig) return null;
+
+        let panelNode: any = null;
+
+        // Priorytet 1: szukaj po panelId (unikalny identyfikator z bay detectora)
+        if (refConfig.panelId && foundCabinetNode) {
+            panelNode = findNodeById(foundCabinetNode, refConfig.panelId);
         }
-        
-        return isMax ? (baseVal - offsetVal) : (baseVal + offsetVal);
+
+        // Priorytet 2: szukaj po partKey (nazwa/klucz)
+        if (!panelNode && refConfig.partKey && foundCabinetNode) {
+            panelNode = findNodeByKey(foundCabinetNode, refConfig.partKey);
+        }
+
+        if (panelNode && panelNode.domainData) {
+            const coord = getPanelFaceCoordinate(
+                panelNode.domainData, panelNode, foundCabinetNode,
+                refConfig.face, axis, null, isMax
+            );
+            return isMax ? (coord - offsetVal) : (coord + offsetVal);
+        }
+
+        return null;
     };
 
-    const xMinVal = resolveRef('xMin', refs.xMin, 'x', false);
-    const xMaxVal = resolveRef('xMax', refs.xMax, 'x', true);
-    
-    // Y w refs to głębokość (Y w CADNode)
-    const yMinVal = resolveRef('yMin', refs.yMin, 'y', false);
-    const yMaxVal = resolveRef('yMax', refs.yMax, 'y', true);
-    
-    // Z w refs to wysokość (Z w CADNode)
-    let zMinVal = resolveRef('zMin', refs.zMin, 'z', false);
-    let zMaxVal = resolveRef('zMax', refs.zMax, 'z', true);
+    // Fallback wymiarów: aktualny rozmiar kontenera (w mm)
+    const currentW = nmToMm(container.width) || 500;
+    const currentH = nmToMm(container.height) || 500;
+    const currentD = nmToMm(container.depth) || 500;
+    const currentNode = doc.findNode(container.id);
+    const currentPos = currentNode ? currentNode.localMatrix.decompose().translation : new Vec3(0, 0, 0);
+    const currentPosXMm = nmToMm(currentPos.x);
+    const currentPosYMm = nmToMm(currentPos.y);
+    const currentPosZMm = nmToMm(currentPos.z);
+
+    // Rozwiąż 6 ścian
+    const xMinRef = resolveRef('xMin', 'x', false);
+    const xMaxRef = resolveRef('xMax', 'x', true);
+    const yMinRef = resolveRef('yMin', 'y', false);
+    const yMaxRef = resolveRef('yMax', 'y', true);
+    let zMinRef = resolveRef('zMin', 'z', false);
+    let zMaxRef = resolveRef('zMax', 'z', true);
+
+    // Wylicz wartości z fallbackiem na aktualny gabaryt kontenera
+    const xMinVal = xMinRef ?? (currentPosXMm - currentW / 2);
+    const xMaxVal = xMaxRef ?? (currentPosXMm + currentW / 2);
+    const yMinVal = yMinRef ?? (currentPosYMm - currentD / 2);
+    const yMaxVal = yMaxRef ?? (currentPosYMm + currentD / 2);
 
     const disabledRefs = params.disabledReferences || {};
     const isZMinActive = !disabledRefs.zMin;
     const isZMaxActive = !disabledRefs.zMax;
 
-    // Sztywny parametr wysokości H (maxHeight lub height)
     const heightH = parseFloat(params.maxHeight || params.height) || 0;
 
+    let zMinVal = zMinRef ?? currentPosZMm;
+    let zMaxVal = zMaxRef ?? (currentPosZMm + currentH);
     let sbHeight = 0;
 
     if (isZMinActive && isZMaxActive) {
-        // Obie referencje aktywne -> wysokość wyliczana jako odległość Góra - Dół (z uwzględnieniem offsetów)
         sbHeight = Math.max(10, zMaxVal - zMinVal);
     } else if (isZMinActive && !isZMaxActive) {
-        // Dół aktywny, Góra skasowana -> wysokość H liczona OD DOŁU w górę!
-        sbHeight = heightH > 0 ? heightH : Math.max(10, refs.zMax - zMinVal);
+        sbHeight = heightH > 0 ? heightH : Math.max(10, zMaxVal - zMinVal);
         zMaxVal = zMinVal + sbHeight;
     } else if (!isZMinActive && isZMaxActive) {
-        // Góra aktywna, Dół skasowany -> wysokość H liczona OD GÓRY w dół!
-        sbHeight = heightH > 0 ? heightH : Math.max(10, zMaxVal - refs.zMin);
+        sbHeight = heightH > 0 ? heightH : Math.max(10, zMaxVal - zMinVal);
         zMinVal = zMaxVal - sbHeight;
     } else {
-        // Obie referencje skasowane -> fallback: spód na zMinVal, wysokość H w górę
-        sbHeight = heightH > 0 ? heightH : Math.max(10, refs.zMax - refs.zMin);
+        sbHeight = heightH > 0 ? heightH : Math.max(10, zMaxVal - zMinVal);
         zMaxVal = zMinVal + sbHeight;
     }
+
+    if (isNaN(sbHeight) || sbHeight <= 0) sbHeight = currentH;
 
     const sbWidth = Math.max(10, xMaxVal - xMinVal);
     const sbDepth = Math.max(10, yMaxVal - yMinVal);
 
-    // 3. Zaktualizuj gabaryt kontenera SmartBox w modelu
+    if (isNaN(sbWidth) || isNaN(sbDepth) || isNaN(sbHeight)) {
+        console.error(`[SmartBox] NaN w wymiarach: W=${sbWidth}, H=${sbHeight}, D=${sbDepth}. Przerywam.`);
+        return false;
+    }
+
+    // 2. Zaktualizuj gabaryt kontenera SmartBox w modelu
     container.width = mmToNm(sbWidth);
     container.height = mmToNm(sbHeight);
     container.depth = mmToNm(sbDepth);
 
-    // 4. Zaktualizuj pozycję świata kontenera SmartBox
-    const foundCabinetNode = doc?.findNode(cabinet.id);
-    const containerNode = doc?.findNode(container.id);
+    // 3. Zaktualizuj pozycję kontenera SmartBox
+    const containerNode = doc.findNode(container.id);
 
     if (foundCabinetNode && containerNode) {
         let sbPosX = (xMinVal + xMaxVal) / 2;
-        let sbPosY = (yMinVal + yMaxVal) / 2; // Głębokość
-        let sbPosZ = zMinVal; // Wysokość
+        let sbPosY = (yMinVal + yMaxVal) / 2;
+        let sbPosZ = zMinVal;
 
-        if (isNaN(sbPosY)) {
-            const cabinetPos = foundCabinetNode.localMatrix.decompose().translation;
-            const debugStr = `🚨 BŁĄD PARAMETRYKI (NaN) 🚨
-yMinVal=${yMinVal}
-yMaxVal=${yMaxVal}
-cabinetPos.y=${nmToMm(cabinetPos.y)}
-W=${cabinet.width}, D=${cabinet.depth}, H=${cabinet.height}
-Skopiuj ten błąd i wyślij mi!`;
-            console.error(debugStr);
-            sbPosY = 0; // Wymuszony fallback by zapobiec crashowi
-        }
         if (isNaN(sbPosX)) sbPosX = 0;
+        if (isNaN(sbPosY)) sbPosY = 0;
         if (isNaN(sbPosZ)) sbPosZ = 0;
 
         const { rotation, scale } = containerNode.localMatrix.decompose();
@@ -666,14 +560,9 @@ Skopiuj ten błąd i wyślij mi!`;
             rotation,
             scale
         );
-        
-
-        
     }
 
-    // 5. Uruchom moduł generujący wewnątrz tego gabarytu.
-    // Mapowanie parametrów na wejście silnika mieszka w adapterze modułu
-    // (1 moduł = X-adapter + X-engine + X_3_rules_V1.json).
+    // 4. Uruchom moduł generujący wewnątrz tego gabarytu.
     const dims: ModuleDims = { width: sbWidth, height: sbHeight, depth: sbDepth };
     let plan: { parts: any[] } = { parts: [] };
     if (boxType === 'SHELVES') {
@@ -694,13 +583,10 @@ Skopiuj ten błąd i wyślij mi!`;
         plan = buildFlapsPlan(params, dims);
     }
 
-    // 6. Zmaterializuj elementy jako dzieci kontenera SmartBox
+    // 5. Zmaterializuj elementy jako dzieci kontenera SmartBox
     applyPlanToContainer(container, plan);
 
-    // 7. Zsynchronizuj nawiercenia na formatkach korpusu.
-    // Najpierw usuń wszystko, co ten SmartBox nawiercił wcześniej — po zmianie modułu
-    // (np. DRZWI -> WIENIEC) sync poprzedniego modułu już nie wystartuje i bez tego
-    // jego otwory zostałyby na boczkach.
+    // 6. Zsynchronizuj nawiercenia na formatkach korpusu.
     if (doc) {
         new ClearSmartBoxDrillingsCommand(container.id).execute(doc);
 
@@ -718,103 +604,3 @@ Skopiuj ten błąd i wyślij mi!`;
     return true;
 }
 
-export function getDefaultReferenceProvenance(boxOrCabinet: any, sideKey: string): { partKey: string, faceName: string, panelId?: string } | null {
-    if (!boxOrCabinet) return null;
-    const doc = ContextManager.instance.document;
-    if (!doc) return null;
-
-    let container = boxOrCabinet;
-    let cabinetNode = doc.findNode(boxOrCabinet.id);
-    if (cabinetNode && cabinetNode.parent && (cabinetNode.parent.domainData as any)?.type === 'container') {
-        cabinetNode = cabinetNode.parent;
-    } else if (!cabinetNode || (cabinetNode.domainData as any)?.generatorParams?.type?.startsWith('smartbox')) {
-        const containers = (doc as any).getContainers ? (doc as any).getContainers() : [];
-        const found = containers.find((c: any) => c.id !== boxOrCabinet.id);
-        if (found) cabinetNode = doc.findNode(found.id);
-    }
-    if (!cabinetNode) return null;
-
-    const cabinet: any = cabinetNode.domainData || cabinetNode;
-    const params = container.generatorParams || {};
-    const rawZone = (params.targetZone || params.zonePrefixRaw || '').toUpperCase();
-    const zoneCount = cabinet.generatorParams?.zoneCount || 1;
-    const boxType = params.boxType || '';
-    const useOuter = boxType === 'PANELS' || params.type === 'smartbox_panels';
-
-    let zonePrefix = 'B';
-    if (!useOuter && (rawZone === 'T' || rawZone === 'TOP')) zonePrefix = 'T';
-    else if (!useOuter && (rawZone === 'M' || rawZone === 'MID' || rawZone === 'MIDDLE')) zonePrefix = 'M';
-    else if (useOuter || rawZone === 'FULL' || rawZone === 'ALL') {
-        if (sideKey === 'zMax') {
-            zonePrefix = zoneCount >= 2 ? 'T' : 'B';
-        } else {
-            zonePrefix = 'B';
-        }
-    }
-
-    let axis: 'x' | 'y' | 'z';
-    let isMin = false;
-    switch (sideKey) {
-        case 'xMin': axis = 'x'; isMin = true; break;
-        case 'xMax': axis = 'x'; isMin = false; break;
-        case 'yMin': axis = 'y'; isMin = true; break;
-        case 'yMax': axis = 'y'; isMin = false; break;
-        case 'zMin': axis = 'z'; isMin = true; break;
-        case 'zMax': axis = 'z'; isMin = false; break;
-        default: return null;
-    }
-
-    const sideRefs = useOuter
-        ? {
-            ...(smartframeContract as any).side_references_outer,
-            ...(korpusRules as any).side_references_outer
-        }
-        : {
-            ...(smartframeContract as any).side_references,
-            ...(korpusRules as any).side_references
-        };
-
-    const sideStr = isMin ? 'MIN' : 'MAX';
-    const suffix = useOuter ? 'OUTER' : 'INNER';
-    const zoneKey = `${zonePrefix}_side.${axis.toUpperCase()}_${sideStr}_${suffix}`;
-    const baseKey = `side.${axis.toUpperCase()}_${sideStr}_${suffix}`;
-    const ref = sideRefs[zoneKey] || sideRefs[baseKey];
-
-    if (!ref || !ref.provenance || !ref.provenance.part_key) return null;
-
-    // Szukamy fizycznej płyty w szafie
-    const targetKey = `${zonePrefix}_${ref.provenance.part_key}`;
-    const fallbackKey = ref.provenance.part_key;
-    const roleMap: Record<string, string> = {
-        "BOK_L": "LEFT_SIDE_PANEL",
-        "BOK_P": "RIGHT_SIDE_PANEL",
-        "PLECY": "BACK_PANEL",
-        "WIENIEC_D": "BOTTOM_PANEL",
-        "WIENIEC_G": "TOP_PANEL"
-    };
-    const targetRole = roleMap[ref.provenance.part_key];
-
-    let foundPanel: any = null;
-    const findNodeRecursive = (node: any) => {
-        if (!node) return;
-        const p = node.domainData;
-        if (p && ((p as any).key === targetKey || p.name === targetKey || (p as any).key === fallbackKey || p.name === fallbackKey || p.role === fallbackKey || (targetRole && p.role === targetRole))) {
-            if (!foundPanel || (p as any).key === targetKey || p.name === targetKey) {
-                foundPanel = p;
-            }
-        }
-        if (node.children) {
-            for (const child of node.children) findNodeRecursive(child);
-        }
-    };
-    findNodeRecursive(cabinetNode);
-
-    const surface = ref.provenance.surface || 'INNER';
-    let faceName = surface === 'INNER' ? 'FACE_Z_PLUS' : 'FACE_Z_MINUS';
-
-    return {
-        partKey: foundPanel?.name || targetKey,
-        faceName: faceName,
-        panelId: foundPanel?.id
-    };
-}

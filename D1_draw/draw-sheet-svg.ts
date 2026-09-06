@@ -15,6 +15,7 @@ import {
     TitleBlockInfo,
     BOMRow,
     Draw2DView,
+    DrawProjectionAngle,
 } from './draw-types';
 import { DrawDimensionsEngine } from './draw-dimensions';
 

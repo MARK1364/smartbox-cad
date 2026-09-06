@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { update_smartbox_core, getDefaultReferenceProvenance, validateReferenceFaceOrientation } from './smartbox-core.js';
+import { update_smartbox_core, validateReferenceFaceOrientation } from './smartbox-core.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { normalizeFaceName } from '../A4_smartpanel/panel-model.js';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
@@ -41,16 +41,26 @@ export function SmartBoxUI({ projectModel }: Props) {
     const [maxHeight, setMaxHeight] = useState<string | number>(0);
     const [pickingField, setPickingField] = useState<string | null>(null);
     const [disabledRefsState, setDisabledRefsState] = useState<any>({});
-    const [targetZone, setTargetZone] = useState<string>('FULL');
     const [isRefsOpen, setIsRefsOpen] = useState<boolean>(false);
     const [isPickerActive, setIsPickerActive] = useState<boolean>(false);
+    const [pickerMode, setPickerMode] = useState<'internal' | 'external'>('internal');
 
     useEffect(() => {
         const ctrl = ContextManager.instance.smartBoxBayController;
-        const syncPicker = () => setIsPickerActive(!!ctrl?.isPickerActive);
+        const syncPicker = (active?: boolean, mode?: any) => {
+            setIsPickerActive(active !== undefined ? active : !!ctrl?.isPickerActive);
+            setPickerMode(mode !== undefined ? mode : (ctrl?.pickerMode || 'internal'));
+        };
         let unsub: (() => void) | undefined;
         if (ctrl) unsub = ctrl.subscribePicker(syncPicker);
-        const onCustom = () => syncPicker();
+        const onCustom = (e: any) => {
+            const detail = e.detail;
+            if (typeof detail === 'object' && detail !== null) {
+                syncPicker(detail.isActive, detail.mode);
+            } else {
+                syncPicker(!!detail);
+            }
+        };
         window.addEventListener('smartbox-bay-picker-state', onCustom);
         syncPicker();
         return () => {
@@ -74,7 +84,6 @@ export function SmartBoxUI({ projectModel }: Props) {
                 setDisabledRefsState(p.disabledReferences || {});
                 setOffsets(p.offsets || {});
                 setMaxHeight(p.maxHeight || 0);
-                setTargetZone(p.targetZone || 'FULL');
                 return;
             }
 
@@ -98,7 +107,6 @@ export function SmartBoxUI({ projectModel }: Props) {
                 setDisabledRefsState(p.disabledReferences || {});
                 setOffsets(p.offsets || {});
                 setMaxHeight(p.maxHeight || 0);
-                setTargetZone(p.targetZone || 'FULL');
             } else {
                 setContainer(null);
             }
@@ -176,8 +184,7 @@ export function SmartBoxUI({ projectModel }: Props) {
     const startPicking = (sideKey: string) => {
         const isDisabled = !!disabledRefsState[sideKey];
         const isCustom = !!customRefs[sideKey];
-        const prov = !isCustom && !isDisabled ? getDefaultReferenceProvenance(container, sideKey) : null;
-        const hasAssigned = isCustom || (prov && !isDisabled);
+        const hasAssigned = isCustom && !isDisabled;
 
         const appApi = ContextManager.instance.appAPI;
         const picker = ContextManager.instance.facePicker;
@@ -360,12 +367,11 @@ export function SmartBoxUI({ projectModel }: Props) {
         const isCustom = !!customRefs[sideKey];
         const isDisabled = !!disabledRefsState[sideKey];
         const isPicking = pickingField === sideKey;
-        const prov = !isCustom && !isDisabled ? getDefaultReferenceProvenance(container, sideKey) : null;
 
         let bg = '#27272a';
         let border = '1px solid #3f3f46';
         let color = '#ffffff';
-        let labelText = isCustom ? customRefs[sideKey].partKey : (prov ? prov.partKey : defaultName);
+        let labelText = isCustom ? customRefs[sideKey].partKey : defaultName;
 
         if (isPicking) {
             bg = '#eab308';
@@ -397,11 +403,14 @@ export function SmartBoxUI({ projectModel }: Props) {
                             let pFace = '';
                             
                             if (isCustom) {
-                                pKey = customRefs[sideKey].partKey;
-                                pFace = customRefs[sideKey].face;
-                            } else if (prov) {
-                                pKey = prov.panelId || prov.partKey;
-                                pFace = prov.faceName;
+                                pKey = customRefs[sideKey]?.partKey;
+                                pFace = customRefs[sideKey]?.face;
+                            } else {
+                                const defaultRef = container?.generatorParams?.references?.[sideKey];
+                                if (defaultRef) {
+                                    pKey = defaultRef.partKey || defaultRef.panelId;
+                                    pFace = defaultRef.face || defaultRef.faceName;
+                                }
                             }
 
                             if (pKey && doc) {
@@ -432,11 +441,14 @@ export function SmartBoxUI({ projectModel }: Props) {
                             let pFace = '';
                             
                             if (isCustom) {
-                                pKey = customRefs[sideKey].partKey;
-                                pFace = customRefs[sideKey].face;
-                            } else if (prov) {
-                                pKey = prov.panelId || prov.partKey;
-                                pFace = prov.faceName;
+                                pKey = customRefs[sideKey]?.partKey;
+                                pFace = customRefs[sideKey]?.face;
+                            } else {
+                                const defaultRef = container?.generatorParams?.references?.[sideKey];
+                                if (defaultRef) {
+                                    pKey = defaultRef.partKey || defaultRef.panelId;
+                                    pFace = defaultRef.face || defaultRef.faceName;
+                                }
                             }
 
                             if (pKey && doc) {
@@ -524,77 +536,100 @@ export function SmartBoxUI({ projectModel }: Props) {
         );
     };
 
-    const renderAddSmartBoxBtn = () => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
-            <button 
-                id="btnNowySmartBox"
-                onClick={() => {
-                    if (ContextManager.instance.appAPI?.addSmartBox) {
-                        ContextManager.instance.appAPI.addSmartBox();
-                    } else {
-                        console.error('[SmartBoxUI] appAPI.addSmartBox is not available');
-                    }
-                }}
-                style={{ 
-                    width: '100%',
-                    padding: '8px 12px', 
-                    background: '#d97706', 
-                    border: 'none', 
-                    color: '#fff', 
-                    borderRadius: '4px', 
-                    fontSize: '13px', 
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                }}
-            >
-                + Nowy SmartBox
-            </button>
-            <button
-                id="btnWstawSmartBoxDoWneki"
-                draggable={true}
-                onDragStart={(e) => {
-                    e.dataTransfer.setData('application/smartbox-template', JSON.stringify({ boxType: 'EMPTY' }));
-                    const ctrl = ContextManager.instance.smartBoxBayController;
-                    if (ctrl) {
-                        ctrl.startDrag('EMPTY');
-                        ctrl.setPendingSmartBoxType('EMPTY');
-                    }
-                }}
-                onDragEnd={() => {
-                    ContextManager.instance.smartBoxBayController?.endDrag();
-                }}
-                onClick={() => {
-                    ContextManager.instance.smartBoxBayController?.togglePicker('EMPTY');
-                }}
-                style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    background: isPickerActive ? '#16a34a' : '#2563eb',
-                    border: isPickerActive ? '1px solid #4ade80' : 'none',
-                    color: '#fff',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    boxShadow: isPickerActive ? '0 0 10px rgba(74, 222, 128, 0.4)' : 'none',
-                    transition: 'all 0.15s ease'
-                }}
-                title="Wskaż wnękę w korpusie 3D lub przeciągnij ten przycisk na wnękę"
-            >
-                {isPickerActive
-                    ? 'Wskaż wnękę w 3D... (anuluj)'
-                    : 'Wstaw do wnęki (przeciągnij / wskaż)'}
-            </button>
-        </div>
-    );
+    const renderAddSmartBoxBtn = () => {
+        const isInternalPicking = isPickerActive && pickerMode === 'internal';
+        const isExternalPicking = isPickerActive && pickerMode === 'external';
+
+        return (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%' }}>
+                <button
+                    id="btnWstawSmartBoxDoWneki"
+                    draggable={true}
+                    onDragStart={(e) => {
+                        const typeToDrag = 'EMPTY';
+                        e.dataTransfer.setData('application/smartbox-template', JSON.stringify({ boxType: typeToDrag, category: 'internal' }));
+                        const ctrl = ContextManager.instance.smartBoxBayController;
+                        if (ctrl) {
+                            ctrl.startDrag(typeToDrag, 'internal');
+                            ctrl.setPendingSmartBoxType(typeToDrag);
+                        }
+                    }}
+                    onDragEnd={() => {
+                        ContextManager.instance.smartBoxBayController?.endDrag();
+                    }}
+                    onClick={() => {
+                        const typeToPick = 'EMPTY';
+                        ContextManager.instance.smartBoxBayController?.togglePicker(typeToPick, 'internal');
+                    }}
+                    style={{
+                        padding: '8px 10px',
+                        background: isInternalPicking ? '#16a34a' : '#2563eb',
+                        border: isInternalPicking ? '1px solid #4ade80' : '1px solid #3b82f6',
+                        color: '#fff',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '3px',
+                        boxShadow: isInternalPicking ? '0 0 10px rgba(74, 222, 128, 0.4)' : 'none',
+                        transition: 'all 0.15s ease',
+                        textAlign: 'center'
+                    }}
+                    title="Wstaw moduł wewnętrzny (półki, drzwi, szuflady itp.) do wskazanej wnęki mebla"
+                >
+                    <span style={{ fontSize: '13px' }}>📥</span>
+                    <span>{isInternalPicking ? 'Wskaż wnękę... (anuluj)' : 'Wstaw do wnęki'}</span>
+                </button>
+
+                <button
+                    id="btnWstawSmartBoxNaZewnatrz"
+                    draggable={true}
+                    onDragStart={(e) => {
+                        const typeToDrag = 'PANELS';
+                        e.dataTransfer.setData('application/smartbox-template', JSON.stringify({ boxType: typeToDrag, category: 'external' }));
+                        const ctrl = ContextManager.instance.smartBoxBayController;
+                        if (ctrl) {
+                            ctrl.startDrag(typeToDrag, 'external');
+                            ctrl.setPendingSmartBoxType(typeToDrag);
+                        }
+                    }}
+                    onDragEnd={() => {
+                        ContextManager.instance.smartBoxBayController?.endDrag();
+                    }}
+                    onClick={() => {
+                        const typeToPick = 'PANELS';
+                        ContextManager.instance.smartBoxBayController?.togglePicker(typeToPick, 'external');
+                    }}
+                    style={{
+                        padding: '8px 10px',
+                        background: isExternalPicking ? '#16a34a' : '#d97706',
+                        border: isExternalPicking ? '1px solid #4ade80' : '1px solid #f59e0b',
+                        color: '#fff',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '3px',
+                        boxShadow: isExternalPicking ? '0 0 10px rgba(74, 222, 128, 0.4)' : 'none',
+                        transition: 'all 0.15s ease',
+                        textAlign: 'center'
+                    }}
+                    title="Wstaw moduł zewnętrzny (blendy, obudowa korpusu, cokoły) na zewnętrzny gabaryt korpusu"
+                >
+                    <span style={{ fontSize: '13px' }}>📦</span>
+                    <span>{isExternalPicking ? 'Wskaż korpus... (anuluj)' : 'Wstaw na zewnątrz'}</span>
+                </button>
+            </div>
+        );
+    };
 
     if (!container) {
         return (
@@ -608,6 +643,8 @@ export function SmartBoxUI({ projectModel }: Props) {
             </div>
         );
     }
+
+    const isExternalContainer = container?.generatorParams?.side_references_smartbox === 'OUTER' || boxType === 'PANELS';
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px', background: '#121214', color: '#fff', fontSize: '13px' }}>
@@ -716,34 +753,6 @@ export function SmartBoxUI({ projectModel }: Props) {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Segment:</span>
-                    <select 
-                        value={targetZone} 
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setTargetZone(val);
-                            triggerUpdateEx({ targetZone: val });
-                        }}
-                        style={{ 
-                            width: '160px', 
-                            padding: '4px 6px', 
-                            background: '#27272a', 
-                            border: '1px solid #3b82f6', 
-                            color: '#fff', 
-                            borderRadius: '4px', 
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: 'bold'
-                        }}
-                    >
-                        <option value="FULL">Cały korpus</option>
-                        <option value="T">Sekcja górna</option>
-                        <option value="M">Sekcja środkowa</option>
-                        <option value="B">Sekcja dolna</option>
-                    </select>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Typ:</span>
                     <select 
                         value={boxType} 
@@ -766,19 +775,23 @@ export function SmartBoxUI({ projectModel }: Props) {
                                 type: typeMap[val] || 'smartbox_empty',
                                 ...(val === 'PANELS' ? { targetZone: 'FULL' } : {})
                             });
-                            if (val === 'PANELS') setTargetZone('FULL');
                         }}
                         style={{ width: '160px', padding: '4px 6px', background: '#27272a', border: '1px solid #3f3f46', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
                     >
                         <option value="EMPTY">Brak</option>
-                        <option value="SHELVES">Półki</option>
-                        <option value="DOORS">Drzwi</option>
-                        <option value="SHELF">Wieniec</option>
-                        <option value="DRAWERS">Szuflady</option>
-                        <option value="DIVIDERS">Przegrody</option>
-                        <option value="FLAPS">Klapy</option>
-                        <option value="TUBES">Drążek</option>
-                        <option value="PANELS">Blendy</option>
+                        {isExternalContainer ? (
+                            <option value="PANELS">Blendy</option>
+                        ) : (
+                            <>
+                                <option value="SHELVES">Półki</option>
+                                <option value="DOORS">Drzwi</option>
+                                <option value="SHELF">Wieniec</option>
+                                <option value="DRAWERS">Szuflady</option>
+                                <option value="DIVIDERS">Przegrody</option>
+                                <option value="FLAPS">Klapy</option>
+                                <option value="TUBES">Drążek</option>
+                            </>
+                        )}
                     </select>
                 </div>
             </div>

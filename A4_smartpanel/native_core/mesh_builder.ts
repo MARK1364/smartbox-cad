@@ -1,5 +1,17 @@
 import earcut from 'earcut';
 import { normalizeFaceName, FaceName } from '../panel-model.js';
+import { nmToMm } from '../../A1_core/cad-math/units.js';
+
+function getGrooveParamsMm(params: any): { u: number; v: number; width: number; length: number; depth: number } {
+    if (!params) return { u: 0, v: 0, width: 0, length: 0, depth: 0 };
+    return {
+        u: params.u !== undefined ? params.u : (params.u_nm !== undefined ? nmToMm(params.u_nm) : 0),
+        v: params.v !== undefined ? params.v : (params.v_nm !== undefined ? nmToMm(params.v_nm) : 0),
+        width: params.width !== undefined ? params.width : (params.width_nm !== undefined ? nmToMm(params.width_nm) : 0),
+        length: params.length !== undefined ? params.length : (params.length_nm !== undefined ? nmToMm(params.length_nm) : 0),
+        depth: params.depth !== undefined ? params.depth : (params.depth_nm !== undefined ? nmToMm(params.depth_nm) : 0)
+    };
+}
 
 // Kopia funkcji / adapter dla niezależności,
 // zwraca układ lokalny ściany do rzutowania 2D -> 3D
@@ -122,9 +134,10 @@ export function buildMeshFromPanel(model: any) {
             if (feat.visible === false || feat.frozen || feat.params?.frozen) continue;
             if (feat.is_assembly_drilling || feat.params?.is_assembly_drilling) continue;
             if (feat.type === 'groove') {
+                const gp = getGrooveParamsMm(feat.params);
                 const faceData = computeFaceData(feat.face, modelWidth, modelHeight, modelThickness);
-                const p00_0 = localTo3D(faceData, feat.params.u, feat.params.v, 0);
-                const p11_d = localTo3D(faceData, feat.params.u + feat.params.width, feat.params.v + feat.params.length, feat.params.depth);
+                const p00_0 = localTo3D(faceData, gp.u, gp.v, 0);
+                const p11_d = localTo3D(faceData, gp.u + gp.width, gp.v + gp.length, gp.depth);
                 
                 const min = [
                     Math.min(p00_0[0], p11_d[0]), Math.min(p00_0[1], p11_d[1]), Math.min(p00_0[2], p11_d[2])
@@ -245,11 +258,12 @@ export function buildMeshFromPanel(model: any) {
                     }
                 }
             } else if (feat.type === 'groove') {
-                const uRaw = feat.params.u;
-                const vRaw = feat.params.v;
-                const wRaw = feat.params.width;
-                const hRaw = feat.params.length;
-                const depth = feat.params.depth;
+                const gp = getGrooveParamsMm(feat.params);
+                const uRaw = gp.u;
+                const vRaw = gp.v;
+                const wRaw = gp.width;
+                const hRaw = gp.length;
+                const depth = gp.depth;
 
                 // Twarde zabezpieczenie matematyczne: Subtractive domain clipping
                 const u0 = Math.max(0, uRaw);
@@ -417,11 +431,12 @@ export function buildMeshFromPanel(model: any) {
                     });
                 }
             } else if (feat.type === 'groove') {
-                const u0 = feat.params.u;
-                const v0 = feat.params.v;
-                const gw = feat.params.width;
-                const gh = feat.params.length;
-                const depth = feat.params.depth;
+                const gp = getGrooveParamsMm(feat.params);
+                const u0 = gp.u;
+                const v0 = gp.v;
+                const gw = gp.width;
+                const gh = gp.length;
+                const depth = gp.depth;
 
                 const u1 = u0 + gw;
                 const v1 = v0 + gh;

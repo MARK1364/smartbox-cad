@@ -6,7 +6,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { E3MultiStudio } from '../E3_export/E3MultiStudio';
+import { E3MultiStudio } from '../R2_rys/E3MultiStudio';
 
 const rootEl = document.getElementById('root');
 if (rootEl) {

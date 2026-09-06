@@ -1,9 +1,9 @@
 /**
  * PMI Data Module — TypeScript
  *
- * Model danych wymiarów CAD. Odpowiednik `pmi_data.py` (wymiary + miarki).
+ * Model danych wymiarów CAD (wymiary + miarki).
  *
- * ZASADY TRWAŁOŚCI (odpowiednik PropertyGroup + SmartID z Blendera):
+ * ZASADY TRWAŁOŚCI:
  * 1. Kotwice opisane są przez `PMIAnchorRef` — stabilne ID węzła dokumentu
  *    plus punkt w jego układzie lokalnym. Nazwy siatek Babylona nie są trwałe.
  * 2. Odsunięcie linii wymiarowej trzymane jest w tym samym układzie lokalnym,
@@ -152,6 +152,7 @@ export interface PMISettingsJSON {
     showUnits: boolean;
     textSizeMM: number;
     lineWidthMM: number;
+    alignTextToLine?: boolean;
     dimColor: [number, number, number, number];
     selectedColor: [number, number, number, number];
     edgeSnapPx?: number;
@@ -194,8 +195,9 @@ export class PMIStore {
     public showUnits = true;
     public dimColor: [number, number, number, number] = [0.05, 0.05, 0.05, 1.0];
     public selectedColor: [number, number, number, number] = [1.0, 0.45, 0.0, 1.0];
-    public textSizeMM = 14; // world-space text cap height in mm
+    public textSizeMM = 120; // world-space text cap height in mm
     public lineWidthMM = 2.0;
+    public alignTextToLine = false; // czy tekst ma leżeć równolegle do linii wymiarowej
 
     /** Promień chwytania krawędzi w pikselach ekranu. */
     public edgeSnapPx = 14;
@@ -535,6 +537,7 @@ export class PMIStore {
                 showUnits: this.showUnits,
                 textSizeMM: this.textSizeMM,
                 lineWidthMM: this.lineWidthMM,
+                alignTextToLine: this.alignTextToLine,
                 dimColor: [...this.dimColor],
                 selectedColor: [...this.selectedColor],
                 edgeSnapPx: this.edgeSnapPx,
@@ -563,6 +566,7 @@ export class PMIStore {
             this.showUnits = settings.showUnits ?? this.showUnits;
             this.textSizeMM = settings.textSizeMM ?? this.textSizeMM;
             this.lineWidthMM = settings.lineWidthMM ?? this.lineWidthMM;
+            this.alignTextToLine = settings.alignTextToLine ?? this.alignTextToLine;
             if (settings.dimColor) this.dimColor = [...settings.dimColor];
             if (settings.selectedColor) this.selectedColor = [...settings.selectedColor];
             this.edgeSnapPx = settings.edgeSnapPx ?? this.edgeSnapPx;

@@ -26,7 +26,7 @@ export const SYNC_CHANNEL_NAME = 'smartbox_cad_sync';
  * Konwertuje dowolną wartość wymiarową na milimetry (mm).
  * Jeśli wartość w CADNode jest w nanometrach (> 10000), dzieli przez 1 000 000.
  */
-export function toMm(val: any, defaultVal: number = 0): number {
+function toMm(val: any, defaultVal: number = 0): number {
     if (val === null || val === undefined) return defaultVal;
     const num = typeof val === 'number' ? val : parseFloat(val);
     if (isNaN(num)) return defaultVal;
@@ -51,6 +51,7 @@ function mapGrooveFeature(f: any, fallbackHeight: number): GrooveFeature2D {
         libraryId: library ? String(f.params.library_id) : undefined,
         face: f.face,
         editable: library,
+        frozen: !!(f.frozen || f.params?.frozen),
     };
 }
 
@@ -291,6 +292,7 @@ export class DrawingProjectExtractor {
                         diameter: toMm(f.params?.diameter ?? f.diameter, 5),
                         depth: toMm(f.params?.depth ?? f.depth, 12),
                         face: f.params?.face || 'FRONT',
+                        frozen: !!(f.frozen || f.params?.frozen),
                     });
                 } else if (f.type?.toLowerCase() === 'groove') {
                     grooves.push(mapGrooveFeature(f, height || 720));
@@ -307,6 +309,7 @@ export class DrawingProjectExtractor {
                             diameter: toMm(h.diameter, 5),
                             depth: toMm(h.depth, 12),
                             face: h.face || 'FRONT',
+                            frozen: !!(h.frozen || h.params?.frozen),
                         });
                     }
                 }
@@ -323,7 +326,7 @@ export class DrawingProjectExtractor {
 
         const isPart = cadNode.nodeType === NodeType.PART || domainData?.type === 'panel';
         const isAssembly = cadNode.nodeType === NodeType.ASSEMBLY || domainData?.type === 'container';
-        const isGroup = cadNode.nodeType === NodeType.GROUP;
+        const isGroup = (cadNode as any).nodeType === 'GROUP' || domainData?.type === 'group';
 
         let icon = '📦';
         let type: CADTreeNode['type'] = 'CONTAINER';
@@ -378,6 +381,9 @@ export class DrawingProjectExtractor {
             holes: holes.length > 0 ? holes : undefined,
             grooves: grooves.length > 0 ? grooves : undefined,
             visible: domainData?.visible !== false,
+            frozen: !!domainData?.frozen,
+            isManual: domainData?.engineManaged === false,
+            engineManaged: domainData?.engineManaged !== false,
         };
     }
 
@@ -464,6 +470,7 @@ export class DrawingProjectExtractor {
                     diameter: toMm(f.params?.diameter ?? f.diameter, 5),
                     depth: toMm(f.params?.depth ?? f.depth, 12),
                     face: f.params?.face || 'FRONT',
+                    frozen: !!(f.frozen || f.params?.frozen),
                 });
             } else if (f.type?.toLowerCase() === 'groove') {
                 grooves.push(mapGrooveFeature(f, height));
@@ -479,6 +486,7 @@ export class DrawingProjectExtractor {
                         diameter: toMm(h.diameter, 5),
                         depth: toMm(h.depth, 12),
                         face: h.face || 'FRONT',
+                        frozen: !!(h.frozen || h.params?.frozen),
                     });
                 }
             }
@@ -506,6 +514,9 @@ export class DrawingProjectExtractor {
             holes,
             grooves,
             visible: pModel.visible !== false,
+            frozen: !!pModel.frozen,
+            isManual: pModel.engineManaged === false,
+            engineManaged: pModel.engineManaged !== false,
         };
     }
 

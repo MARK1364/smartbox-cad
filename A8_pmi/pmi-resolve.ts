@@ -6,8 +6,7 @@
  *
  * To jedyne miejsce, w którym wartość wymiaru jest wyznaczana. Renderer,
  * narzędzie edycji i panel korzystają z tego samego wyniku, więc etykieta nie
- * może rozjechać się z narysowaną geometrią — czym w Blenderze zajmował się
- * `recalc_distance_and_text_from_world()` wołany z handlera depsgraph.
+ * może rozjechać się z narysowaną geometrią.
  */
 
 import { Vec3, v3, v3Len } from './dimension-solver';

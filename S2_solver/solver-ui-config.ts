@@ -5,7 +5,7 @@
 import type { BindType } from './core/contract.js';
 import type { AnchorKind } from './constraint-types.js';
 
-export const SOLVER_PANEL_TITLE = 'Solver v8.6';
+export const SOLVER_PANEL_TITLE = 'Relacje v8.6';
 
 export const CONFLICT_REJECT_MESSAGE = 'Relacja powoduje konflikt i nie będzie realizowana.';
 
@@ -16,7 +16,7 @@ export interface AddButtonDef {
     icon: string;
 }
 
-/** Kolejność jak w Blenderze: VERTEX, COPLANAR, FLUSH, GROUND. */
+/** Kolejność typów więzów: VERTEX, COPLANAR, FLUSH, GROUND. */
 export const ADD_BUTTONS: AddButtonDef[] = [
     {
         bindType: 'VERTEX',

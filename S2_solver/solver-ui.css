@@ -1,4 +1,4 @@
-/* Panel więzów — układ jak VIEW3D_PT_SolverConstraints w Blenderze */
+/* Panel więzów i relacji CAD */
 
 .solver-panel {
     display: flex;

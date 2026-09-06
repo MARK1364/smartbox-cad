@@ -1,20 +1,12 @@
 /**
- * Golden testy solvera — port @@BLENDER/S2_solver/tests/golden_runner.py
+ * Golden testy solvera.
  *
- * Uruchom: npx vitest run S2_solver  (z katalogu web/)
+ * Uruchom: npx vitest run S2_solver
  *
- * Pliki w `golden/` są DOSŁOWNĄ kopią fixtures z Pythona, więc ich długości są
- * w metrach. Rdzeń solvera pracuje w milimetrach, dlatego loader skaluje ×1000
- * wszystko, co jest długością: `location`, `local_vertices`, środki w
+ * Pliki w `golden/` zawierają referencyjne przypadki testowe.
+ * Rdzeń solvera pracuje w milimetrach, dlatego loader skaluje ×1000
+ * parametry długościowe: `location`, `local_vertices`, środki w
  * `local_faces`, `ground_pos`, `offset` oraz `tolerances.position`.
- * Normalne, kwaterniony i `tolerances.angle_deg` zostają bez zmian.
- *
- * Trzymamy fixtures w metrach celowo: jeśli port zacznie zwracać inne wyniki
- * niż Blender, ten sam plik da się uruchomić w Pythonie i w TS i porównać bez
- * zastanawiania się, czy różnica nie wynikła z przeliczenia jednostek.
- *
- * `golden_runner.py` woła solver z max_iterations=20 i convergence_threshold=1e-7
- * (metry) — tutaj odpowiada temu { linearMm: 1e-4, angularRad: 1e-7 }.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';

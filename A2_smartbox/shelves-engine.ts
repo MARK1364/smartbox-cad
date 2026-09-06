@@ -122,6 +122,15 @@ export class ShelvesEngine extends BaseEngine {
         };
 
         if (height > 0) {
+            const shelfOverride = (shelvesRules as any).parameters?.smart_panel_integration?.role_overrides?.SHELF_PANEL ||
+                                  (shelvesRules as any).parameters?.smart_panel_integration?.role_overrides?.SHELF;
+            const edgeBanding = shelfOverride?.edge_banding || {
+                "+Y": { active: true, type_id: "0.008x0.022" },
+                "-Y": { active: false, type_id: "none" },
+                "+X": { active: false, type_id: "none" },
+                "-X": { active: false, type_id: "none" }
+            };
+
             if (count > 0) {
                 for (let i = 1; i <= count; i++) {
                     const zCenter = equalShelfCenterZ(height, count, thickness, i);
@@ -141,6 +150,7 @@ export class ShelvesEngine extends BaseEngine {
                             z: zCenter
                         },
                         lcs: shelfRule?.lcs,
+                        edge_banding: edgeBanding,
                         features: buildShelfSupportHoles(i, zCenter)
                     });
                 }

@@ -75,7 +75,7 @@ export class SolverController {
         }
     }
 
-    /** Po puszczeniu myszy — jeden przebieg solvera (jak depsgraph debounce w Blenderze). */
+    /** Po puszczeniu myszy — jeden przebieg solvera (debounced solve). */
     endInteractiveTransform(): void {
         if (this._interactiveTransformDepth <= 0) {
             return;

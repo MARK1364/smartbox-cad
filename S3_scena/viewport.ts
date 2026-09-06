@@ -23,6 +23,8 @@ export class Viewport {
     axes: any[] = [];
     datumPlanes: any[] = [];
     _orthoZoomObserver: any = null;
+    private _lastCubeAlpha: number | null = null;
+    private _lastCubeBeta: number | null = null;
 
     isPanToolActive: boolean = false;
     currentRenderMode: 'shaded' | 'edges' | 'wireframe' | 'xray' = 'edges';
@@ -40,14 +42,16 @@ export class Viewport {
             console.log("🚀 Inicjalizacja WebGPU Engine");
             engine = new BABYLON.WebGPUEngine(canvas, {
                 stencil: true,
-                preserveDrawingBuffer: true
+                preserveDrawingBuffer: false,
+                powerPreference: 'high-performance'
             });
             await engine.initAsync();
         } else {
             console.warn("WebGPU nie jest obsługiwane w tej przeglądarce. Fallback do WebGL.");
             engine = new BABYLON.Engine(canvas, true, {
-                preserveDrawingBuffer: true,
-                stencil: true
+                preserveDrawingBuffer: false,
+                stencil: true,
+                powerPreference: 'high-performance'
             });
         }
         
@@ -66,19 +70,22 @@ export class Viewport {
         // ─── Camera ──────────────────────────────────
         this.camera = new BABYLON.ArcRotateCamera(
             'camera',
-            Math.PI / 4,        // alpha (obrót wokół Y)
+            -Math.PI / 4,       // alpha (perspektywa przodu front-right)
             Math.PI / 3,        // beta  (kąt od góry)
-            1500,               // radius
-            new BABYLON.Vector3(300, 600, 250), // target — środek sceny
+            3200,               // radius (odsunięcie, aby cały korpus mieścił się w kadrze)
+            new BABYLON.Vector3(500, 1100, 300), // target — środek standardowego mebla
             this.scene
         );
         this.camera.attachControl(canvas, true);
+        this.camera.inertia = 0; // CAD 1:1 - natychmiastowa reakcja bez opóźnień (SolidWorks style)
+        this.camera.panningInertia = 0;
         
         // Domyślny widok ortogonalny (ortho)
         this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
         this._updateOrthographicBounds();
         this._orthoZoomObserver = this.camera.onViewMatrixChangedObservable.add(() => {
             this._updateOrthographicBounds();
+            this._syncViewCube();
         });
 
         // Wyłączenie domyślnych kontroli wskaźnika Babylon.js (LMB nie obraca już natywnie sceny)
@@ -196,24 +203,26 @@ export class Viewport {
                     const deltaX = this.scene.pointerX - lastX;
                     const deltaY = this.scene.pointerY - lastY;
 
-                    if (isRotating) {
-                        this.camera.alpha -= deltaX / rotationSensibility;
-                        this.camera.beta -= deltaY / rotationSensibility;
-                    } else if (isPanning) {
-                        const moveSpeed = this.camera.radius * panningSensibility * 0.01;
-                        
-                        const transformMatrix = this.camera.getViewMatrix();
-                        const right = new BABYLON.Vector3(transformMatrix.m[0], transformMatrix.m[4], transformMatrix.m[8]);
-                        const up = new BABYLON.Vector3(transformMatrix.m[1], transformMatrix.m[5], transformMatrix.m[9]);
-                        
-                        const panX = right.scale(-deltaX * moveSpeed);
-                        const panY = up.scale(deltaY * moveSpeed);
-                        
-                        this.camera.target.addInPlace(panX).addInPlace(panY);
-                    }
+                    if (deltaX !== 0 || deltaY !== 0) {
+                        if (isRotating) {
+                            this.camera.alpha -= deltaX / rotationSensibility;
+                            this.camera.beta -= deltaY / rotationSensibility;
+                        } else if (isPanning) {
+                            const moveSpeed = this.camera.radius * panningSensibility * 0.01;
+                            
+                            const transformMatrix = this.camera.getViewMatrix();
+                            const right = new BABYLON.Vector3(transformMatrix.m[0], transformMatrix.m[4], transformMatrix.m[8]);
+                            const up = new BABYLON.Vector3(transformMatrix.m[1], transformMatrix.m[5], transformMatrix.m[9]);
+                            
+                            const panX = right.scale(-deltaX * moveSpeed);
+                            const panY = up.scale(deltaY * moveSpeed);
+                            
+                            this.camera.target.addInPlace(panX).addInPlace(panY);
+                        }
 
-                    lastX = this.scene.pointerX;
-                    lastY = this.scene.pointerY;
+                        lastX = this.scene.pointerX;
+                        lastY = this.scene.pointerY;
+                    }
                 }
             } else if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERWHEEL) {
                 const wheelEvt = evt as WheelEvent;
@@ -226,7 +235,7 @@ export class Viewport {
                 // Szukamy fizycznego punktu pod kursorem (kolizja z widocznymi bryłami mebla / narożami)
                 const pickInfo = this.scene.pickWithRay(ray, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('lcs'));
                 
-                let targetPoint: BABYLON.Vector3 | null = null;
+                let targetPoint: any = null;
                 if (pickInfo && pickInfo.hit && pickInfo.pickedPoint) {
                     targetPoint = pickInfo.pickedPoint;
                 } else {
@@ -274,7 +283,8 @@ export class Viewport {
         this.camera.maxZ = 50000;
         this.camera.lowerRadiusLimit = 0.5;
         this.camera.upperRadiusLimit = 20000;
-        this.camera.inertia = 0.6; // Płynność ruchu
+        this.camera.inertia = 0; // CAD 1:1 - brak opóźnienia i bezwładności (SolidWorks style)
+        this.camera.panningInertia = 0;
 
         // Odblokowanie pełnego obrotu wokół osi
         this.camera.lowerBetaLimit = null;
@@ -317,6 +327,7 @@ export class Viewport {
         // ─── Render loop ─────────────────────────────
         this.engine.runRenderLoop(() => {
             this.scene.render();
+            this._syncViewCube();
         });
 
         // ─── Resize ──────────────────────────────────
@@ -568,12 +579,21 @@ export class Viewport {
         }
     }
 
+    private _lastOrthoRadius: number = -1;
+    private _lastOrthoAspect: number = -1;
+
     _updateOrthographicBounds() {
         if (this.camera.mode !== BABYLON.Camera.ORTHOGRAPHIC_CAMERA) return;
         
         const aspect = this.engine.getAspectRatio(this.camera);
         const orthoSize = this.camera.radius * 0.65;
         
+        if (this._lastOrthoRadius === this.camera.radius && Math.abs(this._lastOrthoAspect - aspect) < 0.0001) {
+            return;
+        }
+        this._lastOrthoRadius = this.camera.radius;
+        this._lastOrthoAspect = aspect;
+
         this.camera.orthoLeft = -orthoSize * aspect;
         this.camera.orthoRight = orthoSize * aspect;
         this.camera.orthoTop = orthoSize;
@@ -629,5 +649,29 @@ export class Viewport {
             this.camera.onViewMatrixChangedObservable.remove(this._orthoZoomObserver);
         }
         this.engine.dispose();
+    }
+
+    /**
+     * Synchronizuje obrót kostki orientacji (ViewCube w prawym górnym rogu) z kamerą sceny 3D.
+     */
+    _syncViewCube() {
+        if (!this.camera) return;
+        const alpha = this.camera.alpha;
+        const beta = this.camera.beta;
+        if (alpha === this._lastCubeAlpha && beta === this._lastCubeBeta) return;
+        this._lastCubeAlpha = alpha;
+        this._lastCubeBeta = beta;
+
+        const cubes = typeof window !== 'undefined' && window.document
+            ? window.document.querySelectorAll<HTMLElement>('.view-cube-wrapper')
+            : null;
+        if (!cubes || cubes.length === 0) return;
+
+        const degX = (beta * 180 / Math.PI) - 90;
+        const degY = -((alpha * 180 / Math.PI) + 90);
+        const transformStr = `rotateX(${degX.toFixed(2)}deg) rotateY(${degY.toFixed(2)}deg)`;
+        for (let i = 0; i < cubes.length; i++) {
+            cubes[i].style.transform = transformStr;
+        }
     }
 }

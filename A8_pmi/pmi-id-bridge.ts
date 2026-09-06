@@ -1,7 +1,7 @@
 /**
  * PMI ID Bridge — TypeScript
  *
- * Odpowiednik `pmi_id_bridge.py`. Wiąże adnotacje wymiarowe z geometrią przez
+ * Wiąże adnotacje wymiarowe z geometrią przez
  * identyfikatory, które przeżywają przebudowę siatek i zapis projektu.
  *
  * DLACZEGO NIE NAZWA SIATKI:
@@ -130,7 +130,7 @@ export function findNodeRoot(scene: any, nodeId: string): any {
  * Odczytuje aktualne położenie elementu wskazanego przez kotwicę wprost z żywej
  * geometrii.
  *
- * Jest to odpowiednik rozwiązywania SmartID w Blenderze i pokrywa przypadek,
+ * Pokrywa przypadek,
  * którego sama macierz świata nie obsłuży: zmianę parametrów formatki. Po
  * poszerzeniu płyty jej korzeń stoi w miejscu, ale narożnik przesuwa się —
  * zapisany punkt lokalny byłby wtedy nieaktualny.

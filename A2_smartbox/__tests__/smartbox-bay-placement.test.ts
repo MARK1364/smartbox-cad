@@ -31,7 +31,7 @@ describe('SmartBox bay placement & dimensions verification', () => {
         expect(bay.boundary.bottom.planeCoordMm).toBeCloseTo(18, 0);
         expect(bay.boundary.top.planeCoordMm).toBeCloseTo(1982, 0);
 
-        const sbNode = createSmartBoxInDetectedBay(doc, bay, { id: 'SHELVES', type: 'smartbox_shelves', label: 'Półki', icon: '📚', description: 'Półki' })!;
+        const sbNode = createSmartBoxInDetectedBay(doc, bay, { id: 'SHELVES', type: 'smartbox_shelves', category: 'internal', label: 'Półki', icon: '📚', description: 'Półki' })!;
         const sbContainer = sbNode.domainData as any;
 
         // Wymiary kontenera SmartBox muszą ściśle odpowiadać światłu wnęki (ani 1 mm w głąb formatek)
@@ -57,7 +57,7 @@ describe('SmartBox bay placement & dimensions verification', () => {
         expect(bayB.boundary.bottom.planeCoordMm).toBeCloseTo(18, 0);
         expect(bayB.boundary.top.planeCoordMm).toBeCloseTo(482, 0);
 
-        const sbNodeB = createSmartBoxInDetectedBay(doc, bayB, { id: 'SHELVES', type: 'smartbox_shelves', label: 'Półki B', icon: '📚', description: 'Półki B' })!;
+        const sbNodeB = createSmartBoxInDetectedBay(doc, bayB, { id: 'SHELVES', type: 'smartbox_shelves', category: 'internal', label: 'Półki B', icon: '📚', description: 'Półki B' })!;
         expect(nmToMm(sbNodeB.domainData.width)).toBeCloseTo(964, 0);
         expect(nmToMm(sbNodeB.domainData.height)).toBeCloseTo(464, 0);
         expect(nmToMm(sbNodeB.localMatrix.decompose().translation.z)).toBeCloseTo(18, 0);
@@ -70,7 +70,7 @@ describe('SmartBox bay placement & dimensions verification', () => {
         expect(bayM.boundary.bottom.planeCoordMm).toBeCloseTo(518, 0);
         expect(bayM.boundary.top.planeCoordMm).toBeCloseTo(1682, 0);
 
-        const sbNodeM = createSmartBoxInDetectedBay(doc, bayM, { id: 'SHELVES', type: 'smartbox_shelves', label: 'Półki M', icon: '📚', description: 'Półki M' })!;
+        const sbNodeM = createSmartBoxInDetectedBay(doc, bayM, { id: 'SHELVES', type: 'smartbox_shelves', category: 'internal', label: 'Półki M', icon: '📚', description: 'Półki M' })!;
         expect(nmToMm(sbNodeM.domainData.width)).toBeCloseTo(964, 0);
         expect(nmToMm(sbNodeM.domainData.height)).toBeCloseTo(1164, 0);
         expect(nmToMm(sbNodeM.localMatrix.decompose().translation.z)).toBeCloseTo(518, 0);
@@ -83,7 +83,7 @@ describe('SmartBox bay placement & dimensions verification', () => {
         expect(bayT.boundary.bottom.planeCoordMm).toBeCloseTo(1718, 0);
         expect(bayT.boundary.top.planeCoordMm).toBeCloseTo(2382, 0);
 
-        const sbNodeT = createSmartBoxInDetectedBay(doc, bayT, { id: 'SHELVES', type: 'smartbox_shelves', label: 'Półki T', icon: '📚', description: 'Półki T' })!;
+        const sbNodeT = createSmartBoxInDetectedBay(doc, bayT, { id: 'SHELVES', type: 'smartbox_shelves', category: 'internal', label: 'Półki T', icon: '📚', description: 'Półki T' })!;
         expect(nmToMm(sbNodeT.domainData.width)).toBeCloseTo(964, 0);
         expect(nmToMm(sbNodeT.domainData.height)).toBeCloseTo(664, 0);
         expect(nmToMm(sbNodeT.localMatrix.decompose().translation.z)).toBeCloseTo(1718, 0);

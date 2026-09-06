@@ -1,8 +1,7 @@
 /**
- * Widoczność sceny dla zakładki Wiązania — odpowiednik
- * `solver_show_only_smartframe` w Blenderze.
+ * Widoczność sceny dla zakładki Wiązania (tylko SmartFrame).
  *
- * W Babylon.js siatki z isVisible=false / setEnabled(false) nie biorą udziału
+ * W silniku renderowania siatki z isVisible=false nie biorą udziału
  * w picku — dlatego panele muszą pozostać włączone i pickowalne na zakładce więzów.
  */
 

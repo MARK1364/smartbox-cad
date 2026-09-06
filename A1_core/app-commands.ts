@@ -9,7 +9,6 @@ import { isManualPanel, PanelModel } from '../A4_smartpanel/panel-model.js';
 import { ReparentNodeCommand } from './commands/reparent-node-command.js';
 import { ContainerModel } from './container-model.js';
 import { rebuildSmartFrameContainer } from '../A3_smartframe/smartframe-adapter.js';
-import { update_smartbox_core } from '../A2_smartbox/smartbox-core.js';
 import { isUserAbort, ProjectFileIO } from './project-file-io.js';
 
 import { AddNodeCommand } from './commands/add-node-command.js';
@@ -154,10 +153,10 @@ export class AppCommands {
             const parentDomain = parentNode.domainData;
 
             const newPanel = new PanelModel({
-                width: mmToNm(600),
-                height: mmToNm(720),
+                width: mmToNm(720),
+                height: mmToNm(510),
                 thickness: mmToNm(18),
-                name: 'Panel ręczny',
+                name: 'Formatka ręczna',
                 role: 'MANUAL_PANEL',
                 engineManaged: false,
             });
@@ -176,6 +175,11 @@ export class AppCommands {
             document.setActiveEntity(newPanel);
 
             window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('cad-open-floating-panel-edit', {
+                    detail: { panelId: newPanel.id }
+                }));
+            }
             ui.setStatus(inAssembly
                 ? `Dodano panel ręczny do „${activeFrame?.name || 'SmartFrame'}” — w drzewie możesz go przeciągnąć do innego`
                 : 'Dodano panel ręczny na scenę');
@@ -193,7 +197,7 @@ export class AppCommands {
                 type: 'korpus3_2', 
                 zoneCount: 3, 
                 thickness: 18, 
-                backOffset: 10,
+                backOffset: 3,
                 bottomHeight: 500,
                 middleHeight: 1200
             };
@@ -220,52 +224,6 @@ export class AppCommands {
             window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
             ui.setStatus('Dodano nowy Korpus (SmartFrame)');
             pushHistory('Dodano SmartFrame');
-        };
-
-        const addSmartBox = () => {
-            const containers = document.getContainers();
-            let cabinet = containers.find((e: any) => (
-                e.generatorParams?.type === 'korpus3_2' || 
-                e.generatorParams?.type === 'korpus3_1' || 
-                e.generatorParams?.type === 'smartframe' ||
-                (e.name && e.name.includes('Korpus'))
-            ));
-            if (!cabinet) {
-                cabinet = containers[0];
-            }
-            if (!cabinet) {
-                alert("Najpierw utwórz Korpus (SmartFrame) w zakładce 'A3_smartframe'!");
-                return;
-            }
-
-            const newContainer = new ContainerModel({ width: mmToNm(564), height: mmToNm(684), depth: mmToNm(480), name: "SmartBox" });
-            newContainer.generatorParams = {
-                type: 'smartbox_empty',
-                boxType: 'EMPTY',
-                parentContainerId: cabinet.id,
-                targetZone: 'FULL',
-                thickness: 18
-            };
-            
-            const doc = document;
-            const cabinetNode = doc?.findNode(cabinet.id);
-
-            const cNode = CADNode.create(NodeType.ASSEMBLY, newContainer.name, newContainer.id);
-            cNode.domainData = newContainer;
-
-            const cmdHist = ContextManager.instance.commandHistory;
-            if (cmdHist && doc && cabinetNode) {
-                cmdHist.execute(new AddNodeCommand(cabinetNode.id, cNode, undefined, 'Dodano SmartBox'));
-            } else if (doc && cabinetNode) {
-                doc.addNode(cabinetNode.id, cNode);
-            }
-            document.setActiveEntity(newContainer);
-            
-            update_smartbox_core(newContainer, cabinet);
-            
-            window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
-            ui.setStatus('Dodano nowe Wnętrze (SmartBox)');
-            pushHistory('Dodano SmartBox');
         };
 
         const fileIO = new ProjectFileIO();
@@ -463,7 +421,6 @@ export class AppCommands {
         const api: IAppAPI = {
             addSmartPanel,
             addSmartFrame,
-            addSmartBox,
             newProject: resetProject,
             saveProject,
             saveProjectAs,

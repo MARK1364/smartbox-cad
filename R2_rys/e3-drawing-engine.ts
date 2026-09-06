@@ -13,12 +13,14 @@ import {
     E3TitleBlock,
 } from './e3-library-types';
 
-export const MARGIN_LEFT = 20;
-export const MARGIN_RIGHT = 5;
-export const MARGIN_TOP = 5;
-export const MARGIN_BOTTOM = 5;
-export const TITLE_BLOCK_WIDTH = 120;
-export const TITLE_BLOCK_HEIGHT = 30;
+import {
+    MARGIN_LEFT,
+    MARGIN_RIGHT,
+    MARGIN_TOP,
+    MARGIN_BOTTOM,
+    TITLE_BLOCK_WIDTH,
+    TITLE_BLOCK_HEIGHT
+} from './export-types.js';
 
 function v(n: number): string {
     return Number(n).toFixed(2);

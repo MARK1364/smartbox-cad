@@ -9,16 +9,16 @@ describe('SmartBoxBayController', () => {
 
         const unsubscribe = controller.subscribePicker(listener);
         // Pierwsze wywołanie natychmiast przy subskrypcji
-        expect(listener).toHaveBeenCalledWith(false);
+        expect(listener).toHaveBeenCalledWith(false, 'internal');
 
         controller.startPicker('DRAWERS');
         expect(controller.isPickerActive).toBe(true);
         expect(controller.pendingSmartBoxType).toBe('DRAWERS');
-        expect(listener).toHaveBeenCalledWith(true);
+        expect(listener).toHaveBeenCalledWith(true, 'internal');
 
         controller.stopPicker();
         expect(controller.isPickerActive).toBe(false);
-        expect(listener).toHaveBeenCalledWith(false);
+        expect(listener).toHaveBeenCalledWith(false, 'internal');
 
         controller.togglePicker();
         expect(controller.isPickerActive).toBe(true);

@@ -1,6 +1,5 @@
 /**
  * graph.ts — graf więzów i odległości od GROUND (BFS).
- * Port 1:1 z @@BLENDER/S2_solver/core/graph.py
  */
 
 export class ConstraintGraph {

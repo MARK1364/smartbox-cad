@@ -3,23 +3,15 @@
  *
  * Zamienia stabilną `ConstraintAnchor` (nazwa ściany / numer narożnika) na
  * konkretny punkt albo parę (środek, normalna) w lokalnym układzie węzła, w mm.
- * To odpowiednik pythonowego czytania `mesh.vertices[i].co` i `mesh.polygons[i]`,
- * tylko oparty na modelu domenowym, a nie na siatce — bo siatka w web jest
- * regenerowana i jej indeksy nie są trwałe.
+ * Oparty na modelu domenowym, gwarantując trwałość referencji więzów.
  *
- * Konwencje bryły lokalnej w CAD (Z-up). Mesh formatki jest budowany w osiach
- * Babylona (grubość na Z, wysokość na Y); adapter zamienia Y↔Z, więc LCS CAD
- * formatki to X = szerokość, Y = grubość, Z = wysokość.
+ * Konwencje bryły lokalnej w CAD (Z-up):
  *
  *   PART / PanelModel      — wyśrodkowana we wszystkich osiach:
  *                            X ∈ [-w/2, w/2], Y ∈ [-t/2, t/2], Z ∈ [-h/2, h/2]
  *
- *   ASSEMBLY / ContainerModel — wyśrodkowana w X i Y, ale stojąca na Z = 0:
+ *   ASSEMBLY / ContainerModel — wyśrodkowana w X i Y, stojąca na Z = 0:
  *                            X ∈ [-w/2, w/2], Y ∈ [-d/2, d/2], Z ∈ [0, h]
- *                            (skutek `bakeTransformIntoVertices` w container-view.ts)
- *
- * Nazwy ścian formatki zostają w konwencji panelu (front = FACE_Z_PLUS),
- * ale wskazują osie CAD po zamianie Y↔Z: FACE_Z_* → oś Y, FACE_Y_* → oś Z.
  */
 
 import type { CADNode } from '../A1_core/cad-node/cad-node.js';

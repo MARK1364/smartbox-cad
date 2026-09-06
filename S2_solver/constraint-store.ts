@@ -125,9 +125,8 @@ export class ConstraintStore {
     }
 
     /**
-     * Usuwa więzy odwołujące się do węzłów, których już nie ma w dokumencie —
-     * odpowiednik pythonowego `auto_cleanup_dead_binds`. W Blenderze działało to
-     * na handlerze co 0,5 s; tutaj wywołuje to kontroler po zmianach struktury.
+     * Usuwa więzy odwołujące się do węzłów, których już nie ma w dokumencie
+     * (`auto_cleanup_dead_binds`). Wywoływane po zmianach struktury sceny.
      * @returns liczba usuniętych więzów
      */
     pruneMissingNodes(existingNodeIds: Set<string>): number {

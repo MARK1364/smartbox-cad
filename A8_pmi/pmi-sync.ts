@@ -1,7 +1,7 @@
 /**
  * PMI Sync Controller — TypeScript
  *
- * Odpowiednik `pmi_handlers.py`. Utrzymuje wymiary w zgodzie z modelem:
+ * Utrzymuje wymiary w zgodzie z modelem:
  * przy zmianie dokumentu, przebudowie geometrii i przeciąganiu gizmem.
  *
  * Bez tego `renderAll()` byłoby wołane wyłącznie przy zmianie kolekcji wymiarów,
