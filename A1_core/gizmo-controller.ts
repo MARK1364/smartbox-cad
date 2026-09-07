@@ -964,6 +964,9 @@ export class GizmoController {
                     sphere.position.addInPlace(normal.scale(20));
                 }
 
+                const isAxisY = paramName.endsWith('+Y') || paramName.endsWith('-Y') || paramName.includes('pY') || paramName.includes('shiftY');
+                const isAxisX = paramName.endsWith('+X') || paramName.endsWith('-X') || paramName.includes('pX') || paramName.includes('shiftX');
+
                 let diffuseColor: any;
                 let emissiveColor: any;
 
@@ -971,12 +974,16 @@ export class GizmoController {
                     // Środek płyty / Przesuwanie -> NIEBIESKI
                     diffuseColor = new BABYLON.Color3(0.1, 0.45, 0.95);
                     emissiveColor = new BABYLON.Color3(0.05, 0.3, 0.7);
-                } else if (paramName.includes('+Y') || paramName.includes('-Y') || paramName.includes('pY') || faceName === 'top' || faceName === 'bottom') {
-                    // Kierunek Y (Góra / Dół) -> ZIELONY
+                } else if (isAxisY) {
+                    // Kierunek Y (2 kule dla osi Y) -> ZIELONY
                     diffuseColor = new BABYLON.Color3(0.15, 0.8, 0.25);
                     emissiveColor = new BABYLON.Color3(0.1, 0.6, 0.15);
+                } else if (isAxisX) {
+                    // Kierunek X (2 kule dla osi X) -> CZERWONY
+                    diffuseColor = new BABYLON.Color3(0.9, 0.15, 0.15);
+                    emissiveColor = new BABYLON.Color3(0.7, 0.1, 0.1);
                 } else {
-                    // Kierunek X (Przód / Tył / Boki) -> CZERWONY
+                    // Domyślnie CZERWONY
                     diffuseColor = new BABYLON.Color3(0.9, 0.15, 0.15);
                     emissiveColor = new BABYLON.Color3(0.7, 0.1, 0.1);
                 }

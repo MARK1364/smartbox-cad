@@ -171,7 +171,11 @@ export function buildFlapsDrillings(document: ProjectDocument, cabinetContainerI
 
         const hingeLeft = p.hinge_left_offset !== undefined ? Number(p.hinge_left_offset) : 80;
         const hingeRight = p.hinge_right_offset !== undefined ? Number(p.hinge_right_offset) : 80;
-        const hingeId = p.hinge_template || p.library_id || DEFAULT_HINGE_ID;
+        const resolveHingeId = (side: HingeSide): string => {
+            if (side === 'left') return p.hinge_left_template || p.hinge_template || p.library_id || DEFAULT_HINGE_ID;
+            if (side === 'right') return p.hinge_right_template || p.hinge_template || p.library_id || DEFAULT_HINGE_ID;
+            return p.hinge_center_template || p.hinge_template || p.library_id || DEFAULT_HINGE_ID;
+        };
 
         const sbPos = sbNode.getWorldMatrix().decompose().translation;
         const sbPosX = nmToMm(sbPos.x);
@@ -202,6 +206,7 @@ export function buildFlapsDrillings(document: ProjectDocument, cabinetContainerI
             const uv = hingeToWieniecUV(wieniecNode, hingeX, hingeLineY);
             if (!uv) continue;
 
+            const hingeId = resolveHingeId(hinge.side);
             pushPlateHoles(intents, wieniecNode, face, sbNode.id, hinge.key, uv.u, hingeId);
         }
     }

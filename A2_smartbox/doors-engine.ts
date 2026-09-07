@@ -59,9 +59,7 @@ export class DoorsEngine extends BaseEngine {
             hinges.push({ index: 6, localZ: Math.max(0, height - pos6) });
         }
 
-        const hingeId = params.hinge_template || params.hingeTemplate || DEFAULT_HINGE_ID;
-        const frontHoles = hingeFrontHolesMm(hingeId);
-        const templateId = hingeTemplateId(hingeId);
+        const defaultHingeId = params.hinge_template || params.hingeTemplate || DEFAULT_HINGE_ID;
 
         const totalDoorHeight = height + ovTop + ovBottom;
         const posZ = height / 2 + (ovTop - ovBottom) / 2;
@@ -72,6 +70,9 @@ export class DoorsEngine extends BaseEngine {
             const features: any[] = [];
 
             for (const hinge of hinges) {
+                const hingeId = params[`hinge_${hinge.index}_template`] || defaultHingeId;
+                const frontHoles = hingeFrontHolesMm(hingeId);
+                const templateId = hingeTemplateId(hingeId);
                 const vCenter = hinge.localZ + ovBottom;
 
                 for (const hole of frontHoles) {
@@ -85,6 +86,7 @@ export class DoorsEngine extends BaseEngine {
                         face: 'FACE_Z_PLUS',
                         params: {
                             template_id: templateId,
+                            hinge_id: hingeId,
                             u,
                             v: vCenter + hole.yOffset,
                             diameter: hole.dia,

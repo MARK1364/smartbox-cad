@@ -1,0 +1,7 @@
+{
+  "units": "mm",
+  "type": "RAIL",
+  "version": "1.0.0",
+  "description": "Prowadnice osobno od pełnego systemu szuflady (jeśli potrzeba). Origin: RAIL_FRONT.",
+  "items": {}
+}

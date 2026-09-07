@@ -126,26 +126,15 @@ class MaterialDatabase {
 
         this.materials = loaded;
 
-        // Załaduj okleiny
-        const rawEdges = (smartPanelData as any).edge_banding_types || {};
-        const edges: EdgeBandingType[] = [];
-        for (const [edgeId, edgeData] of Object.entries<any>(rawEdges)) {
-            edges.push({
-                id: edgeId,
-                name: edgeData.name || edgeId,
-                thickness_mm: 0.8,
-                width_mm: 22.0,
-                price_per_mb: 3.50
-            });
-        }
-        // Dodaj standardowe okleiny jeśli brak
-        if (edges.length === 0 || !edges.some(e => e.id === 'ABS_1x22')) {
-            edges.push({ id: 'ABS_0.8x22', name: 'Okleina ABS 0.8x22 mm', thickness_mm: 0.8, width_mm: 22.0, price_per_mb: 2.80 });
-            edges.push({ id: 'ABS_1x22', name: 'Okleina ABS 1.0x22 mm', thickness_mm: 1.0, width_mm: 22.0, price_per_mb: 3.50 });
-            edges.push({ id: 'ABS_2x22', name: 'Okleina ABS 2.0x22 mm', thickness_mm: 2.0, width_mm: 22.0, price_per_mb: 5.20 });
-            edges.push({ id: 'ABS_0.8x43', name: 'Okleina ABS 0.8x43 mm', thickness_mm: 0.8, width_mm: 43.0, price_per_mb: 6.00 });
-        }
-        this.edgeBandings = edges;
+        // Załaduj okleiny (6 standardowych wariantów)
+        this.edgeBandings = [
+            { id: 'ABS_0.8x22', name: 'Okleina ABS 0.8x22 mm', thickness_mm: 0.8, width_mm: 22.0, price_per_mb: 2.80 },
+            { id: 'ABS_1x22', name: 'Okleina ABS 1.0x22 mm', thickness_mm: 1.0, width_mm: 22.0, price_per_mb: 3.50 },
+            { id: 'ABS_2x22', name: 'Okleina ABS 2.0x22 mm', thickness_mm: 2.0, width_mm: 22.0, price_per_mb: 5.20 },
+            { id: 'ABS_0.8x43', name: 'Okleina ABS 0.8x43 mm', thickness_mm: 0.8, width_mm: 43.0, price_per_mb: 6.00 },
+            { id: 'ABS_1x43', name: 'Okleina ABS 1.0x43 mm', thickness_mm: 1.0, width_mm: 43.0, price_per_mb: 7.00 },
+            { id: 'ABS_2x43', name: 'Okleina ABS 2.0x43 mm', thickness_mm: 2.0, width_mm: 43.0, price_per_mb: 8.50 }
+        ];
     }
 
     public getAllMaterials(): MaterialItem[] {

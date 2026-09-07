@@ -1362,8 +1362,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 e.stopPropagation();
                 UIController.instance?.emitTree('select-container', { id: container.id });
                 UIController.instance?.emitTree('contextmenu-tree-node', {
-                  type: 'container',
+                  type: isSmartBox ? 'smartbox' : 'container',
                   id: container.id,
+                  name: container.name || (isSmartBox ? 'SmartBox' : 'Korpus'),
                   clientX: e.clientX,
                   clientY: e.clientY
                 });
@@ -2413,8 +2414,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               price_per_mb: edge.price_per_mb || 3.50
             };
 
-            const scope = (window as any).__draggedEdgeScope || 'SINGLE';
-            const cmd = new SetEdgeBandingCommand(nodeId, targetEdgeKey, edgeConfig, scope);
+            const cmd = new SetEdgeBandingCommand(nodeId, targetEdgeKey, edgeConfig, 'SINGLE');
             if (ContextManager.instance.commandHistory) {
               ContextManager.instance.commandHistory.execute(cmd);
             } else if (doc && (doc as any).executeCommand) {

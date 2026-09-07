@@ -72,8 +72,8 @@ export class Viewport {
             'camera',
             -Math.PI / 4,       // alpha (perspektywa przodu front-right)
             Math.PI / 3,        // beta  (kąt od góry)
-            3200,               // radius (odsunięcie, aby cały korpus mieścił się w kadrze)
-            new BABYLON.Vector3(500, 1100, 300), // target — środek standardowego mebla
+            5200,               // radius (odsunięcie, aby cały korpus i otoczenie swobodnie mieściły się w kadrze)
+            new BABYLON.Vector3(500, 950, 300), // target — środek standardowego mebla
             this.scene
         );
         this.camera.attachControl(canvas, true);
@@ -278,6 +278,23 @@ export class Viewport {
             }
         });
 
+        // Globalny helper w konsoli do pobrania aktualnego stanu kamery
+        if (typeof window !== 'undefined') {
+            (window as any).getCamera = () => {
+                const cam = this.camera;
+                const info = {
+                    radius_mm: Math.round(cam.radius),
+                    position: { x: Math.round(cam.position.x), y: Math.round(cam.position.y), z: Math.round(cam.position.z) },
+                    target: { x: Math.round(cam.target.x), y: Math.round(cam.target.y), z: Math.round(cam.target.z) },
+                    alpha_rad: Number(cam.alpha.toFixed(3)),
+                    beta_rad: Number(cam.beta.toFixed(3)),
+                };
+                console.log('%c[KAMERA AKTUALNY STAN]', 'color: #38bdf8; font-weight: bold;', info);
+                return info;
+            };
+            (window as any).logCamera = (window as any).getCamera;
+        }
+
         // Zapobieganie ucinaniu formatek (brak clippingu w rzucie orto, a w perspektywie minZ = 0.1 mm)
         this.camera.minZ = this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA ? -50000 : 0.1;
         this.camera.maxZ = 50000;
@@ -351,8 +368,8 @@ export class Viewport {
 
     _createGroundGrid() {
         const ground = BABYLON.MeshBuilder.CreateGround('ground', {
-            width: 3000,
-            height: 3000,
+            width: 6000,
+            height: 6000,
             subdivisions: 1
         }, this.scene);
         ground.position.y = -0.5;
@@ -366,7 +383,7 @@ export class Viewport {
 
         // Rysujemy siatkę z linii — daje lepszy efekt niż texture
         const gridLines = [];
-        const gridSize = 1500;
+        const gridSize = 3000;
         const step = 100;
         for (let i = -gridSize; i <= gridSize; i += step) {
             gridLines.push([

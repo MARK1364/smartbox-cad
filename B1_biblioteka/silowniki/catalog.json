@@ -1,0 +1,7 @@
+{
+  "units": "mm",
+  "type": "GAS_SPRING",
+  "version": "1.0.0",
+  "description": "Siłowniki / podnośniki (np. Aventos). Nawierty + art_no w JSON; GLB tylko viewport.",
+  "items": {}
+}

@@ -50,7 +50,29 @@ function nodeKind(rawType: string): string {
     return String(rawType || '').toLowerCase();
 }
 
+function isSmartBoxContainer(id: string, rawType?: string): boolean {
+    const t = nodeKind(rawType || '');
+    if (t === 'smartbox' || t === 'drawers' || t === 'shelves') return true;
+    const doc = getDoc();
+    if (!doc) return false;
+    const c = findContainer(id) || doc.findNode(id)?.domainData;
+    if (c) {
+        const pType = (c.generatorParams?.type || '').toLowerCase();
+        if (
+            pType.startsWith('smartbox') || 
+            c.generatorParams?.boxType !== undefined || 
+            c.is_smartbox || 
+            c.type === 'smartbox' || 
+            c.sb_role !== undefined ||
+            (c.name && String(c.name).toLowerCase().includes('smartbox')) ||
+            (c.name && String(c.name).endsWith('_SB'))
+        ) return true;
+    }
+    return false;
+}
+
 function isKorpusNode(data: TreeContextMenuData): boolean {
+    if (isSmartBoxContainer(data.id, data.type)) return false;
     const kind = nodeKind(data.type);
     const doc = getDoc();
     if (!doc) return kind === 'container' || kind === 'korpus';
@@ -70,17 +92,17 @@ function isKorpusNode(data: TreeContextMenuData): boolean {
     return kind === 'container' || kind === 'korpus';
 }
 
-function resolveScopeType(rawType: string): ModuleScopeType | null {
+function resolveScopeType(rawType: string, id?: string): ModuleScopeType | null {
     const t = nodeKind(rawType);
     if (t === 'project' || t === 'root') return 'PROJECT';
-    if (t === 'smartbox' || t === 'drawers' || t === 'shelves') return 'SMARTBOX';
+    if (t === 'smartbox' || t === 'drawers' || t === 'shelves' || (id && isSmartBoxContainer(id, rawType))) return 'SMARTBOX';
     if (t === 'part' || t === 'panel') return 'PANEL';
     if (t === 'container' || t === 'assembly' || t === 'korpus') return 'CONTAINER';
     return null;
 }
 
 function scopeFromData(data: TreeContextMenuData): ModuleScope | null {
-    const type = resolveScopeType(data.type);
+    const type = resolveScopeType(data.type, data.id || data.uuid);
     if (!type) return null;
     const id = type === 'PROJECT' ? 'ALL' : String(data.id || data.uuid || '');
     const name = data.name || (type === 'PROJECT' ? 'Cały projekt' : id);
@@ -310,6 +332,7 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     if (scope) {
         items.push({ separator: true });
         if (scope.type === 'PANEL') {
+            items.push({ label: 'Raport z formatki', icon: ICONS.report, action: 'open-report' });
             items.push({ label: 'CNC — obróbka formatki', icon: ICONS.cnc, action: 'open-cnc' });
             items.push({ label: 'Utwórz rysunek', icon: ICONS.draw, action: 'open-draw' });
         } else if (scope.type === 'SMARTBOX') {

@@ -5,11 +5,13 @@
  */
 import shelfRules from './shelf_3_rules_V1.json';
 import { BaseEngine } from './base-engine.js';
+import { rulesMToMm } from '../A1_core/cad-math/units.js';
 
 export class ShelfEngine extends BaseEngine {
     plan(params: any): { parts: any[] } {
         const parts: any[] = [];
-        const thickness = params.thickness !== undefined ? params.thickness : 18;
+        const shelfRule = (shelfRules as any).model_tree?.root_assembly?.subcomponents?.SHELF;
+        const thickness = params.thickness !== undefined ? params.thickness : rulesMToMm(shelfRule?.thickness, 18);
         const width = params.width || 600;
         const height = params.height || 720;
         const depth = params.depth || 500;
@@ -22,7 +24,6 @@ export class ShelfEngine extends BaseEngine {
         const effectiveWidth = Math.max(10, width - 2 * offsetSide);
         const effectiveDepth = Math.max(10, depth - (offsetFront + offsetBack));
 
-        const shelfRule = (shelfRules as any).model_tree?.root_assembly?.subcomponents?.SHELF;
         const roleOverride = (shelfRules as any).parameters?.smart_panel_integration?.role_overrides?.SHELF_BOARD;
 
         const edgeBanding = roleOverride?.edge_banding || {

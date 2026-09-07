@@ -1,0 +1,7 @@
+{
+  "units": "mm",
+  "type": "CARGO",
+  "version": "1.0.0",
+  "description": "Cargo / kosze wysuwane. Nawierty + art_no / BOM w JSON; GLB tylko viewport.",
+  "items": {}
+}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { materialDatabase } from './material-database.js';
-import { MaterialItem, MaterialScope, MaterialFilters } from './material-types.js';
+import { MaterialItem, MaterialFilters } from './material-types.js';
 
 interface Props {
     projectModel: any;
@@ -18,7 +18,6 @@ export function MaterialsUI({ projectModel: _projectModel }: Props) {
     // Wybrany materiał płyty i obrzeża
     const [selectedMatId, setSelectedMatId] = useState<string>('W1100_ST9_18');
     const [selectedEdgeId, setSelectedEdgeId] = useState<string>('ABS_1x22');
-    const [selectedEdgeScope, setSelectedEdgeScope] = useState<MaterialScope>('SINGLE');
 
     const categories = useMemo(() => materialDatabase.getCategories(), []);
     const thicknesses = useMemo(() => materialDatabase.getAvailableThicknesses(), []);
@@ -195,6 +194,14 @@ export function MaterialsUI({ projectModel: _projectModel }: Props) {
                                             userSelect: 'none'
                                         }}
                                     >
+                                        <span className="hand-icon" title="Chwyć i przeciągnij na formatkę w 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8', flexShrink: 0 }}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                                <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                            </svg>
+                                        </span>
                                         <div style={{
                                             width: '22px',
                                             height: '22px',
@@ -233,107 +240,87 @@ export function MaterialsUI({ projectModel: _projectModel }: Props) {
             {/* SEKCJA 2: OBRZEŻA (EDGE BANDING) */}
             {activeSection === 'EDGES' && (
                 <>
-                    {/* Katalog typów obrzeży + Usuwanie */}
-                    <div style={{ background: '#18181b', border: '1px solid #27272a', padding: '10px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ fontWeight: 'bold', color: '#e4e4e7', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                            🔲 Biblioteka Obrzeży (Przeciągnij na formatkę w 3D)
-                        </div>
-
-                        <div style={{ fontSize: '11px', color: '#a1a1aa', lineHeight: '1.4' }}>
-                            💡 <strong>Jak używać:</strong> Przeciągnij wybrany kafelek na <strong>krawędź</strong> formatki (aby okleić jedną krawędź) lub na <strong>środek płyty</strong> (aby okleić 4 krawędzie dookoła).
-                        </div>
-
-                        {/* Lista typów obrzeży + kafelek Usuń Obrzeże w tej samej siatce */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                            {edgeTypes.map(edge => {
-                                const isSelected = edge.id === selectedEdgeId;
-                                return (
-                                    <div
-                                        key={edge.id}
-                                        draggable={true}
-                                        onDragStart={(e) => {
-                                            e.dataTransfer.setData('text/plain', edge.id);
-                                            e.dataTransfer.setData('application/json', JSON.stringify({ type: 'EDGE_BANDING', edgeType: edge }));
-                                            (window as any).__draggedEdge = edge;
-                                            (window as any).__draggedType = 'EDGE_BANDING';
-                                            setSelectedEdgeId(edge.id);
-                                        }}
-                                        onClick={() => setSelectedEdgeId(edge.id)}
-                                        title="Przeciągnij na krawędź lub płytę w 3D!"
-                                        style={{
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            padding: '8px',
-                                            background: isSelected ? 'rgba(59, 130, 246, 0.2)' : '#27272a',
-                                            border: `1px solid ${isSelected ? '#3b82f6' : '#3f3f46'}`,
-                                            borderRadius: '5px',
-                                            cursor: 'grab',
-                                            userSelect: 'none',
-                                            transition: 'border-color 0.15s, background 0.15s'
-                                        }}
-                                    >
-                                        <div style={{ fontWeight: isSelected ? 'bold' : 'normal', color: isSelected ? '#93c5fd' : '#e4e4e7', fontSize: '11px' }}>
-                                            {edge.name}
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#a1a1aa', fontSize: '10px', marginTop: '4px' }}>
-                                            <span>Grub: {edge.thickness_mm}mm</span>
-                                            <span style={{ color: '#38bdf8' }}>{edge.price_per_mb?.toFixed(2)} PLN/mb</span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-
-                            {/* Dedykowany Kafelek Usuwania Obrzeża o identycznej szerokości */}
-                            <div
-                                draggable={true}
-                                onDragStart={(e) => {
-                                    e.dataTransfer.setData('text/plain', removeEdgeTile.id);
-                                    e.dataTransfer.setData('application/json', JSON.stringify({ type: 'EDGE_BANDING', edgeType: removeEdgeTile }));
-                                    (window as any).__draggedEdge = removeEdgeTile;
-                                    (window as any).__draggedType = 'EDGE_BANDING';
-                                    setSelectedEdgeId(removeEdgeTile.id);
-                                }}
-                                onClick={() => setSelectedEdgeId(removeEdgeTile.id)}
-                                title="Przeciągnij na krawędź formatki (lub na środek płyty), aby zdjąć okleinę i odsłonić surowy rdzeń."
-                                style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'center',
-                                    padding: '8px',
-                                    background: selectedEdgeId === 'REMOVE_EDGE' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.12)',
-                                    border: `1px dashed ${selectedEdgeId === 'REMOVE_EDGE' ? '#ef4444' : '#b91c1c'}`,
-                                    borderRadius: '5px',
-                                    cursor: 'grab',
-                                    userSelect: 'none',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#fca5a5', fontSize: '11px' }}>
-                                    <span>❌</span>
-                                    <span>Usuń Obrzeże</span>
+                    {/* Lista typów obrzeży (6 wariantów) + Kafelek Usuń Obrzeże (łącznie 7 przycisków) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                        {edgeTypes.map(edge => {
+                            const isSelected = edge.id === selectedEdgeId;
+                            return (
+                                <div
+                                    key={edge.id}
+                                    draggable={true}
+                                    onDragStart={(e) => {
+                                        e.dataTransfer.setData('text/plain', edge.id);
+                                        e.dataTransfer.setData('application/json', JSON.stringify({ type: 'EDGE_BANDING', edgeType: edge }));
+                                        (window as any).__draggedEdge = edge;
+                                        (window as any).__draggedType = 'EDGE_BANDING';
+                                        setSelectedEdgeId(edge.id);
+                                    }}
+                                    onClick={() => setSelectedEdgeId(edge.id)}
+                                    title="Przeciągnij na krawędź lub płytę w 3D!"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '8px',
+                                        background: isSelected ? 'rgba(59, 130, 246, 0.2)' : '#27272a',
+                                        border: `1px solid ${isSelected ? '#3b82f6' : '#3f3f46'}`,
+                                        borderRadius: '5px',
+                                        cursor: 'grab',
+                                        userSelect: 'none',
+                                        transition: 'border-color 0.15s, background 0.15s'
+                                    }}
+                                >
+                                    <span className="hand-icon" title="Chwyć i przeciągnij na krawędź lub formatkę w 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8', flexShrink: 0 }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                            <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                        </svg>
+                                    </span>
+                                    <span style={{ fontWeight: isSelected ? 'bold' : 'normal', color: isSelected ? '#93c5fd' : '#e4e4e7', fontSize: '11px', lineHeight: '1.2' }}>
+                                        {edge.name}
+                                    </span>
                                 </div>
-                                <div style={{ color: '#f87171', fontSize: '10px', marginTop: '4px' }}>
-                                    Zdejmij okleinę
-                                </div>
-                            </div>
-                        </div>
+                            );
+                        })}
 
-                        {/* Zasięg stosowania */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid #27272a', paddingTop: '8px' }}>
-                            <span style={{ color: '#a1a1aa', fontSize: '10px' }}>Zasięg przeciągania:</span>
-                            <select
-                                value={selectedEdgeScope}
-                                onChange={(e) => {
-                                    const sc = e.target.value as MaterialScope;
-                                    setSelectedEdgeScope(sc);
-                                    (window as any).__draggedEdgeScope = sc;
-                                }}
-                                style={{ padding: '3px 6px', background: '#27272a', border: '1px solid #3f3f46', color: '#fff', borderRadius: '4px', fontSize: '10px' }}
-                            >
-                                <option value="SINGLE">Pojedyncza formatka</option>
-                                <option value="CONTAINER">Cała szafka</option>
-                                <option value="PROJECT">Cały projekt</option>
-                            </select>
+                        {/* Dedykowany Kafelek Usuwania Obrzeża o identycznej szerokości */}
+                        <div
+                            draggable={true}
+                            onDragStart={(e) => {
+                                e.dataTransfer.setData('text/plain', removeEdgeTile.id);
+                                e.dataTransfer.setData('application/json', JSON.stringify({ type: 'EDGE_BANDING', edgeType: removeEdgeTile }));
+                                (window as any).__draggedEdge = removeEdgeTile;
+                                (window as any).__draggedType = 'EDGE_BANDING';
+                                setSelectedEdgeId(removeEdgeTile.id);
+                            }}
+                            onClick={() => setSelectedEdgeId(removeEdgeTile.id)}
+                            title="Przeciągnij na krawędź formatki (lub na środek płyty), aby zdjąć okleinę i odsłonić surowy rdzeń."
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '8px',
+                                background: selectedEdgeId === 'REMOVE_EDGE' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.12)',
+                                border: `1px dashed ${selectedEdgeId === 'REMOVE_EDGE' ? '#ef4444' : '#b91c1c'}`,
+                                borderRadius: '5px',
+                                cursor: 'grab',
+                                userSelect: 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            <span className="hand-icon" title="Chwyć i przeciągnij na krawędź lub formatkę w 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#f87171', flexShrink: 0 }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                </svg>
+                            </span>
+                            <span style={{ fontWeight: 600, color: '#fca5a5', fontSize: '11px', lineHeight: '1.2' }}>
+                                Usuń Obrzeże
+                            </span>
                         </div>
                     </div>
                 </>

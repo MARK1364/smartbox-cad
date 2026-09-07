@@ -49,7 +49,7 @@
               "object": "Cylinder",
               "role": "TUBE_ROD",
               "report_type": "akcesoria",
-              "diameter": 25,
+              "diameter": 0.025,
               "custom_properties": {
                 "material": "Aluminium_Chrome",
                 "shape": "CYLINDER",
@@ -63,8 +63,8 @@
               "object": "Cylinder",
               "role": "HOLDER",
               "report_type": "akcesoria",
-              "thickness": 5,
-              "diameter": 45,
+              "thickness": 0.005,
+              "diameter": 0.045,
               "custom_properties": {
                 "material": "Aluminium_Chrome",
                 "shape": "CYLINDER",
@@ -85,8 +85,8 @@
               "object": "Cylinder",
               "role": "HOLDER",
               "report_type": "akcesoria",
-              "thickness": 5,
-              "diameter": 45,
+              "thickness": 0.005,
+              "diameter": 0.045,
               "custom_properties": {
                 "material": "Aluminium_Chrome",
                 "shape": "CYLINDER",
@@ -109,7 +109,7 @@
           "object": "Cube",
           "role": "SHELF_PANEL",
           "report_type": "plyty",
-          "thickness": 18,
+          "thickness": 0.018,
           "lcs": {
             "mapping": { "X": "x", "Y": "y", "Z": "z" },
             "rotation": [90, 0, 0],
@@ -127,8 +127,8 @@
     "TUBE_HOLDER_DRILLING": {
       "side_mount": {
         "holes": [
-          { "name": "Hole_1", "pos": [-16, 0, 0], "dia": 3.5, "depth": 12 },
-          { "name": "Hole_2", "pos": [16, 0, 0], "dia": 3.5, "depth": 12 }
+          { "name": "Hole_1", "pos": [-0.016, 0, 0], "dia": 0.0035, "depth": 0.012 },
+          { "name": "Hole_2", "pos": [0.016, 0, 0], "dia": 0.0035, "depth": 0.012 }
         ]
       }
     }
@@ -138,8 +138,8 @@
       "name": "Rozeta drazka fi25",
       "type": "HOLDER",
       "brand": "GTV",
-      "diameter": 45,
-      "thickness": 5
+      "diameter": 0.045,
+      "thickness": 0.005
     }
   },
   "ui_config": {

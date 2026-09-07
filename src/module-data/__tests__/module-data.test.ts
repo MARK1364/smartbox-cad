@@ -35,7 +35,7 @@ B,100,50,1`;
 describe('filterPanelsByScope', () => {
     const panels = [
         { part_id: 'a', node_id: 'n1', container_id: 'c1', smartbox_id: 's1', furniture_name: 'Szafa', role: 'BOK', material: 'x', thickness_mm: 18, length_mm: 700, width_mm: 500, edge_config: {}, is_x_longer: true, qty: 1 },
-        { part_id: 'b', node_id: 'n2', container_id: 'c2', furniture_name: 'Inna', role: 'Wieniec', material: 'x', thickness_mm: 18, length_mm: 600, width_mm: 400, edge_config: {}, is_x_longer: true, qty: 1 },
+        { part_id: 'b', node_id: 'n2', container_id: 'c2', smartbox_id: 's2', furniture_name: 'Inna', role: 'Wieniec', material: 'x', thickness_mm: 18, length_mm: 600, width_mm: 400, edge_config: {}, is_x_longer: true, qty: 1 },
     ] as CuttingPanelContract[];
 
     it('PROJECT zwraca wszystkie', () => {
@@ -50,6 +50,11 @@ describe('filterPanelsByScope', () => {
     it('SMARTBOX filtruje po smartbox_id', () => {
         const out = filterPanelsByScope(panels, { type: 'SMARTBOX', id: 's1', name: 'Szuflady' });
         expect(out.map((p) => p.part_id)).toEqual(['a']);
+    });
+
+    it('PANEL filtruje po pojedynczej formatce', () => {
+        const out = filterPanelsByScope(panels, { type: 'PANEL', id: 'b', name: 'Wieniec' });
+        expect(out.map((p) => p.part_id)).toEqual(['b']);
     });
 });
 
@@ -204,6 +209,26 @@ describe('tree-context-menu', () => {
             expect(labels).toContain('Edytuj formatkę');
             expect(labels).toContain('Usuń');
             expect(labels).not.toContain('Zamroź formatkę');
+            expect(labels).toContain('Raport z formatki');
+
+            // 5. SmartBox container
+            const doc2 = new ProjectDocument();
+            registerProjectDomain(doc2);
+            const sbContainer = doc2.createContainer({ name: 'smartbox_szuflady' });
+            sbContainer.generatorParams = { type: 'smartbox_drawers', boxType: 'DRAWERS' };
+            ContextManager.instance.document = doc2;
+
+            showCadTreeContextMenu({
+                type: 'container',
+                id: sbContainer.id,
+                name: sbContainer.name,
+                clientX: 100,
+                clientY: 100
+            });
+
+            labels = shownItems.map(i => i.label);
+            expect(labels).toContain('Raport ze SmartBoxa');
+            expect(labels).not.toContain('Edytuj korpus');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }

@@ -629,9 +629,6 @@ async function main() {
         ctx.ui.setStatus('Inicjalizacja silnika reguł...');
         await initializeSmartFrameEngine();
 
-        ctx.viewport.camera.target = new BABYLON.Vector3(300, 600, 250);
-        ctx.viewport.camera.radius = 1500;
-
         const { consumeCadRestoreFlag, readProjectSnapshot } = await import('../src/module-data/session.js');
         if (consumeCadRestoreFlag()) {
             const snapshot = readProjectSnapshot();

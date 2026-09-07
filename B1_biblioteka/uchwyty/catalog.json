@@ -1,0 +1,7 @@
+{
+  "units": "mm",
+  "type": "HANDLE",
+  "version": "1.0.0",
+  "description": "Uchwyty — rozstaw C-C, otwory, art_no w JSON; GLB tylko viewport. Origin: zwykle środek C-C.",
+  "items": {}
+}

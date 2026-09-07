@@ -697,10 +697,22 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
           draggable={!editingNode}
           onDragStart={(e) => {
             e.stopPropagation();
+            const isSmartBox = (
+              container.type === 'DRAWERS' ||
+              container.type === 'SHELVES' ||
+              (container as any).is_smartbox ||
+              container.type === 'smartbox' ||
+              /smartbox/i.test(container.name || '') ||
+              container.name?.endsWith('_SB') ||
+              (container as any).generatorParams?.type?.startsWith('smartbox') ||
+              (container as any).generatorParams?.boxType !== undefined ||
+              (container as any).sb_role !== undefined ||
+              (container as any).role === 'SMARTBOX'
+            );
             const payload = {
-              type: 'CONTAINER',
+              type: isSmartBox ? 'SMARTBOX' : 'CONTAINER',
               id: container.id,
-              name: container.name || 'Korpus',
+              name: container.name || (isSmartBox ? 'SmartBox' : 'Korpus'),
               raw: container,
             };
             (window as any).__draggedCadNode = payload;
@@ -735,12 +747,22 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.preventDefault();
               e.stopPropagation();
               UIController.instance?.emitTree('select-container', { id: container.id });
+              const isSmartBox = (
+                container.type === 'DRAWERS' ||
+                container.type === 'SHELVES' ||
+                (container as any).is_smartbox ||
+                container.type === 'smartbox' ||
+                /smartbox/i.test(container.name || '') ||
+                container.name?.endsWith('_SB') ||
+                (container as any).generatorParams?.type?.startsWith('smartbox') ||
+                (container as any).generatorParams?.boxType !== undefined ||
+                (container as any).sb_role !== undefined ||
+                (container as any).role === 'SMARTBOX'
+              );
               UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: (container.type === 'DRAWERS' || container.type === 'SHELVES' || /smartbox/i.test(container.name || '') || container.name?.endsWith('_SB') || (container as any).generatorParams?.type?.startsWith('smartbox'))
-                  ? 'smartbox'
-                  : 'container',
+                type: isSmartBox ? 'smartbox' : 'container',
                 id: container.id,
-                name: container.name || 'Korpus',
+                name: container.name || (isSmartBox ? 'SmartBox' : 'Korpus'),
                 clientX: e.clientX,
                 clientY: e.clientY,
               });

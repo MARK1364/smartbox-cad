@@ -63,16 +63,22 @@ export function buildDoorsPlan(params: any, dims: ModuleDims): { parts: any[] } 
         ov_right: params.ov_right !== undefined ? params.ov_right : 16,
         use_hinge_1: params.use_hinge_1,
         hinge_1_pos: params.hinge_1_pos,
+        hinge_1_template: params.hinge_1_template,
         use_hinge_2: params.use_hinge_2,
         hinge_2_pos: params.hinge_2_pos,
+        hinge_2_template: params.hinge_2_template,
         use_hinge_3: params.use_hinge_3,
         hinge_3_pos: params.hinge_3_pos,
+        hinge_3_template: params.hinge_3_template,
         use_hinge_4: params.use_hinge_4,
         hinge_4_pos: params.hinge_4_pos,
+        hinge_4_template: params.hinge_4_template,
         use_hinge_5: params.use_hinge_5,
         hinge_5_pos: params.hinge_5_pos,
+        hinge_5_template: params.hinge_5_template,
         use_hinge_6: params.use_hinge_6,
         hinge_6_pos: params.hinge_6_pos,
+        hinge_6_template: params.hinge_6_template,
         hinge_template: params.hinge_template || params.hingeTemplate || DEFAULT_HINGE_ID
     });
 }
@@ -91,48 +97,62 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
     const [ovLeft, setOvLeft] = useState<string | number>(p.ov_left !== undefined ? p.ov_left : 16);
     const [ovRight, setOvRight] = useState<string | number>(p.ov_right !== undefined ? p.ov_right : 16);
 
-    // Szablon zawiasów
-    const [hingeTemplate, setHingeTemplate] = useState<string>(p.hinge_template || DEFAULT_HINGE_ID);
+    // Domyślny szablon zawiasów
+    const defaultTemplate = p.hinge_template || DEFAULT_HINGE_ID;
+    const [hingeTemplate, setHingeTemplate] = useState<string>(defaultTemplate);
 
-    // Pozycje i aktywność zawiasów
+    // Pozycje, aktywność i szablony dla 6 zawiasów
     const [useHinge1, setUseHinge1] = useState<boolean>(p.use_hinge_1 !== false);
     const [hinge1Pos, setHinge1Pos] = useState<number>(p.hinge_1_pos !== undefined ? p.hinge_1_pos : 120);
+    const [hinge1Template, setHinge1Template] = useState<string>(p.hinge_1_template || defaultTemplate);
 
     const [useHinge2, setUseHinge2] = useState<boolean>(!!p.use_hinge_2);
     const [hinge2Pos, setHinge2Pos] = useState<number>(p.hinge_2_pos !== undefined ? p.hinge_2_pos : 570);
+    const [hinge2Template, setHinge2Template] = useState<string>(p.hinge_2_template || defaultTemplate);
 
     const [useHinge3, setUseHinge3] = useState<boolean>(!!p.use_hinge_3);
     const [hinge3Pos, setHinge3Pos] = useState<number>(p.hinge_3_pos !== undefined ? p.hinge_3_pos : 910);
+    const [hinge3Template, setHinge3Template] = useState<string>(p.hinge_3_template || defaultTemplate);
 
     const [useHinge4, setUseHinge4] = useState<boolean>(!!p.use_hinge_4);
     const [hinge4Pos, setHinge4Pos] = useState<number>(p.hinge_4_pos !== undefined ? p.hinge_4_pos : 1230);
+    const [hinge4Template, setHinge4Template] = useState<string>(p.hinge_4_template || defaultTemplate);
 
     const [useHinge5, setUseHinge5] = useState<boolean>(!!p.use_hinge_5);
     const [hinge5Pos, setHinge5Pos] = useState<number>(p.hinge_5_pos !== undefined ? p.hinge_5_pos : 1580);
+    const [hinge5Template, setHinge5Template] = useState<string>(p.hinge_5_template || defaultTemplate);
 
     const [useHinge6, setUseHinge6] = useState<boolean>(p.use_hinge_6 !== false);
     const [hinge6Pos, setHinge6Pos] = useState<number>(p.hinge_6_pos !== undefined ? p.hinge_6_pos : 120);
+    const [hinge6Template, setHinge6Template] = useState<string>(p.hinge_6_template || defaultTemplate);
 
     useEffect(() => {
+        const defTpl = p.hinge_template || DEFAULT_HINGE_ID;
         setDoorType(p.door_type || p.doorType || 'LEFT');
         setGap(p.gap !== undefined ? p.gap : 4);
         setOvTop(p.ov_top !== undefined ? p.ov_top : 14);
         setOvBottom(p.ov_bottom !== undefined ? p.ov_bottom : 15);
         setOvLeft(p.ov_left !== undefined ? p.ov_left : 16);
         setOvRight(p.ov_right !== undefined ? p.ov_right : 16);
-        setHingeTemplate(p.hinge_template || DEFAULT_HINGE_ID);
+        setHingeTemplate(defTpl);
         setUseHinge1(p.use_hinge_1 !== false);
         setHinge1Pos(p.hinge_1_pos !== undefined ? p.hinge_1_pos : 120);
+        setHinge1Template(p.hinge_1_template || defTpl);
         setUseHinge2(!!p.use_hinge_2);
         setHinge2Pos(p.hinge_2_pos !== undefined ? p.hinge_2_pos : 570);
+        setHinge2Template(p.hinge_2_template || defTpl);
         setUseHinge3(!!p.use_hinge_3);
         setHinge3Pos(p.hinge_3_pos !== undefined ? p.hinge_3_pos : 910);
+        setHinge3Template(p.hinge_3_template || defTpl);
         setUseHinge4(!!p.use_hinge_4);
         setHinge4Pos(p.hinge_4_pos !== undefined ? p.hinge_4_pos : 1230);
+        setHinge4Template(p.hinge_4_template || defTpl);
         setUseHinge5(!!p.use_hinge_5);
         setHinge5Pos(p.hinge_5_pos !== undefined ? p.hinge_5_pos : 1580);
+        setHinge5Template(p.hinge_5_template || defTpl);
         setUseHinge6(p.use_hinge_6 !== false);
         setHinge6Pos(p.hinge_6_pos !== undefined ? p.hinge_6_pos : 120);
+        setHinge6Template(p.hinge_6_template || defTpl);
     }, [container?.id]);
 
     return (
@@ -263,80 +283,110 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                     const ovTopMm = toNum(ovTop, 14);
                     const ovBottomMm = toNum(ovBottom, 15);
                     return [
-                    { label: 'Poz. Z 1::', active: useHinge1, setActive: setUseHinge1, val: hinge1Pos, setVal: setHinge1Pos, keyActive: 'use_hinge_1', keyPos: 'hinge_1_pos', fromTop: false },
-                    { label: 'Poz. Z 2::', active: useHinge2, setActive: setUseHinge2, val: hinge2Pos, setVal: setHinge2Pos, keyActive: 'use_hinge_2', keyPos: 'hinge_2_pos', fromTop: false },
-                    { label: 'Poz. Z 3::', active: useHinge3, setActive: setUseHinge3, val: hinge3Pos, setVal: setHinge3Pos, keyActive: 'use_hinge_3', keyPos: 'hinge_3_pos', fromTop: false },
-                    { label: 'Poz. Z 4::', active: useHinge4, setActive: setUseHinge4, val: hinge4Pos, setVal: setHinge4Pos, keyActive: 'use_hinge_4', keyPos: 'hinge_4_pos', fromTop: false },
-                    { label: 'Poz. Z 5::', active: useHinge5, setActive: setUseHinge5, val: hinge5Pos, setVal: setHinge5Pos, keyActive: 'use_hinge_5', keyPos: 'hinge_5_pos', fromTop: false },
-                    { label: 'Poz. Z Góra::', active: useHinge6, setActive: setUseHinge6, val: hinge6Pos, setVal: setHinge6Pos, keyActive: 'use_hinge_6', keyPos: 'hinge_6_pos', fromTop: true },
-                ].map((h, i) => {
-                    const outOfPanel = h.active && isDoorHingeOutOfPanel({
-                        posMm: toNum(h.val, 0),
-                        fromTop: h.fromTop,
-                        sbHeight,
-                        ovTop: ovTopMm,
-                        ovBottom: ovBottomMm,
-                        hingeId: hingeTemplate
-                    });
-                    return (
-                    <div
-                        key={i}
-                        title={outOfPanel ? 'Ostrzeżenie: otwór zawiasu wychodzi poza formatkę drzwi' : undefined}
-                        style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '2px 4px',
-                            margin: '0 -4px',
-                            borderRadius: '3px',
-                            background: outOfPanel ? '#3b1515' : 'transparent',
-                            border: outOfPanel ? '1px solid #7f1d1d' : '1px solid transparent'
-                        }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <input 
-                                type="checkbox" 
-                                id={`chkHinge_${i}`}
-                                checked={h.active}
-                                onChange={(e) => {
-                                    h.setActive(e.target.checked);
-                                    triggerUpdate({ [h.keyActive]: e.target.checked });
-                                }}
-                            />
-                            <label
-                                htmlFor={`chkHinge_${i}`}
+                        { label: 'Dół 1', active: useHinge1, setActive: setUseHinge1, val: hinge1Pos, setVal: setHinge1Pos, tpl: hinge1Template, setTpl: setHinge1Template, keyActive: 'use_hinge_1', keyPos: 'hinge_1_pos', keyTpl: 'hinge_1_template', fromTop: false },
+                        { label: 'Poz. 2', active: useHinge2, setActive: setUseHinge2, val: hinge2Pos, setVal: setHinge2Pos, tpl: hinge2Template, setTpl: setHinge2Template, keyActive: 'use_hinge_2', keyPos: 'hinge_2_pos', keyTpl: 'hinge_2_template', fromTop: false },
+                        { label: 'Poz. 3', active: useHinge3, setActive: setUseHinge3, val: hinge3Pos, setVal: setHinge3Pos, tpl: hinge3Template, setTpl: setHinge3Template, keyActive: 'use_hinge_3', keyPos: 'hinge_3_pos', keyTpl: 'hinge_3_template', fromTop: false },
+                        { label: 'Poz. 4', active: useHinge4, setActive: setUseHinge4, val: hinge4Pos, setVal: setHinge4Pos, tpl: hinge4Template, setTpl: setHinge4Template, keyActive: 'use_hinge_4', keyPos: 'hinge_4_pos', keyTpl: 'hinge_4_template', fromTop: false },
+                        { label: 'Poz. 5', active: useHinge5, setActive: setUseHinge5, val: hinge5Pos, setVal: setHinge5Pos, tpl: hinge5Template, setTpl: setHinge5Template, keyActive: 'use_hinge_5', keyPos: 'hinge_5_pos', keyTpl: 'hinge_5_template', fromTop: false },
+                        { label: 'Góra 6', active: useHinge6, setActive: setUseHinge6, val: hinge6Pos, setVal: setHinge6Pos, tpl: hinge6Template, setTpl: setHinge6Template, keyActive: 'use_hinge_6', keyPos: 'hinge_6_pos', keyTpl: 'hinge_6_template', fromTop: true },
+                    ].map((h, i) => {
+                        const outOfPanel = h.active && isDoorHingeOutOfPanel({
+                            posMm: toNum(h.val, 0),
+                            fromTop: h.fromTop,
+                            sbHeight,
+                            ovTop: ovTopMm,
+                            ovBottom: ovBottomMm,
+                            hingeId: h.tpl
+                        });
+                        return (
+                            <div
+                                key={i}
+                                title={outOfPanel ? 'Ostrzeżenie: otwór zawiasu wychodzi poza formatkę drzwi' : undefined}
                                 style={{
-                                    color: outOfPanel ? '#f87171' : (h.active ? '#e4e4e7' : '#71717a'),
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                    fontWeight: outOfPanel ? 'bold' : 'normal'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    padding: '2px 4px',
+                                    margin: '0 -4px',
+                                    borderRadius: '3px',
+                                    background: outOfPanel ? '#3b1515' : 'transparent',
+                                    border: outOfPanel ? '1px solid #7f1d1d' : '1px solid transparent'
                                 }}
                             >
-                                {outOfPanel ? '⚠ ' : ''}{h.label}
-                            </label>
-                        </div>
-                        <SmartNumericInput 
-                            value={h.val}
-                            disabled={!h.active}
-                            unit="mm"
-                            onChange={(v) => {
-                                h.setVal(v);
-                                triggerUpdate({ [h.keyPos]: v });
-                            }}
-                            style={{
-                                width: '80px',
-                                padding: '2px 4px',
-                                background: h.active ? '#18181b' : '#18181b80',
-                                border: `1px solid ${outOfPanel ? '#ef4444' : '#3f3f46'}`,
-                                color: outOfPanel ? '#fca5a5' : (h.active ? '#fff' : '#71717a'),
-                                borderRadius: '3px',
-                                textAlign: 'right',
-                                fontSize: '11px'
-                            }}
-                        />
-                    </div>
-                    );
-                });
+                                <input 
+                                    type="checkbox" 
+                                    id={`chkHinge_${i}`}
+                                    checked={h.active}
+                                    onChange={(e) => {
+                                        h.setActive(e.target.checked);
+                                        triggerUpdate({ [h.keyActive]: e.target.checked });
+                                    }}
+                                    style={{ margin: 0, cursor: 'pointer' }}
+                                />
+                                <label
+                                    htmlFor={`chkHinge_${i}`}
+                                    style={{
+                                        color: outOfPanel ? '#f87171' : (h.active ? '#e4e4e7' : '#71717a'),
+                                        fontSize: '11px',
+                                        cursor: 'pointer',
+                                        fontWeight: outOfPanel ? 'bold' : 'normal',
+                                        width: '42px',
+                                        flexShrink: 0,
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {outOfPanel ? '⚠ ' : ''}{h.label}
+                                </label>
+                                <SmartNumericInput 
+                                    value={h.val}
+                                    disabled={!h.active}
+                                    unit="mm"
+                                    onChange={(v) => {
+                                        h.setVal(v);
+                                        triggerUpdate({ [h.keyPos]: v });
+                                    }}
+                                    style={{
+                                        width: '52px',
+                                        padding: '2px 3px',
+                                        background: h.active ? '#18181b' : '#18181b80',
+                                        border: `1px solid ${outOfPanel ? '#ef4444' : '#3f3f46'}`,
+                                        color: outOfPanel ? '#fca5a5' : (h.active ? '#fff' : '#71717a'),
+                                        borderRadius: '3px',
+                                        textAlign: 'right',
+                                        fontSize: '11px',
+                                        flexShrink: 0
+                                    }}
+                                />
+                                <select
+                                    disabled={!h.active}
+                                    value={h.tpl}
+                                    onChange={(e) => {
+                                        h.setTpl(e.target.value);
+                                        triggerUpdate({ [h.keyTpl]: e.target.value });
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                        padding: '2px 3px',
+                                        background: h.active ? '#18181b' : '#18181b80',
+                                        border: '1px solid #3f3f46',
+                                        color: h.active ? '#fff' : '#71717a',
+                                        borderRadius: '3px',
+                                        fontSize: '10px',
+                                        textOverflow: 'ellipsis',
+                                        overflow: 'hidden',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                >
+                                    {listByType('HINGE').map((hw) => (
+                                        <option key={hw.id} value={hw.id}>
+                                            [{hw.brand || ''}] {hw.name || hw.id}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        );
+                    });
                 })()}
             </div>
 

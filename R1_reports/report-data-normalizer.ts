@@ -45,6 +45,8 @@ export interface AccessoryItem {
     library_id: string;
     qty: number;
     furniture_name: string;
+    container_id?: string;
+    smartbox_id?: string;
 }
 
 export class ReportDataNormalizer {
@@ -127,8 +129,8 @@ export class ReportDataNormalizer {
         return {
             part_id: String(part_id),
             node_id: nodeId ? String(nodeId) : undefined,
-            container_id: containerId ? String(containerId) : undefined,
-            smartbox_id: smartboxId ? String(smartboxId) : undefined,
+            container_id: containerId ? String(containerId) : (panel.containerId || panel.container_id ? String(panel.containerId || panel.container_id) : undefined),
+            smartbox_id: smartboxId ? String(smartboxId) : (panel.smartbox_id || panel.smartboxId ? String(panel.smartbox_id || panel.smartboxId) : undefined),
             role: String(role),
             material: String(material),
             thickness_mm: Math.round(tRaw * 10) / 10,
@@ -195,11 +197,13 @@ export class ReportDataNormalizer {
 
             const isSmartBox = domain?.is_smartbox || 
                 domain?.type === 'smartbox' || 
+                domain?.type === 'SMARTBOX' || 
                 (domain?.name && String(domain.name).toLowerCase().includes('smartbox')) || 
                 (domain?.name && String(domain.name).endsWith('_SB')) ||
                 domain?.generatorParams?.type?.startsWith('smartbox') ||
                 domain?.generatorParams?.boxType !== undefined ||
-                domain?.sb_role !== undefined;
+                domain?.sb_role !== undefined ||
+                domain?.role === 'SMARTBOX';
             const isSmartFrame = !isSmartBox && (domain?.is_smartframe || domain?.type === 'container' || String(node.nodeType) === 'ASSEMBLY' || node.type === 'CONTAINER');
 
             if (isSmartBox) {
@@ -252,7 +256,9 @@ export class ReportDataNormalizer {
                     role: roleUpper || 'AKCESORIUM',
                     library_id,
                     qty: roleUpper === 'PROWADNICA' ? 0.5 : 1,
-                    furniture_name: furn
+                    furniture_name: furn,
+                    container_id: activeContainerId,
+                    smartbox_id: activeSmartboxId,
                 });
             }
 

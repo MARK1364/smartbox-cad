@@ -43,6 +43,12 @@
     "prices_hardware": {
         "HINGE_BLUM_71B3550": { "price": 12.0, "unit": "szt", "name": "Zawias Blum Clip Top 110st (zintegrowany hamulec)" },
         "HINGE_BLUM_713550": { "price": 11.0, "unit": "szt", "name": "Zawias Blum Clip Top 110st (bez hamulca)" },
+        "HINGE_BLUM_71B3750": { "price": 14.0, "unit": "szt", "name": "Zawias Blum Clip Top 110st wpuszczany (z hamulcem)" },
+        "HINGE_BLUM_71T3750": { "price": 13.0, "unit": "szt", "name": "Zawias Blum Clip Top 110st wpuszczany (bez hamulca)" },
+        "HINGE_GTV_3D": { "price": 8.0, "unit": "szt", "name": "Zawias GTV Hydrauliczny 110st 3D (z hamulcem)" },
+        "HINGE_GTV_STD": { "price": 5.0, "unit": "szt", "name": "Zawias GTV Standardowy 110st (bez hamulca)" },
+        "HINGE_HETTICH_8645I": { "price": 13.5, "unit": "szt", "name": "Zawias Hettich Sensys 8645i 110st (z hamulcem)" },
+        "HINGE_HETTICH_8645": { "price": 12.0, "unit": "szt", "name": "Zawias Hettich Sensys 8645 110st (bez hamulca)" },
         "PODPORKA_POLKI": { "price": 0.5, "unit": "szt", "name": "Podpórka pod półkę metalowa" },
         "ROZETA_FI25": { "price": 8.5, "unit": "szt", "name": "Rozeta rury fi25 uchwyt" },
         "BLUM_ANTARO_M_300": { "price": 350.0, "unit": "kpl", "name": "Szuflada Blum Tandembox Antaro M 300mm" },

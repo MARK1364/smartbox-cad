@@ -45,7 +45,7 @@
           "object": "Cube",
           "role": "SHELF_BOARD",
           "report_type": "plyty",
-          "thickness": 18,
+          "thickness": 0.018,
           "lcs": {
             "mapping": { "X": "x", "Y": "y", "Z": "z" },
             "rotation": [90, 0, 0],

@@ -2,11 +2,15 @@
  * SmartPanel Web — CAD Math: Units (Konwersja Jednostek)
  *
  * Jedno miejsce dla przeliczania jednostek. Bez zgadywania (`n < 2`, `n > 100_000`).
+ * Pełna polityka: `.agents/AGENTS.md` → sekcja „Jednostki”.
  *
  *   Domena CAD / CADNode / silniki / pliki zapisu  →  Nanometry (nm) [SSOT]
  *   UI / Formularze                                 →  Milimetry (mm)
- *   JSON rules i Biblioteki/okucia                  →  Metry (m) — rulesMToNm do silnika, rulesMToMm tylko do UI
+ *   Nowe JSON katalogów (okucia, uchwyty, szuflady) →  Milimetry (mm) → mmToNm
+ *   Legacy JSON rules / część okucia                →  Metry (m) — rulesMToNm / rulesMToMm
  *   Postprocesory CNC                               →  Milimetry (mm) / Cale (inch)
+ *
+ * NIE dodawać nowych katalogów w metrach ani nanometrach — tylko mm.
  *
  * 1 mm = 1,000,000 nm (10^6)
  * 1 m  = 1,000 mm

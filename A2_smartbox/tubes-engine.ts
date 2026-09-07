@@ -5,6 +5,7 @@
  */
 import tubesRules from './tubes_3_rules_V1.json';
 import { BaseEngine } from './base-engine.js';
+import { rulesMToMm } from '../A1_core/cad-math/units.js';
 
 export class TubesEngine extends BaseEngine {
     plan(params: any): { parts: any[] } {
@@ -13,11 +14,6 @@ export class TubesEngine extends BaseEngine {
         const height = params.height || 720;
         const depth = params.depth || 500;
 
-        const offsetTop = params.offsetTop !== undefined ? params.offsetTop : (params.offset_top !== undefined ? params.offset_top : 70);
-        const showShelf = params.showShelf !== undefined ? params.showShelf : (params.show_shelf !== undefined ? !!params.show_shelf : false);
-        const spaceAboveShelf = params.spaceAboveShelf !== undefined ? params.spaceAboveShelf : (params.space_above_shelf !== undefined ? params.space_above_shelf : 100);
-        const shelfThickness = params.shelfThickness !== undefined ? params.shelfThickness : (params.shelf_thickness !== undefined ? params.shelf_thickness : 18);
-
         const tree = (tubesRules as any).model_tree?.root_assembly?.subcomponents || {};
         const rodSys = tree.ROD_SYSTEM?.subcomponents || {};
         const rodRule = rodSys.ROD || {};
@@ -25,7 +21,12 @@ export class TubesEngine extends BaseEngine {
         const rightRule = rodSys.HOLDER_RIGHT || {};
         const shelfRule = tree.SHELF || {};
         const shelfOverride = (tubesRules as any).parameters?.smart_panel_integration?.role_overrides?.TOP_SHELF;
-        const rodDiameter = params.rodDiameter || rodRule.diameter || 25;
+
+        const offsetTop = params.offsetTop !== undefined ? params.offsetTop : (params.offset_top !== undefined ? params.offset_top : 70);
+        const showShelf = params.showShelf !== undefined ? params.showShelf : (params.show_shelf !== undefined ? !!params.show_shelf : false);
+        const spaceAboveShelf = params.spaceAboveShelf !== undefined ? params.spaceAboveShelf : (params.space_above_shelf !== undefined ? params.space_above_shelf : 100);
+        const shelfThickness = params.shelfThickness !== undefined ? params.shelfThickness : (params.shelf_thickness !== undefined ? params.shelf_thickness : rulesMToMm(shelfRule.thickness, 18));
+        const rodDiameter = params.rodDiameter || (rodRule.diameter !== undefined ? rulesMToMm(rodRule.diameter, 25) : 25);
 
         let shelfZ: number | null = null;
         let rodZ: number;
@@ -72,8 +73,8 @@ export class TubesEngine extends BaseEngine {
             features: []
         });
 
-        const holderThick = leftRule.thickness !== undefined ? leftRule.thickness : 5;
-        const holderDia = leftRule.diameter !== undefined ? leftRule.diameter : 45;
+        const holderThick = leftRule.thickness !== undefined ? rulesMToMm(leftRule.thickness, 5) : 5;
+        const holderDia = leftRule.diameter !== undefined ? rulesMToMm(leftRule.diameter, 45) : 45;
         parts.push({
             name: leftRule.name || 'Uchwyt_Lewy',
             role: leftRule.role || 'HOLDER',

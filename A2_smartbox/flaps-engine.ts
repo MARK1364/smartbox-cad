@@ -32,9 +32,11 @@ export class FlapsEngine extends BaseEngine {
         const hingeLeftOffset = params.hinge_left_offset !== undefined ? Number(params.hinge_left_offset) : 80;
         const hingeRightOffset = params.hinge_right_offset !== undefined ? Number(params.hinge_right_offset) : 80;
         const useCenterHinge = !!params.use_center_hinge;
-        const hingeId = params.hinge_template || params.library_id || DEFAULT_HINGE_ID;
-        const frontHoles = hingeFrontHolesMm(hingeId);
-        const templateId = hingeTemplateId(hingeId);
+        const resolveHingeId = (side: HingeSide): string => {
+            if (side === 'left') return params.hinge_left_template || params.hinge_template || params.library_id || DEFAULT_HINGE_ID;
+            if (side === 'right') return params.hinge_right_template || params.hinge_template || params.library_id || DEFAULT_HINGE_ID;
+            return params.hinge_center_template || params.hinge_template || params.library_id || DEFAULT_HINGE_ID;
+        };
 
         const flapWidth = width + ovLeft + ovRight;
         const flapHeight = height + ovTop + ovBottom;
@@ -50,6 +52,9 @@ export class FlapsEngine extends BaseEngine {
 
         const buildHingeFeatures = (side: HingeSide, hingeKey: string) => {
             const uCenter = hingeUCenter(side);
+            const hingeId = resolveHingeId(side);
+            const frontHoles = hingeFrontHolesMm(hingeId);
+            const templateId = hingeTemplateId(hingeId);
             const features: any[] = [];
 
             for (const hole of frontHoles) {

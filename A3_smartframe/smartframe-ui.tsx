@@ -184,9 +184,19 @@ export function SmartFrameUI({ projectModel }: Props) {
                             <rect x="2" y="2" width="28" height="38" rx="1" stroke="currentColor" />
                             <rect x="5" y="5" width="22" height="32" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="currentColor" strokeDasharray="2 2" strokeWidth="1" />
                         </svg>
-                        <span style={{ fontSize: '11px', marginTop: '6px', fontWeight: 500, color: 'var(--text-secondary, #aaa)' }}>
-                            1 Strefa
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px' }}>
+                            <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                </svg>
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary, #aaa)' }}>
+                                1 Strefa
+                            </span>
+                        </div>
                     </div>
 
                     {/* Karta 2: 2 Strefy */}
@@ -216,9 +226,19 @@ export function SmartFrameUI({ projectModel }: Props) {
                             <rect x="5" y="24" width="22" height="13" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="none" />
                             <rect x="5" y="5" width="22" height="13" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="none" />
                         </svg>
-                        <span style={{ fontSize: '11px', marginTop: '6px', fontWeight: 500, color: 'var(--text-secondary, #aaa)' }}>
-                            2 Strefy
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px' }}>
+                            <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                </svg>
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary, #aaa)' }}>
+                                2 Strefy
+                            </span>
+                        </div>
                     </div>
 
                     {/* Karta 3: 3 Strefy */}
@@ -250,9 +270,19 @@ export function SmartFrameUI({ projectModel }: Props) {
                             <rect x="5" y="18" width="22" height="7" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="none" />
                             <rect x="5" y="5" width="22" height="7" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="none" />
                         </svg>
-                        <span style={{ fontSize: '11px', marginTop: '6px', fontWeight: 500, color: 'var(--text-secondary, #aaa)' }}>
-                            3 Strefy
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px' }}>
+                            <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                </svg>
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary, #aaa)' }}>
+                                3 Strefy
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>

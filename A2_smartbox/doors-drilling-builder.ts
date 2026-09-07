@@ -218,15 +218,14 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
             hinges.push({ index: 6, localZ: Math.max(0, sbHeight - pos6) });
         }
 
-        const hingeId = p.hinge_template || p.hingeTemplate || DEFAULT_HINGE_ID;
-        const corpusHoles = hingeCorpusHolesMm(hingeId);
-        const templateId = hingeTemplateId(hingeId);
-
         const isLeftActive = doorType === 'LEFT' || doorType === 'SINGLE_LEFT' || doorType === 'DOUBLE';
         const isRightActive = doorType === 'RIGHT' || doorType === 'SINGLE_RIGHT' || doorType === 'DOUBLE';
 
         for (const hinge of hinges) {
             const worldCenterZ = sbPosZ + hinge.localZ;
+            const hingeId = (p as any)[`hinge_${hinge.index}_template`] || p.hinge_template || p.hingeTemplate || DEFAULT_HINGE_ID;
+            const corpusHoles = hingeCorpusHolesMm(hingeId);
+            const templateId = hingeTemplateId(hingeId);
 
             // ─── 1. BOK / PRZEGRODA PO LEWEJ STRONIE ──────────────────────────
             if (isLeftActive) {

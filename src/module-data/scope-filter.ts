@@ -12,7 +12,7 @@ export function filterPanelsByScope(panels: CuttingPanelContract[], scope: Modul
     const { type, id, name } = scope;
     return panels.filter((p) => {
         if (type === 'SMARTBOX') {
-            return matches(p.smartbox_id, id, name) || matches(p.part_id, id, name);
+            return matches(p.smartbox_id, id, name) || matches(p.part_id, id, name) || matches(p.node_id, id, name);
         }
         if (type === 'PANEL') {
             return matches(p.part_id, id, name) || matches(p.node_id, id, name);
@@ -27,9 +27,14 @@ export function filterAccessoriesByScope(accessories: AccessoryItem[], scope: Mo
     const { type, id, name } = scope;
     return accessories.filter((a) => {
         if (type === 'SMARTBOX') {
-            return a.id === id || (a.name && a.name.includes(name)) || matches(a.furniture_name, id, name);
+            return (
+                matches(a.smartbox_id, id, name) ||
+                a.id === id ||
+                (a.name && a.name.includes(name)) ||
+                matches(a.furniture_name, id, name)
+            );
         }
-        return matches(a.furniture_name, id, name);
+        return matches(a.container_id, id, name) || matches(a.furniture_name, id, name);
     });
 }
 

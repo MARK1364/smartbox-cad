@@ -175,7 +175,13 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
 
         return projectRawData.panels.filter((p) => {
             if (type === 'SMARTBOX') {
-                return p.smartbox_id === id || p.smartbox_id === name || (p.part_id && p.part_id === id) || (p.role && p.role.includes(name));
+                return (
+                    p.smartbox_id === id || 
+                    p.smartbox_id === name || 
+                    (p.node_id && p.node_id === id) || 
+                    (p.part_id && (p.part_id === id || p.part_id === name)) || 
+                    (p.role && p.role.includes(name))
+                );
             }
             if (type === 'PANEL') {
                 return p.part_id === id || p.node_id === id || p.part_id === name;
@@ -194,10 +200,16 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
 
         return projectRawData.accessories.filter((a) => {
             if (type === 'SMARTBOX') {
-                return a.id === id || a.name.includes(name) || (a.furniture_name && a.furniture_name.includes(name));
+                return (
+                    a.smartbox_id === id ||
+                    a.smartbox_id === name ||
+                    a.id === id ||
+                    (a.name && a.name.includes(name)) ||
+                    (a.furniture_name && a.furniture_name.includes(name))
+                );
             }
             // CONTAINER
-            return a.furniture_name === name || a.furniture_name === id;
+            return a.container_id === id || a.container_id === name || a.furniture_name === name || a.furniture_name === id;
         });
     }, [projectRawData.accessories, selectedTarget]);
 
@@ -269,7 +281,7 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                 }}>
                     <span style={{ fontSize: '2.4rem' }}>📥</span>
                     <div style={{ fontWeight: 700, fontSize: '1rem', color: '#ffffff', textAlign: 'center' }}>
-                        Upuść Korpus lub SmartBox tutaj
+                        Upuść Korpus, SmartBox lub Formatkę tutaj
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#bae6fd' }}>
                         Wycena i raport zostaną natychmiast przeliczone dla tego elementu
@@ -325,7 +337,7 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                                 Wycena: Cały Projekt
                             </div>
                             <div style={{ fontSize: '10px', color: '#71717a' }}>
-                                Przeciągnij Korpus lub SmartBox z lewego drzewa, aby wycenić pojedynczy moduł.
+                                Przeciągnij Korpus, SmartBox lub Formatkę z lewego drzewa, aby wycenić pojedynczy element.
                             </div>
                         </div>
                     </div>

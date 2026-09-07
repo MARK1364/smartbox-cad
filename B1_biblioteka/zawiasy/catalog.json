@@ -1,0 +1,7 @@
+{
+  "units": "mm",
+  "type": "HINGE",
+  "version": "1.0.0",
+  "description": "Zawiasy — nawierty i art_no w JSON; GLB tylko viewport. Origin: CUP_CENTER.",
+  "items": {}
+}

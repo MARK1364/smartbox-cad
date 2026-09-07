@@ -1,0 +1,7 @@
+{
+  "units": "mm",
+  "type": "DRAWER_SYSTEM",
+  "version": "1.0.0",
+  "description": "Systemy szuflad (np. Antaro). Nawierty + BOM art_no per długość/kolor. GLB opcjonalnie 1 na system.",
+  "items": {}
+}

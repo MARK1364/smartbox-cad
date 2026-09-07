@@ -1,5 +1,38 @@
 # Projektowe zasady agenta
 
+## Jednostki (SSOT) — NIE ZGADUJ, NIE ZMIENIAJ
+
+Źródło prawdy: `A1_core/cad-math/units.ts` (`mmToNm`, `nmToMm`, `rulesMToNm`, `rulesMToMm`).
+
+### Decyzja projektowa (prosto)
+- **Nowe / ręczne JSON katalogów** (okucia, uchwyty, szuflady, nawierty) → **`mm`** + pole `"units": "mm"`.
+- **Silnik / domena / zapis projektu** → zawsze **`nm`** (`mmToNm` na brzegu).
+- **UI** → **`mm`**.
+- **CNC post** → **`mm`** (`nmToMm`).
+- **Nie używaj `nm` w JSON katalogów** (nieczytelne). **Nie dodawaj nowych plików w metrach.**
+- Stare pliki w **metrach** (legacy SmartBox rules / część `Biblioteki/okucia`) → zostaw; do silnika tylko `rulesMToNm`. Nie mieszaj m i mm w jednym pliku.
+
+| Warstwa | Jednostka | Uwagi |
+|--------|-----------|--------|
+| Domena CAD / `CADNode` / silniki / zapis projektu | **nm** | `domainUnit === 'nm'`; wartości całkowite |
+| UI / formularze / etykiety | **mm** | konwersja tylko na brzegu UI ↔ domena |
+| **Nowe** JSON bibliotek / katalogów | **mm** | adapter → `mmToNm` |
+| Legacy JSON rules / okucia (istniejące) | **m** | tylko `rulesMToNm` / `rulesMToMm` |
+| Postprocesory CNC / G-code | **mm** (lub inch) | z domeny: `nmToMm` |
+
+**Twarde zakazy:**
+- NIE zmieniać domeny na metry ani milimetry „dla wygody”.
+- NIE pisać własnych przeliczników (`* 1000`, `* 1e6`, `n < 2` → „to metry”) — tylko helpery z `units.ts`.
+- NIE mieszać jednostek w jednym pliku JSON / jednym polu modelu bez jawnej konwersji na brzegu.
+- NIE traktować wartości z UI (mm) jako wartości domenowych (nm) i odwrotnie.
+- NIE tworzyć nowych katalogów okuć w metrach ani nanometrach — tylko **mm**.
+
+Przeliczniki: `1 mm = 1_000_000 nm`, `1 m = 1_000_000_000 nm`.
+
+### Biblioteka modeli (`B1_biblioteka/`)
+- Nowe GLB i katalogi mm: `B1_biblioteka/{zawiasy|uchwyty|szuflady|silowniki|carga|nozki|…}/` (`catalog.json` + `models/*.glb`).
+- Legacy: `Biblioteki/okucia/`, `Biblioteki/szuflady.json` — nie usuwać bez migracji; nowe pozycje preferuj w `B1_biblioteka`.
+
 ## Architektura Formatek (SmartPanel)
 - Projekt odchodzi od korzystania z ciezkiego jadra OCCT (OpenCASCADE) na froncie.
 - Domyślnym, aktywnym i rozwijanym silnikiem budowania siatek jest **NativePanelBuilder** (A4_smartpanel/native-panel-builder.ts oraz native_core/mesh_builder.ts).
