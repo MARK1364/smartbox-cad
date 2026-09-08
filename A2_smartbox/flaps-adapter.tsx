@@ -10,8 +10,37 @@ import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { FlapsEngine } from './flaps-engine.js';
 import type { ModuleDims } from './base-engine.js';
 import { DEFAULT_HINGE_ID, listByType } from '../Biblioteki/okucia/index.js';
+import { nmToMm } from '../A1_core/cad-math/units.js';
 
 const MIN_HINGE_OFFSET = 50;
+
+function dimToMm(raw: number | undefined): number {
+    if (raw === undefined || raw === null || !Number.isFinite(Number(raw))) return 0;
+    return nmToMm(Number(raw));
+}
+
+function calculateFlapWeightAndLF(opts: {
+    sbWidth: number;
+    sbHeight: number;
+    ovTop: number;
+    ovBottom: number;
+    ovLeft: number;
+    ovRight: number;
+    thickness: number;
+    density?: number;
+}): { weightKg: number; suggestedHinges: number; powerFactorLF: number } {
+    const flapW = opts.sbWidth + opts.ovLeft + opts.ovRight;
+    const flapH = opts.sbHeight + opts.ovTop + opts.ovBottom;
+    const th = opts.thickness || 18;
+    const density = opts.density || 680;
+
+    const volM3 = (flapW * flapH * th) / 1_000_000_000;
+    const weightKg = parseFloat((volM3 * density + 0.15).toFixed(2));
+    const powerFactorLF = Math.round(flapH * weightKg);
+    const suggestedHinges = (flapW >= 600 || weightKg >= 4.5) ? 3 : 2;
+
+    return { weightKg, suggestedHinges, powerFactorLF };
+}
 
 export function buildFlapsPlan(params: any, dims: ModuleDims): { parts: any[] } {
     const engine = new FlapsEngine();
@@ -156,6 +185,43 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <span style={{ color: '#d4d4d8', fontSize: '12px', fontWeight: 'bold' }}>Zawiasy</span>
+
+                {/* Informacja o wadze i sugerowanej ilości zawiasów / współczynniku LF */}
+                {(() => {
+                    const sbW = dimToMm(container?.width);
+                    const sbH = dimToMm(container?.height);
+                    if (sbW <= 0 || sbH <= 0) return null;
+                    const info = calculateFlapWeightAndLF({
+                        sbWidth: sbW,
+                        sbHeight: sbH,
+                        ovTop: parseFloat(String(ovTop)) || 0,
+                        ovBottom: parseFloat(String(ovBottom)) || 0,
+                        ovLeft: parseFloat(String(ovLeft)) || 0,
+                        ovRight: parseFloat(String(ovRight)) || 0,
+                        thickness: parseFloat(String(p.front_thickness || p.thickness || 18))
+                    });
+                    return (
+                        <div style={{
+                            padding: '6px 8px',
+                            background: '#141416',
+                            border: '1px solid #27272a',
+                            borderRadius: '3px',
+                            fontSize: '11px',
+                            color: '#a1a1aa',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '3px'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>Waga frontu: <strong style={{ color: '#f4f4f5' }}>{info.weightKg} kg</strong></span>
+                                <span>Sugerowana ilość zawiasów: <strong style={{ color: '#60a5fa' }}>{info.suggestedHinges} szt.</strong></span>
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#71717a' }}>
+                                Współczynnik mocy siłownika (LF): <span style={{ color: '#93c5fa' }}>{info.powerFactorLF}</span>
+                            </div>
+                        </div>
+                    );
+                })()}
                 
                 {/* Zawias lewy */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>

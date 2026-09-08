@@ -97,12 +97,23 @@ export class FlapsEngine extends BaseEngine {
         const flapRule = (flapsRules as any).model_tree?.root_assembly?.subcomponents?.FLAP;
         const allFeatures = activeHinges.flatMap((h) => buildHingeFeatures(h.side, h.key));
 
+        const flapOverride = (flapsRules as any).parameters?.smart_panel_integration?.role_overrides?.FRONT ||
+                             (flapsRules as any).parameters?.smart_panel_integration?.role_overrides?.FLAP ||
+                             (flapsRules as any).smart_panel_integration?.role_overrides?.FRONT;
+        const edgeBanding = flapOverride?.edge_banding || {
+            "+X": { active: true, type_id: "0.008x0.022" },
+            "-X": { active: true, type_id: "0.008x0.022" },
+            "+Y": { active: true, type_id: "0.008x0.022" },
+            "-Y": { active: true, type_id: "0.008x0.022" }
+        };
+
         const parts: any[] = [{
             name: 'Klapa',
             role: flapRule?.role || 'FLAP',
             dim: { x: flapWidth, y: thickness, z: flapHeight },
             loc: { x: posX, y: posY, z: posZ },
             lcs: flapRule?.lcs || FRONT_LCS,
+            edge_banding: edgeBanding,
             features: allFeatures
         }];
 

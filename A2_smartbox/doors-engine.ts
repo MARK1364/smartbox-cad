@@ -105,6 +105,15 @@ export class DoorsEngine extends BaseEngine {
         const doorLRule = rootSubs.DOOR_L;
         const doorRRule = rootSubs.DOOR_R;
 
+        const frontOverride = (doorsRules as any).parameters?.smart_panel_integration?.role_overrides?.FRONT ||
+                              (doorsRules as any).smart_panel_integration?.role_overrides?.FRONT;
+        const edgeBanding = frontOverride?.edge_banding || {
+            "+X": { active: true, type_id: "0.008x0.022" },
+            "-X": { active: true, type_id: "0.008x0.022" },
+            "+Y": { active: true, type_id: "0.008x0.022" },
+            "-Y": { active: true, type_id: "0.008x0.022" }
+        };
+
         if (doorType === 'LEFT' || doorType === 'RIGHT') {
             // Pojedyncze drzwi
             const doorWidth = width + ovLeft + ovRight;
@@ -122,6 +131,7 @@ export class DoorsEngine extends BaseEngine {
                     rotation: [0, 0, 0],
                     faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
                 },
+                edge_banding: edgeBanding,
                 features: buildHingeFeatures(hingeSide, doorWidth)
             });
         } else if (doorType === 'DOUBLE') {
@@ -144,6 +154,7 @@ export class DoorsEngine extends BaseEngine {
                     rotation: [0, 0, 0],
                     faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
                 },
+                edge_banding: edgeBanding,
                 features: buildHingeFeatures('left', doorWLeft)
             });
 
@@ -157,6 +168,7 @@ export class DoorsEngine extends BaseEngine {
                     rotation: [0, 0, 0],
                     faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
                 },
+                edge_banding: edgeBanding,
                 features: buildHingeFeatures('right', doorWRight)
             });
         }

@@ -22,6 +22,42 @@ function dimToMm(raw: number | undefined): number {
     return nmToMm(Number(raw));
 }
 
+function calculateDoorWeightAndHinges(opts: {
+    sbWidth: number;
+    sbHeight: number;
+    doorType: string;
+    gap: number;
+    ovTop: number;
+    ovBottom: number;
+    ovLeft: number;
+    ovRight: number;
+    thickness: number;
+    density?: number;
+}): { weightKg: number; suggestedHinges: number; isDouble: boolean } {
+    const isDouble = opts.doorType === 'DOUBLE';
+    const totalW = opts.sbWidth + opts.ovLeft + opts.ovRight;
+    const doorW = isDouble ? Math.max(0, (totalW - opts.gap) / 2) : totalW;
+    const doorH = opts.sbHeight + opts.ovTop + opts.ovBottom;
+    const th = opts.thickness || 18;
+    const density = opts.density || 680;
+
+    const volM3 = (doorW * doorH * th) / 1_000_000_000;
+    const weightKg = parseFloat((volM3 * density + 0.15).toFixed(2));
+
+    let suggestedHinges = 2;
+    if (doorH > 2000 || weightKg > 15.0) {
+        suggestedHinges = 5;
+    } else if (doorH > 1600 || weightKg > 9.0) {
+        suggestedHinges = 4;
+    } else if (doorH > 900 || weightKg > 4.5) {
+        suggestedHinges = 3;
+    } else {
+        suggestedHinges = 2;
+    }
+
+    return { weightKg, suggestedHinges, isDouble };
+}
+
 /**
  * Czy puszka fi35 i wkręty montażowe zawiasu wychodzą poza formatkę drzwi.
  * Wzór V taki sam jak w doors-engine.ts (od dolnej krawędzi drzwi, z nałożeniem dołu).
@@ -261,9 +297,48 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
 
             {/* Okucia (Zawiasy) */}
             <div style={{ background: '#1c1c1f', border: '1px solid #2d2d30', borderRadius: '4px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#93c5fd', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span>⧉</span> Okucia (Zawiasy):
+                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#93c5fd' }}>
+                    Okucia (Zawiasy):
                 </div>
+
+                {/* Informacja o wadze i sugerowanej ilości zawiasów */}
+                {(() => {
+                    const sbW = dimToMm(container?.width);
+                    const sbH = dimToMm(container?.height);
+                    if (sbW <= 0 || sbH <= 0) return null;
+                    const info = calculateDoorWeightAndHinges({
+                        sbWidth: sbW,
+                        sbHeight: sbH,
+                        doorType,
+                        gap: toNum(gap, 4),
+                        ovTop: toNum(ovTop, 14),
+                        ovBottom: toNum(ovBottom, 15),
+                        ovLeft: toNum(ovLeft, 16),
+                        ovRight: toNum(ovRight, 16),
+                        thickness: toNum(p.front_thickness || p.thickness, 18)
+                    });
+                    return (
+                        <div style={{
+                            padding: '6px 8px',
+                            background: '#141416',
+                            border: '1px solid #27272a',
+                            borderRadius: '3px',
+                            fontSize: '11px',
+                            color: '#a1a1aa',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <span>
+                                {info.isDouble ? 'Waga skrzydła:' : 'Waga frontu:'} <strong style={{ color: '#f4f4f5' }}>{info.weightKg} kg</strong>{info.isDouble ? ' (x2)' : ''}
+                            </span>
+                            <span>
+                                Sugerowana ilość zawiasów: <strong style={{ color: '#60a5fa' }}>{info.suggestedHinges} szt.{info.isDouble ? ' / skrz.' : ''}</strong>
+                            </span>
+                        </div>
+                    );
+                })()}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: '#d4d4d8', fontSize: '11px' }}>Szablon...</span>
                     <select 

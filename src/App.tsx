@@ -5,6 +5,7 @@ import { SmartFrameUI } from '../A3_smartframe/smartframe-ui';
 import { SmartBoxUI } from '../A2_smartbox/smartbox-ui';
 import { SSOTUI } from './ssot-ui';
 import { PerformanceOptionsModal } from './PerformanceOptionsModal';
+import { GoogleDriveModal } from './GoogleDriveModal';
 import { PropertiesPanel } from './PropertiesPanel';
 import { FloatingOperationDialog, CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
 import { BelkaDisplayModeMenu, BelkaProjectionMenu, BelkaInfoMenu } from './BelkaDisplayModeMenu';
@@ -194,6 +195,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const [infoMenuOpen, setInfoMenuOpen] = useState(false);
   const [ssotModalOpen, setSsotModalOpen] = useState(false);
   const [perfModalOpen, setPerfModalOpen] = useState(false);
+  const [gdriveModalMode, setGdriveModalMode] = useState<'open' | 'save' | 'settings' | null>(null);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const uiRegionHint = useUiRegionEdgeHint();
@@ -1548,6 +1550,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <a href="#" id="menuExportStep" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStep'); }}>Eksport do STEP</a>
                 <a href="#" id="menuExportStl" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStl'); }}>Eksport do STL</a>
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
+                <a href="#" id="menuGdriveOpen" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setGdriveModalMode('open'); }}>
+                  Otwórz z Google Drive...
+                </a>
+                <a href="#" id="menuGdriveSave" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setGdriveModalMode('save'); }}>
+                  Zapisz na Google Drive...
+                </a>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
                 <a href="#" id="menuPerfOptions" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setPerfModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#93c5fd' }}>
                   <span style={{ fontSize: '13px' }}>⚙️</span> Opcje wydajności (GPU)...
                 </a>
@@ -2729,6 +2738,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       <PerformanceOptionsModal 
         isOpen={perfModalOpen} 
         onClose={() => setPerfModalOpen(false)} 
+      />
+
+      {/* ─── Modal Google Drive (Chmura) ──────────────────────── */}
+      <GoogleDriveModal 
+        isOpen={gdriveModalMode !== null} 
+        initialMode={gdriveModalMode || 'open'} 
+        onClose={() => setGdriveModalMode(null)} 
       />
 
       {/* ─── Bottom Console (Hover Info) ───────────────── */}
