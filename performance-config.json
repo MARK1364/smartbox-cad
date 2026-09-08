@@ -1,0 +1,39 @@
+{
+  "activeProfile": "auto",
+  "profiles": {
+    "low": {
+      "name": "Słaby komputer / Stara przeglądarka",
+      "hardwareScalingLevel": 1.5,
+      "antialias": false,
+      "throttleHoverMs": 50,
+      "maxFps": 30,
+      "renderOnDemand": false,
+      "powerPreference": "default"
+    },
+    "medium": {
+      "name": "Zbalansowany",
+      "hardwareScalingLevel": 1.25,
+      "antialias": true,
+      "throttleHoverMs": 35,
+      "maxFps": 60,
+      "renderOnDemand": false,
+      "powerPreference": "high-performance"
+    },
+    "high": {
+      "name": "Wysoka wydajność (Dedykowane GPU)",
+      "hardwareScalingLevel": 1.0,
+      "antialias": true,
+      "throttleHoverMs": 20,
+      "maxFps": 60,
+      "renderOnDemand": false,
+      "powerPreference": "high-performance"
+    }
+  },
+  "current": {
+    "hardwareScalingLevel": 1.0,
+    "antialias": true,
+    "throttleHoverMs": 35,
+    "powerPreference": "high-performance",
+    "renderOnDemand": false
+  }
+}

@@ -7,6 +7,7 @@
  */
 
 import { ContextManager } from './context-manager.js';
+import { PerformanceConfigManager } from './performance-config.js';
 import { shouldPromoteSubgeometryToEntity } from './selection-mode.js';
 
 declare const BABYLON: any;
@@ -52,6 +53,7 @@ export class FacePicker {
     private _hoveredEntity: any = null;
     public cursorUV: { u: number; v: number } | null = null;
     private _pointerObserver: any = null;
+    private _lastHoverTime: number = 0;
     /** Słabo widoczne wszystkie naroża — pipeta VERTEX w solverze. */
     private _vertexPickPreview = false;
 
@@ -93,6 +95,13 @@ export class FacePicker {
                     this._clearHoverHighlights();
                     return;
                 }
+
+                const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+                const throttleMs = PerformanceConfigManager.instance.getThrottleHoverMs();
+                if (now - this._lastHoverTime < throttleMs) {
+                    return;
+                }
+                this._lastHoverTime = now;
 
                 // Priorytet 1: Narożniki, krawędzie, cechy CAM (z tolerancją próbkowania ekranowego 18px)
                 let pickResult = this.targetSubgeometryType === 'face'

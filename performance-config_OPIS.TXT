@@ -1,0 +1,144 @@
+================================================================================
+           INSTRUKCJA I OPIS PARAMETRÓW: performance-config.json
+                    SmartPanel CAD / Silnik 3D (Babylon.js)
+================================================================================
+
+Plik `performance-config.json` służy do globalnego sterowania wydajnością,
+jakością grafiki 3D oraz obciążeniem procesora (CPU) i karty graficznej (GPU)
+w aplikacji SmartPanel CAD.
+
+
+================================================================================
+1. STRUKTURA PLIKU
+================================================================================
+
+{
+  "activeProfile": "auto",       <-- Wybrany profil: "auto", "low", "medium", "high"
+  "profiles": {
+    "low": { ... },              <-- Ustawienia dla słabych komputerów
+    "medium": { ... },           <-- Ustawienia zbalansowane
+    "high": { ... }              <-- Maksymalna jakość (dedykowana grafika)
+  },
+  "current": { ... }             <-- Wartości aktualnie używane przez silnik
+}
+
+
+================================================================================
+2. OPIS POSZCZEGÓLNYCH PARAMETRÓW
+================================================================================
+
+--------------------------------------------------------------------------------
+A) "activeProfile"
+--------------------------------------------------------------------------------
+Typ: Tekst ("auto" | "low" | "medium" | "high")
+Opis:
+  Określa, który profil wydajnościowy ma zostać załadowany:
+  - "auto"   - Domyślna konfiguracja zbalansowana / automatyczna
+  - "low"    - Profil oszczędny (dla słabych laptopów, zintegrowanych kart Intel)
+  - "medium" - Profil zrównoważony (dobry kompromis jakości i płynności)
+  - "high"   - Profil maksymalny (dedykowane karty NVIDIA / AMD, monitory 4K)
+
+
+--------------------------------------------------------------------------------
+B) "hardwareScalingLevel"
+--------------------------------------------------------------------------------
+Typ: Liczba zmiennoprzecinkowa (np. 1.0, 1.25, 1.5, 2.0)
+Gdzie działa: Silnik 3D (Babylon.js engine.setHardwareScalingLevel)
+Opis:
+  Skalowanie rozdzielczości renderowania sceny 3D (tzw. DPI scaling / bufor ramki):
+  - 1.0  = Pełna natywna rozdzielczość ekranu 100% (obraz ostry jak brzytwa).
+  - 1.25 = Render w rozdzielczości 80% (nieznaczny spadek ostrości, +30% FPS).
+  - 1.5  = Render w rozdzielczości ok. 66% (duży zysk płynności na słabych GPU).
+  - 2.0  = Render w rozdzielczości 50% (dla bardzo starych komputerów i zintegrowanych grafik).
+Wskazówka:
+  Im WYŻSZA wartość (np. 1.5), tym MNIEJSZE obciążenie karty graficznej (ale obraz staje się bardziej miękki/rozmyty).
+
+
+--------------------------------------------------------------------------------
+C) "antialias"
+--------------------------------------------------------------------------------
+Typ: Wartość logiczna (true | false)
+Gdzie działa: Inicjalizacja WebGPU / WebGL Engine
+Opis:
+  Wygładzanie krawędzi obiektów (Anti-Aliasing MSAA):
+  - true  = Krawędzie formatek, krawędzie cięć i linie są idealnie gładkie (brak "schodków").
+            Zalecane przy dedykowanych kartach GPU.
+  - false = Wyłączone wygładzanie. Odciąża zintegrowaną kartę graficzną i zmniejsza
+            zużycie pamięci VRAM.
+
+
+--------------------------------------------------------------------------------
+D) "throttleHoverMs"
+--------------------------------------------------------------------------------
+Typ: Liczba całkowita w milisekundach (np. 20, 35, 50, 100)
+Gdzie działa: FacePicker (podświetlanie ścian, krawędzi, narożników) oraz
+              SmartBoxBayController (wykrywanie wnęk meblowych na żywo)
+Opis:
+  Minimalny odstęp czasowy między testami kolizji myszy z geometrią (raycasting):
+  - 20 ms  = Próbkowanie do 50 razy na sekundę. Natychmiastowa reakcja podświetlenia
+             elementów pod kursorem, wymaga wydajniejszego procesora (CPU).
+  - 35 ms  = Wartość domyślna (~30 próbek/s). Płynne podświetlanie bez obciążania procesora.
+  - 50-100 ms = Rzadsze testowanie geometrii. Eliminuje jakiekolwiek przycięcia
+                kursora myszy na słabszych procesorach przy bardzo złożonych meblach.
+
+
+--------------------------------------------------------------------------------
+E) "powerPreference"
+--------------------------------------------------------------------------------
+Typ: Tekst ("high-performance" | "default" | "low-power")
+Gdzie działa: Żądanie kontekstu WebGL / WebGPU do przeglądarki i systemu operacyjnego
+Opis:
+  Wskazówka dla systemu (zwłaszcza w laptopach z dwoma układami graficznymi):
+  - "high-performance" = Wymusza użycie dedykowanej karty graficznej (np. NVIDIA GeForce, RTX, AMD Radeon).
+  - "default"          = Domyślny wybór przeglądarki / systemu operacyjnego.
+  - "low-power"        = Wymusza kartę zintegrowaną (oszczędza baterię w laptopie).
+
+
+--------------------------------------------------------------------------------
+F) "maxFps"
+--------------------------------------------------------------------------------
+Typ: Liczba całkowita (np. 30, 60)
+Gdzie działa: Ograniczenie pętli renderowania
+Opis:
+  Maksymalna liczba klatek na sekundę (klatek/s):
+  - 60 = Standardowa płynność CAD (płynny obrót i zoom).
+  - 30 = Obniżona liczba klatek, drastycznie zmniejsza nagrzewanie się laptopa i zużycie baterii.
+
+
+--------------------------------------------------------------------------------
+G) "renderOnDemand"
+--------------------------------------------------------------------------------
+Typ: Wartość logiczna (true | false)
+Gdzie działa: Render Loop
+Opis:
+  - false = Ciągłe renderowanie w pętli (standard).
+  - true  = Renderowanie tylko wtedy, gdy nastąpiła zmiana w scenie (ruch kamery,
+            kliknięcie, zmiana wymiarów mebla). Oszczędza 100% GPU w stanie bezczynności.
+
+
+--------------------------------------------------------------------------------
+H) "name"
+--------------------------------------------------------------------------------
+Typ: Tekst
+Opis:
+  Czytelna, informacyjna nazwa profilu wyświetlana w konsoli lub menu ustawień.
+
+
+================================================================================
+3. JAK STOSOWAĆ I TESTOWAĆ USTAWIENIA?
+================================================================================
+
+1. Bezpośrednia edycja w pliku `performance-config.json`:
+   - Zmień wartość `"activeProfile"` na `"low"`, `"medium"` lub `"high"`.
+   - Lub zmień konkretne parametry w sekcji `"current"`.
+
+2. Nadpisywanie parametrami w adresie URL przeglądarki:
+   - Wybór profilu:    http://localhost:5173/?perf=low
+   - Zmiana skali:     http://localhost:5173/?scale=1.5
+   - Zmiana throttle:  http://localhost:5173/?throttle=50
+   - Łączenie opcji:   http://localhost:5173/?perf=low&scale=1.5&throttle=60
+
+3. W konsoli deweloperskiej (F12):
+   - Wpisz: localStorage.clear(); aby przywrócić wartości domyślne z pliku json.
+
+================================================================================

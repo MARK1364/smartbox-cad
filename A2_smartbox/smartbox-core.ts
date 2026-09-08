@@ -66,6 +66,7 @@ import { buildPanelsPlan } from './panels-adapter.js';
 import { buildFlapsPlan } from './flaps-adapter.js';
 
 import { ContextManager } from '../A1_core/context-manager.js';
+import { CADNode } from '../A1_core/cad-node/cad-node.js';
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { cadMatrixToRenderMatrix } from '../A1_core/cad-math/coord-system.js';
@@ -214,7 +215,7 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
                 if (canonicalFace === 'FACE_Z_MINUS') return localTxMm - sizeZ / 2;
             }
         } else if (axis === 'y') {
-            const depthMm = Math.min(sizeX, sizeY) > 50 && Math.max(sizeX, sizeY) > 200 ? Math.min(sizeX, sizeY) : sizeX;
+            const depthMm = sizeX;
             if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_MINUS') {
                 return localTyMm - depthMm / 2; // Przód szafy
             } else if (canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_PLUS') {
@@ -223,7 +224,7 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
                 return isMax ? (localTyMm + depthMm / 2) : (localTyMm - depthMm / 2);
             }
         } else if (axis === 'z') {
-            const heightMm = Math.max(sizeX, sizeY);
+            const heightMm = sizeY;
             if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_PLUS') {
                 return localTzMm + heightMm / 2; // Góra boku
             } else if (canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_MINUS') {
@@ -247,7 +248,7 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
     }
 
     if ((roleUpper.includes('BOTTOM') || roleUpper.includes('TOP') || roleUpper.includes('WIENIEC') || roleUpper.includes('SHELF')) && axis === 'y') {
-        const depthMm = Math.min(sizeX, sizeY) > 50 && Math.max(sizeX, sizeY) > 200 ? Math.min(sizeX, sizeY) : (sizeY > 50 ? sizeY : sizeX);
+        const depthMm = sizeY > 50 ? sizeY : sizeX;
         if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_MINUS') {
             return localTyMm - depthMm / 2; // Przód szafy
         } else if (canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_PLUS') {
@@ -408,17 +409,22 @@ export function update_smartbox_core(container: any, docTarget: any): boolean {
 
     // Znajdź nadrzędny korpus (SmartFrame)
     const cabinetId = params.parentContainerId;
-    const containers = typeof doc.getContainers === 'function' ? doc.getContainers() : [];
-    
-    let cabinetNode = containers.find((e: any) => e.domainData && (e.domainData as any).id === cabinetId);
+    let cabinetNode = cabinetId ? doc.findNode(cabinetId) : null;
     let cabinet: any = cabinetNode ? cabinetNode.domainData : null;
 
     if (!cabinet) {
-        cabinetNode = containers.find((e: any) => (e.domainData && (e.domainData.generatorParams?.type === 'korpus3_2' || e.domainData.generatorParams?.type === 'korpus3_1')));
+        const allNodes: CADNode[] = [];
+        const traverse = (node: CADNode) => {
+            allNodes.push(node);
+            for (const child of node.children) traverse(child);
+        };
+        traverse(doc.rootNode);
+
+        cabinetNode = allNodes.find((e: any) => e.domainData && (e.domainData.generatorParams?.type === 'korpus3_2' || e.domainData.generatorParams?.type === 'korpus3_1')) || null;
         cabinet = cabinetNode ? cabinetNode.domainData : null;
         
         if (!cabinet) {
-            cabinetNode = containers.find((e: any) => e.domainData && e.domainData.type === 'container');
+            cabinetNode = allNodes.find((e: any) => e.domainData && e.domainData.type === 'container' && e.id !== container.id) || null;
             cabinet = cabinetNode ? cabinetNode.domainData : null;
         }
         
@@ -460,21 +466,27 @@ export function update_smartbox_core(container: any, docTarget: any): boolean {
         let panelNode: any = null;
 
         // Priorytet 1: szukaj po panelId (unikalny identyfikator z bay detectora)
-        if (refConfig.panelId && foundCabinetNode) {
+        if (refConfig.panelId && foundCabinetNode && refConfig.panelId !== foundCabinetNode.id) {
             panelNode = findNodeById(foundCabinetNode, refConfig.panelId);
         }
 
         // Priorytet 2: szukaj po partKey (nazwa/klucz)
-        if (!panelNode && refConfig.partKey && foundCabinetNode) {
+        if (!panelNode && refConfig.partKey && refConfig.partKey !== 'SmartFrame' && foundCabinetNode) {
             panelNode = findNodeByKey(foundCabinetNode, refConfig.partKey);
         }
 
-        if (panelNode && panelNode.domainData) {
+        if (panelNode && panelNode.domainData && panelNode.domainData.type !== 'container') {
             const coord = getPanelFaceCoordinate(
                 panelNode.domainData, panelNode, foundCabinetNode,
                 refConfig.face, axis, null, isMax
             );
             return isMax ? (coord - offsetVal) : (coord + offsetVal);
+        }
+
+        // Gdy brak fizycznego panelu frontowego, przód (yMin) pobieramy na sztywno ze SmartFrame (-D/2)
+        if (sideKey === 'yMin') {
+            const cabDepth = nmToMm(cabinet.depth) || 600;
+            return -cabDepth / 2 + offsetVal;
         }
 
         return null;

@@ -5,6 +5,7 @@
  */
 
 import { ContextManager } from '../A1_core/context-manager.js';
+import { PerformanceConfigManager } from '../A1_core/performance-config.js';
 import { probeBayFromCADPoint, probeBayFromSceneRay } from '../A2_smartbox/smartbox-bay-detector.js';
 import { highlightBayInScene, clearBayHighlight } from '../A2_smartbox/smartbox-bay-visualizer.js';
 
@@ -32,29 +33,34 @@ export class Viewport {
     suppressDoubleTapZoom = false;
 
     /**
-     * Inicjalizacja asynchroniczna z obsługą WebGPU
+     * Inicjalizacja asynchroniczna z obsługą WebGPU i PerformanceConfigManager
      */
     static async create(canvas: any) {
         let engine: any;
         const webGPUSupported = await BABYLON.WebGPUEngine.IsSupportedAsync;
+        const perfConfig = PerformanceConfigManager.instance;
+        const powerPref = perfConfig.getPowerPreference();
+        const antialias = perfConfig.getAntialias();
         
         if (webGPUSupported) {
             console.log("🚀 Inicjalizacja WebGPU Engine");
             engine = new BABYLON.WebGPUEngine(canvas, {
                 stencil: true,
                 preserveDrawingBuffer: false,
-                powerPreference: 'high-performance'
+                powerPreference: powerPref,
+                antialias
             });
             await engine.initAsync();
         } else {
             console.warn("WebGPU nie jest obsługiwane w tej przeglądarce. Fallback do WebGL.");
-            engine = new BABYLON.Engine(canvas, true, {
+            engine = new BABYLON.Engine(canvas, antialias, {
                 preserveDrawingBuffer: false,
                 stencil: true,
-                powerPreference: 'high-performance'
+                powerPreference: powerPref
             });
         }
         
+        perfConfig.applyToEngine(engine);
         return new Viewport(canvas, engine);
     }
 
@@ -116,6 +122,7 @@ export class Viewport {
         let isPanning = false;
         let lastX = 0;
         let lastY = 0;
+        let lastBayProbeTime = 0;
 
         this.scene.onPointerObservable.add((pointerInfo) => {
             const evt = pointerInfo.event as PointerEvent | WheelEvent;
@@ -182,19 +189,24 @@ export class Viewport {
             } else if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
                 const bayCtrl = ContextManager.instance.smartBoxBayController;
                 if (bayCtrl?.isPickerActive && !ContextManager.instance.activeReferencePicker) {
-                    const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('smartbox_bay') && !m.name?.includes('smartbox_plane'));
-                    if (pick && pick.hit && pick.pickedPoint) {
-                        const cadPoint = {
-                            x: pick.pickedPoint.x,
-                            y: pick.pickedPoint.z,
-                            z: pick.pickedPoint.y
-                        };
-                        const doc = ContextManager.instance.document;
-                        if (doc) {
-                            const bay = probeBayFromSceneRay(this.scene, pick, doc) || probeBayFromCADPoint(doc, cadPoint);
-                            if (bay) {
-                                highlightBayInScene(this.scene, bay);
-                                bayCtrl.setLastDetectedBay(bay);
+                    const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+                    const throttleMs = PerformanceConfigManager.instance.getThrottleHoverMs();
+                    if (now - lastBayProbeTime >= throttleMs) {
+                        lastBayProbeTime = now;
+                        const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('smartbox_bay') && !m.name?.includes('smartbox_plane'));
+                        if (pick && pick.hit && pick.pickedPoint) {
+                            const cadPoint = {
+                                x: pick.pickedPoint.x,
+                                y: pick.pickedPoint.z,
+                                z: pick.pickedPoint.y
+                            };
+                            const doc = ContextManager.instance.document;
+                            if (doc) {
+                                const bay = probeBayFromSceneRay(this.scene, pick, doc) || probeBayFromCADPoint(doc, cadPoint);
+                                if (bay) {
+                                    highlightBayInScene(this.scene, bay);
+                                    bayCtrl.setLastDetectedBay(bay);
+                                }
                             }
                         }
                     }

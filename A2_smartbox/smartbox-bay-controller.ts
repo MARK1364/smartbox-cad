@@ -9,6 +9,7 @@
 import { type DetectedBay, probeBayFromSceneRay } from './smartbox-bay-detector.js';
 import { highlightBayInScene, clearBayHighlight } from './smartbox-bay-visualizer.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
+import { PerformanceConfigManager } from '../A1_core/performance-config.js';
 
 export type SmartBoxPickerMode = 'internal' | 'external';
 export type BayPickerListener = (isActive: boolean, mode?: SmartBoxPickerMode) => void;
@@ -122,12 +123,21 @@ export class SmartBoxBayController {
         this._pendingSmartBoxType = type;
     }
 
+    private _lastPointerMoveTime: number = 0;
+
     isBayDrag(): boolean {
         return !!this._draggedSmartBoxType;
     }
 
     onPointerMoveOnScene(scene: any, pointerX: number, pointerY: number, doc: ProjectDocument): DetectedBay | null {
         if (!scene || !doc) return null;
+        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+        const throttleMs = PerformanceConfigManager.instance.getThrottleHoverMs();
+        if (now - this._lastPointerMoveTime < throttleMs && this._lastDetectedBay) {
+            return this._lastDetectedBay;
+        }
+        this._lastPointerMoveTime = now;
+
         const pick = scene.pick(pointerX, pointerY, (m: any) =>
             m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('smartbox_plane') && !m.name?.includes('smartbox_bay')
         );

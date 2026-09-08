@@ -334,19 +334,15 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         if (scope.type === 'PANEL') {
             items.push({ label: 'Raport z formatki', icon: ICONS.report, action: 'open-report' });
             items.push({ label: 'CNC — obróbka formatki', icon: ICONS.cnc, action: 'open-cnc' });
-            items.push({ label: 'Utwórz rysunek', icon: ICONS.draw, action: 'open-draw' });
         } else if (scope.type === 'SMARTBOX') {
             items.push({ label: 'Raport ze SmartBoxa', icon: ICONS.report, action: 'open-report' });
             items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: 'Utwórz rysunek', icon: ICONS.draw, action: 'open-draw' });
         } else if (scope.type === 'CONTAINER') {
             items.push({ label: 'Raport z korpusu', icon: ICONS.report, action: 'open-report' });
             items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: 'Utwórz rysunek', icon: ICONS.draw, action: 'open-draw' });
         } else {
             items.push({ label: 'Raport z projektu', icon: ICONS.report, action: 'open-report' });
             items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: 'Utwórz rysunek', icon: ICONS.draw, action: 'open-draw' });
         }
     }
 

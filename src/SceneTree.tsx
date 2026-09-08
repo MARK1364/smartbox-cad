@@ -98,6 +98,25 @@ export const TREE_ICONS = {
 export type SceneTreeMode = 'full' | 'draw';
 export type TreeTab = 'obiekty' | 'relacje' | 'wymiary' | 'zlacza';
 
+export const isContainerNode = (node: CADTreeNode): boolean => {
+  return node.type === 'CONTAINER' || node.type === 'ASSEMBLY' || node.type === 'SUBASSEMBLY' || node.type === 'DRAWERS' || node.type === 'SHELVES';
+};
+
+export const isSmartBoxTreeItem = (container: CADTreeNode): boolean => {
+  return (
+    container.type === 'DRAWERS' ||
+    container.type === 'SHELVES' ||
+    (container as any).is_smartbox ||
+    container.type === 'smartbox' ||
+    /smartbox/i.test(container.name || '') ||
+    container.name?.endsWith('_SB') ||
+    (container as any).generatorParams?.type?.startsWith('smartbox') ||
+    (container as any).generatorParams?.boxType !== undefined ||
+    (container as any).sb_role !== undefined ||
+    (container as any).role === 'SMARTBOX'
+  );
+};
+
 interface SceneTreeProps {
   projectModel?: ProjectDocument | null;
   /** `draw` = to samo drzewo co na scenie, bez narzędzi edycji 3D (usuń, widoczność, CNC, menu). */
@@ -697,18 +716,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
           draggable={!editingNode}
           onDragStart={(e) => {
             e.stopPropagation();
-            const isSmartBox = (
-              container.type === 'DRAWERS' ||
-              container.type === 'SHELVES' ||
-              (container as any).is_smartbox ||
-              container.type === 'smartbox' ||
-              /smartbox/i.test(container.name || '') ||
-              container.name?.endsWith('_SB') ||
-              (container as any).generatorParams?.type?.startsWith('smartbox') ||
-              (container as any).generatorParams?.boxType !== undefined ||
-              (container as any).sb_role !== undefined ||
-              (container as any).role === 'SMARTBOX'
-            );
+            const isSmartBox = isSmartBoxTreeItem(container);
             const payload = {
               type: isSmartBox ? 'SMARTBOX' : 'CONTAINER',
               id: container.id,
@@ -747,18 +755,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.preventDefault();
               e.stopPropagation();
               UIController.instance?.emitTree('select-container', { id: container.id });
-              const isSmartBox = (
-                container.type === 'DRAWERS' ||
-                container.type === 'SHELVES' ||
-                (container as any).is_smartbox ||
-                container.type === 'smartbox' ||
-                /smartbox/i.test(container.name || '') ||
-                container.name?.endsWith('_SB') ||
-                (container as any).generatorParams?.type?.startsWith('smartbox') ||
-                (container as any).generatorParams?.boxType !== undefined ||
-                (container as any).sb_role !== undefined ||
-                (container as any).role === 'SMARTBOX'
-              );
+              const isSmartBox = isSmartBoxTreeItem(container);
               UIController.instance?.emitTree('contextmenu-tree-node', {
                 type: isSmartBox ? 'smartbox' : 'container',
                 id: container.id,
@@ -827,7 +824,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         {!isContainerCollapsed &&
           container.children &&
           container.children.map((child: CADTreeNode) => {
-            if (child.type === 'CONTAINER' || child.type === 'ASSEMBLY') {
+            if (isContainerNode(child)) {
               return renderContainerNode(child);
             }
             return renderPanelNode(child);
@@ -1145,7 +1142,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         {!isProjectCollapsed &&
           treeRoot.children &&
           treeRoot.children.map((child: CADTreeNode) => {
-            if (child.type === 'CONTAINER' || child.type === 'ASSEMBLY') {
+            if (isContainerNode(child)) {
               return renderContainerNode(child);
             }
             return renderPanelNode(child);

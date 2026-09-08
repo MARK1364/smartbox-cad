@@ -4,6 +4,7 @@ import { UIController, PANEL_DIM_MAX_MM, PANEL_DIM_MIN_MM } from '../A1_core/ui-
 import { SmartFrameUI } from '../A3_smartframe/smartframe-ui';
 import { SmartBoxUI } from '../A2_smartbox/smartbox-ui';
 import { SSOTUI } from './ssot-ui';
+import { PerformanceOptionsModal } from './PerformanceOptionsModal';
 import { PropertiesPanel } from './PropertiesPanel';
 import { FloatingOperationDialog, CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
 import { BelkaDisplayModeMenu, BelkaProjectionMenu, BelkaInfoMenu } from './BelkaDisplayModeMenu';
@@ -192,6 +193,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const [projMenuOpen, setProjMenuOpen] = useState(false);
   const [infoMenuOpen, setInfoMenuOpen] = useState(false);
   const [ssotModalOpen, setSsotModalOpen] = useState(false);
+  const [perfModalOpen, setPerfModalOpen] = useState(false);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const uiRegionHint = useUiRegionEdgeHint();
@@ -1545,6 +1547,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
                 <a href="#" id="menuExportStep" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStep'); }}>Eksport do STEP</a>
                 <a href="#" id="menuExportStl" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStl'); }}>Eksport do STL</a>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
+                <a href="#" id="menuPerfOptions" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setPerfModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#93c5fd' }}>
+                  <span style={{ fontSize: '13px' }}>⚙️</span> Opcje wydajności (GPU)...
+                </a>
               </div>
             )}
           </div>
@@ -2718,6 +2724,12 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           </div>
         </div>
       )}
+
+      {/* ─── Modal Opcji Wydajności (GPU / Płynność) ────────── */}
+      <PerformanceOptionsModal 
+        isOpen={perfModalOpen} 
+        onClose={() => setPerfModalOpen(false)} 
+      />
 
       {/* ─── Bottom Console (Hover Info) ───────────────── */}
       <div id="bottomConsole" className="bottom-console">

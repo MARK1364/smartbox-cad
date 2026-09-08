@@ -335,10 +335,22 @@ export class DrawingProjectExtractor {
             icon = '🪵';
             type = 'PART';
             if (depth === 0) depth = thickness;
-        } else if (isGroup || rawName.toLowerCase().includes('szuflad') || rawName.toLowerCase().includes('drawer')) {
+        } else if (
+            isGroup ||
+            domainData?.generatorParams?.boxType === 'DRAWERS' ||
+            domainData?.generatorParams?.type === 'smartbox_drawers' ||
+            rawName.toLowerCase().includes('szuflad') ||
+            rawName.toLowerCase().includes('drawer')
+        ) {
             icon = '🗄️';
             type = 'DRAWERS';
-        } else if (rawName.toLowerCase().includes('półk') || rawName.toLowerCase().includes('shelf')) {
+        } else if (
+            domainData?.generatorParams?.boxType === 'SHELVES' ||
+            domainData?.generatorParams?.type === 'smartbox_shelves' ||
+            rawName.toLowerCase().includes('półk') ||
+            rawName.toLowerCase().includes('polk') ||
+            rawName.toLowerCase().includes('shelf')
+        ) {
             icon = '📚';
             type = 'SHELVES';
         } else if (isAssembly) {
@@ -525,7 +537,7 @@ export class DrawingProjectExtractor {
         const standaloneParts: PartDrawingGeometry[] = [];
 
         const walk = (node: CADTreeNode) => {
-            if (node.type === 'CONTAINER') {
+            if (node.type === 'CONTAINER' || node.type === 'ASSEMBLY' || node.type === 'SUBASSEMBLY' || node.type === 'DRAWERS' || node.type === 'SHELVES') {
                 const parts: PartDrawingGeometry[] = [];
                 if (node.children) {
                     for (const ch of node.children) {
@@ -632,7 +644,7 @@ export class DrawingProjectExtractor {
             this._drawPartVectors(lines, node, projection, W, H, D);
         } else if (node.type === 'DRAWERS') {
             this._drawDrawersVectors(lines, node, projection, W, H, D);
-        } else if (node.type === 'CONTAINER') {
+        } else if (node.type === 'CONTAINER' || node.type === 'ASSEMBLY' || node.type === 'SHELVES' || node.type === 'SUBASSEMBLY') {
             this._drawContainerVectors(lines, node, projection, W, H, D);
         } else {
             this._drawProjectVectors(lines, node, projection, W, H, D);
