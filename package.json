@@ -8,7 +8,7 @@
     "typecheck:a2": "node scripts/typecheck-core.mjs",
     "typecheck:core": "node scripts/typecheck-core.mjs",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck:core && vite build",
+    "build": "npm run typecheck:core && vite build --outDir docs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
