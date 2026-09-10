@@ -56,6 +56,9 @@ export interface SmartBoxModalParams {
     flapType?: 'UP' | 'DOWN';
     dividerCount?: number;
     tubeOffsetTopMm?: number;
+    offset_bottom?: number;
+    offsetBottom?: number;
+    count?: number;
 }
 
 export const SMARTBOX_CATEGORY_NAMES: Record<string, string> = {
@@ -173,6 +176,8 @@ export function createSmartBoxInDetectedBay(
         },
         shelfCount: params?.shelfCount ?? (option.id === 'SHELVES' ? 3 : undefined),
         shelfOffsetFrontMm: params?.shelfOffsetFrontMm,
+        offset_bottom: option.id === 'SHELF' ? (params?.offset_bottom ?? 100) : undefined,
+        offsetBottom: option.id === 'SHELF' ? (params?.offsetBottom ?? 100) : undefined,
         drawerCount: params?.drawerCount ?? (option.id === 'DRAWERS' ? 3 : undefined),
         drawerGapMm: params?.drawerGapMm,
         doorType: params?.doorType ?? (option.id === 'DOORS' ? 'SINGLE_LEFT' : undefined),

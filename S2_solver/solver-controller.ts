@@ -13,7 +13,7 @@ import { ConstraintGraph } from './core/graph.js';
 import { RESIDUAL_TOLERANCE, solveWithConflictResolution } from './core/solver-core.js';
 import { ConstraintDragGroup } from './constraint-drag-group.js';
 import type { ConstraintStore } from './constraint-store.js';
-import { buildSolverInput, collectTransformDeltas } from './solver-bridge.js';
+import { buildSolverInput, collectTransformDeltas, getNodeGroundingPriority } from './solver-bridge.js';
 import { SolveConstraintsCommand } from './solve-constraints-command.js';
 import type { SolverConstraint } from './constraint-types.js';
 import { constraintNodeIds } from './constraint-types.js';
@@ -156,7 +156,7 @@ export class SolverController {
                 return false;
             }
 
-            input.contract.groundDistanceMap = this._computeGroundDistances(enabled);
+            input.contract.groundDistanceMap = this._computeGroundDistances(enabled, document);
 
             this._store.resetSolveResults();
             const [converged, conflictCount] = solveWithConflictResolution(
@@ -238,7 +238,10 @@ export class SolverController {
         return constraints.filter((c) => constraintNodeIds(c).some((id) => nodeIds.has(id)));
     }
 
-    private _computeGroundDistances(constraints: SolverConstraint[]): Record<string, number> {
+    private _computeGroundDistances(
+        constraints: SolverConstraint[],
+        document?: ProjectDocument,
+    ): Record<string, number> {
         const groundIds = new Set<string>();
         const edges: Record<string, string[]> = {};
 
@@ -265,29 +268,53 @@ export class SolverController {
         }
 
         if (groundIds.size === 0) {
-            // Brak GROUND — element A więzu jest odniesieniem (jak pierwszy
-            // komponent w złożeniu SW/Creo): B podciąga się do A, a nie oba
-            // rozjeżdżają się na pół.
-            const usedAsB = new Set<string>();
-            for (const c of constraints) {
-                if (!c.enabled || c.bindType === 'GROUND' || !c.anchorB) {
-                    continue;
-                }
-                usedAsB.add(c.anchorB.nodeId);
-            }
+            // Brak GROUND — sprawdzamy priorytety uziemienia (np. SmartFrame/SmartBox > SmartPanel).
+            // Wyższy priorytet oznacza, że węzeł staje się punktem odniesienia (seed)
+            // i nie poruszy się względem elementu o niższym priorytecie.
             const seeds = new Set<string>();
-            for (const c of constraints) {
-                if (!c.enabled || c.bindType === 'GROUND' || !c.anchorA) {
-                    continue;
-                }
-                if (!usedAsB.has(c.anchorA.nodeId)) {
-                    seeds.add(c.anchorA.nodeId);
+
+            if (document) {
+                for (const c of constraints) {
+                    if (!c.enabled || c.bindType === 'GROUND' || !c.anchorA || !c.anchorB) {
+                        continue;
+                    }
+                    const nodeA = document.findNode(c.anchorA.nodeId);
+                    const nodeB = document.findNode(c.anchorB.nodeId);
+                    const prioA = getNodeGroundingPriority(nodeA);
+                    const prioB = getNodeGroundingPriority(nodeB);
+
+                    if (prioA > prioB) {
+                        seeds.add(c.anchorA.nodeId);
+                    } else if (prioB > prioA) {
+                        seeds.add(c.anchorB.nodeId);
+                    }
                 }
             }
+
             if (seeds.size === 0) {
+                // Heurystyka domyślna: element A więzu jest odniesieniem (jak pierwszy
+                // komponent w złożeniu SW/Creo): B podciąga się do A, a nie oba
+                // rozjeżdżają się na pół.
+                const usedAsB = new Set<string>();
                 for (const c of constraints) {
-                    if (c.enabled && c.bindType !== 'GROUND' && c.anchorA) {
+                    if (!c.enabled || c.bindType === 'GROUND' || !c.anchorB) {
+                        continue;
+                    }
+                    usedAsB.add(c.anchorB.nodeId);
+                }
+                for (const c of constraints) {
+                    if (!c.enabled || c.bindType === 'GROUND' || !c.anchorA) {
+                        continue;
+                    }
+                    if (!usedAsB.has(c.anchorA.nodeId)) {
                         seeds.add(c.anchorA.nodeId);
+                    }
+                }
+                if (seeds.size === 0) {
+                    for (const c of constraints) {
+                        if (c.enabled && c.bindType !== 'GROUND' && c.anchorA) {
+                            seeds.add(c.anchorA.nodeId);
+                        }
                     }
                 }
             }

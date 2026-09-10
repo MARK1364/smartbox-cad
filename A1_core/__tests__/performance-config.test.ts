@@ -15,6 +15,7 @@ describe('PerformanceConfigManager', () => {
         expect(mgr.getThrottleHoverMs()).toBe(35);
         expect(mgr.getAntialias()).toBe(true);
         expect(mgr.getPowerPreference()).toBe('high-performance');
+        expect(mgr.getRenderOnDemand()).toBe(true);
     });
 
     it('switches to "low" performance profile correctly', () => {

@@ -485,14 +485,28 @@ export const PropertiesPanel: React.FC = () => {
                                     </>
                                 ) : (
                                     <>
-                                        <div className="item-field">
-                                            <label>Szerokość:</label>
-                                            <span className="item-highlight">{data.grooveProps.width} mm</span>
-                                        </div>
-                                        <div className="item-field">
-                                            <label>Głębokość:</label>
-                                            <span className="item-highlight">{data.grooveProps.depth} mm</span>
-                                        </div>
+                                        {(() => {
+                                            const rawW = data.grooveProps.width || 0;
+                                            const rawL = data.grooveProps.length || 0;
+                                            const grooveLength = Math.max(rawW, rawL);
+                                            const grooveWidth = rawL > 0 ? Math.min(rawW, rawL) : rawW;
+                                            return (
+                                                <>
+                                                    <div className="item-field">
+                                                        <label>Długość:</label>
+                                                        <span className="item-highlight">{grooveLength} mm</span>
+                                                    </div>
+                                                    <div className="item-field">
+                                                        <label>Szerokość:</label>
+                                                        <span className="item-highlight">{grooveWidth} mm</span>
+                                                    </div>
+                                                    <div className="item-field">
+                                                        <label>Głębokość:</label>
+                                                        <span className="item-highlight">{data.grooveProps.depth} mm</span>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </>
                                 )}
                                 <div className="item-field">

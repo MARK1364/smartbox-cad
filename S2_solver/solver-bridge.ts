@@ -28,6 +28,8 @@ import { Mat4 } from '../A1_core/cad-math/mat4.js';
 import { Quat } from '../A1_core/cad-math/quat.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
+import { NodeType } from '../A1_core/cad-node/node-type.js';
+import { isManualPanel } from '../A4_smartpanel/panel-model.js';
 import type { CADNode } from '../A1_core/cad-node/cad-node.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
 import { resolveAnchor } from './constraint-geometry.js';
@@ -279,7 +281,7 @@ export function buildSolverInput(
     }
 
     return {
-        contract: makeSolverContract({ constraints: items, lockedIds: computeReferenceLockedIds(constraints) }),
+        contract: makeSolverContract({ constraints: items, lockedIds: computeReferenceLockedIds(constraints, document) }),
         states,
         nodes,
         localBefore,
@@ -289,13 +291,82 @@ export function buildSolverInput(
     };
 }
 
+/** Sprawdza, czy węzeł to kontener SmartBox (np. smartbox_shelf, smartbox_shelves itp.). */
+export function isSmartBoxContainer(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.ASSEMBLY) return false;
+    const data = node.domainData as any;
+    const genType = data?.generatorParams?.type || '';
+    const isCustomSb = Boolean((node as any).customData?.smartbox || data?.customData?.smartbox);
+    return (
+        genType.startsWith('smartbox_') ||
+        node.name?.startsWith('smartbox_') ||
+        node.name?.endsWith('_SB') ||
+        isCustomSb
+    );
+}
+
+/** Sprawdza, czy węzeł to formatka wewnątrz SmartBoxa. */
+export function isSmartBoxComponent(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.PART) return false;
+    const isCustomSbPart = Boolean((node as any).customData?.smartbox_component || (node.domainData as any)?.customData?.smartbox_component);
+    return isSmartBoxContainer(node.parent) || isCustomSbPart;
+}
+
+/** Sprawdza, czy węzeł to korpus szafy SmartFrame. */
+export function isSmartFrameContainer(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.ASSEMBLY) return false;
+    if (isSmartBoxContainer(node)) return false;
+    const data = node.domainData as any;
+    const isCustomSf = Boolean((node as any).customData?.smartframe || data?.customData?.smartframe);
+    const genType = data?.generatorParams?.type || '';
+    const isFrameName = node.name?.toLowerCase().includes('smartframe');
+    return isCustomSf || isFrameName || genType.startsWith('korpus');
+}
+
+/** Sprawdza, czy węzeł to formatka wygenerowana algorytmicznie przez SmartFrame. */
+export function isSmartFrameEngineComponent(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.PART) return false;
+    const isCustomSfPart = Boolean((node as any).customData?.smartframe_component || (node.domainData as any)?.customData?.smartframe_component);
+    const role = (node.domainData as any)?.role || (node as any).customData?.role;
+    if (isCustomSfPart && role) return true;
+    return isSmartFrameContainer(node.parent) && !isManualPanel(node.domainData);
+}
+
+/** Sprawdza, czy węzeł to SmartPanel (ręczna formatka dokładana do sceny lub szafy). */
+export function isSmartPanel(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.PART) return false;
+    if (isSmartBoxComponent(node)) return false;
+    if (isSmartFrameEngineComponent(node)) return false;
+    return true;
+}
+
+/**
+ * Wyznacza wagę sztywności (utwierdzenia) węzła w solverze:
+ * Wyższa wartość = bardziej utwierdzony obiekt (baza odniesienia),
+ * Niższa wartość = obiekt ruchomy, który dojeżdża do bazy.
+ */
+export function getNodeGroundingPriority(node: CADNode | null): number {
+    if (!node) return 0;
+    if (isSmartFrameEngineComponent(node)) return 50; // komponent silnika SmartFrame — zawsze sztywny
+    if (isSmartFrameContainer(node)) return 40;       // korpus SmartFrame — sztywny względem SmartBoxów i SmartPaneli
+    if (isSmartBoxComponent(node)) return 35;          // komponent SmartBoxa (np. wieniec) — sztywny w SmartBoxie
+    if (isSmartBoxContainer(node)) return 30;          // kontener SmartBox — sztywny względem SmartPaneli
+    if (isSmartPanel(node)) return 10;                 // SmartPanel — ruchomy cel
+    return 0;
+}
+
 /**
  * Bryły, których solver nie może ruszyć przy więzach relatywnych:
- * GROUND oraz pierwsza wskazana kotwica A (odniesienie).
+ * GROUND, komponenty silnika SmartFrame/SmartBox oraz węzły o wyższym priorytecie
+ * utwierdzenia (SmartFrame/SmartBox w relacji ze SmartPanelem).
  */
-export function computeReferenceLockedIds(constraints: SolverConstraint[]): Set<string> {
+export function computeReferenceLockedIds(
+    constraints: SolverConstraint[],
+    document?: ProjectDocument,
+): Set<string> {
     const locked = new Set<string>();
     const usedAsB = new Set<string>();
+
     for (const c of constraints) {
         if (!c.enabled || c.conflict) {
             continue;
@@ -307,14 +378,54 @@ export function computeReferenceLockedIds(constraints: SolverConstraint[]): Set<
             usedAsB.add(c.anchorB.nodeId);
         }
     }
-    for (const c of constraints) {
-        if (!c.enabled || c.conflict || c.bindType === 'GROUND' || !c.anchorA) {
-            continue;
+
+    if (document) {
+        // Wszystkie komponenty algorytmiczne SmartFrame i SmartBox są z definicji sztywne
+        for (const node of document.rootNode.findAll()) {
+            if (isSmartFrameEngineComponent(node) || isSmartBoxComponent(node)) {
+                locked.add(node.id);
+            }
         }
-        if (!usedAsB.has(c.anchorA.nodeId)) {
-            locked.add(c.anchorA.nodeId);
+
+        // Badamy więzy relatywne pod kątem hierarchii utwierdzenia (SmartFrame / SmartBox vs SmartPanel)
+        for (const c of constraints) {
+            if (!c.enabled || c.conflict || c.bindType === 'GROUND' || !c.anchorA || !c.anchorB) {
+                continue;
+            }
+            const nodeA = document.findNode(c.anchorA.nodeId);
+            const nodeB = document.findNode(c.anchorB.nodeId);
+            if (!nodeA || !nodeB) continue;
+
+            const prioA = getNodeGroundingPriority(nodeA);
+            const prioB = getNodeGroundingPriority(nodeB);
+
+            if (prioA > prioB) {
+                // A jest bardziej sztywne niż B (np. A to SmartBox/SmartFrame, B to SmartPanel) -> A jest locked, B dojeżdża
+                locked.add(nodeA.id);
+            } else if (prioB > prioA) {
+                // B jest bardziej sztywne niż A (np. A to SmartPanel, B to SmartBox/SmartFrame) -> B jest locked, A dojeżdża
+                locked.add(nodeB.id);
+            }
         }
     }
+
+    // Domyślna heurystyka dla więzów, gdzie żaden z końców nie jest utwierdzony:
+    // element A więzu jest traktowany jako odniesienie (B podciąga się do A).
+    for (const c of constraints) {
+        if (!c.enabled || c.conflict || c.bindType === 'GROUND' || !c.anchorA || !c.anchorB) {
+            continue;
+        }
+        const aId = c.anchorA.nodeId;
+        const bId = c.anchorB.nodeId;
+        if (locked.has(aId) || locked.has(bId)) {
+            // Przynajmniej jedna strona jest już uziemiona lub ma wyznaczony priorytet
+            continue;
+        }
+        if (!usedAsB.has(aId)) {
+            locked.add(aId);
+        }
+    }
+
     if (locked.size === 0) {
         for (const c of constraints) {
             if (c.enabled && c.bindType !== 'GROUND' && c.anchorA) {
@@ -323,6 +434,7 @@ export function computeReferenceLockedIds(constraints: SolverConstraint[]): Set<
             }
         }
     }
+
     return locked;
 }
 
@@ -420,6 +532,15 @@ export function collectTransformDeltas(
         const state = input.states.get(nodeId)!;
         const before = input.localBefore.get(nodeId);
         if (!before) {
+            continue;
+        }
+
+        // Komponenty wewnętrzne algorytmiczne SmartFrame i SmartBox nigdy nie mogą zmienić pozycji lokalnej w szafie
+        // (chyba że zostały bezpośrednio uziemione więzem GROUND).
+        const hasDirectGround = input.contract.constraints.some(
+            (c) => c.enabled && c.bindType === 'GROUND' && c.objAId === nodeId,
+        );
+        if (!hasDirectGround && (isSmartFrameEngineComponent(node) || isSmartBoxComponent(node))) {
             continue;
         }
 

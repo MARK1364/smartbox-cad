@@ -425,6 +425,7 @@ export class FacePicker {
         if (exceptType !== 'vertices' && this.selectedVertices.size > 0) {
             for (const mesh of this.selectedVertices) {
                 if (!mesh.isDisposed() && mesh.metadata) {
+                    mesh.visibility = this._vertexPickPreview ? 0.28 : 0.0;
                     mesh.material.alpha = 0.0;
                     mesh.material.diffuseColor = new BABYLON.Color3(1, 0, 0);
                     mesh.material.emissiveColor = BABYLON.Color3.Black();
@@ -432,6 +433,7 @@ export class FacePicker {
             }
             this.selectedVertices.clear();
             this.selectedVertex = null;
+            ContextManager.instance.viewport?.requestRender(2);
         }
         if (exceptType !== 'features' && this.selectedFeatures.size > 0) {
             for (const mesh of this.selectedFeatures) {
@@ -579,12 +581,14 @@ export class FacePicker {
             if (this.selectedVertices.has(mesh)) {
                 this.selectedVertices.delete(mesh);
                 if (!mesh.isDisposed() && mesh.metadata) {
+                    mesh.visibility = this._vertexPickPreview ? 0.28 : 0.0;
                     mesh.material.alpha = 0.0;
                     mesh.material.diffuseColor = new BABYLON.Color3(1, 0, 0);
                     mesh.material.emissiveColor = BABYLON.Color3.Black();
                 }
             } else {
                 this.selectedVertices.add(mesh);
+                mesh.visibility = 1.0;
                 mesh.material.alpha = 1.0;
                 mesh.material.diffuseColor = new BABYLON.Color3(0.2, 1.0, 0.6);
                 mesh.material.emissiveColor = new BABYLON.Color3(0.1, 0.8, 0.4);
@@ -599,10 +603,12 @@ export class FacePicker {
             this.clearSelection();
             this.selectedVertices.add(mesh);
             this.selectedVertex = mesh;
+            this.selectedVertex.visibility = 1.0;
             this.selectedVertex.material.alpha = 1.0;
             this.selectedVertex.material.diffuseColor = new BABYLON.Color3(0.2, 1.0, 0.6);
             this.selectedVertex.material.emissiveColor = new BABYLON.Color3(0.1, 0.8, 0.4);
         }
+        ContextManager.instance.viewport?.requestRender(2);
 
         this._emit('select-vertex', {
             smartId: smartId,
@@ -687,14 +693,18 @@ export class FacePicker {
             return;
         }
         if (hovering) {
+            mesh.visibility = 0.92;
             mesh.material.alpha = 0.92;
             mesh.material.diffuseColor = new BABYLON.Color3(1.0, 0.85, 0.15);
             mesh.material.emissiveColor = new BABYLON.Color3(1.0, 0.72, 0.08);
+            ContextManager.instance.viewport?.requestRender(2);
             return;
         }
+        mesh.visibility = this._vertexPickPreview ? 0.28 : 0.0;
         mesh.material.alpha = this._vertexPickPreview ? 0.28 : 0.0;
         mesh.material.diffuseColor = mesh.metadata?.baseDiffuse || new BABYLON.Color3(1, 0.2, 0.2);
         mesh.material.emissiveColor = mesh.metadata?.baseColor || new BABYLON.Color3(0.5, 0.1, 0.1);
+        ContextManager.instance.viewport?.requestRender(2);
     }
 
     /**
@@ -717,6 +727,7 @@ export class FacePicker {
                 if (this.selectedVertices.has(mesh) || mesh === this._hoveredEntity) {
                     continue;
                 }
+                mesh.visibility = on ? 0.28 : 0.0;
                 mesh.material.alpha = on ? 0.28 : 0.0;
                 mesh.material.diffuseColor = mesh.metadata?.baseDiffuse || new BABYLON.Color3(1, 0.2, 0.2);
                 mesh.material.emissiveColor = mesh.metadata?.baseColor || new BABYLON.Color3(0.5, 0.1, 0.1);
@@ -729,6 +740,7 @@ export class FacePicker {
                 }
             }
         }
+        ContextManager.instance.viewport?.requestRender(2);
     }
 
     /**

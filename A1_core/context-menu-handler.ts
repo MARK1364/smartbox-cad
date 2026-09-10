@@ -9,9 +9,7 @@ import { openCncFromCad } from '../src/module-data/open-modules.js';
 
 export class ContextMenuHandler {
     private svgIcons = {
-        hole: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>',
         fillet: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20v-8a8 8 0 0 1 8-8h8"></path></svg>',
-        sketch: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path></svg>',
         properties: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
         zoomFit: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
         reset: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
@@ -25,7 +23,7 @@ export class ContextMenuHandler {
 
     private lastInspectedData: any = null;
 
-    public init(canvas: HTMLCanvasElement, contextMenu: any, propertiesManager: any, getAllPanels: () => any[], toggleSketchMode: () => void, applyUndo: () => void, applyRedo: () => void, history: any): void {
+    public init(canvas: HTMLCanvasElement, contextMenu: any, propertiesManager: any, getAllPanels: () => any[], applyUndo: () => void, applyRedo: () => void, history: any): void {
         const viewport = ContextManager.instance.viewport;
         const doc = ContextManager.instance.document;
         const facePicker = ContextManager.instance.facePicker;
@@ -82,12 +80,7 @@ export class ContextMenuHandler {
             const hasEdges = facePicker.selectedEdges && facePicker.selectedEdges.size > 0;
             const hasEdge = hasEdges || !!facePicker.selectedEdge;
 
-            if (hasFace) {
-                const displayName = clickedFaceName ? `${clickedFaceMesh.metadata.panelModel?.name || 'Płyta'}_${clickedFaceName}` : 'wybranej ścianie';
-                items.push({ label: `Dodaj otwór na: ${displayName}`, icon: this.svgIcons.hole, action: 'add-hole' });
-                items.push({ label: 'Tryb szkicu', icon: this.svgIcons.sketch, action: 'sketch-mode', shortcut: 'S' });
-                items.push({ separator: true });
-            }
+
 
             if (hasEdge) {
                 const count = facePicker.selectedEdges ? facePicker.selectedEdges.size : 1;
@@ -124,14 +117,8 @@ export class ContextMenuHandler {
                     }
                     break;
                 }
-                case 'add-hole':
-                    document.getElementById('btnAddHole')?.click();
-                    break;
                 case 'add-fillet':
                     document.getElementById('btnAddFillet')?.click();
-                    break;
-                case 'sketch-mode':
-                    toggleSketchMode();
                     break;
                 case 'undo':
                     applyUndo();

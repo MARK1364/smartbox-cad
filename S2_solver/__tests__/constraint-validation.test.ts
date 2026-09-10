@@ -145,7 +145,7 @@ describe('validateConstraints', () => {
         expect(result.issues).toHaveLength(0);
     });
 
-    it('nierównoległe płaszczyzny — ostrzeżenie, więz zostaje aktywny', () => {
+    it('nierównoległe płaszczyzny przed rozwiązaniem nie blokują więzu ani nie emitują fałszywego ostrzeżenia', () => {
         const document = new ProjectDocument();
         const cabA = document.createContainer({
             width: mmToNm(600),
@@ -181,6 +181,6 @@ describe('validateConstraints', () => {
             document,
         );
         expect(result.skipIds.size).toBe(0);
-        expect(result.issues.some((i) => i.code === 'NON_PARALLEL_PLANES')).toBe(true);
+        expect(result.issues).toHaveLength(0);
     });
 });

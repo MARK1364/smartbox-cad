@@ -5,7 +5,8 @@
  * Pozostałe przeglądarki: Blob + <a download> / <input type="file">.
  *
  * Dokument nie zna DOM. Ta klasa woła `serialize()`.
- * `markSaved()` tylko po zapisie natywnym (uchwyt pliku); pobranie Bloba nie czyści dirty.
+ * `markSaved()` wywoływane po każdym zapisie (natywnym i download), dzięki czemu
+ * flaga dirty jest czyszczona i użytkownik może otworzyć nowy projekt bez ostrzeżenia.
  */
 
 import {
@@ -128,6 +129,7 @@ export class ProjectFileIO {
 
         downloadTextFile(text, filename);
         document.metadata = { ...payload.metadata };
+        document.markSaved();
         return 'download';
     }
 

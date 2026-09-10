@@ -13,8 +13,6 @@ export class UIController {
     static instance: UIController | null = null;
     
     _treeListeners: Set<any>;
-    _sketchModeListeners: Set<any>;
-    _addHoleListeners: Set<any>;
     _addFilletListeners: Set<any>;
     _resetListeners: Set<any>;
 
@@ -25,8 +23,6 @@ export class UIController {
         consoleText: string;
         faceInfoHtml: string;
         coordsInfoText: string;
-        sketchModeActive: boolean;
-        sketchFaceName: string;
         inputWidthValue: string;
         inputHeightValue: string;
         inputThicknessValue: string;
@@ -39,8 +35,6 @@ export class UIController {
     constructor(document: ProjectDocument) {
         this.document = document;
         this._treeListeners = new Set();
-        this._sketchModeListeners = new Set();
-        this._addHoleListeners = new Set();
         this._addFilletListeners = new Set();
         this._resetListeners = new Set();
 
@@ -50,8 +44,6 @@ export class UIController {
             consoleText: "Gotowy. Najedź na element.",
             faceInfoHtml: '<span class="face-none">Kliknij element</span>',
             coordsInfoText: "",
-            sketchModeActive: false,
-            sketchFaceName: "—",
             inputWidthValue: "",
             inputHeightValue: "",
             inputThicknessValue: "",
@@ -176,6 +168,14 @@ export class UIController {
         this.showSelectedFace(null, null);
     }
 
+    showSketchMode(_face?: any) {
+        if (this.onStateChange) this.onStateChange();
+    }
+
+    hideSketchMode() {
+        if (this.onStateChange) this.onStateChange();
+    }
+
     updateCursorCoords(uv: any) {
         if (!uv) {
             this.state.coordsInfoText = '';
@@ -186,28 +186,13 @@ export class UIController {
         if (this.onStateChange) this.onStateChange();
     }
 
-    showSketchMode(faceName: string) {
-        this.state.sketchModeActive = true;
-        this.state.sketchFaceName = faceName;
-        if (this.onStateChange) this.onStateChange();
-    }
-
-    hideSketchMode() {
-        this.state.sketchModeActive = false;
-        if (this.onStateChange) this.onStateChange();
-    }
-
     refreshFeatures() {
         if (this.onStateChange) this.onStateChange();
     }
 
-    onSketchMode(fn: () => void) { this._sketchModeListeners.add(fn); }
-    onAddHole(fn: () => void) { this._addHoleListeners.add(fn); }
     onAddFillet(fn: () => void) { this._addFilletListeners.add(fn); }
     onReset(fn: () => void) { this._resetListeners.add(fn); }
 
-    triggerSketchMode() { this._sketchModeListeners.forEach(fn => fn()); }
-    triggerAddHole() { this._addHoleListeners.forEach(fn => fn()); }
     triggerAddFillet() { this._addFilletListeners.forEach(fn => fn()); }
     triggerReset() { this._resetListeners.forEach(fn => fn()); }
 

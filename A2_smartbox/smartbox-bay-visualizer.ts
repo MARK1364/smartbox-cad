@@ -7,6 +7,7 @@
  */
 
 import type { DetectedBay } from './smartbox-bay-detector.js';
+import { ContextManager } from '../A1_core/context-manager.js';
 
 declare const BABYLON: any;
 
@@ -30,13 +31,49 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
 
     _clearOffsetPlanes();
 
-    // Płaszczyzny ścian ograniczających wnękę (left, right, bottom, top, back, front)
+    const cx = bay.centerWorldMm.x;
+    const cy = bay.centerWorldMm.y;
+    const cz = bay.centerWorldMm.z;
+    const bw = Math.max(1, bay.boundsMm.width - 2);
+    const bh = Math.max(1, bay.boundsMm.height - 2);
+    const bd = Math.max(1, bay.boundsMm.depth - 2);
+
+    // 1. Półprzezroczysta bryła (box) reprezentująca przestrzeń w środku wnęki w kolorze magenty
+    if (typeof B.MeshBuilder?.CreateBox === 'function') {
+        const volMat = new B.StandardMaterial('smartbox_bay_vol_mat', scene);
+        volMat.diffuseColor = new B.Color3(1.0, 0.1, 0.85); // Wyrazista Magenta
+        volMat.emissiveColor = new B.Color3(0.65, 0.05, 0.55);
+        volMat.alpha = 0.28;
+        volMat.backFaceCulling = false;
+        volMat.disableLighting = true; // Zapewnia widoczność magenty niezależnie od kąta oświetlenia
+
+        const volumeBox = B.MeshBuilder.CreateBox('smartbox_bay_volume', {
+            width: bw,
+            height: bh,
+            depth: bd
+        }, scene);
+        volumeBox.material = volMat;
+        volumeBox.isPickable = false;
+        volumeBox.position.x = cx;
+        volumeBox.position.y = cz;
+        volumeBox.position.z = cy;
+        if (typeof volumeBox.enableEdgesRendering === 'function') {
+            volumeBox.enableEdgesRendering(0.9999);
+            volumeBox.edgesWidth = 2.5;
+            const ColorClass = B.Color4 || B.Color3;
+            volumeBox.edgesColor = new ColorClass(1.0, 0.1, 0.85, 0.85);
+        }
+        offsetPlaneMeshes.push(volumeBox);
+    }
+
+    // 2. Płaszczyzny ścian ograniczających wnękę (left, right, bottom, top, back, front)
     if (bay.boundary) {
         const planeMat = new B.StandardMaterial('smartbox_bay_plane_mat', scene);
         planeMat.diffuseColor = new B.Color3(1.0, 0.1, 0.85); // Wyrazista Magenta / Fiolet
         planeMat.emissiveColor = new B.Color3(0.65, 0.05, 0.55);
         planeMat.alpha = 0.45;
-        planeMat.backFaceCulling = true;
+        planeMat.backFaceCulling = false;
+        planeMat.disableLighting = true;
 
         const makePlane = (name: string, width: number, height: number, posX: number, posY: number, posZ: number, rotX: number, rotY: number) => {
             const p = B.MeshBuilder.CreatePlane(name, { width: Math.max(1, width), height: Math.max(1, height) }, scene);
@@ -49,13 +86,6 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
             p.rotation.y = rotY;
             offsetPlaneMeshes.push(p);
         };
-
-        const cx = bay.centerWorldMm.x;
-        const cy = bay.centerWorldMm.y;
-        const cz = bay.centerWorldMm.z;
-        const bw = Math.max(1, bay.boundsMm.width - 2);
-        const bh = Math.max(1, bay.boundsMm.height - 2);
-        const bd = Math.max(1, bay.boundsMm.depth - 2);
 
         // Dół (Bottom) — normalna skierowana w górę (+Y w Babylon)
         if (bay.boundary.bottom?.planeCoordMm !== undefined) {
@@ -87,6 +117,10 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
             makePlane('smartbox_plane_front', bw, bh, cx, cz, bay.boundary.frontPlaneYMm + 1.5, 0, Math.PI);
         }
     }
+
+    try {
+        ContextManager.instance?.viewport?.requestRender(2);
+    } catch {}
 }
 
 /**
@@ -94,4 +128,7 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
  */
 export function clearBayHighlight(scene?: any): void {
     _clearOffsetPlanes();
+    try {
+        ContextManager.instance?.viewport?.requestRender(2);
+    } catch {}
 }

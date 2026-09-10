@@ -238,6 +238,19 @@ describe('SmartBox Bay Detector (3D Geometric Probe)', () => {
                     };
                     createdPlanes.push(plane);
                     return plane;
+                },
+                CreateBox: (name: string) => {
+                    const box = {
+                        name,
+                        position: { x: 0, y: 0, z: 0 },
+                        material: null,
+                        isPickable: false,
+                        enableEdgesRendering: () => {},
+                        dispose: () => { disposedCount++; },
+                        isDisposed: () => false
+                    };
+                    createdPlanes.push(box);
+                    return box;
                 }
             },
             StandardMaterial: class {
@@ -248,16 +261,20 @@ describe('SmartBox Bay Detector (3D Geometric Probe)', () => {
             },
             Color3: class {
                 constructor(public r: number, public g: number, public b: number) {}
+            },
+            Color4: class {
+                constructor(public r: number, public g: number, public b: number, public a: number) {}
             }
         };
 
         highlightBayInScene({} as any, bay);
-        expect(createdPlanes.length).toBe(6); // bottom, top, left, right, back, front
+        expect(createdPlanes.length).toBe(7); // 1 volume box + 6 boundary planes
+        expect(createdPlanes.some(p => p.name === 'smartbox_bay_volume')).toBe(true);
         expect(createdPlanes.some(p => p.name === 'smartbox_plane_bottom')).toBe(true);
         expect(createdPlanes.some(p => p.name === 'smartbox_plane_left')).toBe(true);
 
         clearBayHighlight();
-        expect(disposedCount).toBe(6);
+        expect(disposedCount).toBe(7);
     });
 
     it('detects bay bounded by custom manual panel (e.g. wall thickening) without role or specific naming', () => {

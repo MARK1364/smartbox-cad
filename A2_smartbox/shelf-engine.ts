@@ -19,7 +19,23 @@ export class ShelfEngine extends BaseEngine {
         const offsetFront = params.offsetFront !== undefined ? params.offsetFront : 0;
         const offsetBack = params.offsetBack !== undefined ? params.offsetBack : 0;
         const offsetSide = params.offsetSide !== undefined ? params.offsetSide : 0;
-        const offsetBottom = params.offsetBottom !== undefined ? params.offsetBottom : (params.offset_bottom !== undefined ? params.offset_bottom : 0);
+
+        // Matematyka pozycjonowania Z:
+        // 'top' -> przestrzeń od górnego sufitu kontenera (height) do górnego lica wińca
+        // 'bottom' (domyślnie) -> przestrzeń od dolnego dna kontenera (0) do dolnego lica wińca
+        const isRefTop = params.referenceFrom === 'top' || (
+            (params.offsetTop !== undefined || params.offset_top !== undefined) &&
+            params.offsetBottom === undefined && params.offset_bottom === undefined
+        );
+
+        let zCenter: number;
+        if (isRefTop) {
+            const offsetTop = params.offsetTop !== undefined ? params.offsetTop : (params.offset_top !== undefined ? params.offset_top : 100);
+            zCenter = height - offsetTop - thickness / 2.0;
+        } else {
+            const offsetBottom = params.offsetBottom !== undefined ? params.offsetBottom : (params.offset_bottom !== undefined ? params.offset_bottom : 100);
+            zCenter = offsetBottom + thickness / 2.0;
+        }
 
         const effectiveWidth = Math.max(10, width - 2 * offsetSide);
         const effectiveDepth = Math.max(10, depth - (offsetFront + offsetBack));
@@ -27,13 +43,11 @@ export class ShelfEngine extends BaseEngine {
         const roleOverride = (shelfRules as any).parameters?.smart_panel_integration?.role_overrides?.SHELF_BOARD;
 
         const edgeBanding = roleOverride?.edge_banding || {
-            '-Y': { active: true, type_id: '0.008x0.022' },
-            '+Y': { active: false, type_id: 'none' },
+            '+Y': { active: true, type_id: '0.008x0.022' },
+            '-Y': { active: false, type_id: 'none' },
             '+X': { active: false, type_id: 'none' },
             '-X': { active: false, type_id: 'none' }
         };
-
-        const zCenter = offsetBottom + thickness / 2.0;
         const yCenter = (offsetFront - offsetBack) / 2.0;
 
         parts.push({

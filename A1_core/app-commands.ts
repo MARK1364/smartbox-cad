@@ -17,6 +17,7 @@ import { CADNode } from './cad-node/cad-node.js';
 import { Vec3 } from './cad-math/vec3.js';
 import { nmToMm, mmToNm } from './cad-math/units.js';
 import { Quat } from './cad-math/quat.js';
+import { CAMStateStore } from '../C1_cnc/core/cam-state-store.js';
 
 declare const BABYLON: any;
 
@@ -236,13 +237,46 @@ export class AppCommands {
             rebuildGeometry(status);
         };
 
-        const resetProject = () => {
-            if (!confirmDiscardUnsaved()) return;
+        const performResetProject = () => {
+            document.reset('Nowy projekt');
+            history.clear();
+            const cmdHist = ContextManager.instance.commandHistory;
+            if (cmdHist) {
+                cmdHist.clear();
+            }
             fileIO.clearHandle();
-            ui.triggerReset();
+            ContextManager.instance.activePanel = null;
+            ContextManager.instance.selectedPanel = null;
+            ContextManager.instance.activeReferencePicker = null;
+            ContextManager.instance.activeConstraintPicker = null;
+            
+            try {
+                const camStore = CAMStateStore.getInstance();
+                camStore.setPrograms([]);
+                camStore.setActiveProgramId(null);
+            } catch {}
+
+            pushHistory('Nowy projekt');
+            rebuildGeometry('Utworzono nowy projekt');
+            
+            if (viewport) {
+                viewport.zoomToFit();
+            }
+            
+            window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+            ui.setStatus('Utworzono nowy projekt', true);
         };
 
-        const saveProject = async () => {
+        const resetProject = () => {
+            if (ContextManager.instance.requestNewProjectDialog) {
+                ContextManager.instance.requestNewProjectDialog();
+                return;
+            }
+            if (!confirmDiscardUnsaved()) return;
+            performResetProject();
+        };
+
+        const saveProject = async (): Promise<boolean> => {
             try {
                 const mode = await fileIO.save(document);
                 ui.setStatus(
@@ -251,14 +285,16 @@ export class AppCommands {
                         : 'Pobrano kopię projektu (.spp.json) — dokument nadal oznaczony jako niezapisany',
                     true
                 );
+                return true;
             } catch (err) {
-                if (isUserAbort(err)) return;
+                if (isUserAbort(err)) return false;
                 console.error(err);
                 ui.setStatus('Błąd podczas zapisu projektu!', true);
+                return false;
             }
         };
 
-        const saveProjectAs = async () => {
+        const saveProjectAs = async (): Promise<boolean> => {
             try {
                 const mode = await fileIO.saveAs(document);
                 ui.setStatus(
@@ -267,10 +303,12 @@ export class AppCommands {
                         : 'Pobrano kopię projektu (.spp.json) — dokument nadal oznaczony jako niezapisany',
                     true
                 );
+                return true;
             } catch (err) {
-                if (isUserAbort(err)) return;
+                if (isUserAbort(err)) return false;
                 console.error(err);
                 ui.setStatus('Błąd podczas zapisu projektu!', true);
+                return false;
             }
         };
 
@@ -422,6 +460,7 @@ export class AppCommands {
             addSmartPanel,
             addSmartFrame,
             newProject: resetProject,
+            forceResetProject: performResetProject,
             saveProject,
             saveProjectAs,
             openProject,

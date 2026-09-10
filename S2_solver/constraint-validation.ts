@@ -105,28 +105,6 @@ function hasStaleSource(
     return !document.findNode(anchor.sourceNodeId);
 }
 
-function worldAnchorNormal(
-    document: ProjectDocument,
-    anchor: ConstraintAnchor,
-): Vec3 | null {
-    const node = document.findNode(anchor.nodeId);
-    if (!node) {
-        return null;
-    }
-    const geom = anchor.sourceNodeId ? document.findNode(anchor.sourceNodeId) : null;
-    const resolved = resolveAnchor(node, anchor, geom);
-    if (!resolved?.localNormal) {
-        return null;
-    }
-    const { rotation } = node.getWorldMatrix().decompose();
-    const n = rotation.rotateVec3(
-        new Vec3(resolved.localNormal[0], resolved.localNormal[1], resolved.localNormal[2]),
-    );
-    return n.lengthSquared() < 1e-12 ? null : n.normalize();
-}
-
-const PARALLEL_DOT = 0.98;
-
 function anchorResolves(
     document: ProjectDocument | null,
     anchor: ConstraintAnchor | null,
@@ -298,29 +276,6 @@ export function validateConstraints(
                     severity: 'warning',
                     code: 'PLANE_DIRECTION_CONFLICT',
                     message: `Więz ${b.id}: COPLANAR i FLUSH na tych samych ścianach — sprzeczne kierunki.`,
-                });
-            }
-        }
-    }
-
-    if (document) {
-        for (const c of enabled) {
-            if (!isFaceBind(c.bindType) || skipIds.has(c.id) || !c.anchorA || !c.anchorB) {
-                continue;
-            }
-            const nA = worldAnchorNormal(document, c.anchorA);
-            const nB = worldAnchorNormal(document, c.anchorB);
-            if (!nA || !nB) {
-                continue;
-            }
-            if (Math.abs(nA.dot(nB)) < PARALLEL_DOT) {
-                issues.push({
-                    constraintId: c.id,
-                    severity: 'warning',
-                    code: 'NON_PARALLEL_PLANES',
-                    message:
-                        `Więz ${c.id}: wskazane płaszczyzny nie są równoległe — ` +
-                        `wyrównanie przesuwa drugą szafę wzdłuż normalnej pierwszej, bez obrotu.`,
                 });
             }
         }

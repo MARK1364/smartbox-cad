@@ -35,8 +35,8 @@ const PREVIEW_ID = '__pmi_preview__';
 const MEASURE_PREVIEW_ID = '__pmi_measure_preview__';
 
 const MEASURE_COLOR: Rgba = [1.0, 1.0, 0.0, 1.0];
-/** Miarki czytamy z daleka — etykieta ~4× większa niż wymiary CAD. */
-const MEASURE_LABEL_SCALE = 4;
+/** Etykieta miarki zbliżona rozmiarem do tekstu wymiarowego CAD. */
+const MEASURE_LABEL_SCALE = 1.0;
 /** Kolory delt (linie przerywane XYZ). */
 const MEASURE_DELTA_COLOR: Record<'X' | 'Y' | 'Z', Rgba> = {
     X: [1.0, 0.2, 0.2, 0.6],
@@ -794,9 +794,9 @@ export class PMIRenderer {
         const lines = label.split('\n');
         const textHWorld = Math.max(store.textSizeMM, 12) * MEASURE_LABEL_SCALE;
         const lineH = textHWorld * 0.85;
-        const textWWorld = Math.max(...lines.map(l => l.length * textHWorld * 0.58), 24);
+        const textWWorld = Math.max(...lines.map(l => l.length * textHWorld * 0.58), 16);
         const totalH = lineH * lines.length;
-        const padWorld = textHWorld * 0.42;
+        const padWorld = textHWorld * 0.3;
         const planeW = textWWorld + padWorld * 2;
         const planeH = totalH + padWorld * 2;
         const cacheKey = `${label}|${accentColor}|${selected}|${planeW.toFixed(0)}|${planeH.toFixed(0)}`;

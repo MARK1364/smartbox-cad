@@ -299,7 +299,7 @@ describe('ProjectDocument', () => {
         expect(loaded).toBeNull();
     });
 
-    it('does not markSaved on download fallback', async () => {
+    it('markSaved also on download fallback', async () => {
         const clicks: string[] = [];
         const fakeAnchor = {
             href: '',
@@ -328,7 +328,7 @@ describe('ProjectDocument', () => {
             const mode = await io.save(doc);
             expect(mode).toBe('download');
             expect(clicks).toHaveLength(1);
-            expect(doc.isDirty()).toBe(true);
+            expect(doc.isDirty()).toBe(false);
             expect(doc.metadata.savedAt).toMatch(/^\d{4}-/);
         } finally {
             (globalThis as any).window = prevWindow;
@@ -386,4 +386,29 @@ describe('ProjectDocument', () => {
         doc.load(json);
         expect(calls).toContain(panel.id);
     });
+
+    it('should reset document to a clean empty project with reset()', () => {
+        const container = doc.createContainer({ name: 'Szafa' });
+        doc.createPanel({ name: 'Panel' }, container.id);
+        expect(doc.getPanels()).toHaveLength(1);
+        expect(doc.getContainers()).toHaveLength(1);
+        expect(doc.isDirty()).toBe(true);
+
+        let loadedEventFired = false;
+        doc.onDocumentChanged((evt) => {
+            if (evt.type === 'loaded') loadedEventFired = true;
+        });
+
+        doc.reset('Mój Nowy Projekt');
+
+        expect(doc.name).toBe('Mój Nowy Projekt');
+        expect(doc.rootNode.nodeType).toBe(NodeType.ROOM);
+        expect(doc.rootNode.children).toHaveLength(0);
+        expect(doc.getPanels()).toHaveLength(0);
+        expect(doc.getContainers()).toHaveLength(0);
+        expect(doc.isDirty()).toBe(false);
+        expect(doc.activeEntity).toBeNull();
+        expect(loadedEventFired).toBe(true);
+    });
 });
+

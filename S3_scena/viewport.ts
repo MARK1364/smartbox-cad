@@ -32,6 +32,18 @@ export class Viewport {
     /** PMI / narzędzia: podwójny klik odwołuje narzędzie, nie zoomuje kamery. */
     suppressDoubleTapZoom = false;
 
+    private _dirtyFrames: number = 5;
+    private _isDirty: boolean = true;
+
+    /**
+     * Zgłasza potrzebę wyrenderowania klatki (lub określonej liczby klatek) sceny 3D.
+     * W trybie Render-on-Demand pozwala na 0% zużycia CPU/GPU w stanie spoczynku.
+     */
+    public requestRender(frames: number = 2): void {
+        this._dirtyFrames = Math.max(this._dirtyFrames, frames);
+        this._isDirty = true;
+    }
+
     /**
      * Inicjalizacja asynchroniczna z obsługą WebGPU i PerformanceConfigManager
      */
@@ -92,6 +104,7 @@ export class Viewport {
         this._orthoZoomObserver = this.camera.onViewMatrixChangedObservable.add(() => {
             this._updateOrthographicBounds();
             this._syncViewCube();
+            this.requestRender(2);
         });
 
         // Wyłączenie domyślnych kontroli wskaźnika Babylon.js (LMB nie obraca już natywnie sceny)
@@ -125,6 +138,7 @@ export class Viewport {
         let lastBayProbeTime = 0;
 
         this.scene.onPointerObservable.add((pointerInfo) => {
+            this.requestRender(2);
             const evt = pointerInfo.event as PointerEvent | WheelEvent;
 
             if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
@@ -353,15 +367,28 @@ export class Viewport {
         // ─── Ground grid ─────────────────────────────
         this._createGroundGrid();
 
-        // ─── Render loop ─────────────────────────────
+        // ─── Render loop (Render-on-Demand) ──────────
         this.engine.runRenderLoop(() => {
-            this.scene.render();
-            this._syncViewCube();
+            const perfConfig = PerformanceConfigManager.instance;
+            const onDemand = perfConfig.getRenderOnDemand();
+            if (!onDemand || this._dirtyFrames > 0 || this._isDirty) {
+                this.scene.render();
+                this._syncViewCube();
+                if (this._dirtyFrames > 0) {
+                    this._dirtyFrames--;
+                }
+                this._isDirty = false;
+            }
         });
 
         // ─── Resize ──────────────────────────────────
         window.addEventListener('resize', () => {
             this.engine.resize();
+            this.requestRender(3);
+        });
+
+        PerformanceConfigManager.instance.subscribe(() => {
+            this.requestRender(2);
         });
     }
 
@@ -527,6 +554,7 @@ export class Viewport {
         this.scene.meshes.forEach((mesh: any) => {
             this.applyRenderModeToMesh(mesh, mode);
         });
+        this.requestRender(2);
     }
 
     /**
@@ -659,6 +687,7 @@ export class Viewport {
             BABYLON.Animation.CreateAndStartAnimation('camTarget', this.camera, 'target', fps, frames,
                 this.camera.target.clone(), target, loopMode, ease);
         }
+        this.requestRender(frames + 10);
     }
 
     setPanToolActive(active: boolean) {

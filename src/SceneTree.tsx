@@ -454,10 +454,14 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
           const isFrozen = g.frozen === true;
           const isSelected = selectedFeatureId === g.id ? 'selected' : '';
           const label = isSmart ? (g.name || 'Operacja') : (g.name || 'Wpust');
-          const faceText = formatFaceLabel(g.face);
+          const w = Math.round(g.width) || 0;
+          const h = Math.round(g.height) || 0;
+          const d = Math.round(g.depth) || 0;
+          const lengthVal = Math.max(w, h);
+          const widthVal = h > 0 ? Math.min(w, h) : w;
           const dims = isSmart
-            ? `${Math.round(g.width)}×${Math.round(g.height)}×${Math.round(g.depth)}`
-            : `${Math.round(g.width)}×${Math.round(g.depth)}`;
+            ? `${w}×${h}×${d}`
+            : `${lengthVal}×${widthVal}×${d}`;
           const details = faceText ? `${faceText} · ${dims}` : dims;
           return (
             <div

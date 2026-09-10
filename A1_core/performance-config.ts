@@ -18,6 +18,7 @@ export interface PerformanceProfile {
 }
 
 export interface PerformanceConfigData {
+    _v?: number;
     activeProfile: 'low' | 'medium' | 'high' | 'auto';
     profiles: Record<string, PerformanceProfile>;
     current: {
@@ -55,10 +56,19 @@ export class PerformanceConfigManager {
                 if (stored) {
                     const parsed = JSON.parse(stored);
                     if (parsed && typeof parsed === 'object') {
+                        // Jeżeli w localStorage jest stary config bez flagi _v2, wymuszamy renderOnDemand = true
+                        const hasV2 = parsed._v === 2;
+                        const renderOnDemandVal = hasV2 ? Boolean(parsed.current?.renderOnDemand) : true;
+
                         this._config = {
                             ...this._config,
                             ...parsed,
-                            current: { ...this._config.current, ...(parsed.current || {}) }
+                            _v: 2,
+                            current: { 
+                                ...this._config.current, 
+                                ...(parsed.current || {}),
+                                renderOnDemand: renderOnDemandVal
+                            }
                         };
                     }
                 }
@@ -102,7 +112,7 @@ export class PerformanceConfigManager {
                 antialias: true,
                 throttleHoverMs: 35,
                 powerPreference: 'high-performance',
-                renderOnDemand: false
+                renderOnDemand: true
             };
             return;
         }
@@ -114,7 +124,7 @@ export class PerformanceConfigManager {
                 antialias: profile.antialias,
                 throttleHoverMs: profile.throttleHoverMs,
                 powerPreference: profile.powerPreference || 'high-performance',
-                renderOnDemand: profile.renderOnDemand ?? false
+                renderOnDemand: profile.renderOnDemand ?? true
             };
         }
     }
@@ -191,7 +201,7 @@ export class PerformanceConfigManager {
     }
 
     public getRenderOnDemand(): boolean {
-        return this._config.current?.renderOnDemand ?? false;
+        return this._config.current?.renderOnDemand ?? true;
     }
 
     public applyToEngine(engine: any): void {

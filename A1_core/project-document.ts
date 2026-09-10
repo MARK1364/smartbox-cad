@@ -596,17 +596,27 @@ export class ProjectDocument {
         return json;
     }
 
+    /**
+     * Całkowicie resetuje dokument do stanu czystego, nowego projektu.
+     */
+    reset(name = 'Nowy projekt'): void {
+        this.id = `doc_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        this.name = name;
+        this.metadata = {};
+        this.activeEntity = null;
+        this._rootNode = new CADNode('root_room', 'Pokój', NodeType.ROOM);
+        this._nodeIndex.clear();
+        this._registerSubtree(this._rootNode);
+        this._orphanExtensions = {};
+        this._revision = 0;
+        this._loadExtensions(null);
+        this.emitChange('loaded');
+        this._savedRevision = this._revision;
+    }
+
     load(data: any, options?: LoadOptions): void {
         if (!data) {
-            this._rootNode = new CADNode('root_room', 'Pokój', NodeType.ROOM);
-            this._nodeIndex.clear();
-            this._registerSubtree(this._rootNode);
-            this.activeEntity = null;
-            this.metadata = {};
-            this._revision = 0;
-            this._loadExtensions(null, options);
-            this.emitChange('loaded');
-            this._savedRevision = this._revision;
+            this.reset();
             return;
         }
 

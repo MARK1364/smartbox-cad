@@ -52,6 +52,8 @@ export class ConnectorVisualizer {
     private _hover: EligibleContactFace | null = null;
     private _eligibleMeshes: any[] = [];
     private _connectorMeshes: any[] = [];
+    private _templateMeshes: Map<string, any> = new Map();
+    private _sharedMaterials: Map<string, any> = new Map();
     private _hideSymbols = false;
     private _offDoc: (() => void) | null = null;
     private _offStore: (() => void) | null = null;
@@ -123,6 +125,7 @@ export class ConnectorVisualizer {
                 this._drawSegment(scene, worldPos, edgeDir, segs.edgeMm, segs.edgeDiaMm, conn.type);
             }
         }
+        ContextManager.instance.viewport?.requestRender(2);
     }
 
     private _listen(): void {
@@ -144,6 +147,7 @@ export class ConnectorVisualizer {
             const hover = this._hover && this._sameFace(this._hover, face);
             this._drawPatch(scene, face, hover ? COLOR_HOVER : COLOR_ELIGIBLE, true);
         }
+        ContextManager.instance.viewport?.requestRender(2);
     }
 
     private _sameFace(a: EligibleContactFace, b: EligibleContactFace): boolean {
@@ -191,9 +195,39 @@ export class ConnectorVisualizer {
         }
     }
 
+    private _getTemplate(scene: any, type: string): any {
+        const key = type.startsWith('kolki') ? 'dowel' : (type === 'minifix' ? 'minifix' : 'screw');
+        if (this._templateMeshes.has(key)) {
+            const tm = this._templateMeshes.get(key);
+            if (tm && !tm.isDisposed()) return tm;
+        }
+
+        let mat = this._sharedMaterials.get(key);
+        if (!mat || mat.isDisposed()) {
+            const col = colorForType(type);
+            mat = new BABYLON.StandardMaterial(`c2_conn_mat_${key}`, scene);
+            mat.diffuseColor = new BABYLON.Color3(col.r, col.g, col.b);
+            mat.emissiveColor = new BABYLON.Color3(col.r * 0.35, col.g * 0.35, col.b * 0.35);
+            mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+            this._sharedMaterials.set(key, mat);
+        }
+
+        // Template cylinder (wysokość 1, średnica 1) — instancje skalują do żądanych wymiarów
+        const template = BABYLON.MeshBuilder.CreateCylinder(`c2_template_${key}`, {
+            height: 1,
+            diameter: 1,
+            tessellation: 12,
+        }, scene);
+        template.isVisible = false;
+        template.isPickable = false;
+        template.material = mat;
+        this._templateMeshes.set(key, template);
+        return template;
+    }
+
     /**
      * Walec od płaszczyzny styku w głąb formatki (środek Babylona = środek walca).
-     * dirCad — kierunek w CAD, od styku do wnętrza płyty.
+     * Wykorzystuje sprzętowe instancjonowanie GPU (1 draw call na typ złącza).
      */
     private _drawSegment(
         scene: any,
@@ -209,30 +243,33 @@ export class ConnectorVisualizer {
         const pos = cadToRender(centerCad);
         const nBab = cadToRender(dirN).normalize();
 
-        const cyl = BABYLON.MeshBuilder.CreateCylinder('c2_conn', {
-            height: lengthMm,
-            diameter: diameterMm,
-            tessellation: 12,
-        }, scene);
-        cyl.position = new BABYLON.Vector3(pos.x, pos.y, pos.z);
-        cyl.rotationQuaternion = quatAlignY(new BABYLON.Vector3(nBab.x, nBab.y, nBab.z));
+        const template = this._getTemplate(scene, type);
+        const inst = template.createInstance('c2_conn_inst');
+        inst.scaling = new BABYLON.Vector3(diameterMm, lengthMm, diameterMm);
+        inst.position = new BABYLON.Vector3(pos.x, pos.y, pos.z);
+        inst.rotationQuaternion = quatAlignY(new BABYLON.Vector3(nBab.x, nBab.y, nBab.z));
+        inst.isPickable = false;
+        inst.renderingGroupId = 0;
+        inst.metadata = { type: 'c2_connector_symbol' };
 
-        const col = colorForType(type);
-        const mat = new BABYLON.StandardMaterial('c2_conn_mat', scene);
-        mat.diffuseColor = new BABYLON.Color3(col.r, col.g, col.b);
-        mat.emissiveColor = new BABYLON.Color3(col.r * 0.35, col.g * 0.35, col.b * 0.35);
-        cyl.material = mat;
-        cyl.isPickable = false;
-        cyl.renderingGroupId = 0;
-        cyl.metadata = { type: 'c2_connector_symbol' };
-        this._connectorMeshes.push(cyl);
+        const vp = ContextManager.instance.viewport;
+        if (vp) {
+            const currentMode = vp.currentRenderMode || 'edges';
+            const showInMode = currentMode === 'wireframe' || currentMode === 'xray';
+            inst.setEnabled(showInMode);
+            inst.isVisible = showInMode;
+        }
+
+        this._connectorMeshes.push(inst);
     }
 
     private _dispose(meshes: any[]): void {
         for (const m of meshes) {
             try {
-                m.material?.dispose?.();
-                m.dispose?.();
+                if (m.material && !m.isAnInstance) {
+                    m.material.dispose();
+                }
+                m.dispose();
             } catch {}
         }
     }

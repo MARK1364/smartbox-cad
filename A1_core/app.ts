@@ -50,7 +50,6 @@ declare const BABYLON: any;
 let ctx: BootstrapContext;
 let gizmoCtrl: GizmoController;
 let contextMenuHandler: ContextMenuHandler;
-let sketchModeActive = false;
 
 // ─── Helper functions ───
 function getAllContainers(doc: any): any[] {
@@ -295,7 +294,6 @@ async function main() {
         ctx.contextMenu,
         ctx.propertiesManager,
         () => getAllPanels(ctx.document),
-        () => toggleSketchMode(),
         () => ContextManager.instance.appAPI?.undo?.(),
         () => ContextManager.instance.appAPI?.redo?.(),
         ctx.history
@@ -661,21 +659,6 @@ async function main() {
     }
 }
 
-function toggleSketchMode() {
-    sketchModeActive = !sketchModeActive;
-    if (sketchModeActive) {
-        ctx.facePicker.selectionMode = 'subgeometry';
-        ctx.ui.setStatus('Sketch mode — kliknij ścianę', true);
-        if (ctx.facePicker.selectedFace) {
-            ctx.sketchPlane.activate(ctx.facePicker.selectedFace, true);
-            ctx.ui.showSketchMode(ctx.facePicker.selectedFace);
-        }
-    } else {
-        ctx.facePicker.selectionMode = 'object';
-        ctx.sketchPlane.deactivate();
-        ctx.ui.hideSketchMode();
-        ctx.ui.setStatus('Sketch mode wyłączony');
-    }
-}
+
 
 main().catch(err => console.error('Bootstrap error:', err));

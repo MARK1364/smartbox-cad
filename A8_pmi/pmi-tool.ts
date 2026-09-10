@@ -126,6 +126,12 @@ export class DimensionTool extends BaseState {
     // STATE LIFECYCLE
     // ========================================================================
 
+    private handleWindowKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Control' || e.ctrlKey) {
+            this.isCtrlPressed = true;
+        }
+    };
+
     private handleWindowKeyUp = (e: KeyboardEvent) => {
         if (!e.ctrlKey) this.isCtrlPressed = false;
     };
@@ -156,10 +162,15 @@ export class DimensionTool extends BaseState {
         // Rejestracja wyłącznie POINTERMOVE do płynnego śledzenia kursora i podglądu na żywo
         this.pointerObserver = scene.onPointerObservable.add((pointerInfo: any) => {
             if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
+                if (pointerInfo.event) {
+                    this.isCtrlPressed = !!pointerInfo.event.ctrlKey;
+                }
                 this.onPointerMove();
             }
             if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
-                this.isCtrlPressed = !!pointerInfo.event?.ctrlKey;
+                if (pointerInfo.event) {
+                    this.isCtrlPressed = !!pointerInfo.event.ctrlKey;
+                }
             }
         });
 
@@ -174,6 +185,7 @@ export class DimensionTool extends BaseState {
         });
 
         if (typeof window !== 'undefined') {
+            window.addEventListener('keydown', this.handleWindowKeyDown);
             window.addEventListener('keyup', this.handleWindowKeyUp);
             window.addEventListener('blur', this.handleWindowBlur);
         }
@@ -186,6 +198,7 @@ export class DimensionTool extends BaseState {
 
     public onExit(): void {
         if (typeof window !== 'undefined') {
+            window.removeEventListener('keydown', this.handleWindowKeyDown);
             window.removeEventListener('keyup', this.handleWindowKeyUp);
             window.removeEventListener('blur', this.handleWindowBlur);
         }
@@ -248,7 +261,10 @@ export class DimensionTool extends BaseState {
     // INTENT HANDLING
     // ========================================================================
 
-    public onSelect(_intent: Intent): void {
+    public onSelect(intent: Intent): void {
+        if (intent.pointerInfo?.event) {
+            this.isCtrlPressed = !!intent.pointerInfo.event.ctrlKey;
+        }
         this.onLeftClick();
     }
 
@@ -346,12 +362,24 @@ export class DimensionTool extends BaseState {
         if (this.phase === 'PICK_P1') {
             // Krawędź pod kursorem ma pierwszeństwo przed snapem do punktu — inaczej
             // klik obok linii uciekał do najbliższego narożnika ściany.
-            if (!this.isCtrlPressed && !this.isVertexUnderCursor()) {
+            // Działa zarówno bez Ctrl jak i z Ctrl (Ctrl + krawędź = wybierz krawędź jako P1,
+            // a nie bezpośrednio wyciągaj wymiar — czeka na P2).
+            if (!this.isVertexUnderCursor()) {
                 const detectedEdge = this.findDetectedEdge();
                 if (detectedEdge) {
-                    this.pick1 = detectedEdge.p1;
-                    this.pick2 = detectedEdge.p2;
-                    this.beginOffsetDrag();
+                    if (this.isCtrlPressed) {
+                        // Ctrl + krawędź: zapisz jako P1 i czekaj na P2 (multi-wybór)
+                        this.pick1 = detectedEdge.p1;
+                        this.pick2 = null;
+                        this.phase = 'PICK_P2';
+                        this.syncToolLiveState();
+                        this.setUIStatus('Krawędź 1 wybrana. Wskaż punkt 2 lub drugą krawędź (LMB).');
+                    } else {
+                        // Bez Ctrl: od razu P1+P2 z krawędzi i drag offset
+                        this.pick1 = detectedEdge.p1;
+                        this.pick2 = detectedEdge.p2;
+                        this.beginOffsetDrag();
+                    }
                     return;
                 }
             }
@@ -378,6 +406,16 @@ export class DimensionTool extends BaseState {
         }
 
         if (this.phase === 'PICK_P2') {
+            // Gdy Ctrl i jest krawędź pod kursorem — użyj jej bliższego końca jako P2
+            if (this.isCtrlPressed && !this.isVertexUnderCursor()) {
+                const detectedEdge = this.findDetectedEdge();
+                if (detectedEdge) {
+                    this.pick2 = detectedEdge.p1;
+                    this.disposeLiveGuideLine();
+                    this.beginOffsetDrag();
+                    return;
+                }
+            }
             const snap = this.isCtrlPressed
                 ? this.findStructuredSnapPoint()
                 : this.findSnapPoint();

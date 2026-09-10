@@ -7,7 +7,7 @@
       "antialias": false,
       "throttleHoverMs": 50,
       "maxFps": 30,
-      "renderOnDemand": false,
+      "renderOnDemand": true,
       "powerPreference": "default"
     },
     "medium": {
@@ -16,7 +16,7 @@
       "antialias": true,
       "throttleHoverMs": 35,
       "maxFps": 60,
-      "renderOnDemand": false,
+      "renderOnDemand": true,
       "powerPreference": "high-performance"
     },
     "high": {
@@ -25,7 +25,7 @@
       "antialias": true,
       "throttleHoverMs": 20,
       "maxFps": 60,
-      "renderOnDemand": false,
+      "renderOnDemand": true,
       "powerPreference": "high-performance"
     }
   },
@@ -34,6 +34,6 @@
     "antialias": true,
     "throttleHoverMs": 35,
     "powerPreference": "high-performance",
-    "renderOnDemand": false
+    "renderOnDemand": true
   }
 }

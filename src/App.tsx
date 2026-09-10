@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { unit } from '../A1_core/unit-system';
 import { UIController, PANEL_DIM_MAX_MM, PANEL_DIM_MIN_MM } from '../A1_core/ui-controller';
 import { SmartFrameUI } from '../A3_smartframe/smartframe-ui';
@@ -6,6 +6,7 @@ import { SmartBoxUI } from '../A2_smartbox/smartbox-ui';
 import { SSOTUI } from './ssot-ui';
 import { PerformanceOptionsModal } from './PerformanceOptionsModal';
 import { GoogleDriveModal } from './GoogleDriveModal';
+import { NewProjectModal } from './NewProjectModal';
 import { PropertiesPanel } from './PropertiesPanel';
 import { FloatingOperationDialog, CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
 import { BelkaDisplayModeMenu, BelkaProjectionMenu, BelkaInfoMenu } from './BelkaDisplayModeMenu';
@@ -196,9 +197,222 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const [ssotModalOpen, setSsotModalOpen] = useState(false);
   const [perfModalOpen, setPerfModalOpen] = useState(false);
   const [gdriveModalMode, setGdriveModalMode] = useState<'open' | 'save' | 'settings' | null>(null);
+  const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
+
+  useEffect(() => {
+    ContextManager.instance.requestNewProjectDialog = () => {
+      setNewProjectModalOpen(true);
+    };
+    return () => {
+      ContextManager.instance.requestNewProjectDialog = null;
+    };
+  }, []);
+
+  const handleNewProjectClick = () => {
+    const doc = ContextManager.instance.document || projectModel;
+    const hasPanels = doc && typeof doc.getPanels === 'function' && doc.getPanels().length > 0;
+    const hasContainers = doc && typeof doc.getContainers === 'function' && doc.getContainers().length > 0;
+    const isDirty = doc && typeof doc.isDirty === 'function' ? doc.isDirty() : false;
+
+    if (!isDirty && !hasPanels && !hasContainers) {
+      callAPI('forceResetProject');
+      return;
+    }
+
+    setNewProjectModalOpen(true);
+  };
+
+  const handleSaveAndNewProject = async () => {
+    const api = ContextManager.instance.appAPI;
+    if (api && typeof api.saveProject === 'function') {
+      const saved = await api.saveProject();
+      if (saved !== false) {
+        setNewProjectModalOpen(false);
+        if (typeof api.forceResetProject === 'function') {
+          api.forceResetProject();
+        }
+      }
+    }
+  };
+
+  const handleDiscardAndNewProject = () => {
+    setNewProjectModalOpen(false);
+    const api = ContextManager.instance.appAPI;
+    if (api && typeof api.forceResetProject === 'function') {
+      api.forceResetProject();
+    }
+  };
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const uiRegionHint = useUiRegionEdgeHint();
+
+  // ─── Szerokości paneli (Drzewo obiektów i Panel edycji) z pamięcią w localStorage ───
+  const TREE_MIN_CONTENT_WIDTH = 280;
+  const EDIT_MIN_CONTENT_WIDTH = 340;
+  const COLLAPSED_PANEL_WIDTH = 32;
+  const COLLAPSE_SNAP_THRESHOLD = 75;
+
+  const lastTreeWidthRef = useRef<number>(280);
+  const lastEditWidthRef = useRef<number>(340);
+
+  const [treeWidth, setTreeWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('cad_tree_panel_width');
+      const last = localStorage.getItem('cad_last_tree_width');
+      if (last) {
+        const lVal = parseInt(last, 10);
+        if (!isNaN(lVal) && lVal >= 160) lastTreeWidthRef.current = lVal;
+      }
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val)) {
+          if (val <= 48) return COLLAPSED_PANEL_WIDTH;
+          if (val >= 100 && val <= 900) return val;
+        }
+      }
+    } catch {}
+    return 280;
+  });
+
+  const [editPanelWidth, setEditPanelWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('cad_edit_panel_width');
+      const last = localStorage.getItem('cad_last_edit_width');
+      if (last) {
+        const lVal = parseInt(last, 10);
+        if (!isNaN(lVal) && lVal >= 200) lastEditWidthRef.current = lVal;
+      }
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val)) {
+          if (val <= 48) return COLLAPSED_PANEL_WIDTH;
+          if (val >= 100 && val <= 1000) return val;
+        }
+      }
+    } catch {}
+    return 340;
+  });
+
+  const [isDraggingTree, setIsDraggingTree] = useState(false);
+  const [isDraggingEdit, setIsDraggingEdit] = useState(false);
+
+  const startResizeTree = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingTree(true);
+    const startX = e.clientX;
+    const startW = treeWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onPointerMove = (moveEv: PointerEvent) => {
+      const delta = moveEv.clientX - startX;
+      const maxW = Math.floor(window.innerWidth * 0.45);
+      const rawW = startW + delta;
+      const newW = rawW < COLLAPSE_SNAP_THRESHOLD ? COLLAPSED_PANEL_WIDTH : Math.max(COLLAPSED_PANEL_WIDTH, Math.min(maxW, rawW));
+      setTreeWidth(newW);
+    };
+
+    const onPointerUp = (upEv: PointerEvent) => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setIsDraggingTree(false);
+
+      const dragDistance = Math.abs(upEv.clientX - startX);
+      if (dragDistance < 4) {
+        // Kliknięcie w krawędź / gizmo bez przeciągania -> toggle zwiń / rozwiń
+        if (treeWidth <= 48) {
+          const restored = lastTreeWidthRef.current || 280;
+          setTreeWidth(restored);
+          try { localStorage.setItem('cad_tree_panel_width', String(restored)); } catch {}
+        } else {
+          lastTreeWidthRef.current = treeWidth;
+          try { localStorage.setItem('cad_last_tree_width', String(treeWidth)); } catch {}
+          setTreeWidth(COLLAPSED_PANEL_WIDTH);
+          try { localStorage.setItem('cad_tree_panel_width', String(COLLAPSED_PANEL_WIDTH)); } catch {}
+        }
+        return;
+      }
+
+      // Zakończone przeciąganie
+      const finalDelta = upEv.clientX - startX;
+      const maxW = Math.floor(window.innerWidth * 0.45);
+      const rawW = startW + finalDelta;
+      const finalW = rawW < COLLAPSE_SNAP_THRESHOLD ? COLLAPSED_PANEL_WIDTH : Math.max(COLLAPSED_PANEL_WIDTH, Math.min(maxW, rawW));
+      setTreeWidth(finalW);
+      if (finalW > 48) {
+        lastTreeWidthRef.current = finalW;
+        try { localStorage.setItem('cad_last_tree_width', String(finalW)); } catch {}
+      }
+      try {
+        localStorage.setItem('cad_tree_panel_width', String(finalW));
+      } catch {}
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }, [treeWidth]);
+
+  const startResizeEdit = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingEdit(true);
+    const startX = e.clientX;
+    const startW = editPanelWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onPointerMove = (moveEv: PointerEvent) => {
+      const delta = startX - moveEv.clientX;
+      const maxW = Math.floor(window.innerWidth * 0.5);
+      const rawW = startW + delta;
+      const newW = rawW < COLLAPSE_SNAP_THRESHOLD ? COLLAPSED_PANEL_WIDTH : Math.max(COLLAPSED_PANEL_WIDTH, Math.min(maxW, rawW));
+      setEditPanelWidth(newW);
+    };
+
+    const onPointerUp = (upEv: PointerEvent) => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setIsDraggingEdit(false);
+
+      const dragDistance = Math.abs(startX - upEv.clientX);
+      if (dragDistance < 4) {
+        // Kliknięcie w krawędź / gizmo bez przeciągania -> toggle zwiń / rozwiń
+        if (editPanelWidth <= 48) {
+          const restored = lastEditWidthRef.current || 340;
+          setEditPanelWidth(restored);
+          try { localStorage.setItem('cad_edit_panel_width', String(restored)); } catch {}
+        } else {
+          lastEditWidthRef.current = editPanelWidth;
+          try { localStorage.setItem('cad_last_edit_width', String(editPanelWidth)); } catch {}
+          setEditPanelWidth(COLLAPSED_PANEL_WIDTH);
+          try { localStorage.setItem('cad_edit_panel_width', String(COLLAPSED_PANEL_WIDTH)); } catch {}
+        }
+        return;
+      }
+
+      // Zakończone przeciąganie
+      const finalDelta = startX - upEv.clientX;
+      const maxW = Math.floor(window.innerWidth * 0.5);
+      const rawW = startW + finalDelta;
+      const finalW = rawW < COLLAPSE_SNAP_THRESHOLD ? COLLAPSED_PANEL_WIDTH : Math.max(COLLAPSED_PANEL_WIDTH, Math.min(maxW, rawW));
+      setEditPanelWidth(finalW);
+      if (finalW > 48) {
+        lastEditWidthRef.current = finalW;
+        try { localStorage.setItem('cad_last_edit_width', String(finalW)); } catch {}
+      }
+      try {
+        localStorage.setItem('cad_edit_panel_width', String(finalW));
+      } catch {}
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }, [editPanelWidth]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -1542,7 +1756,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             </button>
             {fileMenuOpen && (
               <div className="dropdown-content">
-                <a href="#" id="menuNew" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('newProject'); }}>Nowy projekt</a>
+                <a href="#" id="menuNew" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); handleNewProjectClick(); }}>Nowy projekt</a>
                 <a href="#" id="menuOpen" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('openProject'); }}>Otwórz...</a>
                 <a href="#" id="menuSave" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProject'); }}>Zapisz</a>
                 <a href="#" id="menuSaveAs" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProjectAs'); }}>Zapisz jako...</a>
@@ -1781,38 +1995,58 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         </div>
       </div>
 
-      {/* ─── Sketch mode indicator ─────────────────────── */}
-      <div 
-        id="sketchIndicator" 
-        className={`sketch-indicator ${uiState?.sketchModeActive ? 'visible' : ''}`}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
-        Tryb szkicu: <span id="sketchFaceName" style={{ marginLeft: '6px' }}>{uiState?.sketchFaceName || '—'}</span>
-        <kbd style={{ marginLeft: '12px' }}>ESC</kbd> aby wyjść
-      </div>
+
 
       {/* ─── Drzewo obiektów ──────────────────────────── */}
       <div
         id="drzewo-obiektow"
-        className="drzewo-obiektow"
+        className={`drzewo-obiektow ${treeWidth <= 48 ? 'is-collapsed' : ''}`}
         aria-label="Drzewo obiektów"
         data-ui-name="Drzewo obiektów"
+        style={{ width: `${treeWidth}px` }}
       >
-        <div className="panel-header" style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <h2 style={{ fontSize: '0.9rem', margin: 0, color: '#e2e8f0' }}>Drzewo obiektów</h2>
-        </div>
+        {/* Sztywny kontener wewnętrzny — nie ulega deformacji/ściskaniu poniżej 280px, tylko jest ucinany */}
         <div 
-          className="panel-section" 
-          style={{ padding: '6px', overflowY: 'auto', height: 'calc(100% - 40px)' }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            UIController.instance?.emitTree('contextmenu-tree-bg', {
-              clientX: e.clientX,
-              clientY: e.clientY
-            });
+          className="panel-inner-content"
+          style={{
+            minWidth: `${TREE_MIN_CONTENT_WIDTH}px`,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            opacity: treeWidth <= 48 ? 0 : 1,
+            pointerEvents: treeWidth <= 48 ? 'none' : 'auto',
+            transition: isDraggingTree ? 'none' : 'opacity 0.15s ease',
           }}
         >
-          <SceneTree projectModel={projectModel} />
+          <div className="panel-header" style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <h2 style={{ fontSize: '0.9rem', margin: 0, color: '#e2e8f0' }}>Drzewo obiektów</h2>
+          </div>
+          <div 
+            className="panel-section" 
+            style={{ padding: '6px', overflowY: 'auto', flex: 1, minHeight: 0 }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              UIController.instance?.emitTree('contextmenu-tree-bg', {
+                clientX: e.clientX,
+                clientY: e.clientY
+              });
+            }}
+          >
+            <SceneTree projectModel={projectModel} />
+          </div>
+        </div>
+
+        {/* Gizmo zmiany szerokości (prawa krawędź) / kliknij aby zwinąć/rozwinąć */}
+        <div
+          className={`panel-resize-handle panel-resize-handle--left-panel ${isDraggingTree ? 'is-dragging' : ''} ${treeWidth <= 48 ? 'is-collapsed' : ''}`}
+          onPointerDown={startResizeTree}
+          title={treeWidth <= 48 ? 'Kliknij lub przeciągnij, aby rozwinąć drzewo obiektów' : 'Przeciągnij krawędź lub kliknij, aby schować drzewo obiektów'}
+        >
+          <div className="panel-resize-gizmo">
+            <div className="panel-resize-gizmo-dot" />
+          </div>
         </div>
       </div>
 
@@ -2067,11 +2301,43 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       {/* ─── Panel edycji (moduły: Korpus, SmartBox, Formatka…) ── */}
       <div
         id="panel-edycji"
-        className="panel-edycji"
+        className={`panel-edycji ${editPanelWidth <= 48 ? 'is-collapsed' : ''}`}
         aria-label="Panel edycji"
         data-ui-name="Panel edycji"
+        style={{ width: `${editPanelWidth}px` }}
       >
-        {/* Tab 1: A4 SmartPanel */}
+        {/* Gizmo zmiany szerokości (lewa krawędź) / kliknij aby zwinąć/rozwinąć */}
+        <div
+          className={`panel-resize-handle panel-resize-handle--right-panel ${isDraggingEdit ? 'is-dragging' : ''} ${editPanelWidth <= 48 ? 'is-collapsed' : ''}`}
+          onPointerDown={startResizeEdit}
+          title={editPanelWidth <= 48 ? 'Kliknij lub przeciągnij, aby rozwinąć panel edycji' : 'Przeciągnij krawędź lub kliknij, aby schować panel edycji'}
+        >
+          <div className="panel-resize-gizmo">
+            <div className="panel-resize-gizmo-dot" />
+          </div>
+        </div>
+
+        {/* Sztywny kontener wewnętrzny — nie ulega deformacji/ściskaniu poniżej 340px, tylko jest ucinany */}
+        <div 
+          className="panel-inner-content"
+          style={{
+            minWidth: `${EDIT_MIN_CONTENT_WIDTH}px`,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            opacity: editPanelWidth <= 48 ? 0 : 1,
+            pointerEvents: editPanelWidth <= 48 ? 'none' : 'auto',
+            transition: isDraggingEdit ? 'none' : 'opacity 0.15s ease',
+          }}
+        >
+          {/* Nagłówek podpisany tak jak drzewo obiektów */}
+          <div className="panel-header" style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+            <h2 style={{ fontSize: '0.9rem', margin: 0, color: '#e2e8f0' }}>Panel edycji</h2>
+          </div>
+
+          {/* Tab 1: A4 SmartPanel */}
         <div className={`tab-content ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} id="tab-a4-smartpanel">
           <div className="panel-header">
             <h2>SmartPanel</h2>
@@ -2190,6 +2456,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <ExportUI />
         </div>
       </div>
+    </div>
 
       {/* ─── 3D Canvas ─────────────────────────────────── */}
       <canvas 
@@ -2207,6 +2474,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             const doc = ContextManager.instance.document || projectModel;
             if (scene && doc) {
               bayCtrl.onPointerMoveOnScene(scene, x, y, doc);
+              ContextManager.instance.viewport?.requestRender(2);
             }
             return;
           }
@@ -2218,14 +2486,21 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             const scene = ContextManager.instance.viewport?.scene;
             if (scene) {
               frameDragCtrl.onPointerMoveOnScene(scene, x, y);
+              ContextManager.instance.viewport?.requestRender(2);
             }
             return;
           }
         }}
         onDragLeave={() => {
+          const bayCtrl = ContextManager.instance.smartBoxBayController;
+          if (bayCtrl && (bayCtrl.isDragging || bayCtrl.isBayDrag())) {
+            clearBayHighlight();
+            ContextManager.instance.viewport?.requestRender(2);
+          }
           const frameDragCtrl = ContextManager.instance.smartFrameDragController;
           if (frameDragCtrl && frameDragCtrl.isDragging) {
             frameDragCtrl.endDrag();
+            ContextManager.instance.viewport?.requestRender(2);
           }
         }}
         onDrop={(e) => {
@@ -2745,6 +3020,16 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         isOpen={gdriveModalMode !== null} 
         initialMode={gdriveModalMode || 'open'} 
         onClose={() => setGdriveModalMode(null)} 
+      />
+
+      {/* ─── Modal Nowego Projektu (Zapisz / Nie zapisuj / Anuluj) ─── */}
+      <NewProjectModal
+        isOpen={newProjectModalOpen}
+        isDirty={!!(projectModel?.isDirty?.())}
+        projectName={projectModel?.name || 'Projekt'}
+        onSaveAndNew={handleSaveAndNewProject}
+        onDiscardAndNew={handleDiscardAndNewProject}
+        onCancel={() => setNewProjectModalOpen(false)}
       />
 
       {/* ─── Bottom Console (Hover Info) ───────────────── */}

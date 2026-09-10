@@ -9,7 +9,7 @@
       "enabled": true,
       "role_overrides": {
         "SHELF_BOARD": {
-          "description": "Wieniec - oklejony FRONT (Y-)",
+          "description": "Wieniec - oklejony FRONT (+Y)",
           "edge_banding": {
             "+X": {
               "active": false,
@@ -20,12 +20,12 @@
               "type_id": "none"
             },
             "+Y": {
-              "active": false,
-              "type_id": "none"
-            },
-            "-Y": {
               "active": true,
               "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
             }
           },
           "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }

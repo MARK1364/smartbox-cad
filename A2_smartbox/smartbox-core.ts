@@ -184,35 +184,75 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
         canonicalFace = 'FACE_Z_PLUS';
     }
 
-    // 2. Akumulacja macierzy transformacji panelu w szafie (CADNode localMatrix)
-    let absoluteMat = panelNode.localMatrix.clone();
-    let currentParent = panelNode.parent;
-    while (currentParent && currentParent !== cabinetNode && currentParent.domainData?.type !== 'container') {
-        absoluteMat = currentParent.localMatrix.multiply(absoluteMat);
-        currentParent = currentParent.parent;
+    // 2. Pozycja środka formatki w przestrzeni szafy (uwzględnia pełne zagnieżdżenie kontenerów)
+    let localTxMm = 0;
+    let localTyMm = 0;
+    let localTzMm = 0;
+
+    if (cabinetNode && panelNode && typeof cabinetNode.worldToLocal === 'function' && typeof panelNode.localToWorld === 'function') {
+        const centerInCab = cabinetNode.worldToLocal(panelNode.localToWorld(Vec3.ZERO));
+        localTxMm = nmToMm(centerInCab.x);
+        localTyMm = nmToMm(centerInCab.y);
+        localTzMm = nmToMm(centerInCab.z);
+    } else if (panelNode) {
+        localTxMm = nmToMm(panelNode.localMatrix.data[12]);
+        localTyMm = nmToMm(panelNode.localMatrix.data[13]);
+        localTzMm = nmToMm(panelNode.localMatrix.data[14]);
     }
 
     const roleUpper = String((panel as any).role || '').toUpperCase();
-    const localTxMm = nmToMm(panelNode.localMatrix.data[12]);
-    const localTyMm = nmToMm(panelNode.localMatrix.data[13]);
-    const localTzMm = nmToMm(panelNode.localMatrix.data[14]);
 
-    const isSide = roleUpper.includes('SIDE') || roleUpper.includes('BOK') || roleUpper.includes('DIVIDER') || roleUpper.includes('PRZEGRODA') ||
-        (roleUpper === 'MANUAL_PANEL' && Math.abs(panelNode.localMatrix.data[12]) > mmToNm(50));
+    const isDivider = roleUpper.includes('DIVIDER') || roleUpper.includes('PRZEGRODA');
+    const isCabinetSide = roleUpper.includes('SIDE') || roleUpper.includes('BOK') ||
+        (roleUpper === 'MANUAL_PANEL' && Math.abs(localTxMm) > 50);
 
-    if (isSide) {
+    if (isDivider) {
+        if (axis === 'x') {
+            // W DividersEngine (rotation [90, 0, 90]):
+            // FACE_Z_MINUS to prawa ściana przegrody (+X)
+            // FACE_Z_PLUS to lewa ściana przegrody (-X)
+            if (canonicalFace === 'FACE_Z_MINUS' || canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'RIGHT') {
+                return localTxMm + sizeZ / 2;
+            }
+            if (canonicalFace === 'FACE_Z_PLUS' || canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'LEFT') {
+                return localTxMm - sizeZ / 2;
+            }
+            // Gdy przegroda jest prawą granicą wnęki (isMax=true), bierzemy jej lewą ścianę (-X).
+            // Gdy jest lewą granicą wnęki (isMax=false), bierzemy jej prawą ścianę (+X).
+            return isMax ? (localTxMm - sizeZ / 2) : (localTxMm + sizeZ / 2);
+        } else if (axis === 'y') {
+            const depthMm = sizeY; // w DividersEngine dim.y to depth
+            if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_MINUS') {
+                return localTyMm - depthMm / 2; // Przód szafy
+            } else if (canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_PLUS') {
+                return localTyMm + depthMm / 2; // Tył szafy
+            } else {
+                return isMax ? (localTyMm + depthMm / 2) : (localTyMm - depthMm / 2);
+            }
+        } else if (axis === 'z') {
+            const heightMm = sizeX; // w DividersEngine dim.x to height
+            if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_PLUS') {
+                return localTzMm + heightMm / 2; // Góra przegrody
+            } else if (canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_MINUS') {
+                return localTzMm - heightMm / 2; // Dół przegrody
+            } else {
+                return isMax ? (localTzMm + heightMm / 2) : (localTzMm - heightMm / 2);
+            }
+        }
+    } else if (isCabinetSide) {
         if (axis === 'x') {
             const isLeft = localTxMm < 0 || roleUpper.includes('LEFT') || roleUpper.includes('_L');
             const isRight = localTxMm > 0 || roleUpper.includes('RIGHT') || roleUpper.includes('_P');
             if (isLeft) {
                 if (canonicalFace === 'FACE_Z_PLUS') return localTxMm + sizeZ / 2;
                 if (canonicalFace === 'FACE_Z_MINUS') return localTxMm - sizeZ / 2;
+                return isMax ? (localTxMm - sizeZ / 2) : (localTxMm + sizeZ / 2);
             } else if (isRight) {
                 if (canonicalFace === 'FACE_Z_PLUS') return localTxMm - sizeZ / 2;
                 if (canonicalFace === 'FACE_Z_MINUS') return localTxMm + sizeZ / 2;
+                return isMax ? (localTxMm + sizeZ / 2) : (localTxMm - sizeZ / 2);
             } else {
-                if (canonicalFace === 'FACE_Z_PLUS') return localTxMm + sizeZ / 2;
-                if (canonicalFace === 'FACE_Z_MINUS') return localTxMm - sizeZ / 2;
+                return isMax ? (localTxMm - sizeZ / 2) : (localTxMm + sizeZ / 2);
             }
         } else if (axis === 'y') {
             const depthMm = sizeX;
@@ -235,19 +275,29 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
         }
     }
 
-    if ((roleUpper.includes('BOTTOM') || roleUpper.includes('WIENIEC_D')) && axis === 'z') {
-        if (canonicalFace === 'FACE_Z_PLUS') return localTzMm + sizeZ / 2;
-        if (canonicalFace === 'FACE_Z_MINUS') return localTzMm - sizeZ / 2;
-        return isMax ? (localTzMm + sizeZ / 2) : (localTzMm - sizeZ / 2);
+    const isHorizontal = roleUpper.includes('BOTTOM') || roleUpper.includes('WIENIEC') || roleUpper.includes('TOP') ||
+                         roleUpper.includes('SHELF') || roleUpper.includes('PÓŁKA') || roleUpper.includes('POLKA');
+
+    if (isHorizontal && axis === 'z') {
+        if (canonicalFace === 'FACE_Z_PLUS' && (roleUpper.includes('BOTTOM') || roleUpper.includes('WIENIEC_D'))) {
+            return localTzMm + sizeZ / 2;
+        }
+        if (canonicalFace === 'FACE_Z_MINUS' && (roleUpper.includes('BOTTOM') || roleUpper.includes('WIENIEC_D'))) {
+            return localTzMm - sizeZ / 2;
+        }
+        if (canonicalFace === 'FACE_Z_PLUS' && (roleUpper.includes('TOP') || roleUpper.includes('WIENIEC_G'))) {
+            return localTzMm - sizeZ / 2;
+        }
+        if (canonicalFace === 'FACE_Z_MINUS' && (roleUpper.includes('TOP') || roleUpper.includes('WIENIEC_G'))) {
+            return localTzMm + sizeZ / 2;
+        }
+        // Domyślnie dla wieńców i półek pośrednich:
+        // isMax === true oznacza górne ograniczenie (sufit wnęki) -> bierzemy dolne lico formatki
+        // isMax === false oznacza dolne ograniczenie (podłogę wnęki) -> bierzemy górne lico formatki
+        return isMax ? (localTzMm - sizeZ / 2) : (localTzMm + sizeZ / 2);
     }
 
-    if ((roleUpper.includes('TOP') || roleUpper.includes('WIENIEC_G')) && axis === 'z') {
-        if (canonicalFace === 'FACE_Z_PLUS') return localTzMm - sizeZ / 2;
-        if (canonicalFace === 'FACE_Z_MINUS') return localTzMm + sizeZ / 2;
-        return isMax ? (localTzMm + sizeZ / 2) : (localTzMm - sizeZ / 2);
-    }
-
-    if ((roleUpper.includes('BOTTOM') || roleUpper.includes('TOP') || roleUpper.includes('WIENIEC') || roleUpper.includes('SHELF')) && axis === 'y') {
+    if (isHorizontal && axis === 'y') {
         const depthMm = sizeY > 50 ? sizeY : sizeX;
         if (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_Y_MINUS') {
             return localTyMm - depthMm / 2; // Przód szafy
@@ -280,16 +330,15 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
         localPoint = new Vec3(0, -sizeY / 2, 0);
     }
 
-    const localPointNm = new Vec3(mmToNm(localPoint.x), mmToNm(localPoint.y), mmToNm(localPoint.z));
-    const worldPointCAD = absoluteMat.transformPoint(localPointNm);
-
-    if (axis === 'x') {
-        return nmToMm(worldPointCAD.x);
-    } else if (axis === 'y') {
-        return nmToMm(worldPointCAD.y);
-    } else {
-        return nmToMm(worldPointCAD.z);
+    if (cabinetNode && panelNode && typeof cabinetNode.worldToLocal === 'function' && typeof panelNode.localToWorld === 'function') {
+        const localPointNm = new Vec3(mmToNm(localPoint.x), mmToNm(localPoint.y), mmToNm(localPoint.z));
+        const ptInCab = cabinetNode.worldToLocal(panelNode.localToWorld(localPointNm));
+        if (axis === 'x') return nmToMm(ptInCab.x);
+        if (axis === 'y') return nmToMm(ptInCab.y);
+        return nmToMm(ptInCab.z);
     }
+
+    return 0;
 }
 
 /**
@@ -346,14 +395,9 @@ export function validateReferenceFaceOrientation(
         worldNx = Math.abs(worldVec.x); // X w Babylon = szerokość mebla (Bok Lewy / Prawy)
         worldNy = Math.abs(worldVec.y); // Y w Babylon = wysokość mebla (Dół / Góra)
         worldNz = Math.abs(worldVec.z); // Z w Babylon = głębokość mebla (Przód / Tył)
-    } else if (panelNode) {
-        let absoluteMat = panelNode.localMatrix.clone();
-        let currentParent = panelNode.parent;
-        while (currentParent && currentParent !== cabinetNode && currentParent.domainData?.type !== 'container') {
-            absoluteMat = currentParent.localMatrix.multiply(absoluteMat);
-            currentParent = currentParent.parent;
-        }
-        const renderMat = cadMatrixToRenderMatrix(absoluteMat);
+    } else if (panelNode && cabinetNode && typeof cabinetNode.getWorldMatrix === 'function' && typeof panelNode.getWorldMatrix === 'function') {
+        const relMat = cabinetNode.getWorldMatrix().invert().multiply(panelNode.getWorldMatrix());
+        const renderMat = cadMatrixToRenderMatrix(relMat);
         const localVec = new Vec3(nxLocal, nyLocal, nzLocal);
         const worldVec = renderMat.transformDirection(localVec).normalize();
         worldNx = Math.abs(worldVec.x);
@@ -408,9 +452,25 @@ export function update_smartbox_core(container: any, docTarget: any): boolean {
     ensure_smartbox_name(container);
 
     // Znajdź nadrzędny korpus (SmartFrame)
-    const cabinetId = params.parentContainerId;
+    let cabinetId = params.parentContainerId;
     let cabinetNode = cabinetId ? doc.findNode(cabinetId) : null;
     let cabinet: any = cabinetNode ? cabinetNode.domainData : null;
+
+    // Jeśli cabinetNode to inny moduł SmartBox, wejdź wyżej do głównego korpusu SmartFrame
+    if (cabinetNode && (cabinet?.generatorParams?.type?.startsWith('smartbox_') || cabinet?.generatorParams?.boxType)) {
+        let curr: CADNode | null = cabinetNode.parent;
+        while (curr && curr.id !== doc.rootNode.id) {
+            const dd = curr.domainData as any;
+            if (dd?.type === 'container' && (dd.generatorParams?.type?.startsWith('korpus') || !dd.generatorParams?.type?.startsWith('smartbox_'))) {
+                cabinetNode = curr;
+                cabinet = dd;
+                cabinetId = curr.id;
+                params.parentContainerId = cabinetId;
+                break;
+            }
+            curr = curr.parent;
+        }
+    }
 
     if (!cabinet) {
         const allNodes: CADNode[] = [];
@@ -465,9 +525,14 @@ export function update_smartbox_core(container: any, docTarget: any): boolean {
 
         let panelNode: any = null;
 
-        // Priorytet 1: szukaj po panelId (unikalny identyfikator z bay detectora)
+        // Priorytet 1: szukaj po panelId (unikalny identyfikator z bay detectora) w szafie
         if (refConfig.panelId && foundCabinetNode && refConfig.panelId !== foundCabinetNode.id) {
             panelNode = findNodeById(foundCabinetNode, refConfig.panelId);
+        }
+
+        // Fallback: szukaj bezpośrednio w dokumencie
+        if (!panelNode && refConfig.panelId && doc) {
+            panelNode = doc.findNode(refConfig.panelId);
         }
 
         // Priorytet 2: szukaj po partKey (nazwa/klucz)

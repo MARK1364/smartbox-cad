@@ -328,6 +328,9 @@ export class PanelView {
                 sphere.material = vertMat;
                 sphere.renderingGroupId = 1;
                 
+                // Optymalizacja GPU: visibility = 0 pomija rasteryzację i sortowanie głębokości alpha na GPU,
+                // a raycast (isPickable = true) nadal działa natychmiastowo.
+                sphere.visibility = 0.0;
                 sphere.isPickable = true;
                 sphere.metadata = { 
                     type: 'vertex', 
@@ -351,6 +354,7 @@ export class PanelView {
         if (vp && typeof vp.applyRenderModeToMeshes === 'function') {
             vp.applyRenderModeToMeshes();
         }
+        vp?.requestRender(3);
     }
 
     _disposeCurrentMeshes() {

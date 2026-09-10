@@ -52,9 +52,23 @@ export class MeasureTool extends BaseState {
         this.renderer = renderer;
     }
 
+    private handleWindowKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Control' || e.ctrlKey) {
+            this.isCtrlPressed = true;
+        }
+    };
+
+    private handleWindowKeyUp = (e: KeyboardEvent) => {
+        if (!e.ctrlKey) this.isCtrlPressed = false;
+    };
+
+    private handleWindowBlur = () => {
+        this.isCtrlPressed = false;
+    };
+
     public onEnter(): void {
         this.resetPicks();
-        this.setUIStatus('Pomiar: kliknij krawędź (długość) lub punkt. Ctrl = punkt / krawędź / płaszczyzna.');
+        this.setUIStatus('Pomiar: kliknij krawędź lub punkt. Ctrl = narożnik / płaszczyzna.');
 
         const scene = this.ctx.viewport.scene;
         this.geometryHighlighter = new PMIGeometryHighlighter(scene);
@@ -67,19 +81,35 @@ export class MeasureTool extends BaseState {
         setSelectionHighlightSuppressed(true, this.ctx);
 
         this.pointerObserver = scene.onPointerObservable.add((info: any) => {
-            if (info.event) this.isCtrlPressed = !!info.event.ctrlKey;
-            if (info.type === BABYLON.PointerEventTypes.POINTERMOVE) this.onMove();
+            // Śledź Ctrl tylko przy MOVE — przy POINTERDOWN isCtrlPressed
+            // jest już ustawiony przez onSelect() z intent.pointerInfo.event.ctrlKey.
+            if (info.type === BABYLON.PointerEventTypes.POINTERMOVE) {
+                if (info.event) this.isCtrlPressed = !!info.event.ctrlKey;
+                this.onMove();
+            }
         });
         this.keyboardObserver = scene.onKeyboardObservable.add((info: any) => {
             const event = info.event as KeyboardEvent;
             this.isCtrlPressed = !!event.ctrlKey;
         });
 
+        if (typeof window !== 'undefined') {
+            window.addEventListener('keydown', this.handleWindowKeyDown);
+            window.addEventListener('keyup', this.handleWindowKeyUp);
+            window.addEventListener('blur', this.handleWindowBlur);
+        }
+
         if (this.ctx.viewport) this.ctx.viewport.suppressDoubleTapZoom = true;
         if (this.ctx.canvas) this.ctx.canvas.style.cursor = 'crosshair';
     }
 
     public onExit(): void {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('keydown', this.handleWindowKeyDown);
+            window.removeEventListener('keyup', this.handleWindowKeyUp);
+            window.removeEventListener('blur', this.handleWindowBlur);
+        }
+
         this.renderer.clearMeasurePreview();
         this.geometryHighlighter?.dispose();
         this.geometryHighlighter = null;
@@ -110,7 +140,7 @@ export class MeasureTool extends BaseState {
         this.renderer.clearMeasurePreview();
         if (this.phase === 'PICK_P2') {
             this.resetPicks();
-            this.setUIStatus('Pomiar: kliknij krawędź (długość) lub punkt. Ctrl = punkt / krawędź / płaszczyzna.');
+            this.setUIStatus('Pomiar: kliknij krawędź lub punkt. Ctrl = punkt / krawędź / płaszczyzna.');
         } else {
             this.exitTool();
         }
@@ -181,7 +211,7 @@ export class MeasureTool extends BaseState {
         const snap = this.findElementPick();
         if (!snap) return;
 
-        // Bez Ctrl + krawędź → od razu długość
+        // Bez Ctrl + krawędź → od razu długość (1 klik)
         if (!this.isCtrlPressed && snap.edge && this.phase === 'PICK_P1') {
             this.commitEdge(snap.edge);
             return;
@@ -194,12 +224,33 @@ export class MeasureTool extends BaseState {
             return;
         }
 
+        // PICK_P2
         if (this.pick1?.kind === 'edge' && snap.kind === 'edge' && this.pick1.edge && snap.edge) {
             this.commitTwoEdges(this.pick1.edge, snap.edge);
             return;
         }
 
         this.commitElements(this.pick1!, snap);
+    }
+
+    private findElementPick(): MeasureElementPick | null {
+        const scene = this.ctx.viewport.scene;
+        if (!scene) return null;
+
+        const store = PMIStore.instance;
+        if (this.geometryHighlighter) {
+            this.geometryHighlighter.update(scene.pointerX, scene.pointerY);
+        }
+
+        return findMeasureElementPick({
+            scene,
+            pointerX: scene.pointerX,
+            pointerY: scene.pointerY,
+            ctrl: this.isCtrlPressed,
+            vertexSnapPx: store.vertexSnapPx,
+            edgeSnapPx: store.edgeSnapPx,
+            lastDetection: this.geometryHighlighter?.lastDetection ?? null,
+        });
     }
 
     private statusForSecondPick(first: MeasureElementPick): string {
@@ -268,26 +319,6 @@ export class MeasureTool extends BaseState {
         this.renderer.clearMeasurePreview();
         this.resetPicks();
         this.setUIStatus('Pomiar dodany.');
-    }
-
-    private findElementPick(): MeasureElementPick | null {
-        const scene = this.ctx.viewport.scene;
-        if (!scene) return null;
-
-        const store = PMIStore.instance;
-        if (this.geometryHighlighter) {
-            this.geometryHighlighter.update(scene.pointerX, scene.pointerY);
-        }
-
-        return findMeasureElementPick({
-            scene,
-            pointerX: scene.pointerX,
-            pointerY: scene.pointerY,
-            ctrl: this.isCtrlPressed,
-            vertexSnapPx: store.vertexSnapPx,
-            edgeSnapPx: store.edgeSnapPx,
-            lastDetection: this.geometryHighlighter?.lastDetection ?? null,
-        });
     }
 
     private setUIStatus(text: string): void {

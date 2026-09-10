@@ -7,6 +7,10 @@ import { createSmartBoxInDetectedBay } from '../smartbox-bay-actions.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { registerSmartBoxModule } from '../register.js';
 import { CommandHistory } from '../../A1_core/commands/command-history.js';
+import { Quat } from '../../A1_core/cad-math/quat.js';
+import { Vec3 } from '../../A1_core/cad-math/vec3.js';
+import { Mat4 } from '../../A1_core/cad-math/mat4.js';
+import { cadMatrixToRenderMatrix } from '../../A1_core/cad-math/coord-system.js';
 
 describe('SmartBox bay placement & dimensions verification', () => {
     let doc: ProjectDocument;
@@ -130,5 +134,116 @@ describe('SmartBox bay placement & dimensions verification', () => {
         expect(nmToMm((sbNodeT.domainData as any).height)).toBeCloseTo(664, 0);
         expect(nmToMm((sbNodeT.domainData as any).depth)).toBeGreaterThanOrEqual(580);
         expect(nmToMm(sbNodeT.localMatrix.decompose().translation.z)).toBeCloseTo(1718, 0);
+    });
+
+    it('correctly places SmartBox dividers directly on top of an inserted SmartBox wieniec (shelf)', () => {
+        const cabinet = doc.createContainer({ name: 'Korpus 1-strefowy' });
+        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
+        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+
+        // 1. Wstawiamy pierwszy SmartBox: Wieniec (SHELF) z offset_bottom = 100 mm
+        const bay1 = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 1000 })!;
+        expect(bay1).not.toBeNull();
+        const shelfSbNode = createSmartBoxInDetectedBay(doc, bay1, {
+            id: 'SHELF',
+            type: 'smartbox_shelf',
+            category: 'internal',
+            label: 'Wieniec'
+        }, { offset_bottom: 100, offsetBottom: 100 })!;
+        expect(shelfSbNode).not.toBeNull();
+
+        // Sprawdzamy pozycję wieńca:
+        // Spód kontenera SmartBox Wieniec = 18 mm (na dnie szafy)
+        // Wieniec w środku: offset_bottom = 100 mm, thickness = 18 mm.
+        // Środek wieńca Z = 100 + 9 = 109 mm (lokalnie).
+        // W szafie: Z_środka = 18 + 109 = 127 mm.
+        // Górne lico wieńca = 127 + 9 = 136 mm.
+        const shelfPanelNode = shelfSbNode.children.find(c => c.name.includes('Wieniec'))!;
+        expect(shelfPanelNode).toBeDefined();
+
+        // 2. Wnęka NAD wieńcem (bottomRef to formatka wieńca)
+        const bayAbove: any = {
+            boundsMm: { width: 764, height: 1982 - 136, depth: 580 },
+            boundsNm: { width: mmToNm(764), height: mmToNm(1982 - 136), depth: mmToNm(580) },
+            centerWorldMm: { x: 0, y: 0, z: (136 + 1982) / 2 },
+            parentCabinetId: cabinet.id,
+            boundary: {
+                left: { ...bay1.boundary.left },
+                right: { ...bay1.boundary.right },
+                bottom: { nodeId: shelfPanelNode.id, nodeName: shelfPanelNode.name, face: 'FACE_Z_PLUS', worldPointMm: { x: 0, y: 0, z: 136 }, planeCoordMm: 136 },
+                top: { ...bay1.boundary.top },
+                back: { ...bay1.boundary.back },
+                front: { ...bay1.boundary.front },
+                frontPlaneYMm: -300
+            }
+        };
+
+        // 3. Wstawiamy Przegrody (DIVIDERS)
+        const dividersNode = createSmartBoxInDetectedBay(doc, bayAbove, {
+            id: 'DIVIDERS',
+            type: 'smartbox_dividers',
+            category: 'internal',
+            label: 'Przegrody'
+        })!;
+        expect(dividersNode).not.toBeNull();
+
+        const dividersContainer = dividersNode.domainData as any;
+        const divPos = dividersNode.localMatrix.decompose().translation;
+
+        // Kluczowa weryfikacja: kontener Przegród MUSI zaczynać się dokładnie na górnym licu wieńca (Z = 136 mm)
+        // a NIE 18-20 mm pod nim (Z = 118 mm)!
+        expect(nmToMm(divPos.z)).toBeCloseTo(136, 0);
+        expect(nmToMm(dividersContainer.height)).toBeCloseTo(1982 - 136, 0);
+    });
+
+    it('correctly resolves left and right divider boundaries and faces when placing a shelf in the middle bay between 2 dividers', () => {
+        const cabinet = doc.createContainer({ name: 'Korpus 1-strefowy' });
+        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
+        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+
+        const bay1 = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 1000 })!;
+        expect(bay1).not.toBeNull();
+
+        // 1. Wstawiamy 2 przegrody (3 przestrzenie pionowe)
+        const dividersNode = createSmartBoxInDetectedBay(doc, bay1, {
+            id: 'DIVIDERS',
+            type: 'smartbox_dividers',
+            category: 'internal',
+            label: 'Przegrody'
+        }, { count: 2, dividerCount: 2 })!;
+        expect(dividersNode).not.toBeNull();
+
+        // 2. Próbkujemy punkt w środkowej przestrzeni (X=0, y=0, z=1000)
+        const middleBay = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 1000 });
+        expect(middleBay).not.toBeNull();
+        expect(middleBay!.boundary.left.nodeName).toContain('Przegroda_1');
+        expect(middleBay!.boundary.left.face).toBe('FACE_Z_MINUS'); // Prawa ściana lewej przegrody (+X)
+        expect(middleBay!.boundary.right.nodeName).toContain('Przegroda_2');
+        expect(middleBay!.boundary.right.face).toBe('FACE_Z_PLUS'); // Lewa ściana prawej przegrody (-X)
+
+        const expectedBayWidth = (764 - 2 * 18) / 3; // 242.67 mm
+        expect(middleBay!.boundsMm.width).toBeCloseTo(expectedBayWidth, 0);
+
+        // 3. Wstawiamy Wieniec (SHELF) do środkowej wnęki
+        const shelfNode = createSmartBoxInDetectedBay(doc, middleBay!, {
+            id: 'SHELF',
+            type: 'smartbox_shelf',
+            category: 'internal',
+            label: 'Wieniec'
+        }, { offset_bottom: 200, offsetBottom: 200 })!;
+        expect(shelfNode).not.toBeNull();
+
+        const shelfContainer = shelfNode.domainData as any;
+        const shelfPos = shelfNode.localMatrix.decompose().translation;
+
+        // Sprawdzamy szerokość wieńca i wycentrowanie w środkowej wnęce (X=0)
+        expect(nmToMm(shelfContainer.width)).toBeCloseTo(expectedBayWidth, 0);
+        expect(nmToMm(shelfPos.x)).toBeCloseTo(0, 0);
+
+        // Krawędzie wieńca muszą idealnie dotykać wewnętrznych ścian przegród (ani 1 mm wcięcia w przegrody)
+        const shelfLeftEdge = nmToMm(shelfPos.x) - nmToMm(shelfContainer.width) / 2;
+        const shelfRightEdge = nmToMm(shelfPos.x) + nmToMm(shelfContainer.width) / 2;
+        expect(shelfLeftEdge).toBeCloseTo(-expectedBayWidth / 2, 0);
+        expect(shelfRightEdge).toBeCloseTo(expectedBayWidth / 2, 0);
     });
 });

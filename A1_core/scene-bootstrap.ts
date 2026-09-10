@@ -66,6 +66,10 @@ export async function bootstrapScene(): Promise<BootstrapContext> {
     ContextManager.instance.viewport = viewport;
     ContextManager.instance.babylonScene = viewport.scene;
 
+    document.onDocumentChanged(() => {
+        viewport.requestRender(3);
+    });
+
     ModalTransformManager.instance.init();
 
     const commandHistory = new CommandHistory(document, { maxEntries: 100 });

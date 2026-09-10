@@ -665,8 +665,11 @@ export class DrawingProjectExtractor {
 
             if (node.grooves) {
                 for (const g of node.grooves) {
+                    const gLength = Math.max(Math.round(g.width), Math.round(g.height));
+                    const gWidth = Math.min(Math.round(g.width), Math.round(g.height)) || Math.round(g.width);
+                    const gDepth = Math.round(g.depth);
                     lines.push(`<rect x="${g.x}" y="${g.y}" width="${g.width}" height="${g.height}" fill="#f0f9ff" stroke="#0284c7" stroke-width="0.8" stroke-dasharray="3,2"/>`);
-                    lines.push(`<text x="${g.x + g.width / 2}" y="${H / 2}" font-size="7" fill="#0369a1" font-family="'Segoe UI', Arial, sans-serif" text-anchor="middle" transform="rotate(-90, ${g.x + g.width / 2}, ${H / 2})">WPUST ${g.width}×${g.depth}mm</text>`);
+                    lines.push(`<text x="${g.x + g.width / 2}" y="${H / 2}" font-size="7" fill="#0369a1" font-family="'Segoe UI', Arial, sans-serif" text-anchor="middle" transform="rotate(-90, ${g.x + g.width / 2}, ${H / 2})">WPUST ${gLength}×${gWidth}×${gDepth}mm</text>`);
                 }
             }
 

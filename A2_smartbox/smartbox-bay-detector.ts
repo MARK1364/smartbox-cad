@@ -8,7 +8,7 @@
 
 import { ProjectDocument } from '../A1_core/project-document.js';
 import { CADNode } from '../A1_core/cad-node/cad-node.js';
-import { PanelModel, type FaceName } from '../A4_smartpanel/panel-model.js';
+import { PanelModel, normalizeFaceName, type FaceName } from '../A4_smartpanel/panel-model.js';
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { Mat4 } from '../A1_core/cad-math/mat4.js';
@@ -82,16 +82,19 @@ function collectScenePanelFaces(document: ProjectDocument): PanelFaceInfo[] {
         const d = node.domainData;
         if (!d || (d.type !== 'panel' && d.type !== 'part')) continue;
         const panel = d as PanelModel;
-
-        // Pomiń elementy samego SmartBoxa
+        const role = String((panel as any).role || '').toUpperCase();
+        // Pomiń elementy SmartBoxa, z wyjątkiem stałych przegród i półek/wieńców dzielących wnęki
         const parent = node.parent;
         const gp = (parent?.domainData as any)?.generatorParams;
-        if (gp && (String(gp.type || '').startsWith('smartbox_') || gp.boxType)) continue;
+        const isStructural = role.includes('DIVIDER') || role.includes('PRZEGRODA') ||
+            role.includes('SHELF') || role.includes('WIENIEC') || role.includes('POLKA');
+        if (gp && (String(gp.type || '').startsWith('smartbox_') || gp.boxType) && !isStructural) {
+            continue;
+        }
 
         const wNm = panel.width || mmToNm(800);
         const hNm = panel.height || mmToNm(600);
         const tNm = panel.thickness || mmToNm(18);
-        const role = String((panel as any).role || '').toUpperCase();
 
         type FaceCfg = { face: FaceName; centerLocal: Vec3; normalLocal: Vec3; cornersLocal: Vec3[] };
         const localTx = node.localMatrix.data[12];
@@ -219,13 +222,13 @@ function collectScenePanelFaces(document: ProjectDocument): PanelFaceInfo[] {
                     ]
                 }
             ];
-        } else if (role === 'VERTICAL_DIVIDER' || role === 'DIVIDER' || role === 'PRZEGRODA') {
+        } else if (role === 'VERTICAL_DIVIDER' || role === 'DIVIDER' || role === 'PRZEGRODA' || role.includes('DIVIDER')) {
             const hx = tNm / 2;
             const hy = wNm / 2;
             const hz = hNm / 2;
             facesConfig = [
                 {
-                    face: 'FACE_Z_MINUS', // lewa strona przegrody
+                    face: 'FACE_Z_PLUS', // lewa strona przegrody (-X)
                     centerLocal: new Vec3(-hx, 0, 0),
                     normalLocal: new Vec3(-1, 0, 0),
                     cornersLocal: [
@@ -234,7 +237,7 @@ function collectScenePanelFaces(document: ProjectDocument): PanelFaceInfo[] {
                     ]
                 },
                 {
-                    face: 'FACE_Z_PLUS', // prawa strona przegrody
+                    face: 'FACE_Z_MINUS', // prawa strona przegrody (+X)
                     centerLocal: new Vec3(hx, 0, 0),
                     normalLocal: new Vec3(1, 0, 0),
                     cornersLocal: [
@@ -1147,7 +1150,7 @@ export function probeBayFromSceneRay(
             }
         }
         if (m.metadata?.faceName) {
-            face = m.metadata.faceName as FaceName;
+            face = normalizeFaceName(m.metadata.faceName);
         }
         return { id: id || m.id || '', name: name || m.name || '', face };
     };
@@ -1185,14 +1188,22 @@ export function probeBayFromSceneRay(
     if (document) {
         const testNodeId = leftInfo.id || bottomInfo.id;
         let curr: CADNode | null = testNodeId ? document.findNode(testNodeId) : null;
+        let topContainer: CADNode | null = null;
         while (curr && curr.id !== document.rootNode.id) {
-            if (curr.domainData?.type === 'container' || (curr.domainData as any)?.generatorParams) {
-                parentCabinetId = curr.id;
-                const cDepth = (curr.domainData as any)?.depth;
-                if (cDepth) cabinetDepthMm = nmToMm(cDepth);
-                break;
+            const dd = curr.domainData as any;
+            if (dd?.type === 'container' || dd?.generatorParams) {
+                topContainer = curr;
+                // Jeśli natrafimy na korpus SmartFrame (np. korpus3_2), jest to ostateczny rodzic
+                if (dd.generatorParams?.type?.startsWith('korpus')) {
+                    break;
+                }
             }
             curr = curr.parent;
+        }
+        if (topContainer) {
+            parentCabinetId = topContainer.id;
+            const cDepth = (topContainer.domainData as any)?.depth;
+            if (cDepth) cabinetDepthMm = nmToMm(cDepth);
         }
     }
 

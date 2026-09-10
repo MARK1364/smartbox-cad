@@ -16,6 +16,7 @@ export interface IAppAPI {
     undo?: () => void;
     redo?: () => void;
     newProject?: () => void;
+    forceResetProject?: () => void;
     openProject?: () => void;
     saveProject?: () => void;
     saveProjectAs?: () => void;
@@ -61,6 +62,7 @@ export class ContextManager {
     /** Pipeta więzów S2_solver — aktywna podczas wskazywania slotu A/B. */
     public activeConstraintPicker: any = null;
     public appAPI: IAppAPI | null = null;
+    public requestNewProjectDialog: (() => void) | null = null;
     public stateMachine: any = null;
     public pmiRenderer: any = null;
     public lcsVisible: boolean = false;
