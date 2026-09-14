@@ -447,7 +447,7 @@ body, html {
     border: 1px solid var(--border-light);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-sm);
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     color: var(--text-muted);
     z-index: 10;
     display: flex;
@@ -961,10 +961,10 @@ body, html {
     justify-content: space-between;
     padding: 3px 6px;
     border-radius: var(--radius-sm);
-    font-size: 0.8rem;
+    font-size: 0.92rem;
     cursor: pointer;
     transition: background 0.1s;
-    height: 22px;
+    height: 25px;
 }
 
 .tree-node:hover,
@@ -1034,7 +1034,7 @@ body, html {
 .tree-action-btn {
     background: transparent;
     border: none;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     padding: 1px 3px;
     cursor: pointer;
     border-radius: 2px;
@@ -1097,11 +1097,11 @@ body, html {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    font-size: 9px;
+    gap: 3px;
+    font-size: 11px;
     font-weight: 600;
     line-height: 1.2;
-    padding: 4px 1px;
+    padding: 5px 2px;
     border-radius: var(--radius-sm);
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.03);
@@ -1125,15 +1125,16 @@ body, html {
 }
 
 .drzewo-tab-count {
-    opacity: 0.7;
-    font-weight: 500;
+    opacity: 0.8;
+    font-size: 11px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
 
 .drzewo-list-empty {
     padding: 16px 8px;
     text-align: center;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
 }
 
@@ -1141,7 +1142,7 @@ body, html {
     flex-shrink: 0;
     width: 14px;
     text-align: center;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1;
 }
 
@@ -1149,8 +1150,8 @@ body, html {
 .drzewo-row-meta {
     flex-shrink: 1;
     min-width: 0;
-    opacity: 0.55;
-    font-size: 10px;
+    opacity: 0.7;
+    font-size: 11px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1160,20 +1161,20 @@ body, html {
     flex-shrink: 0;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    font-size: 9px;
+    font-size: 10.5px;
     font-weight: 600;
 }
 
 .drzewo-wymiar-affix {
     width: 28px;
-    height: 16px;
+    height: 18px;
     flex-shrink: 0;
     background: #09090b;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 2px;
     color: #a1a1aa;
     padding: 0 2px;
-    font-size: 9px;
+    font-size: 11px;
 }
 
 .drzewo-zlacza {
@@ -1224,6 +1225,7 @@ body, html {
 #panel-edycji,
 .panel-edycji {
     top: 64px !important;
+    height: calc(100vh - 120px) !important;
     max-height: calc(100vh - 120px) !important;
 }
 
@@ -1555,6 +1557,13 @@ body, html {
 @keyframes ctxFadeIn {
     from { opacity: 0; transform: scale(0.96); }
     to { opacity: 1; transform: scale(1); }
+}
+
+.ctx-menu-separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.16);
+    margin: 6px 0;
+    width: 100%;
 }
 
 .ctx-menu-item {
@@ -2521,5 +2530,57 @@ body, html {
     display: block;
     max-width: 100%;
     height: auto;
+}
+
+/* --- Stylizacja paska przewijania dla paneli edycji --- */
+.panel-edycji,
+.panel-inner-content,
+.tab-content,
+#tab-a2-smartbox {
+    scrollbar-width: thin;
+    scrollbar-color: #52525b rgba(0, 0, 0, 0.4);
+}
+
+.panel-edycji::-webkit-scrollbar,
+.panel-inner-content::-webkit-scrollbar,
+.tab-content::-webkit-scrollbar,
+#tab-a2-smartbox::-webkit-scrollbar,
+.panel-edycji *::-webkit-scrollbar,
+.panel-inner-content *::-webkit-scrollbar,
+.tab-content *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.panel-edycji::-webkit-scrollbar-track,
+.panel-inner-content::-webkit-scrollbar-track,
+.tab-content::-webkit-scrollbar-track,
+#tab-a2-smartbox::-webkit-scrollbar-track,
+.panel-edycji *::-webkit-scrollbar-track,
+.panel-inner-content *::-webkit-scrollbar-track,
+.tab-content *::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.panel-edycji::-webkit-scrollbar-thumb,
+.panel-inner-content::-webkit-scrollbar-thumb,
+.tab-content::-webkit-scrollbar-thumb,
+#tab-a2-smartbox::-webkit-scrollbar-thumb,
+.panel-edycji *::-webkit-scrollbar-thumb,
+.panel-inner-content *::-webkit-scrollbar-thumb,
+.tab-content *::-webkit-scrollbar-thumb {
+    background: #52525b;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.panel-edycji::-webkit-scrollbar-thumb:hover,
+.panel-inner-content::-webkit-scrollbar-thumb:hover,
+.tab-content::-webkit-scrollbar-thumb:hover,
+#tab-a2-smartbox::-webkit-scrollbar-thumb:hover,
+.panel-edycji *::-webkit-scrollbar-thumb:hover,
+.panel-inner-content *::-webkit-scrollbar-thumb:hover,
+.tab-content *::-webkit-scrollbar-thumb:hover {
+    background: #71717a;
 }
 

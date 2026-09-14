@@ -143,5 +143,25 @@ describe('PMIStore', () => {
         expect(ann.axisSpace).toBe('GLOBAL');
         expect(ann.measureAxisKey).toBe('AUTO');
         expect(ann.visible).toBe(true);
+        expect(ann.textShiftMM).toBe(0);
+    });
+
+    it('domyślnie tworzy wymiary bez jednostek gdy showUnits = false', () => {
+        store.showUnits = false;
+        const ann = store.addAnnotation(sampleInit());
+        store.applyMeasuredValue(ann, 600, 'X');
+        expect(ann.text).toBe('600.0');
+    });
+
+    it('pozwala na przesunięcie tekstu wzdłuż linii i zachowuje je w JSON', () => {
+        const ann = store.addAnnotation(sampleInit());
+        expect(ann.textShiftMM).toBe(0);
+        store.setTextShift(ann.id, 45.5);
+        expect(ann.textShiftMM).toBe(45.5);
+
+        const json = JSON.parse(JSON.stringify(store.toJSON()));
+        store.clearAll();
+        store.fromJSON(json);
+        expect(store.annotations[0].textShiftMM).toBe(45.5);
     });
 });

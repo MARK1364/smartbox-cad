@@ -25,6 +25,8 @@ import { rebuildSmartFrameContainer } from '../A3_smartframe/smartframe-adapter.
 
 declare const BABYLON: any;
 
+const GIZMO_DRAG_MULTIPLIER = 1.0;
+
 export class GizmoController {
     private activeFaceGizmoSpheres: any[] = [];
     private isDraggingFaceGizmo = false;
@@ -37,6 +39,7 @@ export class GizmoController {
     private positionGizmo: CadTranslateGizmo | null = null;
     private rotationGizmo: any = null;
     private freeDragSphere: any = null;
+    private activeDragGuideLine: any = null;
     private matrixBeforeDrag: Mat4 | null = null;
     private activeTopPanelEntity: any = null;
     private activeTopPanelContainer: any = null;
@@ -104,7 +107,7 @@ export class GizmoController {
             'left': '-Y',
             'right': '+Y'
         },
-        'BACK_PANEL': { 'top': '+Y', 'bottom': '-Y', 'left': '-X', 'right': '+X', 'front': 'backOffset' }
+        'BACK_PANEL': { 'top': '-Y', 'bottom': '+Y', 'left': '-X', 'right': '+X', 'front': 'backOffset' }
     };
 
     private faceNormals: Record<string, any> = {};
@@ -728,6 +731,7 @@ export class GizmoController {
         if (this.freeDragSphere && !this.freeDragSphere.isDisposed()) {
             this.freeDragSphere.setEnabled(false);
         }
+        this._disposeDragGuideLine();
     }
 
     public showTranslateGizmo(entity?: any): void {
@@ -997,6 +1001,7 @@ export class GizmoController {
                 const dragBehavior = new BABYLON.PointerDragBehavior({
                     dragAxis: normal
                 });
+                dragBehavior.dragDeltaRatio = GIZMO_DRAG_MULTIPLIER;
 
                 let originalValue = 0;
                 let startPos: any = null;
@@ -1017,13 +1022,22 @@ export class GizmoController {
                     originalValue = this.originalValueBeforeEdit;
                     sphere.setParent(null);
                     startPos = sphere.position.clone();
+                    this._showDragGuideLine(viewport.scene, startPos, normal, diffuseColor);
                 });
 
                 dragBehavior.onDragObservable.add(() => {
                     const c = container as any;
-                    const diffVec = sphere.position.subtract(startPos);
-                    let delta = BABYLON.Vector3.Dot(diffVec, normal);
-                    delta = Math.round(delta);
+                    const projDist = this._projectPointerRayOntoAxis(viewport.scene, startPos, normal);
+                    let delta = 0;
+                    if (projDist !== null) {
+                        delta = Math.round(projDist);
+                    } else {
+                        const diffVec = sphere.position.subtract(startPos);
+                        delta = Math.round(BABYLON.Vector3.Dot(diffVec, normal));
+                    }
+
+                    // Precyzyjnie przypnij pozycję kulki do poruszającej się krawędzi formatki
+                    sphere.position.copyFrom(startPos.add(normal.scale(delta)));
 
                     if (paramName === 'backOffset') {
                         const newValue = Math.max(0, originalValue + delta);
@@ -1067,6 +1081,7 @@ export class GizmoController {
                 });
 
                 dragBehavior.onDragEndObservable.add(() => {
+                    this._disposeDragGuideLine();
                     this.isDraggingFaceGizmo = false;
                     viewport.camera.attachControl(viewport.canvas, true);
                     
@@ -1084,6 +1099,14 @@ export class GizmoController {
                 });
 
                 sphere.actionManager = new BABYLON.ActionManager(viewport.scene);
+                sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                    BABYLON.ActionManager.OnPointerOverTrigger,
+                    () => { sphere.scaling.setAll(1.2); }
+                ));
+                sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                    BABYLON.ActionManager.OnPointerOutTrigger,
+                    () => { sphere.scaling.setAll(1.0); }
+                ));
                 sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
                     BABYLON.ActionManager.OnPickTrigger,
                     () => {
@@ -1140,6 +1163,7 @@ export class GizmoController {
                     const centerDrag = new BABYLON.PointerDragBehavior({
                         dragAxis: shiftAxis
                     });
+                    centerDrag.dragDeltaRatio = GIZMO_DRAG_MULTIPLIER;
                     
                     let originalValue = 0;
                     let startPos: any = null;
@@ -1156,13 +1180,22 @@ export class GizmoController {
                         originalValue = this.originalValueBeforeEdit;
                         centerSphere.setParent(null);
                         startPos = centerSphere.position.clone();
+                        this._showDragGuideLine(viewport.scene, startPos, shiftAxis, diffuseColor);
                     });
 
                     centerDrag.onDragObservable.add(() => {
                         const c = container as any;
-                        const diffVec = centerSphere.position.subtract(startPos);
-                        let delta = BABYLON.Vector3.Dot(diffVec, shiftAxis);
-                        delta = Math.round(delta);
+                        const projDist = this._projectPointerRayOntoAxis(viewport.scene, startPos, shiftAxis);
+                        let delta = 0;
+                        if (projDist !== null) {
+                            delta = Math.round(projDist);
+                        } else {
+                            const diffVec = centerSphere.position.subtract(startPos);
+                            delta = Math.round(BABYLON.Vector3.Dot(diffVec, shiftAxis));
+                        }
+
+                        // Precyzyjnie przypnij pozycję kulki do poruszającej się krawędzi formatki
+                        centerSphere.position.copyFrom(startPos.add(shiftAxis.scale(delta)));
 
                         const newValue = originalValue + delta;
                         if (!c.generatorParams.offsets) {
@@ -1188,6 +1221,7 @@ export class GizmoController {
                     });
 
                     centerDrag.onDragEndObservable.add(() => {
+                        this._disposeDragGuideLine();
                         this.isDraggingFaceGizmo = false;
                         viewport.camera.attachControl(viewport.canvas, true);
                         
@@ -1204,6 +1238,14 @@ export class GizmoController {
                     });
 
                     centerSphere.actionManager = new BABYLON.ActionManager(viewport.scene);
+                    centerSphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                        BABYLON.ActionManager.OnPointerOverTrigger,
+                        () => { centerSphere.scaling.setAll(1.2); }
+                    ));
+                    centerSphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                        BABYLON.ActionManager.OnPointerOutTrigger,
+                        () => { centerSphere.scaling.setAll(1.0); }
+                    ));
                     centerSphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
                         BABYLON.ActionManager.OnPickTrigger,
                         () => {
@@ -1412,6 +1454,61 @@ export class GizmoController {
         if (doc) {
             doc.emit('transform-ended', activeEntity);
             doc.notifyDocumentChanged();
+        }
+    }
+
+    private _projectPointerRayOntoAxis(scene: any, startPos: any, axisDir: any): number | null {
+        if (!scene || !scene.activeCamera) return null;
+        const ray = scene.createPickingRay(scene.pointerX, scene.pointerY, null, scene.activeCamera);
+        if (!ray) return null;
+
+        const O = ray.origin;
+        const D = ray.direction;
+        const P = startPos;
+        const N = axisDir;
+
+        const w0x = P.x - O.x;
+        const w0y = P.y - O.y;
+        const w0z = P.z - O.z;
+
+        const b = D.x * N.x + D.y * N.y + D.z * N.z;
+        const denom = 1.0 - b * b;
+        if (Math.abs(denom) < 1e-4) {
+            return null;
+        }
+
+        const d = D.x * w0x + D.y * w0y + D.z * w0z;
+        const e = N.x * w0x + N.y * w0y + N.z * w0z;
+
+        const s = (b * d - e) / denom;
+        return isFinite(s) ? s : null;
+    }
+
+    private _showDragGuideLine(scene: any, startPos: any, axisDir: any, color: any): void {
+        this._disposeDragGuideLine();
+        if (!scene || !startPos || !axisDir) return;
+        const p1 = startPos.subtract(axisDir.scale(800));
+        const p2 = startPos.add(axisDir.scale(800));
+        const builder = (BABYLON && BABYLON.MeshBuilder && BABYLON.MeshBuilder.CreateDashedLines)
+            ? BABYLON.MeshBuilder.CreateDashedLines.bind(BABYLON.MeshBuilder)
+            : BABYLON.MeshBuilder.CreateLines.bind(BABYLON.MeshBuilder);
+        this.activeDragGuideLine = builder('gizmo_drag_guide_line', {
+            points: [p1, p2],
+            dashSize: 8,
+            gapSize: 6,
+            dashNb: 100,
+            updatable: false
+        }, scene);
+        this.activeDragGuideLine.color = color || new BABYLON.Color3(1, 0.5, 0.1);
+        this.activeDragGuideLine.alpha = 0.85;
+        this.activeDragGuideLine.isPickable = false;
+        this.activeDragGuideLine.renderingGroupId = 2;
+    }
+
+    private _disposeDragGuideLine(): void {
+        if (this.activeDragGuideLine) {
+            try { this.activeDragGuideLine.dispose(); } catch {}
+            this.activeDragGuideLine = null;
         }
     }
 }

@@ -9,6 +9,7 @@ declare const BABYLON: any;
 import { ContextManager } from '../A1_core/context-manager.js';
 import { CreateKorpusCommand } from './commands/create-korpus-command.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
+import { instantiateCabinetTemplate } from '../B1_biblioteka/korpusy/cabinet-instantiator.js';
 
 export interface DraggedKorpusParams {
     width: number;
@@ -17,6 +18,7 @@ export interface DraggedKorpusParams {
     bottomHeight?: number;
     middleHeight?: number;
     backOffset?: number;
+    template?: any;
 }
 
 export class SmartFrameDragController {
@@ -40,6 +42,20 @@ export class SmartFrameDragController {
         this._draggedZoneCount = zoneCount;
         this._draggedParams = { ...params };
         this._lastGroundPointMm = null;
+    }
+
+    startDragTemplate(template: any): void {
+        const fp = template?.frameParams || {};
+        const zc = (fp.zoneCount as 1 | 2 | 3) || 1;
+        this.startDrag(zc, {
+            width: template.dimensions?.width ?? 600,
+            height: template.dimensions?.height ?? 820,
+            depth: template.dimensions?.depth ?? 560,
+            bottomHeight: fp.bottomHeight,
+            middleHeight: fp.middleHeight,
+            backOffset: fp.backOffset,
+            template
+        });
     }
 
     endDrag(): void {
@@ -156,15 +172,15 @@ export class SmartFrameDragController {
         const zoneCount = this._draggedZoneCount;
         const pos = this._lastGroundPointMm || { x: 0, y: 0 };
 
-        let bottomHeight = params.bottomHeight ?? 500;
+        let bottomHeight = params.bottomHeight ?? (zoneCount === 2 ? 2000 : 500);
         let middleHeight = params.middleHeight ?? 1200;
 
         if (zoneCount === 1) {
             bottomHeight = params.height;
             middleHeight = 0;
         } else if (zoneCount === 2) {
-            if (bottomHeight >= params.height || bottomHeight <= 0) {
-                bottomHeight = Math.round(params.height / 2);
+            if (bottomHeight >= params.height || bottomHeight <= 0 || bottomHeight === 500) {
+                bottomHeight = params.height > 2000 ? 2000 : (params.height >= 400 ? params.height - 200 : Math.round(params.height / 2));
             }
             middleHeight = 0;
         } else if (zoneCount === 3) {
@@ -176,6 +192,16 @@ export class SmartFrameDragController {
                     middleHeight = Math.round(params.height * 0.55);
                 }
             }
+        }
+
+        if (params.template) {
+            instantiateCabinetTemplate({
+                template: params.template,
+                position: { x: pos.x, y: pos.y, z: 0 },
+                overrideDims: { width: params.width, height: params.height, depth: params.depth }
+            }, doc);
+            this.endDrag();
+            return true;
         }
 
         const cmd = new CreateKorpusCommand({

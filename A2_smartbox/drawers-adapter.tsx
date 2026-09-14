@@ -11,7 +11,7 @@ import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { DrawersEngine, listRailBrands, listRailLengthsForBrand, listRailSystemsForBrand, resolveDrawerLayout } from './drawers-engine.js';
 import type { ModuleDims } from './base-engine.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
-import { DEFAULT_RAIL_ID } from '../Biblioteki/okucia/index.js';
+import { DEFAULT_RAIL_ID } from '../B1_biblioteka/index.js';
 
 const SPACER_THICK_MM = 18;
 const MAX_DRAWERS = 5;
@@ -37,7 +37,7 @@ function emptyGaps(): number[] {
     return [3, 3, 3, 3];
 }
 
-export function buildDrawersPlan(params: any, dims: ModuleDims): { parts: any[] } {
+export function buildDrawersPlan(params: any, dims: ModuleDims): { parts: any[]; hardware?: any[] } {
     const engine = new DrawersEngine();
     const count = Math.max(0, Math.min(MAX_DRAWERS, Math.round(params.count ?? params.drawerCount ?? 3)));
     const railConfigs: Record<number, { length: string; system: string }> = {};
@@ -211,7 +211,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: any,
                 <span style={labelStyle}>Ilość szuflad:</span>
                 <SmartNumericInput
                     value={count}
-                    min={1} max={MAX_DRAWERS} step={1}
+                    min={1} max={MAX_DRAWERS} step={1} decimals={0}
                     style={{ ...inputStyle, width: '120px' }}
                     onChange={(val) => {
                         const n = Math.max(1, Math.min(MAX_DRAWERS, Math.round(val)));
@@ -264,7 +264,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: any,
                     <span style={labelStyle}>Szczelina (wspólna):</span>
                     <SmartNumericInput
                         value={commonGap}
-                        min={0} step={0.5} unit="mm"
+                        min={0} step={0.01} decimals={2} unit="mm"
                         style={inputStyle}
                         onChange={(val) => {
                             setCommonGap(val);
@@ -283,7 +283,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: any,
                                 <span style={{ ...labelStyle, fontSize: '11px' }}>Wys. frontu {i + 1}:</span>
                                 <SmartNumericInput
                                     value={frontHeights[i] ?? 150}
-                                    min={10} step={1} unit="mm"
+                                    min={10} step={0.01} decimals={2} unit="mm"
                                     style={{ ...inputStyle, width: '80px', fontSize: '11px' }}
                                     onChange={(val) => {
                                         const next = [...frontHeights];
@@ -298,7 +298,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: any,
                                     <span style={{ ...labelStyle, fontSize: '11px' }}>Szczelina {i + 1}:</span>
                                     <SmartNumericInput
                                         value={individualGaps[i] ?? 3}
-                                        min={0} step={0.5} unit="mm"
+                                        min={0} step={0.01} decimals={2} unit="mm"
                                         style={{ ...inputStyle, width: '80px', fontSize: '11px' }}
                                         onChange={(val) => {
                                             const next = [...individualGaps];
@@ -327,6 +327,8 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: any,
                             <span style={{ ...labelStyle, fontSize: '11px' }}>{label}:</span>
                             <SmartNumericInput
                                 value={val}
+                                step={0.01}
+                                decimals={2}
                                 unit="mm"
                                 style={{ width: '50px', padding: '2px 4px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right', fontSize: '11px' }}
                                 onChange={(v) => {
@@ -374,7 +376,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: any,
                         >
                             <div style={{ color: warn ? '#f87171' : '#e4e4e7', fontSize: '11px', fontWeight: warn ? 'bold' : 'normal' }}>
                                 {warn ? '⚠ ' : ''}Szuflada {slot.index}
-                                <span style={{ opacity: 0.7, marginLeft: '6px' }}>{Math.round(slot.frontH)} mm</span>
+                                <span style={{ opacity: 0.7, marginLeft: '6px' }}>{Math.round(slot.frontH * 100) / 100} mm</span>
                             </div>
                             <div style={rowStyle}>
                                 <span style={{ ...labelStyle, fontSize: '11px' }}>Długość:</span>
@@ -393,7 +395,21 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: any,
                                     style={{ ...selectStyle, width: '160px', fontSize: '11px' }}
                                     onChange={(e) => setRail(slot.index, { system: e.target.value })}
                                 >
-                                    {systems.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.corpusHeightMm}mm)</option>)}
+                                    {(() => {
+                                        const seriesMap = new Map<string, typeof systems>();
+                                        for (const s of systems) {
+                                            const key = s.series || 'Inne';
+                                            if (!seriesMap.has(key)) seriesMap.set(key, []);
+                                            seriesMap.get(key)!.push(s);
+                                        }
+                                        return Array.from(seriesMap.entries()).map(([ser, sysList]) => (
+                                            <optgroup key={ser} label={ser}>
+                                                {sysList.map((s) => (
+                                                    <option key={s.id} value={s.id}>{s.name} ({s.corpusHeightMm}mm)</option>
+                                                ))}
+                                            </optgroup>
+                                        ));
+                                    })()}
                                 </select>
                             </div>
                         </div>

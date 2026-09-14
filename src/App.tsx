@@ -3,12 +3,15 @@ import { unit } from '../A1_core/unit-system';
 import { UIController, PANEL_DIM_MAX_MM, PANEL_DIM_MIN_MM } from '../A1_core/ui-controller';
 import { SmartFrameUI } from '../A3_smartframe/smartframe-ui';
 import { SmartBoxUI } from '../A2_smartbox/smartbox-ui';
+import { CabinetLibraryPanel } from './CabinetLibraryPanel';
+import { SaveCabinetModal } from './SaveCabinetModal';
 import { SSOTUI } from './ssot-ui';
 import { PerformanceOptionsModal } from './PerformanceOptionsModal';
 import { GoogleDriveModal } from './GoogleDriveModal';
 import { NewProjectModal } from './NewProjectModal';
 import { PropertiesPanel } from './PropertiesPanel';
 import { FloatingOperationDialog, CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
+import { QuickPickPopup } from './QuickPickPopup';
 import { BelkaDisplayModeMenu, BelkaProjectionMenu, BelkaInfoMenu } from './BelkaDisplayModeMenu';
 import { MaterialsUI } from '../A7_material/materials-ui';
 import { AssignMaterialCommand, SetEdgeBandingCommand } from '../A7_material/material-commands';
@@ -47,8 +50,9 @@ import { CAD_TREE_START_RENAME } from './module-data/tree-context-menu';
 import { SmartBoxBayController } from '../A2_smartbox/smartbox-bay-controller';
 import { SmartFrameDragController } from '../A3_smartframe/smartframe-drag-controller';
 import { createSmartBoxInDetectedBay, SMARTBOX_CATEGORY_NAMES } from '../A2_smartbox/smartbox-bay-actions';
-import { clearBayHighlight } from '../A2_smartbox/smartbox-bay-visualizer';
+import { clearBayHighlight, highlightBayInScene } from '../A2_smartbox/smartbox-bay-visualizer';
 import { ModalTransformManager, type ModalTransformMode } from '../A1_core/modal-transform';
+import { HardwareLoader } from '../B1_biblioteka/hardware-loader';
 
 function useModalTransformState() {
   const [mode, setMode] = useState<ModalTransformMode>(() => ModalTransformManager.instance.activeMode);
@@ -143,6 +147,37 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const [editingNode, setEditingNode] = useState<{ type: string; id: any; panelId?: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [isPanActive, setIsPanActive] = useState(false);
+  const [isZoomWindowActive, setIsZoomWindowActive] = useState(false);
+  const [zoomBox, setZoomBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const zoomStartRef = useRef<{ startX: number; startY: number } | null>(null);
+
+  useEffect(() => {
+    if (!isZoomWindowActive) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        zoomStartRef.current = null;
+        setZoomBox(null);
+        setIsZoomWindowActive(false);
+        UIController.instance?.setStatus('Gotowe');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isZoomWindowActive]);
+
+  const toggleZoomWindowMode = () => {
+    setIsZoomWindowActive((prev) => {
+      const next = !prev;
+      if (next) {
+        UIController.instance?.setStatus('Zoom - Zaznacz ramką obszar do powiększenia.');
+      } else {
+        zoomStartRef.current = null;
+        setZoomBox(null);
+        UIController.instance?.setStatus('Gotowe');
+      }
+      return next;
+    });
+  };
   const [dropModal, setDropModal] = useState<{
     material: any;
     targetPanel: any;
@@ -198,6 +233,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const [perfModalOpen, setPerfModalOpen] = useState(false);
   const [gdriveModalMode, setGdriveModalMode] = useState<'open' | 'save' | 'settings' | null>(null);
   const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
+  const [saveCabinetModalOpen, setSaveCabinetModalOpen] = useState(false);
 
   useEffect(() => {
     ContextManager.instance.requestNewProjectDialog = () => {
@@ -536,14 +572,22 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   return;
               }
 
+              const isPanelVisible = model.visible !== false;
               const shouldShow = isolate
                   ? isTargetPanel
-                  : model.visible !== false;
+                  : isPanelVisible;
 
               if (view.root) {
-                  try { view.root.setEnabled(shouldShow); } catch {}
+                  try {
+                      // W trybie izolacji CNC ukrywamy inne elementy.
+                      // W trybie standardowym węzeł root (TransformNode) pozostaje aktywny,
+                      // dzięki czemu zawiasy/okucia (będące osobnymi bytami) nie znikają po ukryciu skrzydła drzwi!
+                      view.root.setEnabled(isolate ? isTargetPanel : true);
+                  } catch {}
               }
-              if (view.faceMeshes) {
+              if (typeof (view as any).setPanelVisible === 'function') {
+                  (view as any).setPanelVisible(shouldShow);
+              } else if (view.faceMeshes) {
                   Object.values(view.faceMeshes).forEach((mesh: any) => {
                       if (mesh) {
                           try {
@@ -559,9 +603,22 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   view._featureMarkers.forEach((m: any) => {
                       if (m) {
                           try {
-                              m.setEnabled(shouldShow);
-                              m.visibility = shouldShow ? faceVis : 0.0;
-                              m.isVisible = shouldShow && !wireframe;
+                              const isHw = m.metadata?.type === 'hardware' || m.name?.startsWith('hw_');
+                              if (isHw) {
+                                  const hwVis = m.metadata?.feature?.visible !== false && m.metadata?.feature?.params?.visible !== false && m.metadata?.visible !== false;
+                                  const showHw = isolate ? isTargetPanel : hwVis;
+                                  m.setEnabled(showHw);
+                                  if ('isVisible' in m) m.isVisible = showHw && !wireframe;
+                                  if (m.metadata?.frozen) {
+                                      HardwareLoader.instance.setHingeFrozen(m, true);
+                                  } else {
+                                      HardwareLoader.instance.setHingeFrozen(m, false);
+                                  }
+                              } else {
+                                  m.setEnabled(shouldShow);
+                                  m.visibility = shouldShow ? faceVis : 0.0;
+                                  m.isVisible = shouldShow && !wireframe;
+                              }
                           } catch {}
                       }
                   });
@@ -689,6 +746,14 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                       mesh.visibility = 0.5;
                       mesh.isVisible = true;
                   }
+                  return;
+              }
+
+              const isHwDescendant = name.startsWith('hw_') ||
+                  mesh.parent?.name?.startsWith('hw_') ||
+                  mesh.metadata?.type === 'hardware' ||
+                  (mesh.parent && (mesh.parent as any).metadata?.type === 'hardware');
+              if (isHwDescendant) {
                   return;
               }
 
@@ -935,7 +1000,11 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       const doc = ContextManager.instance.document || projectModel;
       if (doc) {
         const scene = ContextManager.instance.viewport?.scene;
-        if (scene) clearBayHighlight(scene);
+        if (optId === 'EMPTY') {
+          if (scene) highlightBayInScene(scene, bay);
+        } else {
+          if (scene) clearBayHighlight(scene);
+        }
 
         const typeMap: Record<string, { type: string; label: string }> = {
           'EMPTY': { type: 'smartbox_empty', label: '' },
@@ -961,7 +1030,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         if (sbNode) {
           if (ctrl) {
             ctrl.setPendingSmartBoxType(null);
-            ctrl.endDrag();
+            ctrl.endDrag(optId === 'EMPTY');
           }
           setActiveTab('tab-a2-smartbox');
           doc.setActiveEntity(sbNode.domainData || sbNode);
@@ -1536,6 +1605,29 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       );
     };
 
+    const renderHardwareNode = (hardware: any, hwNode: any) => {
+      const isSelected = projectModel.activeEntity === hardware || projectModel.activeEntity === hwNode ? 'selected' : '';
+      const hwName = hardware.name || hwNode.name || 'Okucie';
+      const hwId = hardware.hardwareId || '';
+      return (
+        <div key={hwNode.id || hardware.id} className="tree-children" style={{ marginLeft: '16px' }}>
+          <div 
+            className={`tree-node ${isSelected}`}
+            style={{ cursor: 'pointer', padding: '3px 6px', borderRadius: '4px' }}
+            onClick={() => {
+              projectModel.setActiveEntity(hardware);
+            }}
+          >
+            <div className="tree-node-content" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '13px' }}>🔩</span>
+              <span className="node-name-text" style={{ color: '#93c5fd', fontWeight: 500 }}>{hwName}</span>
+              {hwId && <span style={{ opacity: 0.5, fontSize: '11px' }}>({hwId})</span>}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     const renderContainerNode = (container: any) => {
       const containerVisible = container.visible !== false;
       const isSelected = projectModel.activeEntity === container ? 'selected' : '';
@@ -1639,6 +1731,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             if (!containerNode) return null;
             return containerNode.children.map((childNode: any) => {
               const child = childNode.domainData;
+              if (childNode.nodeType === 'HARDWARE' || child?.type === 'hardware') return renderHardwareNode(child || childNode, childNode);
               if (!child) return null;
               if (childNode.nodeType === 'ASSEMBLY' || child.type === 'container') return renderContainerNode(child);
               return renderPanelNode(child);
@@ -1718,6 +1811,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         </div>
         {!isProjectCollapsed && projectModel?.rootNode?.children.map((childNode: any) => {
           const entity = childNode.domainData;
+          if (childNode.nodeType === 'HARDWARE' || entity?.type === 'hardware') return renderHardwareNode(entity || childNode, childNode);
           if (!entity) return null;
           if (childNode.nodeType === 'ASSEMBLY' || entity.type === 'container') return renderContainerNode(entity);
           return renderPanelNode(entity);
@@ -1760,6 +1854,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <a href="#" id="menuOpen" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('openProject'); }}>Otwórz...</a>
                 <a href="#" id="menuSave" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProject'); }}>Zapisz</a>
                 <a href="#" id="menuSaveAs" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProjectAs'); }}>Zapisz jako...</a>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
+                <a href="#" id="menuSaveCabinet" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setSaveCabinetModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#60a5fa' }}>
+                  <span style={{ fontSize: '13px' }}>💾</span> Zapisz korpus do biblioteki...
+                </a>
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
                 <a href="#" id="menuExportStep" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStep'); }}>Eksport do STEP</a>
                 <a href="#" id="menuExportStl" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStl'); }}>Eksport do STL</a>
@@ -1808,6 +1906,20 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
           {/* ─── Pasek Narzędzi CAD ─── */}
           <div className="topbar-tools">
+            <button 
+              className={`topbar-tool-btn ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-b1-biblioteka')}
+              title="Biblioteka — Gotowe szablony szafek i korpusów (katalog jak w PRO100)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                <line x1="9" y1="6" x2="16" y2="6" />
+                <line x1="9" y1="10" x2="16" y2="10" />
+              </svg>
+              <span>Biblioteka</span>
+            </button>
+
             <button 
               className={`topbar-tool-btn ${activeTab === 'tab-a3-smartframe' ? 'active' : ''}`} 
               onClick={() => setActiveTab('tab-a3-smartframe')}
@@ -2161,17 +2273,11 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           title="Przesuwanie widoku (Pan) — możesz też przytrzymać mały boczny przycisk myszy lub kółko z Shift"
         >✋ Przesuń</button>
         <button 
-          className="tool-btn" 
-          id="toolDimension" 
-          onClick={() => {
-            const sm = ContextManager.instance.appAPI?.stateMachine || (ContextManager.instance as any).stateMachine;
-            if (sm) {
-              setActiveTab('tab-a8-pmi');
-              toggleDimensionTool(sm);
-            }
-          }}
-          title="Wymiarowanie CAD — tworzenie wymiaru (ustawienia w panelu PMI)"
-        >📏 Wymiaruj</button>
+          className={`tool-btn ${isZoomWindowActive ? 'active' : ''}`} 
+          id="toolZoomWindow" 
+          onClick={toggleZoomWindowMode}
+          title="Powiększ zaznaczony obszar (Zoom Window) — przeciągnij ramkę myszą na scenie [Esc aby anulować]"
+        >🔍 Zoom</button>
         <span className="tool-separator"></span>
         <BelkaInfoMenu
           open={infoMenuOpen}
@@ -2388,12 +2494,30 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         </div>
 
         {/* Tab 2: A2 SmartBox */}
-        <div className={`tab-content ${activeTab === 'tab-a2-smartbox' ? 'active' : ''}`} id="tab-a2-smartbox">
-          <div className="panel-header">
-            <h2>SmartBox</h2>
-            <p className="subtitle">Konfigurator wnętrz</p>
+        <div 
+          className={`tab-content ${activeTab === 'tab-a2-smartbox' ? 'active' : ''}`} 
+          id="tab-a2-smartbox"
+          style={{ 
+            height: 'calc(100% - 40px)', 
+            display: activeTab === 'tab-a2-smartbox' ? 'flex' : 'none', 
+            flexDirection: 'column', 
+            minHeight: 0, 
+            overflowY: 'auto', 
+            overflowX: 'hidden' 
+          }}
+        >
+          <div className="panel-header" style={{ flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, background: '#18181b', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px' }}>
+            <h2 style={{ fontSize: '13px', margin: 0, fontWeight: 700, lineHeight: '1.2' }}>SmartBox</h2>
           </div>
           <SmartBoxUI projectModel={projectModel} />
+        </div>
+
+        {/* Tab: B1 Biblioteka Korpusów */}
+        <div className={`tab-content ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} id="tab-b1-biblioteka" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-b1-biblioteka' ? 'flex' : 'none', flexDirection: 'column' }}>
+          <CabinetLibraryPanel 
+            projectModel={projectModel} 
+            onOpenSaveModal={() => setSaveCabinetModalOpen(true)}
+          />
         </div>
 
         {/* Tab 3: A3 SmartFrame */}
@@ -2733,6 +2857,97 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         }}
       ></canvas>
 
+      {/* ─── Nakładka Ramki Powiększającej (Zoom Window Rubberband) ─── */}
+      {isZoomWindowActive && (
+        <div
+          id="zoom-window-overlay"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 35,
+            cursor: 'crosshair',
+            pointerEvents: 'auto',
+            userSelect: 'none',
+          }}
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            const canvas = document.getElementById('renderCanvas');
+            const rect = canvas ? canvas.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
+            const startX = e.clientX - rect.left;
+            const startY = e.clientY - rect.top;
+            zoomStartRef.current = { startX, startY };
+            setZoomBox({ x1: startX, y1: startY, x2: startX, y2: startY });
+          }}
+          onPointerMove={(e) => {
+            if (!zoomStartRef.current) return;
+            e.preventDefault();
+            const canvas = document.getElementById('renderCanvas');
+            const rect = canvas ? canvas.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
+            const currX = e.clientX - rect.left;
+            const currY = e.clientY - rect.top;
+            setZoomBox({
+              x1: zoomStartRef.current.startX,
+              y1: zoomStartRef.current.startY,
+              x2: currX,
+              y2: currY,
+            });
+          }}
+          onPointerUp={(e) => {
+            if (!zoomStartRef.current) return;
+            e.preventDefault();
+            const canvas = document.getElementById('renderCanvas');
+            const rect = canvas ? canvas.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
+            const currX = e.clientX - rect.left;
+            const currY = e.clientY - rect.top;
+            const { startX, startY } = zoomStartRef.current;
+            zoomStartRef.current = null;
+            setZoomBox(null);
+            setIsZoomWindowActive(false);
+            UIController.instance?.setStatus('Gotowe');
+
+            const width = Math.abs(currX - startX);
+            const height = Math.abs(currY - startY);
+            if (width > 8 && height > 8) {
+              const vp = ContextManager.instance.viewport;
+              if (vp && typeof vp.zoomToWindow === 'function') {
+                vp.zoomToWindow(startX, startY, currX, currY);
+              }
+            }
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            zoomStartRef.current = null;
+            setZoomBox(null);
+            setIsZoomWindowActive(false);
+            UIController.instance?.setStatus('Gotowe');
+          }}
+        >
+          {zoomBox && (() => {
+            const left = Math.min(zoomBox.x1, zoomBox.x2);
+            const top = Math.min(zoomBox.y1, zoomBox.y2);
+            const width = Math.abs(zoomBox.x2 - zoomBox.x1);
+            const height = Math.abs(zoomBox.y2 - zoomBox.y1);
+            if (width < 2 && height < 2) return null;
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left,
+                  top,
+                  width,
+                  height,
+                  border: '2px dashed #38bdf8',
+                  backgroundColor: 'rgba(56, 189, 248, 0.18)',
+                  boxShadow: '0 0 12px rgba(56, 189, 248, 0.35)',
+                  pointerEvents: 'none',
+                }}
+              />
+            );
+          })()}
+        </div>
+      )}
+
       {uiRegionHint && (
         <div className="scene-ui-region-hint" role="status">
           {uiRegionHint}
@@ -2900,36 +3115,41 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         <span id="statusText">{uiState?.statusText || 'Ładowanie...'}</span>
       </div>
 
-      {/* ─── Blender-style Tooltip & Status Bar Hint Overlay ─── */}
+      {/* ─── Podpowiedzi na dole z lewej (nad paskiem stanu) ─── */}
       {activeHint && (
         <div style={{
           position: 'absolute',
-          bottom: '36px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: 'rgba(24, 24, 24, 0.95)',
-          border: '1px solid #f59e0b',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.7)',
-          color: '#ffffff',
-          padding: '6px 14px',
-          borderRadius: '20px',
+          bottom: '56px',
+          left: '16px',
+          maxWidth: '560px',
+          backgroundColor: 'var(--bg-panel, rgba(20, 20, 24, 0.95))',
+          border: '1px solid var(--border-light, rgba(255, 255, 255, 0.12))',
+          boxShadow: 'var(--shadow-sm, 0 4px 12px rgba(0,0,0,0.4))',
+          color: 'var(--text-main, #e4e4e7)',
+          padding: '8px 16px',
+          borderRadius: 'var(--radius-sm, 6px)',
           zIndex: 10000,
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          fontSize: '11px',
+          gap: '8px',
+          fontSize: '0.92rem',
           fontFamily: 'Inter, Segoe UI, sans-serif',
-          pointerEvents: 'none'
+          pointerEvents: 'none',
+          backdropFilter: 'blur(12px)'
         }}>
-          <span style={{ color: '#f59e0b', fontWeight: 600 }}>💡 {activeHint.title}:</span>
-          <span style={{ color: '#e5e7eb' }}>{activeHint.description}</span>
+          {activeHint.title && (
+            <span style={{ fontWeight: 600, color: '#ffffff', whiteSpace: 'nowrap' }}>
+              {activeHint.title} -
+            </span>
+          )}
+          <span style={{ color: '#d4d4d8', lineHeight: 1.35 }}>{activeHint.description}</span>
           {activeHint.confirmKey && (
-            <span style={{ backgroundColor: '#d97706', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '10px' }}>
+            <span style={{ backgroundColor: '#374151', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
               [{activeHint.confirmKey}] Zatwierdź
             </span>
           )}
           {activeHint.cancelKey && (
-            <span style={{ backgroundColor: '#374151', color: '#9ca3af', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, fontSize: '10px' }}>
+            <span style={{ backgroundColor: '#374151', color: '#9ca3af', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
               [{activeHint.cancelKey}] Anuluj
             </span>
           )}
@@ -3032,6 +3252,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         onCancel={() => setNewProjectModalOpen(false)}
       />
 
+      {/* ─── Modal Zapisu Korpusu do Biblioteki ───────────────────── */}
+      <SaveCabinetModal
+        open={saveCabinetModalOpen}
+        onClose={() => setSaveCabinetModalOpen(false)}
+        projectModel={projectModel}
+      />
+
       {/* ─── Bottom Console (Hover Info) ───────────────── */}
       <div id="bottomConsole" className="bottom-console">
         <span className="console-prefix">&gt;</span>
@@ -3042,6 +3269,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
       {/* Okno edycji operacji (pływające, swobodne okno nad sceną 3D) */}
       <FloatingOperationDialog />
+
+      {/* Wybór zakrytych płaszczyzn QuickPick (a'la Solid Edge) */}
+      <QuickPickPopup />
       
     </div>
   );

@@ -45,6 +45,9 @@ export class CadTranslateGizmo {
             if (g) {
                 g.updateGizmoRotationToMatchAttachedMesh = true;
                 g.updateGizmoPositionToMatchAttachedMesh = true;
+                if (g.dragBehavior) {
+                    g.dragBehavior.dragDeltaRatio = 1.0;
+                }
             }
         }
     }

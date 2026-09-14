@@ -155,8 +155,8 @@ describe('SmartFrameDragController', () => {
         expect(c2Params.zoneCount).toBe(2);
         expect(c3Params.zoneCount).toBe(3);
 
-        // Upewnijmy się, że 2-strefowy ma poprawny podział (np. 1100 mm) a nie 2200 mm
-        expect(c2Params.bottomHeight).toBe(1100);
+        // Upewnijmy się, że 2-strefowy ma poprawny domyślny podział (2000 mm) a nie 2200 mm
+        expect(c2Params.bottomHeight).toBe(2000);
 
         // Upewnijmy się, że 3-strefowy ma poprawny podział (500 mm dół, 1200 mm środek) a nie 2200 / 0
         expect(c3Params.bottomHeight).toBe(500);

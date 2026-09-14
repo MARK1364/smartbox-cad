@@ -68,4 +68,23 @@ describe('SmartBoxBayController', () => {
         expect(controller.isPickerActive).toBe(false);
         expect(listener).toHaveBeenCalledWith(fakeBay);
     });
+
+    it('preserves highlight when dropping EMPTY smartbox', () => {
+        const controller = new SmartBoxBayController();
+        const fakeBay: DetectedBay = {
+            boundsMm: { width: 764, height: 1964, depth: 600 },
+            boundsNm: { width: 764000000, height: 1964000000, depth: 600000000 },
+            centerWorldMm: { x: 0, y: 0, z: 1000 },
+            boundary: {} as any
+        };
+        controller.startDrag('EMPTY');
+        controller.setLastDetectedBay(fakeBay);
+
+        const listener = vi.fn();
+        controller.subscribeBayDetected(listener);
+
+        controller.onDropOnScene();
+        expect(listener).toHaveBeenCalledWith(fakeBay);
+        expect(controller.isDragging).toBe(false);
+    });
 });

@@ -66,7 +66,7 @@ export function beginConstraintSlotPick(opts: {
     activePick = { constraintId: opts.constraintId, slot: opts.slot };
     notifyPickChanged();
     startConstraintPick({
-        label: `Więz ${BIND_TYPE_ICON[constraint.bindType]}: wskaż ${kindHint} (${slotLabel}) w 3D — ESC anuluje`,
+        label: `Więz ${BIND_TYPE_ICON[constraint.bindType]}: wskaż ${kindHint} (${slotLabel}) w 3D — PPM / Q: QuickPick (zakryte), ESC anuluje`,
         expectedKind: opts.expectedKind,
         onPick: (anchor) => {
             activePick = null;

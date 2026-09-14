@@ -11,7 +11,7 @@ import { NodeType } from '../A1_core/cad-node/node-type.js';
 import { DoorsDrillingIntent, DoorsDrillingFeature } from './doors-drilling-intent.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
-import { DEFAULT_HINGE_ID, hingeCorpusHolesMm, hingeTemplateId } from '../Biblioteki/okucia/index.js';
+import { DEFAULT_HINGE_ID, hingeCorpusHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 
 export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerId?: string): DoorsDrillingIntent[] {
     const intents: DoorsDrillingIntent[] = [];
@@ -221,9 +221,20 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
         const isLeftActive = doorType === 'LEFT' || doorType === 'SINGLE_LEFT' || doorType === 'DOUBLE';
         const isRightActive = doorType === 'RIGHT' || doorType === 'SINGLE_RIGHT' || doorType === 'DOUBLE';
 
+        const baseHingeId = p.hinge_template || p.hingeTemplate || DEFAULT_HINGE_ID;
+        const resolveHingeId = (index: number): string => {
+            if ((p as any)[`hinge_${index}_template`]) {
+                return (p as any)[`hinge_${index}_template`];
+            }
+            if (baseHingeId === 'BLUM_71B3550' || baseHingeId === 'BLUM_71T3550') {
+                return (index % 2 === 1) ? 'BLUM_71B3550' : 'BLUM_71T3550';
+            }
+            return baseHingeId;
+        };
+
         for (const hinge of hinges) {
             const worldCenterZ = sbPosZ + hinge.localZ;
-            const hingeId = (p as any)[`hinge_${hinge.index}_template`] || p.hinge_template || p.hingeTemplate || DEFAULT_HINGE_ID;
+            const hingeId = resolveHingeId(hinge.index);
             const corpusHoles = hingeCorpusHolesMm(hingeId);
             const templateId = hingeTemplateId(hingeId);
 

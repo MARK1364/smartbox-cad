@@ -120,6 +120,9 @@ export interface PMIAnnotation {
     textPrefix: string;
     textSuffix: string;
 
+    /** Przesunięcie tekstu [mm] wzdłuż linii wymiarowej od jej środka (domyślnie 0). */
+    textShiftMM?: number;
+
     /** UI state */
     visible: boolean;
     selected: boolean;
@@ -192,7 +195,7 @@ export class PMIStore {
 
     /** Global settings */
     public unitMode: UnitMode = 'METRIC_MM';
-    public showUnits = true;
+    public showUnits = false;
     public dimColor: [number, number, number, number] = [0.05, 0.05, 0.05, 1.0];
     public selectedColor: [number, number, number, number] = [1.0, 0.45, 0.0, 1.0];
     public textSizeMM = 120; // world-space text cap height in mm
@@ -285,6 +288,7 @@ export class PMIStore {
             distanceMM: 0,
             resolvedAxis: 'AUTO',
             offsetAxisKey: '',
+            textShiftMM: 0,
             textPrefix: '',
             textSuffix: '',
             visible: true,
@@ -488,6 +492,14 @@ export class PMIStore {
         this._notify();
     }
 
+    public setTextShift(id: string, textShiftMM: number): void {
+        const ann = this.getAnnotation(id);
+        if (!ann) return;
+        if (ann.textShiftMM === textShiftMM) return;
+        ann.textShiftMM = textShiftMM;
+        this._notify();
+    }
+
     public setAffixes(id: string, prefix: string, suffix: string): void {
         const ann = this.getAnnotation(id);
         if (!ann) return;
@@ -658,6 +670,7 @@ function normalizeAnnotation(raw: any): PMIAnnotation {
         textSuffix: typeof raw?.textSuffix === 'string' ? raw.textSuffix : '',
         visible: raw?.visible !== false,
         selected: false,
+        textShiftMM: typeof raw?.textShiftMM === 'number' ? raw.textShiftMM : 0,
     };
 }
 

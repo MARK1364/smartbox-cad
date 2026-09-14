@@ -8,7 +8,7 @@
 import { ProjectDocument } from '../A1_core/project-document.js';
 import { FlapsDrillingIntent, FlapsDrillingFeature } from './flaps-drilling-intent.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
-import { DEFAULT_HINGE_ID, hingeCorpusHolesMm, hingeTemplateId } from '../Biblioteki/okucia/index.js';
+import { DEFAULT_HINGE_ID, hingeCorpusHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 
 type HingeSide = 'left' | 'right' | 'center';
 
@@ -171,10 +171,17 @@ export function buildFlapsDrillings(document: ProjectDocument, cabinetContainerI
 
         const hingeLeft = p.hinge_left_offset !== undefined ? Number(p.hinge_left_offset) : 80;
         const hingeRight = p.hinge_right_offset !== undefined ? Number(p.hinge_right_offset) : 80;
+        const baseHingeId = p.hinge_template || p.library_id || DEFAULT_HINGE_ID;
         const resolveHingeId = (side: HingeSide): string => {
-            if (side === 'left') return p.hinge_left_template || p.hinge_template || p.library_id || DEFAULT_HINGE_ID;
-            if (side === 'right') return p.hinge_right_template || p.hinge_template || p.library_id || DEFAULT_HINGE_ID;
-            return p.hinge_center_template || p.hinge_template || p.library_id || DEFAULT_HINGE_ID;
+            if (side === 'left' && p.hinge_left_template) return p.hinge_left_template;
+            if (side === 'right' && p.hinge_right_template) return p.hinge_right_template;
+            if (side === 'center' && p.hinge_center_template) return p.hinge_center_template;
+
+            if (baseHingeId === 'BLUM_71B3550' || baseHingeId === 'BLUM_71T3550') {
+                if (side === 'right') return 'BLUM_71T3550';
+                return 'BLUM_71B3550';
+            }
+            return baseHingeId;
         };
 
         const sbPos = sbNode.getWorldMatrix().decompose().translation;

@@ -742,6 +742,9 @@ export class ExportEngine {
         const rows: BOMRow[] = [];
         const traverse = (node: any) => {
             if (!node) return;
+            const isFrozen = Boolean(node.frozen || node.domainData?.frozen || node.parameters?.frozen || node.params?.frozen);
+            if (isFrozen) return;
+
             if (node.type === 'PANEL' || (node.name && node.name.includes('Płyta'))) {
                 const params = node.parameters || node.params || {};
                 rows.push({

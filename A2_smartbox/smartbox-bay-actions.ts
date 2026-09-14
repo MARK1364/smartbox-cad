@@ -51,7 +51,8 @@ export interface SmartBoxModalParams {
     shelfOffsetFrontMm?: number;
     drawerCount?: number;
     drawerGapMm?: number;
-    doorType?: 'SINGLE_LEFT' | 'SINGLE_RIGHT' | 'DOUBLE';
+    doorType?: 'LEFT' | 'RIGHT' | 'SINGLE_LEFT' | 'SINGLE_RIGHT' | 'DOUBLE';
+    door_type?: 'LEFT' | 'RIGHT' | 'SINGLE_LEFT' | 'SINGLE_RIGHT' | 'DOUBLE';
     doorGapMm?: number;
     flapType?: 'UP' | 'DOWN';
     dividerCount?: number;
@@ -156,6 +157,7 @@ export function createSmartBoxInDetectedBay(
         boxType: option.id,
         parentContainerId: parentId,
         boundary: bay.boundary,
+        detectedBay: bay,
         targetZone: isExternal ? 'FULL' : undefined,
         side_references_smartbox: isExternal ? 'OUTER' : 'INNER',
         customReferences: {
@@ -180,7 +182,8 @@ export function createSmartBoxInDetectedBay(
         offsetBottom: option.id === 'SHELF' ? (params?.offsetBottom ?? 100) : undefined,
         drawerCount: params?.drawerCount ?? (option.id === 'DRAWERS' ? 3 : undefined),
         drawerGapMm: params?.drawerGapMm,
-        doorType: params?.doorType ?? (option.id === 'DOORS' ? 'SINGLE_LEFT' : undefined),
+        doorType: params?.doorType ?? params?.door_type ?? (option.id === 'DOORS' ? 'LEFT' : undefined),
+        door_type: params?.door_type ?? params?.doorType ?? (option.id === 'DOORS' ? 'LEFT' : undefined),
         doorGapMm: params?.doorGapMm,
         flapType: params?.flapType,
         dividerCount: params?.dividerCount,

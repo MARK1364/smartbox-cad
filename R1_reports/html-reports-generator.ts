@@ -224,6 +224,7 @@ export class HtmlReportsGeneratorWeb {
                 <td style="padding:4px; border:1px solid #ddd;">${pLp++}</td>
                 <td style="padding:4px; border:1px solid #ddd; text-align:left; font-weight:600;">${p.role}</td>
                 <td style="padding:4px; border:1px solid #ddd; text-align:left; background:#f6ffed;">${p.material_name}</td>
+                <td style="padding:4px; border:1px solid #ddd; text-align:center;">${p.thickness_mm} mm</td>
                 <td style="padding:4px; border:1px solid #ddd; font-weight:bold; background:#f1f8ff;">${p.length_mm} × ${p.width_mm} × ${p.thickness_mm}</td>
                 <td style="padding:4px; border:1px solid #ddd;">${p.area_m2.toFixed(3)} m²</td>
                 <td style="padding:4px; border:1px solid #ddd;">${typeof p.material_cost === 'number' ? p.material_cost.toFixed(2) + ' PLN' : '<span style="color:red">BRAK</span>'}</td>
@@ -382,6 +383,14 @@ export class HtmlReportsGeneratorWeb {
                 <div class="value">${typeof summary.SUMA_CALKOWITA_PLN === 'number' ? summary.SUMA_CALKOWITA_PLN.toFixed(2) + ' PLN' : summary.SUMA_CALKOWITA_PLN}</div>
             </div>
             <div class="card">
+                <div class="title">Okucia i Akcesoria</div>
+                <div class="value" style="color:#7c3aed;">${typeof summary.SUMA_AKCESORIA_PLN === 'number' ? summary.SUMA_AKCESORIA_PLN.toFixed(2) + ' PLN' : summary.SUMA_AKCESORIA_PLN}</div>
+            </div>
+            <div class="card">
+                <div class="title">Płyty i Obrzeża</div>
+                <div class="value">${typeof summary.SUMA_PLYTY_PLN === 'number' ? summary.SUMA_PLYTY_PLN.toFixed(2) + ' PLN' : summary.SUMA_PLYTY_PLN}</div>
+            </div>
+            <div class="card">
                 <div class="title">Zużycie Płyty</div>
                 <div class="value">${summary.Calkowite_powierzchnia_m2.toFixed(3)} m²</div>
             </div>
@@ -390,8 +399,8 @@ export class HtmlReportsGeneratorWeb {
                 <div class="value">${summary.Calkowite_dlugosc_obrzezy_mb.toFixed(2)} mb</div>
             </div>
             <div class="card">
-                <div class="title">Liczba Formatek</div>
-                <div class="value">${summary.Liczba_elementow} szt.</div>
+                <div class="title">Liczba Formatek / Okuć</div>
+                <div class="value">${summary.Liczba_elementow} / ${summary.Calkowite_liczba_akcesorii_szt} szt.</div>
             </div>
         </div>
 
@@ -411,6 +420,7 @@ export class HtmlReportsGeneratorWeb {
                         <th>LP</th>
                         <th>Rola</th>
                         <th>Materiał</th>
+                        <th>Grubość</th>
                         <th>Wymiary (mm)</th>
                         <th>Pow. m²</th>
                         <th>Koszt Płyty</th>
@@ -422,6 +432,16 @@ export class HtmlReportsGeneratorWeb {
                 <tbody>
                     ${pricingRows}
                 </tbody>
+                <tfoot>
+                    <tr style="background:#e3f2fd; font-weight:bold;">
+                        <td colspan="5" style="text-align:left; padding:10px; font-size:12px;">SUMA FORMATEK I OBRZEŻY</td>
+                        <td style="padding:10px;">${summary.Calkowite_powierzchnia_m2.toFixed(3)} m²</td>
+                        <td style="padding:10px;">${typeof summary.Calkowite_cena_plyt_PLN === 'number' ? summary.Calkowite_cena_plyt_PLN.toFixed(2) + ' PLN' : summary.Calkowite_cena_plyt_PLN}</td>
+                        <td style="padding:10px;">${summary.Calkowite_dlugosc_obrzezy_mb.toFixed(2)} mb</td>
+                        <td style="padding:10px;">${typeof summary.Calkowite_cena_obrzezy_PLN === 'number' ? summary.Calkowite_cena_obrzezy_PLN.toFixed(2) + ' PLN' : summary.Calkowite_cena_obrzezy_PLN}</td>
+                        <td style="padding:10px; color:#1565c0; font-size:14px; font-weight:bold;">${typeof summary.SUMA_PLYTY_PLN === 'number' ? summary.SUMA_PLYTY_PLN.toFixed(2) + ' PLN' : summary.SUMA_PLYTY_PLN}</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
 
@@ -474,6 +494,15 @@ export class HtmlReportsGeneratorWeb {
                 <tbody>
                     ${accRows || '<tr><td colspan="6" style="padding:15px; color:#777;">Brak przypisanych akcesoriów</td></tr>'}
                 </tbody>
+                <tfoot>
+                    <tr style="background:#e3f2fd; font-weight:bold;">
+                        <td colspan="2" style="text-align:left; padding:10px; font-size:12px;">SUMA OKUĆ I AKCESORIÓW</td>
+                        <td style="padding:10px; font-size:12px;">${summary.Calkowite_liczba_akcesorii_szt} szt.</td>
+                        <td style="padding:10px;">—</td>
+                        <td style="padding:10px; color:#1565c0; font-size:14px; font-weight:bold;">${typeof summary.SUMA_AKCESORIA_PLN === 'number' ? summary.SUMA_AKCESORIA_PLN.toFixed(2) + ' PLN' : summary.SUMA_AKCESORIA_PLN}</td>
+                        <td style="padding:10px;">—</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>

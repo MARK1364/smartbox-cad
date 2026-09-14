@@ -15,6 +15,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
   const [customAntialias, setCustomAntialias] = useState(config.current.antialias);
   const [customThrottle, setCustomThrottle] = useState(config.current.throttleHoverMs);
   const [customPowerPref, setCustomPowerPref] = useState(config.current.powerPreference);
+  const [customEngine, setCustomEngine] = useState<'webgl2' | 'webgpu'>(() => PerformanceConfigManager.instance.getPreferredEngine());
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
       setCustomAntialias(currentConfig.current.antialias);
       setCustomThrottle(currentConfig.current.throttleHoverMs);
       setCustomPowerPref(currentConfig.current.powerPreference);
+      setCustomEngine(currentConfig.current.preferredEngine || 'webgl2');
       setSavedNotice(null);
     }
   }, [isOpen]);
@@ -49,14 +51,18 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
       mgr.setProfile(selectedProfile as any, true);
     }
 
-    if (showAdvanced) {
-      mgr.updateCurrent({
+    const currentSavedEngine = mgr.getPreferredEngine();
+    const engineChanged = customEngine !== currentSavedEngine;
+
+    mgr.updateCurrent({
+      preferredEngine: customEngine,
+      ...(showAdvanced ? {
         hardwareScalingLevel: customScaling,
         antialias: customAntialias,
         throttleHoverMs: customThrottle,
         powerPreference: customPowerPref
-      }, true);
-    }
+      } : {})
+    }, true);
 
     // Natychmiastowe zastosowanie poziomu skalowania do aktywnego silnika 3D
     try {
@@ -68,11 +74,19 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
       console.warn('Nie udało się zaaplikować do silnika natychmiast:', e);
     }
 
-    setSavedNotice('Ustawienia zapisane dla tego stanowiska!');
-    setTimeout(() => {
-      setSavedNotice(null);
-      onClose();
-    }, 900);
+    if (engineChanged) {
+      setSavedNotice('Zapisano! Odśwież stronę (F5), aby przełączyć silnik 3D.');
+      setTimeout(() => {
+        setSavedNotice(null);
+        onClose();
+      }, 1500);
+    } else {
+      setSavedNotice('Ustawienia zapisane dla tego stanowiska!');
+      setTimeout(() => {
+        setSavedNotice(null);
+        onClose();
+      }, 900);
+    }
   };
 
   const handleResetDefaults = () => {
@@ -85,6 +99,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
     setCustomAntialias(currentConfig.current.antialias);
     setCustomThrottle(currentConfig.current.throttleHoverMs);
     setCustomPowerPref(currentConfig.current.powerPreference);
+    setCustomEngine('webgl2');
 
     try {
       const viewport = (UIController.instance as any)?.viewport;
@@ -404,6 +419,76 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
                   <span>100 ms (Oszczędza CPU)</span>
                 </div>
               </div>
+
+              {/* Silnik graficzny 3D (WebGL 2 vs WebGPU) */}
+              <div style={{ paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontWeight: 600, color: '#f8fafc' }}>Silnik renderujący 3D:</span>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Wymaga odświeżenia (F5)</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <label
+                    onClick={() => setCustomEngine('webgl2')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      border: customEngine === 'webgl2' ? '1.5px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.1)',
+                      backgroundColor: customEngine === 'webgl2' ? 'rgba(59, 130, 246, 0.14)' : 'rgba(255, 255, 255, 0.02)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="engineChoice"
+                      value="webgl2"
+                      checked={customEngine === 'webgl2'}
+                      onChange={() => setCustomEngine('webgl2')}
+                      style={{ marginTop: '2px', cursor: 'pointer', accentColor: '#3b82f6' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.82rem', color: '#f8fafc' }}>WebGL 2</div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', lineHeight: 1.25, marginTop: '2px' }}>
+                        Stabilny, rekomendowany standard produkcyjny dla CAD.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    onClick={() => setCustomEngine('webgpu')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                      padding: '10px 12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      border: customEngine === 'webgpu' ? '1.5px solid #3b82f6' : '1px solid rgba(255, 255, 255, 0.1)',
+                      backgroundColor: customEngine === 'webgpu' ? 'rgba(59, 130, 246, 0.14)' : 'rgba(255, 255, 255, 0.02)',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="engineChoice"
+                      value="webgpu"
+                      checked={customEngine === 'webgpu'}
+                      onChange={() => setCustomEngine('webgpu')}
+                      style={{ marginTop: '2px', cursor: 'pointer', accentColor: '#3b82f6' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.82rem', color: '#f8fafc' }}>WebGPU</div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', lineHeight: 1.25, marginTop: '2px' }}>
+                        Eksperymentalny silnik nowej generacji.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
             </div>
           )}
 

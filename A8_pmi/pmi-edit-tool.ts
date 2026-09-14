@@ -43,6 +43,9 @@ export class PMIEditOffsetTool extends BaseState {
     private stickyGuideId: string | null = null;
     private hasDragged = false;
 
+    /** Ostatni offset przy którym wywołano renderAll — kwantyzacja 1mm. */
+    private lastRenderedOffsetWorld: Vec3 = v3(0, 0, 0);
+
     private dragAnchored = false;
     private dragStartHitWorld: Vec3 | null = null;
     private dragStartOffsetWorld: Vec3 = v3(0, 0, 0);
@@ -92,6 +95,7 @@ export class PMIEditOffsetTool extends BaseState {
             ? guideCandidateId(this.axisSpace === 'LOCAL' ? 'LOCAL' : 'GLOBAL', this.offsetAxisKey as 'X' | 'Y' | 'Z')
             : null;
         this.hasDragged = false;
+        this.lastRenderedOffsetWorld = v3(0, 0, 0);
         this.store.selectById(ann.id);
 
         const scene = this.ctx.viewport.scene;
@@ -111,7 +115,7 @@ export class PMIEditOffsetTool extends BaseState {
         setSelectionHighlightSuppressed(true, this.ctx);
 
         if (this.ctx.canvas) this.ctx.canvas.style.cursor = 'move';
-        this.setUIStatus('Przeciągnij wzdłuż linii ciągłej (GLOBAL) lub przerywanej (LOCAL). Puść LMB, ESC anuluje.');
+        this.setUIStatus('Tryb odsunięcia linii: ruszaj kursorem, aby zmienić odsunięcie (X/Y/Z blokuje oś). Kliknij LMB, aby zatwierdzić, ESC anuluje.');
     }
 
     public onExit(): void {
@@ -129,6 +133,7 @@ export class PMIEditOffsetTool extends BaseState {
         this.annotationId = null;
         this.originalOffset = null;
         this.hasDragged = false;
+        this.lastRenderedOffsetWorld = v3(0, 0, 0);
         this.dragAnchored = false;
         this.dragStartHitWorld = null;
         this.disposeAxisGuides();
@@ -183,6 +188,8 @@ export class PMIEditOffsetTool extends BaseState {
             this.stickyGuideId = guideCandidateId(space, key as 'X' | 'Y' | 'Z');
             this.setUIStatus(`Oś odsunięcia: ${space === 'LOCAL' ? 'L' : 'G'}:${key}`);
         }
+        // Przy zmianie osi wymuś natychmiastowy re-render (reset kwantyzacji)
+        this.lastRenderedOffsetWorld = v3(0, 0, 0);
         this.onPointerMove();
     }
 
@@ -262,8 +269,14 @@ export class PMIEditOffsetTool extends BaseState {
             // Renderer odświeża podgląd z bieżącego offsetu.
             ann.offset = stored.offset;
             ann.offsetSpace = stored.offsetSpace;
-            this.renderer.renderAll(this.store);
-            this.updateAxisGuides(resolved);
+
+            // Kwantyzacja: odświeżaj renderer tylko gdy offset przesunął się ≥ 1 mm
+            const renderDelta = v3Len(v3Sub(offset, this.lastRenderedOffsetWorld));
+            if (renderDelta >= 1) {
+                this.lastRenderedOffsetWorld = v3Copy(offset);
+                this.renderer.renderAll(this.store);
+                this.updateAxisGuides(resolved);
+            }
         } finally {
             endResolveBatch();
         }
@@ -317,7 +330,7 @@ export class PMIEditOffsetTool extends BaseState {
             this.commit();
             return;
         }
-        // Samo kliknięcie — zostaw zaznaczenie, wróć do narzędzia wyboru.
+        // Samo kliknięcie bez ruchu — wróć do zaznaczania.
         this.restoreOriginal();
         this.stateMachine.changeState('SELECTION_TOOL');
     }

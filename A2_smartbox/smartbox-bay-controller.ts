@@ -54,10 +54,12 @@ export class SmartBoxBayController {
         this._notifyPickerState();
     }
 
-    stopPicker(): void {
+    stopPicker(keepHighlight: boolean = false): void {
         if (!this._isPickerActive) return;
         this._isPickerActive = false;
-        clearBayHighlight();
+        if (!keepHighlight) {
+            clearBayHighlight();
+        }
         this._notifyPickerState();
     }
 
@@ -114,9 +116,11 @@ export class SmartBoxBayController {
         }
     }
 
-    endDrag(): void {
+    endDrag(keepHighlight: boolean = false): void {
         this._draggedSmartBoxType = null;
-        clearBayHighlight();
+        if (!keepHighlight) {
+            clearBayHighlight();
+        }
     }
 
     setPendingSmartBoxType(type: string | null): void {
@@ -156,18 +160,22 @@ export class SmartBoxBayController {
 
     onDropOnScene(): void {
         const bay = this._lastDetectedBay;
+        const optType = this._pendingSmartBoxType || this._draggedSmartBoxType || 'EMPTY';
+        const keepHighlight = optType === 'EMPTY';
         if (bay) {
-            this.notifyBayDetected(bay);
+            this.notifyBayDetected(bay, keepHighlight);
         }
-        this.endDrag();
+        this.endDrag(keepHighlight);
         this._lastDetectedBay = null;
     }
 
     // ─── Wykryta wnęka ────────────────────────────────────────────
 
-    notifyBayDetected(bay: DetectedBay): void {
-        this.stopPicker();
-        clearBayHighlight();
+    notifyBayDetected(bay: DetectedBay, keepHighlight: boolean = false): void {
+        this.stopPicker(keepHighlight);
+        if (!keepHighlight) {
+            clearBayHighlight();
+        }
         for (const sub of this._bayDetectedSubscribers) {
             try { sub(bay); } catch (err) { console.error(err); }
         }

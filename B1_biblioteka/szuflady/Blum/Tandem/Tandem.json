@@ -1,0 +1,64 @@
+{
+  "id": "tandem",
+  "brand": "Blum",
+  "series": "Tandem",
+  "units": "mm",
+  "construction": "WOODEN",
+
+  "variants": [
+    {
+      "id": "BLUM_TANDEM_T158",
+      "legacy_id": "T158",
+      "name": "Tandem 560H T158 (częściowy wysuw)",
+      "corpus_height": 73.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Sprzęgło_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Sprzęgło_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 53.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 30.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 30.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 30.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 284.0, "z_from_bottom": 30.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 30.0, "x_positions": [37, 69, 165, 261], "price_id": "BLUM_TANDEM_T158_300" },
+        "350": { "z_offset": 30.0, "x_positions": [37, 69, 165, 261], "price_id": "BLUM_TANDEM_T158_350" },
+        "400": { "z_offset": 30.0, "x_positions": [37, 69, 165, 229], "price_id": "BLUM_TANDEM_T158_400" },
+        "450": { "z_offset": 30.0, "x_positions": [37, 69, 165, 261], "price_id": "BLUM_TANDEM_T158_450" },
+        "500": { "z_offset": 30.0, "x_positions": [37, 69, 261, 284], "price_id": "BLUM_TANDEM_T158_500" }
+      }
+    },
+    {
+      "id": "BLUM_TANDEM_T108",
+      "legacy_id": "T108",
+      "name": "Tandem 560H T108 (pełny wysuw)",
+      "corpus_height": 73.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Sprzęgło_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Sprzęgło_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 53.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 30.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 30.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 30.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 284.0, "z_from_bottom": 30.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 30.0, "x_positions": [37, 69, 165, 261], "price_id": "BLUM_TANDEM_T108_300" },
+        "350": { "z_offset": 30.0, "x_positions": [37, 69, 165, 261], "price_id": "BLUM_TANDEM_T108_350" },
+        "400": { "z_offset": 30.0, "x_positions": [37, 69, 165, 229], "price_id": "BLUM_TANDEM_T108_400" },
+        "450": { "z_offset": 30.0, "x_positions": [37, 69, 165, 261], "price_id": "BLUM_TANDEM_T108_450" },
+        "500": { "z_offset": 30.0, "x_positions": [37, 69, 261, 284], "price_id": "BLUM_TANDEM_T108_500" }
+      }
+    }
+  ]
+}

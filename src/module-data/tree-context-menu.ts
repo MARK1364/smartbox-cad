@@ -333,16 +333,20 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         items.push({ separator: true });
         if (scope.type === 'PANEL') {
             items.push({ label: 'Raport z formatki', icon: ICONS.report, action: 'open-report' });
+            items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
             items.push({ label: 'CNC — obróbka formatki', icon: ICONS.cnc, action: 'open-cnc' });
         } else if (scope.type === 'SMARTBOX') {
             items.push({ label: 'Raport ze SmartBoxa', icon: ICONS.report, action: 'open-report' });
             items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
+            items.push({ label: 'CNC — obróbka CNC', icon: ICONS.cnc, action: 'open-cnc' });
         } else if (scope.type === 'CONTAINER') {
             items.push({ label: 'Raport z korpusu', icon: ICONS.report, action: 'open-report' });
             items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
+            items.push({ label: 'CNC — obróbka CNC', icon: ICONS.cnc, action: 'open-cnc' });
         } else {
             items.push({ label: 'Raport z projektu', icon: ICONS.report, action: 'open-report' });
             items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
+            items.push({ label: 'CNC — obróbka CNC', icon: ICONS.cnc, action: 'open-cnc' });
         }
     }
 

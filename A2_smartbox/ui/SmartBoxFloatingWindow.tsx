@@ -21,6 +21,7 @@ import { DividersSubModule } from '../dividers-adapter.js';
 import { PanelsSubModule } from '../panels-adapter.js';
 import { FlapsSubModule } from '../flaps-adapter.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
+import { highlightBayInScene, clearBayHighlight } from '../smartbox-bay-visualizer.js';
 
 export const MODULE_TYPES: Record<string, { type: string; label: string; category?: 'internal' | 'external' }> = {
     'EMPTY': { type: 'smartbox_empty', label: 'Wybierz moduł...' },
@@ -594,6 +595,12 @@ export function SmartBoxFloatingWindow({ container, projectModel, onClose, isDoc
                                     onChange={(e) => {
                                         const val = e.target.value;
                                         setBoxType(val);
+                                        const scene = ContextManager.instance.viewport?.scene;
+                                        if (val !== 'EMPTY') {
+                                            clearBayHighlight(scene);
+                                        } else if (container?.generatorParams?.detectedBay && scene) {
+                                            highlightBayInScene(scene, container.generatorParams.detectedBay);
+                                        }
                                         const mapping = MODULE_TYPES[val] || MODULE_TYPES['SHELVES'];
                                         triggerUpdateEx({
                                             boxType: val,

@@ -38,7 +38,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       // Pobierz domyślną nazwę projektu z dokumentu
       const doc = ContextManager.instance.document;
       const curName = doc?.metadata?.name || doc?.rootNode?.name || 'Projekt_Meble';
-      setProjectName(curName.replace(/\.spp\.json$/, '').replace(/\.json$/, ''));
+      setProjectName(String(curName).replace(/\.spp\.json$/, '').replace(/\.json$/, ''));
 
       if (GoogleDriveService.instance.isAuthenticated()) {
         loadFilesList();
@@ -129,12 +129,13 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       const doc = ContextManager.instance.document;
       if (!doc) throw new Error('Brak aktywnego silnika CAD.');
 
-      doc.deserialize(projectJson);
+      doc.load(projectJson);
       
       // Zaktualizuj widok
       if (UIController.instance) {
         (UIController.instance as any).syncDocument();
       }
+      window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
 
       setStatusNotice({ type: 'success', text: `Wczytano projekt: ${file.name}` });
       setTimeout(() => {

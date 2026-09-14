@@ -1,0 +1,139 @@
+{
+  "id": "antaro",
+  "brand": "Blum",
+  "series": "Antaro",
+  "units": "mm",
+  "construction": "SYSTEM",
+  "panels": {
+    "bottom": {
+      "role": "DRAWER_BOTTOM",
+      "name": "Dno szuflady",
+      "thickness": 16.0,
+      "width_offset": -75.0,
+      "length_offset": -24.0
+    },
+    "back": {
+      "role": "DRAWER_BACK",
+      "name": "Plecy szuflady",
+      "thickness": 16.0,
+      "width_offset": -87.0,
+      "height_offset": -10.0
+    }
+  },
+  "variants": [
+    {
+      "id": "BLUM_ANTARO_M",
+      "legacy_id": "M94",
+      "name": "Antaro M (wys. 94 mm)",
+      "corpus_height": 94.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 74.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 133.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 453.0, "z_from_bottom": 33.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 33.0, "x_positions": [37, 133, 165, 261], "price_id": "BLUM_ANTARO_M_300", "glb": "Antaro M 300.glb" },
+        "350": { "z_offset": 33.0, "x_positions": [37, 133, 261, 325], "price_id": "BLUM_ANTARO_M_350", "glb": "Antaro M 350.glb" },
+        "400": { "z_offset": 33.0, "x_positions": [37, 133, 229, 325], "price_id": "BLUM_ANTARO_M_400", "glb": "Antaro M 400.glb" },
+        "450": { "z_offset": 33.0, "x_positions": [37, 133, 261, 357], "price_id": "BLUM_ANTARO_M_450", "glb": "Antaro M 450.glb" },
+        "500": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_M_500", "glb": "Antaro M 500.glb" },
+        "550": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_M_550", "glb": "Antaro M 550.glb" },
+        "600": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_M_600", "glb": "Antaro M 600.glb" }
+      }
+    },
+    {
+      "id": "BLUM_ANTARO_D",
+      "legacy_id": "D214",
+      "name": "Antaro D (wys. 214 mm)",
+      "corpus_height": 214.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 107.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_3", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 194.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 133.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 453.0, "z_from_bottom": 33.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 33.0, "x_positions": [37, 133, 165, 261], "price_id": "BLUM_ANTARO_D_300" },
+        "350": { "z_offset": 33.0, "x_positions": [37, 133, 261, 325], "price_id": "BLUM_ANTARO_D_350" },
+        "400": { "z_offset": 33.0, "x_positions": [37, 133, 229, 325], "price_id": "BLUM_ANTARO_D_400" },
+        "450": { "z_offset": 33.0, "x_positions": [37, 133, 261, 357], "price_id": "BLUM_ANTARO_D_450" },
+        "500": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_D_500" },
+        "550": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_D_550" },
+        "600": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_D_600" }
+      }
+    },
+    {
+      "id": "BLUM_ANTARO_N",
+      "legacy_id": "N68",
+      "name": "Antaro N (wys. 68 mm)",
+      "corpus_height": 68.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 48.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 133.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 33.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "270": { "z_offset": 33.0, "x_positions": [37, 133, 165], "price_id": "BLUM_ANTARO_N_270", "glb": "Antaro N 270.glb" },
+        "300": { "z_offset": 33.0, "x_positions": [37, 133, 165], "price_id": "BLUM_ANTARO_N_300" },
+        "350": { "z_offset": 33.0, "x_positions": [37, 133, 261], "price_id": "BLUM_ANTARO_N_350" },
+        "400": { "z_offset": 33.0, "x_positions": [37, 133, 229], "price_id": "BLUM_ANTARO_N_400" },
+        "450": { "z_offset": 33.0, "x_positions": [37, 133, 261], "price_id": "BLUM_ANTARO_N_450" },
+        "500": { "z_offset": 33.0, "x_positions": [37, 133, 261], "price_id": "BLUM_ANTARO_N_500" }
+      }
+    },
+    {
+      "id": "BLUM_ANTARO_KOSZ",
+      "legacy_id": "KOSZ350",
+      "name": "Antaro kosz (wys. 350 mm)",
+      "corpus_height": 350.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 175.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_3", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 330.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 133.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 33.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 453.0, "z_from_bottom": 33.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 33.0, "x_positions": [37, 133, 165, 261], "price_id": "BLUM_ANTARO_KOSZ_300" },
+        "350": { "z_offset": 33.0, "x_positions": [37, 133, 261, 325], "price_id": "BLUM_ANTARO_KOSZ_350" },
+        "400": { "z_offset": 33.0, "x_positions": [37, 133, 229, 325], "price_id": "BLUM_ANTARO_KOSZ_400" },
+        "450": { "z_offset": 33.0, "x_positions": [37, 133, 261, 357], "price_id": "BLUM_ANTARO_KOSZ_450" },
+        "500": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_KOSZ_500" }
+      }
+    }
+  ]
+}

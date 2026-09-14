@@ -18,8 +18,8 @@ export interface IAppAPI {
     newProject?: () => void;
     forceResetProject?: () => void;
     openProject?: () => void;
-    saveProject?: () => void;
-    saveProjectAs?: () => void;
+    saveProject?: () => Promise<boolean> | void;
+    saveProjectAs?: () => Promise<boolean> | void;
     exportStep?: () => void;
     exportStl?: () => void;
     setRenderMode?: (mode: string) => void;
@@ -52,6 +52,7 @@ export class ContextManager {
     public tooltipManager: TooltipManager = TooltipManager.instance;
     public panelViews: Map<any, any> = new Map();
     public containerViews: Map<any, any> = new Map();
+    public hardwareViews: Map<any, any> = new Map();
     public sceneSyncAdapter: SceneSyncAdapter = new SceneSyncAdapter();
     public smartBoxBayController: any = null;
     public smartFrameDragController: any = null;

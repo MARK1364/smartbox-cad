@@ -244,7 +244,14 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             assignPlanFeatures(panel, part.features || [], true);
         } else {
             panel = new PanelModel({
-                width: mmToNm(bbWidth), height: mmToNm(bbHeight), thickness: mmToNm(bbThickness)
+                width: mmToNm(bbWidth),
+                height: mmToNm(bbHeight),
+                thickness: mmToNm(bbThickness),
+                role: part.role,
+                name: part.name,
+                ...(part.material ? { materialId: part.material } : {}),
+                ...(part.materialName ? { materialName: part.materialName } : {}),
+                ...(part.materialCode ? { materialCode: part.materialCode } : {})
             });
             panel.name = part.name;
             panel.role = part.role;
@@ -273,10 +280,60 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             activePanelIds.add(panelId);
         }
     }
+
+    // ─── Tworzenie i synchronizacja węzłów okuć (NodeType.HARDWARE) ───
+    const activeHardwareIds = new Set<string>();
+    if (Array.isArray((operationPlan as any).hardware)) {
+        for (const hw of (operationPlan as any).hardware) {
+            const hwFullId = `${container.id}_${hw.id}`;
+            let hwNode = cntNode.children.find((c: any) => c.nodeType === NodeType.HARDWARE && (c.id === hwFullId || c.id === hw.id));
+            if (!hwNode) {
+                hwNode = CADNode.create(NodeType.HARDWARE, hw.name, hwFullId);
+                hwNode.domainData = {
+                    type: 'hardware',
+                    id: hwFullId,
+                    name: hw.name,
+                    role: hw.role || 'HARDWARE',
+                    hardwareType: hw.hardwareType || 'HINGE',
+                    hardwareId: hw.hardwareId,
+                    side: hw.side,
+                    loc: hw.loc,
+                    params: hw.params,
+                    custom_properties: hw.customProperties || hw.custom_properties,
+                    visible: true
+                } as any;
+                if (doc) doc.addNode(container.id, hwNode);
+                else cntNode.addChild(hwNode);
+            } else {
+                hwNode.name = hw.name;
+                if (hwNode.domainData) {
+                    (hwNode.domainData as any).hardwareId = hw.hardwareId;
+                    (hwNode.domainData as any).name = hw.name;
+                    (hwNode.domainData as any).loc = hw.loc;
+                    (hwNode.domainData as any).params = hw.params;
+                    if (hw.role) (hwNode.domainData as any).role = hw.role;
+                    if (hw.customProperties) (hwNode.domainData as any).custom_properties = hw.customProperties;
+                }
+            }
+            if (hw.loc) {
+                hwNode.setLocalTransform(
+                    new Vec3(mmToNm(hw.loc.x), mmToNm(hw.loc.y), mmToNm(hw.loc.z)),
+                    Quat.IDENTITY
+                );
+            }
+            activeHardwareIds.add(hwNode.id);
+        }
+    }
     
     if (doc) {
         const currentChildren = [...cntNode.children];
         for (const childNode of currentChildren) {
+            if (childNode.nodeType === NodeType.HARDWARE) {
+                if (!activeHardwareIds.has(childNode.id)) {
+                    doc.removeNode(childNode.id);
+                }
+                continue;
+            }
             const p = childNode.domainData as any;
             if (!p || p.type === 'container' || p.name?.endsWith('_SB') || p.name?.startsWith('smartbox_') || childNode.name?.startsWith('smartbox_') || isManualPanel(p)) {
                 continue;

@@ -394,6 +394,24 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                 </div>
 
                 <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '4px', padding: '8px 10px' }}>
+                    <div style={{ fontSize: '9px', color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600 }}>Okucia i Akcesoria</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#c084fc', marginTop: '2px' }}>
+                        {typeof projectData.summary.SUMA_AKCESORIA_PLN === 'number'
+                            ? `${projectData.summary.SUMA_AKCESORIA_PLN.toFixed(2)} PLN`
+                            : <span style={{ color: '#f87171', fontSize: '11px' }}>{projectData.summary.SUMA_AKCESORIA_PLN}</span>}
+                    </div>
+                </div>
+
+                <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '4px', padding: '8px 10px' }}>
+                    <div style={{ fontSize: '9px', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600 }}>Płyty i Obrzeża</div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#e4e4e7', marginTop: '2px' }}>
+                        {typeof projectData.summary.SUMA_PLYTY_PLN === 'number'
+                            ? `${projectData.summary.SUMA_PLYTY_PLN.toFixed(2)} PLN`
+                            : <span style={{ color: '#f87171', fontSize: '11px' }}>{projectData.summary.SUMA_PLYTY_PLN}</span>}
+                    </div>
+                </div>
+
+                <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '4px', padding: '8px 10px' }}>
                     <div style={{ fontSize: '9px', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600 }}>Zużycie Płyty</div>
                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#e4e4e7', marginTop: '2px' }}>
                         {projectData.summary.Calkowite_powierzchnia_m2.toFixed(3)} m²
@@ -408,9 +426,9 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                 </div>
 
                 <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '4px', padding: '8px 10px' }}>
-                    <div style={{ fontSize: '9px', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600 }}>Liczba Formatek</div>
+                    <div style={{ fontSize: '9px', color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600 }}>Formatki / Okucia</div>
                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#e4e4e7', marginTop: '2px' }}>
-                        {projectData.summary.Liczba_elementow} szt.
+                        {projectData.summary.Liczba_elementow} szt. / {projectData.summary.Calkowite_liczba_akcesorii_szt} szt.
                     </div>
                 </div>
             </div>

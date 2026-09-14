@@ -50,4 +50,15 @@ describe('PerformanceConfigManager', () => {
         mgr.applyToEngine(mockEngine);
         expect(mockEngine.setHardwareScalingLevel).toHaveBeenCalledWith(1.5);
     });
+
+    it('domyślnie wybiera webgl2 i pozwala na zmianę preferredEngine', () => {
+        const mgr = PerformanceConfigManager.instance;
+        expect(mgr.getPreferredEngine()).toBe('webgl2');
+
+        mgr.updateCurrent({ preferredEngine: 'webgpu' }, false);
+        expect(mgr.getPreferredEngine()).toBe('webgpu');
+
+        mgr.resetToDefaults();
+        expect(mgr.getPreferredEngine()).toBe('webgl2');
+    });
 });

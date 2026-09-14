@@ -1,0 +1,26 @@
+{
+  "id": "HETTICH_SENSYS_8645",
+  "type": "HINGE",
+  "units": "mm",
+  "name": "Sensys 8645 110° (bez hamulca)",
+  "brand": "Hettich",
+  "art_no": "9071206",
+  "price_id": "HINGE_HETTICH_8645",
+  "machining_template_id": "HETTICH_SENSYS_110",
+  "usable_in": ["DOORS", "FLAPS"],
+  "mount": {
+    "cup_x_from_inner_side": 21.5,
+    "corpus_y_from_front": 37.0
+  },
+  "machining": {
+    "front_holes": [
+      { "name": "Puszka_35", "dia": 35, "depth": 12.8, "edge_dist": 21.5, "object": "Cylinder" },
+      { "name": "Wkret_1", "dia": 3, "depth": 10, "edge_dist": 31, "y_offset": 26, "object": "Cylinder" },
+      { "name": "Wkret_2", "dia": 3, "depth": 10, "edge_dist": 31, "y_offset": -26, "object": "Cylinder" }
+    ],
+    "corpus_holes": [
+      { "name": "Prowadnik_otw_G", "dia": 5, "depth": 12, "front_dist": 37, "z_offset": 16, "object": "Cylinder" },
+      { "name": "Prowadnik_otw_D", "dia": 5, "depth": 12, "front_dist": 37, "z_offset": -16, "object": "Cylinder" }
+    ]
+  }
+}

@@ -75,7 +75,6 @@
           "features": [
             {
               "type": "Hardware_Instance",
-              "library_id": "BLUM_71B3550",
               "side": "TOP_LEFT"
             }
           ]
@@ -95,7 +94,6 @@
           "features": [
             {
               "type": "Hardware_Instance",
-              "library_id": "BLUM_71B3550",
               "side": "TOP_RIGHT"
             }
           ]
@@ -115,7 +113,6 @@
           "features": [
             {
               "type": "Hardware_Instance",
-              "library_id": "BLUM_71B3550",
               "side": "TOP_CENTER"
             }
           ]
@@ -135,7 +132,6 @@
           "features": [
             {
               "type": "Hardware_Instance",
-              "library_id": "BLUM_71B3550",
               "side": "BOTTOM_LEFT"
             }
           ]
@@ -155,7 +151,6 @@
           "features": [
             {
               "type": "Hardware_Instance",
-              "library_id": "BLUM_71B3550",
               "side": "BOTTOM_RIGHT"
             }
           ]
@@ -175,7 +170,6 @@
           "features": [
             {
               "type": "Hardware_Instance",
-              "library_id": "BLUM_71B3550",
               "side": "BOTTOM_CENTER"
             }
           ]
@@ -314,6 +308,33 @@
         "pl": "Krok 3: Kliknij 'Generuj Klapy'.",
         "en": "Step 3: Click 'Generate Flaps'."
       }
+    },
+    "errors": {
+      "MISSING_BASE_OBJECT": {
+        "pl": "Brak wybranego korpusu szafki wiszącej.",
+        "en": "Missing selected upper cabinet body."
+      }
+    },
+    "warnings": {
+      "WEIGHT_FACTOR_EXCEEDED": {
+        "pl": "Współczynnik mocy podnośnika może być niedopasowany do wagi frontu.",
+        "en": "Lift power factor may not match the front weight."
+      }
+    },
+    "tooltips": {
+      "lift_system": {
+        "pl": "Model mechanizmu podnośnika klapy (np. Aventos HF/HK/HK-S).",
+        "en": "Flap lift mechanism model (e.g. Aventos HF/HK/HK-S)."
+      },
+      "opening_angle": {
+        "pl": "Kąt otwarcia klapy (z ogranicznikiem lub pełny).",
+        "en": "Flap opening angle (with limiter or full)."
+      },
+      "gap": {
+        "pl": "Szczelina dylatacyjna wokół frontu klapy.",
+        "en": "Expansion gap around flap front."
+      }
     }
   }
 }
+

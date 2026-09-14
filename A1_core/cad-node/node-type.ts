@@ -20,4 +20,7 @@ export enum NodeType {
 
     /** Układ bazowy maszyny CNC (Work Coordinate System) */
     WCS_FRAME = 'WCS_FRAME',
+
+    /** Okucie meblowe: zawias, uchwyt, prowadnica, nóżka, siłownik */
+    HARDWARE = 'HARDWARE',
 }

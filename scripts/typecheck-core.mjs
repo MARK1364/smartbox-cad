@@ -22,7 +22,7 @@ const gateErrors = text
         /error TS\d+/.test(line) &&
         (/A1_core[/\\]/.test(line) ||
             /A2_smartbox[/\\]/.test(line) ||
-            /Biblioteki[/\\]/.test(line) ||
+            /B1_biblioteka[/\\]/.test(line) ||
             /A4_smartpanel[/\\]/.test(line) ||
             /A7_material[/\\]/.test(line) ||
             /S2_solver[/\\]/.test(line) ||
@@ -36,4 +36,4 @@ if (gateErrors.length > 0) {
     process.exit(1);
 }
 
-console.log('Core typecheck ok (A1 + A2 + Biblioteki + A4 + A7 + S2 + C2 + O1).');
+console.log('Core typecheck ok (A1 + A2 + B1_biblioteka + A4 + A7 + S2 + C2 + O1).');

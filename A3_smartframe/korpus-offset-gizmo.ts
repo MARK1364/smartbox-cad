@@ -20,7 +20,7 @@ const FACE_MAPPING: Record<string, Record<string, string>> = {
     SIDE_RIGHT: { bottom: '-Y', top: '+Y', right: '+X', left: '-X' },
     BOTTOM_PANEL: { bottom: '+X', top: '-X', left: '-Y', right: '+Y' },
     TOP_PANEL: { bottom: '-X', top: '+X', left: '-Y', right: '+Y' },
-    BACK_PANEL: { top: '+Y', bottom: '-Y', left: '-X', right: '+X', front: 'shiftY' }
+    BACK_PANEL: { top: '-Y', bottom: '+Y', left: '-X', right: '+X', front: 'shiftY' }
 };
 
 const SHIFT: Record<string, OffsetShiftSpec> = {

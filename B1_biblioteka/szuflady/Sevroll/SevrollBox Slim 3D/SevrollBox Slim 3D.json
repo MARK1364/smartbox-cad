@@ -1,0 +1,79 @@
+{
+  "id": "sevrollbox_slim_3d",
+  "brand": "Sevroll",
+  "series": "SevrollBox Slim 3D",
+  "units": "mm",
+  "construction": "SYSTEM",
+  "panels": {
+    "bottom": {
+      "role": "DRAWER_BOTTOM",
+      "name": "Dno szuflady",
+      "thickness": 16.0,
+      "width_offset": -75.0,
+      "length_offset": -24.0
+    },
+    "back": {
+      "role": "DRAWER_BACK",
+      "name": "Plecy szuflady",
+      "thickness": 16.0,
+      "width_offset": -87.0,
+      "height_offset": -10.0
+    }
+  },
+  "variants": [
+    {
+      "id": "SEVROLLBOX_SLIM_3D_114",
+      "legacy_id": "S114",
+      "name": "SevrollBox Slim 3D (wys. 114 mm)",
+      "corpus_height": 114.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 94.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 36.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 36.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 36.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 36.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 36.0, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_114_300" },
+        "350": { "z_offset": 36.0, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_114_350" },
+        "400": { "z_offset": 36.0, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_114_400" },
+        "450": { "z_offset": 36.0, "x_positions": [37, 69, 229, 261], "price_id": "SEVROLLBOX_SLIM_3D_114_450" },
+        "500": { "z_offset": 36.0, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_114_500" }
+      }
+    },
+    {
+      "id": "SEVROLLBOX_SLIM_3D_162",
+      "legacy_id": "S162",
+      "name": "SevrollBox Slim 3D (wys. 162 mm)",
+      "corpus_height": 162.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 142.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 36.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 36.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 36.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 36.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 36.0, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_162_300" },
+        "350": { "z_offset": 36.0, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_162_350" },
+        "400": { "z_offset": 36.0, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_162_400" },
+        "450": { "z_offset": 36.0, "x_positions": [37, 69, 229, 261], "price_id": "SEVROLLBOX_SLIM_3D_162_450" },
+        "500": { "z_offset": 36.0, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_162_500" }
+      }
+    }
+  ]
+}

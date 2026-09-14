@@ -11,6 +11,7 @@ import {
     RemoveMeasurementCommand,
     SetDimensionAffixesCommand,
     SetDimensionOffsetCommand,
+    SetDimensionTextShiftCommand,
     SetDimensionVisibilityCommand,
     SetMeasurementVisibilityCommand,
 } from '../pmi-commands.js';
@@ -135,6 +136,21 @@ describe('Komendy PMI w historii Undo/Redo', () => {
 
         history.undo();
         expect(ann.text).toBe(originalText);
+    });
+
+    it('zmienia przesunięcie tekstu i pozwala je cofnąć', () => {
+        history.execute(new AddDimensionCommand(store, sampleInit()));
+        const ann = store.annotations[0];
+        expect(ann.textShiftMM).toBe(0);
+
+        history.execute(new SetDimensionTextShiftCommand(store, ann.id, 80));
+        expect(ann.textShiftMM).toBe(80);
+
+        history.undo();
+        expect(ann.textShiftMM).toBe(0);
+
+        history.redo();
+        expect(ann.textShiftMM).toBe(80);
     });
 
     it('cofa ukrycie wymiaru', () => {

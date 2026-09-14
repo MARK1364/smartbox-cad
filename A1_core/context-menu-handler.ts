@@ -5,11 +5,14 @@
  */
 
 import { ContextManager } from './context-manager.js';
-import { openCncFromCad } from '../src/module-data/open-modules.js';
+import { openCncFromCad, openReportFromCad, openNestingFromCad } from '../src/module-data/open-modules.js';
+import { findFacesAlongRay } from './quick-pick/quick-pick-detector.js';
+import { openQuickPick } from './quick-pick/quick-pick-events.js';
 
 export class ContextMenuHandler {
     private svgIcons = {
         fillet: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20v-8a8 8 0 0 1 8-8h8"></path></svg>',
+        quickPick: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>',
         properties: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
         zoomFit: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
         reset: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>',
@@ -22,6 +25,8 @@ export class ContextMenuHandler {
     };
 
     private lastInspectedData: any = null;
+    private _lastClientX: number = 0;
+    private _lastClientY: number = 0;
 
     public init(canvas: HTMLCanvasElement, contextMenu: any, propertiesManager: any, getAllPanels: () => any[], applyUndo: () => void, applyRedo: () => void, history: any): void {
         const viewport = ContextManager.instance.viewport;
@@ -32,8 +37,46 @@ export class ContextMenuHandler {
 
         canvas.addEventListener('contextmenu', (e: MouseEvent) => {
             e.preventDefault();
+            this._lastClientX = e.clientX;
+            this._lastClientY = e.clientY;
+
+            const isPickingConstraint = !!ContextManager.instance.activeConstraintPicker;
+            const isPickingRef = !!ContextManager.instance.activeReferencePicker;
+
+            // Gdy aktywna jest pipeta więzów / relacji — PPM natychmiast wyzwala QuickPick (Solid Edge style)!
+            if (isPickingConstraint || isPickingRef) {
+                const candidates = findFacesAlongRay(viewport.scene, viewport.scene.pointerX, viewport.scene.pointerY);
+                if (candidates.length > 0) {
+                    openQuickPick({
+                        screenX: e.clientX,
+                        screenY: e.clientY,
+                        candidates,
+                        onSelect: (candidate) => {
+                            facePicker.selectFaceExplicit(
+                                candidate.mesh,
+                                candidate.worldPoint,
+                                candidate.smartId,
+                                candidate.panelModel,
+                                candidate.worldNormal
+                            );
+                        }
+                    });
+                    return;
+                }
+            }
+
             const items: any[] = [];
             this.lastInspectedData = null;
+
+            const quickPickCandidates = findFacesAlongRay(viewport.scene, viewport.scene.pointerX, viewport.scene.pointerY);
+            if (quickPickCandidates.length > 1) {
+                items.push({
+                    label: `Wybierz inną płaszczyznę (QuickPick - ${quickPickCandidates.length})...`,
+                    icon: this.svgIcons.quickPick,
+                    action: 'open-quick-pick',
+                });
+                items.push({ separator: true });
+            }
 
             const generalPick = viewport.scene.pick(
                 viewport.scene.pointerX,
@@ -45,14 +88,6 @@ export class ContextMenuHandler {
                 this.lastInspectedData = propertiesManager.inspectMesh(pickedMesh, doc, ContextManager.instance.panelViews, getAllPanels, false);
                 if (this.lastInspectedData) {
                     items.push(...propertiesManager.getContextMenuItems(this.lastInspectedData, this.svgIcons.properties));
-                    if (this.lastInspectedData.panelId) {
-                        items.push({
-                            label: 'CNC — obróbka formatki',
-                            icon: this.svgIcons.cnc,
-                            action: 'open-cnc',
-                        });
-                        items.push({ separator: true });
-                    }
                 }
             }
 
@@ -80,8 +115,6 @@ export class ContextMenuHandler {
             const hasEdges = facePicker.selectedEdges && facePicker.selectedEdges.size > 0;
             const hasEdge = hasEdges || !!facePicker.selectedEdge;
 
-
-
             if (hasEdge) {
                 const count = facePicker.selectedEdges ? facePicker.selectedEdges.size : 1;
                 items.push({ label: `Zaokrąglij krawędź (${count})`, icon: this.svgIcons.fillet, action: 'add-fillet' });
@@ -93,6 +126,29 @@ export class ContextMenuHandler {
             items.push({ separator: true });
             items.push({ label: 'Zoom Fit', icon: this.svgIcons.zoomFit, action: 'zoom-fit' });
             items.push({ label: 'Odznacz', icon: this.svgIcons.deselect, action: 'deselect', disabled: !hasFace && !hasEdge });
+
+            // Moduły produkcyjne na samym dole menu, rozdzielone separatorem
+            if (this.lastInspectedData?.panelId || this.lastInspectedData?.containerId) {
+                const isContainer = !this.lastInspectedData.panelId && !!this.lastInspectedData.containerId;
+                const targetName = this.lastInspectedData.name || (isContainer ? 'Korpus' : 'Formatka');
+
+                items.push({ separator: true });
+                items.push({
+                    label: isContainer ? 'Raport z korpusu' : 'Raport z formatki',
+                    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="18" x2="8" y2="14"/><line x1="12" y1="18" x2="12" y2="11"/><line x1="16" y1="18" x2="16" y2="15"/></svg>',
+                    action: 'open-report',
+                });
+                items.push({
+                    label: 'Rozkrój (nesting)',
+                    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><rect x="5" y="5" width="6" height="8"/><rect x="13" y="5" width="6" height="5"/><rect x="13" y="12" width="6" height="7"/></svg>',
+                    action: 'open-nesting',
+                });
+                items.push({
+                    label: isContainer ? 'CNC — obróbka CNC' : 'CNC — obróbka formatki',
+                    icon: this.svgIcons.cnc,
+                    action: 'open-cnc',
+                });
+            }
 
             contextMenu.show(e.clientX, e.clientY, items);
         });
@@ -109,11 +165,44 @@ export class ContextMenuHandler {
                         document.dispatchEvent(new CustomEvent('smartbox-toggle-item-panel'));
                     }
                     break;
+                case 'open-report': {
+                    const isContainer = !this.lastInspectedData?.panelId && !!this.lastInspectedData?.containerId;
+                    const targetId = this.lastInspectedData?.panelId || this.lastInspectedData?.containerId;
+                    const targetName = this.lastInspectedData?.name || (isContainer ? 'Korpus' : 'Formatka');
+                    if (targetId) {
+                        openReportFromCad({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
+                    }
+                    break;
+                }
+                case 'open-nesting': {
+                    const isContainer = !this.lastInspectedData?.panelId && !!this.lastInspectedData?.containerId;
+                    const targetId = this.lastInspectedData?.panelId || this.lastInspectedData?.containerId;
+                    const targetName = this.lastInspectedData?.name || (isContainer ? 'Korpus' : 'Formatka');
+                    if (targetId) {
+                        openNestingFromCad({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
+                    }
+                    break;
+                }
                 case 'open-cnc': {
-                    const panelId = this.lastInspectedData?.panelId;
-                    const panelName = this.lastInspectedData?.name || 'Formatka';
-                    if (panelId) {
-                        openCncFromCad({ type: 'PANEL', id: panelId, name: panelName });
+                    const isContainer = !this.lastInspectedData?.panelId && !!this.lastInspectedData?.containerId;
+                    const targetId = this.lastInspectedData?.panelId || this.lastInspectedData?.containerId;
+                    const targetName = this.lastInspectedData?.name || (isContainer ? 'Korpus' : 'Formatka');
+                    if (targetId) {
+                        openCncFromCad({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
+                    }
+                    break;
+                }
+                case 'open-quick-pick': {
+                    const cands = findFacesAlongRay(viewport.scene, viewport.scene.pointerX, viewport.scene.pointerY);
+                    if (cands.length > 0) {
+                        openQuickPick({
+                            screenX: this._lastClientX,
+                            screenY: this._lastClientY,
+                            candidates: cands,
+                            onSelect: (c) => {
+                                facePicker.selectFaceExplicit(c.mesh, c.worldPoint, c.smartId, c.panelModel, c.worldNormal);
+                            }
+                        });
                     }
                     break;
                 }

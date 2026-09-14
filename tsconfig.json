@@ -20,5 +20,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-    "include": ["src", "A1_core", "A2_smartbox", "A3_smartframe", "A4_smartpanel", "A8_pmi", "C1_cnc", "C2_connectors", "S1_sketcher", "S2_solver", "S3_scena", "Biblioteki"]
+    "include": ["src", "A1_core", "A2_smartbox", "A3_smartframe", "A4_smartpanel", "A8_pmi", "C1_cnc", "C2_connectors", "S1_sketcher", "S2_solver", "S3_scena", "B1_biblioteka"]
 }

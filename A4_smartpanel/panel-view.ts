@@ -35,6 +35,7 @@ import { materialDatabase } from '../A7_material/material-database.js';
 import { NativePanelBuilder } from './native-panel-builder.js';
 import { bindOperationEdge } from '../o1_operacji/operacje-apply.js';
 import { dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound } from '../o1_operacji/operacje-placement.js';
+import { HardwareLoader } from '../B1_biblioteka/hardware-loader.js';
 
 export class PanelView {
     scene: any;
@@ -248,6 +249,12 @@ export class PanelView {
             // Zachowujemy oryginalny kolor do resetu po hoverze
             mesh.metadata.baseColor = BABYLON.Color3.Black();
             mesh.metadata.baseDiffuse = mat.diffuseColor.clone();
+
+            // Styl zamrożonej formatki (obiekt referencyjny)
+            if (this.model?.frozen) {
+                mat.diffuseColor = new BABYLON.Color3(0.78, 0.90, 0.98);
+                mat.emissiveColor = new BABYLON.Color3(0.03, 0.07, 0.14);
+            }
             
             this.faceMeshes[faceName] = mesh;
         }
@@ -283,7 +290,7 @@ export class PanelView {
                 const edgeMesh = BABYLON.MeshBuilder.CreateLines(`edge_${i}`, { 
                     points: points
                 }, this.scene);
-                edgeMesh.color = new BABYLON.Color3(0.1, 0.1, 0.1); // Ciemny, elegancki kolor linii CAD
+                edgeMesh.color = this.model?.frozen ? new BABYLON.Color3(0.2, 0.65, 0.95) : new BABYLON.Color3(0.1, 0.1, 0.1);
                 edgeMesh.intersectionThreshold = 1.5; // Fizyczny margines 1.5mm (zostawia 15mm luzu na formatce 18mm)
 
                 
@@ -697,7 +704,8 @@ export class PanelView {
         }
 
         for (const feature of (this.model.features || [])) {
-            if (feature.visible === false || feature.frozen === true || feature.params?.frozen === true) continue;
+            const isVisible = feature.visible !== false && feature.params?.visible !== false;
+            if (!isVisible) continue;
             if (feature.is_assembly_drilling || feature.params?.is_assembly_drilling) continue;
             switch (feature.type) {
                 case 'hole':
@@ -738,6 +746,68 @@ export class PanelView {
         const radius = holeDia / 2;
 
         const clearance = params.clearance || 0;
+
+        // ─── Wizualizacja 3D okuć (zawias puszkowy) ───
+        const isCup = Boolean(params.isDoorCup || params.isFlapCup || params.isHingeCup || (feature.id && String(feature.id).includes('_cup_')));
+        const isScrew = Boolean(params.isDoorScrew || params.isFlapScrew || params.isHingeScrew || (feature.id && String(feature.id).includes('_screw_')));
+
+        if (isCup) {
+            const hingeId = params.hinge_id || 'BLUM_71B3550';
+            let orientation: 'left' | 'right' | 'top' | 'bottom' = 'left';
+            if (params.isFlapCup || String(feature.id || '').includes('flap_cup_')) {
+                const isTop = String(feature.id || '').includes('_T') || (v > (faceData.height / 2));
+                orientation = isTop ? 'top' : 'bottom';
+            } else {
+                const isLeft = String(feature.id || '').toLowerCase().includes('left') || (u < (faceData.width / 2));
+                orientation = isLeft ? 'left' : 'right';
+            }
+
+            const hwLoader = HardwareLoader.instance;
+            if (hwLoader.hasTemplate(hingeId)) {
+                const hingeMesh = hwLoader.createHingeInstance(hingeId, this.scene);
+                if (hingeMesh) {
+                    hingeMesh.position = this._facePoint(faceData, u, v, 0);
+                    hwLoader.alignHinge(hingeMesh, faceData, orientation);
+                    hingeMesh.parent = this.root;
+
+                    const isFrozen = Boolean(feature.frozen || feature.params?.frozen);
+                    hingeMesh.metadata = {
+                        type: 'hardware',
+                        hardwareType: 'HINGE',
+                        hardwareId: hingeId,
+                        featureId: feature.id,
+                        feature: feature,
+                        side: orientation,
+                        panelModel: this.model,
+                        frozen: isFrozen,
+                        visible: true,
+                    };
+
+                    if (isFrozen) {
+                        hwLoader.setHingeFrozen(hingeMesh, true);
+                    }
+
+                    this._featureMarkers.push(hingeMesh);
+                    return;
+                }
+            } else {
+                hwLoader.loadTemplate(hingeId, this.scene).then((tpl) => {
+                    if (tpl && this.model && !this._dimHandleDragging) {
+                        this.renderFeatures();
+                        ContextManager.instance.viewport?.requestRender(10);
+                    }
+                }).catch((err) => {
+                    console.error('[PanelView] Błąd ładowania zawiasu:', err);
+                });
+            }
+        }
+
+        if (isScrew) {
+            const hingeId = params.hinge_id || 'BLUM_71B3550';
+            if (HardwareLoader.instance.hasTemplate(hingeId)) {
+                return; // Model 3D puszki zawiasu pokrywa już wkręty montażowe
+            }
+        }
 
         // Pozycja 3D na ścianie lub z położenia lokalnego
         let pos;
@@ -1244,6 +1314,45 @@ export class PanelView {
                 mesh.outlineWidth = 1.5;
             } else {
                 mesh.renderOutline = false;
+            }
+        }
+    }
+
+    /**
+     * Ustawia widoczność samej formatki (ścian i obrzeży).
+     * Pozwala na pozostawienie dzieci (np. okuć/zawiasów) widocznymi, gdy sama formatka jest ukryta.
+     */
+    setPanelVisible(visible: boolean) {
+        if (this.faceMeshes) {
+            for (const key in this.faceMeshes) {
+                const m = this.faceMeshes[key];
+                if (m) m.setEnabled(visible);
+            }
+        }
+        if (this._edgeMeshes) {
+            for (const m of this._edgeMeshes) {
+                if (m) m.setEnabled(visible);
+            }
+        }
+        if (this._edgeLines) {
+            for (const l of this._edgeLines) {
+                if (l) l.setEnabled(visible);
+            }
+        }
+        if (this._vertexSpheres) {
+            for (const s of this._vertexSpheres) {
+                if (s) s.setEnabled(visible);
+            }
+        }
+        if (this._featureMarkers) {
+            for (const m of this._featureMarkers) {
+                if (!m) continue;
+                // Jeśli to okucie (np. zawias), nie chowamy go razem z płytą!
+                // Zawiasy to niezależne byty, a nie dzieci formatki.
+                const isHw = m.metadata?.type === 'hardware' || m.name?.startsWith('hw_');
+                if (!isHw) {
+                    m.setEnabled(visible);
+                }
             }
         }
     }

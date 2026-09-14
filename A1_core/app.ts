@@ -32,6 +32,7 @@ import { PMIRenderer } from '../A8_pmi/pmi-renderer.js';
 import { PMIStore } from '../A8_pmi/pmi-data.js';
 import { PMIEditOffsetTool } from '../A8_pmi/pmi-edit-tool.js';
 import { PMIViewportListener, PMI_EDIT_STATE } from '../A8_pmi/pmi-viewport-listener.js';
+import { PMITextShiftTool, PMI_TEXT_SHIFT_STATE } from '../A8_pmi/pmi-text-shift-tool.js';
 import { PMISyncController } from '../A8_pmi/pmi-sync.js';
 import { ConstraintStore } from '../S2_solver/constraint-store.js';
 import { SolverController } from '../S2_solver/solver-controller.js';
@@ -45,6 +46,7 @@ import { attachDrawingsExtension } from './drawings-document-extension.js';
 import { shouldPromoteSubgeometryToEntity } from './selection-mode.js';
 import { DrawingProjectExtractor } from '../R2_rys/drawing-project-extractor.js';
 import { showCadTreeContextMenu } from '../src/module-data/tree-context-menu.js';
+import { HardwareLoader } from '../B1_biblioteka/hardware-loader.js';
 declare const BABYLON: any;
 
 let ctx: BootstrapContext;
@@ -166,8 +168,92 @@ function rebuildGeometry(successMessage = 'Gotowy') {
             if (typeof (view as any).renderFeatures === 'function') (view as any).renderFeatures();
             if (view._updateTransform) view._updateTransform();
             
-            if (view.root) {
-                view.root.setEnabled(panel.visible !== false);
+            const isPanelVis = panel.visible !== false;
+            if (typeof (view as any).setPanelVisible === 'function') {
+                (view as any).setPanelVisible(isPanelVis);
+            } else if (view.root) {
+                view.root.setEnabled(isPanelVis);
+            }
+        }
+
+        // ─── Synchronizacja okuć 3D (NodeType.HARDWARE) ───
+        const hardwareViews = ContextManager.instance.hardwareViews;
+        const allHwNodes = (document.getNodesByType ? document.getNodesByType(NodeType.HARDWARE) : []) as any[];
+        const activeHwIds = new Set<string>();
+
+        for (const hwNode of allHwNodes) {
+            const hw = hwNode.domainData;
+            if (!hw) continue;
+            const isRail = hw.hardwareType === 'RAIL' || hw.role === 'PROWADNICA' || hw.role?.includes('RAIL') || hw.custom_properties?.shape === 'RAIL';
+            if (!isRail) continue;
+
+            activeHwIds.add(hwNode.id);
+            const parentContainer = hwNode.parent?.domainData;
+            const containerView = parentContainer ? containerViews.get(parentContainer) : null;
+            if (!containerView || !containerView.rootNode) continue;
+
+            const hwId = hw.hardwareId || 'BLUM_ANTARO_M_L';
+            const hwLoader = HardwareLoader.instance;
+            let hwMesh = hardwareViews.get(hwNode.id);
+
+            if (!hwMesh) {
+                if (hwLoader.hasTemplate(hwId) || hwLoader.hasTemplate('BLUM_ANTARO_M_L') || hwLoader.hasTemplate('Antaro M 500')) {
+                    hwMesh = hwLoader.createDrawerSideInstance(hwId, viewport.scene, hw.side);
+                    if (hwMesh) {
+                        hwMesh.parent = containerView.rootNode;
+                        hardwareViews.set(hwNode.id, hwMesh);
+                    }
+                } else {
+                    hwLoader.loadTemplate(hwId, viewport.scene).then(() => {
+                        rebuildGeometry();
+                        viewport.requestRender(10);
+                    }).catch((err: any) => {
+                        console.error('[App] Błąd ładowania okucia:', err);
+                    });
+                }
+            }
+
+            if (hwMesh) {
+                if (hwMesh.parent !== containerView.rootNode) {
+                    hwMesh.parent = containerView.rootNode;
+                }
+                const side = hw.side || (hwNode.id?.toLowerCase().includes('_r') ? 'right' : 'left');
+                const lenMm = hw.params?.lengthMm || 500;
+                const baseScale = hwMesh.metadata?.baseScale || Math.abs(hwMesh.scaling?.y || 1);
+
+                if (hw.loc) {
+                    hwMesh.position.set(hw.loc.x, hw.loc.z, hw.loc.y);
+                }
+                // Obrót 180° w osi Y: bieg od frontu szafki w głąb korpusu (+Z)
+                hwMesh.rotation.set(0, Math.PI, 0);
+
+                // Lustro dla prawej strony i skalowanie długości Z
+                const scaleX = side === 'right' ? -baseScale : baseScale;
+                const scaleZ = lenMm > 0 ? (baseScale * (lenMm / 500)) : baseScale;
+                hwMesh.scaling.set(scaleX, baseScale, scaleZ);
+
+                const isVisible = hw.visible !== false && parentContainer.visible !== false;
+                hwMesh.setEnabled(isVisible);
+                hwLoader.setHardwareFrozen(hwMesh, !!hw.frozen);
+                hwMesh.metadata = {
+                    type: 'hardware',
+                    hardwareType: hw.hardwareType || 'RAIL',
+                    hardwareId: hwId,
+                    cadNode: hwNode,
+                    id: hwNode.id,
+                    side: side,
+                    baseScale: baseScale,
+                    frozen: !!hw.frozen,
+                    visible: isVisible
+                };
+            }
+        }
+
+        // Czyszczenie usuniętych okuć
+        for (const [hwId, mesh] of hardwareViews) {
+            if (!activeHwIds.has(hwId)) {
+                try { mesh.dispose(); } catch {}
+                hardwareViews.delete(hwId);
             }
         }
 
@@ -261,6 +347,7 @@ async function main() {
     stateMachine.registerState('MEASURE_TOOL', measureTool);
     stateMachine.registerState('MeasureTool', measureTool);
     stateMachine.registerState(PMI_EDIT_STATE, new PMIEditOffsetTool(ctx, stateMachine, pmiRenderer, PMIStore.instance));
+    stateMachine.registerState(PMI_TEXT_SHIFT_STATE, new PMITextShiftTool(ctx, stateMachine, pmiRenderer, PMIStore.instance));
 
     const pmiViewportListener = new PMIViewportListener(ctx.viewport.scene, stateMachine, PMIStore.instance);
     pmiViewportListener.attach();
@@ -411,6 +498,56 @@ async function main() {
         }
     });
 
+    // ─── Pomocnik dopasowywania cech do węzła okucia (NodeType.HARDWARE) ───
+    function matchesHardware(feat: any, hwNodeId: string, hwDomainData?: any): boolean {
+        if (!feat) return false;
+        const featId = String(feat.id || '').toLowerCase();
+        const p = feat.params || {};
+        const targetId = String(hwNodeId || '').toLowerCase();
+
+        // 1. Bezpośrednie dopasowanie hardwareId z parametrów cechy
+        if (p.hardwareId && (targetId.endsWith(p.hardwareId.toLowerCase()) || targetId.includes(p.hardwareId.toLowerCase()))) {
+            return true;
+        }
+
+        // 2. Dopasowanie po stronie ('left'/'right') i indeksie zawiasu
+        const hwMatch = targetId.match(/hinge_([a-z]+)_(\d+)/i);
+        if (hwMatch) {
+            const side = hwMatch[1].toLowerCase();
+            const idx = hwMatch[2];
+            if (featId.includes(`_${side}_${idx}`) || featId.includes(`${side}_${idx}`) ||
+                (p.side && p.side.toLowerCase() === side && String(p.hingeIndex) === String(idx))) {
+                return true;
+            }
+        }
+
+        // 3. Dopasowanie klap: np. "hinge_tl", "hinge_tr", "hinge_tc"
+        const flapMatch = targetId.match(/hinge_(t[lrc]|b[lrc])/i);
+        if (flapMatch) {
+            const key = flapMatch[1].toLowerCase();
+            if (featId.includes(`_${key}_`) || featId.includes(key) || (p.hingeKey && p.hingeKey.toLowerCase() === key)) {
+                return true;
+            }
+        }
+
+        // 4. Dopasowanie szuflad: np. "drawer_1_rail_l" / "drawer_1_rail_r"
+        const drawerMatch = targetId.match(/drawer_(\d+)_rail_([lr])/i);
+        if (drawerMatch) {
+            const idx = drawerMatch[1];
+            const side = drawerMatch[2].toLowerCase();
+            if (featId.includes(`drawer_${idx}_`) && (featId.includes(`_${side}_`) || featId.includes(`${side}_`) || featId.includes(`front_${side}`))) {
+                return true;
+            }
+        }
+
+        // 5. Dopasowanie po podciągach ID
+        if (featId && (targetId.includes(featId) || featId.includes(targetId))) {
+            return true;
+        }
+
+        return false;
+    }
+
     // ─── Rejestracja akcji z drzewa obiektów ───
     ctx.ui.onTreeAction((action: string, data: any) => {
         if (action === 'select-part') {
@@ -425,6 +562,12 @@ async function main() {
             const container = getAllContainers(ctx.document).find((c: any) => c.id === data.id);
             if (container) {
                 ctx.document.setActiveEntity(container);
+                ctx.facePicker.clearSelection();
+            }
+        } else if (action === 'select-hardware') {
+            const hwNode = ctx.document.findNode(data.id) || (ctx.document.getNodesByType ? ctx.document.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === data.id) : null);
+            if (hwNode) {
+                ctx.document.setActiveEntity(hwNode.domainData || (hwNode as any));
                 ctx.facePicker.clearSelection();
             }
         } else if (action === 'select-feature') {
@@ -489,13 +632,59 @@ async function main() {
                     }
                 }
             }
+        } else if (action === 'toggle-hardware-visibility') {
+            const doc = ctx.document;
+            const hwNode = doc.findNode(data.id) || (doc.getNodesByType ? doc.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === data.id) : null);
+            if (hwNode) {
+                const curVis = (hwNode.domainData as any)?.visible !== false;
+                if (!hwNode.domainData) hwNode.domainData = {} as any;
+                const nextVis = !curVis;
+                (hwNode.domainData as any).visible = nextVis;
+
+                // Synchronizacja z powiązanymi otworami i znacznikami zawiasu w panelach
+                const panels = getAllPanels(doc);
+                for (const panel of panels) {
+                    if (panel.features) {
+                        for (const feat of panel.features) {
+                            if (matchesHardware(feat, data.id, hwNode.domainData)) {
+                                feat.visible = nextVis;
+                                if (feat.params) feat.params.visible = nextVis;
+                            }
+                        }
+                    }
+                }
+                rebuildGeometry(nextVis ? 'Pokazano okucie' : 'Ukryto okucie');
+                ctx.document.emitChange('all');
+            }
+        } else if (action === 'toggle-freeze-hardware') {
+            const doc = ctx.document;
+            const hwNode = doc.findNode(data.id) || (doc.getNodesByType ? doc.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === data.id) : null);
+            if (hwNode) {
+                const curFrozen = !!(hwNode.domainData as any)?.frozen;
+                if (!hwNode.domainData) hwNode.domainData = {} as any;
+                const newFrozen = !curFrozen;
+                (hwNode.domainData as any).frozen = newFrozen;
+
+                const panels = getAllPanels(doc);
+                for (const panel of panels) {
+                    if (panel.features) {
+                        for (const feat of panel.features) {
+                            if (matchesHardware(feat, data.id, hwNode.domainData)) {
+                                feat.frozen = newFrozen;
+                                if (feat.params) feat.params.frozen = newFrozen;
+                            }
+                        }
+                    }
+                }
+                rebuildGeometry(newFrozen ? 'Zamrożono okucie' : 'Odmrożono okucie');
+                ctx.document.emitChange('all');
+            }
         } else if (action === 'toggle-freeze-part') {
             const doc = ctx.document;
             const panel = getAllPanels(doc).find((p: any) => p.id === data.id || p.smartId?.uid === data.uuid);
             if (panel) {
                 const newFrozen = !panel.frozen;
                 panel.frozen = newFrozen;
-                panel.visible = !newFrozen;
                 rebuildGeometry(newFrozen ? 'Zamrożono formatkę' : 'Odmrożono formatkę');
                 ctx.document.emitChange('all');
             }

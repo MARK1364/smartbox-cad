@@ -75,7 +75,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Ilość półek:</span>
                 <SmartNumericInput 
                     value={shelfCount} 
-                    min={0} max={10} step={1}
+                    min={0} max={10} step={1} decimals={0}
                     style={{ width: '120px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={(val) => {
                         setShelfCount(val);
@@ -88,7 +88,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Odsuń przód:</span>
                 <SmartNumericInput 
                     value={shelfOffsetFront} 
-                    step={0.5} unit="mm"
+                    step={0.01} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={(val) => {
                         setShelfOffsetFront(val);
@@ -101,7 +101,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Odsuń bok:</span>
                 <SmartNumericInput 
                     value={shelfOffsetSide} 
-                    step={0.5} unit="mm"
+                    step={0.01} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={(val) => {
                         setShelfOffsetSide(val);
@@ -114,7 +114,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Ods. boczne przód:</span>
                 <SmartNumericInput 
                     value={frontInset}
-                    unit="mm"
+                    step={0.01} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={(val) => {
                         setFrontInset(val);
@@ -127,7 +127,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Ods. boczne tył:</span>
                 <SmartNumericInput 
                     value={backInset}
-                    unit="mm"
+                    step={0.01} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={(val) => {
                         setBackInset(val);
@@ -159,7 +159,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                     <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Rozstaw otw. (góra/dół):</span>
                     <SmartNumericInput 
                         value={tripleZOffset}
-                        unit="mm"
+                        step={0.01} decimals={2} unit="mm"
                         style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => {
                             setTripleZOffset(val);
@@ -175,7 +175,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                         <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Rozstaw otw.:</span>
                         <SmartNumericInput 
                             value={system32Spacing}
-                            unit="mm"
+                            step={0.01} decimals={2} unit="mm"
                             style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                             onChange={(val) => {
                                 setSystem32Spacing(val);
@@ -188,7 +188,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                         <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Dystans od dołu:</span>
                         <SmartNumericInput 
                             value={system32StartOffset}
-                            unit="mm"
+                            step={0.01} decimals={2} unit="mm"
                             style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                             onChange={(val) => {
                                 setSystem32StartOffset(val);
@@ -201,7 +201,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                         <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Ilość otw.:</span>
                         <SmartNumericInput 
                             value={system32HoleCount}
-                            min={1} max={100} step={1}
+                            min={1} max={100} step={1} decimals={0}
                             style={{ width: '120px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                             onChange={(val) => {
                                 setSystem32HoleCount(val);
@@ -232,6 +232,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                             <span style={{ color: '#a1a1aa', fontSize: '11px' }}>Offset X przód:</span>
                             <SmartNumericInput 
                                 value={frontOffsetX}
+                                step={0.01} decimals={2}
                                 unit="mm"
                                 style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                                 onChange={(val) => {
@@ -260,6 +261,7 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: any,
                             <span style={{ color: '#a1a1aa', fontSize: '11px' }}>Offset X tył:</span>
                             <SmartNumericInput 
                                 value={backOffsetX}
+                                step={0.01} decimals={2}
                                 unit="mm"
                                 style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                                 onChange={(val) => {

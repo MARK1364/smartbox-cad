@@ -240,6 +240,48 @@ export class SetDimensionOffsetCommand implements Command {
 }
 
 // ============================================================================
+// EDIT TEXT SHIFT (PRZESUNIĘCIE TEKSTU WZDŁUŻ LINII)
+// ============================================================================
+
+export class SetDimensionTextShiftCommand implements Command {
+    readonly id = nextCommandId('txtshift');
+    readonly label: string;
+    readonly timestamp = Date.now();
+    readonly affectedNodeIds: string[];
+
+    private readonly store: PMIStore;
+    private readonly annotationId: string;
+    private readonly nextShiftMM: number;
+    private readonly prevShiftMM: number;
+
+    constructor(
+        store: PMIStore,
+        annotationId: string,
+        nextShiftMM: number,
+        label = 'Przesunięto tekst wymiaru',
+    ) {
+        const existing = store.getAnnotation(annotationId);
+        if (!existing) {
+            throw new Error(`SetDimensionTextShiftCommand: wymiar "${annotationId}" nie istnieje.`);
+        }
+        this.store = store;
+        this.annotationId = annotationId;
+        this.nextShiftMM = nextShiftMM;
+        this.prevShiftMM = existing.textShiftMM ?? 0;
+        this.label = label;
+        this.affectedNodeIds = affectedNodesOf(existing);
+    }
+
+    execute(): void {
+        this.store.setTextShift(this.annotationId, this.nextShiftMM);
+    }
+
+    undo(): void {
+        this.store.setTextShift(this.annotationId, this.prevShiftMM);
+    }
+}
+
+// ============================================================================
 // EDIT TEXT AFFIXES
 // ============================================================================
 

@@ -174,9 +174,17 @@ export function extractNestingPayload(scope: ModuleScope, document?: any): Nesti
 
 export function extractCncPayload(scope: ModuleScope, document?: any): CncModulePayload {
     const doc = getDocument(document);
-    const panel = findPanelInDocument(doc, scope.id);
+    let panel = findPanelInDocument(doc, scope.id);
+    if (!panel && (scope.type === 'CONTAINER' || scope.type === 'SMARTBOX' || scope.type === 'PROJECT')) {
+        const raw = ReportDataNormalizer.extractProjectData(doc);
+        const scopedPanels = filterPanelsByScope(raw.panels, scope);
+        if (scopedPanels.length > 0) {
+            const firstId = scopedPanels[0].node_id || scopedPanels[0].part_id;
+            panel = findPanelInDocument(doc, firstId);
+        }
+    }
     if (!panel) {
-        throw new Error(`Nie znaleziono formatki „${scope.name}” (${scope.id}).`);
+        throw new Error(`Nie znaleziono formatki dla zakresu „${scope.name}” (${scope.id}).`);
     }
     return {
         meta: {

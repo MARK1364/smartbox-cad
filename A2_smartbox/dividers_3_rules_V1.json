@@ -280,6 +280,32 @@
         "pl": "Krok 3: Kliknij 'Generuj Przegrody'.",
         "en": "Step 3: Click 'Generate Dividers'."
       }
+    },
+    "errors": {
+      "MISSING_BASE_OBJECT": {
+        "pl": "Brak wybranego korpusu dla przegród.",
+        "en": "Missing selected cabinet body for dividers."
+      }
+    },
+    "warnings": {
+      "SPACE_TOO_NARROW": {
+        "pl": "Uzyskane komory mogą być zbyt wąskie do wygodnego użytkowania.",
+        "en": "Resulting bays may be too narrow for practical use."
+      }
+    },
+    "tooltips": {
+      "divider_count": {
+        "pl": "Liczba przegród pionowych we wnęce.",
+        "en": "Number of vertical dividers in the bay."
+      },
+      "spacing_mode": {
+        "pl": "Rozmieszczenie: RÓWNOMIERNE lub WŁASNE szerokości komór.",
+        "en": "Spacing: EQUAL or CUSTOM bay widths."
+      },
+      "setback_front": {
+        "pl": "Cofnięcie przegrody od przedniej krawędzi korpusu.",
+        "en": "Divider setback from front edge of the cabinet."
+      }
     }
   }
 }

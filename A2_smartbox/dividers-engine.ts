@@ -62,7 +62,7 @@ function readSectionWidths(params: any, count: number): number[] {
 export function equalBayWidth(width: number, count: number, thickness: number): number {
     if (count <= 0) return width;
     const remaining = width - count * thickness;
-    return remaining / (count + 1);
+    return Math.round((remaining / (count + 1)) * 100) / 100;
 }
 
 export function resolveDividerLayout(params: any, dims: ModuleDims): DividerLayout {
@@ -79,14 +79,14 @@ export function resolveDividerLayout(params: any, dims: ModuleDims): DividerLayo
     if (count <= 0) {
         bays = [];
     } else if (spacingMode === 'CUSTOM') {
-        bays = readSectionWidths(params, count);
+        bays = readSectionWidths(params, count).map(v => Math.round(v * 100) / 100);
     } else {
         const eq = equalBayWidth(width, count, thickness);
         bays = Array.from({ length: count }, () => eq);
     }
 
     const used = bays.reduce((s, v) => s + v, 0) + count * thickness;
-    const lastBay = width - used;
+    const lastBay = Math.round((width - used) * 100) / 100;
 
     const slots: DividerSlot[] = [];
     let currentX = -width / 2;

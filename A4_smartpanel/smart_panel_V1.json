@@ -23,6 +23,16 @@
         "H1150_ST10_18": { "name": "Dąb Arizona szary", "code": "H1150 ST10" }
       }
     },
+    "PLYTY_16": {
+      "category_name": "Płyta Wiórowa",
+      "default_thickness_mm": 16.0,
+      "density_kg_m3": 680.0,
+      "items": {
+        "W1100_ST9_16": { "name": "Biały Alpejski", "code": "W1100 ST9" },
+        "U999_ST9_16": { "name": "Czarny", "code": "U999 ST9" },
+        "U708_ST9_16": { "name": "Szary Jasny", "code": "U708 ST9" }
+      }
+    },
     "PLYTY_10": {
       "category_name": "Płyta Wiórowa",
       "default_thickness_mm": 10.0,

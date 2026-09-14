@@ -37,7 +37,7 @@ export interface GrooveFeature2D {
     frozen?: boolean;
 }
 
-export type CADNodeType = 'PROJECT' | 'CONTAINER' | 'ASSEMBLY' | 'SUBASSEMBLY' | 'DRAWERS' | 'SHELVES' | 'PART';
+export type CADNodeType = 'PROJECT' | 'CONTAINER' | 'ASSEMBLY' | 'SUBASSEMBLY' | 'DRAWERS' | 'SHELVES' | 'PART' | 'HARDWARE';
 
 export interface CADTreeNode {
     id: string;

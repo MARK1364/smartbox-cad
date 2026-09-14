@@ -11,6 +11,9 @@ import { DrawersSubModule } from './drawers-adapter.js';
 import { DividersSubModule } from './dividers-adapter.js';
 import { PanelsSubModule } from './panels-adapter.js';
 import { FlapsSubModule } from './flaps-adapter.js';
+import { highlightBayInScene, clearBayHighlight } from './smartbox-bay-visualizer.js';
+import { RemoveNodeCommand } from '../A1_core/commands/remove-node-command.js';
+import { TooltipManager } from '../A1_core/tooltip-manager.js';
 
 interface Props {
     projectModel: any;
@@ -32,6 +35,122 @@ function boxTypeFromParams(p: any): string {
     return typeToBox[p?.type] || 'SHELVES';
 }
 
+interface ModuleDefinition {
+    id: string;
+    label: string;
+    desc: string;
+    icon: (color?: string) => React.ReactNode;
+}
+
+const INTERNAL_MODULES: ModuleDefinition[] = [
+    {
+        id: 'SHELVES',
+        label: 'Półki',
+        desc: 'Półki z podziałem równomiernym',
+        icon: (c = 'currentColor') => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="3" y1="15" x2="21" y2="15" />
+            </svg>
+        )
+    },
+    {
+        id: 'DOORS',
+        label: 'Drzwi',
+        desc: 'Fronty pojedyncze lub podwójne',
+        icon: (c = 'currentColor') => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2" />
+                <circle cx="8" cy="12" r="1.2" fill={c} />
+                <circle cx="16" cy="12" r="1.2" fill={c} />
+            </svg>
+        )
+    },
+    {
+        id: 'DRAWERS',
+        label: 'Szuflady',
+        desc: 'Zestaw szuflad z prowadnicami',
+        icon: (c = 'currentColor') => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+                <line x1="3" y1="15" x2="21" y2="15" />
+                <line x1="9" y1="6" x2="15" y2="6" strokeWidth="2" />
+                <line x1="9" y1="12" x2="15" y2="12" strokeWidth="2" />
+                <line x1="9" y1="18" x2="15" y2="18" strokeWidth="2" />
+            </svg>
+        )
+    },
+    {
+        id: 'SHELF',
+        label: 'Wieniec',
+        desc: 'Pojedyncza półka / wieniec poziomy',
+        icon: (c = 'currentColor') => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" strokeOpacity="0.4" />
+                <rect x="3" y="11" width="18" height="3" fill={c} fillOpacity="0.25" stroke={c} />
+            </svg>
+        )
+    },
+    {
+        id: 'TUBES',
+        label: 'Drążek',
+        desc: 'Drążek ubraniowy z rozetami',
+        icon: (c = 'currentColor') => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" strokeOpacity="0.4" />
+                <line x1="3" y1="8" x2="21" y2="8" strokeWidth="2.5" />
+                <path d="M12 8v3l-4 6h8l-4-6" />
+            </svg>
+        )
+    },
+    {
+        id: 'DIVIDERS',
+        label: 'Przegrody',
+        desc: 'Pionowe przegrody wnęki',
+        icon: (c = 'currentColor') => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="10" y1="3" x2="10" y2="21" />
+                <line x1="15" y1="3" x2="15" y2="21" />
+            </svg>
+        )
+    },
+    {
+        id: 'FLAPS',
+        label: 'Klapy',
+        desc: 'Klapy uchylne podnośnikowe',
+        icon: (c = 'currentColor') => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" strokeOpacity="0.4" />
+                <path d="M4 14l16-6" />
+                <path d="M12 8l3-2-1 4" fill={c} />
+                <circle cx="5" cy="14" r="1.5" fill={c} />
+            </svg>
+        )
+    }
+];
+
+const EXTERNAL_MODULES: ModuleDefinition[] = [
+    {
+        id: 'PANELS',
+        label: 'Blendy',
+        desc: 'Blendy i panele obudowy korpusu',
+        icon: (c = 'currentColor') => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="6" width="12" height="12" rx="1" strokeDasharray="2 2" strokeOpacity="0.5" />
+                <rect x="2" y="2" width="20" height="20" rx="2" />
+                <line x1="2" y1="2" x2="6" y2="6" />
+                <line x1="22" y1="2" x2="18" y2="6" />
+                <line x1="2" y1="22" x2="6" y2="18" />
+                <line x1="22" y1="22" x2="18" y2="18" />
+            </svg>
+        )
+    }
+];
+
 // ─── GŁÓWNY KOMPONENT: SmartBoxUI ────────────────────────────────────────────
 export function SmartBoxUI({ projectModel }: Props) {
     const [container, setContainer] = useState<any>(null);
@@ -44,12 +163,20 @@ export function SmartBoxUI({ projectModel }: Props) {
     const [isRefsOpen, setIsRefsOpen] = useState<boolean>(false);
     const [isPickerActive, setIsPickerActive] = useState<boolean>(false);
     const [pickerMode, setPickerMode] = useState<'internal' | 'external'>('internal');
+    const [pendingPickType, setPendingPickType] = useState<string | null>(null);
+    const [uiMode, setUiMode] = useState<'internal' | 'external'>('internal');
 
     useEffect(() => {
         const ctrl = ContextManager.instance.smartBoxBayController;
         const syncPicker = (active?: boolean, mode?: any) => {
-            setIsPickerActive(active !== undefined ? active : !!ctrl?.isPickerActive);
+            const isAct = active !== undefined ? active : !!ctrl?.isPickerActive;
+            setIsPickerActive(isAct);
             setPickerMode(mode !== undefined ? mode : (ctrl?.pickerMode || 'internal'));
+            if (!isAct) {
+                setPendingPickType(null);
+            } else if (ctrl?.pendingSmartBoxType) {
+                setPendingPickType(ctrl.pendingSmartBoxType);
+            }
         };
         let unsub: (() => void) | undefined;
         if (ctrl) unsub = ctrl.subscribePicker(syncPicker);
@@ -68,6 +195,33 @@ export function SmartBoxUI({ projectModel }: Props) {
             window.removeEventListener('smartbox-bay-picker-state', onCustom);
         };
     }, []);
+
+    useEffect(() => {
+        if (!container) return;
+        const hintsByBoxType: Record<string, { title: string; desc: string }> = {
+            SHELVES: { title: 'Półki', desc: 'Przeciągnij na wnękę w korpusie.' },
+            DOORS: { title: 'Drzwi', desc: 'Przeciągnij na wnękę w korpusie.' },
+            DRAWERS: { title: 'Szuflady', desc: 'Przeciągnij na wnękę w korpusie.' },
+            DIVIDERS: { title: 'Przegrody', desc: 'Przeciągnij na wnękę w korpusie.' },
+            TUBES: { title: 'Drążek', desc: 'Przeciągnij na wnękę w korpusie.' },
+            FLAPS: { title: 'Klapa', desc: 'Przeciągnij na wnękę w korpusie.' },
+            PANELS: { title: 'Blendy', desc: 'Przeciągnij i upuść na zewnątrz korpusu.' },
+            EMPTY: { title: 'SmartBox', desc: 'Wybierz moduł lub przeciągnij na korpus.' },
+        };
+        const hint = hintsByBoxType[boxType];
+        if (hint) {
+            TooltipManager.instance.setActiveHint({
+                id: `smartbox_active_${boxType}`,
+                title: hint.title,
+                description: hint.desc,
+                category: 'smartbox'
+            });
+        }
+        return () => {
+            TooltipManager.instance.clearActiveHint();
+        };
+    }, [boxType, container]);
+
     useEffect(() => {
         const doc = projectModel?.document || projectModel;
 
@@ -102,13 +256,28 @@ export function SmartBoxUI({ projectModel }: Props) {
             if (active && active.type === 'container' && (active.generatorParams?.type?.startsWith('smartbox_') || active.generatorParams?.boxType)) {
                 setContainer(active);
                 const p = active.generatorParams;
-                setBoxType(boxTypeFromParams(p));
+                const bType = boxTypeFromParams(p);
+                setBoxType(bType);
                 setCustomRefs(p.customReferences || {});
                 setDisabledRefsState(p.disabledReferences || {});
                 setOffsets(p.offsets || {});
                 setMaxHeight(p.maxHeight || 0);
+
+                if (p.side_references_smartbox === 'OUTER' || bType === 'PANELS') {
+                    setUiMode('external');
+                } else if (bType !== 'EMPTY') {
+                    setUiMode('internal');
+                }
+
+                const scene = ContextManager.instance.viewport?.scene;
+                if (bType === 'EMPTY' && p.detectedBay && scene) {
+                    highlightBayInScene(scene, p.detectedBay);
+                } else if (bType !== 'EMPTY') {
+                    clearBayHighlight(scene);
+                }
             } else {
                 setContainer(null);
+                clearBayHighlight();
             }
         };
 
@@ -124,6 +293,7 @@ export function SmartBoxUI({ projectModel }: Props) {
                 rafIdRef.current = null;
             }
             delete ContextManager.instance.activeReferencePicker;
+            clearBayHighlight();
         };
     }, [projectModel]);
 
@@ -180,6 +350,59 @@ export function SmartBoxUI({ projectModel }: Props) {
             });
         }
     }, [container, flushUpdate]);
+
+    const handleSelectModule = useCallback((val: string) => {
+        setBoxType(val);
+        const scene = ContextManager.instance.viewport?.scene;
+        if (val !== 'EMPTY') {
+            clearBayHighlight(scene);
+        } else if (container?.generatorParams?.detectedBay && scene) {
+            highlightBayInScene(scene, container.generatorParams.detectedBay);
+        }
+        const typeMap: Record<string, string> = {
+            'EMPTY': 'smartbox_empty',
+            'SHELVES': 'smartbox_shelves',
+            'DOORS': 'smartbox_doors',
+            'SHELF': 'smartbox_shelf',
+            'DRAWERS': 'smartbox_drawers',
+            'DIVIDERS': 'smartbox_dividers',
+            'FLAPS': 'smartbox_flaps',
+            'TUBES': 'smartbox_tubes',
+            'PANELS': 'smartbox_panels'
+        };
+        triggerUpdateEx({ 
+            boxType: val,
+            type: typeMap[val] || 'smartbox_empty',
+            ...(val === 'PANELS' ? { targetZone: 'FULL' } : {}),
+            ...(val === 'DOORS' ? { door_type: 'LEFT', doorType: 'LEFT' } : {})
+        }, true);
+    }, [container, triggerUpdateEx]);
+
+    const handleDeleteEmptySmartBox = useCallback(() => {
+        if (!container) return;
+        const doc = projectModel?.document || projectModel || ContextManager.instance.document;
+        if (doc) {
+            clearBayHighlight();
+            const cadNode = doc.findNode(container.id);
+            if (cadNode) {
+                try {
+                    const cmdHist = ContextManager.instance.commandHistory;
+                    if (cmdHist && cadNode.parent) {
+                        cmdHist.execute(new RemoveNodeCommand(doc, cadNode.id, 'Usunięcie pustego SmartBox'));
+                    } else {
+                        doc.removeNode(cadNode.id);
+                    }
+                } catch {
+                    doc.removeNode(cadNode.id);
+                }
+                doc.setActiveEntity(null);
+                setContainer(null);
+                if (typeof window !== 'undefined') {
+                    window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+                }
+            }
+        }
+    }, [container, projectModel]);
 
     const startPicking = (sideKey: string) => {
         const isDisabled = !!disabledRefsState[sideKey];
@@ -536,54 +759,63 @@ export function SmartBoxUI({ projectModel }: Props) {
         );
     };
 
-    const renderAddSmartBoxBtn = () => {
-        const isInternalPicking = isPickerActive && pickerMode === 'internal';
-        const isExternalPicking = isPickerActive && pickerMode === 'external';
+    const renderModulePalette = () => {
+        const modules = uiMode === 'internal' ? INTERNAL_MODULES : EXTERNAL_MODULES;
 
         return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%' }}>
-                <button
-                    id="btnWstawSmartBoxDoWneki"
-                    draggable={true}
-                    onDragStart={(e) => {
-                        const typeToDrag = 'EMPTY';
-                        e.dataTransfer.setData('application/smartbox-template', JSON.stringify({ boxType: typeToDrag, category: 'internal' }));
-                        const ctrl = ContextManager.instance.smartBoxBayController;
-                        if (ctrl) {
-                            ctrl.startDrag(typeToDrag, 'internal');
-                            ctrl.setPendingSmartBoxType(typeToDrag);
-                        }
-                    }}
-                    onDragEnd={() => {
-                        ContextManager.instance.smartBoxBayController?.endDrag();
-                    }}
-                    onClick={() => {
-                        const typeToPick = 'EMPTY';
-                        ContextManager.instance.smartBoxBayController?.togglePicker(typeToPick, 'internal');
-                    }}
-                    style={{
-                        padding: '8px 10px',
-                        background: isInternalPicking ? '#16a34a' : '#2563eb',
-                        border: isInternalPicking ? '1px solid #4ade80' : '1px solid #3b82f6',
-                        color: '#fff',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '3px',
-                        boxShadow: isInternalPicking ? '0 0 10px rgba(74, 222, 128, 0.4)' : 'none',
-                        transition: 'all 0.15s ease',
-                        textAlign: 'center'
-                    }}
-                    title="Wstaw moduł wewnętrzny (półki, drzwi, szuflady itp.) do wskazanej wnęki mebla"
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.95, display: 'inline-flex', alignItems: 'center', color: '#bae6fd' }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+                {/* Dwa główne przyciski wyboru trybu SmartBox */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                    <button
+                        type="button"
+                        id="btnSmartBoxWewnatrz"
+                        draggable={true}
+                        onDragStart={(e) => {
+                            e.dataTransfer.setData('application/smartbox-template', JSON.stringify({ boxType: 'EMPTY', category: 'internal' }));
+                            const ctrl = ContextManager.instance.smartBoxBayController;
+                            if (ctrl) {
+                                ctrl.startDrag('EMPTY', 'internal');
+                                ctrl.setPendingSmartBoxType('EMPTY');
+                            }
+                        }}
+                        onDragEnd={() => {
+                            ContextManager.instance.smartBoxBayController?.endDrag();
+                        }}
+                        onClick={() => {
+                            setUiMode('internal');
+                            if (isPickerActive && pickerMode === 'external') {
+                                ContextManager.instance.smartBoxBayController?.stopPicker();
+                            }
+                        }}
+                        onMouseEnter={() => {
+                            TooltipManager.instance.setActiveHint({
+                                id: 'smartbox_mode_internal',
+                                title: 'SmartBox wewnątrz',
+                                description: 'Przeciągnij na wnękę w korpusie.',
+                                category: 'smartbox'
+                            });
+                        }}
+                        onMouseLeave={() => TooltipManager.instance.clearActiveHint()}
+                        style={{
+                            padding: '5px 6px',
+                            background: uiMode === 'internal' ? '#1e40af' : '#27272a',
+                            border: uiMode === 'internal' ? '2px solid #3b82f6' : '1px solid #3f3f46',
+                            color: '#fff',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            cursor: 'grab',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            boxShadow: uiMode === 'internal' ? '0 0 10px rgba(59, 130, 246, 0.35)' : 'none',
+                            transition: 'all 0.15s ease'
+                        }}
+                        title="Moduły do wnętrza szafek: półki, drzwi, szuflady, drążki, wieńce, przegrody, klapy (kliknij lub przeciągnij na wnękę)"
+                    >
+                        <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
                                 <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
                                 <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
@@ -591,52 +823,59 @@ export function SmartBoxUI({ projectModel }: Props) {
                             </svg>
                         </span>
                         <span style={{ fontSize: '13px' }}>📥</span>
-                    </div>
-                    <span>{isInternalPicking ? 'Wskaż wnękę... (anuluj)' : 'Wstaw do wnęki'}</span>
-                </button>
+                        <span>SmartBox wewnątrz</span>
+                    </button>
 
-                <button
-                    id="btnWstawSmartBoxNaZewnatrz"
-                    draggable={true}
-                    onDragStart={(e) => {
-                        const typeToDrag = 'PANELS';
-                        e.dataTransfer.setData('application/smartbox-template', JSON.stringify({ boxType: typeToDrag, category: 'external' }));
-                        const ctrl = ContextManager.instance.smartBoxBayController;
-                        if (ctrl) {
-                            ctrl.startDrag(typeToDrag, 'external');
-                            ctrl.setPendingSmartBoxType(typeToDrag);
-                        }
-                    }}
-                    onDragEnd={() => {
-                        ContextManager.instance.smartBoxBayController?.endDrag();
-                    }}
-                    onClick={() => {
-                        const typeToPick = 'PANELS';
-                        ContextManager.instance.smartBoxBayController?.togglePicker(typeToPick, 'external');
-                    }}
-                    style={{
-                        padding: '8px 10px',
-                        background: isExternalPicking ? '#16a34a' : '#d97706',
-                        border: isExternalPicking ? '1px solid #4ade80' : '1px solid #f59e0b',
-                        color: '#fff',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '3px',
-                        boxShadow: isExternalPicking ? '0 0 10px rgba(74, 222, 128, 0.4)' : 'none',
-                        transition: 'all 0.15s ease',
-                        textAlign: 'center'
-                    }}
-                    title="Wstaw moduł zewnętrzny (blendy, obudowa korpusu, cokoły) na zewnętrzny gabaryt korpusu"
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.95, display: 'inline-flex', alignItems: 'center', color: '#fef08a' }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <button
+                        type="button"
+                        id="btnSmartBoxNaZewnatrz"
+                        draggable={true}
+                        onDragStart={(e) => {
+                            e.dataTransfer.setData('application/smartbox-template', JSON.stringify({ boxType: 'PANELS', category: 'external' }));
+                            const ctrl = ContextManager.instance.smartBoxBayController;
+                            if (ctrl) {
+                                ctrl.startDrag('PANELS', 'external');
+                                ctrl.setPendingSmartBoxType('PANELS');
+                            }
+                        }}
+                        onDragEnd={() => {
+                            ContextManager.instance.smartBoxBayController?.endDrag();
+                        }}
+                        onClick={() => {
+                            setUiMode('external');
+                            if (isPickerActive && pickerMode === 'internal') {
+                                ContextManager.instance.smartBoxBayController?.stopPicker();
+                            }
+                        }}
+                        onMouseEnter={() => {
+                            TooltipManager.instance.setActiveHint({
+                                id: 'smartbox_mode_external',
+                                title: 'SmartBox na zewnątrz',
+                                description: 'Przeciągnij i upuść na zewnątrz korpusu.',
+                                category: 'smartbox'
+                            });
+                        }}
+                        onMouseLeave={() => TooltipManager.instance.clearActiveHint()}
+                        style={{
+                            padding: '5px 6px',
+                            background: uiMode === 'external' ? '#b45309' : '#27272a',
+                            border: uiMode === 'external' ? '2px solid #f59e0b' : '1px solid #3f3f46',
+                            color: '#fff',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            cursor: 'grab',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            boxShadow: uiMode === 'external' ? '0 0 10px rgba(245, 158, 11, 0.35)' : 'none',
+                            transition: 'all 0.15s ease'
+                        }}
+                        title="Moduły zewnętrzne: blendy i obudowy zewnętrzne korpusu (kliknij lub przeciągnij na korpus)"
+                    >
+                        <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#fef08a' }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
                                 <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
                                 <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
@@ -644,22 +883,142 @@ export function SmartBoxUI({ projectModel }: Props) {
                             </svg>
                         </span>
                         <span style={{ fontSize: '13px' }}>📦</span>
-                    </div>
-                    <span>{isExternalPicking ? 'Wskaż korpus... (anuluj)' : 'Wstaw na zewnątrz'}</span>
-                </button>
+                        <span>SmartBox na zewnątrz</span>
+                    </button>
+                </div>
+
+                {/* Paleta małych przycisków Drag & Drop poszczególnych modułów */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: uiMode === 'internal' ? 'repeat(4, 1fr)' : '1fr',
+                    gap: '4px',
+                    background: '#18181b',
+                    padding: '4px',
+                    borderRadius: '6px',
+                    border: '1px solid #27272a'
+                }}>
+                    {modules.map((mod) => {
+                        const isCurrentActive = container && boxType === mod.id;
+                        const isCurrentPicking = isPickerActive && pendingPickType === mod.id;
+
+                        let cardBg = '#222226';
+                        let cardBorder = '#333338';
+                        if (isCurrentActive) {
+                            cardBg = uiMode === 'internal' ? '#1e3a8a' : '#78350f';
+                            cardBorder = uiMode === 'internal' ? '#60a5fa' : '#fbbf24';
+                        } else if (isCurrentPicking) {
+                            cardBg = '#14532d';
+                            cardBorder = '#4ade80';
+                        }
+
+                        return (
+                            <div
+                                key={mod.id}
+                                id={`cardSmartBoxMod_${mod.id}`}
+                                draggable={true}
+                                onDragStart={(e) => {
+                                    e.dataTransfer.setData('application/smartbox-template', JSON.stringify({ boxType: mod.id, category: uiMode }));
+                                    const ctrl = ContextManager.instance.smartBoxBayController;
+                                    if (ctrl) {
+                                        ctrl.startDrag(mod.id, uiMode);
+                                        ctrl.setPendingSmartBoxType(mod.id);
+                                    }
+                                }}
+                                onDragEnd={() => {
+                                    ContextManager.instance.smartBoxBayController?.endDrag();
+                                }}
+                                onClick={() => {
+                                    if (container) {
+                                        handleSelectModule(mod.id);
+                                    } else {
+                                        const ctrl = ContextManager.instance.smartBoxBayController;
+                                        if (ctrl) {
+                                            ctrl.togglePicker(mod.id, uiMode);
+                                            setPendingPickType(ctrl.isPickerActive ? mod.id : null);
+                                        }
+                                    }
+                                }}
+                                onMouseEnter={() => {
+                                    const isExternal = uiMode === 'external' || mod.id === 'PANELS';
+                                    const text = isExternal 
+                                        ? 'Przeciągnij i upuść na zewnątrz korpusu.' 
+                                        : 'Przeciągnij na wnękę w korpusie.';
+                                    TooltipManager.instance.setActiveHint({
+                                        id: `smartbox_mod_${mod.id}`,
+                                        title: mod.label,
+                                        description: text,
+                                        category: 'smartbox'
+                                    });
+                                }}
+                                onMouseLeave={() => {
+                                    TooltipManager.instance.clearActiveHint();
+                                }}
+                                style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '4px 2px 3px 2px',
+                                    background: cardBg,
+                                    border: `1px solid ${cardBorder}`,
+                                    borderRadius: '5px',
+                                    cursor: 'grab',
+                                    userSelect: 'none',
+                                    position: 'relative',
+                                    transition: 'all 0.15s ease',
+                                    boxShadow: isCurrentActive ? '0 0 8px rgba(59, 130, 246, 0.4)' : (isCurrentPicking ? '0 0 8px rgba(74, 222, 128, 0.4)' : 'none'),
+                                    minHeight: '42px'
+                                }}
+                                title={`${mod.label}: ${mod.desc}\n• Przeciągnij i upuść na wnękę w 3D\n• Lub kliknij, aby ${container ? 'przełączyć ten SmartBox na ' + mod.label : 'wskazać wnękę w 3D'}`}
+                            >
+                                <div style={{ color: isCurrentActive ? '#fff' : (isCurrentPicking ? '#4ade80' : '#93c5fd'), marginBottom: '0px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {mod.icon(isCurrentActive ? '#fff' : (isCurrentPicking ? '#4ade80' : '#93c5fd'))}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', marginTop: '2px' }}>
+                                    <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                            <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                        </svg>
+                                    </span>
+                                    <span style={{ fontSize: '10.5px', fontWeight: isCurrentActive ? 'bold' : 500, color: isCurrentActive ? '#fff' : 'var(--text-secondary, #aaa)', textAlign: 'center', lineHeight: 1.1 }}>
+                                        {mod.label}
+                                    </span>
+                                </div>
+                                {isCurrentActive && (
+                                    <span style={{ fontSize: '8px', color: '#93c5fd', marginTop: '1px', fontWeight: 'bold' }}>
+                                        ✓ Aktywny
+                                    </span>
+                                )}
+                                {isCurrentPicking && !isCurrentActive && (
+                                    <span style={{ fontSize: '8px', color: '#4ade80', marginTop: '1px', fontWeight: 'bold' }}>
+                                        Wskaż 3D
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
         );
     };
 
     if (!container) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px', background: '#121214', color: '#fff', fontSize: '13px' }}>
-                {renderAddSmartBoxBtn()}
-                <div className="panel-section" style={{ padding: '16px' }}>
-                    <p className="placeholder-text" style={{ fontStyle: 'italic', color: '#a1a1aa', textAlign: 'center' }}>
-                        Zaznacz SmartBox na drzewie projektu lub scenie, aby go skonfigurować.
-                    </p>
-                </div>
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                background: '#121214',
+                color: '#fff',
+                fontSize: '13px',
+                width: '100%',
+                padding: '6px 8px 32px 8px',
+                boxSizing: 'border-box'
+            }}>
+                {renderModulePalette()}
             </div>
         );
     }
@@ -667,10 +1026,18 @@ export function SmartBoxUI({ projectModel }: Props) {
     const isExternalContainer = container?.generatorParams?.side_references_smartbox === 'OUTER' || boxType === 'PANELS';
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px', background: '#121214', color: '#fff', fontSize: '13px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {renderAddSmartBoxBtn()}
-            </div>
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            background: '#121214',
+            color: '#fff',
+            fontSize: '13px',
+            width: '100%',
+            padding: '6px 8px 32px 8px',
+            boxSizing: 'border-box'
+        }}>
+            {renderModulePalette()}
 
             <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '6px', overflow: 'hidden' }}>
                 <div 
@@ -767,68 +1134,34 @@ export function SmartBoxUI({ projectModel }: Props) {
                 )}
             </div>
 
-            <div style={{ background: '#18181b', border: '1px solid #27272a', padding: '10px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4d4d8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    Konfiguracja
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Typ:</span>
-                    <select 
-                        value={boxType} 
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setBoxType(val);
-                            const typeMap: Record<string, string> = {
-                                'EMPTY': 'smartbox_empty',
-                                'SHELVES': 'smartbox_shelves',
-                                'DOORS': 'smartbox_doors',
-                                'SHELF': 'smartbox_shelf',
-                                'DRAWERS': 'smartbox_drawers',
-                                'DIVIDERS': 'smartbox_dividers',
-                                'FLAPS': 'smartbox_flaps',
-                                'TUBES': 'smartbox_tubes',
-                                'PANELS': 'smartbox_panels'
-                            };
-                            triggerUpdateEx({ 
-                                boxType: val,
-                                type: typeMap[val] || 'smartbox_empty',
-                                ...(val === 'PANELS' ? { targetZone: 'FULL' } : {})
-                            });
-                        }}
-                        style={{ width: '160px', padding: '4px 6px', background: '#27272a', border: '1px solid #3f3f46', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
-                    >
-                        <option value="EMPTY">Brak</option>
-                        {isExternalContainer ? (
-                            <option value="PANELS">Blendy</option>
-                        ) : (
-                            <>
-                                <option value="SHELVES">Półki</option>
-                                <option value="DOORS">Drzwi</option>
-                                <option value="SHELF">Wieniec</option>
-                                <option value="DRAWERS">Szuflady</option>
-                                <option value="DIVIDERS">Przegrody</option>
-                                <option value="FLAPS">Klapy</option>
-                                <option value="TUBES">Drążek</option>
-                            </>
-                        )}
-                    </select>
-                </div>
-            </div>
-
+            {/* Sekcja konfiguracji aktywnego modułu */}
             <div style={{ background: '#18181b', border: '1px solid #27272a', padding: '10px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#e4e4e7', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>∨</span> {boxType === 'SHELVES' ? 'Polki V1' : boxType === 'DOORS' ? 'Fronty V1' : boxType === 'SHELF' ? 'Wieniec V1' : boxType === 'TUBES' ? 'Drążek V1' : boxType === 'DRAWERS' ? 'Szuflady V1' : boxType === 'DIVIDERS' ? 'Przegrody V1' : boxType === 'PANELS' ? 'Blendy V1' : boxType === 'FLAPS' ? 'Klapy V1' : boxType === 'EMPTY' ? 'Brak modułu' : 'Moduł V1'}
+                    <span>∨</span> {boxType === 'SHELVES' ? 'Półki' : boxType === 'DOORS' ? 'Drzwi / Fronty' : boxType === 'SHELF' ? 'Wieniec' : boxType === 'TUBES' ? 'Drążek' : boxType === 'DRAWERS' ? 'Szuflady' : boxType === 'DIVIDERS' ? 'Przegrody' : boxType === 'PANELS' ? 'Blendy' : boxType === 'FLAPS' ? 'Klapy' : boxType === 'EMPTY' ? 'Wybór modułu' : 'Moduł'}
                 </div>
 
                 {boxType === 'EMPTY' && (
-                    <div style={{ padding: '12px', background: '#222225', borderRadius: '4px', border: '1px dashed #3f3f46', textAlign: 'center' }}>
-                        <p style={{ margin: 0, fontSize: '12px', color: '#93c5fd', fontWeight: 'bold' }}>
-                            📦 Brak modułu
-                        </p>
-                        <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#a1a1aa' }}>
-                            Wybierz powyżej moduł (np. <strong>Półki</strong>, <strong>Drzwi</strong>, <strong>Wieniec</strong> lub <strong>Drążek</strong>), aby wypełnić wnętrze.
-                        </p>
+                    <div style={{ padding: '8px', background: '#222225', borderRadius: '6px', border: '1px dashed #3f3f46', display: 'flex', justifyContent: 'center' }}>
+                        <button
+                            type="button"
+                            onClick={handleDeleteEmptySmartBox}
+                            style={{
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                border: '1px solid rgba(239, 68, 68, 0.4)',
+                                color: '#f87171',
+                                borderRadius: '4px',
+                                padding: '6px 12px',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                transition: 'all 0.15s ease'
+                            }}
+                            title="Usuń ten pusty SmartBox z drzewa projektu"
+                        >
+                            <span>✕</span> Usuń ten pusty SmartBox
+                        </button>
                     </div>
                 )}
                 {boxType === 'SHELVES' && <ShelvesSubModule container={container} triggerUpdate={triggerUpdateEx} />}

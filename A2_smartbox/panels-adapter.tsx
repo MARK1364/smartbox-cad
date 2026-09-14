@@ -156,7 +156,7 @@ export function PanelsSubModule({ container, triggerUpdate }: { container: any, 
                     <span style={{ ...labelStyle, fontSize: '11px' }}>Głębokość:</span>
                     <SmartNumericInput
                         value={depth}
-                        min={50} step={1} unit="mm"
+                        min={50} step={0.01} decimals={2} unit="mm"
                         style={inputStyle}
                         onChange={(val) => {
                             setDepth(val);
@@ -219,17 +219,17 @@ export function PanelsSubModule({ container, triggerUpdate }: { container: any, 
                     <>
                         <div style={rowStyle}>
                             <span style={{ ...labelStyle, fontSize: '11px' }}>Wysokość cokołu:</span>
-                            <SmartNumericInput value={plinthHeight} min={50} step={1} unit="mm" style={inputStyle}
+                            <SmartNumericInput value={plinthHeight} min={50} step={0.01} decimals={2} unit="mm" style={inputStyle}
                                 onChange={(val) => { setPlinthHeight(val); pushUpdate({ plinthHeight: toNum(val, 97), plinth_height: toNum(val, 97) }); }} />
                         </div>
                         <div style={rowStyle}>
                             <span style={{ ...labelStyle, fontSize: '11px' }}>Cofnięcie cokołu:</span>
-                            <SmartNumericInput value={plinthRecess} min={0} step={1} unit="mm" style={inputStyle}
+                            <SmartNumericInput value={plinthRecess} min={0} step={0.01} decimals={2} unit="mm" style={inputStyle}
                                 onChange={(val) => { setPlinthRecess(val); pushUpdate({ plinthRecess: toNum(val, 20), plinth_recess: toNum(val, 20) }); }} />
                         </div>
                         <div style={rowStyle}>
                             <span style={{ ...labelStyle, fontSize: '11px' }}>Szczelina cokołu:</span>
-                            <SmartNumericInput value={plinthGap} min={0} step={0.5} unit="mm" style={inputStyle}
+                            <SmartNumericInput value={plinthGap} min={0} step={0.01} decimals={2} unit="mm" style={inputStyle}
                                 onChange={(val) => { setPlinthGap(val); pushUpdate({ plinthGap: toNum(val, 3), plinth_gap: toNum(val, 3) }); }} />
                         </div>
                     </>

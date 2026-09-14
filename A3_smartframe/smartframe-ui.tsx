@@ -38,12 +38,13 @@ export function SmartFrameUI({ projectModel }: Props) {
             bH = curH;
             mH = 0;
         } else if (zc === 2) {
-            if (bH >= curH || bH <= 0) {
-                bH = Math.round(curH / 2);
+            // Domyślnie dla 2 stref dół wynosi 2000 mm (lub proporcjonalnie mniej jeśli całkowita wysokość curH <= 2000)
+            if (bH >= curH || bH <= 0 || bH === 500) {
+                bH = curH > 2000 ? 2000 : (curH >= 400 ? curH - 200 : Math.round(curH / 2));
             }
             mH = 0;
         } else if (zc === 3) {
-            if (bH + mH >= curH || bH <= 0 || mH <= 0 || bH >= curH) {
+            if (bH + mH >= curH || bH <= 0 || mH <= 0 || bH >= curH || bH === 2000) {
                 bH = 500;
                 mH = 1200;
                 if (bH + mH >= curH) {
@@ -222,9 +223,9 @@ export function SmartFrameUI({ projectModel }: Props) {
                     >
                         <svg width="32" height="42" viewBox="0 0 32 42" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#9ca3af' }}>
                             <rect x="2" y="2" width="28" height="38" rx="1" stroke="currentColor" />
-                            <line x1="2" y1="21" x2="30" y2="21" stroke="currentColor" strokeWidth="2.5" />
-                            <rect x="5" y="24" width="22" height="13" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="none" />
-                            <rect x="5" y="5" width="22" height="13" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="none" />
+                            <line x1="2" y1="9" x2="30" y2="9" stroke="currentColor" strokeWidth="2.5" />
+                            <rect x="5" y="11" width="22" height="27" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="none" />
+                            <rect x="5" y="4" width="22" height="4" rx="0.5" fill="currentColor" fillOpacity="0.08" stroke="none" />
                         </svg>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px' }}>
                             <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>

@@ -154,6 +154,8 @@ export class ReportDataNormalizer {
     } {
         const panels: CuttingPanelContract[] = [];
         const accessories: AccessoryItem[] = [];
+        const seenDrawerSlots = new Set<string>();
+        const drawerKitsByFurnAndType = new Map<string, AccessoryItem>();
         const furnitureSet = new Set<string>();
         const containerMap = new Map<string, ContainerScopeItem>();
 
@@ -167,12 +169,16 @@ export class ReportDataNormalizer {
 
         const processPanel = (domain: any, furnName: string, containerId?: string, smartboxId?: string, nodeId?: string) => {
             if (!domain) return;
+            // Obiekt zamrożony zachowuje się jak usunięty — nie trafia na listę raportów ani nestingu
+            if (domain.frozen === true || domain.params?.frozen === true) return;
+
             const uniqueId = String(nodeId || domain.id || domain.name || Math.random());
             if (visitedIds.has(uniqueId)) return;
             visitedIds.add(uniqueId);
 
             const nameUpper = String(domain.name || '').toUpperCase();
-            const isHardwareOrHole = ['HOLE', 'OTW', 'PUSZKA', 'WKRET'].some(x => nameUpper.includes(x));
+            const isHardwareOrHole = ['HOLE', 'OTW', 'PUSZKA', 'WKRET', 'PROWADNICA', 'RAIL'].some(x => nameUpper.includes(x)) ||
+                domain.role === 'PROWADNICA' || domain.role === 'RAIL';
             if (!isHardwareOrHole) {
                 const contract = this.buildContractFromPanel(domain, furnName, containerId, smartboxId, nodeId);
                 if (contract) {
@@ -241,25 +247,83 @@ export class ReportDataNormalizer {
             const roleUpper = String(domain?.role || '').toUpperCase();
             const nameUpper = String(node.name || domain?.name || '').toUpperCase();
             const isAccessory = (domain?.report_type === 'akcesoria') ||
-                ['HINGE_LOCATOR', 'PROWADNICA', 'HOLDER', 'TUBE_ROD', 'BOX', 'SZUFLADA', 'DRAWER'].includes(roleUpper) ||
-                nameUpper.includes('HINGE') || nameUpper.includes('ZAWIAS') || nameUpper.includes('PROWADNICA');
+                String(node.nodeType) === 'HARDWARE' || domain?.type === 'hardware' ||
+                ['HINGE_LOCATOR', 'PROWADNICA', 'RAIL', 'HOLDER', 'TUBE_ROD', 'BOX', 'SZUFLADA', 'DRAWER'].includes(roleUpper) ||
+                nameUpper.includes('HINGE') || nameUpper.includes('ZAWIAS') || nameUpper.includes('PROWADNICA') || nameUpper.includes('BOCZEK');
 
             if (isAccessory) {
-                let library_id = domain?.library_id || domain?.price_id || domain?.name || roleUpper;
-                if (roleUpper === 'PROWADNICA') library_id = 'PROWADNICA_KPL';
-                if (roleUpper === 'BOX' || nameUpper.includes('SZUFLADA')) library_id = 'BLUM_ANTARO_M_500';
-                if (roleUpper === 'HINGE_LOCATOR' || nameUpper.includes('ZAWIAS')) library_id = 'HINGE_BLUM_71B3550';
+                // Obiekt zamrożony (np. zawias) zachowuje się jak usunięty — nie trafia do raportów
+                const isFrozen = Boolean(node.frozen || domain?.frozen || domain?.params?.frozen);
+                if (!isFrozen) {
+                    let library_id = domain?.library_id || domain?.price_id || domain?.name || roleUpper;
+                    if (roleUpper === 'PROWADNICA' || roleUpper === 'RAIL' || nameUpper.includes('PROWADNICA') || nameUpper.includes('BOCZEK')) {
+                        const rawHw = String(domain?.hardwareId || domain?.library_id || domain?.price_id || domain?.params?.railId || nameUpper).toUpperCase();
+                        const len = domain?.params?.lengthMm || 500;
+                        if (rawHw.includes('ANTARO') || rawHw.includes('M94') || rawHw.includes('D214') || rawHw.includes('KOSZ')) {
+                            const roundedLen = Math.round(len / 50) * 50;
+                            const clampedLen = Math.min(600, Math.max(300, roundedLen));
+                            library_id = `BLUM_ANTARO_M_${clampedLen}`;
+                        } else {
+                            library_id = domain?.library_id || 'PROWADNICA_KPL';
+                        }
+                    }
+                    if (roleUpper === 'HINGE_LOCATOR' || nameUpper.includes('ZAWIAS') || nameUpper.includes('HINGE')) {
+                        const rawHw = String(domain?.hardwareId || domain?.library_id || domain?.price_id || nameUpper).toUpperCase();
+                        if (rawHw.includes('71T3550') || rawHw.includes('BEZ HAMULCA')) {
+                            library_id = 'HINGE_BLUM_71T3550';
+                        } else {
+                            library_id = 'HINGE_BLUM_71B3550';
+                        }
+                    }
 
-                accessories.push({
-                    id: node.id || domain?.id || String(Math.random()),
-                    name: node.name || domain?.name || roleUpper,
-                    role: roleUpper || 'AKCESORIUM',
-                    library_id,
-                    qty: roleUpper === 'PROWADNICA' ? 0.5 : 1,
-                    furniture_name: furn,
-                    container_id: activeContainerId,
-                    smartbox_id: activeSmartboxId,
-                });
+                    const isRailItem = roleUpper === 'PROWADNICA' || roleUpper === 'RAIL' || nameUpper.includes('PROWADNICA') || nameUpper.includes('BOCZEK');
+                    if (isRailItem) {
+                        const drawerIdx = domain?.params?.drawerIndex ?? 
+                            (node.name?.match(/(\d+)[LP]/i)?.[1] || node.id?.match(/drawer_(\d+)/i)?.[1]);
+                        
+                        // Unikalne gniazdo szuflady (aby nie liczyć podwójnie lewej i prawej prowadnicy)
+                        const drawerSlotKey = `${furn}_${activeSmartboxId || 'sb'}_drawer_${drawerIdx ?? node.id}`;
+
+                        if (!seenDrawerSlots.has(drawerSlotKey)) {
+                            seenDrawerSlots.add(drawerSlotKey);
+
+                            // Sumowanie szuflad tego samego typu w danym meblu/korpusie
+                            const furnTypeKey = `${furn}_${library_id}`;
+                            const existingKit = drawerKitsByFurnAndType.get(furnTypeKey);
+
+                            if (existingKit) {
+                                existingKit.qty += 1;
+                            } else {
+                                const railLabel = node.name?.match(/\[(.*?)\]/)?.[1] || domain?.params?.railId || 'Antaro';
+                                const kitName = `Szuflada [${railLabel}] (kpl)`;
+
+                                const kitItem: AccessoryItem = {
+                                    id: `drawer_${furn}_${library_id}`,
+                                    name: kitName,
+                                    role: 'PROWADNICA',
+                                    library_id,
+                                    qty: 1,
+                                    furniture_name: furn,
+                                    container_id: activeContainerId,
+                                    smartbox_id: activeSmartboxId,
+                                };
+                                drawerKitsByFurnAndType.set(furnTypeKey, kitItem);
+                                accessories.push(kitItem);
+                            }
+                        }
+                    } else {
+                        accessories.push({
+                            id: node.id || domain?.id || String(Math.random()),
+                            name: node.name || domain?.name || roleUpper,
+                            role: roleUpper || 'AKCESORIUM',
+                            library_id,
+                            qty: 1,
+                            furniture_name: furn,
+                            container_id: activeContainerId,
+                            smartbox_id: activeSmartboxId,
+                        });
+                    }
+                }
             }
 
             const children = node.children || node._children;
@@ -278,6 +342,7 @@ export class ReportDataNormalizer {
         if (panels.length === 0 && typeof doc.getPanels === 'function') {
             const rawPanels = doc.getPanels();
             for (const p of rawPanels) {
+                if (p.frozen === true || p.domainData?.frozen === true || p.params?.frozen === true) continue;
                 const parentFurn = p.parent?.name || p.parent?.domainData?.name || 'Projekt';
                 if (p.parent) furnitureSet.add(parentFurn);
                 processPanel(p.domainData || p, parentFurn, p.parent?.id, undefined, p.id);

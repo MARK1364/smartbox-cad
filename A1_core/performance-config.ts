@@ -27,6 +27,7 @@ export interface PerformanceConfigData {
         throttleHoverMs: number;
         powerPreference: 'high-performance' | 'default' | 'low-power';
         renderOnDemand?: boolean;
+        preferredEngine?: 'webgl2' | 'webgpu';
     };
 }
 
@@ -202,6 +203,10 @@ export class PerformanceConfigManager {
 
     public getRenderOnDemand(): boolean {
         return this._config.current?.renderOnDemand ?? true;
+    }
+
+    public getPreferredEngine(): 'webgl2' | 'webgpu' {
+        return this._config.current?.preferredEngine ?? 'webgl2';
     }
 
     public applyToEngine(engine: any): void {

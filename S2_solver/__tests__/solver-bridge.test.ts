@@ -19,6 +19,7 @@ import {
     buildSolverInput,
     cadQuatFromSolver,
     collectTransformDeltas,
+    computeReferenceLockedIds,
     solverQuatFromCad,
 } from '../solver-bridge.js';
 import { SolveConstraintsCommand } from '../solve-constraints-command.js';
@@ -434,5 +435,96 @@ describe('SolveConstraintsCommand', () => {
         new SolveConstraintsCommand(collectTransformDeltas(input)).execute(document);
 
         expect(transformEvents).toBe(1);
+    });
+});
+
+describe('Łańcuch uziemionych szaf — niezależność od kolejności kliknięcia', () => {
+    it('nie blokuje szafy 3 w locked, gdy wskazało się szafę 3 jako anchorA i szafę 2 jako anchorB', () => {
+        const document = new ProjectDocument();
+        const cab1 = newContainer(document);
+        const cab2 = newContainer(document);
+        const cab3 = newContainer(document);
+
+        const cGround = constraint({
+            bindType: 'GROUND',
+            anchorA: makeAnchor({ nodeId: cab1.id, kind: 'OBJECT' }),
+            groundPosMm: [0, 0, 0],
+        });
+
+        const c1 = constraint({
+            bindType: 'VERTEX',
+            anchorA: makeAnchor({ nodeId: cab1.id, kind: 'VERTEX', cornerIndex: 1 }),
+            anchorB: makeAnchor({ nodeId: cab2.id, kind: 'VERTEX', cornerIndex: 0 }),
+        });
+
+        // Użytkownik wskazuje szafę 3 jako punkt A, a szafę 2 jako punkt B
+        const c2 = constraint({
+            bindType: 'VERTEX',
+            anchorA: makeAnchor({ nodeId: cab3.id, kind: 'VERTEX', cornerIndex: 0 }),
+            anchorB: makeAnchor({ nodeId: cab2.id, kind: 'VERTEX', cornerIndex: 1 }),
+        });
+
+        const locked = computeReferenceLockedIds([cGround, c1, c2], document);
+
+        // Tylko cab1 (GROUND) powinno być w locked. Cab3 i Cab2 NIE mogą być zablokowane!
+        expect(locked.has(cab1.id)).toBe(true);
+        expect(locked.has(cab2.id)).toBe(false);
+        expect(locked.has(cab3.id)).toBe(false);
+    });
+
+    it('nie odrywa szafy 2 od szafy 1 przy rozwiązywaniu więzów, gdy anchorA = cab3, anchorB = cab2', () => {
+        const document = new ProjectDocument();
+        const cab1 = newContainer(document);
+        const cab2 = newContainer(document);
+        const cab3 = newContainer(document);
+
+        // cab1 w (0, 0, 0)
+        cab1.setLocalTransform(new Vec3(0, 0, 0), Quat.IDENTITY);
+        // cab2 już dociągnięte obok cab1 w (600, 0, 0)
+        cab2.setLocalTransform(new Vec3(mmToNm(600), 0, 0), Quat.IDENTITY);
+        // cab3 stoi swobodnie dalej, np. w (2000, 0, 0)
+        cab3.setLocalTransform(new Vec3(mmToNm(2000), 0, 0), Quat.IDENTITY);
+
+        const cGround = constraint({
+            bindType: 'GROUND',
+            anchorA: makeAnchor({ nodeId: cab1.id, kind: 'OBJECT' }),
+            groundPosMm: [0, 0, 0],
+        });
+
+        // cab2 połączone z cab1: wierzchołek X+ cab1 do X- cab2
+        const c1 = constraint({
+            bindType: 'VERTEX',
+            anchorA: makeAnchor({ nodeId: cab1.id, kind: 'VERTEX', cornerIndex: 1 }),
+            anchorB: makeAnchor({ nodeId: cab2.id, kind: 'VERTEX', cornerIndex: 0 }),
+        });
+
+        // cab3 łączone do cab2, ale kliknięte odwrotnie: A = cab3 (naroże 0), B = cab2 (naroże 1)
+        const c2 = constraint({
+            bindType: 'VERTEX',
+            anchorA: makeAnchor({ nodeId: cab3.id, kind: 'VERTEX', cornerIndex: 0 }),
+            anchorB: makeAnchor({ nodeId: cab2.id, kind: 'VERTEX', cornerIndex: 1 }),
+        });
+
+        const input = buildSolverInput(document, [cGround, c1, c2]);
+        // Symulacja wyliczenia odległości w grafie (odpowiednik SolverController._computeGroundDistances)
+        input.contract.groundDistanceMap = {
+            [cab1.id]: 0,
+            [cab2.id]: 1,
+            [cab3.id]: 2,
+        };
+
+        solveConstraintsPure(input.contract, input.states, 50, RESIDUAL_TOLERANCE);
+        new SolveConstraintsCommand(collectTransformDeltas(input)).execute(document);
+
+        const cab1Pos = cab1.getWorldMatrix().decompose().translation;
+        const cab2Pos = cab2.getWorldMatrix().decompose().translation;
+        const cab3Pos = cab3.getWorldMatrix().decompose().translation;
+
+        // cab1 stoi w (0, 0, 0)
+        expect(nmToMm(cab1Pos.x)).toBeCloseTo(0, 1);
+        // cab2 NIE zostało oderwane i stoi nadal w (600, 0, 0)
+        expect(nmToMm(cab2Pos.x)).toBeCloseTo(600, 1);
+        // cab3 dociągnęło się do cab2 (jego narożnik 0 spotkał się z narożnikiem 1 szafy 2 przy 600 + 600 = 1200)
+        expect(nmToMm(cab3Pos.x)).toBeCloseTo(1200, 1);
     });
 });

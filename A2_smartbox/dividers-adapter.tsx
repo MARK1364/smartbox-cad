@@ -116,7 +116,7 @@ export function DividersSubModule({ container, triggerUpdate }: { container: any
                 <span style={labelStyle}>Ilość przegród:</span>
                 <SmartNumericInput
                     value={count}
-                    min={0} max={MAX_DIVIDERS} step={1}
+                    min={0} max={MAX_DIVIDERS} step={1} decimals={0}
                     style={{ ...inputStyle, width: '120px' }}
                     onChange={(val) => {
                         const n = Math.max(0, Math.min(MAX_DIVIDERS, Math.round(val)));
@@ -141,7 +141,7 @@ export function DividersSubModule({ container, triggerUpdate }: { container: any
                                 onChange={() => {
                                     let nextSections = sectionWidths;
                                     if (id === 'CUSTOM' && spacingMode !== 'CUSTOM') {
-                                        const eq = equalBayWidth(dims.width, count, 18);
+                                        const eq = Math.round(equalBayWidth(dims.width, count, 18) * 100) / 100;
                                         nextSections = emptySections().map((_, i) => (i < count ? eq : 200));
                                         setSectionWidths(nextSections);
                                     }
@@ -166,12 +166,12 @@ export function DividersSubModule({ container, triggerUpdate }: { container: any
                         <div key={i} style={rowStyle}>
                             <span style={{ ...labelStyle, fontSize: '11px' }}>Wnęka {i + 1}:</span>
                             <SmartNumericInput
-                                value={sectionWidths[i] ?? 200}
-                                min={10} step={1} unit="mm"
+                                value={sectionWidths[i] !== undefined ? Math.round(sectionWidths[i] * 100) / 100 : 200}
+                                min={10} step={0.01} decimals={2} unit="mm"
                                 style={{ ...inputStyle, width: '80px', fontSize: '11px' }}
                                 onChange={(val) => {
                                     const next = [...sectionWidths];
-                                    next[i] = toNum(val, 200);
+                                    next[i] = Math.round(toNum(val, 200) * 100) / 100;
                                     setSectionWidths(next);
                                     pushUpdate({ sectionWidths: next });
                                 }}
@@ -184,8 +184,8 @@ export function DividersSubModule({ container, triggerUpdate }: { container: any
                     >
                         <span style={{ ...labelStyle, fontSize: '11px' }}>Wnęka {count + 1}:</span>
                         <SmartNumericInput
-                            value={Math.round(layout.lastBay)}
-                            step={1} unit="mm"
+                            value={Math.round(layout.lastBay * 100) / 100}
+                            step={0.01} decimals={2} unit="mm"
                             readOnly
                             style={{
                                 ...inputStyle,

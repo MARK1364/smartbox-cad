@@ -5,7 +5,7 @@
  */
 import flapsRules from './flaps_3_rules_V1.json';
 import { BaseEngine } from './base-engine.js';
-import { DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../Biblioteki/okucia/index.js';
+import { DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 
 const FRONT_LCS = {
     mapping: { X: 'x', Y: 'z', Z: 'y' },
@@ -16,7 +16,7 @@ const FRONT_LCS = {
 type HingeSide = 'left' | 'right' | 'center';
 
 export class FlapsEngine extends BaseEngine {
-    plan(params: any): { parts: any[] } {
+    plan(params: any): { parts: any[]; hardware?: any[] } {
         const width = params.width || 600;
         const height = params.height || 720;
         const depth = params.depth || 500;
@@ -32,10 +32,17 @@ export class FlapsEngine extends BaseEngine {
         const hingeLeftOffset = params.hinge_left_offset !== undefined ? Number(params.hinge_left_offset) : 80;
         const hingeRightOffset = params.hinge_right_offset !== undefined ? Number(params.hinge_right_offset) : 80;
         const useCenterHinge = !!params.use_center_hinge;
+        const baseHingeId = params.hinge_template || params.library_id || DEFAULT_HINGE_ID;
         const resolveHingeId = (side: HingeSide): string => {
-            if (side === 'left') return params.hinge_left_template || params.hinge_template || params.library_id || DEFAULT_HINGE_ID;
-            if (side === 'right') return params.hinge_right_template || params.hinge_template || params.library_id || DEFAULT_HINGE_ID;
-            return params.hinge_center_template || params.hinge_template || params.library_id || DEFAULT_HINGE_ID;
+            if (side === 'left' && params.hinge_left_template) return params.hinge_left_template;
+            if (side === 'right' && params.hinge_right_template) return params.hinge_right_template;
+            if (side === 'center' && params.hinge_center_template) return params.hinge_center_template;
+
+            if (baseHingeId === 'BLUM_71B3550' || baseHingeId === 'BLUM_71T3550') {
+                if (side === 'right') return 'BLUM_71T3550';
+                return 'BLUM_71B3550';
+            }
+            return baseHingeId;
         };
 
         const flapWidth = width + ovLeft + ovRight;
@@ -70,12 +77,16 @@ export class FlapsEngine extends BaseEngine {
                     face: 'FACE_Z_PLUS',
                     params: {
                         template_id: templateId,
+                        hinge_id: hingeId,
                         u,
                         v,
                         diameter: hole.dia,
                         depth: hole.depth,
                         isFlapCup: isCup,
-                        isFlapScrew: !isCup
+                        isFlapScrew: !isCup,
+                        hingeKey: hingeKey,
+                        side: side,
+                        hardwareId: `hinge_${hingeKey.toLowerCase()}`
                     }
                 });
             }
@@ -117,6 +128,33 @@ export class FlapsEngine extends BaseEngine {
             features: allFeatures
         }];
 
-        return { parts };
+        const hardware: any[] = [];
+        for (const h of activeHinges) {
+            const hingeId = resolveHingeId(h.side);
+            const uCenter = hingeUCenter(h.side);
+            const frontHoles = hingeFrontHolesMm(hingeId);
+            const cupHole = frontHoles.find(hole => hole.isCup);
+            const cupEdgeDist = cupHole?.edgeDist ?? 21.5;
+            const vCenter = isTop ? (flapHeight - cupEdgeDist) : cupEdgeDist;
+
+            const hwX = posX - flapWidth / 2 + uCenter;
+            const hwZ = posZ - flapHeight / 2 + vCenter;
+
+            hardware.push({
+                id: `hinge_${h.key.toLowerCase()}`,
+                name: `Zawias Klapy (${h.side === 'left' ? 'Lewy' : h.side === 'right' ? 'Prawy' : 'Środkowy'}) [${hingeId}]`,
+                hardwareType: 'HINGE',
+                hardwareId: hingeId,
+                side: h.side,
+                loc: { x: hwX, y: posY, z: hwZ },
+                params: {
+                    hingeKey: h.key,
+                    side: h.side,
+                    isTop
+                }
+            });
+        }
+
+        return { parts, hardware };
     }
 }

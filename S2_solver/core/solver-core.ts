@@ -23,17 +23,27 @@ import {
 } from './contract.js';
 import {
     applyRotationToQuat,
-    localToWorldNormal,
-    localToWorldPoint,
-    rotationBetweenNormals,
-    scaledQuat,
+    applyRotationToQuatTo,
     findPerpendicular,
+    findPerpendicularTo,
+    localToWorldNormal,
+    localToWorldNormalTo,
+    localToWorldPoint,
+    localToWorldPointTo,
+    rotationBetweenNormals,
+    rotationBetweenNormalsTo,
+    scaledQuat,
+    scaledQuatTo,
     vec3Add,
+    vec3AddTo,
     vec3Dot,
     vec3Len,
     vec3Normalize,
+    vec3NormalizeTo,
     vec3Scale,
+    vec3ScaleTo,
     vec3Sub,
+    vec3SubTo,
     type Quat,
     type Vec3,
 } from './math3d.js';
@@ -69,33 +79,69 @@ export const DEFAULT_TOLERANCE: SolverTolerance = { linearMm: 0.1, angularRad: 1
 /** Odpowiednik pythonowego `RESIDUAL_THRESHOLD = 0.005 mm`. */
 export const RESIDUAL_TOLERANCE: SolverTolerance = { linearMm: 0.005, angularRad: 5e-6 };
 
-export function getVertexWorldPosition(state: ObjectState, vertIdx: number): Vec3 {
+// ============================================================================
+// REJESTRY ROBOCZE DLA GORĄCEJ PĘTLI SOLVERA (ZERO-ALLOCATION SCRATCHPAD)
+// ============================================================================
+
+const _rV0: Vec3 = [0.0, 0.0, 0.0];
+const _rV1: Vec3 = [0.0, 0.0, 0.0];
+const _rV2: Vec3 = [0.0, 0.0, 0.0];
+const _rCenterA: Vec3 = [0.0, 0.0, 0.0];
+const _rNormA: Vec3 = [0.0, 0.0, 0.0];
+const _rCenterB: Vec3 = [0.0, 0.0, 0.0];
+const _rNormB: Vec3 = [0.0, 0.0, 0.0];
+const _rQ0: Quat = [1.0, 0.0, 0.0, 0.0];
+const _rQ1: Quat = [1.0, 0.0, 0.0, 0.0];
+const _rQ2: Quat = [1.0, 0.0, 0.0, 0.0];
+
+export function getVertexWorldPositionTo(state: ObjectState, vertIdx: number, out: Vec3): Vec3 {
     const localPt = state.localVertices.get(vertIdx);
     if (localPt === undefined) {
-        return [0.0, 0.0, 0.0];
+        out[0] = 0.0;
+        out[1] = 0.0;
+        out[2] = 0.0;
+        return out;
     }
-    return localToWorldPoint(localPt, state.location, state.rotation);
+    return localToWorldPointTo(localPt, state.location, state.rotation, out);
+}
+
+export function getVertexWorldPosition(state: ObjectState, vertIdx: number): Vec3 {
+    return getVertexWorldPositionTo(state, vertIdx, [0.0, 0.0, 0.0]);
+}
+
+export function getFaceWorldDataTo(
+    state: ObjectState,
+    faceIdx: number,
+    outCenter: Vec3,
+    outNormal: Vec3,
+): void {
+    const faceData = state.localFaces.get(faceIdx);
+    if (faceData === undefined) {
+        outCenter[0] = 0.0;
+        outCenter[1] = 0.0;
+        outCenter[2] = 0.0;
+        outNormal[0] = 0.0;
+        outNormal[1] = 0.0;
+        outNormal[2] = 1.0;
+        return;
+    }
+    const [localCenter, localNormal] = faceData;
+    localToWorldPointTo(localCenter, state.location, state.rotation, outCenter);
+    localToWorldNormalTo(localNormal, state.rotation, outNormal);
+    vec3NormalizeTo(outNormal, outNormal);
 }
 
 export function getFaceWorldData(state: ObjectState, faceIdx: number): [Vec3, Vec3] {
-    const faceData = state.localFaces.get(faceIdx);
-    if (faceData === undefined) {
-        return [
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ];
-    }
-    const [localCenter, localNormal] = faceData;
-    const worldCenter = localToWorldPoint(localCenter, state.location, state.rotation);
-    const worldNormal = localToWorldNormal(localNormal, state.rotation);
-    return [worldCenter, vec3Normalize(worldNormal)];
+    const center: Vec3 = [0.0, 0.0, 0.0];
+    const normal: Vec3 = [0.0, 0.0, 0.0];
+    getFaceWorldDataTo(state, faceIdx, center, normal);
+    return [center, normal];
 }
 
 /**
  * Kolejność rozwiązywania: GROUND najpierw, potem więzy tym bliżej, im mniejsza
- * odległość ich obiektów od uziemienia. Sortowanie musi być stabilne, dlatego
- * remisy rozstrzyga pierwotny indeks — bez tego zmieniłaby się kolejność
- * aplikowania poprawek, a z nią wynik.
+ * odległość ich obiektów od uziemienia. Sortowanie w JS (ES2019+) jest stabilne,
+ * dlatego zachowuje pierwotną kolejność przy remisach bez dodatkowych mapowań obiektów.
  */
 function sortConstraints(
     constraints: ConstraintItem[],
@@ -110,10 +156,7 @@ function sortConstraints(
         return Math.min(da, db);
     };
 
-    return constraints
-        .map((c, index) => ({ c, index }))
-        .sort((l, r) => key(l.c) - key(r.c) || l.index - r.index)
-        .map((entry) => entry.c);
+    return constraints.slice().sort((l, r) => key(l) - key(r));
 }
 
 function moveShares(
@@ -176,36 +219,39 @@ export function solveConstraintsPure(
 
             if (bind.groundMode === 'OBJECT') {
                 const targetPos = bind.groundPos;
-                const errorLen = vec3Len(vec3Sub(targetPos, stateA.location));
+                vec3SubTo(targetPos, stateA.location, _rV0);
+                const errorLen = vec3Len(_rV0);
                 if (errorLen > tol.linearMm) {
-                    stateA.location = [targetPos[0], targetPos[1], targetPos[2]];
+                    stateA.location[0] = targetPos[0];
+                    stateA.location[1] = targetPos[1];
+                    stateA.location[2] = targetPos[2];
                     maxLinear = Math.max(maxLinear, errorLen);
                 }
             } else if (bind.groundMode === 'VERTEX' && bind.vertA >= 0) {
-                const posCurrent = getVertexWorldPosition(stateA, bind.vertA);
-                const error = vec3Sub(bind.groundPos, posCurrent);
-                const errorLen = vec3Len(error);
+                getVertexWorldPositionTo(stateA, bind.vertA, _rV1);
+                vec3SubTo(bind.groundPos, _rV1, _rV0);
+                const errorLen = vec3Len(_rV0);
                 if (errorLen > tol.linearMm) {
-                    stateA.location = vec3Add(stateA.location, error);
+                    vec3AddTo(stateA.location, _rV0, stateA.location);
                     maxLinear = Math.max(maxLinear, errorLen);
                 }
             } else if (bind.groundMode === 'FACE' && bind.faceA >= 0) {
                 // 1) Obrót normalnej płaszczyzny uziemienia.
-                const [, currentNormal] = getFaceWorldData(stateA, bind.faceA);
-                const rotationDiff = rotationBetweenNormals(currentNormal, bind.groundNormal);
-                const w = Math.min(Math.max(Math.abs(rotationDiff[0]), -1.0), 1.0);
+                getFaceWorldDataTo(stateA, bind.faceA, _rCenterA, _rNormA);
+                rotationBetweenNormalsTo(_rNormA, bind.groundNormal, _rQ0, _rV0, _rV1);
+                const w = Math.min(Math.max(Math.abs(_rQ0[0]), -1.0), 1.0);
                 const angle = 2.0 * Math.acos(w);
                 if (angle > tol.angularRad) {
-                    stateA.rotation = applyRotationToQuat(stateA.rotation, rotationDiff);
+                    applyRotationToQuatTo(stateA.rotation, _rQ0, stateA.rotation);
                     maxAngular = Math.max(maxAngular, angle);
                 }
 
                 // 2) Translacja środka płaszczyzny — aplikowana PO obrocie.
-                const [posCurrent] = getFaceWorldData(stateA, bind.faceA);
-                const error = vec3Sub(bind.groundPos, posCurrent);
-                const errorLen = vec3Len(error);
+                getFaceWorldDataTo(stateA, bind.faceA, _rCenterA, _rNormA);
+                vec3SubTo(bind.groundPos, _rCenterA, _rV0);
+                const errorLen = vec3Len(_rV0);
                 if (errorLen > tol.linearMm) {
-                    stateA.location = vec3Add(stateA.location, error);
+                    vec3AddTo(stateA.location, _rV0, stateA.location);
                     maxLinear = Math.max(maxLinear, errorLen);
                 }
             }
@@ -230,10 +276,10 @@ export function solveConstraintsPure(
             }
 
             if (bind.bindType === 'VERTEX') {
-                const posA = getVertexWorldPosition(stateA, bind.vertA);
-                const posB = getVertexWorldPosition(stateB, bind.vertB);
-                const errorVec = vec3Sub(posA, posB);
-                const errorLen = vec3Len(errorVec);
+                getVertexWorldPositionTo(stateA, bind.vertA, _rV0);
+                getVertexWorldPositionTo(stateB, bind.vertB, _rV1);
+                vec3SubTo(_rV0, _rV1, _rV2);
+                const errorLen = vec3Len(_rV2);
                 if (errorLen < tol.linearMm) {
                     continue;
                 }
@@ -241,87 +287,95 @@ export function solveConstraintsPure(
                 const kB = wb === 0 ? 0 : wa === 0 ? RELAX : RELAX * wb;
                 const kA = wa === 0 ? 0 : wb === 0 ? RELAX : RELAX * wa;
                 if (kB > 0) {
-                    stateB.location = vec3Add(stateB.location, vec3Scale(errorVec, kB));
+                    vec3ScaleTo(_rV2, kB, _rV0);
+                    vec3AddTo(stateB.location, _rV0, stateB.location);
                 }
                 if (kA > 0) {
-                    stateA.location = vec3Add(stateA.location, vec3Scale(errorVec, -kA));
+                    vec3ScaleTo(_rV2, -kA, _rV0);
+                    vec3AddTo(stateA.location, _rV0, stateA.location);
                 }
                 maxLinear = Math.max(maxLinear, errorLen);
             } else if (bind.bindType === 'COPLANAR' || bind.bindType === 'FLUSH') {
-                let [centerA, normA] = getFaceWorldData(stateA, bind.faceA);
-                let [centerB, normB] = getFaceWorldData(stateB, bind.faceB);
+                getFaceWorldDataTo(stateA, bind.faceA, _rCenterA, _rNormA);
+                getFaceWorldDataTo(stateB, bind.faceB, _rCenterB, _rNormB);
 
                 if (bind.bindType === 'FLUSH') {
-                    normB = vec3Scale(normB, -1.0);
+                    vec3ScaleTo(_rNormB, -1.0, _rNormB);
                 }
 
                 // ---- ROTACJA (tłumiona); zablokowana bryła nie obraca się ----
                 if (wb > 0 && wa === 0) {
-                    let rot = rotationBetweenNormals(normB, normA);
-                    let w = Math.min(Math.max(Math.abs(rot[0]), -1.0), 1.0);
+                    rotationBetweenNormalsTo(_rNormB, _rNormA, _rQ0, _rV0, _rV1);
+                    let w = Math.min(Math.max(Math.abs(_rQ0[0]), -1.0), 1.0);
                     let angle = 2.0 * Math.acos(w);
                     if (angle > tol.angularRad) {
-                        stateB.rotation = applyRotationToQuat(stateB.rotation, scaledQuat(rot, RELAX));
+                        scaledQuatTo(_rQ0, RELAX, _rQ1);
+                        applyRotationToQuatTo(stateB.rotation, _rQ1, stateB.rotation);
                         maxAngular = Math.max(maxAngular, angle);
-                        [centerB, normB] = getFaceWorldData(stateB, bind.faceB);
+                        getFaceWorldDataTo(stateB, bind.faceB, _rCenterB, _rNormB);
                         if (bind.bindType === 'FLUSH') {
-                            normB = vec3Scale(normB, -1.0);
+                            vec3ScaleTo(_rNormB, -1.0, _rNormB);
                         }
                     }
                 } else if (wa > 0 && wb === 0) {
-                    let rot = rotationBetweenNormals(normA, normB);
-                    let w = Math.min(Math.max(Math.abs(rot[0]), -1.0), 1.0);
+                    rotationBetweenNormalsTo(_rNormA, _rNormB, _rQ0, _rV0, _rV1);
+                    let w = Math.min(Math.max(Math.abs(_rQ0[0]), -1.0), 1.0);
                     let angle = 2.0 * Math.acos(w);
                     if (angle > tol.angularRad) {
-                        stateA.rotation = applyRotationToQuat(stateA.rotation, scaledQuat(rot, RELAX));
+                        scaledQuatTo(_rQ0, RELAX, _rQ1);
+                        applyRotationToQuatTo(stateA.rotation, _rQ1, stateA.rotation);
                         maxAngular = Math.max(maxAngular, angle);
-                        [centerA, normA] = getFaceWorldData(stateA, bind.faceA);
+                        getFaceWorldDataTo(stateA, bind.faceA, _rCenterA, _rNormA);
                     }
                 } else if (wa > 0 && wb > 0) {
-                    let avgNormal = vec3Add(normA, normB);
-                    if (vec3Len(avgNormal) > 0.0001) {
-                        avgNormal = vec3Normalize(avgNormal);
+                    vec3AddTo(_rNormA, _rNormB, _rV2);
+                    if (vec3Len(_rV2) > 0.0001) {
+                        vec3NormalizeTo(_rV2, _rV2);
                     } else {
-                        avgNormal = findPerpendicular(normA);
+                        findPerpendicularTo(_rNormA, _rV2);
                     }
 
-                    const rotA = rotationBetweenNormals(normA, avgNormal);
-                    const rotB = rotationBetweenNormals(normB, avgNormal);
+                    rotationBetweenNormalsTo(_rNormA, _rV2, _rQ0, _rV0, _rV1);
+                    rotationBetweenNormalsTo(_rNormB, _rV2, _rQ2, _rV0, _rV1);
 
-                    let wA = Math.min(Math.max(Math.abs(rotA[0]), -1.0), 1.0);
+                    let wA = Math.min(Math.max(Math.abs(_rQ0[0]), -1.0), 1.0);
                     let angleA = 2.0 * Math.acos(wA);
                     if (angleA > tol.angularRad) {
-                        stateA.rotation = applyRotationToQuat(stateA.rotation, scaledQuat(rotA, RELAX));
+                        scaledQuatTo(_rQ0, RELAX, _rQ1);
+                        applyRotationToQuatTo(stateA.rotation, _rQ1, stateA.rotation);
                         maxAngular = Math.max(maxAngular, angleA);
                     }
 
-                    let wB = Math.min(Math.max(Math.abs(rotB[0]), -1.0), 1.0);
+                    let wB = Math.min(Math.max(Math.abs(_rQ2[0]), -1.0), 1.0);
                     let angleB = 2.0 * Math.acos(wB);
                     if (angleB > tol.angularRad) {
-                        stateB.rotation = applyRotationToQuat(stateB.rotation, scaledQuat(rotB, RELAX));
+                        scaledQuatTo(_rQ2, RELAX, _rQ1);
+                        applyRotationToQuatTo(stateB.rotation, _rQ1, stateB.rotation);
                         maxAngular = Math.max(maxAngular, angleB);
                     }
 
-                    [centerA, normA] = getFaceWorldData(stateA, bind.faceA);
-                    [centerB, normB] = getFaceWorldData(stateB, bind.faceB);
+                    getFaceWorldDataTo(stateA, bind.faceA, _rCenterA, _rNormA);
+                    getFaceWorldDataTo(stateB, bind.faceB, _rCenterB, _rNormB);
                     if (bind.bindType === 'FLUSH') {
-                        normB = vec3Scale(normB, -1.0);
+                        vec3ScaleTo(_rNormB, -1.0, _rNormB);
                     }
                 }
 
                 // ---- TRANSLACJA wzdłuż normA ----
-                const errorVec = vec3Sub(centerA, centerB);
-                const proj = vec3Dot(errorVec, normA);
+                vec3SubTo(_rCenterA, _rCenterB, _rV0);
+                const proj = vec3Dot(_rV0, _rNormA);
                 const targetDist = proj + bind.offset;
 
                 if (Math.abs(targetDist) > tol.linearMm) {
                     const kB = wb === 0 ? 0 : wa === 0 ? RELAX : RELAX * wb;
                     const kA = wa === 0 ? 0 : wb === 0 ? RELAX : RELAX * wa;
                     if (kB > 0) {
-                        stateB.location = vec3Add(stateB.location, vec3Scale(normA, targetDist * kB));
+                        vec3ScaleTo(_rNormA, targetDist * kB, _rV1);
+                        vec3AddTo(stateB.location, _rV1, stateB.location);
                     }
                     if (kA > 0) {
-                        stateA.location = vec3Add(stateA.location, vec3Scale(normA, -targetDist * kA));
+                        vec3ScaleTo(_rNormA, -targetDist * kA, _rV1);
+                        vec3AddTo(stateA.location, _rV1, stateA.location);
                     }
                     maxLinear = Math.max(maxLinear, Math.abs(targetDist));
                 }
@@ -359,17 +413,20 @@ export function computeConstraintResidual(
             return emptyConstraintResidual();
         }
         if (bind.groundMode === 'OBJECT') {
-            return { linearMm: vec3Len(vec3Sub(bind.groundPos, stateA.location)), angularRad: 0 };
+            vec3SubTo(bind.groundPos, stateA.location, _rV0);
+            return { linearMm: vec3Len(_rV0), angularRad: 0 };
         }
         if (bind.groundMode === 'VERTEX' && bind.vertA >= 0) {
-            const pos = getVertexWorldPosition(stateA, bind.vertA);
-            return { linearMm: vec3Len(vec3Sub(bind.groundPos, pos)), angularRad: 0 };
+            getVertexWorldPositionTo(stateA, bind.vertA, _rV0);
+            vec3SubTo(bind.groundPos, _rV0, _rV1);
+            return { linearMm: vec3Len(_rV1), angularRad: 0 };
         }
         if (bind.groundMode === 'FACE' && bind.faceA >= 0) {
-            const [pos, norm] = getFaceWorldData(stateA, bind.faceA);
-            const posErr = vec3Len(vec3Sub(bind.groundPos, pos));
-            const targetNorm = vec3Normalize(bind.groundNormal);
-            const dot = Math.min(Math.abs(vec3Dot(norm, targetNorm)), 1.0);
+            getFaceWorldDataTo(stateA, bind.faceA, _rCenterA, _rNormA);
+            vec3SubTo(bind.groundPos, _rCenterA, _rV0);
+            const posErr = vec3Len(_rV0);
+            vec3NormalizeTo(bind.groundNormal, _rV1);
+            const dot = Math.min(Math.abs(vec3Dot(_rNormA, _rV1)), 1.0);
             return { linearMm: posErr, angularRad: Math.acos(dot) };
         }
     }
@@ -378,28 +435,26 @@ export function computeConstraintResidual(
         if (!stateA || !stateB) {
             return emptyConstraintResidual();
         }
-        const posA = getVertexWorldPosition(stateA, bind.vertA);
-        const posB = getVertexWorldPosition(stateB, bind.vertB);
-        return { linearMm: vec3Len(vec3Sub(posA, posB)), angularRad: 0 };
+        getVertexWorldPositionTo(stateA, bind.vertA, _rV0);
+        getVertexWorldPositionTo(stateB, bind.vertB, _rV1);
+        vec3SubTo(_rV0, _rV1, _rV2);
+        return { linearMm: vec3Len(_rV2), angularRad: 0 };
     }
-
-
 
     if (bind.bindType === 'COPLANAR' || bind.bindType === 'FLUSH') {
         if (!stateA || !stateB) {
             return emptyConstraintResidual();
         }
-        const [centerA, normA] = getFaceWorldData(stateA, bind.faceA);
-        const [centerB, normBRaw] = getFaceWorldData(stateB, bind.faceB);
-        let normB = normBRaw;
+        getFaceWorldDataTo(stateA, bind.faceA, _rCenterA, _rNormA);
+        getFaceWorldDataTo(stateB, bind.faceB, _rCenterB, _rNormB);
         if (bind.bindType === 'FLUSH') {
-            normB = vec3Scale(normB, -1.0);
+            vec3ScaleTo(_rNormB, -1.0, _rNormB);
         }
 
-        const dot = Math.min(Math.abs(vec3Dot(normA, normB)), 1.0);
-        const errorVec = vec3Sub(centerA, centerB);
+        const dot = Math.min(Math.abs(vec3Dot(_rNormA, _rNormB)), 1.0);
+        vec3SubTo(_rCenterA, _rCenterB, _rV0);
         return {
-            linearMm: Math.abs(vec3Dot(errorVec, normA) + bind.offset),
+            linearMm: Math.abs(vec3Dot(_rV0, _rNormA) + bind.offset),
             angularRad: Math.acos(dot),
         };
     }
@@ -459,8 +514,13 @@ function restorePoses(states: Map<string, ObjectState>, snap: Map<string, PoseSn
         if (!pose) {
             continue;
         }
-        state.location = [pose.location[0], pose.location[1], pose.location[2]];
-        state.rotation = [pose.rotation[0], pose.rotation[1], pose.rotation[2], pose.rotation[3]];
+        state.location[0] = pose.location[0];
+        state.location[1] = pose.location[1];
+        state.location[2] = pose.location[2];
+        state.rotation[0] = pose.rotation[0];
+        state.rotation[1] = pose.rotation[1];
+        state.rotation[2] = pose.rotation[2];
+        state.rotation[3] = pose.rotation[3];
     }
 }
 

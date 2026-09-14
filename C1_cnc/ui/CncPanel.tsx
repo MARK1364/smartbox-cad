@@ -567,6 +567,11 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     const handleGenerateGCode = () => {
         if (!lockedPanel) return;
 
+        if (lockedPanel.frozen === true || lockedPanel.params?.frozen === true) {
+            setWarningMessage('Formatka jest zamrożona (obiekt wykluczony z obróbki CNC). Odmroź formatkę w drzewie obiektów, aby wygenerować kod.');
+            return;
+        }
+
         // Sprawdź czy są operacje bez przypisanego narzędzia
         const missingToolFeats = features.filter(f => !f.toolId);
         if (missingToolFeats.length > 0) {
@@ -605,6 +610,11 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     // Kontrola Symulacji 3D
     const handleStartSim = () => {
         if (!CNCEngine.getInstance().simulator || !lockedPanel) return;
+
+        if (lockedPanel.frozen === true || lockedPanel.params?.frozen === true) {
+            setWarningMessage('Formatka jest zamrożona (obiekt wykluczony z obróbki CNC). Odmroź formatkę w drzewie obiektów, aby uruchomić symulację.');
+            return;
+        }
 
         // Sprawdź czy są operacje bez przypisanego narzędzia
         const missingToolFeats = features.filter(f => !f.toolId);
@@ -818,6 +828,24 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                 <div style={{ fontSize: '11px', color: '#eeeeee', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     ⚙️ Edycja: {programs.find(p => p.id === activeProgramId)?.name || 'Brak'}
                 </div>
+
+                {/* OSTRZEŻENIE O ZAMROŻENIU FORMATKI */}
+                {lockedPanel && (lockedPanel.frozen === true || lockedPanel.params?.frozen === true) && (
+                    <div style={{
+                        background: 'rgba(56, 189, 248, 0.12)',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        borderRadius: '4px',
+                        padding: '6px 10px',
+                        fontSize: '11px',
+                        color: '#7dd3fc',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                    }}>
+                        <span>❄️</span>
+                        <span><strong>Formatka zamrożona:</strong> wykluczona z obróbki CNC, generowania G-kodu oraz nestingu.</span>
+                    </div>
+                )}
 
                 {/* TAB GRID */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: 'auto auto', gap: '1px', background: '#222', border: '1px solid #222', borderRadius: '3px', overflow: 'hidden' }}>

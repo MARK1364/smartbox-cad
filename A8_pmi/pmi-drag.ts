@@ -86,6 +86,37 @@ function dragPlaneNormal(scene: any): Vec3 | null {
 }
 
 export const MAX_OFFSET_DRAG_DISTANCE = 5000; // mm
+export const PMI_OFFSET_DRAG_MULTIPLIER = 1.0;
+
+/**
+ * Analityczny rzut promienia kursora na prostą w przestrzeni 3D.
+ * Wyznacza współrzędną s wzdłuż osi (punkt na osi: startPos + s * axisDir).
+ */
+export function projectRayOntoAxis(scene: any, startPos: Vec3, axisDir: Vec3): number | null {
+    const camera = scene?.activeCamera;
+    if (!scene || !camera) return null;
+    const ray = scene.createPickingRay(scene.pointerX, scene.pointerY, null, camera);
+    if (!ray) return null;
+
+    const O = ray.origin;
+    const D = ray.direction;
+    const P = startPos;
+    const N = axisDir;
+
+    const w0x = P.x - O.x;
+    const w0y = P.y - O.y;
+    const w0z = P.z - O.z;
+
+    const b = D.x * N.x + D.y * N.y + D.z * N.z;
+    const denom = 1.0 - b * b;
+    if (Math.abs(denom) < 1e-4) return null;
+
+    const d = D.x * w0x + D.y * w0y + D.z * w0z;
+    const e = N.x * w0x + N.y * w0y + N.z * w0z;
+
+    const s = (b * d - e) / denom;
+    return isFinite(s) ? s : null;
+}
 
 /**
  * Punkt przecięcia promienia spod kursora z płaszczyzną widoku.
@@ -137,17 +168,24 @@ export function computeOffsetFromPointer(input: OffsetDragInput): Vec3 | null {
     const axisLen = axis ? v3Len(axis) : 0;
 
     if (axis && axisLen > 1e-6) {
-        // Blokada osi: delta względem punktu startu.
+        // Blokada osi: bezpośredni rzut promienia na oś w przestrzeni 3D
         const axisNorm = v3Normalize(axis);
-        const startHit = input.dragStartHitWorld ?? hit;
-        const startOff = input.dragStartOffsetWorld ?? v3(0, 0, 0);
-        const rawDelta = v3Sub(hit, startHit);
-        const scalar = v3Dot(startOff, axisNorm) + v3Dot(rawDelta, axisNorm);
-        const clampedScalar = Math.max(-MAX_OFFSET_DRAG_DISTANCE, Math.min(MAX_OFFSET_DRAG_DISTANCE, scalar));
+        const projScalar = projectRayOntoAxis(scene, mid, axisNorm);
+        let scalar: number;
+        if (projScalar !== null) {
+            scalar = projScalar;
+        } else {
+            const startHit = input.dragStartHitWorld ?? hit;
+            const startOff = input.dragStartOffsetWorld ?? v3(0, 0, 0);
+            const rawDelta = v3Sub(hit, startHit);
+            scalar = v3Dot(startOff, axisNorm) + v3Dot(rawDelta, axisNorm);
+        }
+        const roundedScalar = Math.round(scalar);
+        const clampedScalar = Math.max(-MAX_OFFSET_DRAG_DISTANCE, Math.min(MAX_OFFSET_DRAG_DISTANCE, roundedScalar));
         return v3Scale(axisNorm, clampedScalar);
     }
 
-    // Tryb FREE: składowa prostopadła + bias startowy.
+    // Tryb FREE: składowa prostopadła do odcinka + bias startowy.
     const rel = v3Sub(hit, mid);
     const perp = perpendicularToDimension(rel, anchor1World, anchor2World);
     const bias = input.freeDragBiasWorld ?? v3(0, 0, 0);
@@ -156,7 +194,11 @@ export function computeOffsetFromPointer(input: OffsetDragInput): Vec3 | null {
     if (len > MAX_OFFSET_DRAG_DISTANCE) {
         return v3Scale(v3Normalize(rawOffset), MAX_OFFSET_DRAG_DISTANCE);
     }
-    return rawOffset;
+    return {
+        x: Math.round(rawOffset.x),
+        y: Math.round(rawOffset.y),
+        z: Math.round(rawOffset.z),
+    };
 }
 
 /** Przygotowuje stan kotwicy dragu na początku przeciągania offsetu. */

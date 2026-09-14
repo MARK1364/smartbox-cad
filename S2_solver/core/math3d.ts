@@ -17,12 +17,24 @@ function vecLen(v: Vec3): number {
     return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
-export function quatNorm(q: Quat): Quat {
+export function quatNormTo(q: Quat, out: Quat): Quat {
     const n = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
     if (n < 1e-12) {
-        return [1.0, 0.0, 0.0, 0.0];
+        out[0] = 1.0;
+        out[1] = 0.0;
+        out[2] = 0.0;
+        out[3] = 0.0;
+        return out;
     }
-    return [q[0] / n, q[1] / n, q[2] / n, q[3] / n];
+    out[0] = q[0] / n;
+    out[1] = q[1] / n;
+    out[2] = q[2] / n;
+    out[3] = q[3] / n;
+    return out;
+}
+
+export function quatNorm(q: Quat): Quat {
+    return quatNormTo(q, [0.0, 0.0, 0.0, 0.0]);
 }
 
 export function quatDot(a: Quat, b: Quat): number {
@@ -94,53 +106,109 @@ export function averageQuaternions(quats: Quat[]): Quat {
 // TRANSFORMACJE PRZESTRZENNE
 // ============================================================================
 
-function quatMul(a: Quat, b: Quat): Quat {
-    const [aw, ax, ay, az] = a;
-    const [bw, bx, by, bz] = b;
-    return [
-        aw * bw - ax * bx - ay * by - az * bz,
-        aw * bx + ax * bw + ay * bz - az * by,
-        aw * by - ax * bz + ay * bw + az * bx,
-        aw * bz + ax * by - ay * bx + az * bw,
-    ];
+export function quatMulTo(a: Quat, b: Quat, out: Quat): Quat {
+    const aw = a[0], ax = a[1], ay = a[2], az = a[3];
+    const bw = b[0], bx = b[1], by = b[2], bz = b[3];
+    out[0] = aw * bw - ax * bx - ay * by - az * bz;
+    out[1] = aw * bx + ax * bw + ay * bz - az * by;
+    out[2] = aw * by - ax * bz + ay * bw + az * bx;
+    out[3] = aw * bz + ax * by - ay * bx + az * bw;
+    return out;
 }
 
-function quatConjugate(q: Quat): Quat {
-    return [q[0], -q[1], -q[2], -q[3]];
+export function quatMul(a: Quat, b: Quat): Quat {
+    return quatMulTo(a, b, [0.0, 0.0, 0.0, 0.0]);
+}
+
+export function quatConjugateTo(q: Quat, out: Quat): Quat {
+    out[0] = q[0];
+    out[1] = -q[1];
+    out[2] = -q[2];
+    out[3] = -q[3];
+    return out;
+}
+
+export function quatConjugate(q: Quat): Quat {
+    return quatConjugateTo(q, [0.0, 0.0, 0.0, 0.0]);
+}
+
+/** Obraca wektor v kwaternionem q (q * v * q^-1) in-place do out bez alokacji. */
+export function rotateVec3ByQuatTo(v: Vec3, q: Quat, out: Vec3): Vec3 {
+    let qw = q[0], qx = q[1], qy = q[2], qz = q[3];
+    const n = Math.sqrt(qw * qw + qx * qx + qy * qy + qz * qz);
+    if (n > 1e-12) {
+        qw /= n; qx /= n; qy /= n; qz /= n;
+    } else {
+        qw = 1.0; qx = 0.0; qy = 0.0; qz = 0.0;
+    }
+    const vx = v[0], vy = v[1], vz = v[2];
+    // t = 2 * cross(q.xyz, v)
+    const tx = 2.0 * (qy * vz - qz * vy);
+    const ty = 2.0 * (qz * vx - qx * vz);
+    const tz = 2.0 * (qx * vy - qy * vx);
+    // out = v + qw * t + cross(q.xyz, t)
+    out[0] = vx + qw * tx + (qy * tz - qz * ty);
+    out[1] = vy + qw * ty + (qz * tx - qx * tz);
+    out[2] = vz + qw * tz + (qx * ty - qy * tx);
+    return out;
 }
 
 /** Obraca wektor v kwaternionem q (q * v * q^-1). */
 export function rotateVec3ByQuat(v: Vec3, q: Quat): Vec3 {
-    const qn = quatNorm(q);
-    const vq: Quat = [0.0, v[0], v[1], v[2]];
-    const tmp = quatMul(qn, vq);
-    const res = quatMul(tmp, quatConjugate(qn));
-    return [res[1], res[2], res[3]];
+    return rotateVec3ByQuatTo(v, q, [0.0, 0.0, 0.0]);
+}
+
+export function localToWorldPointTo(localPoint: Vec3, location: Vec3, rotation: Quat, out: Vec3): Vec3 {
+    rotateVec3ByQuatTo(localPoint, rotation, out);
+    out[0] += location[0];
+    out[1] += location[1];
+    out[2] += location[2];
+    return out;
 }
 
 export function localToWorldPoint(localPoint: Vec3, location: Vec3, rotation: Quat): Vec3 {
-    const rotated = rotateVec3ByQuat(localPoint, rotation);
-    return [
-        rotated[0] + location[0],
-        rotated[1] + location[1],
-        rotated[2] + location[2],
-    ];
+    return localToWorldPointTo(localPoint, location, rotation, [0.0, 0.0, 0.0]);
+}
+
+export function localToWorldNormalTo(normal: Vec3, rotation: Quat, out: Vec3): Vec3 {
+    return rotateVec3ByQuatTo(normal, rotation, out);
 }
 
 export function localToWorldNormal(normal: Vec3, rotation: Quat): Vec3 {
-    return rotateVec3ByQuat(normal, rotation);
+    return localToWorldNormalTo(normal, rotation, [0.0, 0.0, 0.0]);
+}
+
+export function vec3SubTo(a: Vec3, b: Vec3, out: Vec3): Vec3 {
+    out[0] = a[0] - b[0];
+    out[1] = a[1] - b[1];
+    out[2] = a[2] - b[2];
+    return out;
 }
 
 export function vec3Sub(a: Vec3, b: Vec3): Vec3 {
-    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    return vec3SubTo(a, b, [0.0, 0.0, 0.0]);
+}
+
+export function vec3AddTo(a: Vec3, b: Vec3, out: Vec3): Vec3 {
+    out[0] = a[0] + b[0];
+    out[1] = a[1] + b[1];
+    out[2] = a[2] + b[2];
+    return out;
 }
 
 export function vec3Add(a: Vec3, b: Vec3): Vec3 {
-    return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+    return vec3AddTo(a, b, [0.0, 0.0, 0.0]);
+}
+
+export function vec3ScaleTo(v: Vec3, s: number, out: Vec3): Vec3 {
+    out[0] = v[0] * s;
+    out[1] = v[1] * s;
+    out[2] = v[2] * s;
+    return out;
 }
 
 export function vec3Scale(v: Vec3, s: number): Vec3 {
-    return [v[0] * s, v[1] * s, v[2] * s];
+    return vec3ScaleTo(v, s, [0.0, 0.0, 0.0]);
 }
 
 export function vec3Dot(a: Vec3, b: Vec3): number {
@@ -151,12 +219,22 @@ export function vec3Len(v: Vec3): number {
     return vecLen(v);
 }
 
-export function vec3Normalize(v: Vec3): Vec3 {
+export function vec3NormalizeTo(v: Vec3, out: Vec3): Vec3 {
     const n = vecLen(v);
     if (n < 1e-12) {
-        return [0.0, 0.0, 1.0];
+        out[0] = 0.0;
+        out[1] = 0.0;
+        out[2] = 1.0;
+        return out;
     }
-    return [v[0] / n, v[1] / n, v[2] / n];
+    out[0] = v[0] / n;
+    out[1] = v[1] / n;
+    out[2] = v[2] / n;
+    return out;
+}
+
+export function vec3Normalize(v: Vec3): Vec3 {
+    return vec3NormalizeTo(v, [0.0, 0.0, 0.0]);
 }
 
 /**
@@ -171,49 +249,88 @@ const NORMALS_PARALLEL_DOT = 1 - 1e-12;
  * Kwaternion obrotu między dwoma wektorami, przez tożsamość połowy kąta —
  * bez acos() i sin() w przypadku ogólnym.
  */
-export function rotationBetweenNormals(fromN: Vec3, toN: Vec3): Quat {
-    const f = vec3Normalize(fromN);
-    const t = vec3Normalize(toN);
+export function rotationBetweenNormalsTo(
+    fromN: Vec3,
+    toN: Vec3,
+    out: Quat,
+    tmpV0?: Vec3,
+    tmpV1?: Vec3,
+): Quat {
+    const f = tmpV0 ? vec3NormalizeTo(fromN, tmpV0) : vec3Normalize(fromN);
+    const t = tmpV1 ? vec3NormalizeTo(toN, tmpV1) : vec3Normalize(toN);
     const dot = vec3Dot(f, t);
 
     if (dot > NORMALS_PARALLEL_DOT) {
-        return [1.0, 0.0, 0.0, 0.0];
+        out[0] = 1.0;
+        out[1] = 0.0;
+        out[2] = 0.0;
+        out[3] = 0.0;
+        return out;
     }
 
     if (dot < -NORMALS_PARALLEL_DOT) {
         // Wektory przeciwne (180°) — obrót wokół dowolnej osi prostopadłej.
-        const perp = findPerpendicular(f);
-        return [0.0, perp[0], perp[1], perp[2]];
+        if (tmpV0) {
+            findPerpendicularTo(f, tmpV0);
+            out[0] = 0.0;
+            out[1] = tmpV0[0];
+            out[2] = tmpV0[1];
+            out[3] = tmpV0[2];
+        } else {
+            const perp = findPerpendicular(f);
+            out[0] = 0.0;
+            out[1] = perp[0];
+            out[2] = perp[1];
+            out[3] = perp[2];
+        }
+        return out;
     }
 
     const cx = f[1] * t[2] - f[2] * t[1];
     const cy = f[2] * t[0] - f[0] * t[2];
     const cz = f[0] * t[1] - f[1] * t[0];
 
-    return quatNorm([1.0 + dot, cx, cy, cz]);
+    out[0] = 1.0 + dot;
+    out[1] = cx;
+    out[2] = cy;
+    out[3] = cz;
+    return quatNormTo(out, out);
+}
+
+export function rotationBetweenNormals(fromN: Vec3, toN: Vec3): Quat {
+    return rotationBetweenNormalsTo(fromN, toN, [0.0, 0.0, 0.0, 0.0]);
 }
 
 /** Stabilny numerycznie wektor prostopadły do v. */
-export function findPerpendicular(v: Vec3): Vec3 {
+export function findPerpendicularTo(v: Vec3, out: Vec3): Vec3 {
     const ax = Math.abs(v[0]);
     const ay = Math.abs(v[1]);
     const az = Math.abs(v[2]);
-    let perp: Vec3;
     if (ax <= ay && ax <= az) {
-        perp = [0.0, -v[2], v[1]];
+        out[0] = 0.0;
+        out[1] = -v[2];
+        out[2] = v[1];
     } else if (ay <= ax && ay <= az) {
-        perp = [-v[2], 0.0, v[0]];
+        out[0] = -v[2];
+        out[1] = 0.0;
+        out[2] = v[0];
     } else {
-        perp = [-v[1], v[0], 0.0];
+        out[0] = -v[1];
+        out[1] = v[0];
+        out[2] = 0.0;
     }
-    return vec3Normalize(perp);
+    return vec3NormalizeTo(out, out);
+}
+
+export function findPerpendicular(v: Vec3): Vec3 {
+    return findPerpendicularTo(v, [0.0, 0.0, 0.0]);
 }
 
 /**
  * Skaluje kwaternion o ułamek `frac` wokół osi obrotu (shortest path, w >= 0).
  * Port `_scaled_quat` z solver_core.py.
  */
-export function scaledQuat(q: Quat, frac: number): Quat {
+export function scaledQuatTo(q: Quat, frac: number, out: Quat): Quat {
     let w = q[0];
     let x = q[1];
     let y = q[2];
@@ -229,21 +346,42 @@ export function scaledQuat(q: Quat, frac: number): Quat {
     w = Math.min(Math.max(w, -1.0), 1.0);
     const angle = 2.0 * Math.acos(w);
     if (angle < 1e-9) {
-        return [1.0, 0.0, 0.0, 0.0];
+        out[0] = 1.0;
+        out[1] = 0.0;
+        out[2] = 0.0;
+        out[3] = 0.0;
+        return out;
     }
 
     const axisLen = Math.sqrt(x * x + y * y + z * z);
     if (axisLen < 1e-12) {
-        return [1.0, 0.0, 0.0, 0.0];
+        out[0] = 1.0;
+        out[1] = 0.0;
+        out[2] = 0.0;
+        out[3] = 0.0;
+        return out;
     }
 
     const half = angle * frac * 0.5;
     const s = Math.sin(half) / axisLen;
-    return [Math.cos(half), x * s, y * s, z * s];
+    out[0] = Math.cos(half);
+    out[1] = x * s;
+    out[2] = y * s;
+    out[3] = z * s;
+    return out;
+}
+
+export function scaledQuat(q: Quat, frac: number): Quat {
+    return scaledQuatTo(q, frac, [0.0, 0.0, 0.0, 0.0]);
+}
+
+export function applyRotationToQuatTo(objRot: Quat, deltaRot: Quat, out: Quat): Quat {
+    quatMulTo(deltaRot, objRot, out);
+    return quatNormTo(out, out);
 }
 
 export function applyRotationToQuat(objRot: Quat, deltaRot: Quat): Quat {
-    return quatNorm(quatMul(deltaRot, objRot));
+    return applyRotationToQuatTo(objRot, deltaRot, [0.0, 0.0, 0.0, 0.0]);
 }
 
 export function rotationsCompatiblePure(

@@ -29,9 +29,9 @@ export class GeometryDataExtractor {
     public extractPanelFeatures(panel: any, wcsManager?: any, filterType?: 'hole' | 'groove' | 'contour' | null): CAMData {
         const features: CAMFeature[] = [];
 
-        if (!panel) {
+        if (!panel || panel.frozen === true || panel.params?.frozen === true) {
             return {
-                objectName: "Unknown",
+                objectName: panel ? (panel.name || "Płyta") : "Unknown",
                 features: [],
                 wcsOffset: wcsManager ? wcsManager.getOrigin() : createVector3D(),
                 isDirty: false
@@ -55,8 +55,8 @@ export class GeometryDataExtractor {
         const panelFeatures = panel.features || [];
 
         for (const feat of panelFeatures) {
-            // Cecha zamrożona przez CAD — CAM pipeline ją pomija
-            if (feat.cam_frozen === true) continue;
+            // Cecha zamrożona lub ukryta — CAM pipeline ją pomija (traktuje jak usuniętą)
+            if (feat.cam_frozen === true || feat.frozen === true || feat.params?.frozen === true || feat.visible === false || feat.params?.visible === false) continue;
 
             // Filtr typów — przycisk "Wykryj otwory" pobiera tylko otwory, itd.
             if (filterType) {

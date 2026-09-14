@@ -42,7 +42,7 @@ export function TubesSubModule({ container, triggerUpdate }: { container: any, t
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Dystans od góry:</span>
                 <SmartNumericInput 
                     value={offsetTop} 
-                    min={10} max={300} step={1} unit="mm"
+                    min={10} max={300} step={0.01} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={(val) => {
                         setOffsetTop(val);
@@ -68,8 +68,8 @@ export function TubesSubModule({ container, triggerUpdate }: { container: any, t
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '16px' }}>
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>Luz nad półką:</span>
                     <SmartNumericInput 
-                        value={spaceAboveShelf}
-                        min={10} max={500} step={1} unit="mm"
+                        value={spaceAboveShelf} 
+                        min={10} max={500} step={0.01} decimals={2} unit="mm"
                         style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => {
                             setSpaceAboveShelf(val);

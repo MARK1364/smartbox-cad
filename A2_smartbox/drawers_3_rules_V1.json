@@ -49,6 +49,33 @@
             }
           },
             "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        },
+        "DRAWER_BOTTOM": {
+          "edge_banding": {
+            "+X": { "active": false, "type_id": "none" },
+            "-X": { "active": false, "type_id": "none" },
+            "+Y": { "active": false, "type_id": "none" },
+            "-Y": { "active": false, "type_id": "none" }
+          },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        },
+        "DRAWER_BACK": {
+          "edge_banding": {
+            "+X": { "active": false, "type_id": "none" },
+            "-X": { "active": false, "type_id": "none" },
+            "+Y": { "active": true, "type_id": "0.008x0.022" },
+            "-Y": { "active": false, "type_id": "none" }
+          },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
+        },
+        "DRAWER_INTERNAL_FRONT": {
+          "edge_banding": {
+            "+X": { "active": true, "type_id": "0.008x0.022" },
+            "-X": { "active": true, "type_id": "0.008x0.022" },
+            "+Y": { "active": true, "type_id": "0.008x0.022" },
+            "-Y": { "active": true, "type_id": "0.008x0.022" }
+          },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" }
         }
       }
     }
@@ -1079,6 +1106,40 @@
       "STEP_3_APPLY": {
         "pl": "Krok 3: Kliknij 'Generuj Szuflady'.",
         "en": "Step 3: Click 'Generate Drawers'."
+      }
+    },
+    "errors": {
+      "MISSING_BASE_OBJECT": {
+        "pl": "Brak obiektu bazowego SmartBox w kontekście.",
+        "en": "Missing base SmartBox object in context."
+      },
+      "INVALID_FRONT_HEIGHT": {
+        "pl": "Nieprawidłowa suma wysokości frontów względem światła korpusu.",
+        "en": "Invalid total front height relative to cabinet opening."
+      }
+    },
+    "warnings": {
+      "MIN_DRAWER_HEIGHT_WARNING": {
+        "pl": "Zbyt mała wysokość użytkowa dla wybranego typu prowadnicy.",
+        "en": "Usable drawer height is too low for the selected runner type."
+      }
+    },
+    "tooltips": {
+      "drawer_count": {
+        "pl": "Liczba szuflad w module.",
+        "en": "Number of drawers in the module."
+      },
+      "runner_type": {
+        "pl": "System prowadnic szufladowych (dolny/boczny montaż).",
+        "en": "Drawer runner system (undermount/side-mount)."
+      },
+      "front_gap": {
+        "pl": "Szczelina dylatacyjna między frontami (domyślnie 2-3mm).",
+        "en": "Expansion gap between drawer fronts (default 2-3mm)."
+      },
+      "bottom_clearance": {
+        "pl": "Odsunięcie dolnego frontu od wieńca dolnego.",
+        "en": "Clearance of bottom front from bottom panel."
       }
     }
   }

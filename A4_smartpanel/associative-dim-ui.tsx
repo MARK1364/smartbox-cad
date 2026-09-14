@@ -150,7 +150,7 @@ export function AssociativeDimInputs({ panel, axis }: Props) {
                 </button>
             </div>
             <div className="assoc-dim-length">
-                {distanceMm != null ? (
+                {distanceMm != null && (
                     <>
                         <span>Odległość: <strong>{distanceMm.toFixed(1)} mm</strong></span>
                         <label className="assoc-dim-offset">
@@ -164,8 +164,6 @@ export function AssociativeDimInputs({ panel, axis }: Props) {
                             <span>mm</span>
                         </label>
                     </>
-                ) : (
-                    <span className="assoc-dim-hint">Wskaż dwie płaszczyzny — odległość stanie się {axisLabel}ą płyty</span>
                 )}
             </div>
         </div>

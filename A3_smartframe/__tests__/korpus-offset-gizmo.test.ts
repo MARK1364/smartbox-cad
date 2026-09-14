@@ -18,8 +18,8 @@ describe('offset gizmo roles', () => {
         const mapping = findOffsetGizmoHandler('BACK_PANEL')!.getFaceMapping('BACK_PANEL')!;
         expect(mapping.left).toBe('-X');
         expect(mapping.right).toBe('+X');
-        expect(mapping.top).toBe('+Y');
-        expect(mapping.bottom).toBe('-Y');
+        expect(mapping.top).toBe('-Y');
+        expect(mapping.bottom).toBe('+Y');
         expect(findOffsetGizmoHandler('BACK_PANEL')!.id).toBe('A3_korpus');
     });
 

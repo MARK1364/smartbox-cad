@@ -296,8 +296,13 @@ export class PMIRenderer {
         rd: BridgeRenderData,
         lineColor: Rgba,
         textColor: string,
-        annotationId: string | null,
+        annOrId: PMIAnnotation | string | null,
     ): void {
+        const annotationId = typeof annOrId === 'string' ? annOrId : (annOrId?.id ?? null);
+        const ann = typeof annOrId === 'object' && annOrId !== null
+            ? annOrId
+            : (annotationId ? PMIStore.instance.getAnnotation(annotationId) : null);
+
         this.updateSegmentTubes(
             vis,
             'dimLineParts',
@@ -320,7 +325,7 @@ export class PMIRenderer {
         this.updateArrow(vis, 'arrowMesh1', rd.p1DimWorld, rd.fwdWorld, rd.arrowLen, rd.arrowWid, rd.arrowsOutside, lineColor);
         this.updateArrow(vis, 'arrowMesh2', rd.p2DimWorld, rd.fwdWorld, rd.arrowLen, rd.arrowWid, rd.arrowsOutside, lineColor, true);
 
-        this.updateTextLabel(vis, rd, textColor, annotationId);
+        this.updateTextLabel(vis, rd, textColor, annotationId, ann);
     }
 
     // ========================================================================
@@ -346,8 +351,28 @@ export class PMIRenderer {
                 Math.max(diameterMM, partsKey === 'dimLineParts' ? 0.9 : 0.55),
                 color,
                 annotationId,
+                partsKey === 'dimLineParts' ? 'line' : 'helper',
             );
             if (tube) vis[partsKey].push(tube);
+
+            // Dla linii wymiarowej tworzymy niewidoczny, wygodny hitbox ułatwiający chwytanie myszą w 3D
+            if (partsKey === 'dimLineParts' && annotationId) {
+                const hitbox = this.createTubeSegment(
+                    `pmi_${vis.id}_hitbox_${i}`,
+                    a,
+                    b,
+                    18, // 18mm średnicy — łatwe chwytanie
+                    [0, 0, 0, 0],
+                    annotationId,
+                    'line',
+                );
+                if (hitbox) {
+                    hitbox.visibility = 0;
+                    hitbox.isVisible = true;
+                    hitbox.isPickable = true;
+                    vis[partsKey].push(hitbox);
+                }
+            }
         }
     }
 
@@ -358,6 +383,7 @@ export class PMIRenderer {
         diameterMM: number,
         color: Rgba,
         annotationId: string | null,
+        targetPart: 'line' | 'helper' = 'line',
     ): any {
         const aB = this.toB(a);
         const bB = this.toB(b);
@@ -398,7 +424,7 @@ export class PMIRenderer {
         const pickable = !!annotationId;
         tube.isPickable = pickable;
         if (pickable) {
-            tube.metadata = { pmiAnnotationId: annotationId };
+            tube.metadata = { pmiAnnotationId: annotationId, pmiTarget: targetPart };
         }
 
         return tube;
@@ -490,6 +516,7 @@ export class PMIRenderer {
         rd: BridgeRenderData,
         textColor: string,
         annotationId: string | null,
+        ann: PMIAnnotation | null = null,
     ): void {
         if (!rd.labelText) {
             this.disposeTextLabel(vis);
@@ -514,6 +541,9 @@ export class PMIRenderer {
         vis.labelHeight = textHWorld;
         if (vis.textPlane && rd.p1DimWorld && rd.p2DimWorld) {
             const mid = v3Scale(v3Add(rd.p1DimWorld, rd.p2DimWorld), 0.5);
+            const shiftMM = ann?.textShiftMM ?? (annotationId ? PMIStore.instance.getAnnotation(annotationId)?.textShiftMM ?? 0 : 0);
+            const shiftAlongLine = v3Scale(v3Normalize(rd.fwdWorld), shiftMM);
+            const midShifted = v3Add(mid, shiftAlongLine);
 
             if (alignToLine) {
                 vis.textPlane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_NONE;
@@ -530,7 +560,7 @@ export class PMIRenderer {
                 if (camera) {
                     const camPos = (camera as any).globalPosition ?? camera.position;
                     if (camPos) {
-                        const toCam = v3Normalize(v3Sub(v3(camPos.x, camPos.y, camPos.z), mid));
+                        const toCam = v3Normalize(v3Sub(v3(camPos.x, camPos.y, camPos.z), midShifted));
                         // Babylon CreatePlane front face has normal (0, 0, -1) in local coords.
                         // When axis3 = side, front normal in world is -side.
                         // We want front face (-side) to face toward camera: dot(-side, toCam) > 0 <=> dot(side, toCam) < 0.
@@ -568,7 +598,7 @@ export class PMIRenderer {
                 }
 
                 const textOffset = v3Scale(up, rd.arrowWid * 1.5 + textHWorld * 0.55);
-                const textPos = v3Add(mid, textOffset);
+                const textPos = v3Add(midShifted, textOffset);
                 vis.labelPreferredWorld = textPos;
                 vis.textPlane.position = new BABYLON.Vector3(textPos.x, textPos.y, textPos.z);
 
@@ -579,7 +609,7 @@ export class PMIRenderer {
                 vis.textPlane.rotation = BABYLON.Vector3.RotationFromAxis(axis1, axis2, axis3);
             } else {
                 const textOffset = v3Scale(rd.upWorld, rd.arrowWid * 2 + textHWorld * 0.6);
-                const textPos = v3Add(mid, textOffset);
+                const textPos = v3Add(midShifted, textOffset);
                 vis.labelPreferredWorld = textPos;
                 vis.textPlane.position = new BABYLON.Vector3(textPos.x, textPos.y, textPos.z);
 
@@ -615,15 +645,16 @@ export class PMIRenderer {
         dt.update();
 
         const plane = BABYLON.MeshBuilder.CreatePlane(`pmi_lbl_${vis.id}`, {
-            width: textWWorld,
-            height: textHWorld,
+            width: textWWorld + 6,
+            height: textHWorld + 4,
+            sideOrientation: BABYLON.Mesh.DOUBLESIDE,
         }, this.scene);
 
         plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
         plane.renderingGroupId = 2;
         plane.isPickable = !!annotationId;
         if (annotationId) {
-            plane.metadata = { pmiAnnotationId: annotationId };
+            plane.metadata = { pmiAnnotationId: annotationId, pmiTarget: 'text' };
         }
 
         const mat = new BABYLON.StandardMaterial(`pmi_lbl_mat_${vis.id}`, this.scene);

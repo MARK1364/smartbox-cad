@@ -30,5 +30,5 @@ export abstract class BaseEngine {
         this.depth = depth;
     }
 
-    abstract plan(params: any): { parts: any[] };
+    abstract plan(params: any): { parts: any[]; hardware?: any[] };
 }

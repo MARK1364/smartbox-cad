@@ -45,26 +45,40 @@ export class Viewport {
     }
 
     /**
-     * Inicjalizacja asynchroniczna z obsługą WebGPU i PerformanceConfigManager
+     * Inicjalizacja silnika graficznego z obsługą stabilnego WebGL2 oraz opcjonalnego WebGPU
      */
     static async create(canvas: any) {
-        let engine: any;
-        const webGPUSupported = await BABYLON.WebGPUEngine.IsSupportedAsync;
+        let engine: any = null;
         const perfConfig = PerformanceConfigManager.instance;
         const powerPref = perfConfig.getPowerPreference();
         const antialias = perfConfig.getAntialias();
-        
-        if (webGPUSupported) {
-            console.log("🚀 Inicjalizacja WebGPU Engine");
-            engine = new BABYLON.WebGPUEngine(canvas, {
-                stencil: true,
-                preserveDrawingBuffer: false,
-                powerPreference: powerPref,
-                antialias
-            });
-            await engine.initAsync();
-        } else {
-            console.warn("WebGPU nie jest obsługiwane w tej przeglądarce. Fallback do WebGL.");
+        const preferredEngine = perfConfig.getPreferredEngine();
+
+        // Sprawdzenie czy użytkownik wybrał WebGPU w opcjach lub zażądał w URL (?webgpu=true)
+        const urlParams = typeof window !== 'undefined' && window.location ? new URLSearchParams(window.location.search) : null;
+        const forceWebGPU = preferredEngine === 'webgpu' || urlParams?.get('webgpu') === 'true' || urlParams?.get('webgpu') === '1';
+
+        if (forceWebGPU) {
+            try {
+                const webGPUSupported = await BABYLON.WebGPUEngine?.IsSupportedAsync;
+                if (webGPUSupported) {
+                    console.log("🚀 Inicjalizacja eksperymentalnego WebGPU Engine");
+                    engine = new BABYLON.WebGPUEngine(canvas, {
+                        stencil: true,
+                        preserveDrawingBuffer: false,
+                        powerPreference: powerPref,
+                        antialias
+                    });
+                    await engine.initAsync();
+                }
+            } catch (err) {
+                console.warn("Nieudana inicjalizacja WebGPU Engine. Następuje fallback do stabilnego WebGL2:", err);
+                engine = null;
+            }
+        }
+
+        // Standard produkcyjny dla CAD: stabilny, w 100% kompatybilny WebGL2
+        if (!engine) {
             engine = new BABYLON.Engine(canvas, antialias, {
                 preserveDrawingBuffer: false,
                 stencil: true,
@@ -173,7 +187,8 @@ export class Viewport {
                                 if (bay) {
                                     highlightBayInScene(this.scene, bay);
                                     bayCtrl.setLastDetectedBay(bay);
-                                    bayCtrl.notifyBayDetected(bay);
+                                    const optType = bayCtrl.pendingSmartBoxType || bayCtrl.draggedSmartBoxType || 'EMPTY';
+                                    bayCtrl.notifyBayDetected(bay, optType === 'EMPTY');
                                     evt.preventDefault();
                                     evt.stopPropagation();
                                     return;
@@ -392,12 +407,39 @@ export class Viewport {
         });
     }
 
-    toggleInspector() {
+    private _loadScript(src: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (typeof document === 'undefined') {
+                resolve();
+                return;
+            }
+            const existing = document.querySelector(`script[src="${src}"]`);
+            if (existing) {
+                resolve();
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => resolve();
+            script.onerror = (err) => reject(err);
+            document.head.appendChild(script);
+        });
+    }
+
+    async toggleInspector() {
         if (!this.scene) return;
         try {
             if (this.scene.debugLayer && this.scene.debugLayer.isVisible()) {
                 this.scene.debugLayer.hide();
-            } else if (this.scene.debugLayer) {
+                return;
+            }
+            if (!(window as any).BABYLON?.GUI) {
+                await this._loadScript('https://cdn.babylonjs.com/gui/babylon.gui.js');
+            }
+            if (!(window as any).BABYLON?.Inspector) {
+                await this._loadScript('https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js');
+            }
+            if (this.scene.debugLayer) {
                 this.scene.debugLayer.show({ embedMode: true });
             }
         } catch (e) {
@@ -663,6 +705,57 @@ export class Viewport {
     zoomToFit() {
         // Kod kadrowania kamery wyłączony na życzenie użytkownika (brak automatycznego skakania/kadrowania)
         return;
+    }
+
+    /**
+     * Przybliża kamerę do wskazanego prostokątnego obszaru ekranu (Window Zoom / ramka powiększająca).
+     */
+    zoomToWindow(startX: number, startY: number, endX: number, endY: number) {
+        if (!this.camera || !this.canvas || !this.scene) return;
+
+        const minX = Math.min(startX, endX);
+        const maxX = Math.max(startX, endX);
+        const minY = Math.min(startY, endY);
+        const maxY = Math.max(startY, endY);
+
+        const boxW = maxX - minX;
+        const boxH = maxY - minY;
+
+        // Jeśli kliknięto bez przeciągania (zbyt mała ramka), zignoruj
+        if (boxW < 8 || boxH < 8) return;
+
+        const canvasW = this.canvas.clientWidth || window.innerWidth;
+        const canvasH = this.canvas.clientHeight || window.innerHeight;
+
+        const scaleX = canvasW / boxW;
+        const scaleY = canvasH / boxH;
+        const zoomFactor = Math.min(Math.max(Math.min(scaleX, scaleY), 1.05), 30);
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+
+        let newTarget: any = null;
+
+        // Sprawdź czy pod środkiem ramki znajduje się geometria 3D
+        const pickResult = this.scene.pick(centerX, centerY);
+        if (pickResult && pickResult.hit && pickResult.pickedPoint) {
+            newTarget = pickResult.pickedPoint.clone();
+        } else {
+            const ray = this.scene.createPickingRay(centerX, centerY, BABYLON.Matrix.Identity(), this.camera);
+            const cameraForward = this.camera.target.subtract(this.camera.position).normalize();
+            const plane = BABYLON.Plane.FromPositionAndNormal(this.camera.target, cameraForward);
+            const dist = ray.intersectsPlane(plane);
+            if (dist !== null && dist > 0) {
+                newTarget = ray.origin.add(ray.direction.scale(dist));
+            } else {
+                newTarget = this.camera.target.clone();
+            }
+        }
+
+        const minRadius = this.camera.lowerRadiusLimit || 50;
+        const newRadius = Math.max(minRadius, this.camera.radius / zoomFactor);
+
+        this.animateCameraTo(this.camera.alpha, this.camera.beta, newRadius, newTarget);
     }
 
     /**

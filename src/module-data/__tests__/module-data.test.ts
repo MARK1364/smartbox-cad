@@ -235,3 +235,91 @@ describe('tree-context-menu', () => {
     });
 });
 
+describe('HtmlReportsGeneratorWeb', () => {
+    it('generates Grubość column right after Materiał and highlights 16 mm drawer panels', async () => {
+        const { HtmlReportsGeneratorWeb } = await import('../../../R1_reports/html-reports-generator');
+        const generator = new HtmlReportsGeneratorWeb();
+        const html = generator.generateFullProjectReport(
+            'TestProject',
+            {
+                Liczba_elementow: 2,
+                Calkowite_powierzchnia_m2: 0.5,
+                Calkowite_cena_plyt_PLN: 50,
+                Calkowite_dlugosc_obrzezy_mb: 2,
+                Calkowite_cena_obrzezy_PLN: 10,
+                SUMA_PLYTY_PLN: 60,
+                Calkowite_liczba_akcesorii_szt: 0,
+                Calkowite_cena_akcesorii_PLN: 0,
+                SUMA_AKCESORIA_PLN: 0,
+                SUMA_CALKOWITA_PLN: 60,
+                furnituresBreakdown: []
+            },
+            [
+                {
+                    part_id: 'p1',
+                    role: 'DRAWER_BOTTOM',
+                    material_id: 'W1100_ST9_16',
+                    material_name: 'Biały Alpejski 16mm',
+                    thickness_mm: 16,
+                    length_mm: 500,
+                    width_mm: 400,
+                    area_m2: 0.2,
+                    price_per_m2: 82,
+                    material_cost: 16.4,
+                    edge_length_mb: 1.8,
+                    edge_cost: 6.3,
+                    total_netto_pln: 22.7,
+                    edge_config: {},
+                    is_x_longer: true,
+                    furniture_name: 'Szafka',
+                    qty: 1
+                }
+            ],
+            []
+        );
+
+        // Nagłówek Grubość występuje w tabeli
+        expect(html).toContain('<th>Materiał</th>\n                        <th>Grubość</th>');
+        // Grubość jest wyświetlana jako prosty tekst
+        expect(html).toContain('16 mm</td>');
+    });
+
+    it('generates accessories total sum and card in full report', async () => {
+        const { HtmlReportsGeneratorWeb } = await import('../../../R1_reports/html-reports-generator');
+        const generator = new HtmlReportsGeneratorWeb();
+        const html = generator.generateFullProjectReport(
+            'TestProjectAcc',
+            {
+                Liczba_elementow: 1,
+                Calkowite_powierzchnia_m2: 0.2,
+                Calkowite_cena_plyt_PLN: 20,
+                Calkowite_dlugosc_obrzezy_mb: 1,
+                Calkowite_cena_obrzezy_PLN: 5,
+                SUMA_PLYTY_PLN: 25,
+                Calkowite_liczba_akcesorii_szt: 4,
+                Calkowite_cena_akcesorii_PLN: 48,
+                SUMA_AKCESORIA_PLN: 48,
+                SUMA_CALKOWITA_PLN: 73,
+                furnituresBreakdown: []
+            },
+            [],
+            [
+                {
+                    id: 'acc1',
+                    name: 'Zawias Blum Clip Top',
+                    role: 'ZAWIAS',
+                    library_id: 'HINGE_BLUM_71B3550',
+                    qty: 4,
+                    unit_price_pln: 12,
+                    total_price_pln: 48,
+                    furniture_name: 'Szafka'
+                }
+            ]
+        );
+
+        expect(html).toContain('SUMA OKUĆ I AKCESORIÓW');
+        expect(html).toContain('48.00 PLN');
+        expect(html).toContain('4 szt.');
+    });
+});
+

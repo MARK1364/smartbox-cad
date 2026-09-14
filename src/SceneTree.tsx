@@ -93,6 +93,15 @@ export const TREE_ICONS = {
       <path d="M9 5l7 7-7 7"></path>
     </svg>
   ),
+  hardware: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      {/* Kształt zawiasu puszkowego / okucia technicznego */}
+      <rect x="3" y="5" width="8" height="14" rx="2" stroke="currentColor" strokeWidth="2"></rect>
+      <circle cx="7" cy="12" r="2.5" fill="currentColor"></circle>
+      <path d="M11 9h5l3 3v5h-8" stroke="currentColor" strokeWidth="2"></path>
+      <circle cx="16" cy="14" r="1" fill="currentColor"></circle>
+    </svg>
+  ),
 };
 
 export type SceneTreeMode = 'full' | 'draw';
@@ -102,12 +111,16 @@ export const isContainerNode = (node: CADTreeNode): boolean => {
   return node.type === 'CONTAINER' || node.type === 'ASSEMBLY' || node.type === 'SUBASSEMBLY' || node.type === 'DRAWERS' || node.type === 'SHELVES';
 };
 
+export const isHardwareNode = (node: CADTreeNode): boolean => {
+  return node.type === 'HARDWARE' || (node as any).hardwareType !== undefined || /zawias|okucie|hinge|prowadnica|rail|boczek/i.test(node.name || '');
+};
+
 export const isSmartBoxTreeItem = (container: CADTreeNode): boolean => {
   return (
     container.type === 'DRAWERS' ||
     container.type === 'SHELVES' ||
     (container as any).is_smartbox ||
-    container.type === 'smartbox' ||
+    (container as any).type === 'smartbox' ||
     /smartbox/i.test(container.name || '') ||
     container.name?.endsWith('_SB') ||
     (container as any).generatorParams?.type?.startsWith('smartbox') ||
@@ -454,6 +467,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
           const isFrozen = g.frozen === true;
           const isSelected = selectedFeatureId === g.id ? 'selected' : '';
           const label = isSmart ? (g.name || 'Operacja') : (g.name || 'Wpust');
+          const faceText = formatFaceLabel((g as any).face);
           const w = Math.round(g.width) || 0;
           const h = Math.round(g.height) || 0;
           const d = Math.round(g.depth) || 0;
@@ -703,6 +717,69 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     );
   };
 
+  const renderHardwareNode = (hwNode: CADTreeNode) => {
+    const isSelected = selectedNodeId === hwNode.id ? 'selected' : '';
+    const isFrozen = hwNode.frozen === true;
+    const isVisible = hwNode.visible !== false;
+
+    return (
+      <div key={hwNode.id} className="tree-children" style={{ marginLeft: '12px' }}>
+        <div
+          className={`tree-node ${isSelected}`}
+          style={{
+            cursor: 'pointer',
+            opacity: !isVisible || isFrozen ? 0.45 : 1,
+          }}
+        >
+          <div
+            className="tree-node-content"
+            onClick={() => {
+              setSelectedNodeId(hwNode.id);
+              onSelectNode?.(hwNode);
+              if (!isDrawMode) {
+                UIController.instance?.emitTree('select-hardware', { id: hwNode.id, name: hwNode.name });
+              }
+            }}
+          >
+            <span style={{ width: '8px', display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ color: '#60a5fa', display: 'inline-flex', alignItems: 'center' }}>
+              {TREE_ICONS.hardware}
+            </span>
+            <span className="node-name-text" style={{ color: isFrozen ? '#94a3b8' : '#e0e7ff', fontWeight: 500 }}>
+              {hwNode.name || 'Okucie'}
+            </span>
+          </div>
+
+          {!isDrawMode && (
+            <div className="tree-node-actions">
+              <button
+                className="tree-action-btn btn-toggle-hw-vis"
+                title={isVisible ? 'Ukryj okucie' : 'Pokaż okucie'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  UIController.instance?.emitTree('toggle-hardware-visibility', { id: hwNode.id });
+                }}
+              >
+                {!isVisible ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
+              </button>
+              <button
+                className="tree-action-btn btn-freeze-hw"
+                title={isFrozen ? 'Odmroź okucie' : 'Zamroź okucie'}
+                style={{ color: isFrozen ? '#38bdf8' : undefined }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  UIController.instance?.emitTree('toggle-freeze-hardware', { id: hwNode.id });
+                }}
+              >
+                {TREE_ICONS.freeze}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderContainerNode = (container: CADTreeNode) => {
     const isContainerCollapsed = isNodeCollapsed(container.id, true);
     const isSelected = selectedNodeId === container.id ? 'selected' : '';
@@ -828,6 +905,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         {!isContainerCollapsed &&
           container.children &&
           container.children.map((child: CADTreeNode) => {
+            if (isHardwareNode(child)) {
+              return renderHardwareNode(child);
+            }
             if (isContainerNode(child)) {
               return renderContainerNode(child);
             }
@@ -1146,6 +1226,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         {!isProjectCollapsed &&
           treeRoot.children &&
           treeRoot.children.map((child: CADTreeNode) => {
+            if (isHardwareNode(child)) {
+              return renderHardwareNode(child);
+            }
             if (isContainerNode(child)) {
               return renderContainerNode(child);
             }

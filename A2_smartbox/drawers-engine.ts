@@ -11,7 +11,7 @@
 import drawersRules from './drawers_3_rules_V1.json';
 import { BaseEngine, type ModuleDims } from './base-engine.js';
 import { rulesMToMm } from '../A1_core/cad-math/units.js';
-import { getDrawerDrill, getHardware, listByType, DEFAULT_RAIL_ID, type HardwareItem } from '../Biblioteki/okucia/index.js';
+import { getDrawerDrill, getHardware, listByType, DEFAULT_RAIL_ID, type HardwareItem } from '../B1_biblioteka/index.js';
 
 const FRONT_LCS = {
     mapping: { X: 'x', Y: 'z', Z: 'y' },
@@ -50,12 +50,23 @@ export function listRailBrands(): string[] {
     return Array.from(brands).sort();
 }
 
-export function listRailSystemsForBrand(brand: string): { id: string; name: string; corpusHeightMm: number }[] {
-    return railsForBrand(brand).map((r) => ({
-        id: r.id,
-        name: r.name || r.id,
-        corpusHeightMm: rulesMToMm(r.mount?.corpus_height, 84)
-    }));
+export function listRailSeriesForBrand(brand: string): string[] {
+    const seriesSet = new Set<string>();
+    for (const r of railsForBrand(brand)) {
+        if (r.series) seriesSet.add(r.series);
+    }
+    return Array.from(seriesSet).sort();
+}
+
+export function listRailSystemsForBrand(brand: string, series?: string): { id: string; name: string; corpusHeightMm: number; series?: string }[] {
+    return railsForBrand(brand)
+        .filter((r) => !series || r.series === series)
+        .map((r) => ({
+            id: r.id,
+            name: r.name || r.id,
+            corpusHeightMm: rulesMToMm(r.mount?.corpus_height, 84),
+            series: r.series
+        }));
 }
 
 export function listRailLengthsForBrand(brand: string): string[] {
@@ -76,6 +87,8 @@ export interface DrawerSlot {
     lengthMm: number;
     rail: {
         name: string;
+        construction?: string;
+        panels?: any;
         railHeight: number;
         corpusHeight: number;
         width: number;
@@ -114,10 +127,16 @@ function defaultRailId(params: any): string {
         || DEFAULT_RAIL_ID;
 }
 
-function defaultLength(item: HardwareItem | undefined, requested?: string): string {
+function defaultLength(item: HardwareItem | undefined, requested?: string, depthMm?: number): string {
     const keys = Object.keys(item?.lengths || {});
     if (requested && keys.includes(String(requested))) return String(requested);
-    return keys[0] || '500';
+    if (keys.includes('500') && (!depthMm || depthMm >= 500)) return '500';
+    if (depthMm) {
+        const fitting = keys.map(Number).filter(l => l <= depthMm).sort((a, b) => b - a);
+        if (fitting.length > 0) return String(fitting[0]);
+    }
+    const sorted = keys.map(Number).sort((a, b) => b - a);
+    return sorted[0] ? String(sorted[0]) : '500';
 }
 
 /**
@@ -156,7 +175,7 @@ export function resolveDrawerLayout(params: any, dims: ModuleDims): DrawerLayout
         if (autoH) {
             const totalH = height + ovBottom + ovTop;
             const totalGaps = count > 1 ? (count - 1) * commonGap : 0;
-            frontH = count > 0 ? (totalH - totalGaps) / count : 0;
+            frontH = count > 0 ? Math.round(((totalH - totalGaps) / count) * 100) / 100 : 0;
             zFrontBottom = -ovBottom + (i - 1) * (frontH + commonGap);
         } else {
             frontH = Number(frontHeights[i - 1]);
@@ -174,11 +193,13 @@ export function resolveDrawerLayout(params: any, dims: ModuleDims): DrawerLayout
         const railItem = (requestedId && getHardware(requestedId)?.type === 'RAIL')
             ? getHardware(requestedId)
             : getHardware(fallbackRailId);
-        const railId = railItem?.id || fallbackRailId;
+        const railId = (requestedId && getHardware(requestedId)) ? requestedId : (railItem?.id || fallbackRailId);
         const mount = railItem?.mount || {};
-        const lengthMm = parseFloat(defaultLength(railItem, cfg.length));
+        const lengthMm = parseFloat(defaultLength(railItem, cfg.length, depth));
         const rail = {
             name: railItem?.name || railId,
+            construction: (railItem as any)?.construction || ((railItem as any)?.panels ? 'SYSTEM' : 'WOODEN'),
+            panels: (railItem as any)?.panels,
             railHeight: rulesMToMm(mount.rail_height, 35),
             corpusHeight: rulesMToMm(mount.corpus_height, 84),
             width: rulesMToMm(mount.width, 27),
@@ -256,7 +277,7 @@ function buildFrontHoles(slot: DrawerSlot, frontW: number, frontH: number): any[
 }
 
 export class DrawersEngine extends BaseEngine {
-    plan(params: any): { parts: any[] } {
+    plan(params: any): { parts: any[]; hardware?: any[] } {
         const dims: ModuleDims = {
             width: params.width || 600,
             height: params.height || 720,
@@ -264,8 +285,11 @@ export class DrawersEngine extends BaseEngine {
         };
         const layout = resolveDrawerLayout(params, dims);
         const parts: any[] = [];
+        const hardware: any[] = [];
         const roleFront = (drawersRules as any).parameters?.smart_panel_integration?.role_overrides?.FRONT;
         const roleSpacer = (drawersRules as any).parameters?.smart_panel_integration?.role_overrides?.SPACER;
+        const roleBottom = (drawersRules as any).parameters?.smart_panel_integration?.role_overrides?.DRAWER_BOTTOM;
+        const roleBack = (drawersRules as any).parameters?.smart_panel_integration?.role_overrides?.DRAWER_BACK;
 
         const frontY = -(layout.depth / 2 + layout.thickness / 2);
         // Nałożenie L/P liczone od wewnętrznej ściany dystansu (nie od krawędzi SmartBoxa).
@@ -285,56 +309,137 @@ export class DrawersEngine extends BaseEngine {
                 features: buildFrontHoles(slot, frontW, slot.frontH)
             });
 
-            const boxW = Math.max(10, layout.innerW - slot.rail.width * 2);
-            const boxLen = Math.min(slot.lengthMm, Math.max(10, layout.depth - 2));
-            parts.push({
-                name: `Skrzynka_${slot.index}`,
-                key: `DRAWER_${slot.index}_BOX`,
-                role: 'BOX',
-                dim: { x: boxW, y: boxLen, z: slot.rail.corpusHeight },
-                loc: {
-                    x: layout.innerXOffset,
-                    y: -(layout.depth / 2) + boxLen / 2,
-                    z: slot.zInternalBottom + slot.rail.corpusHeight / 2
-                },
-                lcs: SHELF_LCS,
-                features: []
-            });
+            const railLen = Math.min(slot.lengthMm, Math.max(10, layout.depth - 2));
+            const isSystemDrawer = (slot.rail as any).construction === 'SYSTEM' ||
+                ((slot.rail as any).construction !== 'WOODEN' && (
+                    Boolean((slot.rail as any).panels) ||
+                    /antaro|slimbox|merivo|legrabox|^m\d+|^d\d+|^kosz/i.test(slot.railId) ||
+                    /antaro|slimbox|merivo|legrabox/i.test(slot.rail.name)
+                ));
 
-            const railLen = boxLen;
-            const railZ = slot.zInternalBottom + slot.rail.railHeight / 2;
-            const railY = -(layout.depth / 2) + railLen / 2;
-            const railXLeft = -layout.width / 2 + layout.spacerL + slot.rail.width / 2;
-            const railXRight = layout.width / 2 - layout.spacerR - slot.rail.width / 2;
+            const panelConf = (slot.rail as any).panels;
 
-            parts.push({
-                name: `Prowadnica_${slot.index}L`,
-                key: `DRAWER_${slot.index}_RAIL_L`,
+            if (isSystemDrawer) {
+                // Szuflada systemowa (np. Blum Antaro) — 2 formatki meblowe: Dno i Plecy
+                const bottomThickness = panelConf?.bottom?.thickness || 16;
+                const bottomW = Math.max(10, layout.innerW + (panelConf?.bottom?.width_offset ?? -75));
+                const bottomL = Math.max(10, slot.lengthMm + (panelConf?.bottom?.length_offset ?? -24));
+
+                parts.push({
+                    name: `Dno_${slot.index}`,
+                    key: `DRAWER_${slot.index}_BOTTOM`,
+                    role: 'DRAWER_BOTTOM',
+                    material: 'W1100_ST9_16',
+                    materialName: 'Biały Alpejski 16mm',
+                    materialCode: 'W1100 ST9',
+                    dim: { x: bottomW, y: bottomL, z: bottomThickness },
+                    loc: {
+                        x: layout.innerXOffset,
+                        y: -(layout.depth / 2) + bottomL / 2,
+                        z: slot.zInternalBottom + bottomThickness / 2
+                    },
+                    lcs: SHELF_LCS,
+                    edge_banding: roleBottom?.edge_banding,
+                    features: []
+                });
+
+                const backThickness = panelConf?.back?.thickness || 16;
+                const backW = Math.max(10, layout.innerW + (panelConf?.back?.width_offset ?? -87));
+                const backH = panelConf?.back?.height ??
+                    (panelConf?.back?.height_offset !== undefined
+                        ? Math.max(10, slot.rail.corpusHeight + panelConf.back.height_offset)
+                        : slot.rail.corpusHeight || 84);
+
+                parts.push({
+                    name: `Plecy_${slot.index}`,
+                    key: `DRAWER_${slot.index}_BACK`,
+                    role: 'DRAWER_BACK',
+                    material: 'W1100_ST9_16',
+                    materialName: 'Biały Alpejski 16mm',
+                    materialCode: 'W1100 ST9',
+                    dim: { x: backW, y: backThickness, z: backH },
+                    loc: {
+                        x: layout.innerXOffset,
+                        y: -(layout.depth / 2) + bottomL - backThickness / 2,
+                        z: slot.zInternalBottom + backH / 2
+                    },
+                    lcs: FRONT_LCS,
+                    edge_banding: roleBack?.edge_banding,
+                    features: []
+                });
+            } else {
+                // Szuflada drewniana (np. Tandem, rolkowa, kulkowa) — bryła skrzynki
+                const boxW = Math.max(10, layout.innerW - slot.rail.width * 2);
+                parts.push({
+                    name: `Skrzynka_${slot.index}`,
+                    key: `DRAWER_${slot.index}_BOX`,
+                    role: 'BOX',
+                    dim: { x: boxW, y: railLen, z: slot.rail.corpusHeight },
+                    loc: {
+                        x: layout.innerXOffset,
+                        y: -(layout.depth / 2) + railLen / 2,
+                        z: slot.zInternalBottom + slot.rail.corpusHeight / 2
+                    },
+                    lcs: SHELF_LCS,
+                    features: []
+                });
+            }
+
+            const railZ = slot.zInternalBottom;
+            const railY = -(layout.depth / 2);
+            const railXLeft = -layout.width / 2 + layout.spacerL + slot.rail.width;
+            const railXRight = layout.width / 2 - layout.spacerR - slot.rail.width;
+
+            const hwModelId = 'BLUM_ANTARO_M_L';
+
+            hardware.push({
+                id: `drawer_${slot.index}_rail_L`,
+                name: `Prowadnica ${slot.index}L [${slot.rail.name}]`,
                 role: 'PROWADNICA',
-                dim: { x: slot.rail.width, y: railLen, z: slot.rail.railHeight },
+                hardwareType: 'RAIL',
+                hardwareId: hwModelId,
+                side: 'left',
                 loc: { x: railXLeft, y: railY, z: railZ },
-                lcs: SHELF_LCS,
+                dim: { x: slot.rail.width, y: railLen, z: slot.rail.railHeight },
+                params: {
+                    drawerIndex: slot.index,
+                    railId: slot.railId,
+                    side: 'left',
+                    lengthMm: slot.lengthMm,
+                    corpusHeight: slot.rail.corpusHeight,
+                    zInternalBottom: slot.zInternalBottom,
+                    art_no: slot.rail.lengths[String(Math.round(slot.lengthMm))]?.art_no
+                },
                 customProperties: {
                     library_id: slot.railId,
                     art_no: slot.rail.lengths[String(Math.round(slot.lengthMm))]?.art_no,
                     shape: 'RAIL'
-                },
-                features: []
+                }
             });
 
-            parts.push({
-                name: `Prowadnica_${slot.index}P`,
-                key: `DRAWER_${slot.index}_RAIL_R`,
+            hardware.push({
+                id: `drawer_${slot.index}_rail_R`,
+                name: `Prowadnica ${slot.index}P [${slot.rail.name}]`,
                 role: 'PROWADNICA',
-                dim: { x: slot.rail.width, y: railLen, z: slot.rail.railHeight },
+                hardwareType: 'RAIL',
+                hardwareId: hwModelId,
+                side: 'right',
                 loc: { x: railXRight, y: railY, z: railZ },
-                lcs: SHELF_LCS,
+                dim: { x: slot.rail.width, y: railLen, z: slot.rail.railHeight },
+                params: {
+                    drawerIndex: slot.index,
+                    railId: slot.railId,
+                    side: 'right',
+                    lengthMm: slot.lengthMm,
+                    corpusHeight: slot.rail.corpusHeight,
+                    zInternalBottom: slot.zInternalBottom,
+                    art_no: slot.rail.lengths[String(Math.round(slot.lengthMm))]?.art_no
+                },
                 customProperties: {
                     library_id: slot.railId,
                     art_no: slot.rail.lengths[String(Math.round(slot.lengthMm))]?.art_no,
                     shape: 'RAIL'
-                },
-                features: []
+                }
             });
         }
 
@@ -363,6 +468,6 @@ export class DrawersEngine extends BaseEngine {
             });
         }
 
-        return { parts };
+        return { parts, hardware };
     }
 }

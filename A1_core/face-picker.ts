@@ -9,6 +9,9 @@
 import { ContextManager } from './context-manager.js';
 import { PerformanceConfigManager } from './performance-config.js';
 import { shouldPromoteSubgeometryToEntity } from './selection-mode.js';
+import { findFacesAlongRay } from './quick-pick/quick-pick-detector.js';
+import { openQuickPick } from './quick-pick/quick-pick-events.js';
+import type { QuickPickCandidate } from './quick-pick/quick-pick-types.js';
 
 declare const BABYLON: any;
 
@@ -56,6 +59,10 @@ export class FacePicker {
     private _lastHoverTime: number = 0;
     /** Słabo widoczne wszystkie naroża — pipeta VERTEX w solverze. */
     private _vertexPickPreview = false;
+
+    private _longPressTimer: any = null;
+    private _pointerDownPos: { x: number; y: number } | null = null;
+    private _longPressTriggered = false;
 
     constructor(scene: any, canvas: any, panelViews: Map<any, any>, document: any) {
         this.scene = scene;
@@ -212,12 +219,90 @@ export class FacePicker {
                         panelModel: pickResult.pickedMesh.metadata.panelModel
                     });
                 }
+            } else if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
+                const isConstraintOrRef = Boolean(ContextManager.instance.activeConstraintPicker || ContextManager.instance.activeReferencePicker);
+                if (isConstraintOrRef && evt && evt.button === 0) {
+                    this._pointerDownPos = { x: this.scene.pointerX, y: this.scene.pointerY };
+                    this._longPressTriggered = false;
+                    if (this._longPressTimer) clearTimeout(this._longPressTimer);
+                    this._longPressTimer = setTimeout(() => {
+                        const candidates = findFacesAlongRay(this.scene, this.scene.pointerX, this.scene.pointerY);
+                        if (candidates.length > 1) {
+                            this._longPressTriggered = true;
+                            openQuickPick({
+                                screenX: evt.clientX ?? this.scene.pointerX,
+                                screenY: evt.clientY ?? this.scene.pointerY,
+                                candidates,
+                                onSelect: (candidate) => {
+                                    this.selectFaceExplicit(
+                                        candidate.mesh,
+                                        candidate.worldPoint,
+                                        candidate.smartId,
+                                        candidate.panelModel,
+                                        candidate.worldNormal
+                                    );
+                                }
+                            });
+                        }
+                    }, 350);
+                }
+            } else if (type === BABYLON.PointerEventTypes.POINTERUP) {
+                if (this._longPressTimer) {
+                    clearTimeout(this._longPressTimer);
+                    this._longPressTimer = null;
+                }
+            }
+        });
+
+        window.addEventListener('keydown', (e: KeyboardEvent) => {
+            if ((e.key === 'q' || e.key === 'Q') && (ContextManager.instance.activeConstraintPicker || ContextManager.instance.activeReferencePicker)) {
+                const tag = (document.activeElement?.tagName || '').toUpperCase();
+                if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+                const candidates = findFacesAlongRay(this.scene, this.scene.pointerX, this.scene.pointerY);
+                if (candidates.length > 0) {
+                    e.preventDefault();
+                    openQuickPick({
+                        screenX: this.scene.pointerX,
+                        screenY: this.scene.pointerY,
+                        candidates,
+                        onSelect: (candidate) => {
+                            this.selectFaceExplicit(
+                                candidate.mesh,
+                                candidate.worldPoint,
+                                candidate.smartId,
+                                candidate.panelModel,
+                                candidate.worldNormal
+                            );
+                        }
+                    });
+                }
             }
         });
     }
 
+    public selectFaceExplicit(
+        mesh: any,
+        worldPoint: any,
+        smartId: any,
+        panelModel: any = null,
+        worldNormal: any = null,
+    ): void {
+        this._selectFace(mesh, worldPoint, smartId, panelModel, false, worldNormal);
+    }
+
+    public pickAllFacesUnderCursor(pointerX?: number, pointerY?: number): QuickPickCandidate[] {
+        const x = pointerX !== undefined ? pointerX : this.scene?.pointerX;
+        const y = pointerY !== undefined ? pointerY : this.scene?.pointerY;
+        return findFacesAlongRay(this.scene, x, y);
+    }
+
     public handlePointerDown(pointerX: number, pointerY: number, evt: any): void {
         if (!this.enabled) return;
+
+        if (this._longPressTriggered) {
+            this._longPressTriggered = false;
+            return;
+        }
 
         // Ignoruj tylko kulki przesuwania CAD (nie ignoruj bazy WCS ani formatki)
         const directPick = this.scene.pick(pointerX, pointerY);

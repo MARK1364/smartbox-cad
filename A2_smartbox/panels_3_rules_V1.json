@@ -438,6 +438,32 @@
         "pl": "Krok 3: Kliknij 'Generuj Blendy'.",
         "en": "Step 3: Click 'Generate Panels'."
       }
+    },
+    "errors": {
+      "MISSING_BASE_OBJECT": {
+        "pl": "Brak wybranego korpusu do nałożenia blend.",
+        "en": "Missing selected cabinet body for panels."
+      }
+    },
+    "warnings": {
+      "OVERHANG_TOO_LARGE": {
+        "pl": "Wypuszczenie blendy przekracza standardową tolerancję montażową.",
+        "en": "Panel overhang exceeds standard installation tolerance."
+      }
+    },
+    "tooltips": {
+      "panel_thickness": {
+        "pl": "Grubość formatki blendy (zwykle 18mm).",
+        "en": "Panel thickness (usually 18mm)."
+      },
+      "overhang_front": {
+        "pl": "Wysunięcie blendy przed przednią płaszczyznę korpusu.",
+        "en": "Overhang of panel in front of cabinet face."
+      },
+      "side_selection": {
+        "pl": "Strony korpusu, na których mają zostać zamontowane blendy.",
+        "en": "Sides of the cabinet where panels should be placed."
+      }
     }
   }
 }

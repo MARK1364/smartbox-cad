@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { FlapsEngine } from './flaps-engine.js';
 import type { ModuleDims } from './base-engine.js';
-import { DEFAULT_HINGE_ID, listByType } from '../Biblioteki/okucia/index.js';
+import { DEFAULT_HINGE_ID, listByType } from '../B1_biblioteka/index.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
 
 const MIN_HINGE_OFFSET = 50;
@@ -78,15 +78,25 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
     const [hingeRightOffset, setHingeRightOffset] = useState<number>(
         p.hinge_right_offset !== undefined ? Number(p.hinge_right_offset) : 80
     );
+    const getPairedFlapHingeDefault = (side: 'left' | 'right' | 'center', customVal?: string, globalTpl?: string): string => {
+        if (customVal) return customVal;
+        const base = globalTpl || p.hinge_template || DEFAULT_HINGE_ID;
+        if (base === 'BLUM_71B3550' || base === 'BLUM_71T3550') {
+            if (side === 'right') return 'BLUM_71T3550';
+            return 'BLUM_71B3550';
+        }
+        return base;
+    };
+
     const [useCenterHinge, setUseCenterHinge] = useState<boolean>(!!p.use_center_hinge);
     const [hingeLeftTemplate, setHingeLeftTemplate] = useState<string>(
-        p.hinge_left_template || p.hingeLeftTemplate || p.hinge_template || DEFAULT_HINGE_ID
+        getPairedFlapHingeDefault('left', p.hinge_left_template || p.hingeLeftTemplate)
     );
     const [hingeRightTemplate, setHingeRightTemplate] = useState<string>(
-        p.hinge_right_template || p.hingeRightTemplate || p.hinge_template || DEFAULT_HINGE_ID
+        getPairedFlapHingeDefault('right', p.hinge_right_template || p.hingeRightTemplate)
     );
     const [hingeCenterTemplate, setHingeCenterTemplate] = useState<string>(
-        p.hinge_center_template || p.hingeCenterTemplate || p.hinge_template || DEFAULT_HINGE_ID
+        getPairedFlapHingeDefault('center', p.hinge_center_template || p.hingeCenterTemplate)
     );
 
     useEffect(() => {
@@ -98,9 +108,9 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
         setHingeLeftOffset(p.hinge_left_offset !== undefined ? Number(p.hinge_left_offset) : 80);
         setHingeRightOffset(p.hinge_right_offset !== undefined ? Number(p.hinge_right_offset) : 80);
         setUseCenterHinge(!!p.use_center_hinge);
-        setHingeLeftTemplate(p.hinge_left_template || p.hingeLeftTemplate || p.hinge_template || DEFAULT_HINGE_ID);
-        setHingeRightTemplate(p.hinge_right_template || p.hingeRightTemplate || p.hinge_template || DEFAULT_HINGE_ID);
-        setHingeCenterTemplate(p.hinge_center_template || p.hingeCenterTemplate || p.hinge_template || DEFAULT_HINGE_ID);
+        setHingeLeftTemplate(getPairedFlapHingeDefault('left', p.hinge_left_template || p.hingeLeftTemplate));
+        setHingeRightTemplate(getPairedFlapHingeDefault('right', p.hinge_right_template || p.hingeRightTemplate));
+        setHingeCenterTemplate(getPairedFlapHingeDefault('center', p.hinge_center_template || p.hingeCenterTemplate));
     }, [container?.id]);
 
     const clampHinge = (val: number) => Math.max(MIN_HINGE_OFFSET, val);
@@ -149,6 +159,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>Nałożenie góra</span>
                     <SmartNumericInput
                         value={ovTop}
+                        step={0.01} decimals={2}
                         unit="mm"
                         style={{ width: '100%', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => { setOvTop(val); pushUpdate({ ov_top: val }); }}
@@ -158,6 +169,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>Nałożenie dół</span>
                     <SmartNumericInput
                         value={ovBottom}
+                        step={0.01} decimals={2}
                         unit="mm"
                         style={{ width: '100%', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => { setOvBottom(val); pushUpdate({ ov_bottom: val }); }}
@@ -167,6 +179,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>Nałożenie lewo</span>
                     <SmartNumericInput
                         value={ovLeft}
+                        step={0.01} decimals={2}
                         unit="mm"
                         style={{ width: '100%', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => { setOvLeft(val); pushUpdate({ ov_left: val }); }}
@@ -176,6 +189,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>Nałożenie prawo</span>
                     <SmartNumericInput
                         value={ovRight}
+                        step={0.01} decimals={2}
                         unit="mm"
                         style={{ width: '100%', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => { setOvRight(val); pushUpdate({ ov_right: val }); }}
@@ -228,6 +242,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
                     <span style={{ color: '#e4e4e7', fontSize: '11px', width: '56px', flexShrink: 0 }}>Lewy:</span>
                     <SmartNumericInput
                         value={hingeLeftOffset}
+                        step={0.01} decimals={2}
                         unit="mm"
                         min={MIN_HINGE_OFFSET}
                         style={{ width: '52px', padding: '2px 3px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right', fontSize: '11px', flexShrink: 0 }}
@@ -258,6 +273,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: any; t
                     <span style={{ color: '#e4e4e7', fontSize: '11px', width: '56px', flexShrink: 0 }}>Prawy:</span>
                     <SmartNumericInput
                         value={hingeRightOffset}
+                        step={0.01} decimals={2}
                         unit="mm"
                         min={MIN_HINGE_OFFSET}
                         style={{ width: '52px', padding: '2px 3px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right', fontSize: '11px', flexShrink: 0 }}

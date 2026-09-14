@@ -1,0 +1,107 @@
+{
+  "id": "merivo",
+  "brand": "Blum",
+  "series": "Merivo",
+  "units": "mm",
+  "construction": "SYSTEM",
+  "panels": {
+    "bottom": {
+      "role": "DRAWER_BOTTOM",
+      "name": "Dno szuflady",
+      "thickness": 16.0,
+      "width_offset": -75.0,
+      "length_offset": -24.0
+    },
+    "back": {
+      "role": "DRAWER_BACK",
+      "name": "Plecy szuflady",
+      "thickness": 16.0,
+      "width_offset": -87.0,
+      "height_offset": -10.0
+    }
+  },
+  "variants": [
+    {
+      "id": "BLUM_MERIVO_100",
+      "legacy_id": "MR100",
+      "name": "Merivo M (wys. 100 mm)",
+      "corpus_height": 100.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 80.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 55.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 55.0, "x_positions": [37, 69, 197, 229], "price_id": "BLUM_MERIVO_100_300" },
+        "350": { "z_offset": 55.0, "x_positions": [37, 69, 197, 229], "price_id": "BLUM_MERIVO_100_350" },
+        "400": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_100_400" },
+        "450": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_100_450" },
+        "500": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_100_500" }
+      }
+    },
+    {
+      "id": "BLUM_MERIVO_150",
+      "legacy_id": "MR150",
+      "name": "Merivo K (wys. 150 mm)",
+      "corpus_height": 150.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 130.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 55.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 55.0, "x_positions": [37, 69, 197, 229], "price_id": "BLUM_MERIVO_150_300" },
+        "350": { "z_offset": 55.0, "x_positions": [37, 69, 197, 229], "price_id": "BLUM_MERIVO_150_350" },
+        "400": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_150_400" },
+        "450": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_150_450" },
+        "500": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_150_500" }
+      }
+    },
+    {
+      "id": "BLUM_MERIVO_200",
+      "legacy_id": "MR200",
+      "name": "Merivo E (wys. 200 mm)",
+      "corpus_height": 200.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "machining": {
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 100.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_3", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 180.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 55.0, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "300": { "z_offset": 55.0, "x_positions": [37, 69, 197, 229], "price_id": "BLUM_MERIVO_200_300" },
+        "350": { "z_offset": 55.0, "x_positions": [37, 69, 197, 229], "price_id": "BLUM_MERIVO_200_350" },
+        "400": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_200_400" },
+        "450": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_200_450" },
+        "500": { "z_offset": 55.0, "x_positions": [37, 69, 261, 293], "price_id": "BLUM_MERIVO_200_500" }
+      }
+    }
+  ]
+}

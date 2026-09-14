@@ -10,7 +10,7 @@ import { DrawersEngine } from './drawers-engine.js';
 import { DividersEngine } from './dividers-engine.js';
 import { PanelsEngine, type SidePanelMode } from './panels-engine.js';
 import { FlapsEngine } from './flaps-engine.js';
-import { DEFAULT_HINGE_ID, DEFAULT_RAIL_ID } from '../Biblioteki/okucia/index.js';
+import { DEFAULT_HINGE_ID, DEFAULT_RAIL_ID } from '../B1_biblioteka/index.js';
 
 const MAX_DRAWERS = 5;
 const MAX_DIVIDERS = 5;

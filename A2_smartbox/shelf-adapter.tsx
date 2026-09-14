@@ -39,9 +39,11 @@ export function ShelfSubModule({ container, triggerUpdate }: { container: any, t
     const containerHeight = getContainerHeightMm(container);
     const thickness = p.thickness !== undefined ? Number(p.thickness) : 18;
 
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+
     const initialReference = p.referenceFrom || (p.offset_top !== undefined && p.offset_bottom === undefined ? 'top' : 'bottom');
     const initBottom = p.offset_bottom !== undefined ? Number(p.offset_bottom) : (p.offsetBottom !== undefined ? Number(p.offsetBottom) : 100);
-    const initTop = p.offset_top !== undefined ? Number(p.offset_top) : (p.offsetTop !== undefined ? Number(p.offsetTop) : Math.max(0, Math.round(containerHeight - initBottom - thickness)));
+    const initTop = p.offset_top !== undefined ? Number(p.offset_top) : (p.offsetTop !== undefined ? Number(p.offsetTop) : Math.max(0, round2(containerHeight - initBottom - thickness)));
 
     const [offsetBottom, setOffsetBottom] = useState<string | number>(initBottom);
     const [offsetTop, setOffsetTop] = useState<string | number>(initTop);
@@ -55,17 +57,17 @@ export function ShelfSubModule({ container, triggerUpdate }: { container: any, t
         if (ref === 'top' && (curP.offset_top !== undefined || curP.offsetTop !== undefined)) {
             const topVal = Number(curP.offset_top ?? curP.offsetTop ?? 100);
             setOffsetTop(topVal);
-            setOffsetBottom(Math.max(0, Math.round(h - topVal - th)));
+            setOffsetBottom(Math.max(0, round2(h - topVal - th)));
         } else {
             const btmVal = Number(curP.offset_bottom ?? curP.offsetBottom ?? 100);
             setOffsetBottom(btmVal);
-            setOffsetTop(Math.max(0, Math.round(h - btmVal - th)));
+            setOffsetTop(Math.max(0, round2(h - btmVal - th)));
         }
     }, [container?.id, container?.height, container?.generatorParams?.height]);
 
     const handleBottomChange = (val: number) => {
         setOffsetBottom(val);
-        const calcTop = Math.max(0, Math.round(containerHeight - val - thickness));
+        const calcTop = Math.max(0, round2(containerHeight - val - thickness));
         setOffsetTop(calcTop);
         triggerUpdate({
             referenceFrom: 'bottom',
@@ -78,7 +80,7 @@ export function ShelfSubModule({ container, triggerUpdate }: { container: any, t
 
     const handleTopChange = (val: number) => {
         setOffsetTop(val);
-        const calcBottom = Math.max(0, Math.round(containerHeight - val - thickness));
+        const calcBottom = Math.max(0, round2(containerHeight - val - thickness));
         setOffsetBottom(calcBottom);
         triggerUpdate({
             referenceFrom: 'top',
@@ -95,7 +97,7 @@ export function ShelfSubModule({ container, triggerUpdate }: { container: any, t
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Przestrzeń od dołu:</span>
                 <SmartNumericInput 
                     value={offsetBottom} 
-                    min={0} step={1} unit="mm"
+                    min={0} step={0.01} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={handleBottomChange}
                 />
@@ -104,7 +106,7 @@ export function ShelfSubModule({ container, triggerUpdate }: { container: any, t
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Przestrzeń od góry:</span>
                 <SmartNumericInput 
                     value={offsetTop} 
-                    min={0} step={1} unit="mm"
+                    min={0} step={0.01} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={handleTopChange}
                 />

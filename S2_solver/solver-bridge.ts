@@ -409,20 +409,82 @@ export function computeReferenceLockedIds(
         }
     }
 
-    // Domyślna heurystyka dla więzów, gdzie żaden z końców nie jest utwierdzony:
-    // element A więzu jest traktowany jako odniesienie (B podciąga się do A).
+    // Budujemy graf nieskierowany aktywnych więzów relatywnych
+    const adj = new Map<string, Set<string>>();
+    function addEdge(u: string, v: string) {
+        if (!adj.has(u)) adj.set(u, new Set());
+        if (!adj.has(v)) adj.set(v, new Set());
+        adj.get(u)!.add(v);
+        adj.get(v)!.add(u);
+    }
+
     for (const c of constraints) {
         if (!c.enabled || c.conflict || c.bindType === 'GROUND' || !c.anchorA || !c.anchorB) {
             continue;
         }
-        const aId = c.anchorA.nodeId;
-        const bId = c.anchorB.nodeId;
-        if (locked.has(aId) || locked.has(bId)) {
-            // Przynajmniej jedna strona jest już uziemiona lub ma wyznaczony priorytet
+        addEdge(c.anchorA.nodeId, c.anchorB.nodeId);
+    }
+
+    // Znajdujemy wszystkie węzły, które należą do składowej spójnej zawierającej już węzeł utwierdzony (locked).
+    // Jeśli składowa ma już choć jeden węzeł locked (np. GROUND lub z priorytetu), żaden inny węzeł
+    // z tej składowej NIE MOŻE zostać dodany do locked!
+    const anchoredComponentNodes = new Set<string>();
+    const queue: string[] = [];
+    for (const id of locked) {
+        anchoredComponentNodes.add(id);
+        queue.push(id);
+    }
+    while (queue.length > 0) {
+        const curr = queue.shift()!;
+        const neighbors = adj.get(curr);
+        if (neighbors) {
+            for (const n of neighbors) {
+                if (!anchoredComponentNodes.has(n)) {
+                    anchoredComponentNodes.add(n);
+                    queue.push(n);
+                }
+            }
+        }
+    }
+
+    // Dla składowych spójnych, które NIE MAJĄ żadnego punktu utwierdzenia (całkowicie swobodne obiekty):
+    // wybieramy dokładnie JEDEN stabilny węzeł referencyjny na składową spójną.
+    const visited = new Set<string>(anchoredComponentNodes);
+
+    for (const [nodeId] of adj) {
+        if (visited.has(nodeId)) {
             continue;
         }
-        if (!usedAsB.has(aId)) {
-            locked.add(aId);
+
+        // BFS zbierający całą wolną składową spójną
+        const component: string[] = [];
+        const compQueue = [nodeId];
+        visited.add(nodeId);
+
+        while (compQueue.length > 0) {
+            const curr = compQueue.shift()!;
+            component.push(curr);
+            const neighbors = adj.get(curr);
+            if (neighbors) {
+                for (const n of neighbors) {
+                    if (!visited.has(n)) {
+                        visited.add(n);
+                        compQueue.push(n);
+                    }
+                }
+            }
+        }
+
+        // W wyodrębnionej wolnej składowej wybieramy dokładnie jeden węzeł bazowy:
+        // preferujemy węzeł, który występuje jako anchorA i nie był użyty jako anchorB (!usedAsB.has(id)).
+        let chosenSeed = component.find(id => !usedAsB.has(id));
+        if (!chosenSeed) {
+            // Jeśli cykl lub wszystkie były jako B — bierzemy pierwszy węzeł w składowej
+            chosenSeed = component[0];
+        }
+
+        if (chosenSeed) {
+            locked.add(chosenSeed);
         }
     }
 

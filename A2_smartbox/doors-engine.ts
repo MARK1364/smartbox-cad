@@ -5,10 +5,10 @@
  */
 import doorsRules from './doors_3_rules_V1.json';
 import { BaseEngine } from './base-engine.js';
-import { DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../Biblioteki/okucia/index.js';
+import { DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 
 export class DoorsEngine extends BaseEngine {
-    plan(params: any): { parts: any[] } {
+    plan(params: any): { parts: any[]; hardware?: any[] } {
         const parts: any[] = [];
         const width = params.width || 600;
         const height = params.height || 720;
@@ -59,7 +59,16 @@ export class DoorsEngine extends BaseEngine {
             hinges.push({ index: 6, localZ: Math.max(0, height - pos6) });
         }
 
-        const defaultHingeId = params.hinge_template || params.hingeTemplate || DEFAULT_HINGE_ID;
+        const baseHingeId = params.hinge_template || params.hingeTemplate || DEFAULT_HINGE_ID;
+        const resolveHingeId = (index: number): string => {
+            if (params[`hinge_${index}_template`]) {
+                return params[`hinge_${index}_template`];
+            }
+            if (baseHingeId === 'BLUM_71B3550' || baseHingeId === 'BLUM_71T3550') {
+                return (index % 2 === 1) ? 'BLUM_71B3550' : 'BLUM_71T3550';
+            }
+            return baseHingeId;
+        };
 
         const totalDoorHeight = height + ovTop + ovBottom;
         const posZ = height / 2 + (ovTop - ovBottom) / 2;
@@ -70,7 +79,7 @@ export class DoorsEngine extends BaseEngine {
             const features: any[] = [];
 
             for (const hinge of hinges) {
-                const hingeId = params[`hinge_${hinge.index}_template`] || defaultHingeId;
+                const hingeId = resolveHingeId(hinge.index);
                 const frontHoles = hingeFrontHolesMm(hingeId);
                 const templateId = hingeTemplateId(hingeId);
                 const vCenter = hinge.localZ + ovBottom;
@@ -92,7 +101,10 @@ export class DoorsEngine extends BaseEngine {
                             diameter: hole.dia,
                             depth: hole.depth,
                             isDoorCup: hole.isCup,
-                            isDoorScrew: !hole.isCup
+                            isDoorScrew: !hole.isCup,
+                            hingeIndex: hinge.index,
+                            side: side,
+                            hardwareId: `hinge_${side}_${hinge.index}`
                         }
                     });
                 }
@@ -112,6 +124,34 @@ export class DoorsEngine extends BaseEngine {
             "-X": { active: true, type_id: "0.008x0.022" },
             "+Y": { active: true, type_id: "0.008x0.022" },
             "-Y": { active: true, type_id: "0.008x0.022" }
+        };
+
+        const hardware: any[] = [];
+        const generateHardwareItems = (side: 'left' | 'right', doorW: number, dPosX: number) => {
+            for (const hinge of hinges) {
+                const hingeId = resolveHingeId(hinge.index);
+                const vCenter = hinge.localZ + ovBottom;
+                const frontHoles = hingeFrontHolesMm(hingeId);
+                const cupHole = frontHoles.find(h => h.isCup);
+                const cupEdgeDist = cupHole?.edgeDist ?? 21.5;
+                const u = side === 'left' ? cupEdgeDist : (doorW - cupEdgeDist);
+                const hwX = dPosX - doorW / 2 + u;
+                const hwZ = posZ - totalDoorHeight / 2 + vCenter;
+
+                hardware.push({
+                    id: `hinge_${side}_${hinge.index}`,
+                    name: `Zawias ${hinge.index} (${side === 'left' ? 'Lewy' : 'Prawy'}) [${hingeId}]`,
+                    hardwareType: 'HINGE',
+                    hardwareId: hingeId,
+                    side: side,
+                    loc: { x: hwX, y: posY, z: hwZ },
+                    params: {
+                        hingeIndex: hinge.index,
+                        localZ: hinge.localZ,
+                        side
+                    }
+                });
+            }
         };
 
         if (doorType === 'LEFT' || doorType === 'RIGHT') {
@@ -134,6 +174,8 @@ export class DoorsEngine extends BaseEngine {
                 edge_banding: edgeBanding,
                 features: buildHingeFeatures(hingeSide, doorWidth)
             });
+
+            generateHardwareItems(hingeSide, doorWidth, posX);
         } else if (doorType === 'DOUBLE') {
             // Podwójne drzwi
             const baseW = (width - gap) / 2;
@@ -171,8 +213,11 @@ export class DoorsEngine extends BaseEngine {
                 edge_banding: edgeBanding,
                 features: buildHingeFeatures('right', doorWRight)
             });
+
+            generateHardwareItems('left', doorWLeft, posLeftX);
+            generateHardwareItems('right', doorWRight, posRightX);
         }
 
-        return { parts };
+        return { parts, hardware };
     }
 }

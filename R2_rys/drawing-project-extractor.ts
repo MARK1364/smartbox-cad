@@ -325,13 +325,17 @@ export class DrawingProjectExtractor {
         }
 
         const isPart = cadNode.nodeType === NodeType.PART || domainData?.type === 'panel';
+        const isHardware = cadNode.nodeType === NodeType.HARDWARE || domainData?.type === 'hardware';
         const isAssembly = cadNode.nodeType === NodeType.ASSEMBLY || domainData?.type === 'container';
         const isGroup = (cadNode as any).nodeType === 'GROUP' || domainData?.type === 'group';
 
         let icon = '📦';
         let type: CADTreeNode['type'] = 'CONTAINER';
 
-        if (isPart) {
+        if (isHardware) {
+            icon = '🔩';
+            type = 'HARDWARE';
+        } else if (isPart) {
             icon = '🪵';
             type = 'PART';
             if (depth === 0) depth = thickness;
@@ -373,9 +377,15 @@ export class DrawingProjectExtractor {
             }
         }
 
-        if (width === 0) width = 600;
-        if (height === 0) height = 720;
-        if (depth === 0) depth = isPart ? thickness : 560;
+        if (isHardware) {
+            width = 0;
+            height = 0;
+            depth = 0;
+        } else {
+            if (width === 0) width = 600;
+            if (height === 0) height = 720;
+            if (depth === 0) depth = isPart ? thickness : 560;
+        }
 
         return {
             id: cadNode.id,

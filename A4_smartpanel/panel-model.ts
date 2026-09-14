@@ -172,6 +172,11 @@ export class PanelModel {
             materialName = 'HDF Biały 3mm';
             materialCode = 'HDF 3mm';
             color = { r: 0.94, g: 0.94, b: 0.94 };
+        } else if ((Math.abs(thickness - 16_000_000) < 500_000 || role === 'DRAWER_BOTTOM' || role === 'DRAWER_BACK') && materialId === 'W1100_ST9_18') {
+            materialId = 'W1100_ST9_16';
+            materialName = 'Biały Alpejski 16mm';
+            materialCode = 'W1100 ST9';
+            color = { r: 0.95, g: 0.95, b: 0.95 };
         }
 
         this.width = width;

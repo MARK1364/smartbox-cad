@@ -11,7 +11,7 @@ import { DrawersDrillingIntent, DrawersDrillingFeature } from './drawers-drillin
 import { nmToMm, rulesMToMm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { resolveDrawerLayout } from './drawers-engine.js';
-import { getDrawerDrill } from '../Biblioteki/okucia/index.js';
+import { getDrawerDrill } from '../B1_biblioteka/index.js';
 
 function dimToMm(raw: number | undefined, fallback = 0): number {
     if (raw === undefined || raw === null || !Number.isFinite(Number(raw))) return fallback;

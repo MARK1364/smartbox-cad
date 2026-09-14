@@ -10,7 +10,7 @@ import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { DoorsEngine } from './doors-engine.js';
 import type { ModuleDims } from './base-engine.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
-import { DEFAULT_HINGE_ID, hingeFrontHolesMm, listByType } from '../Biblioteki/okucia/index.js';
+import { DEFAULT_HINGE_ID, hingeFrontHolesMm, listByType } from '../B1_biblioteka/index.js';
 
 function toNum(val: string | number | undefined, fallback = 0): number {
     const n = typeof val === 'number' ? val : parseFloat(String(val ?? ''));
@@ -84,7 +84,7 @@ function isDoorHingeOutOfPanel(opts: {
     });
 }
 
-export function buildDoorsPlan(params: any, dims: ModuleDims): { parts: any[] } {
+export function buildDoorsPlan(params: any, dims: ModuleDims): { parts: any[]; hardware?: any[] } {
     const engine = new DoorsEngine();
     return engine.plan({
         width: dims.width,
@@ -119,11 +119,20 @@ export function buildDoorsPlan(params: any, dims: ModuleDims): { parts: any[] } 
     });
 }
 
+export function normalizeDoorType(val: string | undefined): 'LEFT' | 'RIGHT' | 'DOUBLE' {
+    if (!val) return 'LEFT';
+    const u = String(val).toUpperCase();
+    if (u === 'SINGLE_LEFT' || u === 'LEFT') return 'LEFT';
+    if (u === 'SINGLE_RIGHT' || u === 'RIGHT') return 'RIGHT';
+    if (u === 'DOUBLE') return 'DOUBLE';
+    return 'LEFT';
+}
+
 export function DoorsSubModule({ container, triggerUpdate }: { container: any, triggerUpdate: (params: any) => void }) {
     const p = container?.generatorParams || {};
     
     // Typ drzwi: LEFT, RIGHT, DOUBLE
-    const [doorType, setDoorType] = useState<string>(p.door_type || p.doorType || 'LEFT');
+    const [doorType, setDoorType] = useState<string>(() => normalizeDoorType(p.door_type || p.doorType));
     // Szczelina środkowa (tylko dla DOUBLE)
     const [gap, setGap] = useState<number>(p.gap !== undefined ? p.gap : 4);
     
@@ -133,6 +142,16 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
     const [ovLeft, setOvLeft] = useState<string | number>(p.ov_left !== undefined ? p.ov_left : 16);
     const [ovRight, setOvRight] = useState<string | number>(p.ov_right !== undefined ? p.ov_right : 16);
 
+    // Pomocnik naprzemiennego parowania zawiasów (1,3,5 = z hamulcem 71B3550, 2,4,6 = bez hamulca 71T3550)
+    const getPairedHingeDefault = (idx: number, customVal?: string, globalTpl?: string): string => {
+        if (customVal) return customVal;
+        const base = globalTpl || p.hinge_template || DEFAULT_HINGE_ID;
+        if (base === 'BLUM_71B3550' || base === 'BLUM_71T3550') {
+            return (idx % 2 === 1) ? 'BLUM_71B3550' : 'BLUM_71T3550';
+        }
+        return base;
+    };
+
     // Domyślny szablon zawiasów
     const defaultTemplate = p.hinge_template || DEFAULT_HINGE_ID;
     const [hingeTemplate, setHingeTemplate] = useState<string>(defaultTemplate);
@@ -140,31 +159,31 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
     // Pozycje, aktywność i szablony dla 6 zawiasów
     const [useHinge1, setUseHinge1] = useState<boolean>(p.use_hinge_1 !== false);
     const [hinge1Pos, setHinge1Pos] = useState<number>(p.hinge_1_pos !== undefined ? p.hinge_1_pos : 120);
-    const [hinge1Template, setHinge1Template] = useState<string>(p.hinge_1_template || defaultTemplate);
+    const [hinge1Template, setHinge1Template] = useState<string>(getPairedHingeDefault(1, p.hinge_1_template, defaultTemplate));
 
     const [useHinge2, setUseHinge2] = useState<boolean>(!!p.use_hinge_2);
     const [hinge2Pos, setHinge2Pos] = useState<number>(p.hinge_2_pos !== undefined ? p.hinge_2_pos : 570);
-    const [hinge2Template, setHinge2Template] = useState<string>(p.hinge_2_template || defaultTemplate);
+    const [hinge2Template, setHinge2Template] = useState<string>(getPairedHingeDefault(2, p.hinge_2_template, defaultTemplate));
 
     const [useHinge3, setUseHinge3] = useState<boolean>(!!p.use_hinge_3);
     const [hinge3Pos, setHinge3Pos] = useState<number>(p.hinge_3_pos !== undefined ? p.hinge_3_pos : 910);
-    const [hinge3Template, setHinge3Template] = useState<string>(p.hinge_3_template || defaultTemplate);
+    const [hinge3Template, setHinge3Template] = useState<string>(getPairedHingeDefault(3, p.hinge_3_template, defaultTemplate));
 
     const [useHinge4, setUseHinge4] = useState<boolean>(!!p.use_hinge_4);
     const [hinge4Pos, setHinge4Pos] = useState<number>(p.hinge_4_pos !== undefined ? p.hinge_4_pos : 1230);
-    const [hinge4Template, setHinge4Template] = useState<string>(p.hinge_4_template || defaultTemplate);
+    const [hinge4Template, setHinge4Template] = useState<string>(getPairedHingeDefault(4, p.hinge_4_template, defaultTemplate));
 
     const [useHinge5, setUseHinge5] = useState<boolean>(!!p.use_hinge_5);
     const [hinge5Pos, setHinge5Pos] = useState<number>(p.hinge_5_pos !== undefined ? p.hinge_5_pos : 1580);
-    const [hinge5Template, setHinge5Template] = useState<string>(p.hinge_5_template || defaultTemplate);
+    const [hinge5Template, setHinge5Template] = useState<string>(getPairedHingeDefault(5, p.hinge_5_template, defaultTemplate));
 
     const [useHinge6, setUseHinge6] = useState<boolean>(p.use_hinge_6 !== false);
     const [hinge6Pos, setHinge6Pos] = useState<number>(p.hinge_6_pos !== undefined ? p.hinge_6_pos : 120);
-    const [hinge6Template, setHinge6Template] = useState<string>(p.hinge_6_template || defaultTemplate);
+    const [hinge6Template, setHinge6Template] = useState<string>(getPairedHingeDefault(6, p.hinge_6_template, defaultTemplate));
 
     useEffect(() => {
         const defTpl = p.hinge_template || DEFAULT_HINGE_ID;
-        setDoorType(p.door_type || p.doorType || 'LEFT');
+        setDoorType(normalizeDoorType(p.door_type || p.doorType));
         setGap(p.gap !== undefined ? p.gap : 4);
         setOvTop(p.ov_top !== undefined ? p.ov_top : 14);
         setOvBottom(p.ov_bottom !== undefined ? p.ov_bottom : 15);
@@ -173,23 +192,25 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
         setHingeTemplate(defTpl);
         setUseHinge1(p.use_hinge_1 !== false);
         setHinge1Pos(p.hinge_1_pos !== undefined ? p.hinge_1_pos : 120);
-        setHinge1Template(p.hinge_1_template || defTpl);
+        setHinge1Template(getPairedHingeDefault(1, p.hinge_1_template, defTpl));
         setUseHinge2(!!p.use_hinge_2);
         setHinge2Pos(p.hinge_2_pos !== undefined ? p.hinge_2_pos : 570);
-        setHinge2Template(p.hinge_2_template || defTpl);
+        setHinge2Template(getPairedHingeDefault(2, p.hinge_2_template, defTpl));
         setUseHinge3(!!p.use_hinge_3);
         setHinge3Pos(p.hinge_3_pos !== undefined ? p.hinge_3_pos : 910);
-        setHinge3Template(p.hinge_3_template || defTpl);
+        setHinge3Template(getPairedHingeDefault(3, p.hinge_3_template, defTpl));
         setUseHinge4(!!p.use_hinge_4);
         setHinge4Pos(p.hinge_4_pos !== undefined ? p.hinge_4_pos : 1230);
-        setHinge4Template(p.hinge_4_template || defTpl);
+        setHinge4Template(getPairedHingeDefault(4, p.hinge_4_template, defTpl));
         setUseHinge5(!!p.use_hinge_5);
         setHinge5Pos(p.hinge_5_pos !== undefined ? p.hinge_5_pos : 1580);
-        setHinge5Template(p.hinge_5_template || defTpl);
+        setHinge5Template(getPairedHingeDefault(5, p.hinge_5_template, defTpl));
         setUseHinge6(p.use_hinge_6 !== false);
         setHinge6Pos(p.hinge_6_pos !== undefined ? p.hinge_6_pos : 120);
-        setHinge6Template(p.hinge_6_template || defTpl);
-    }, [container?.id]);
+        setHinge6Template(getPairedHingeDefault(6, p.hinge_6_template, defTpl));
+    }, [container?.id, p.door_type, p.doorType]);
+
+    const activeDoor = normalizeDoorType(doorType);
 
     return (
         <div className="submodule-box" style={{ background: '#222225', padding: '10px', borderRadius: '4px', border: '1px solid #2d2d30', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -198,19 +219,19 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Typ drzwi:</span>
                 <div style={{ display: 'flex', width: '100%', borderRadius: '4px', overflow: 'hidden', border: '1px solid #3f3f46' }}>
                     <button 
-                        style={{ flex: 1, padding: '5px 0', background: doorType === 'LEFT' ? '#3b82f6' : '#27272a', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: doorType === 'LEFT' ? 'bold' : 'normal' }}
+                        style={{ flex: 1, padding: '5px 0', background: activeDoor === 'LEFT' ? '#3b82f6' : '#27272a', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: activeDoor === 'LEFT' ? 'bold' : 'normal' }}
                         onClick={() => { setDoorType('LEFT'); triggerUpdate({ door_type: 'LEFT', doorType: 'LEFT' }); }}
                     >
                         Lewe
                     </button>
                     <button 
-                        style={{ flex: 1, padding: '5px 0', background: doorType === 'RIGHT' ? '#3b82f6' : '#27272a', color: '#fff', border: 'none', borderLeft: '1px solid #3f3f46', borderRight: '1px solid #3f3f46', cursor: 'pointer', fontSize: '12px', fontWeight: doorType === 'RIGHT' ? 'bold' : 'normal' }}
+                        style={{ flex: 1, padding: '5px 0', background: activeDoor === 'RIGHT' ? '#3b82f6' : '#27272a', color: '#fff', border: 'none', borderLeft: '1px solid #3f3f46', borderRight: '1px solid #3f3f46', cursor: 'pointer', fontSize: '12px', fontWeight: activeDoor === 'RIGHT' ? 'bold' : 'normal' }}
                         onClick={() => { setDoorType('RIGHT'); triggerUpdate({ door_type: 'RIGHT', doorType: 'RIGHT' }); }}
                     >
                         Prawe
                     </button>
                     <button 
-                        style={{ flex: 1, padding: '5px 0', background: doorType === 'DOUBLE' ? '#3b82f6' : '#27272a', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: doorType === 'DOUBLE' ? 'bold' : 'normal' }}
+                        style={{ flex: 1, padding: '5px 0', background: activeDoor === 'DOUBLE' ? '#3b82f6' : '#27272a', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: activeDoor === 'DOUBLE' ? 'bold' : 'normal' }}
                         onClick={() => { setDoorType('DOUBLE'); triggerUpdate({ door_type: 'DOUBLE', doorType: 'DOUBLE' }); }}
                     >
                         Podwójne
@@ -224,6 +245,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                     <span style={{ color: '#d4d4d8', fontSize: '12px' }}>Szczelina (Środek):</span>
                     <SmartNumericInput 
                         value={gap}
+                        step={0.01} decimals={2}
                         unit="mm"
                         style={{ width: '80px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => {
@@ -245,6 +267,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                         <span style={{ color: '#d4d4d8', fontSize: '11px' }}>Góra:</span>
                         <SmartNumericInput 
                             value={ovTop} 
+                            step={0.01} decimals={2}
                             unit="mm"
                             onChange={(val) => {
                                 setOvTop(val);
@@ -258,6 +281,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                         <span style={{ color: '#d4d4d8', fontSize: '11px' }}>Lewo:</span>
                         <SmartNumericInput 
                             value={ovLeft} 
+                            step={0.01} decimals={2}
                             unit="mm"
                             onChange={(val) => {
                                 setOvLeft(val);
@@ -271,6 +295,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                         <span style={{ color: '#d4d4d8', fontSize: '11px' }}>Dół:</span>
                         <SmartNumericInput 
                             value={ovBottom} 
+                            step={0.01} decimals={2}
                             unit="mm"
                             onChange={(val) => {
                                 setOvBottom(val);
@@ -284,6 +309,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                         <span style={{ color: '#d4d4d8', fontSize: '11px' }}>Prawo:</span>
                         <SmartNumericInput 
                             value={ovRight} 
+                            step={0.01} decimals={2}
                             unit="mm"
                             onChange={(val) => {
                                 setOvRight(val);
@@ -343,7 +369,17 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                     <span style={{ color: '#d4d4d8', fontSize: '11px' }}>Szablon...</span>
                     <select 
                         value={hingeTemplate} 
-                        onChange={(e) => { setHingeTemplate(e.target.value); triggerUpdate({ hinge_template: e.target.value }); }}
+                        onChange={(e) => { 
+                            const newTpl = e.target.value;
+                            setHingeTemplate(newTpl);
+                            if (!p.hinge_1_template) setHinge1Template(getPairedHingeDefault(1, undefined, newTpl));
+                            if (!p.hinge_2_template) setHinge2Template(getPairedHingeDefault(2, undefined, newTpl));
+                            if (!p.hinge_3_template) setHinge3Template(getPairedHingeDefault(3, undefined, newTpl));
+                            if (!p.hinge_4_template) setHinge4Template(getPairedHingeDefault(4, undefined, newTpl));
+                            if (!p.hinge_5_template) setHinge5Template(getPairedHingeDefault(5, undefined, newTpl));
+                            if (!p.hinge_6_template) setHinge6Template(getPairedHingeDefault(6, undefined, newTpl));
+                            triggerUpdate({ hinge_template: newTpl }); 
+                        }}
                         style={{ width: '180px', padding: '2px 4px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', fontSize: '11px' }}
                     >
                         {listByType('HINGE').map((hw) => (
@@ -415,6 +451,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: any, t
                                 <SmartNumericInput 
                                     value={h.val}
                                     disabled={!h.active}
+                                    step={0.01} decimals={2}
                                     unit="mm"
                                     onChange={(v) => {
                                         h.setVal(v);

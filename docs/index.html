@@ -6,50 +6,39 @@
     <title>SmartPanel Web — Interaktywny CAD Stolarski</title>
     <meta name="description" content="SmartPanel Web — szybki obiektowy CAD stolarski z interaktywnym widokiem 3D">
 
-    <!-- Babylon.js -->
+    <!-- Babylon.js Core & Loaders -->
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
-    <!-- Babylon.js GUI (wymagany przez Inspector) -->
-    <script src="https://cdn.babylonjs.com/gui/babylon.gui.js"></script>
-    <!-- Babylon.js Inspector -->
-    <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
     <!-- Styles -->
 
     <script>
+        function isExtensionError(msg, src, stack) {
+            var s = String(msg || '') + ' ' + String(src || '') + ' ' + String(stack || '');
+            return /chrome-extension|moz-extension|safari-extension|content\.js|globals-front|adblock|Could not establish connection/i.test(s);
+        }
         window.addEventListener("error", function(e) {
-            console.error("Global Error:", e.error);
-            const errDiv = document.createElement("div");
-            errDiv.style.position = "fixed";
-            errDiv.style.top = "10px";
-            errDiv.style.left = "10px";
-            errDiv.style.zIndex = "99999";
-            errDiv.style.background = "red";
-            errDiv.style.color = "white";
-            errDiv.style.padding = "20px";
-            errDiv.innerHTML = "<h3>Wystąpił krytyczny błąd JS:</h3><p>" + e.message + "</p><pre>" + (e.error && e.error.stack ? e.error.stack : '') + "</pre>";
-            document.body.appendChild(errDiv);
+            if (isExtensionError(e.message, e.filename, e.error && e.error.stack)) {
+                return;
+            }
+            console.error("[SmartPanel CAD Error]:", e.error || e.message);
         });
         window.addEventListener("unhandledrejection", function(e) {
-            console.error("Unhandled Rejection:", e.reason);
-            const errDiv = document.createElement("div");
-            errDiv.style.position = "fixed";
-            errDiv.style.top = "150px";
-            errDiv.style.left = "10px";
-            errDiv.style.zIndex = "99999";
-            errDiv.style.background = "orange";
-            errDiv.style.color = "black";
-            errDiv.style.padding = "20px";
-            errDiv.innerHTML = "<h3>Unhandled Promise Rejection:</h3><p>" + e.reason + "</p>";
-            document.body.appendChild(errDiv);
+            var reasonStr = e.reason ? (e.reason.message || String(e.reason)) : '';
+            var stackStr = e.reason && e.reason.stack ? e.reason.stack : '';
+            if (isExtensionError(reasonStr, '', stackStr)) {
+                return;
+            }
+            console.error("[SmartPanel CAD Rejection]:", e.reason);
         });
     </script>
-  <script type="module" crossorigin src="./assets/main-DvnzKQNC.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/report-data-normalizer-DzjLKfBX.js">
-  <link rel="modulepreload" crossorigin href="./assets/nesting-engine-PW0pZEE3.js">
-  <link rel="modulepreload" crossorigin href="./assets/cad-extract-ACVk9p9a.js">
-  <link rel="modulepreload" crossorigin href="./assets/BelkaDisplayModeMenu-BbgSgwXr.js">
-  <link rel="modulepreload" crossorigin href="./assets/SceneTree-BNubyDBi.js">
-  <link rel="stylesheet" crossorigin href="./assets/report-data-normalizer-BWVYnm6L.css">
+  <script type="module" crossorigin src="./assets/main-BlrouNSy.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/report-data-normalizer-oXnivjUY.js">
+  <link rel="modulepreload" crossorigin href="./assets/nesting-engine-C-qkEMRl.js">
+  <link rel="modulepreload" crossorigin href="./assets/cad-extract-5qCubSoZ.js">
+  <link rel="modulepreload" crossorigin href="./assets/BelkaDisplayModeMenu-BO45bdMA.js">
+  <link rel="modulepreload" crossorigin href="./assets/SceneTree-CVcdEYq_.js">
+  <link rel="stylesheet" crossorigin href="./assets/report-data-normalizer-C149IeR1.css">
   <link rel="stylesheet" crossorigin href="./assets/SceneTree-BzqUzbe4.css">
   <link rel="stylesheet" crossorigin href="./assets/main-3bjImRlY.css">
 </head>
