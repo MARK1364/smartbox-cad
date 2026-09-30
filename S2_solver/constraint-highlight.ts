@@ -3,6 +3,10 @@
  *
  * A = cyjan, B = żółty, GROUND = magenta. Overlay na klikniętej formatce;
  * solver przesuwa korpus, do którego formatka należy.
+ *
+ * Odświeżanie jest złączane do jednej klatki (rAF), a stare meshe/materiały
+ * są dispose'owane dopiero po renderze — unikamy WebGL
+ * `uniformMatrix4fv: location is not from the associated program` przy solve.
  */
 
 import { ContextManager } from '../A1_core/context-manager.js';
@@ -35,7 +39,11 @@ export class ConstraintHighlightOverlay {
 
     private _ids = new Set<string>();
     private _meshes: any[] = [];
+    private _pendingDispose: any[] = [];
     private _offDoc: (() => void) | null = null;
+    private _rafRefresh: number | null = null;
+    private _afterRenderObs: any = null;
+    private _disposeFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     get ids(): ReadonlySet<string> {
         return this._ids;
@@ -60,14 +68,44 @@ export class ConstraintHighlightOverlay {
 
     clear(): void {
         this._ids.clear();
-        this._disposeMeshes();
+        this._cancelScheduledRefresh();
+        this._retireMeshes();
+        this._scheduleDeferredDispose();
     }
 
+    /** Publiczne API: najwyżej jedno przebudowanie na klatkę. */
     refresh(): void {
-        this._disposeMeshes();
+        if (this._rafRefresh != null) {
+            return;
+        }
+        const raf =
+            typeof requestAnimationFrame === 'function'
+                ? requestAnimationFrame
+                : (cb: FrameRequestCallback) => setTimeout(cb, 16) as unknown as number;
+        this._rafRefresh = raf(() => {
+            this._rafRefresh = null;
+            this._refreshNow();
+        });
+    }
+
+    private _cancelScheduledRefresh(): void {
+        if (this._rafRefresh == null) {
+            return;
+        }
+        if (typeof cancelAnimationFrame === 'function') {
+            cancelAnimationFrame(this._rafRefresh);
+        } else {
+            clearTimeout(this._rafRefresh);
+        }
+        this._rafRefresh = null;
+    }
+
+    private _refreshNow(): void {
+        this._retireMeshes();
         const doc = ContextManager.instance.document;
         const scene = ContextManager.instance.viewport?.scene;
         if (!doc || !scene || this._ids.size === 0) {
+            this._scheduleDeferredDispose();
             return;
         }
 
@@ -78,6 +116,8 @@ export class ConstraintHighlightOverlay {
             }
             this._drawConstraint(scene, doc, constraint);
         }
+        this._scheduleDeferredDispose();
+        ContextManager.instance.viewport?.requestRender?.(2);
     }
 
     private _listenDocument(): void {
@@ -111,6 +151,37 @@ export class ConstraintHighlightOverlay {
      * ściany niż ta, którą solver faktycznie liczy.
      */
     private _drawAnchor(scene: any, doc: any, anchor: ConstraintAnchor, color: typeof COLOR_A): void {
+        if (anchor.kind === 'DATUM' || String(anchor.nodeId || '').startsWith('__DATUM__:')) {
+            const n = (anchor.localNormalMm || [0, 0, 1]) as number[];
+            const c = (anchor.quadCenterMm || anchor.localPointMm || [0, 0, 0]) as number[];
+            // Osie U/V w płaszczyźnie (dowolna baza ortogonalna)
+            const absN = n.map(Math.abs);
+            const helper = absN[0] < 0.9 ? [1, 0, 0] : [0, 1, 0];
+            const u = [
+                helper[1] * n[2] - helper[2] * n[1],
+                helper[2] * n[0] - helper[0] * n[2],
+                helper[0] * n[1] - helper[1] * n[0],
+            ];
+            const uLen = Math.hypot(u[0], u[1], u[2]) || 1;
+            const uAxis = [u[0] / uLen, u[1] / uLen, u[2] / uLen];
+            const v = [
+                n[1] * uAxis[2] - n[2] * uAxis[1],
+                n[2] * uAxis[0] - n[0] * uAxis[2],
+                n[0] * uAxis[1] - n[1] * uAxis[0],
+            ];
+            this._addPlaneWorldCad(
+                scene,
+                c,
+                n,
+                uAxis,
+                v,
+                anchor.quadWidthMm || 500,
+                anchor.quadHeightMm || 500,
+                color,
+            );
+            return;
+        }
+
         const body = doc.findNode?.(anchor.nodeId);
         if (!body) {
             return;
@@ -189,6 +260,42 @@ export class ConstraintHighlightOverlay {
         this._meshes.push(mesh);
     }
 
+    /** Płaszczyzna wprost w CAD WCS (datum — bez węzła). */
+    private _addPlaneWorldCad(
+        scene: any,
+        centerCadMm: number[],
+        normalCad: number[],
+        uCad: number[],
+        vCad: number[],
+        width: number,
+        height: number,
+        color: typeof COLOR_A,
+    ): void {
+        const mesh = BABYLON.MeshBuilder.CreatePlane(
+            'solver_hl_datum',
+            { width, height, sideOrientation: BABYLON.Mesh.DOUBLESIDE },
+            scene,
+        );
+        const mat = new BABYLON.StandardMaterial('solver_hl_datum_mat', scene);
+        mat.diffuseColor = new BABYLON.Color3(color.r, color.g, color.b);
+        mat.emissiveColor = new BABYLON.Color3(color.r, color.g, color.b);
+        mat.alpha = color.a;
+        mat.backFaceCulling = false;
+        mat.disableDepthWrite = true;
+        mat.zOffset = -2;
+        mesh.material = mat;
+        mesh.isPickable = false;
+        mesh.renderingGroupId = 1;
+
+        const pos = cadToRender(new Vec3(centerCadMm[0], centerCadMm[1], centerCadMm[2]));
+        mesh.position.set(pos.x, pos.y, pos.z);
+        const x = cadToRender(new Vec3(uCad[0], uCad[1], uCad[2])).normalize();
+        const y = cadToRender(new Vec3(vCad[0], vCad[1], vCad[2])).normalize();
+        const z = cadToRender(new Vec3(normalCad[0], normalCad[1], normalCad[2])).normalize();
+        this._orientPlaneFromAxes(mesh, x, y, z);
+        this._meshes.push(mesh);
+    }
+
     private _addPointWorld(scene: any, node: any, localMm: number[], color: typeof COLOR_A): void {
         const mesh = BABYLON.MeshBuilder.CreateSphere('solver_hl_pt', { diameter: 12 }, scene);
         const mat = new BABYLON.StandardMaterial('solver_hl_pt_mat', scene);
@@ -236,14 +343,63 @@ export class ConstraintHighlightOverlay {
         mesh.rotationQuaternion = BABYLON.Quaternion.FromRotationMatrix(mat);
     }
 
-    private _disposeMeshes(): void {
+    /** Schowaj stare overlaye od razu; GPU dispose dopiero po klatce. */
+    private _retireMeshes(): void {
         for (const m of this._meshes) {
             try {
-                m.dispose();
+                m.isVisible = false;
+                m.isPickable = false;
+                if (typeof m.setEnabled === 'function') {
+                    m.setEnabled(false);
+                }
+            } catch {
+                /* ignore */
+            }
+            this._pendingDispose.push(m);
+        }
+        this._meshes = [];
+    }
+
+    private _scheduleDeferredDispose(): void {
+        if (this._pendingDispose.length === 0) {
+            return;
+        }
+        if (this._afterRenderObs != null || this._disposeFallbackTimer != null) {
+            return;
+        }
+
+        const scene = ContextManager.instance.viewport?.scene;
+        if (scene?.onAfterRenderObservable?.addOnce) {
+            this._afterRenderObs = scene.onAfterRenderObservable.addOnce(() => {
+                this._afterRenderObs = null;
+                this._flushPendingDispose();
+            });
+            ContextManager.instance.viewport?.requestRender?.(1);
+            return;
+        }
+
+        this._disposeFallbackTimer = setTimeout(() => {
+            this._disposeFallbackTimer = null;
+            this._flushPendingDispose();
+        }, 0);
+    }
+
+    private _flushPendingDispose(): void {
+        const doomed = this._pendingDispose;
+        this._pendingDispose = [];
+        for (const m of doomed) {
+            try {
+                const mat = m.material;
+                if (m.material) {
+                    m.material = null;
+                }
+                m.dispose(/* doNotRecurse */ false, /* disposeMaterialAndTextures */ false);
+                if (mat && typeof mat.dispose === 'function' && !mat.isDisposed?.()) {
+                    mat.dispose();
+                }
             } catch {
                 /* ignore */
             }
         }
-        this._meshes = [];
     }
 }

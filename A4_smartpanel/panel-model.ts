@@ -1,7 +1,7 @@
 /**
  * SmartPanel Web — Panel Model (Domain Object)
  * 
- * Czysta logika JS — zero zależności od Babylon, OCCT, DOM.
+ * Czysta logika JS — zero zależności od Babylon.js i DOM.
  * Reprezentuje płytę meblową z 6 ścianami i listą features.
  */
 
@@ -9,87 +9,20 @@ import { IDManager, EntityType } from '../A1_core/id-manager.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { Quat } from '../A1_core/cad-math/quat.js';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
+import { AluFrameManager, AluFrameComponent } from './alu-frame-manager.js';
+import { validatePanelDimensionsNm } from './native_core/panel-dimensions.js';
+import { normalizeFaceName, FACE_NAMES } from '../A1_core/face-name.js';
+
+export { validatePanelDimensionsNm } from './native_core/panel-dimensions.js';
+export { normalizeFaceName, FACE_NAMES, type FaceName } from '../A1_core/face-name.js';
+export { isManualPanel } from '../A1_core/panel-like.js';
 
 // ─── Face definitions ────────────────────────────────────────
 
-export type FaceName = 'FACE_X_PLUS' | 'FACE_X_MINUS' | 'FACE_Y_PLUS' | 'FACE_Y_MINUS' | 'FACE_Z_PLUS' | 'FACE_Z_MINUS';
-
-const FACE_NAMES: FaceName[] = [
-    'FACE_X_PLUS',
-    'FACE_X_MINUS',
-    'FACE_Y_PLUS',
-    'FACE_Y_MINUS',
-    'FACE_Z_PLUS',
-    'FACE_Z_MINUS'
-];
-
-/**
- * Normalizuje dowolną nazwę ściany (legacy lub skróconą) do kanonicznej nazwy LCS.
- */
-export function normalizeFaceName(name: string): FaceName {
-    if (!name) return 'FACE_Z_PLUS';
-    const key = name.trim().toUpperCase();
-    switch (key) {
-        // Płaszczyzny główne (grubość Z)
-        case 'FACE_Z_PLUS':
-        case 'FRONT':
-        case '+Z':
-        case 'POS_Z':
-        case 'Z+':
-            return 'FACE_Z_PLUS';
-
-        case 'FACE_Z_MINUS':
-        case 'BACK':
-        case '-Z':
-        case 'NEG_Z':
-        case 'Z-':
-            return 'FACE_Z_MINUS';
-
-        // Płaszczyzny boczne szerokości (oś X)
-        case 'FACE_X_MINUS':
-        case 'EDGE_X_MINUS':
-        case 'LEFT':
-        case '-X':
-        case 'NEG_X':
-        case 'X-':
-            return 'FACE_X_MINUS';
-
-        case 'FACE_X_PLUS':
-        case 'EDGE_X_PLUS':
-        case 'RIGHT':
-        case '+X':
-        case 'POS_X':
-        case 'X+':
-            return 'FACE_X_PLUS';
-
-        // Płaszczyzny boczne wysokości (oś Y)
-        case 'FACE_Y_PLUS':
-        case 'EDGE_Y_PLUS':
-        case 'TOP':
-        case '+Y':
-        case 'POS_Y':
-        case 'Y+':
-            return 'FACE_Y_PLUS';
-
-        case 'FACE_Y_MINUS':
-        case 'EDGE_Y_MINUS':
-        case 'BOTTOM':
-        case '-Y':
-        case 'NEG_Y':
-        case 'Y-':
-            return 'FACE_Y_MINUS';
-
-        default:
-            // Jeśli nie rozpoznano, a jest poprawnym FaceName w innym casingu
-            const matched = FACE_NAMES.find(f => f.toUpperCase() === key);
-            if (matched) return matched;
-            throw new Error(`Invalid face name: "${name}". Valid: ${FACE_NAMES.join(', ')}`);
-    }
-}
+// FaceName / FACE_NAMES / normalizeFaceName — SSOT w A1_core/face-name.ts
 
 /**
  * Oblicza lokalny układ współrzędnych 2D dla danej ściany płyty.
- * Zgodne z sekcją 9 planu OCCT.
  * 
  * @param {string} rawFaceName 
  * @param {number} w - szerokość płyty (X)
@@ -143,6 +76,10 @@ export class PanelModel {
     color: { r: number; g: number; b: number; a?: number } = { r: 0.95, g: 0.95, b: 0.95 };
     edgeBanding: Record<string, any> = {};
     custom_properties: Record<string, any> = {};
+    /** Klasyfikacja raportowa z planu ('plyty' | 'akcesoria') — strukturalna, nie display. */
+    report_type?: string;
+    /** Pozycja katalogowa okucia kupowanego (B1_biblioteka) — SSOT wyceny. */
+    library_id?: string;
     /**
      * false = panel ręczny (wzmocnienie, nietypowa płyta w korpusie).
      * Silnik nie kasuje go przy przebudowie i nie nadpisuje wymiarów / transformacji.
@@ -150,11 +87,15 @@ export class PanelModel {
     engineManaged: boolean = true;
     /** Asocjacyjna szerokość / wysokość — dwie płaszczyzny + offset [mm]. */
     associativeDims: import('./associative-dim.js').AssociativeDims | null = null;
+    /** Postać formatki: pełna płyta (SOLID) lub ramka aluminiowa ze szkłem (ALU_FRAME). */
+    panelForm: 'SOLID' | 'ALU_FRAME' = 'SOLID';
+    /** ID wybranego szablonu ramki alu (np. Z1_BLACK, Z9_WIDE_BLACK). */
+    frameTemplateId?: string;
 
     constructor({ 
-        width = 600_000_000, 
-        height = 720_000_000, 
-        thickness = 18_000_000, 
+        width, 
+        height, 
+        thickness, 
         position = {x: 0, y: 0, z: 0},
         rotation = {x: 0, y: 0, z: 0},
         role = "LEFT_SIDE_PANEL",
@@ -166,7 +107,24 @@ export class PanelModel {
         engineManaged = true,
         zoneId = undefined as string | undefined,
         zonePrefix = undefined as string | undefined,
-    } = {}) {
+    }: {
+        width: number;
+        height: number;
+        thickness: number;
+        position?: { x: number; y: number; z: number };
+        rotation?: { x: number; y: number; z: number };
+        role?: string;
+        name?: string;
+        materialId?: string;
+        materialName?: string;
+        materialCode?: string;
+        color?: { r: number; g: number; b: number };
+        engineManaged?: boolean;
+        zoneId?: string;
+        zonePrefix?: string;
+    }) {
+        validatePanelDimensionsNm({ width, height, thickness, name }, 'PanelModel');
+
         if ((thickness <= 3_500_000 || role === 'BACK_PANEL') && materialId === 'W1100_ST9_18' && materialName === 'Biały Alpejski') {
             materialId = 'HDF_BIALY_3';
             materialName = 'HDF Biały 3mm';
@@ -204,7 +162,7 @@ export class PanelModel {
         
         // Inicjalizacja Głównego ID
         const idMgr = IDManager.getInstance();
-        this.parentId = idMgr.register(EntityType.SMARTBOX, "", "main").fullPath;
+        this.parentId = idMgr.register(EntityType.BLOKI, "", "main").fullPath;
         this.smartId = idMgr.register(EntityType.PART, this.parentId, "", { model: this });
 
         this.features = [];
@@ -250,6 +208,40 @@ export class PanelModel {
         this._emit('lcsVisibility', { visible });
     }
 
+    // ─── Postać Ramki Aluminiowej (Alu Frame) ────────
+
+    isAluFrame(): boolean {
+        return this.panelForm === 'ALU_FRAME';
+    }
+
+    convertToAluFrame(templateId: string = 'Z1_BLACK'): void {
+        this.panelForm = 'ALU_FRAME';
+        this.frameTemplateId = templateId;
+        const tpl = AluFrameManager.instance.getTemplate(templateId);
+        if (tpl?.profile?.depth_mm) {
+            this.thickness = mmToNm(tpl.profile.depth_mm);
+        }
+        this._emit('panelFormChanged', { panelForm: 'ALU_FRAME', templateId });
+        this._emit('dimensions', { width: this.width, height: this.height, thickness: this.thickness });
+    }
+
+    convertToSolid(): void {
+        this.panelForm = 'SOLID';
+        this.frameTemplateId = undefined;
+        this._emit('panelFormChanged', { panelForm: 'SOLID' });
+        this._emit('dimensions', { width: this.width, height: this.height, thickness: this.thickness });
+    }
+
+    getFrameComponents(): AluFrameComponent[] {
+        if (!this.isAluFrame()) return [];
+        return AluFrameManager.instance.computeComponents(
+            nmToMm(this.width),
+            nmToMm(this.height),
+            nmToMm(this.thickness),
+            this.frameTemplateId
+        );
+    }
+
     // ─── Edge Banding (Okleinowanie Krawędzi) ────────
     
     /**
@@ -257,17 +249,19 @@ export class PanelModel {
      */
     static normalizeEdgeKey(key: string): '+X' | '-X' | '+Y' | '-Y' {
         const u = String(key || '').toUpperCase().trim();
-        if (u === '+X' || u === 'FACE_X_PLUS' || u === 'RIGHT' || u === 'POS_X' || u === 'X+') return '+X';
-        if (u === '-X' || u === 'FACE_X_MINUS' || u === 'LEFT' || u === 'NEG_X' || u === 'X-') return '-X';
-        if (u === '+Y' || u === 'FACE_Y_PLUS' || u === 'TOP' || u === 'POS_Y' || u === 'Y+') return '+Y';
-        if (u === '-Y' || u === 'FACE_Y_MINUS' || u === 'BOTTOM' || u === 'NEG_Y' || u === 'Y-') return '-Y';
-        return '+X';
+        // Kanoniczny zapis obrzeża to +/-X, +/-Y. FACE_X_PLUS itd. to osobna przestrzeń
+        // nazw (face) — panel przyjmuje oba, bo edge_banding z JSON bywa w obu.
+        if (u === '+X' || u === 'FACE_X_PLUS') return '+X';
+        if (u === '-X' || u === 'FACE_X_MINUS') return '-X';
+        if (u === '+Y' || u === 'FACE_Y_PLUS') return '+Y';
+        if (u === '-Y' || u === 'FACE_Y_MINUS') return '-Y';
+        throw new Error(`Niekanoniczna krawędź obrzeża: "${key}". Dozwolone: +X, -X, +Y, -Y.`);
     }
 
     /**
      * Ustawia obrzeże na wybranej krawędzi.
      */
-    setEdgeBand(edgeKey: string, config: { active?: boolean; type_id?: string; name?: string; thickness_mm?: number; width_mm?: number; color?: any; material_id?: string; price_per_mb?: number }) {
+    setEdgeBand(edgeKey: string, config: { active?: boolean; type_id?: string; name?: string; thickness_mm?: number; width_mm?: number; color?: any; material_id?: string; price_per_mb?: number; cutAngle?: number }) {
         const canonical = PanelModel.normalizeEdgeKey(edgeKey);
         if (!this.edgeBanding) this.edgeBanding = {};
         const existing = this.edgeBanding[canonical] || {};
@@ -280,7 +274,8 @@ export class PanelModel {
             width_mm: config.width_mm !== undefined ? config.width_mm : (existing.width_mm || 22.0),
             color: config.color || existing.color || this.color,
             material_id: config.material_id || existing.material_id || this.materialId,
-            price_per_mb: config.price_per_mb !== undefined ? config.price_per_mb : (existing.price_per_mb || 3.50)
+            price_per_mb: config.price_per_mb !== undefined ? config.price_per_mb : (existing.price_per_mb || 3.50),
+            cutAngle: config.cutAngle !== undefined ? config.cutAngle : (existing.cutAngle || 0)
         };
 
         if (this.custom_properties) {
@@ -465,8 +460,12 @@ export class PanelModel {
             color: this.color,
             edgeBanding: this.edgeBanding,
             custom_properties: this.custom_properties,
+            ...(this.report_type !== undefined ? { report_type: this.report_type } : {}),
+            ...(this.library_id !== undefined ? { library_id: this.library_id } : {}),
             engineManaged: this.engineManaged,
             associativeDims: this.associativeDims,
+            panelForm: this.panelForm,
+            frameTemplateId: this.frameTemplateId,
             features: this.features.map(f => ({ ...f, params: { ...f.params } }))
         };
     }
@@ -485,8 +484,12 @@ export class PanelModel {
         if (data.color != null) this.color = data.color;
         if (data.edgeBanding != null) this.edgeBanding = data.edgeBanding;
         if (data.custom_properties != null) this.custom_properties = data.custom_properties;
+        if (data.report_type != null) this.report_type = data.report_type;
+        if (data.library_id != null) this.library_id = data.library_id;
         if (data.engineManaged != null) this.engineManaged = data.engineManaged !== false;
         if (data.associativeDims !== undefined) this.associativeDims = data.associativeDims;
+        if (data.panelForm) this.panelForm = data.panelForm;
+        if (data.frameTemplateId !== undefined) this.frameTemplateId = data.frameTemplateId;
         if (data.features) {
             this.features = data.features.map((f: any) => ({
                 ...f,
@@ -530,8 +533,12 @@ export class PanelModel {
         if (data.color) this.color = data.color;
         if (data.edgeBanding) this.edgeBanding = data.edgeBanding;
         if (data.custom_properties) this.custom_properties = data.custom_properties;
+        if (data.report_type !== undefined) this.report_type = data.report_type;
+        if (data.library_id !== undefined) this.library_id = data.library_id;
         if (data.engineManaged != null) this.engineManaged = data.engineManaged !== false;
         if (data.associativeDims !== undefined) this.associativeDims = data.associativeDims;
+        if (data.panelForm) this.panelForm = data.panelForm;
+        if (data.frameTemplateId !== undefined) this.frameTemplateId = data.frameTemplateId;
         this.features = (data.features || []).map(f => ({
             ...f,
             params: { ...f.params }
@@ -576,9 +583,7 @@ export class PanelModel {
     }
 }
 
-/** Panel ręczny (wzmocnienie, nietypowa płyta) — silnik nie kasuje i nie nadpisuje. */
-export function isManualPanel(panel: any): boolean {
-    return !!panel && panel.engineManaged === false;
+/** Type guard klasy PanelModel (A4) — nie mylić z A1 `isPanelLike`. */
+export function isPanelModel(data: any): data is PanelModel {
+    return !!data && (data instanceof PanelModel || data.type === 'part' || data.type === 'panel');
 }
-
-export { FACE_NAMES };

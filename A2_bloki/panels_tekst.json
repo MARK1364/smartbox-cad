@@ -1,0 +1,119 @@
+{
+  "panel.label": {
+    "pl": "Ustawienia Blend V2",
+    "en": "Panel Settings V2",
+    "de": "Blenden Einstellungen V2"
+  },
+  "outer_note": {
+    "pl": "Na zewnątrz korpusu (OUTER)",
+    "en": "Outside cabinet (OUTER)",
+    "de": "Außerhalb Korpus (OUTER)"
+  },
+  "side_panel_mode.label": {
+    "pl": "Montaż blend:",
+    "en": "Panel mount mode:",
+    "de": "Blenden Montage:"
+  },
+  "side_panel_mode.items.FULL": {
+    "pl": "Cokół+korpus+blenda_G",
+    "en": "Plinth+body+top",
+    "de": "Sockel+Korpus+Blende_O"
+  },
+  "side_panel_mode.items.KORPUS_BLENDA_G": {
+    "pl": "Korpus+blenda_G",
+    "en": "Body+top",
+    "de": "Korpus+Blende_O"
+  },
+  "side_panel_mode.items.COKOL_KORPUS": {
+    "pl": "Cokół+Korpus",
+    "en": "Plinth+body",
+    "de": "Sockel+Korpus"
+  },
+  "side_panel_mode.items.KORPUS": {
+    "pl": "Korpus",
+    "en": "Body only",
+    "de": "Nur Korpus"
+  },
+  "side.left": {
+    "pl": "Blenda lewa",
+    "en": "Left panel",
+    "de": "Linke Blende"
+  },
+  "side.right": {
+    "pl": "Blenda prawa",
+    "en": "Right panel",
+    "de": "Rechte Blende"
+  },
+  "side.top": {
+    "pl": "Blenda górna",
+    "en": "Top panel",
+    "de": "Obere Blende"
+  },
+  "side.auto": {
+    "pl": "Auto",
+    "en": "Auto",
+    "de": "Auto"
+  },
+  "side.depth": {
+    "pl": "Głębokość:",
+    "en": "Depth:",
+    "de": "Tiefe:"
+  },
+  "plinth.enable": {
+    "pl": "Cokół",
+    "en": "Plinth",
+    "de": "Sockel"
+  },
+  "plinth.height": {
+    "pl": "Wysokość cokołu:",
+    "en": "Plinth height:",
+    "de": "Sockelhöhe:"
+  },
+  "plinth.recess": {
+    "pl": "Cofnięcie cokołu:",
+    "en": "Plinth recess:",
+    "de": "Sockelrücksprung:"
+  },
+  "plinth.gap": {
+    "pl": "Szczelina cokołu:",
+    "en": "Plinth gap:",
+    "de": "Sockelspalt:"
+  },
+  "generate.label": {
+    "pl": "Generuj / Odśwież",
+    "en": "Generate / Refresh",
+    "de": "Generieren / Aktualisieren"
+  },
+  "hints.STEP_1_SELECT_BASE": {
+    "pl": "Krok 1: Zaznacz moduły, do których chcesz dodać blendy.",
+    "en": "Step 1: Select the modules to which you want to add panels."
+  },
+  "hints.STEP_2_CONFIGURE": {
+    "pl": "Krok 2: Określ rodzaj blend (boczna, górna, cokół).",
+    "en": "Step 2: Specify the panel type (side, top, plinth)."
+  },
+  "hints.STEP_3_APPLY": {
+    "pl": "Krok 3: Kliknij 'Generuj Blendy'.",
+    "en": "Step 3: Click 'Generate Panels'."
+  },
+  "errors.MISSING_BASE_OBJECT": {
+    "pl": "Brak wybranego korpusu do nałożenia blend.",
+    "en": "Missing selected cabinet body for panels."
+  },
+  "warnings.OVERHANG_TOO_LARGE": {
+    "pl": "Wypuszczenie blendy przekracza standardową tolerancję montażową.",
+    "en": "Panel overhang exceeds standard installation tolerance."
+  },
+  "tooltips.panel_thickness": {
+    "pl": "Grubość formatki blendy (zwykle 18mm).",
+    "en": "Panel thickness (usually 18mm)."
+  },
+  "tooltips.overhang_front": {
+    "pl": "Wysunięcie blendy przed przednią płaszczyznę korpusu.",
+    "en": "Overhang of panel in front of cabinet face."
+  },
+  "tooltips.side_selection": {
+    "pl": "Strony korpusu, na których mają zostać zamontowane blendy.",
+    "en": "Sides of the cabinet where panels should be placed."
+  }
+}

@@ -28,7 +28,7 @@ function persist(panel: PanelModel, axis: AssocAxis, next: AssociativeDim | null
         resized = applyAssociativeDim(doc, panel, axis);
     }
     doc?.emitChange?.('dimensions');
-    window.document.dispatchEvent(new CustomEvent('smartbox-panel-changed', { detail: { panelModel: panel } }));
+    window.document.dispatchEvent(new CustomEvent('bloki-panel-changed', { detail: { panelModel: panel } }));
     if (resized) {
         (ContextManager.instance as any)?.solverController?.solveNow?.();
     }

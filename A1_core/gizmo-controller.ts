@@ -6,22 +6,16 @@
  */
 
 import { ContextManager } from './context-manager.js';
-import { applyRealtimeUpdate } from '../A3_smartframe/smartframe-adapter.js';
 import { Vec3 } from './cad-math/vec3.js';
 import { Mat4 } from './cad-math/mat4.js';
 import { nmToMm } from './cad-math/units.js';
 import { TransformNodeCommand } from './commands/transform-node-command.js';
 import { MacroCommand } from './commands/macro-command.js';
-import { SyncBackGroovesCommand } from '../A3_smartframe/commands/sync-back-grooves-command.js';
-import { ConstraintStore } from '../S2_solver/constraint-store.js';
-import { ConstraintDragGroup } from '../S2_solver/constraint-drag-group.js';
+import { normalizeFaceName } from './face-name.js';
+import { findOffsetGizmoHandler } from './offset-gizmo-port.js';
+import { getCabinetModule, TopPanelMode } from './cabinet-port.js';
 import { CadTranslateGizmo } from './cad-translate-gizmo.js';
-
-import { normalizeFaceName } from '../A4_smartpanel/panel-model.js';
-import { readOffsetMm } from '../A3_smartframe/back-overlap.js';
-import { findOwningKorpus } from '../A3_smartframe/korpus-offset-gizmo.js';
-import { SetKorpusTopPanelConfigCommand, TopPanelMode } from '../A3_smartframe/commands/set-korpus-top-panel-config-command.js';
-import { rebuildSmartFrameContainer } from '../A3_smartframe/smartframe-adapter.js';
+import { getConstraintDragPort } from './constraint-drag-port.js';
 
 declare const BABYLON: any;
 
@@ -46,68 +40,79 @@ export class GizmoController {
     private isTopPanelWidgetOpen = false;
     private topPanelWidgetManualPos: { left: number; top: number } | null = null;
 
+    /**
+     * Ściana panelu (klucz = kanoniczny FaceName) → sufiks parametra korpusu.
+     *
+     * Klucze są kanonicznymi nazwami LCS — `normalizeFaceName` nie przyjmuje już
+     * aliasów. Wartości to dalej osie/sufiksy (`+X`, `-Y`, `backOffset`).
+     */
     private pushPullMapping: Record<string, Record<string, string>> = {
         'LEFT_SIDE_PANEL': {
-            'top': '-Y',    // Krawędź górna korpusu (-Y / top offset)
-            'bottom': '+Y', // Krawędź dolna korpusu (+Y / bottom offset)
-            'left': '+X',   // Ścianka left z tyłu korpusu -> (+X / pXPlus offset)
-            'right': '-X'   // Ścianka right z przodu korpusu -> (-X / pXMinus offset)
+            'FACE_Y_PLUS': '-Y',    // Krawędź górna korpusu (-Y / top offset)
+            'FACE_Y_MINUS': '+Y',  // Krawędź dolna korpusu (+Y / bottom offset)
+            'FACE_X_MINUS': '+X',  // Ścianka left z tyłu korpusu -> (+X / pXPlus offset)
+            'FACE_X_PLUS': '-X'    // Ścianka right z przodu korpusu -> (-X / pXMinus offset)
         },
         'SIDE_LEFT': {
-            'top': '-Y',
-            'bottom': '+Y',
-            'left': '+X',
-            'right': '-X'
+            'FACE_Y_PLUS': '-Y',
+            'FACE_Y_MINUS': '+Y',
+            'FACE_X_MINUS': '+X',
+            'FACE_X_PLUS': '-X'
         },
         'RIGHT_SIDE_PANEL': {
-            'bottom': '-Y',
-            'top': '+Y',
-            'right': '+X',  // Ścianka right (+X) z tyłu korpusu -> (+X / pXPlus offset)
-            'left': '-X'    // Ścianka left (-X) z przodu korpusu -> (-X / pXMinus offset)
+            'FACE_Y_MINUS': '-Y',
+            'FACE_Y_PLUS': '+Y',
+            'FACE_X_PLUS': '+X',   // Ścianka right (+X) z tyłu korpusu -> (+X / pXPlus offset)
+            'FACE_X_MINUS': '-X'  // Ścianka left (-X) z przodu korpusu -> (-X / pXMinus offset)
         },
         'SIDE_RIGHT': {
-            'bottom': '-Y',
-            'top': '+Y',
-            'right': '+X',
-            'left': '-X'
+            'FACE_Y_MINUS': '-Y',
+            'FACE_Y_PLUS': '+Y',
+            'FACE_X_PLUS': '+X',
+            'FACE_X_MINUS': '-X'
         },
         'VERTICAL_DIVIDER': {
-            'bottom': '-Y',
-            'top': '+Y',
-            'right': '+X',
-            'left': '-X'
+            'FACE_Y_MINUS': '-Y',
+            'FACE_Y_PLUS': '+Y',
+            'FACE_X_PLUS': '+X',
+            'FACE_X_MINUS': '-X'
         },
         'DIVIDER': {
-            'bottom': '-Y',
-            'top': '+Y',
-            'right': '+X',
-            'left': '-X'
+            'FACE_Y_MINUS': '-Y',
+            'FACE_Y_PLUS': '+Y',
+            'FACE_X_PLUS': '+X',
+            'FACE_X_MINUS': '-X'
         },
         'BOTTOM_PANEL': {
-            'bottom': '+X',  // Krawędź tylna (+X / pXPlus offset)
-            'top': '-X',     // Krawędź przednia (-X / pXMinus offset)
-            'left': '-Y',    // Krawędź lewa (-Y / pYMinus offset)
-            'right': '+Y'    // Krawędź prawa (+Y / pYPlus offset)
+            // [90,180,0]: Ry=180 — tylna = −X (jak TOP)
+            'FACE_Y_MINUS': '-X',
+            'FACE_Y_PLUS': '+X',
+            'FACE_X_MINUS': '-Y',
+            'FACE_X_PLUS': '+Y'
         },
         'TOP_PANEL': {
-            'bottom': '-X', // Odbicie wokół X: lokalny -Y leży z PRZODU korpusu (-X / pXMinus offset)
-            'top': '+X',    // Lokalny +Y leży z TYŁU korpusu (+X / pXPlus offset)
-            'left': '-Y',   // Krawędź lewa (-Y offset)
-            'right': '+Y'   // Krawędź prawa (+Y offset)
+            'FACE_Y_MINUS': '-X', // Odbicie wokół X: lokalny -Y leży z PRZODU korpusu (-X / pXMinus offset)
+            'FACE_Y_PLUS': '+X',  // Lokalny +Y leży z TYŁU korpusu (+X / pXPlus offset)
+            'FACE_X_MINUS': '-Y', // Krawędź lewa (-Y offset)
+            'FACE_X_PLUS': '+Y'   // Krawędź prawa (+Y offset)
         },
         'SHELF_PANEL': {
-            'bottom': '+X',
-            'top': '-X',
-            'left': '-Y',
-            'right': '+Y'
+            'FACE_Y_MINUS': '+X',
+            'FACE_Y_PLUS': '-X',
+            'FACE_X_MINUS': '-Y',
+            'FACE_X_PLUS': '+Y'
         },
         'SHELF': {
-            'bottom': '+X',
-            'top': '-X',
-            'left': '-Y',
-            'right': '+Y'
+            'FACE_Y_MINUS': '+X',
+            'FACE_Y_PLUS': '-X',
+            'FACE_X_MINUS': '-Y',
+            'FACE_X_PLUS': '+Y'
         },
-        'BACK_PANEL': { 'top': '-Y', 'bottom': '+Y', 'left': '-X', 'right': '+X', 'front': 'backOffset' }
+        'BACK_PANEL': {
+            'FACE_Y_PLUS': '-Y', 'FACE_Y_MINUS': '+Y',
+            'FACE_X_MINUS': '-X', 'FACE_X_PLUS': '+X',
+            'FACE_Z_PLUS': 'backOffset'
+        }
     };
 
     private faceNormals: Record<string, any> = {};
@@ -115,20 +120,12 @@ export class GizmoController {
     constructor() {
         if (typeof BABYLON !== 'undefined') {
             this.faceNormals = {
-                // Canonical FACE_
                 'FACE_Y_PLUS': new BABYLON.Vector3(0, 1, 0),
                 'FACE_Y_MINUS': new BABYLON.Vector3(0, -1, 0),
                 'FACE_Z_PLUS': new BABYLON.Vector3(0, 0, 1),
                 'FACE_Z_MINUS': new BABYLON.Vector3(0, 0, -1),
                 'FACE_X_MINUS': new BABYLON.Vector3(-1, 0, 0),
-                'FACE_X_PLUS': new BABYLON.Vector3(1, 0, 0),
-                // Legacy aliasy
-                'top': new BABYLON.Vector3(0, 1, 0),
-                'bottom': new BABYLON.Vector3(0, -1, 0),
-                'front': new BABYLON.Vector3(0, 0, 1),
-                'back': new BABYLON.Vector3(0, 0, -1),
-                'left': new BABYLON.Vector3(-1, 0, 0),
-                'right': new BABYLON.Vector3(1, 0, 0)
+                'FACE_X_PLUS': new BABYLON.Vector3(1, 0, 0)
             };
         }
     }
@@ -184,7 +181,11 @@ export class GizmoController {
                         } else {
                             const activeEntity = ContextManager.instance.document?.activeEntity;
                             const role = (activeEntity as any)?.role;
-                            currentVal = readOffsetMm(this.activeGizmoContainer.generatorParams?.offsets, this.activeGizmoParamName, role);
+                            currentVal = this._readOffsetMm(
+                                this.activeGizmoContainer,
+                                this.activeGizmoParamName,
+                                role
+                            );
                         }
                         input.value = currentVal.toString();
                     }
@@ -323,7 +324,7 @@ export class GizmoController {
         const isBackOffset = paramName === 'backOffset';
         this.originalValueBeforeEdit = isBackOffset
             ? (container.generatorParams?.backOffset !== undefined ? container.generatorParams.backOffset : 3)
-            : readOffsetMm(container.generatorParams?.offsets, paramName, role);
+            : this._readOffsetMm(container, paramName, role);
 
         const badge = document.getElementById('gizmo-floating-input');
         const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
@@ -338,9 +339,44 @@ export class GizmoController {
         }
     }
 
+    private _readOffsetMm(container: any, paramName: string, role?: string): number {
+        if (!container) return 0;
+        if (paramName === 'backOffset') {
+            return container.generatorParams?.backOffset !== undefined ? container.generatorParams.backOffset : 3;
+        }
+        const handler = role ? findOffsetGizmoHandler(role) : null;
+        if (handler) {
+            return handler.readOffsetMm(container, paramName, role);
+        }
+        return container.generatorParams?.offsets?.[paramName] ?? 0;
+    }
+
     /**
-     * Bezpieczny ewaluator wyrażeń matematycznych dla inputów gizm (np. "88+10", "150-12", "600/2", "18*2")
+     * Podgląd offsetu na WSKAZANYM korpusie — bez applyRealtimeUpdate/getActiveContainer
+     * (te brały gabaryt z getContainers()[0] i nadpisywały aktywny korpus).
      */
+    private previewOffsetOnContainer(container: any, paramName: string, value: number, role?: string): void {
+        if (!container) return;
+        if (!container.generatorParams) container.generatorParams = {};
+
+        const handler = role ? findOffsetGizmoHandler(role) : null;
+        if (handler) {
+            handler.previewOffset(container, paramName, value);
+            return;
+        }
+
+        const cabMod = getCabinetModule();
+        if (paramName === 'backOffset') {
+            container.generatorParams.backOffset = value;
+            cabMod?.rebuild(container);
+            return;
+        }
+
+        if (!container.generatorParams.offsets) container.generatorParams.offsets = {};
+        container.generatorParams.offsets[paramName] = value;
+        cabMod?.rebuild(container);
+    }
+
     private evaluateMathExpression(expr: string): number | null {
         if (!expr) return null;
         // Zamień przecinki na kropki (np. 88,5 -> 88.5)
@@ -370,29 +406,11 @@ export class GizmoController {
             const val = this.evaluateMathExpression(input.value);
             if (val === null) return;
 
-            const isBackOffset = this.activeGizmoParamName === 'backOffset';
-            if (isBackOffset) {
-                this.activeGizmoContainer.generatorParams.backOffset = val;
-            } else {
-                if (!this.activeGizmoContainer.generatorParams.offsets) {
-                    this.activeGizmoContainer.generatorParams.offsets = {};
-                }
-                this.activeGizmoContainer.generatorParams.offsets[this.activeGizmoParamName] = val;
-            }
-
-            const doc = ContextManager.instance.document;
-            if (doc) {
-                applyRealtimeUpdate(doc, {
-                    width: nmToMm(this.activeGizmoContainer.width),
-                    height: nmToMm(this.activeGizmoContainer.height),
-                    depth: nmToMm(this.activeGizmoContainer.depth),
-                    zoneCount: this.activeGizmoContainer.generatorParams.zoneCount || 1,
-                    bottomHeight: this.activeGizmoContainer.generatorParams.bottomHeight || 500,
-                    middleHeight: this.activeGizmoContainer.generatorParams.middleHeight || 1200,
-                    backOffset: this.activeGizmoContainer.generatorParams.backOffset !== undefined ? this.activeGizmoContainer.generatorParams.backOffset : 3,
-                    offsets: this.activeGizmoContainer.generatorParams.offsets || {}
-                });
-            }
+            this.previewOffsetOnContainer(
+                this.activeGizmoContainer,
+                this.activeGizmoParamName,
+                val
+            );
         };
 
         input.onkeydown = (e) => {
@@ -407,28 +425,11 @@ export class GizmoController {
             } else if (e.key === 'Escape') {
                 input.value = this.originalValueBeforeEdit.toString();
                 if (this.activeGizmoContainer && this.activeGizmoParamName) {
-                    const isBackOffset = this.activeGizmoParamName === 'backOffset';
-                    if (isBackOffset) {
-                        this.activeGizmoContainer.generatorParams.backOffset = this.originalValueBeforeEdit;
-                    } else {
-                        if (!this.activeGizmoContainer.generatorParams.offsets) {
-                            this.activeGizmoContainer.generatorParams.offsets = {};
-                        }
-                        this.activeGizmoContainer.generatorParams.offsets[this.activeGizmoParamName] = this.originalValueBeforeEdit;
-                    }
-                    const doc = ContextManager.instance.document;
-                    if (doc) {
-                        applyRealtimeUpdate(doc, {
-                            width: nmToMm(this.activeGizmoContainer.width),
-                            height: nmToMm(this.activeGizmoContainer.height),
-                            depth: nmToMm(this.activeGizmoContainer.depth),
-                            zoneCount: this.activeGizmoContainer.generatorParams.zoneCount || 1,
-                            bottomHeight: this.activeGizmoContainer.generatorParams.bottomHeight || 500,
-                            middleHeight: this.activeGizmoContainer.generatorParams.middleHeight || 1200,
-                            backOffset: this.activeGizmoContainer.generatorParams.backOffset !== undefined ? this.activeGizmoContainer.generatorParams.backOffset : 3,
-                            offsets: this.activeGizmoContainer.generatorParams.offsets || {}
-                        });
-                    }
+                    this.previewOffsetOnContainer(
+                        this.activeGizmoContainer,
+                        this.activeGizmoParamName,
+                        this.originalValueBeforeEdit
+                    );
                 }
                 input.blur();
             }
@@ -662,19 +663,20 @@ export class GizmoController {
         const curWidth = container.generatorParams?.traverseWidth || 80;
         if (curMode === newMode) return;
 
-        const cmd = new SetKorpusTopPanelConfigCommand(
+        const cabMod = getCabinetModule();
+        const cmd = cabMod?.createSetTopPanelConfigCommand?.(
             container.id,
             { mode: curMode, width: curWidth },
             { mode: newMode, width: curWidth }
         );
         const hist = ContextManager.instance.commandHistory;
-        if (hist) {
+        if (hist && cmd) {
             hist.execute(cmd);
         } else {
             if (!container.generatorParams) container.generatorParams = {};
             container.generatorParams.topPanelMode = newMode;
             container.generatorParams.traverseWidth = curWidth;
-            rebuildSmartFrameContainer(container);
+            cabMod?.rebuild(container);
         }
         setTimeout(() => {
             this.updateFaceGizmo();
@@ -688,19 +690,20 @@ export class GizmoController {
         const curWidth = container.generatorParams?.traverseWidth || 80;
         if (curWidth === newWidth) return;
 
-        const cmd = new SetKorpusTopPanelConfigCommand(
+        const cabMod = getCabinetModule();
+        const cmd = cabMod?.createSetTopPanelConfigCommand?.(
             container.id,
             { mode: curMode, width: curWidth },
             { mode: curMode, width: newWidth }
         );
         const hist = ContextManager.instance.commandHistory;
-        if (hist) {
+        if (hist && cmd) {
             hist.execute(cmd);
         } else {
             if (!container.generatorParams) container.generatorParams = {};
             container.generatorParams.topPanelMode = curMode;
             container.generatorParams.traverseWidth = newWidth;
-            rebuildSmartFrameContainer(container);
+            cabMod?.rebuild(container);
         }
         setTimeout(() => {
             this.updateFaceGizmo();
@@ -921,17 +924,18 @@ export class GizmoController {
         if (!view || !view.faceMeshes) return;
 
         const role = (targetEntity as any).role;
-        if (!role || !this.pushPullMapping[role]) return;
+        const handler = role ? findOffsetGizmoHandler(role) : null;
+        const mapping = handler?.getFaceMapping(role, targetEntity) || (role && this.pushPullMapping[role]) || null;
+        if (!mapping) return;
 
-        const mapping = this.pushPullMapping[role];
-        const rawContainer: any = doc.getContainers()[0];
-        const container: any = rawContainer?.domainData || rawContainer;
+        // Zawsze korpus właściciel płyty — NIE getContainers()[0]
+        const container: any = handler?.resolveContainer(doc, targetEntity) || (doc ? doc.findNode(targetEntity.id)?.parent?.domainData : null);
         if (!container || !container.generatorParams) return;
 
         const panelName = targetEntity.name;
 
         if (role === 'TOP_PANEL' || role.includes('TOP')) {
-            const owningKorpus = findOwningKorpus(doc, targetEntity.id) || container;
+            const owningKorpus = container;
             if (owningKorpus) {
                 this.activeTopPanelEntity = targetEntity;
                 this.activeTopPanelContainer = owningKorpus;
@@ -942,23 +946,31 @@ export class GizmoController {
         }
 
         for (const [faceName, suffix] of Object.entries(mapping)) {
-            const paramName = suffix === 'backOffset' ? 'backOffset' : `${panelName}_${suffix}`;
+            const isFrontFace = faceName === 'FACE_Z_PLUS';
+            let paramName = suffix === 'backOffset' ? 'backOffset' : `${panelName}_${suffix}`;
+            if (handler?.resolveFrontParam && (isFrontFace || suffix === 'backOffset' || suffix === 'shiftY')) {
+                const resolved = handler.resolveFrontParam(targetEntity);
+                if (resolved && isFrontFace) {
+                    paramName = resolved.paramName;
+                }
+            }
             const canonicalFace = normalizeFaceName(faceName);
-            const mesh = view.faceMeshes[canonicalFace] || view.faceMeshes[faceName];
+            const mesh = view.faceMeshes[canonicalFace];
             if (!mesh) continue;
 
                 mesh.computeWorldMatrix(true);
                 const faceCenter = mesh.getBoundingInfo().boundingBox.centerWorld;
                 
                 view.root.computeWorldMatrix(true);
-                const localNormal = this.faceNormals[canonicalFace] || this.faceNormals[faceName] || new BABYLON.Vector3(0, 1, 0);
+                const localNormal = this.faceNormals[canonicalFace] || new BABYLON.Vector3(0, 1, 0);
                 const normal = BABYLON.Vector3.TransformNormal(localNormal, view.root.getWorldMatrix()).normalize();
 
                 const sphere = BABYLON.MeshBuilder.CreateSphere(`faceGizmoSphere_${faceName}`, { diameter: 30 }, viewport.scene);
                 sphere.metadata = { paramName: paramName };
 
                 // Centralna kulka przesuwania na środku płyty (front/back/shift/backOffset) -> ZAWSZE NIEBIESKA i W ŚRODKU LCS FORMATKI
-                const isCenterPlane = faceName === 'front' || faceName === 'back' || paramName.includes('shift') || paramName === 'backOffset';
+                const isCenterPlane = faceName === 'FACE_Z_PLUS' || faceName === 'FACE_Z_MINUS'
+                    || paramName.includes('shift') || paramName === 'backOffset';
 
                 if (isCenterPlane) {
                     const worldPos = view.root.getAbsolutePosition ? view.root.getAbsolutePosition().clone() : view.root.position.clone();
@@ -1015,7 +1027,7 @@ export class GizmoController {
                     if (paramName === 'backOffset') {
                         this.originalValueBeforeEdit = c.generatorParams.backOffset !== undefined ? c.generatorParams.backOffset : 3;
                     } else {
-                        this.originalValueBeforeEdit = readOffsetMm(c.generatorParams?.offsets, paramName, role);
+                        this.originalValueBeforeEdit = this._readOffsetMm(c, paramName, role);
                     }
 
                     viewport.camera.detachControl();
@@ -1042,18 +1054,7 @@ export class GizmoController {
                     if (paramName === 'backOffset') {
                         const newValue = Math.max(0, originalValue + delta);
                         if (c.generatorParams.backOffset === newValue) return;
-                        c.generatorParams.backOffset = newValue;
-
-                        applyRealtimeUpdate(doc, {
-                            width: nmToMm(c.width),
-                            height: nmToMm(c.height),
-                            depth: nmToMm(c.depth),
-                            zoneCount: c.generatorParams.zoneCount || 1,
-                            bottomHeight: c.generatorParams.bottomHeight || 500,
-                            middleHeight: c.generatorParams.middleHeight || 1200,
-                            backOffset: newValue,
-                            offsets: c.generatorParams.offsets || {}
-                        });
+                        this.previewOffsetOnContainer(c, paramName, newValue, role);
                         return;
                     }
 
@@ -1066,18 +1067,7 @@ export class GizmoController {
                         return;
                     }
 
-                    c.generatorParams.offsets[paramName] = newValue;
-
-                    applyRealtimeUpdate(doc, {
-                        width: nmToMm(c.width),
-                        height: nmToMm(c.height),
-                        depth: nmToMm(c.depth),
-                        zoneCount: c.generatorParams.zoneCount || 1,
-                        bottomHeight: c.generatorParams.bottomHeight || 500,
-                        middleHeight: c.generatorParams.middleHeight || 1200,
-                        backOffset: c.generatorParams.backOffset !== undefined ? c.generatorParams.backOffset : 3,
-                        offsets: c.generatorParams.offsets
-                    });
+                    this.previewOffsetOnContainer(c, paramName, newValue, role);
                 });
 
                 dragBehavior.onDragEndObservable.add(() => {
@@ -1174,7 +1164,7 @@ export class GizmoController {
                         this.activeGizmoParamName = paramName;
                         this.activeGizmoContainer = container;
                         const c = container as any;
-                        this.originalValueBeforeEdit = readOffsetMm(c.generatorParams?.offsets, paramName, role);
+                        this.originalValueBeforeEdit = this._readOffsetMm(c, paramName, role);
 
                         viewport.camera.detachControl();
                         originalValue = this.originalValueBeforeEdit;
@@ -1206,18 +1196,7 @@ export class GizmoController {
                             return;
                         }
 
-                        c.generatorParams.offsets[paramName] = newValue;
-
-                        applyRealtimeUpdate(doc, {
-                            width: nmToMm(c.width),
-                            height: nmToMm(c.height),
-                            depth: nmToMm(c.depth),
-                            zoneCount: c.generatorParams.zoneCount || 1,
-                            bottomHeight: c.generatorParams.bottomHeight || 500,
-                            middleHeight: c.generatorParams.middleHeight || 1200,
-                            backOffset: c.generatorParams.backOffset !== undefined ? c.generatorParams.backOffset : 3,
-                            offsets: c.generatorParams.offsets
-                        });
+                        this.previewOffsetOnContainer(c, paramName, newValue, role);
                     });
 
                     centerDrag.onDragEndObservable.add(() => {
@@ -1404,7 +1383,7 @@ export class GizmoController {
         if (!modal || modal.activeMode === 'none') {
             this._solverController()?.beginInteractiveTransform();
         }
-        ConstraintDragGroup.instance.begin(ctx.doc, ctx.cadNodeId, ConstraintStore.instance.constraints);
+        getConstraintDragPort()?.begin(ctx.doc, ctx.cadNodeId);
     }
 
     private _propagateConstraintDrag(): void {
@@ -1412,7 +1391,7 @@ export class GizmoController {
         if (!ctx) {
             return;
         }
-        ConstraintDragGroup.instance.propagateTransform(ctx.doc, ctx.cadNodeId);
+        getConstraintDragPort()?.propagateTransform(ctx.doc, ctx.cadNodeId);
         ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(ctx.cadNodeId);
     }
 
@@ -1424,18 +1403,22 @@ export class GizmoController {
             return;
         }
 
-        const cmds = ConstraintDragGroup.instance.buildTransformCommands(doc, label);
+        const cmds = getConstraintDragPort()?.buildTransformCommands(doc, label) ?? [];
         if (cmdHist && cmds.length > 0) {
             const syncIds = new Set<string>();
             for (const cmd of cmds) {
-                const node = doc.findNode(cmd.nodeId);
+                const node = doc.findNode((cmd as any).nodeId);
                 if (node && (node.domainData as any)?.type === 'container') {
-                    syncIds.add(cmd.nodeId);
+                    syncIds.add((cmd as any).nodeId);
                 }
             }
+            const cabMod = getCabinetModule();
+            const syncCmds = cabMod
+                ? Array.from(syncIds).map((id) => cabMod.createSyncBackGroovesCommand(id))
+                : [];
             const allCmds = [
                 ...cmds,
-                ...Array.from(syncIds).map((id) => new SyncBackGroovesCommand(id)),
+                ...syncCmds,
             ];
             cmdHist.execute(allCmds.length === 1 ? allCmds[0] : new MacroCommand(allCmds, label));
         }
@@ -1444,7 +1427,7 @@ export class GizmoController {
     }
 
     private _finishConstraintDrag(activeEntity: any): void {
-        ConstraintDragGroup.instance.end();
+        getConstraintDragPort()?.end();
         this.matrixBeforeDrag = null;
         const modal = ContextManager.instance.modalTransformManager;
         if (!modal || modal.activeMode === 'none') {

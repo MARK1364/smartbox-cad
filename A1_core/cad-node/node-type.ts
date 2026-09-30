@@ -9,7 +9,7 @@ export enum NodeType {
     /** Korzeń sceny — cały pokój/przestrzeń robocza */
     ROOM = 'ROOM',
 
-    /** Złożenie: korpus meblowy, SmartFrame, SmartBox */
+    /** Złożenie: korpus meblowy, SmartFrame, Bloki */
     ASSEMBLY = 'ASSEMBLY',
 
     /** Formatka/płyta (PanelModel) */

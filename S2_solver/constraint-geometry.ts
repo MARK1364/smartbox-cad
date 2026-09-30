@@ -307,7 +307,7 @@ export const SMARTFRAME_FACE_LABEL: Record<string, string> = {
     FACE_Z_MINUS: 'dół',
 };
 
-/** Etykiety ścian formatki w LCS panelu (Y=wys, Z=grubość). */
+/** Etykiety ścian formatki w LCS panelu (Y=wys, Z=grubość). Tylko kanoniczne nazwy. */
 export const PANEL_FACE_LABEL: Record<string, string> = {
     FACE_Z_PLUS: 'front',
     FACE_Z_MINUS: 'tył',
@@ -315,12 +315,6 @@ export const PANEL_FACE_LABEL: Record<string, string> = {
     FACE_X_PLUS: 'prawy',
     FACE_Y_PLUS: 'góra',
     FACE_Y_MINUS: 'dół',
-    front: 'front',
-    back: 'tył',
-    left: 'lewy',
-    right: 'prawy',
-    top: 'góra',
-    bottom: 'dół',
 };
 
 const AXIS_LETTER = ['X', 'Y', 'Z'] as const;

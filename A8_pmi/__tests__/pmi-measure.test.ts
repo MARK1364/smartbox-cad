@@ -12,6 +12,11 @@ import {
     shouldShowDeltas,
 } from '../pmi-measure.js';
 import { formatMeasureText, PMIStore } from '../pmi-data.js';
+import {
+    computeMeasureLabelDimensions,
+    computeMeasureScreenScale,
+    MEASURE_BASE_TEXT_H,
+} from '../pmi-renderer.js';
 
 describe('cadDeltasFromRender', () => {
     it('mapuje osie Babylon na CAD (Y↔Z)', () => {
@@ -239,5 +244,54 @@ describe('PMIStore measurements', () => {
         expect(item.distanceMM).toBeCloseTo(150);
         expect(item.text).toBe('L: 150.0 mm');
         expect(item.text).not.toContain('dX');
+    });
+});
+
+describe('etykieta miarki (skalowanie i wymiary)', () => {
+    it('oblicza kompaktowe wymiary bazowe (nie przekracza 60 mm wysokości dla 4 linii)', () => {
+        const lines = ['L: 600.0 mm', 'dX: 600.0 mm', 'dY: 200.0 mm', 'dZ: 50.0 mm'];
+        const dims = computeMeasureLabelDimensions(lines);
+
+        expect(dims.textHWorld).toBe(MEASURE_BASE_TEXT_H);
+        expect(dims.planeH).toBeLessThan(60); // w starym kodzie było 480 mm!
+        expect(dims.planeW).toBeLessThan(160); // w starym kodzie było 1185 mm!
+        expect(dims.planeH).toBeGreaterThan(40);
+        expect(dims.planeW).toBeGreaterThan(80);
+    });
+
+    it('dla pojedynczej linii (L:) zachowuje małą wysokość bazową', () => {
+        const dims = computeMeasureLabelDimensions(['L: 120.0 mm']);
+        expect(dims.planeH).toBeLessThan(25);
+    });
+
+    it('skaluje plakietkę w dół przy dużym powiększeniu (zoom in), zapobiegając zajęciu pół ekranu', () => {
+        const basePlaneH = 56;
+        const lineCount = 4;
+        // Kamera ortograficzna z bliskiej odległości: orthoH = 400 mm, renderH = 1080 px -> pxPerMM = 2.7 px/mm
+        // Bez skalowania: 56 mm * 2.7 = 151 px na ekranie (lub przy 480 mm: 1296 px!)
+        const scale = computeMeasureScreenScale(basePlaneH, lineCount, 1, 1080, 400);
+
+        expect(scale).toBeLessThan(1.0);
+        const screenHPx = basePlaneH * scale * (1080 / 400);
+        expect(screenHPx).toBeCloseTo(84, 1);
+    });
+
+    it('skaluje plakietkę w górę przy oddaleniu (zoom out), utrzymując czytelność z daleka', () => {
+        const basePlaneH = 56;
+        const lineCount = 4;
+        // Kamera ortograficzna z daleka: orthoH = 6760 mm, renderH = 1080 px -> pxPerMM = 0.16 px/mm
+        const scale = computeMeasureScreenScale(basePlaneH, lineCount, 1, 1080, 6760);
+
+        expect(scale).toBeGreaterThan(1.0);
+        const screenHPx = basePlaneH * scale * (1080 / 6760);
+        expect(screenHPx).toBeCloseTo(84, 1);
+    });
+
+    it('dla pojedynczej linii utrzymuje mniejszą stałą wysokość ekranową ok. 38 px', () => {
+        const basePlaneH = 20;
+        const lineCount = 1;
+        const scale = computeMeasureScreenScale(basePlaneH, lineCount, 1, 1080, 1000);
+        const screenHPx = basePlaneH * scale * (1080 / 1000);
+        expect(screenHPx).toBeCloseTo(38, 1);
     });
 });

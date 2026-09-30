@@ -1,0 +1,134 @@
+{
+  "panel.label": {
+    "pl": "Półki V2",
+    "en": "Shelves V2",
+    "de": "Regale V2"
+  },
+  "shelf_count.label": {
+    "pl": "Ilość półek:",
+    "en": "Shelf count:",
+    "de": "Regalanzahl:"
+  },
+  "shelf_count.tooltip": {
+    "pl": "Liczba półek w korpusie",
+    "en": "Number of shelves in the cabinet"
+  },
+  "shelf_offset_front.label": {
+    "pl": "Odsuń przód:",
+    "en": "Front offset:",
+    "de": "Versatz vorne:"
+  },
+  "shelf_offset_side.label": {
+    "pl": "Odsuń bok:",
+    "en": "Side offset:",
+    "de": "Versatz Seite:"
+  },
+  "hole_offset_front.label": {
+    "pl": "Ods. boczne przód:",
+    "en": "Front side offset:",
+    "de": "Seitenabstand vorne:"
+  },
+  "hole_offset_back.label": {
+    "pl": "Ods. boczne tył:",
+    "en": "Back side offset:",
+    "de": "Seitenabstand hinten:"
+  },
+  "hole_pattern.label": {
+    "pl": "Wzór otworów:",
+    "en": "Hole pattern:",
+    "de": "Lochmuster:"
+  },
+  "hole_pattern.items.SINGLE": {
+    "pl": "Pojedynczy otw.",
+    "en": "Single hole",
+    "de": "Einzelloch"
+  },
+  "hole_pattern.items.TRIPLE": {
+    "pl": "Potrójny otw.",
+    "en": "Triple holes",
+    "de": "Dreifachloch"
+  },
+  "hole_pattern.items.SYSTEM_32": {
+    "pl": "System 32",
+    "en": "System 32",
+    "de": "System 32"
+  },
+  "hole_pattern.items.NONE": {
+    "pl": "Brak otworów",
+    "en": "No holes",
+    "de": "Keine Löcher"
+  },
+  "triple_z_offset.label": {
+    "pl": "Rozstaw otw. (góra/dół):",
+    "en": "Hole spacing (top/bottom):",
+    "de": "Lochabstand (oben/unten):"
+  },
+  "system_32_spacing.label": {
+    "pl": "Rozstaw otw.:",
+    "en": "Hole spacing:",
+    "de": "Lochabstand:"
+  },
+  "system_32_start_offset.label": {
+    "pl": "Dystans od dołu:",
+    "en": "Distance from bottom:",
+    "de": "Abstand von unten:"
+  },
+  "system_32_hole_count.label": {
+    "pl": "Ilość otw.:",
+    "en": "Hole count:",
+    "de": "Lochanzahl:"
+  },
+  "front_holes.label": {
+    "pl": "Otwory przód",
+    "en": "Front holes",
+    "de": "Löcher vorne"
+  },
+  "front_offset_x.label": {
+    "pl": "Offset X przód:",
+    "en": "X offset front:",
+    "de": "X-Versatz vorne:"
+  },
+  "back_holes.label": {
+    "pl": "Otwory tył",
+    "en": "Back holes",
+    "de": "Löcher hinten"
+  },
+  "back_offset_x.label": {
+    "pl": "Offset X tył:",
+    "en": "X offset back:",
+    "de": "X-Versatz hinten:"
+  },
+  "generate.label": {
+    "pl": "Odśwież Półki",
+    "en": "Refresh Shelves",
+    "de": "Regale aktualisieren"
+  },
+  "hints.STEP_1_SELECT_BASE": {
+    "pl": "Krok 1: Zaznacz korpus, w którym chcesz umieścić półki.",
+    "en": "Step 1: Select the cabinet body where you want to place shelves."
+  },
+  "hints.STEP_2_ADJUST_COUNT": {
+    "pl": "Krok 2: Ustaw pożądaną ilość półek i ich cofnięcie.",
+    "en": "Step 2: Set the desired number of shelves and their setback."
+  },
+  "hints.STEP_3_APPLY": {
+    "pl": "Krok 3: Kliknij 'Generuj Półki', aby zakończyć.",
+    "en": "Step 3: Click 'Generate Shelves' to finish."
+  },
+  "errors.MISSING_BASE_OBJECT": {
+    "pl": "Brak obiektu bazowego Bloków w kontekście.",
+    "en": "Missing base Bloki object in context."
+  },
+  "warnings.MAX_SHELVES_EXCEEDED": {
+    "pl": "Przekroczono maksymalną dopuszczalną ilość półek (maks. 8).",
+    "en": "Maximum allowed number of shelves exceeded (max 8)."
+  },
+  "tooltips.shelf_count": {
+    "pl": "Ilość półek do wygenerowania w module.",
+    "en": "Number of shelves to generate in the module."
+  },
+  "tooltips.shelf_setback": {
+    "pl": "Cofnięcie półki względem przedniej krawędzi korpusu (domyślnie 5mm).",
+    "en": "Shelf setback relative to the front corpus edge (default 5mm)."
+  }
+}

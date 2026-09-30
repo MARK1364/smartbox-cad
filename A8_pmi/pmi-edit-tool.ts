@@ -10,7 +10,7 @@ declare const BABYLON: any;
 
 import { BaseState } from '../A1_core/interaction/states/base-state';
 import { Intent } from '../A1_core/interaction/interaction-types';
-import { BootstrapContext } from '../A1_core/scene-bootstrap';
+import type { CadModuleContext } from '../A1_core/cad-module-context.js';
 import { StateMachine } from '../A1_core/interaction/state-machine';
 import { Vec3, v3, v3Copy, v3Len, v3Sub } from './dimension-solver';
 import { AxisSpace, OffsetSpace, PMIAnnotation, PMIStore } from './pmi-data';
@@ -56,7 +56,7 @@ export class PMIEditOffsetTool extends BaseState {
     private keyboardObserver: any = null;
 
     constructor(
-        ctx: BootstrapContext,
+        ctx: CadModuleContext,
         stateMachine: StateMachine,
         renderer: PMIRenderer,
         store: PMIStore = PMIStore.instance,

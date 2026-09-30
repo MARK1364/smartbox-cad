@@ -28,13 +28,12 @@ describe('QuickPick — formatFaceLabels', () => {
         expect(fxMinus.label).toContain('Lewa');
     });
 
-    it('poprawnie normalizuje aliasy legacy (front, back, left, top)', () => {
-        expect(formatFaceLabels('front').badge).toBe('+Z');
-        expect(formatFaceLabels('back').badge).toBe('-Z');
-        expect(formatFaceLabels('top').badge).toBe('+Y');
-        expect(formatFaceLabels('bottom').badge).toBe('-Y');
-        expect(formatFaceLabels('left').badge).toBe('-X');
-        expect(formatFaceLabels('right').badge).toBe('+X');
+    it('odrzuca aliasy legacy — zero kompatybilności wstecznej', () => {
+        for (const legacy of ['front', 'back', 'top', 'bottom', 'left', 'right', '+Z', 'EDGE_X_MINUS']) {
+            const r = formatFaceLabels(legacy);
+            expect(r.badge).toBe('Face');
+            expect(r.label).toBe(legacy);
+        }
     });
 });
 

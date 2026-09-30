@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { PerformanceConfigManager, PerformanceConfigData } from '../A1_core/performance-config';
 import { UIController } from '../A1_core/ui-controller';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 interface PerformanceOptionsModalProps {
   isOpen: boolean;
@@ -17,6 +24,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
   const [customPowerPref, setCustomPowerPref] = useState(config.current.powerPreference);
   const [customEngine, setCustomEngine] = useState<'webgl2' | 'webgpu'>(() => PerformanceConfigManager.instance.getPreferredEngine());
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  useLocale();
 
   useEffect(() => {
     if (isOpen) {
@@ -71,11 +79,11 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
         mgr.applyToEngine(viewport.engine);
       }
     } catch (e) {
-      console.warn('Nie udało się zaaplikować do silnika natychmiast:', e);
+      console.warn(tx(srcTekst, 'perf.apply_fail', TX_NS), e);
     }
 
     if (engineChanged) {
-      setSavedNotice('Zapisano! Odśwież stronę (F5), aby przełączyć silnik 3D.');
+      setSavedNotice(tx(srcTekst, 'perf.saved', TX_NS));
       setTimeout(() => {
         setSavedNotice(null);
         onClose();
@@ -108,7 +116,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
       }
     } catch { /* ignoruj */ }
 
-    setSavedNotice('Przywrócono ustawienia fabryczne!');
+    setSavedNotice(tx(srcTekst, 'perf.restored', TX_NS));
     setTimeout(() => setSavedNotice(null), 1500);
   };
 
@@ -161,10 +169,10 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
             <span style={{ fontSize: '1.4rem' }}>⚙️</span>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#f8fafc' }}>
-                Opcje Wydajności i Grafiki 3D
+                {tx(srcTekst, 'perf.title', TX_NS)}
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
-                Wybierz profil zoptymalizowany pod kartę graficzną tego komputera
+                {tx(srcTekst, 'perf.subtitle', TX_NS)}
               </p>
             </div>
           </div>
@@ -204,7 +212,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
             }}
           >
             <span>💡</span>
-            <span>Ustawienia są zapamiętywane w pamięci tej przeglądarki (możesz ustawić inną opcję na warsztacie, a inną w biurze).</span>
+            <span>{tx(srcTekst, 'perf.stored_note', TX_NS)}</span>
           </div>
 
           {/* Karty profili do wyboru */}
@@ -235,14 +243,14 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <span style={{ fontWeight: 600, fontSize: '0.95rem', color: '#f8fafc' }}>
-                    🚀 Wysoka wydajność i ostrość (Dedykowana GPU)
+                    {tx(srcTekst, 'perf.high', TX_NS)}
                   </span>
                   <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(59, 130, 246, 0.25)', color: '#60a5fa', borderRadius: '4px', fontWeight: 600 }}>
                     NVIDIA Quadro M4000 / RTX / Radeon
                   </span>
                 </div>
                 <div style={{ fontSize: '0.78rem', color: '#94a3b8', lineHeight: 1.35 }}>
-                  Pełna ostrość 100% (żyleta), włączony antyaliasing, natychmiastowe podświetlanie elementów (20 ms).
+                  {tx(srcTekst, 'perf.high_desc', TX_NS)}
                 </div>
               </div>
             </div>
@@ -272,14 +280,14 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <span style={{ fontWeight: 600, fontSize: '0.95rem', color: '#f8fafc' }}>
-                    ⚖️ Zrównoważony
+                    {tx(srcTekst, 'perf.balanced', TX_NS)}
                   </span>
                   <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255, 255, 255, 0.1)', color: '#cbd5e1', borderRadius: '4px' }}>
-                    Średnie laptopy / Biuro
+                    {tx(srcTekst, 'perf.balanced_sub', TX_NS)}
                   </span>
                 </div>
                 <div style={{ fontSize: '0.78rem', color: '#94a3b8', lineHeight: 1.35 }}>
-                  Skalowanie 1.25 (80% rozdzielczości), włączony antyaliasing, zrównoważona reakcja (35 ms).
+                  {tx(srcTekst, 'perf.balanced_desc', TX_NS)}
                 </div>
               </div>
             </div>
@@ -309,14 +317,14 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <span style={{ fontWeight: 600, fontSize: '0.95rem', color: '#f8fafc' }}>
-                    ⚡ Lekki / Słaby komputer (Zintegrowana grafika)
+                    {tx(srcTekst, 'perf.light', TX_NS)}
                   </span>
                   <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(245, 158, 11, 0.25)', color: '#fbbf24', borderRadius: '4px', fontWeight: 600 }}>
                     Intel Graphics / Komputer warsztatowy
                   </span>
                 </div>
                 <div style={{ fontSize: '0.78rem', color: '#94a3b8', lineHeight: 1.35 }}>
-                  Skalowanie 1.5 (lżejszy render o 55%), wyłączony antyaliasing (płynny obrót), odciążony procesor (50 ms).
+                  {tx(srcTekst, 'perf.light_desc', TX_NS)}
                 </div>
               </div>
             </div>
@@ -340,7 +348,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
                 padding: '4px 0',
               }}
             >
-              <span>{showAdvanced ? '▼ Ukryj ustawienia zaawansowane' : '▶ Pokaż ustawienia zaawansowane (suwaki)'}</span>
+              <span>{showAdvanced ? `▼ ${tx(srcTekst, 'perf.advanced_hide', TX_NS)}` : `▶ ${tx(srcTekst, 'perf.advanced_show', TX_NS)}`}</span>
             </button>
           </div>
 
@@ -361,8 +369,8 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
               {/* Hardware scaling level */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <label htmlFor="scalingSlider">Skalowanie rozdzielczości (DPI):</label>
-                  <span style={{ fontWeight: 600, color: '#60a5fa' }}>{customScaling}x {customScaling === 1 ? '(100% ostrość)' : `(~${Math.round(100 / customScaling)}% rozdzielczości)`}</span>
+                  <label htmlFor="scalingSlider">{tx(srcTekst, 'perf.scaling', TX_NS)}</label>
+                  <span style={{ fontWeight: 600, color: '#60a5fa' }}>{customScaling}x {customScaling === 1 ? tx(srcTekst, 'perf.sharp_100', TX_NS) : tx(srcTekst, 'perf.scaled_pct', TX_NS, { n: Math.round(100 / customScaling) })}</span>
                 </div>
                 <input
                   id="scalingSlider"
@@ -375,7 +383,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
                   style={{ width: '100%', cursor: 'pointer', accentColor: '#3b82f6' }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
-                  <span>1.0 (Żyleta)</span>
+                  <span>{tx(srcTekst, 'perf.scale_10', TX_NS)}</span>
                   <span>1.25</span>
                   <span>1.5 (Szybki)</span>
                   <span>1.75</span>
@@ -386,8 +394,8 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
               {/* Antyaliasing */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontWeight: 500 }}>Wygładzanie krawędzi (Antyaliasing / MSAA)</div>
-                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>Wyłączenie drastycznie przyspiesza karty Intel Graphics</div>
+                    <div style={{ fontWeight: 500 }}>{tx(srcTekst, 'perf.aa_title', TX_NS)}</div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{tx(srcTekst, 'perf.aa_desc', TX_NS)}</div>
                 </div>
                 <input
                   type="checkbox"
@@ -400,7 +408,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
               {/* Throttle hover */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <label htmlFor="throttleSlider">Częstotliwość próbkowania kursora (Raycast Hover):</label>
+                  <label htmlFor="throttleSlider">{tx(srcTekst, 'perf.hover_title', TX_NS)}</label>
                   <span style={{ fontWeight: 600, color: '#60a5fa' }}>{customThrottle} ms</span>
                 </div>
                 <input
@@ -416,15 +424,15 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748b' }}>
                   <span>10 ms (Natychmiast)</span>
                   <span>35 ms (Standard)</span>
-                  <span>100 ms (Oszczędza CPU)</span>
+                  <span>{tx(srcTekst, 'perf.hover_save', TX_NS)}</span>
                 </div>
               </div>
 
               {/* Silnik graficzny 3D (WebGL 2 vs WebGPU) */}
               <div style={{ paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontWeight: 600, color: '#f8fafc' }}>Silnik renderujący 3D:</span>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Wymaga odświeżenia (F5)</span>
+                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>{tx(srcTekst, 'perf.engine', TX_NS)}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{tx(srcTekst, 'perf.engine_restart', TX_NS)}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <label
@@ -536,7 +544,7 @@ export const PerformanceOptionsModal: React.FC<PerformanceOptionsModalProps> = (
               cursor: 'pointer',
             }}
           >
-            Przywróć domyślne
+            {tx(srcTekst, 'perf.restore', TX_NS)}
           </button>
 
           <div style={{ display: 'flex', gap: '10px' }}>

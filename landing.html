@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPanel CAD/CAM — Przewodnik i Odpowiedzi na Pytania</title>
+    <meta name="description" content="Praktyczne odpowiedzi na pytania o systemie SmartPanel CAD/CAM: jak działa projektowanie korpusów, nesting rozkroju, generowanie kodów CNC, gdzie zapisują się projekty i ile to kosztuje.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-page: #0b0f17;
+            --bg-card: #131b26;
+            --bg-card-hover: #182232;
+            --border-color: #1e293b;
+            --border-highlight: #3b82f6;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --accent-blue: #2563eb;
+            --accent-blue-hover: #1d4ed8;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            padding-bottom: 60px;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        header {
+            border-bottom: 1px solid var(--border-color);
+            background: #090d14;
+            padding: 16px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-badge {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            background: rgba(37, 99, 235, 0.2);
+            color: #60a5fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(37, 99, 235, 0.4);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 9px 20px;
+            border-radius: 6px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.15s ease;
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-blue-hover);
+        }
+
+        /* Hero / Introduction */
+        .intro {
+            padding: 40px 0 30px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .intro h1 {
+            font-size: 1.85rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #fff;
+            line-height: 1.3;
+        }
+
+        .intro p {
+            font-size: 1.02rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Quick Facts Grid */
+        .facts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 24px 0 10px;
+        }
+
+        .fact-card {
+            background: #101722;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 14px 16px;
+        }
+
+        .fact-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #38bdf8;
+            font-family: var(--font-mono);
+            margin-bottom: 4px;
+        }
+
+        .fact-value {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #fff;
+            line-height: 1.35;
+        }
+
+        .fact-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Q&A Section Item */
+        .qa-item {
+            padding: 32px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .qa-item:last-child {
+            border-bottom: none;
+        }
+
+        .qa-question {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .qa-bullet {
+            width: 6px;
+            height: 6px;
+            background: #38bdf8;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .qa-answer {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.65;
+        }
+
+        .qa-answer p {
+            margin-bottom: 14px;
+        }
+
+        .qa-answer p:last-child {
+            margin-bottom: 0;
+        }
+
+        .qa-answer strong {
+            color: #fff;
+        }
+
+        /* Technical Info Box */
+        .info-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin: 16px 0;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        /* 6-step Workflow Grid */
+        .workflow-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+            margin: 20px 0;
+        }
+
+        .wf-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .wf-card-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            font-family: var(--font-mono);
+            color: #38bdf8;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .wf-preview {
+            height: 110px;
+            background: #090d14;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .wf-card h4 {
+            font-size: 0.92rem;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .wf-card p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Module Launcher List */
+        .module-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+            margin: 18px 0;
+        }
+
+        .module-entry {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.15s ease;
+        }
+
+        .module-entry:hover {
+            border-color: var(--border-highlight);
+            background: var(--bg-card-hover);
+        }
+
+        .module-entry-title {
+            font-weight: 600;
+            color: #fff;
+            font-size: 0.95rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .module-entry-title span {
+            font-size: 0.72rem;
+            font-family: var(--font-mono);
+            color: #60a5fa;
+        }
+
+        .module-entry-desc {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Simple Pricing Comparison */
+        .pricing-table {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 680px) {
+            .pricing-table {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .pricing-col {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+        }
+
+        .pricing-col.pro {
+            border-color: #2563eb;
+            background: #0f1826;
+        }
+
+        .pricing-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .pricing-price {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            margin: 8px 0 14px;
+        }
+
+        .pricing-price span {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .pricing-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        /* Footer CTA */
+        .cta-box {
+            background: #131b26;
+            border: 1px solid var(--border-highlight);
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .cta-box h3 {
+            font-size: 1.3rem;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .cta-box p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        /* ─── INTERACTIVE VIRTUAL TOUR ─── */
+        .tour-wrapper {
+            background: #0d131d;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 20px;
+            align-items: center;
+        }
+
+        @media (max-width: 800px) {
+            .tour-wrapper {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .tour-visual-stage {
+            position: relative;
+            background: #080c13;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            min-height: 320px;
+        }
+
+        .tour-svg-layer {
+            width: 100%;
+            max-width: 440px;
+            height: auto;
+            display: block;
+        }
+
+        /* Hotspots */
+        .hotspot-point {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            margin-left: -12px;
+            margin-top: -12px;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            outline: none;
+        }
+
+        .hotspot-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #38bdf8;
+            box-shadow: 0 0 10px #38bdf8;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s;
+        }
+
+        .hotspot-ping {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(56, 189, 248, 0.4);
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+            pointer-events: none;
+        }
+
+        .hotspot-point:hover .hotspot-dot,
+        .hotspot-point.active .hotspot-dot {
+            background: #60a5fa;
+            transform: scale(1.35);
+            box-shadow: 0 0 16px #60a5fa;
+        }
+
+        .hotspot-point.active .hotspot-ping {
+            background: rgba(96, 165, 250, 0.6);
+            animation-duration: 1.2s;
+        }
+
+        @keyframes ping {
+            75%, 100% {
+                transform: scale(2.2);
+                opacity: 0;
+            }
+        }
+
+        /* Tour Details Inspector */
+        .tour-inspector {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100%;
+        }
+
+        .tour-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.2s ease;
+        }
+
+        .tour-card-tag {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .tour-card-title {
+            font-size: 1.15rem;
+            color: #fff;
+            font-weight: 700;
+            margin-bottom: 8px;
+            line-height: 1.3;
+        }
+
+        .tour-card-text {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+            margin-bottom: 14px;
+        }
+
+        .tour-specs-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 12px;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            color: #94a3b8;
+        }
+
+        .tour-specs-list li {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tour-specs-list li span {
+            color: #38bdf8;
+        }
+
+        /* Tour Bottom Controls */
+        .tour-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 14px;
+            gap: 10px;
+        }
+
+        .tour-nav-btns {
+            display: flex;
+            gap: 6px;
+        }
+
+        .tour-btn {
+            background: #182232;
+            border: 1px solid var(--border-color);
+            color: #cbd5e1;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .tour-btn:hover {
+            background: #233147;
+            border-color: #3b82f6;
+            color: #fff;
+        }
+
+        .tour-btn-play {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(37, 99, 235, 0.15);
+            border-color: rgba(37, 99, 235, 0.4);
+            color: #60a5fa;
+        }
+
+        .tour-btn-play:hover {
+            background: rgba(37, 99, 235, 0.3);
+            border-color: #3b82f6;
+            color: #fff;
+        }
+
+        .tour-indicators {
+            display: flex;
+            gap: 6px;
+        }
+
+        .tour-dot-btn {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #334155;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            transition: all 0.2s;
+        }
+
+        .tour-dot-btn.active {
+            background: #38bdf8;
+            transform: scale(1.4);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ─── HEADER ─── -->
+    <header>
+        <div class="container header-inner">
+            <a href="landing.html" class="brand">
+                SmartPanel CAD/CAM
+                <span class="brand-badge">B2B</span>
+            </a>
+
+            <div style="display: flex; gap: 10px;">
+                <a href="index.html" class="btn btn-primary">Uruchom edytor CAD 3D</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+
+        <!-- ─── WSTĘP I SUCHE FAKTY ─── -->
+        <section class="intro">
+            <h1>Czym jest SmartPanel CAD/CAM i jak działa?</h1>
+            <p>
+                To inżynierski system w przeglądarce internetowej stworzony do parametrycznego projektowania mebli korpusowych, automatycznego rozkroju płyt (nesting) oraz bezpośredniego generowania kodów na obrabiarki CNC. Poniżej zebraliśmy kluczowe fakty techniczne oraz bezpośrednie odpowiedzi na pytania warsztatowe.
+            </p>
+
+            <!-- SUCHE FAKTY W PIGUŁCE -->
+            <div class="facts-grid">
+                <div class="fact-card">
+                    <div class="fact-label">ŚRODOWISKO</div>
+                    <div class="fact-value">100% Przeglądarka</div>
+                    <div class="fact-desc">Zero instalacji. Działa na Windows, Mac, Linux i iPad.</div>
+                </div>
+
+                <div class="fact-card">
+                    <div class="fact-label">PRECYZJA CAD</div>
+                    <div class="fact-value">Nanometrowy B-rep</div>
+                    <div class="fact-desc">Obliczenia w liczbach całkowitych. Zero błędów zaokrągleń.</div>
+                </div>
+
+                <div class="fact-card">
+                    <div class="fact-label">ZAPIS PROJEKTÓW</div>
+                    <div class="fact-value">Dysk Google (15 GB)</div>
+                    <div class="fact-desc">Twoja prywatna chmura lub pobieranie plików .spp.json.</div>
+                </div>
+
+                <div class="fact-card">
+                    <div class="fact-label">OBRÓBKA CNC</div>
+                    <div class="fact-value">ISO G-Code / CLData</div>
+                    <div class="fact-desc">Homag, Biesse, SCM, Felder, InfoTEC, Kimla, Mach3.</div>
+                </div>
+
+                <div class="fact-card">
+                    <div class="fact-label">ROZKRÓJ PŁYT</div>
+                    <div class="fact-value">Wbudowany Nesting</div>
+                    <div class="fact-desc">Arkusze 2800x2070 mm, kontrola usłojenia i rzazu freza.</div>
+                </div>
+
+                <div class="fact-card">
+                    <div class="fact-label">KOSZT</div>
+                    <div class="fact-value">0 zł / 99 zł miesięcznie</div>
+                    <div class="fact-desc">Darmowy start bez karty, licencja PRO bez zobowiązań.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── INTERAKTYWNY WIRTUALNY PRZEWODNIK ─── -->
+        <article class="qa-item" id="virtual-tour">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Wirtualny przewodnik: jak działają narzędzia i anatomia szafki?
+            </h2>
+            <div class="qa-answer">
+                <p>
+                    Kliknij dowolny pulsujący punkt na szafce lub włącz autoodtwarzanie, aby zobaczyć jak system automatyzuje konstrukcję mebla:
+                </p>
+
+                <div class="tour-wrapper">
+                    <!-- LEWA STRONA: WIZUALIZACJA SVG Z PUNKTAMI -->
+                    <div class="tour-visual-stage" id="tour-stage">
+                        <svg class="tour-svg-layer" viewBox="0 0 460 340" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Tło / Baza CAD -->
+                            <rect x="10" y="10" width="440" height="320" rx="6" fill="#0b1019" stroke="#1e293b" stroke-width="1.5"/>
+                            
+                            <!-- Boki korpusu -->
+                            <rect x="70" y="40" width="16" height="250" fill="#131e2e" stroke="#38bdf8" stroke-width="1.6"/>
+                            <rect x="330" y="40" width="16" height="250" fill="#131e2e" stroke="#38bdf8" stroke-width="1.6"/>
+                            
+                            <!-- Wieniec górny i dolny -->
+                            <rect x="86" y="40" width="244" height="16" fill="#131e2e" stroke="#38bdf8" stroke-width="1.6"/>
+                            <rect x="86" y="274" width="244" height="16" fill="#131e2e" stroke="#38bdf8" stroke-width="1.6"/>
+                            
+                            <!-- Plecy i linia nutu -->
+                            <line x1="86" y1="58" x2="330" y2="58" stroke="#334155" stroke-dasharray="3 3" stroke-width="1.2"/>
+                            <line x1="86" y1="272" x2="330" y2="272" stroke="#334155" stroke-dasharray="3 3" stroke-width="1.2"/>
+                            
+                            <!-- Przegroda pionowa -->
+                            <rect x="200" y="56" width="14" height="218" fill="#152233" stroke="#60a5fa" stroke-width="1.4"/>
+                            
+                            <!-- Półka lewa (stała / System 32) -->
+                            <rect x="86" y="150" width="114" height="14" fill="#18273b" stroke="#60a5fa" stroke-width="1.3"/>
+                            <!-- Raster otworów System 32 -->
+                            <circle cx="98" cy="115" r="2.5" fill="#38bdf8"/>
+                            <circle cx="98" cy="130" r="2.5" fill="#38bdf8"/>
+                            <circle cx="98" cy="180" r="2.5" fill="#38bdf8"/>
+                            <circle cx="98" cy="195" r="2.5" fill="#38bdf8"/>
+                            <circle cx="188" cy="115" r="2.5" fill="#38bdf8"/>
+                            <circle cx="188" cy="130" r="2.5" fill="#38bdf8"/>
+                            <circle cx="188" cy="180" r="2.5" fill="#38bdf8"/>
+                            <circle cx="188" cy="195" r="2.5" fill="#38bdf8"/>
+
+                            <!-- Szuflada prawa dolna -->
+                            <rect x="218" y="200" width="108" height="70" rx="2" fill="#101a28" stroke="#60a5fa" stroke-width="1.3"/>
+                            <line x1="222" y1="262" x2="322" y2="262" stroke="#38bdf8" stroke-width="1.2"/>
+                            <rect x="250" y="232" width="44" height="6" rx="2" fill="#38bdf8" opacity="0.8"/>
+
+                            <!-- Zawias z puszką ø35mm prawy górny -->
+                            <rect x="340" y="70" width="30" height="90" rx="2" fill="#0d1522" stroke="#eab308" stroke-width="1.2" stroke-dasharray="2 2"/>
+                            <circle cx="355" cy="100" r="10" fill="#1e293b" stroke="#eab308" stroke-width="1.6"/>
+                            <circle cx="355" cy="100" r="2" fill="#eab308"/>
+
+                            <!-- Frezowanie obwiedniowe CNC / WCS -->
+                            <rect x="62" y="32" width="292" height="266" rx="2" fill="none" stroke="#22c55e" stroke-width="1" stroke-dasharray="4 3"/>
+                            <!-- Baza G54 -->
+                            <circle cx="70" cy="290" r="5" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+                            <line x1="70" y1="280" x2="70" y2="300" stroke="#22c55e" stroke-width="1"/>
+                            <line x1="60" y1="290" x2="80" y2="290" stroke="#22c55e" stroke-width="1"/>
+                        </svg>
+
+                        <!-- PUNKTY INTERAKTYWNE (HOTSPOTS) -->
+                        <button class="hotspot-point active" style="left: 24%; top: 15%;" data-step="0" title="SmartFrame: Korpus">
+                            <span class="hotspot-ping"></span>
+                            <span class="hotspot-dot"></span>
+                        </button>
+
+                        <button class="hotspot-point" style="left: 32%; top: 48%;" data-step="1" title="Bloki: Półki i System 32">
+                            <span class="hotspot-ping"></span>
+                            <span class="hotspot-dot"></span>
+                        </button>
+
+                        <button class="hotspot-point" style="left: 78%; top: 30%;" data-step="2" title="Okucia: Puszka ø35 mm">
+                            <span class="hotspot-ping"></span>
+                            <span class="hotspot-dot"></span>
+                        </button>
+
+                        <button class="hotspot-point" style="left: 60%; top: 72%;" data-step="3" title="Szuflady i prowadnice">
+                            <span class="hotspot-ping"></span>
+                            <span class="hotspot-dot"></span>
+                        </button>
+
+                        <button class="hotspot-point" style="left: 14%; top: 86%;" data-step="4" title="CAM CNC i Bazy obróbcze">
+                            <span class="hotspot-ping"></span>
+                            <span class="hotspot-dot"></span>
+                        </button>
+                    </div>
+
+                    <!-- PRAWA STRONA: INSPEKTOR SZCZEGÓŁÓW -->
+                    <div class="tour-inspector">
+                        <div class="tour-card" id="tour-card">
+                            <span class="tour-card-tag" id="tour-tag">MODUŁ: SMARTFRAME</span>
+                            <h3 class="tour-card-title" id="tour-title">Parametryczny Korpus i Nut pod Plecy</h3>
+                            <p class="tour-card-text" id="tour-desc">
+                                Zewnętrzna konstrukcja szafki (boki, wieńce, cokoły). Zmiana szerokości, wysokości lub grubości płyty (np. 18 mm) natychmiast przelicza długości formatek i automatycznie generuje nut pod plecy 3 mm z właściwym odsunięciem.
+                            </p>
+                            <ul class="tour-specs-list" id="tour-specs">
+                                <li><span>•</span> Grubość płyty: 18 mm</li>
+                                <li><span>•</span> Nut pod plecy: 4 × 8 mm</li>
+                                <li><span>•</span> Baza WCS: lewy dolny narożnik (G54)</li>
+                            </ul>
+                        </div>
+
+                        <!-- KONTROLER PRZEWODNIKA -->
+                        <div class="tour-controls">
+                            <button class="tour-btn tour-btn-play" id="tour-play-btn">
+                                <span id="tour-play-icon">⏸</span>
+                                <span id="tour-play-label">Pauza</span>
+                            </button>
+
+                            <div class="tour-indicators" id="tour-indicators">
+                                <button class="tour-dot-btn active" data-step="0"></button>
+                                <button class="tour-dot-btn" data-step="1"></button>
+                                <button class="tour-dot-btn" data-step="2"></button>
+                                <button class="tour-dot-btn" data-step="3"></button>
+                                <button class="tour-dot-btn" data-step="4"></button>
+                            </div>
+
+                            <div class="tour-nav-btns">
+                                <button class="tour-btn" id="tour-prev-btn">◀ Poprzedni</button>
+                                <button class="tour-btn" id="tour-next-btn">Dalej ▶</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <!-- ─── PYTANIE: CZYM RÓŻNI SIĘ OD ZWYKŁYCH PROGRAMÓW? ─── -->
+        <article class="qa-item">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Czym różni się ten program od tradycyjnych programów CAD (PRO100, AutoCAD)?
+            </h2>
+            <div class="qa-answer">
+                <p>
+                    Tradycyjne programy traktują szafkę jak zwykły rysunek 3D — przy zmianie wymiaru musisz ręcznie przesuwać węzły, formatki i od nowa liczyć pozycje zawiasów czy kołków.
+                </p>
+                <p>
+                    <strong>SmartPanel CAD jest systemem semantycznym (obiektowym):</strong>
+                </p>
+                <div class="info-box">
+                    <ul>
+                        <li>Wpisujesz wymiar zewnętrzny korpusu (np. szerokość 800 mm) $\rightarrow$ długości wieńców, podział wnęk i światło szuflad przeliczają się same.</li>
+                        <li>Nawierty pod zawiasy (Blum, Hettich, GTV) i złącza meblowe (System 32) pozycjonują się automatycznie na podstawie reguł technologicznych.</li>
+                        <li>Wszystkie obliczenia geometrii B-rep wykonywane są natywnie w przeglądarce w całkowitych nanometrach, eliminując błędy produkcyjne.</li>
+                    </ul>
+                </div>
+            </div>
+        </article>
+
+        <!-- ─── PYTANIE: JAK WYGLĄDA PRACA KROK PO KROKU? ─── -->
+        <article class="qa-item">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Jak wygląda proces projektowania i produkcji krok po kroku?
+            </h2>
+            <div class="qa-answer">
+                <p>Cały proces od pustego projektu do maszyny CNC zamyka się w 6 logicznych etapach:</p>
+
+                <div class="workflow-grid">
+                    
+                    <!-- KROK 1 -->
+                    <div class="wf-card">
+                        <div class="wf-card-header">
+                            <span>ETAP 01</span>
+                            <span>SmartFrame</span>
+                        </div>
+                        <div class="wf-preview">
+                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+                                <rect x="25" y="10" width="70" height="60" rx="2" fill="#131b26" stroke="#38bdf8" stroke-width="1.8"/>
+                                <rect x="25" y="10" width="8" height="60" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+                                <rect x="87" y="10" width="8" height="60" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+                                <rect x="33" y="10" width="54" height="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+                                <rect x="33" y="64" width="54" height="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+                            </svg>
+                        </div>
+                        <h4>Korpus (SmartFrame)</h4>
+                        <p>Zdefiniowanie gabarytów (szer., wys., głęb.), grubości płyty (18 mm) i nutu pod plecy.</p>
+                    </div>
+
+                    <!-- KROK 2 -->
+                    <div class="wf-card">
+                        <div class="wf-card-header">
+                            <span>ETAP 02</span>
+                            <span>Bloki</span>
+                        </div>
+                        <div class="wf-preview">
+                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+                                <rect x="25" y="10" width="70" height="60" rx="2" fill="#131b26" stroke="#38bdf8" stroke-width="1.8"/>
+                                <rect x="58" y="16" width="4" height="48" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+                                <line x1="33" y1="35" x2="58" y2="35" stroke="#38bdf8" stroke-width="1.5"/>
+                                <line x1="33" y1="50" x2="58" y2="50" stroke="#38bdf8" stroke-width="1.5"/>
+                                <rect x="65" y="20" width="22" height="18" fill="none" stroke="#60a5fa" stroke-width="1.2"/>
+                                <rect x="65" y="42" width="22" height="22" fill="none" stroke="#60a5fa" stroke-width="1.2"/>
+                            </svg>
+                        </div>
+                        <h4>Wnętrze i półki</h4>
+                        <p>Podział na strefy, wstawianie przegród, półek stałych/regulowanych oraz szuflad.</p>
+                    </div>
+
+                    <!-- KROK 3 -->
+                    <div class="wf-card">
+                        <div class="wf-card-header">
+                            <span>ETAP 03</span>
+                            <span>Zabudowa</span>
+                        </div>
+                        <div class="wf-preview">
+                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+                                <rect x="15" y="10" width="28" height="60" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.5"/>
+                                <rect x="47" y="38" width="30" height="32" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.5"/>
+                                <rect x="80" y="38" width="25" height="32" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.5"/>
+                                <rect x="47" y="12" width="58" height="20" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.5"/>
+                            </svg>
+                        </div>
+                        <h4>Zestaw szaf</h4>
+                        <p>Łączenie korpusów w ciągi zabudowy kuchennej lub szaf wnękowych.</p>
+                    </div>
+
+                    <!-- KROK 4 -->
+                    <div class="wf-card">
+                        <div class="wf-card-header">
+                            <span>ETAP 04</span>
+                            <span>Wykaz BOM</span>
+                        </div>
+                        <div class="wf-preview">
+                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+                                <rect x="20" y="12" width="80" height="56" rx="2" fill="#131b26" stroke="#38bdf8" stroke-width="1.2"/>
+                                <rect x="20" y="12" width="80" height="12" fill="#1e293b"/>
+                                <line x1="20" y1="24" x2="100" y2="24" stroke="#38bdf8" stroke-width="1"/>
+                                <line x1="25" y1="35" x2="95" y2="35" stroke="#60a5fa" stroke-width="1.5"/>
+                                <line x1="25" y1="48" x2="90" y2="48" stroke="#64748b" stroke-width="1.2"/>
+                                <line x1="25" y1="58" x2="92" y2="58" stroke="#64748b" stroke-width="1.2"/>
+                            </svg>
+                        </div>
+                        <h4>Raport materiałowy</h4>
+                        <p>Wykaz formatek z wymiarami cięcia, przypisaniem obrzeży i bilansu m² płyty.</p>
+                    </div>
+
+                    <!-- KROK 5 -->
+                    <div class="wf-card">
+                        <div class="wf-card-header">
+                            <span>ETAP 05</span>
+                            <span>Nesting</span>
+                        </div>
+                        <div class="wf-preview">
+                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+                                <rect x="15" y="15" width="90" height="50" rx="1" fill="#0f172a" stroke="#64748b" stroke-width="1.2"/>
+                                <rect x="18" y="18" width="30" height="24" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+                                <rect x="18" y="44" width="30" height="18" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+                                <rect x="50" y="18" width="35" height="20" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+                                <rect x="50" y="40" width="35" height="22" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+                                <rect x="87" y="18" width="15" height="44" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
+                            </svg>
+                        </div>
+                        <h4>Rozkrój płyty</h4>
+                        <p>Optymalne ułożenie formatek na arkuszu 2800x2070 mm z uwzględnieniem usłojenia.</p>
+                    </div>
+
+                    <!-- KROK 6 -->
+                    <div class="wf-card">
+                        <div class="wf-card-header">
+                            <span>ETAP 06</span>
+                            <span>CAM / CNC</span>
+                        </div>
+                        <div class="wf-preview">
+                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+                                <rect x="20" y="15" width="80" height="50" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.2"/>
+                                <rect x="25" y="20" width="70" height="40" rx="1" fill="none" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="2 2"/>
+                                <circle cx="30" cy="25" r="2.5" fill="#fff" stroke="#38bdf8" stroke-width="0.8"/>
+                                <circle cx="30" cy="40" r="2.5" fill="#fff" stroke="#38bdf8" stroke-width="0.8"/>
+                                <circle cx="30" cy="55" r="2.5" fill="#fff" stroke="#38bdf8" stroke-width="0.8"/>
+                                <circle cx="80" cy="30" r="5" fill="#1e293b" stroke="#eab308" stroke-width="1.2"/>
+                            </svg>
+                        </div>
+                        <h4>Kod maszynowy CNC</h4>
+                        <p>Ścieżki frezowania, nawierty Systemu 32 i eksport plików G-Code / CLData.</p>
+                    </div>
+
+                </div>
+            </div>
+        </article>
+
+        <!-- ─── PYTANIE: JAKIE SĄ MODUŁY I JAK JE URUCHOMIĆ? ─── -->
+        <article class="qa-item">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Jakie moduły wchodzą w skład systemu i jak je otworzyć?
+            </h2>
+            <div class="qa-answer">
+                <p>System podzielony jest na wyspecjalizowane podstrony. Możesz przejść do każdego modułu bezpośrednio:</p>
+
+                <div class="module-list">
+                    <a href="index.html" class="module-entry">
+                        <div class="module-entry-title">
+                            Główny CAD 3D (SmartPanel)
+                            <span>index.html</span>
+                        </div>
+                        <div class="module-entry-desc">
+                            Środowisko do parametrycznego modelowania korpusów, szafek, szuflad, zawiasów i przypisywania dekorów płyt.
+                        </div>
+                    </a>
+
+                    <a href="cnc.html" class="module-entry">
+                        <div class="module-entry-title">
+                            Centrum CAM CNC
+                            <span>cnc.html</span>
+                        </div>
+                        <div class="module-entry-desc">
+                            Weryfikacja ścieżek narzędziowych w standardzie CLData (ISO 4343) i generowanie kodów G-Code na obrabiarki.
+                        </div>
+                    </a>
+
+                    <a href="nesting.html" class="module-entry">
+                        <div class="module-entry-title">
+                            Moduł Nestingu
+                            <span>nesting.html</span>
+                        </div>
+                        <div class="module-entry-desc">
+                            Optymalizator rozkroju formatek na arkuszach z kontrolą rzazu freza i kierunku usłojenia.
+                        </div>
+                    </a>
+
+                    <a href="draw.html" class="module-entry">
+                        <div class="module-entry-title">
+                            Rysunki Techniczne 2D
+                            <span>draw.html</span>
+                        </div>
+                        <div class="module-entry-desc">
+                            Automatyczne rzuty formatek z naniesionymi bazami wymiarowymi i pozycjami nawierceń.
+                        </div>
+                    </a>
+
+                    <a href="report.html" class="module-entry">
+                        <div class="module-entry-title">
+                            Raporty i BOM
+                            <span>report.html</span>
+                        </div>
+                        <div class="module-entry-desc">
+                            Zestawienie materiałowe formatek, metrów bieżących obrzeża, zużycia okuć oraz kalkulacja kosztów.
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </article>
+
+        <!-- ─── PYTANIE: CZY MUSZĘ COŚ INSTALOWAĆ? ─── -->
+        <article class="qa-item">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Czy muszę instalować jakikolwiek program na komputerze?
+            </h2>
+            <div class="qa-answer">
+                <p>
+                    <strong>Nie. System w 100% działa w przeglądarce internetowej</strong> (Chrome, Edge, Firefox, Safari).
+                </p>
+                <div class="info-box">
+                    <ul>
+                        <li>Działa na dowolnym systemie: Windows, macOS, Linux, a także na tabletach.</li>
+                        <li>Nie wymaga drogiej stacji roboczej CAD — silnik triangulacji 2D/3D został zoptymalizowany do płynnej pracy przy 60 FPS na zwykłym laptopie.</li>
+                        <li>Wszystkie aktualizacje silnika CAD i katalogów okuć są dostępne natychmiast bez instalowania poprawek.</li>
+                    </ul>
+                </div>
+            </div>
+        </article>
+
+        <!-- ─── PYTANIE: GDZIE ZAPISYWANE SĄ MOJE PROJEKTY? ─── -->
+        <article class="qa-item">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Gdzie są zapisywane moje projekty i czy mam do nich stały dostęp?
+            </h2>
+            <div class="qa-answer">
+                <p>Masz dwa w pełni niezależne sposoby zapisu:</p>
+                <div class="info-box">
+                    <ul>
+                        <li><strong>Dysk Google (Chmura CAD)</strong>: Projekty zapisują się bezpośrednio w folderze <code>SmartPanel CAD Projects</code> na Twoim prywatnym koncie Google (15 GB darmowego miejsca). Masz do nich dostęp z biura, z warsztatu i z telefonu.</li>
+                        <li><strong>Tradycyjny plik lokalny (Pobierz)</strong>: W każdej chwili możesz pobrać projekt jako pojedynczy plik <code>.spp.json</code> na swój twardy dysk lub pendrive.</li>
+                    </ul>
+                </div>
+            </div>
+        </article>
+
+        <!-- ─── PYTANIE: JAKIE MASZYNY CNC I FORMATY SĄ OBSŁUGIWANE? ─── -->
+        <article class="qa-item">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Jakie maszyny CNC i formaty plików są obsługiwane?
+            </h2>
+            <div class="qa-answer">
+                <p>
+                    Silnik CAM generuje obróbki w neutralnym standardzie pośrednim <strong>CLData (ISO 4343)</strong>, który następnie jest tłumaczony przez dedykowane postprocesory na kod maszynowy:
+                </p>
+                <div class="info-box">
+                    <ul>
+                        <li><strong>Formaty maszynowe</strong>: Standardowy ISO G-Code (dla sterowników Mach3, LinuxCNC, Syntec, Weihong), pliki obróbcze pod centra Homag (WoodWOP), Biesse (BiesseWorks / bSolid), SCM (Xilog / Maestro), Felder, InfoTEC, Kimla.</li>
+                        <li><strong>Formaty CAD</strong>: Eksport geometrii formatek do DXF (z podziałem na warstwy frezowań i wierceń) oraz wektorowych arkuszy SVG.</li>
+                    </ul>
+                </div>
+            </div>
+        </article>
+
+        <!-- ─── PYTANIE: ILE TO KOSZTUJE? ─── -->
+        <article class="qa-item">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Ile to kosztuje i czym różni się wersja Starter od PRO?
+            </h2>
+            <div class="qa-answer">
+                <p>Zasady licencjonowania są proste i przejrzyste — bez opłat wdrożeniowych i bez długoterminowych umów:</p>
+
+                <div class="pricing-table">
+                    <!-- PLAN FREE -->
+                    <div class="pricing-col">
+                        <div class="pricing-title">Plan Starter</div>
+                        <div class="pricing-price">0 zł <span>/ na zawsze</span></div>
+                        <ul class="pricing-list">
+                            <li>✓ Pełne modelowanie szafek w 3D</li>
+                            <li>✓ Parametryczne korpusy Bloki</li>
+                            <li>✓ Podstawowe rysunki techniczne 2D</li>
+                            <li>✓ Do 3 projektów w chmurze Google</li>
+                            <li style="color: #64748b;">✕ Eksport kodów na obrabiarki CNC</li>
+                            <li style="color: #64748b;">✕ Nielimitowany nesting rozkroju</li>
+                        </ul>
+                        <a href="index.html" class="btn btn-primary" style="background: rgba(255,255,255,0.08); color: #fff; width: 100%;">
+                            Uruchom za darmo
+                        </a>
+                    </div>
+
+                    <!-- PLAN PRO -->
+                    <div class="pricing-col pro">
+                        <div class="pricing-title" style="color: #93c5fd;">Plan Warsztat PRO</div>
+                        <div class="pricing-price">99 zł <span>/ miesiąc</span></div>
+                        <ul class="pricing-list">
+                            <li>✓ <strong>Wszystko z planu Starter</strong></li>
+                            <li>✓ <strong>Generowanie kodów CNC (G-Code / CLData)</strong></li>
+                            <li>✓ <strong>Pełny nesting wieloarkuszowy z usłojeniem</strong></li>
+                            <li>✓ <strong>Nielimitowane projekty w chmurze</strong></li>
+                            <li>✓ <strong>Udostępnianie modelu 3D linkiem dla klienta</strong></li>
+                            <li>✓ Eksport wektorowy DXF i etykiety produkcyjne</li>
+                        </ul>
+                        <a href="index.html" class="btn btn-primary" style="width: 100%;">
+                            Przejdź do wersji PRO
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <!-- ─── PYTANIE: JAK ZACZĄĆ? ─── -->
+        <article class="qa-item">
+            <h2 class="qa-question">
+                <span class="qa-bullet"></span>
+                Jak mogę zacząć projektować już teraz?
+            </h2>
+            <div class="qa-answer">
+                <p>
+                    Wystarczy jedno kliknięcie — nie musisz podawać karty płatniczej ani zakładać konta, aby przetestować edytor 3D:
+                </p>
+                <div class="cta-box">
+                    <h3>Otwórz środowisko projektowe SmartPanel CAD</h3>
+                    <p>Zaprojektuj pierwszy korpus, wstaw szuflady i sprawdź automatyczny rozkrój formatek.</p>
+                    <a href="index.html" class="btn btn-primary" style="padding: 12px 32px; font-size: 1rem;">
+                        ▶ Rozpocznij projektowanie w CAD 3D
+                    </a>
+                </div>
+            </div>
+        </article>
+
+    </main>
+
+    <!-- ─── SKRYPT WIRTUALNEGO PRZEWODNIKA ─── -->
+    <script>
+        (function() {
+            const tourSteps = [
+                {
+                    tag: "MODUŁ: SMARTFRAME",
+                    title: "Parametryczny Korpus i Nut pod Plecy",
+                    desc: "Zewnętrzna konstrukcja szafki (boki, wieńce, cokoły). Zmiana szerokości, wysokości lub grubości płyty (np. 18 mm) natychmiast przelicza długości formatek i automatycznie generuje nut pod plecy 3 mm z właściwym odsunięciem.",
+                    specs: [
+                        "Grubość płyty: 18 mm (lub zdefiniowana przez użytkownika)",
+                        "Nut pod plecy: 4 × 8 mm z odsunięciem 15 mm",
+                        "Baza WCS: lewy dolny narożnik (G54)"
+                    ]
+                },
+                {
+                    tag: "MODUŁ: BLOKI",
+                    title: "Wnęki, Półki i System 32",
+                    desc: "Inteligentne zarządzanie przestrzenią szafki. Półki stałe generują złącza mimośrodowe lub kołki, a półki regulowane automatycznie tworzą rzędy otworów w rozstawie 32 mm na zdefiniowanej wysokości roboczej.",
+                    specs: [
+                        "Rozstaw otworów: System 32 (raster co 32 mm)",
+                        "Wiercenia: ø5 mm × 12 mm pod podpórki półek",
+                        "Reguła: automatyczne centrowanie i równy podział wnęk"
+                    ]
+                },
+                {
+                    tag: "OKUCIA: BLUM / HETTICH",
+                    title: "Automatyczne Puszki Zawiasowe",
+                    desc: "Katalog standardowych okuć meblowych. Program automatycznie wyznacza puszkę zawiasową ø35 mm w odległości 21.5 mm od krawędzi frontu oraz rozstaw wkrętów prowadnika w korpusie bez konieczności ręcznego trasowania.",
+                    specs: [
+                        "Średnica puszki: ø35 mm (głębokość 13 mm)",
+                        "Katalog: Blum Clip Top, Hettich Sensys, GTV 3D",
+                        "Baza: automatyczny offset od krawędzi z luzem 1.5 mm"
+                    ]
+                },
+                {
+                    tag: "MODUŁ: SZUFLADY",
+                    title: "Prowadnice i Dno Szuflady",
+                    desc: "Automatyczny dobór długości prowadnicy do głębokości korpusu. System sam wylicza szerokość dna szuflady z uwzględnieniem luzów bocznych, grubości ścianek bocznych i otworów montażowych pod wkręty euro.",
+                    specs: [
+                        "Systemy: Tandem, Legrabox, ModernBox, Sevroll",
+                        "Kalkulacja: dno + plecy ze zdefiniowanym luzem montażowym",
+                        "Nawierty sprzęgieł: generowane automatycznie na spodzie"
+                    ]
+                },
+                {
+                    tag: "MODUŁ: CAM CNC & NESTING",
+                    title: "Ścieżki Maszynowe i Rozkrój Płyty",
+                    desc: "Pełne przejście do produkcji. Z geometrii formatek B-rep generowany jest optymalny nesting na arkuszu 2800x2070 mm oraz neutralny kod CLData / ISO G-Code na centra Homag, Biesse, SCM, Kimla, InfoTEC i obrabiarki ze sterownikiem Mach3.",
+                    specs: [
+                        "Standard ścieżek: ISO 4343 CLData",
+                        "Kompensacja: rzaz freza i usłojenie płyty",
+                        "Postprocesory: Homag MPR, Biesse CIX, Standard G-Code"
+                    ]
+                }
+            ];
+
+            let currentStep = 0;
+            let isAutoPlaying = true;
+            let tourTimer = null;
+
+            const tagEl = document.getElementById("tour-tag");
+            const titleEl = document.getElementById("tour-title");
+            const descEl = document.getElementById("tour-desc");
+            const specsEl = document.getElementById("tour-specs");
+            const cardEl = document.getElementById("tour-card");
+
+            const playBtn = document.getElementById("tour-play-btn");
+            const playIcon = document.getElementById("tour-play-icon");
+            const playLabel = document.getElementById("tour-play-label");
+
+            const prevBtn = document.getElementById("tour-prev-btn");
+            const nextBtn = document.getElementById("tour-next-btn");
+
+            const hotspots = document.querySelectorAll(".hotspot-point");
+            const indicatorDots = document.querySelectorAll(".tour-dot-btn");
+
+            function showStep(idx) {
+                currentStep = (idx + tourSteps.length) % tourSteps.length;
+                const data = tourSteps[currentStep];
+
+                // Update text content
+                tagEl.textContent = data.tag;
+                titleEl.textContent = data.title;
+                descEl.textContent = data.desc;
+
+                specsEl.innerHTML = data.specs.map(function(s) {
+                    return '<li><span>•</span> ' + s + '</li>';
+                }).join('');
+
+                // Update active hotspot
+                hotspots.forEach(function(h, i) {
+                    if (i === currentStep) {
+                        h.classList.add("active");
+                    } else {
+                        h.classList.remove("active");
+                    }
+                });
+
+                // Update indicator dots
+                indicatorDots.forEach(function(dot, i) {
+                    if (i === currentStep) {
+                        dot.classList.add("active");
+                    } else {
+                        dot.classList.remove("active");
+                    }
+                });
+
+                // Subtle card flash
+                cardEl.style.transform = "scale(0.99)";
+                setTimeout(function() {
+                    cardEl.style.transform = "scale(1)";
+                }, 120);
+            }
+
+            function startTimer() {
+                clearInterval(tourTimer);
+                tourTimer = setInterval(function() {
+                    if (isAutoPlaying) {
+                        showStep(currentStep + 1);
+                    }
+                }, 4500);
+            }
+
+            function setAutoPlay(val) {
+                isAutoPlaying = val;
+                if (isAutoPlaying) {
+                    playIcon.textContent = "⏸";
+                    playLabel.textContent = "Pauza";
+                    startTimer();
+                } else {
+                    playIcon.textContent = "▶";
+                    playLabel.textContent = "Odtwórz";
+                    clearInterval(tourTimer);
+                }
+            }
+
+            // Event Listeners
+            playBtn.addEventListener("click", function() {
+                setAutoPlay(!isAutoPlaying);
+            });
+
+            prevBtn.addEventListener("click", function() {
+                setAutoPlay(false);
+                showStep(currentStep - 1);
+            });
+
+            nextBtn.addEventListener("click", function() {
+                setAutoPlay(false);
+                showStep(currentStep + 1);
+            });
+
+            hotspots.forEach(function(btn) {
+                btn.addEventListener("click", function() {
+                    const step = parseInt(btn.getAttribute("data-step"), 10);
+                    setAutoPlay(false);
+                    showStep(step);
+                });
+            });
+
+            indicatorDots.forEach(function(dot) {
+                dot.addEventListener("click", function() {
+                    const step = parseInt(dot.getAttribute("data-step"), 10);
+                    setAutoPlay(false);
+                    showStep(step);
+                });
+            });
+
+            // Start Tour
+            showStep(0);
+            startTimer();
+        })();
+    </script>
+</body>
+</html>

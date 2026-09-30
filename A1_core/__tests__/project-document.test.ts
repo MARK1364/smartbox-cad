@@ -8,6 +8,7 @@ import { mmToNm } from '../cad-math/units.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { ProjectFileIO, suggestedProjectFileName, stampProjectFileMetadata } from '../project-file-io.js';
 import appPackage from '../../package.json';
+import { ContainerModel } from '../container-model.js';
 
 describe('ProjectDocument', () => {
     let doc: ProjectDocument;
@@ -24,13 +25,13 @@ describe('ProjectDocument', () => {
     });
 
     it('should add containers and panels to the document tree', () => {
-        const container = doc.createContainer({ name: 'Szafa', width: mmToNm(600) });
+        const container = doc.createAssembly({ name: 'Szafa', width: mmToNm(600) }) as ContainerModel;
         const containerNode = doc.findNode(container.id)!;
         expect(containerNode.parent).toBe(doc.rootNode);
         expect(doc.findNode(container.id)).toBe(containerNode);
         expect(doc.getContainers()).toHaveLength(1);
 
-        const panel = doc.createPanel({ name: 'Bok lewy' }, container.id);
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok lewy' }, container.id);
         const panelNode = doc.findNode(panel.id)!;
         expect(panelNode.parent).toBe(containerNode);
         expect(doc.findNode(panel.id)).toBe(panelNode);
@@ -38,19 +39,19 @@ describe('ProjectDocument', () => {
     });
 
     it('should prevent cyclic references when adding or reparenting nodes', () => {
-        const parent = doc.createContainer({ name: 'Parent' });
-        const child = doc.createPanel({ name: 'Child' }, parent.id);
+        const parent = doc.createAssembly({ name: 'Parent' }) as ContainerModel;
+        const child = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Child' }, parent.id);
         const parentNode = doc.findNode(parent.id)!;
 
-        // Próba dodania parent jako dziecka child musi wyrzucić błąd
+        // PrĂłba dodania parent jako dziecka child musi wyrzuciÄ‡ bĹ‚Ä…d
         expect(() => {
             doc.addNode(child.id, parentNode);
         }).toThrow(/cycle detected/i);
     });
 
     it('should remove node and its subtree', () => {
-        const parent = doc.createContainer({ name: 'Parent' });
-        const child = doc.createPanel({ name: 'Child' }, parent.id);
+        const parent = doc.createAssembly({ name: 'Parent' }) as ContainerModel;
+        const child = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Child' }, parent.id);
         const childNode = doc.findNode(child.id)!;
 
         expect(doc.findNode(child.id)).toBe(childNode);
@@ -63,13 +64,13 @@ describe('ProjectDocument', () => {
     });
 
     it('should reparent node keeping world transform', () => {
-        const container1 = doc.createContainer({ name: 'Szafa 1' });
+        const container1 = doc.createAssembly({ name: 'Szafa 1' }) as ContainerModel;
         doc.findNode(container1.id)!.setLocalTransform(new Vec3(mmToNm(1000), 0, 0), Quat.IDENTITY);
 
-        const container2 = doc.createContainer({ name: 'Szafa 2' });
+        const container2 = doc.createAssembly({ name: 'Szafa 2' }) as ContainerModel;
         doc.findNode(container2.id)!.setLocalTransform(new Vec3(mmToNm(2000), 0, 0), Quat.IDENTITY);
 
-        const panel = doc.createPanel({ name: 'Półka' }, container1.id);
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'PĂłĹ‚ka' }, container1.id);
         const panelNode = doc.findNode(panel.id)!;
         panelNode.setLocalTransform(new Vec3(mmToNm(100), 0, 0), Quat.IDENTITY);
 
@@ -88,17 +89,18 @@ describe('ProjectDocument', () => {
             expect(evt.type).toBe('structure');
         });
 
-        doc.createContainer({ name: 'Szafa' });
+        doc.createAssembly({ name: 'Szafa' }) as ContainerModel;
         expect(eventCount).toBe(1);
     });
 
-    it('should serialize to v3 JSON format and load back identically', () => {
-        const container = doc.createContainer({ name: 'Szafa Test' });
-        const panel = doc.createPanel({ name: 'Bok' }, container.id);
+    it('should serialize to v4 JSON format and load back identically', () => {
+        const container = doc.createAssembly({ name: 'Szafa Test' }) as ContainerModel;
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok' }, container.id);
 
         const serialized = JSON.parse(JSON.stringify(doc.serialize()));
         expect(serialized.format).toBe('smartpanel-project');
-        expect(serialized.version).toBe(3);
+        expect(serialized.version).toBe(PROJECT_FORMAT_VERSION);
+        expect(PROJECT_FORMAT_VERSION).toBe(4);
         expect(serialized.extensions).toEqual({});
         expect(serialized).not.toHaveProperty('pmi');
         expect(serialized).not.toHaveProperty('constraints');
@@ -122,9 +124,9 @@ describe('ProjectDocument', () => {
     });
 
     it('should restore panel material, edgebanding and custom_properties via fromJSON', () => {
-        const panel: any = doc.createPanel({ name: 'Bok' });
+        const panel: any = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok' });
         panel.materialId = 'H1180_ST37_18';
-        panel.materialName = 'Dąb Halifax';
+        panel.materialName = 'DÄ…b Halifax';
         panel.materialCode = 'H1180 ST37';
         panel.color = { r: 0.4, g: 0.3, b: 0.2 };
         panel.setEdgeBand('+X', { type_id: '0.008x0.022', name: 'ABS 0.8', thickness_mm: 0.8 });
@@ -140,7 +142,7 @@ describe('ProjectDocument', () => {
         const restoredPanel = restored.findNode(panel.id)!.domainData as PanelModel;
 
         expect(restoredPanel.materialId).toBe('H1180_ST37_18');
-        expect(restoredPanel.materialName).toBe('Dąb Halifax');
+        expect(restoredPanel.materialName).toBe('DÄ…b Halifax');
         expect(restoredPanel.materialCode).toBe('H1180 ST37');
         expect(restoredPanel.color).toEqual({ r: 0.4, g: 0.3, b: 0.2 });
         expect(restoredPanel.edgeBanding['+X'].type_id).toBe('0.008x0.022');
@@ -151,8 +153,8 @@ describe('ProjectDocument', () => {
     });
 
     it('should restore container generatorParams via fromJSON', () => {
-        const container = doc.createContainer({ name: 'Korpus' });
-        container.generatorParams = { type: 'korpus3_2', zoneCount: 3, thickness: 18 };
+        const container = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        container.generatorParams = { type: 'korpus3_2', liczba_stref: 3, thickness: 18 };
 
         const restored = new ProjectDocument();
         restored.load(JSON.parse(JSON.stringify(doc.serialize())));
@@ -160,7 +162,7 @@ describe('ProjectDocument', () => {
 
         expect(restoredContainer.generatorParams).toEqual({
             type: 'korpus3_2',
-            zoneCount: 3,
+            liczba_stref: 3,
             thickness: 18,
         });
     });
@@ -176,7 +178,7 @@ describe('ProjectDocument', () => {
         expect(json).not.toHaveProperty('pmi');
     });
 
-    it('should migrate v2 root pmi/constraints/camera into extensions', () => {
+    it('odrzuca plik v2 czytelnym bledem (zero kompatybilnosci wstecznej)', () => {
         const v2 = {
             format: 'smartpanel-project',
             version: 2,
@@ -185,7 +187,7 @@ describe('ProjectDocument', () => {
             name: 'Stary projekt',
             rootNode: {
                 id: 'root_room',
-                name: 'Pokój',
+                name: 'Pokoj',
                 nodeType: 'ROOM',
                 translationNm: [0, 0, 0],
                 rotationQuat: [0, 0, 0, 1],
@@ -197,34 +199,52 @@ describe('ProjectDocument', () => {
             camera: { alpha: 1.2, beta: 0.8, radius: 1400, target: [10, 20, 30] },
         };
 
-        const migrated = migrateProjectToCurrent(v2);
-        expect(migrated.version).toBe(PROJECT_FORMAT_VERSION);
-        expect(migrated.extensions?.pmi).toEqual(v2.pmi);
-        expect(migrated.extensions?.constraints).toEqual(v2.constraints);
-        expect(migrated.extensions?.viewport).toEqual({
-            version: 1,
-            camera: v2.camera,
-        });
-        expect(migrated).not.toHaveProperty('pmi');
-        expect(migrated).not.toHaveProperty('camera');
+        // v2 mialo wycofane nazwy parametrow korpusu — migracja bylaby trwalym dlugiem.
+        expect(() => migrateProjectToCurrent(v2)).toThrow(/wersji 2/);
+        expect(() => migrateProjectToCurrent(v2)).toThrow(/4/);
+    });
 
-        let loadedPmi: any = null;
-        let loadedViewport: any = null;
-        const restored = new ProjectDocument();
-        restored.registerExtension('pmi', {
-            serialize: () => loadedPmi,
-            load: (data) => { loadedPmi = data; },
-        });
-        restored.registerExtension('viewport', {
-            serialize: () => loadedViewport,
-            load: (data) => { loadedViewport = data; },
-        });
-        restored.load(v2);
+    it('odrzuca plik v3 (z aliasami parametrow) zamiast go cicho wczytac', () => {
+        const v3 = {
+            format: 'smartpanel-project',
+            version: 3,
+            domainUnit: 'nm',
+            id: 'doc_v3',
+            name: 'Projekt v3',
+            rootNode: {
+                id: 'root_room',
+                name: 'Pokoj',
+                nodeType: 'ROOM',
+                translationNm: [0, 0, 0],
+                rotationQuat: [0, 0, 0, 1],
+                scale: [1, 1, 1],
+                children: [],
+            },
+        };
 
-        expect(loadedPmi).toEqual(v2.pmi);
-        expect(loadedViewport.camera.alpha).toBe(1.2);
-        expect(restored.serialize().extensions?.pmi).toEqual(v2.pmi);
-        expect(restored.serialize()).not.toHaveProperty('pmi');
+        expect(() => new ProjectDocument().load(v3)).toThrow(/wersji 3/);
+    });
+
+    it('odrzuca plik z domainUnit innym niż nm', () => {
+        const badUnit = {
+            format: 'smartpanel-project',
+            version: PROJECT_FORMAT_VERSION,
+            domainUnit: 'µm',
+            id: 'doc_bad_unit',
+            name: 'Złe jednostki',
+            rootNode: {
+                id: 'root_room',
+                name: 'Pokoj',
+                nodeType: 'ROOM',
+                translationNm: [0, 0, 0],
+                rotationQuat: [0, 0, 0, 1],
+                scale: [1, 1, 1],
+                children: [],
+            },
+        };
+
+        expect(() => migrateProjectToCurrent(badUnit)).toThrow(/domainUnit/);
+        expect(() => migrateProjectToCurrent(badUnit)).toThrow(/nm/);
     });
 
     it('should keep unknown extension payloads for round-trip', () => {
@@ -240,7 +260,7 @@ describe('ProjectDocument', () => {
     });
 
     it('should markSaved after an explicit save, and load() resets dirty', () => {
-        doc.createPanel({ name: 'A' });
+        doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'A' });
         expect(doc.isDirty()).toBe(true);
         doc.markSaved();
         expect(doc.isDirty()).toBe(false);
@@ -254,17 +274,16 @@ describe('ProjectDocument', () => {
         expect(PROJECT_APP_VERSION).toBe(appPackage.version);
     });
 
-    it('warns when opening a newer format version and clamps to current', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('odrzuca plik nowszy niz obslugiwany zamiast go clampowac', () => {
         const newer = {
             format: 'smartpanel-project',
             version: PROJECT_FORMAT_VERSION + 1,
             domainUnit: 'nm',
             id: 'doc_future',
-            name: 'Przyszły',
+            name: 'Przyszly',
             rootNode: {
                 id: 'root_room',
-                name: 'Pokój',
+                name: 'Pokoj',
                 nodeType: 'ROOM',
                 translationNm: [0, 0, 0],
                 rotationQuat: [0, 0, 0, 1],
@@ -273,10 +292,9 @@ describe('ProjectDocument', () => {
             },
         };
 
-        const migrated = migrateProjectToCurrent(newer);
-        expect(migrated.version).toBe(PROJECT_FORMAT_VERSION);
-        expect(warn).toHaveBeenCalled();
-        warn.mockRestore();
+        // Clampowanie do dolnej wersji czytalo strukture nowego formatu stara semantyka —
+        // to ten sam problem co wersja 3. Teraz: czytelny blad.
+        expect(() => migrateProjectToCurrent(newer)).toThrow(/wersji/);
     });
 
     it('skips includeInSnapshots:false extensions in undo snapshots', () => {
@@ -322,7 +340,7 @@ describe('ProjectDocument', () => {
         };
 
         try {
-            doc.createPanel({ name: 'A' });
+            doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'A' });
             expect(doc.isDirty()).toBe(true);
             const io = new ProjectFileIO();
             const mode = await io.save(doc);
@@ -337,10 +355,10 @@ describe('ProjectDocument', () => {
     });
 
     it('keeps a manual panel independently transformable inside a cabinet', () => {
-        const container = doc.createContainer({ name: 'Szafa' });
-        const enginePanel = doc.createPanel({ name: 'Bok lewy' }, container.id);
+        const container = doc.createAssembly({ name: 'Szafa' }) as ContainerModel;
+        const enginePanel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok lewy' }, container.id);
         const manual = doc.createPanel(
-            { name: 'Wzmocnienie', engineManaged: false },
+            { width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Wzmocnienie', engineManaged: false },
             container.id,
         );
 
@@ -353,7 +371,7 @@ describe('ProjectDocument', () => {
     });
 
     it('round-trips engineManaged on a manual panel', () => {
-        const panel = doc.createPanel({ name: 'Wzmocnienie', engineManaged: false });
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Wzmocnienie', engineManaged: false });
         expect((panel as PanelModel).engineManaged).toBe(false);
 
         const restored = new ProjectDocument();
@@ -363,7 +381,7 @@ describe('ProjectDocument', () => {
     });
 
     it('hydrates PART/ASSEMBLY through the registered factory registry', () => {
-        const panel = doc.createPanel({ name: 'Bok', materialId: 'H1180_ST37_18' });
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok', materialId: 'H1180_ST37_18' });
         expect(panel.type).toBe('part');
         expect(panel).toBeInstanceOf(PanelModel);
 
@@ -381,15 +399,15 @@ describe('ProjectDocument', () => {
             calls.push(nodeJson.id);
             return PanelModel.fromJSON(raw);
         });
-        const panel = doc.createPanel({ name: 'X' });
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'X' });
         const json = JSON.parse(JSON.stringify(doc.serialize()));
         doc.load(json);
         expect(calls).toContain(panel.id);
     });
 
     it('should reset document to a clean empty project with reset()', () => {
-        const container = doc.createContainer({ name: 'Szafa' });
-        doc.createPanel({ name: 'Panel' }, container.id);
+        const container = doc.createAssembly({ name: 'Szafa' }) as ContainerModel;
+        doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Panel' }, container.id);
         expect(doc.getPanels()).toHaveLength(1);
         expect(doc.getContainers()).toHaveLength(1);
         expect(doc.isDirty()).toBe(true);
@@ -399,9 +417,9 @@ describe('ProjectDocument', () => {
             if (evt.type === 'loaded') loadedEventFired = true;
         });
 
-        doc.reset('Mój Nowy Projekt');
+        doc.reset('MĂłj Nowy Projekt');
 
-        expect(doc.name).toBe('Mój Nowy Projekt');
+        expect(doc.name).toBe('MĂłj Nowy Projekt');
         expect(doc.rootNode.nodeType).toBe(NodeType.ROOM);
         expect(doc.rootNode.children).toHaveLength(0);
         expect(doc.getPanels()).toHaveLength(0);
@@ -409,6 +427,52 @@ describe('ProjectDocument', () => {
         expect(doc.isDirty()).toBe(false);
         expect(doc.activeEntity).toBeNull();
         expect(loadedEventFired).toBe(true);
+    });
+
+    it('throws when extension serialize fails instead of omitting the section', () => {
+        doc.registerExtension('broken', {
+            serialize: () => {
+                throw new Error('boom-serialize');
+            },
+            load: () => {},
+        });
+        expect(() => doc.serialize()).toThrow(/serializacji rozszerzenia "broken"/);
+    });
+
+    it('throws when extension load fails instead of continuing', () => {
+        doc.registerExtension('broken', {
+            serialize: () => ({}),
+            load: () => {
+                throw new Error('boom-load');
+            },
+        });
+        const json = doc.serialize();
+        json.extensions = { ...(json.extensions || {}), broken: { x: 1 } };
+        expect(() => doc.load(json)).toThrow(/wczytywania rozszerzenia "broken"/);
+    });
+
+    it('throws when domainData lacks toJSON during serialize', () => {
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'X' });
+        const node = doc.findNode(panel.id)!;
+        node.domainData = { type: 'part', id: panel.id } as any;
+        expect(() => doc.serialize()).toThrow(/bez toJSON/);
+    });
+
+    it('throws when hydrator is missing for a node with domainData', () => {
+        doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'X' });
+        const json = JSON.parse(JSON.stringify(doc.serialize()));
+        const bare = new ProjectDocument();
+        (bare as any)._hydrators.delete(NodeType.PART);
+        expect(() => bare.load(json)).toThrow(/brak hydratora dla nodeType "PART"/);
+    });
+
+    it('throws when hydrator itself fails', () => {
+        doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'X' });
+        const json = JSON.parse(JSON.stringify(doc.serialize()));
+        doc.registerHydrator(NodeType.PART, () => {
+            throw new Error('broken-hydrate');
+        });
+        expect(() => doc.load(json)).toThrow(/błąd hydratacji "PART"/);
     });
 });
 

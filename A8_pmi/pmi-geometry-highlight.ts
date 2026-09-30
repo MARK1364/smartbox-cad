@@ -208,12 +208,12 @@ export class PMIGeometryHighlighter {
 
         this.hoveredMesh = null;
         this.saved = null;
+        this.hoveredSegment = null;
+        this.lastDetection = null;
     }
 
     public dispose(): void {
         this.clearHighlight();
-        this.hoveredSegment = null;
-        this.lastDetection = null;
     }
 
     private applyHighlight(result: DetectionResult): void {

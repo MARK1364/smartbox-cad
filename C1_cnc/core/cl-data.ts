@@ -60,4 +60,5 @@ export interface CLDataProgram {
     totalLengthMm: number;
     estimatedTimeSec: number;
     toolIdsUsed: string[];
+    workpieceDimensions?: { width: number; height: number; thickness: number };
 }

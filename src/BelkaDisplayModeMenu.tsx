@@ -1,4 +1,11 @@
 import React, { useEffect, useRef } from 'react';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 export type DisplayMode = 'shaded' | 'edges' | 'wireframe' | 'xray';
 export type ProjectionMode = 'ortho' | 'perspective';
@@ -103,17 +110,21 @@ function BelkaSelectMenu<T extends string>({
     );
 }
 
-const DISPLAY_MODES: SelectOption<DisplayMode>[] = [
-    { id: 'edges', label: 'Krawędzie', title: 'Cieniowanie z krawędziami (domyślny)', itemId: 'toolEdges', icon: <DisplayCubeIcon mode="edges" /> },
-    { id: 'wireframe', label: 'Szkielet', title: 'Tylko krawędzie', itemId: 'toolWireframe', icon: <DisplayCubeIcon mode="wireframe" /> },
-    { id: 'xray', label: 'Półprzezroczyste', title: 'Półprzezroczyste bryły', itemId: 'toolXRay', icon: <DisplayCubeIcon mode="xray" /> },
-    { id: 'shaded', label: 'Cieniowany', title: 'Cieniowanie powierzchni', itemId: 'toolShaded', icon: <DisplayCubeIcon mode="shaded" /> },
+const DISPLAY_MODES: (SelectOption<DisplayMode> & { labelKey: string; titleKey: string })[] = [
+    { id: 'edges', label: '', title: '', labelKey: 'belka.mode_edges', titleKey: 'belka.mode_edges_title', itemId: 'toolEdges', icon: <DisplayCubeIcon mode="edges" /> },
+    { id: 'wireframe', label: '', title: '', labelKey: 'belka.mode_wire', titleKey: 'belka.mode_wire_title', itemId: 'toolWireframe', icon: <DisplayCubeIcon mode="wireframe" /> },
+    { id: 'xray', label: '', title: '', labelKey: 'belka.mode_xray', titleKey: 'belka.mode_xray_title', itemId: 'toolXRay', icon: <DisplayCubeIcon mode="xray" /> },
+    { id: 'shaded', label: '', title: '', labelKey: 'belka.mode_shaded', titleKey: 'belka.mode_shaded_title', itemId: 'toolShaded', icon: <DisplayCubeIcon mode="shaded" /> },
 ];
 
-const PROJECTION_MODES: SelectOption<ProjectionMode>[] = [
-    { id: 'ortho', label: 'Ortogonalny', title: 'Rzut prostokątny (CAD)', itemId: 'toolProjOrtho' },
-    { id: 'perspective', label: 'Perspektywa', title: 'Rzut perspektywiczny', itemId: 'toolProjPersp' },
+const PROJECTION_MODES: (SelectOption<ProjectionMode> & { labelKey: string; titleKey: string })[] = [
+    { id: 'ortho', label: '', title: '', labelKey: 'belka.proj_ortho', titleKey: 'belka.proj_ortho_title', itemId: 'toolProjOrtho' },
+    { id: 'perspective', label: '', title: '', labelKey: 'belka.proj_persp', titleKey: 'belka.proj_persp_title', itemId: 'toolProjPersp' },
 ];
+
+function localizeOptions<T extends string>(opts: (SelectOption<T> & { labelKey: string; titleKey: string })[]): SelectOption<T>[] {
+    return opts.map((o) => ({ ...o, label: tx(srcTekst, o.labelKey, TX_NS), title: tx(srcTekst, o.titleKey, TX_NS) }));
+}
 
 export function BelkaDisplayModeMenu({
     mode,
@@ -126,13 +137,14 @@ export function BelkaDisplayModeMenu({
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
+    useLocale();
     return (
         <BelkaSelectMenu
             id="belka-tryb-wyswietlania"
-            title="Widok (Tryb wyświetlania)"
+            title={tx(srcTekst, 'belka.view_title', TX_NS)}
             value={mode}
-            label="Widok"
-            options={DISPLAY_MODES}
+            label={tx(srcTekst, 'belka.view', TX_NS)}
+            options={localizeOptions(DISPLAY_MODES)}
             open={open}
             onOpenChange={onOpenChange}
             onChange={onChange}
@@ -151,12 +163,13 @@ export function BelkaProjectionMenu({
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
+    useLocale();
     return (
         <BelkaSelectMenu
             id="belka-projekcja"
-            title="Projekcja kamery"
+            title={tx(srcTekst, 'belka.proj_title', TX_NS)}
             value={mode}
-            options={PROJECTION_MODES}
+            options={localizeOptions(PROJECTION_MODES)}
             open={open}
             onOpenChange={onOpenChange}
             onChange={onChange}
@@ -177,6 +190,7 @@ export function BelkaInfoMenu({
     onDumpSceneTree: () => void;
     onOpenSSOT?: () => void;
 }) {
+    useLocale();
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -194,42 +208,39 @@ export function BelkaInfoMenu({
                 type="button"
                 id="toolInfo"
                 className={`tool-btn ${open ? 'active' : ''}`}
-                title="Informacje i narzędzia diagnostyczne"
+                title={tx(srcTekst, 'belka.info_title', TX_NS)}
                 onClick={() => onOpenChange(!open)}
             >
-                <span style={{ fontSize: '0.9rem' }}>ℹ️</span>
-                <span>Info</span>
+                <span>{tx(srcTekst, 'belka.info', TX_NS)}</span>
                 <Chevron />
             </button>
             {open && (
-                <div className="belka-dropdown-panel" role="menu" aria-label="Informacje i narzędzia diagnostyczne">
+                <div className="belka-dropdown-panel" role="menu" aria-label={tx(srcTekst, 'belka.info_title', TX_NS)}>
                     <button
                         type="button"
                         id="toolInspector"
                         role="menuitem"
                         className="belka-dropdown-item"
-                        title="Przełącz widoczność Babylon.js Inspector (Skrót: Ctrl+I)"
+                        title={tx(srcTekst, 'belka.inspector_title', TX_NS)}
                         onClick={() => {
                             onToggleInspector();
                             onOpenChange(false);
                         }}
                     >
-                        <span style={{ width: 16, textAlign: 'center' }}>🔍</span>
-                        Inspector (Ctrl+I)
+                        {tx(srcTekst, 'belka.inspector', TX_NS)}
                     </button>
                     <button
                         type="button"
                         id="toolSceneTree"
                         role="menuitem"
                         className="belka-dropdown-item"
-                        title="Wypisz drzewo hierarchii CADNode oraz Babylon.js w konsoli F12"
+                        title={tx(srcTekst, 'belka.dump_tree_title', TX_NS)}
                         onClick={() => {
                             onDumpSceneTree();
                             onOpenChange(false);
                         }}
                     >
-                        <span style={{ width: 16, textAlign: 'center' }}>🌳</span>
-                        SceneTree (Konsola)
+                        {tx(srcTekst, 'belka.dump_tree', TX_NS)}
                     </button>
                     {onOpenSSOT && (
                         <button
@@ -237,15 +248,14 @@ export function BelkaInfoMenu({
                             id="toolJsonSSOT"
                             role="menuitem"
                             className="belka-dropdown-item"
-                            title="Wyświetl drzewo JSON SSOT (Single Source of Truth) projektu"
+                            title={tx(srcTekst, 'belka.ssot_title', TX_NS)}
                             onClick={() => {
                                 onOpenSSOT();
                                 onOpenChange(false);
                             }}
                         >
-                            <span style={{ width: 16, textAlign: 'center' }}>📄</span>
-                            JSON SSOT
-                        </button>
+                        {tx(srcTekst, 'belka.ssot', TX_NS)}
+                    </button>
                     )}
                 </div>
             )}

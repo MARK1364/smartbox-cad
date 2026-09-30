@@ -11,6 +11,7 @@ import {
     findCabinetPanels,
     type CabinetPanelRole
 } from '../panel-lookup.js';
+import { ContainerModel } from '../container-model.js';
 
 describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     let doc: ProjectDocument;
@@ -21,9 +22,9 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     });
 
     it('resolves all 5 carpentry roles in a 1-zone cabinet', () => {
-        const cabinet = doc.createContainer({ name: 'Korpus 1-strefowy' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
-        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+        const cabinet = doc.createAssembly({ name: 'Korpus 1-strefowy' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
 
         const cabinetNode = doc.findNode(cabinet.id);
         expect(cabinetNode).toBeDefined();
@@ -48,16 +49,16 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     });
 
     it('resolves specific zone panels in a 3-zone cabinet using aliases B, M, T and canonical names', () => {
-        const cabinet = doc.createContainer({ name: 'Korpus 3-strefowy' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 3 };
+        const cabinet = doc.createAssembly({ name: 'Korpus 3-strefowy' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 3 };
         runEngineAndApply(
             cabinet,
-            mmToNm(1000),
-            mmToNm(2400),
-            mmToNm(600),
+            1000,
+            2400,
+            600,
             3,
-            mmToNm(500),
-            mmToNm(1100),
+            500,
+            1100,
             0
         );
 
@@ -70,13 +71,13 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
         expect(leftB.panel?.zoneId).toBe('SEKCJA_B');
         expect(leftB.panel?.zonePrefix).toBe('B_');
 
-        // Strefa środkowa przez 'SEKCJA_M'
+        // Strefa Ĺ›rodkowa przez 'SEKCJA_M'
         const rightM = findCabinetPanel(cabinetNode, { role: 'RIGHT_SIDE_PANEL', zoneId: 'SEKCJA_M' });
         expect(rightM.status).toBe('OK');
         expect(rightM.panel?.zoneId).toBe('SEKCJA_M');
         expect(rightM.panel?.zonePrefix).toBe('M_');
 
-        // Strefa górna przez 'TOP'
+        // Strefa gĂłrna przez 'TOP'
         const topT = findCabinetPanel(cabinetNode, { role: 'TOP_PANEL', zoneId: 'TOP' });
         expect(topT.status).toBe('OK');
         expect(topT.panel?.zoneId).toBe('SEKCJA_T');
@@ -84,16 +85,16 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     });
 
     it('returns MULTIPLE_FOUND when querying multi-zone cabinet without zoneId', () => {
-        const cabinet = doc.createContainer({ name: 'Korpus 3-strefowy' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 3 };
+        const cabinet = doc.createAssembly({ name: 'Korpus 3-strefowy' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 3 };
         runEngineAndApply(
             cabinet,
-            mmToNm(1000),
-            mmToNm(2400),
-            mmToNm(600),
+            1000,
+            2400,
+            600,
             3,
-            mmToNm(500),
-            mmToNm(1100),
+            500,
+            1100,
             0
         );
 
@@ -109,9 +110,9 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     });
 
     it('returns INVALID_ZONE with diagnostic message when zoneId is invalid', () => {
-        const cabinet = doc.createContainer({ name: 'Korpus' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
-        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+        const cabinet = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
 
         const cabinetNode = doc.findNode(cabinet.id);
         const res = findCabinetPanel(cabinetNode, { role: 'LEFT_SIDE_PANEL', zoneId: 'X' });
@@ -123,9 +124,9 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     });
 
     it('returns NOT_FOUND when panel role does not exist', () => {
-        const cabinet = doc.createContainer({ name: 'Korpus' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
-        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+        const cabinet = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
 
         const cabinetNode = doc.findNode(cabinet.id);
         const res = findCabinetPanel(cabinetNode, { role: 'NON_EXISTING_ROLE' as any });
@@ -135,23 +136,22 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
         expect(res.candidatesCount).toBe(0);
     });
 
-    it('skips SmartBox subtrees completely', () => {
-        const cabinet = doc.createContainer({ name: 'Korpus' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
-        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+    it('skips Bloki subtrees completely', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
 
         const cabinetNode = doc.findNode(cabinet.id)!;
 
-        // Dodaj węzeł SmartBox pod korpusem (nazwa celowo bez żadnego sufiksu _SB)
+        // Dodaj wÄ™zeĹ‚ Bloki pod korpusem (nazwa celowo bez ĹĽadnego sufiksu _SB)
         const sbNode = CADNode.create(NodeType.ASSEMBLY, 'ModulWewnetrznyPolki');
         sbNode.domainData = {
             type: 'container',
-            generatorParams: { type: 'smartbox_shelves', boxType: 'SHELVES' }
+            generatorParams: { type: 'blok_shelves', boxType: 'SHELVES' }
         } as any;
 
-        // Dodaj formatkę półki wewnątrz SmartBoxa o roli BOTTOM_PANEL
-        const shelfPanel = new PanelModel({
-            name: 'Polka_Wewnetrzna',
+        // Dodaj formatkÄ™ pĂłĹ‚ki wewnÄ…trz Bloku o roli BOTTOM_PANEL
+        const shelfPanel = new PanelModel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Polka_Wewnetrzna',
             role: 'BOTTOM_PANEL',
             zoneId: 'SEKCJA_B'
         });
@@ -160,7 +160,7 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
         sbNode.addChild(shelfNode);
         cabinetNode.addChild(sbNode);
 
-        // Szukanie BOTTOM_PANEL w korpusie musi znaleźć wyłącznie wieniec dolny korpusu, a nie półkę SmartBoxa
+        // Szukanie BOTTOM_PANEL w korpusie musi znaleĹşÄ‡ wyĹ‚Ä…cznie wieniec dolny korpusu, a nie pĂłĹ‚kÄ™ Bloku
         const bottom = findCabinetPanel(cabinetNode, { role: 'BOTTOM_PANEL' });
         expect(bottom.status).toBe('OK');
         expect(bottom.panel?.name).not.toBe('Polka_Wewnetrzna');
@@ -168,14 +168,13 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     });
 
     it('skips manual panels (engineManaged: false / isManualPanel)', () => {
-        const cabinet = doc.createContainer({ name: 'Korpus' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
-        runEngineAndApply(cabinet, mmToNm(800), mmToNm(2000), mmToNm(600), 1, 0, 0, 0);
+        const cabinet = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
 
         const cabinetNode = doc.findNode(cabinet.id)!;
 
-        const manualPanel = new PanelModel({
-            name: 'Wzmocnienie_Reczne',
+        const manualPanel = new PanelModel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Wzmocnienie_Reczne',
             role: 'BOTTOM_PANEL',
             engineManaged: false
         });
@@ -190,8 +189,8 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
     });
 
     it('consistently resolves panels after cabinet rebuild/update', () => {
-        const cabinet = doc.createContainer({ name: 'Korpus' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
+        const cabinet = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
         runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
 
         const cabinetNode = doc.findNode(cabinet.id)!;
@@ -202,8 +201,8 @@ describe('Panel Lookup (findCabinetPanel / findCabinetPanels)', () => {
         runEngineAndApply(cabinet, 1000, 2200, 700, 1, 0, 0, 0);
 
         const updatedLeft = findCabinetPanel(cabinetNode, { role: 'LEFT_SIDE_PANEL' });
-        expect(updatedLeft.panel?.height).toBe(mmToNm(2200)); // H boku (oś X formatki = wysokość)
-        expect(updatedLeft.panel?.width).toBe(mmToNm(700)); // D boku (oś Y formatki = głębokość)
+        expect(updatedLeft.panel?.height).toBe(mmToNm(2200)); // H boku (oĹ› X formatki = wysokoĹ›Ä‡)
+        expect(updatedLeft.panel?.width).toBe(mmToNm(700)); // D boku (oĹ› Y formatki = gĹ‚Ä™bokoĹ›Ä‡)
         expect(updatedLeft.panel?.role).toBe('LEFT_SIDE_PANEL');
     });
 });

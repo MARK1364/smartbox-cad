@@ -1,7 +1,7 @@
 /**
- * Główny silnik optymalizacji rozkroju NestingEngine
+ * Silnik optymalizacji rozkroju — czyste funkcje (dawniej NestingEngine)
  * Obsługuje rozkrój pod piły panelowe oraz CNC z podziałem na materiały,
- * profile maszynowe (Piła vs CNC) oraz filtrowanie zakresu (Cały projekt / Szafka / SmartBox).
+ * profile maszynowe (Piła vs CNC) oraz filtrowanie zakresu (Cały projekt / Szafka / Bloki).
  *
  * Wszystkie wewnętrzne obliczenia geometryczne (BinPacker, rzazy, marginesy, pozycje x/y)
  * są wykonywane z całkowitoliczbową precyzją w Nanometrach (nm, 1 mm = 1 000 000 nm).
@@ -28,7 +28,7 @@ interface InternalRect {
     originalName: string;
     sourceNodeId?: string;
     containerId?: string;
-    smartboxId?: string;
+    blokId?: string;
     furnitureName?: string;
     material?: string;
     thickness?: number;
@@ -45,32 +45,31 @@ interface InternalRect {
     area_nm2: number;
 }
 
-export class NestingEngine {
     /**
      * Zwraca domyślny rzaz narzędzia dla danego typu maszyny (w mm)
      */
-    public static getDefaultKerf(machineType: MachineType): number {
+    export function getDefaultKerf(machineType: MachineType): number {
         return machineType === 'cnc' ? 10 : 4;
     }
 
     /**
      * Zwraca domyślny rzaz narzędzia w nanometrach (nm)
      */
-    public static getDefaultKerfNm(machineType: MachineType): number {
-        return mmToNm(this.getDefaultKerf(machineType));
+    export function getDefaultKerfNm(machineType: MachineType): number {
+        return mmToNm(getDefaultKerf(machineType));
     }
 
     /**
      * Pobiera pełną tożsamość materiału (id, code, name, thickness, fullLabel)
      */
-    public static getMaterialInfo(part: { material?: string; thickness?: number }) {
+    export function getMaterialInfo(part: { material?: string; thickness?: number }) {
         return materialDatabase.getMaterialInfo(part.material, part.thickness);
     }
 
     /**
      * Mapuje surowe ID dekoru (np. W1100_ST9_18) na oficjalną nazwę handlową (np. "Biały Alpejski")
      */
-    public static resolveMaterialName(rawMaterial?: string, thickness?: number): string {
+    export function resolveMaterialName(rawMaterial?: string, thickness?: number): string {
         const info = materialDatabase.getMaterialInfo(rawMaterial, thickness);
         return info.name;
     }
@@ -79,10 +78,16 @@ export class NestingEngine {
      * Zwraca unikalny klucz grupy materiałowej (Dekor + Grubość fizyczna).
      * Ściśle separuje grubości płyt (np. 18mm i 10mm dla dekoru W1100 ST9 tworzą DWA OSOBNE arkusze rozkroju).
      */
-    public static getMaterialKey(part: { material?: string; thickness?: number }): string {
-        const info = this.getMaterialInfo(part);
+    export function getMaterialKey(part: { material?: string; thickness?: number }): string {
+        if (typeof part.thickness === 'number' && (part.thickness <= 0 || !Number.isFinite(part.thickness))) {
+            throw new Error(`[getMaterialKey] Formatka "${(part as any).name || (part as any).id || 'nieznana'}" posiada nieprawidłową grubość (thickness=${part.thickness}).`);
+        }
+        const info = getMaterialInfo(part);
         const decorIdentifier = info.code || info.name;
-        const thk = Math.round((part.thickness || info.thickness_mm || 18) * 10) / 10;
+        const thk = Math.round((part.thickness || info.thickness_mm) * 10) / 10;
+        if (!thk || thk <= 0) {
+            throw new Error(`[getMaterialKey] Formatka "${(part as any).name || (part as any).id || 'nieznana'}" nie posiada zdefiniowanej grubości.`);
+        }
         return `${decorIdentifier}__${thk}mm`;
     }
 
@@ -90,15 +95,15 @@ export class NestingEngine {
      * Zwraca czytelną, kompletną etykietę materiału: Nazwa + (Kod dekoru) + Grubość
      * np. "Biały Alpejski (W1100 ST9) 18mm", "Sosna Sealand (H110 ST9) 18mm"
      */
-    public static getMaterialLabel(part: { material?: string; thickness?: number }): string {
-        const info = this.getMaterialInfo(part);
+    export function getMaterialLabel(part: { material?: string; thickness?: number }): string {
+        const info = getMaterialInfo(part);
         return info.fullLabel;
     }
 
     /**
      * Główna funkcja uruchamiająca proces nestingu.
      */
-    public static async runNesting(
+    export async function runNesting(
         parts: NestingPart[],
         config: SheetConfig,
         options: Partial<NestingOptions> = {}
@@ -109,7 +114,7 @@ export class NestingEngine {
         const scope: NestingScope = options.scope || 'PROJECT';
         const targetContainerId = options.targetContainerId;
 
-        const defaultKerf = this.getDefaultKerf(machineType);
+        const defaultKerf = getDefaultKerf(machineType);
         const kerf = config.kerf !== undefined ? Math.max(0, config.kerf) : defaultKerf;
         const trimMargin = Math.max(0, config.trimMargin ?? (machineType === 'cnc' ? 15 : 10));
 
@@ -131,7 +136,7 @@ export class NestingEngine {
             ...options
         };
 
-        // 1. Filtrowanie wg zakresu (Scope: PROJECT vs CONTAINER vs SMARTBOX vs MULTI_SELECTION)
+        // 1. Filtrowanie wg zakresu (Scope: PROJECT vs CONTAINER vs BLOKI vs MULTI_SELECTION)
         let scopedParts = parts;
         const targetIds = opts.targetContainerIds && opts.targetContainerIds.length > 0
             ? opts.targetContainerIds
@@ -141,21 +146,21 @@ export class NestingEngine {
             const idSet = new Set(targetIds);
             scopedParts = parts.filter((p) => {
                 const matchContainer = p.containerId && idSet.has(p.containerId);
-                const matchSmartbox = p.smartboxId && idSet.has(p.smartboxId);
+                const matchBloki = p.blokId && idSet.has(p.blokId);
                 const matchName = p.furnitureName && idSet.has(p.furnitureName);
-                return matchContainer || matchSmartbox || matchName;
+                return matchContainer || matchBloki || matchName;
             });
         }
 
         // 2. Filtrowanie wg materiału
         const filteredParts = (opts.selectedMaterial && opts.selectedMaterial !== 'ALL')
-            ? scopedParts.filter((p) => this.getMaterialKey(p) === opts.selectedMaterial)
+            ? scopedParts.filter((p) => getMaterialKey(p) === opts.selectedMaterial)
             : scopedParts;
 
         // Podział formatek na grupy wg materiału i grubości
         const groupsMap = new Map<string, NestingPart[]>();
         filteredParts.forEach((p) => {
-            const key = this.getMaterialKey(p);
+            const key = getMaterialKey(p);
             if (!groupsMap.has(key)) {
                 groupsMap.set(key, []);
             }
@@ -181,9 +186,9 @@ export class NestingEngine {
         // Przetwarzanie każdej grupy materiałowej
         for (const [matKey, partsInGroup] of groupsMap.entries()) {
             const samplePart = partsInGroup[0];
-            const materialName = this.resolveMaterialName(samplePart.material);
-            const thickness = samplePart.thickness || 18;
-            const materialLabel = this.getMaterialLabel(samplePart);
+            const materialName = resolveMaterialName(samplePart.material);
+            const thickness = samplePart.thickness || getMaterialInfo(samplePart).thickness_mm;
+            const materialLabel = getMaterialLabel(samplePart);
 
             // Przygotowanie listy formatek (rozwinięcie ilości sztuk quantity) w nm
             const rectsToPack: InternalRect[] = [];
@@ -196,7 +201,11 @@ export class NestingEngine {
 
                 const partW_nm = p.width_nm || mmToNm(p.width);
                 const partH_nm = p.height_nm || mmToNm(p.height);
-                const thk_nm = p.thickness_nm || (p.thickness ? mmToNm(p.thickness) : mmToNm(18));
+                const resolvedThk = p.thickness ?? (p.thickness_nm ? nmToMm(p.thickness_nm) : undefined) ?? getMaterialInfo(p).thickness_mm;
+                if (!resolvedThk || resolvedThk <= 0) {
+                    throw new Error(`[nesting] Formatka "${p.name || p.id}" nie posiada poprawnej grubości materiału.`);
+                }
+                const thk_nm = p.thickness_nm || mmToNm(resolvedThk);
 
                 for (let i = 0; i < qty; i++) {
                     if (partW_nm <= 0 || partH_nm <= 0) continue;
@@ -211,9 +220,9 @@ export class NestingEngine {
                         originalName: p.name,
                         sourceNodeId: p.sourceNodeId,
                         containerId: p.containerId,
-                        smartboxId: p.smartboxId,
+                        blokId: p.blokId,
                         furnitureName: p.furnitureName,
-                        material: this.resolveMaterialName(p.material),
+                        material: resolveMaterialName(p.material),
                         thickness: p.thickness,
                         thickness_nm: thk_nm,
                         w_nm: w_with_kerf_nm,
@@ -269,7 +278,7 @@ export class NestingEngine {
             }
 
             // Uruchomienie algorytmu optymalizacji pakowania w nanometrach
-            const groupBoards = await this.optimizePacking(
+            const groupBoards = await optimizePacking(
                 validRects,
                 usableBoardW_nm,
                 usableBoardH_nm,
@@ -344,7 +353,7 @@ export class NestingEngine {
     /**
      * Optymalizuje pakowanie w nanometrach za pomocą iteracji i mutacji kolejności.
      */
-    private static async optimizePacking(
+    async function optimizePacking(
         rects: InternalRect[],
         usableBoardW_nm: number,
         usableBoardH_nm: number,
@@ -380,7 +389,7 @@ export class NestingEngine {
                 currentList.sort((a, b) => (b.w_nm + b.h_nm) - (a.w_nm + a.h_nm));
             } else {
                 // Heurystyka losowa (Monte Carlo / Genetic Shuffle)
-                this.shuffleArray(currentList);
+                shuffleArray(currentList);
                 currentList.forEach((r) => {
                     if (r.canRotate && Math.random() > 0.5) {
                         const tempW = r.w_nm;
@@ -393,7 +402,7 @@ export class NestingEngine {
                 });
             }
 
-            const boards = this.packRectangles(
+            const boards = packRectangles(
                 currentList,
                 usableBoardW_nm,
                 usableBoardH_nm,
@@ -427,7 +436,7 @@ export class NestingEngine {
     /**
      * Pakuje listę prostokątów w serię płyt operując w 100% na nanometrach.
      */
-    private static packRectangles(
+    function packRectangles(
         rectsList: InternalRect[],
         usableBoardW_nm: number,
         usableBoardH_nm: number,
@@ -475,7 +484,7 @@ export class NestingEngine {
                         name: rect.originalName,
                         sourceNodeId: rect.sourceNodeId,
                         containerId: rect.containerId,
-                        smartboxId: rect.smartboxId,
+                        blokId: rect.blokId,
                         furnitureName: rect.furnitureName,
                         material: rect.material,
                         thickness: rect.thickness,
@@ -532,10 +541,9 @@ export class NestingEngine {
         return boards;
     }
 
-    private static shuffleArray<T>(array: T[]): void {
+    function shuffleArray<T>(array: T[]): void {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [array[i], array[j]] = [array[j], array[i]];
         }
     }
-}

@@ -4,12 +4,39 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ContextManager } from '../A1_core/context-manager.js';
-import { isPanelModel } from '../A1_core/domain-data.js';
+import { isPanelModel } from '../A4_smartpanel/panel-model.js';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { updateLibraryOperationParams, isLibraryOperation } from '../o1_operacji/operacje-apply.js';
 import { edgeShortLabel } from '../o1_operacji/operacje-placement.js';
 import { AssociativeDimInputs } from '../A4_smartpanel/associative-dim-ui.js';
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
+
+/** Mapowanie kodów ścian na klucze tekstów (kody stabilne, display tłumaczony). */
+const FACE_KEY_BY_CODE: Record<string, string> = {
+    FACE_Z_MINUS: 'float.face_outer',
+    FRONT: 'float.face_outer',
+    OUTER: 'float.face_outer',
+    ZEWN: 'float.face_outer',
+    FACE_Z_PLUS: 'float.face_inner',
+    BACK: 'float.face_inner',
+    INNER: 'float.face_inner',
+    WEWN: 'float.face_inner',
+    FACE_X_MINUS: 'float.face_side_l',
+    LEFT: 'float.face_side_l',
+    FACE_X_PLUS: 'float.face_side_r',
+    RIGHT: 'float.face_side_r',
+    FACE_Y_MINUS: 'float.face_bottom',
+    BOTTOM: 'float.face_bottom',
+    FACE_Y_PLUS: 'float.face_top',
+    TOP: 'float.face_top',
+};
 
 export const CAD_OPEN_FLOATING_OPERATION = 'cad-open-floating-operation';
 export const CAD_OPEN_FLOATING_PANEL_EDIT = 'cad-open-floating-panel-edit';
@@ -38,24 +65,19 @@ const inputStyle: React.CSSProperties = {
 };
 
 function formatFaceName(rawFace?: string): string {
-    if (!rawFace) return 'Zewnętrzna';
-    const f = String(rawFace).toUpperCase();
-    if (f === 'FACE_Z_MINUS' || f === 'FRONT' || f === 'OUTER' || f === 'ZEWN') return 'Zewnętrzna';
-    if (f === 'FACE_Z_PLUS' || f === 'BACK' || f === 'INNER' || f === 'WEWN') return 'Wewnętrzna';
-    if (f === 'FACE_X_MINUS' || f === 'LEFT') return 'Bok L';
-    if (f === 'FACE_X_PLUS' || f === 'RIGHT') return 'Bok P';
-    if (f === 'FACE_Y_MINUS' || f === 'BOTTOM') return 'Dół';
-    if (f === 'FACE_Y_PLUS' || f === 'TOP') return 'Góra';
-    return rawFace;
+    if (!rawFace) return tx(srcTekst, 'float.face_outer', TX_NS);
+    const key = FACE_KEY_BY_CODE[String(rawFace).toUpperCase()];
+    return key ? tx(srcTekst, key, TX_NS) : rawFace;
 }
 
 export const FloatingOperationDialog: React.FC = () => {
+    useLocale();
     const [visible, setVisible] = useState(false);
     const [dialogMode, setDialogMode] = useState<'operation' | 'panel'>('operation');
     const [opData, setOpData] = useState<FloatingOperationData | null>(null);
     const [panelModel, setPanelModel] = useState<any | null>(null);
-    const [panelName, setPanelName] = useState<string>('Formatka');
-    const [opName, setOpName] = useState<string>('Przetłoczenie / Wycięcie');
+    const [panelName, setPanelName] = useState<string>(tx(srcTekst, 'float.panel_default', TX_NS));
+    const [opName, setOpName] = useState<string>(tx(srcTekst, 'float.default_op', TX_NS));
     const [isEdgeDims, setIsEdgeDims] = useState(false);
 
     // Parametry formatki (panel mode)
@@ -76,7 +98,7 @@ export const FloatingOperationDialog: React.FC = () => {
     const [uMm, setUMm] = useState<number>(100);
     const [vMm, setVMm] = useState<number>(80);
     const [uEdgeLabel, setUEdgeLabel] = useState<string>('L');
-    const [vEdgeLabel, setVEdgeLabel] = useState<string>('Dół');
+    const [vEdgeLabel, setVEdgeLabel] = useState<string>(tx(srcTekst, 'float.face_bottom', TX_NS));
 
     // Pozycja okna (domyślnie pod belką główną / widokową)
     const [pos, setPos] = useState<{ x: number; y: number }>(() => {
@@ -108,7 +130,7 @@ export const FloatingOperationDialog: React.FC = () => {
         }
 
         if (feat) {
-            setOpName(feat.name || 'Przetłoczenie / Wycięcie');
+            setOpName(feat.name || tx(srcTekst, 'float.default_op', TX_NS));
             const p = feat.params || {};
             const isEdge = p.placement === 'edge_dims';
             setIsEdgeDims(isEdge);
@@ -146,11 +168,19 @@ export const FloatingOperationDialog: React.FC = () => {
 
     useEffect(() => {
         const handleOpenOp = (e: any) => {
-            const d = e.detail as FloatingOperationData;
+            const d = e.detail as (FloatingOperationData & { screenX?: number; screenY?: number });
             if (d && d.panelId) {
                 setDialogMode('operation');
                 setOpData(d);
                 loadFeatureData(d);
+                if (typeof d.screenX === 'number' && typeof d.screenY === 'number') {
+                    const maxX = typeof window !== 'undefined' ? Math.max(100, window.innerWidth - 300) : 600;
+                    const maxY = typeof window !== 'undefined' ? Math.max(100, window.innerHeight - 320) : 600;
+                    setPos({
+                        x: Math.max(20, Math.min(maxX, d.screenX + 24)),
+                        y: Math.max(60, Math.min(maxY, d.screenY - 40)),
+                    });
+                }
                 setVisible(true);
             }
         };
@@ -198,10 +228,10 @@ export const FloatingOperationDialog: React.FC = () => {
         const doc = ContextManager.instance.document;
         const unsub = doc?.onDocumentChanged?.(syncDims);
         const handlePanelChanged = () => syncDims();
-        window.addEventListener('smartbox-panel-changed', handlePanelChanged);
+        window.addEventListener('bloki-panel-changed', handlePanelChanged);
         return () => {
             if (typeof unsub === 'function') unsub();
-            window.removeEventListener('smartbox-panel-changed', handlePanelChanged);
+            window.removeEventListener('bloki-panel-changed', handlePanelChanged);
         };
     }, [visible, dialogMode, panelModel]);
 
@@ -224,8 +254,8 @@ export const FloatingOperationDialog: React.FC = () => {
         panelModel.setDimensions(mmToNm(wMm), mmToNm(hMm), mmToNm(tMm));
         const doc = ContextManager.instance.document;
         doc?.emitChange?.('dimensions');
-        window.document.dispatchEvent(new CustomEvent('smartbox-panel-changed', { detail: { panelModel } }));
-        window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+        window.document.dispatchEvent(new CustomEvent('bloki-panel-changed', { detail: { panelModel } }));
+        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
         (window as any).__rebuildGeometry?.();
     };
 
@@ -289,9 +319,8 @@ export const FloatingOperationDialog: React.FC = () => {
                 }}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
-                    <span style={{ fontSize: '13px', color: '#60a5fa' }}>{dialogMode === 'panel' ? '🪵' : '⚙️'}</span>
                     <strong style={{ fontSize: '12px', color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {dialogMode === 'panel' ? `Edycja formatki: ${panelName}` : opName}
+                        {dialogMode === 'panel' ? tx(srcTekst, 'float.edit_panel_title', TX_NS, { name: panelName }) : opName}
                     </strong>
                 </div>
                 <button
@@ -307,7 +336,7 @@ export const FloatingOperationDialog: React.FC = () => {
                         padding: '0 4px',
                         borderRadius: '3px',
                     }}
-                    title="Zamknij (Esc)"
+                    title={tx(srcTekst, 'float.close', TX_NS)}
                 >
                     ✕
                 </button>
@@ -316,9 +345,9 @@ export const FloatingOperationDialog: React.FC = () => {
             {/* Context Subtitle */}
             <div style={{ padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '11px', color: '#94a3b8' }}>
                 {dialogMode === 'panel' ? (
-                    <>Formatka: <span style={{ color: '#60a5fa' }}>{panelName}</span> · Wymiary i asocjacje</>
+                    <>Formatka: <span style={{ color: '#60a5fa' }}>{panelName}</span> · {tx(srcTekst, 'float.subtitle_dims', TX_NS)}</>
                 ) : (
-                    <>Formatka: <span style={{ color: '#60a5fa' }}>{panelName}</span> · Strona: <span style={{ color: '#38bdf8' }}>{formatFaceName(opData?.face)}</span></>
+                    <>Formatka: <span style={{ color: '#60a5fa' }}>{panelName}</span> · {tx(srcTekst, 'float.subtitle_side', TX_NS)} <span style={{ color: '#38bdf8' }}>{formatFaceName(opData?.face)}</span></>
                 )}
             </div>
 
@@ -327,7 +356,7 @@ export const FloatingOperationDialog: React.FC = () => {
                 {dialogMode === 'panel' ? (
                     <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Szerokość (W)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_w', TX_NS)}</span>
                             <SmartNumericInput
                                 value={panelWidthMm}
                                 min={10}
@@ -343,7 +372,7 @@ export const FloatingOperationDialog: React.FC = () => {
                         )}
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                            <span style={{ color: '#cbd5e1' }}>Wysokość (H)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_h', TX_NS)}</span>
                             <SmartNumericInput
                                 value={panelHeightMm}
                                 min={10}
@@ -359,7 +388,7 @@ export const FloatingOperationDialog: React.FC = () => {
                         )}
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                            <span style={{ color: '#cbd5e1' }}>Grubość (T)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_t', TX_NS)}</span>
                             <SmartNumericInput
                                 value={panelThicknessMm}
                                 min={1}
@@ -374,7 +403,7 @@ export const FloatingOperationDialog: React.FC = () => {
                 ) : isEdgeDims ? (
                     <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Szerokość (W)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_w', TX_NS)}</span>
                             <SmartNumericInput
                                 value={widthMm}
                                 min={1}
@@ -389,7 +418,7 @@ export const FloatingOperationDialog: React.FC = () => {
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Wysokość (H)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_h', TX_NS)}</span>
                             <SmartNumericInput
                                 value={heightMm}
                                 min={1}
@@ -404,7 +433,7 @@ export const FloatingOperationDialog: React.FC = () => {
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Od {uEdgeLabel}</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.from_edge', TX_NS, { edge: uEdgeLabel })}</span>
                             <SmartNumericInput
                                 value={uMm}
                                 min={0}
@@ -419,7 +448,7 @@ export const FloatingOperationDialog: React.FC = () => {
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Od {vEdgeLabel}</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.from_edge', TX_NS, { edge: vEdgeLabel })}</span>
                             <SmartNumericInput
                                 value={vMm}
                                 min={0}
@@ -437,7 +466,7 @@ export const FloatingOperationDialog: React.FC = () => {
                 ) : (
                     <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Margines lewy (L)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.margin_left', TX_NS)}</span>
                             <SmartNumericInput
                                 value={insetLMm}
                                 min={0}
@@ -452,7 +481,7 @@ export const FloatingOperationDialog: React.FC = () => {
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Margines prawy (P)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.margin_right', TX_NS)}</span>
                             <SmartNumericInput
                                 value={insetRMm}
                                 min={0}
@@ -467,7 +496,7 @@ export const FloatingOperationDialog: React.FC = () => {
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Margines góra (G)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.margin_top', TX_NS)}</span>
                             <SmartNumericInput
                                 value={insetTMm}
                                 min={0}
@@ -482,7 +511,7 @@ export const FloatingOperationDialog: React.FC = () => {
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Margines dół (D)</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.margin_bottom', TX_NS)}</span>
                             <SmartNumericInput
                                 value={insetBMm}
                                 min={0}
@@ -497,7 +526,7 @@ export const FloatingOperationDialog: React.FC = () => {
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>Głębokość</span>
+                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.depth', TX_NS)}</span>
                             <SmartNumericInput
                                 value={depthMm}
                                 min={0.1}
@@ -520,12 +549,12 @@ export const FloatingOperationDialog: React.FC = () => {
                     <>
                         {!isEdgeDims && (insetLMm + insetRMm >= panelWidthMm || insetTMm + insetBMm >= panelHeightMm) && (
                             <div style={{ padding: '6px 8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '4px', color: '#fca5a5', fontSize: '11px' }}>
-                                ⚠️ Marginesy przekraczają wymiar formatki ({panelWidthMm}×{panelHeightMm} mm)
+                                {tx(srcTekst, 'float.margins_overflow', TX_NS, { w: panelWidthMm, h: panelHeightMm })}
                             </div>
                         )}
                         {isEdgeDims && (uMm + widthMm > panelWidthMm || vMm + heightMm > panelHeightMm) && (
                             <div style={{ padding: '6px 8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '4px', color: '#fca5a5', fontSize: '11px' }}>
-                                ⚠️ Wycięcie wykracza poza obrys formatki ({panelWidthMm}×{panelHeightMm} mm)
+                                {tx(srcTekst, 'float.cut_overflow', TX_NS, { w: panelWidthMm, h: panelHeightMm })}
                             </div>
                         )}
                     </>

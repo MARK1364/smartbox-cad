@@ -1,8 +1,7 @@
 import { Intent } from "../interaction-types";
 import { BaseState } from "./base-state";
 import { ContextManager } from "../../context-manager";
-import { deleteActiveDimension } from "../../../A8_pmi/pmi-commands.js";
-import { getActiveConstraintPicker, stopConstraintPick } from "../../../S2_solver/constraint-picker.js";
+import { getSelectionToolHooks } from "../../selection-tool-hooks-port.js";
 
 export class SelectionTool extends BaseState {
     
@@ -32,10 +31,7 @@ export class SelectionTool extends BaseState {
     }
 
     public onCancel(intent: Intent): void {
-        const constraintPicker = getActiveConstraintPicker();
-        if (constraintPicker) {
-            constraintPicker.onCancel?.();
-            stopConstraintPick();
+        if (getSelectionToolHooks().cancelActivePick?.()) {
             return;
         }
         console.log("[SelectionTool] Odznaczono wszystko (CANCEL).");
@@ -50,7 +46,7 @@ export class SelectionTool extends BaseState {
     }
 
     public onDelete(_intent: Intent): void {
-        deleteActiveDimension();
+        getSelectionToolHooks().deleteActiveAnnotation?.();
     }
 
     private clearSketchMode(): void {

@@ -1,0 +1,212 @@
+{
+  "panel.title": {
+    "pl": "SmartFrame",
+    "en": "SmartFrame",
+    "de": "SmartFrame"
+  },
+  "panel.subtitle": {
+    "pl": "Korpus mebla",
+    "en": "Cabinet body",
+    "de": "Korpus"
+  },
+  "cards.add_title": {
+    "pl": "+DODAJ NOWY KORPUS",
+    "en": "+ADD NEW CABINET",
+    "de": "+NEUER KORPUS"
+  },
+  "cards.hint_status": {
+    "pl": "Karty służą do wstawiania nowych korpusów. Przeciągnij wybraną kartę na scenę 3D.",
+    "en": "Cards insert new cabinets. Drag the selected card onto the 3D scene.",
+    "de": "Karten fügen neue Korpusse ein. Ziehen Sie die Karte auf die 3D-Szene."
+  },
+  "cards.drag_hint": {
+    "pl": "Chwyć i przeciągnij na scenę 3D",
+    "en": "Grab and drag onto the 3D scene",
+    "de": "Greifen und auf die 3D-Szene ziehen"
+  },
+  "cards.zone_1.title": {
+    "pl": "Przeciągnij na scenę 3D lub kliknij, aby wstawić korpus 1-strefowy",
+    "en": "Drag onto the 3D scene or click to insert a 1-zone cabinet",
+    "de": "Auf die 3D-Szene ziehen oder klicken, um einen 1-zonigen Korpus einzufügen"
+  },
+  "cards.zone_1.label": {
+    "pl": "1 Strefa",
+    "en": "1 Zone",
+    "de": "1 Zone"
+  },
+  "cards.zone_2.title": {
+    "pl": "Przeciągnij na scenę 3D lub kliknij, aby wstawić korpus 2-strefowy",
+    "en": "Drag onto the 3D scene or click to insert a 2-zone cabinet",
+    "de": "Auf die 3D-Szene ziehen oder klicken, um einen 2-zonigen Korpus einzufügen"
+  },
+  "cards.zone_2.label": {
+    "pl": "2 Strefy",
+    "en": "2 Zones",
+    "de": "2 Zonen"
+  },
+  "cards.zone_3.title": {
+    "pl": "Przeciągnij na scenę 3D lub kliknij, aby wstawić korpus 3-strefowy",
+    "en": "Drag onto the 3D scene or click to insert a 3-zone cabinet",
+    "de": "Auf die 3D-Szene ziehen oder klicken, um einen 3-zonigen Korpus einzufügen"
+  },
+  "cards.zone_3.label": {
+    "pl": "3 Strefy",
+    "en": "3 Zones",
+    "de": "3 Zonen"
+  },
+  "cards.rogowy1.title": {
+    "pl": "Przeciągnij na scenę 3D — korpus narożny z panelem zaślepiającym",
+    "en": "Drag onto the 3D scene — corner cabinet with filler panel",
+    "de": "Auf die 3D-Szene ziehen — Eckkorpus mit Blende"
+  },
+  "cards.rogowy1.label": {
+    "pl": "Rogowy 1",
+    "en": "Corner 1",
+    "de": "Ecke 1"
+  },
+  "cards.rogowy90.title": {
+    "pl": "Przeciągnij na scenę 3D — korpus narożny kątownik 90°",
+    "en": "Drag onto the 3D scene — 90° corner cabinet",
+    "de": "Auf die 3D-Szene ziehen — 90°-Eckkorpus"
+  },
+  "cards.rogowy90.label": {
+    "pl": "Rogowy 90",
+    "en": "Corner 90",
+    "de": "Ecke 90"
+  },
+  "cards.skosny_dach.title": {
+    "pl": "Przeciągnij na scenę 3D — korpus pod skośny dach (przód niski, tył wysoki)",
+    "en": "Drag onto the 3D scene — cabinet for sloped roof (low front, high back)",
+    "de": "Auf die 3D-Szene ziehen — Korpus unter Schrägdach (vorne niedrig, hinten hoch)"
+  },
+  "cards.skosny_dach.label": {
+    "pl": "Skośny dach",
+    "en": "Sloped roof",
+    "de": "Schrägdach"
+  },
+  "skosny_dach.title": {
+    "pl": "Skos do tyłu (pod dach)",
+    "en": "Slope to back (under roof)",
+    "de": "Schräge nach hinten (unter Dach)"
+  },
+  "skosny_dach.height_front": {
+    "pl": "Wys. przód",
+    "en": "Front height",
+    "de": "Höhe vorne"
+  },
+  "skosny_dach.height_back": {
+    "pl": "Wys. tył",
+    "en": "Back height",
+    "de": "Höhe hinten"
+  },
+  "cards.skosny_lr_uc.title": {
+    "pl": "Przeciągnij na scenę 3D — skośny L/P z uciosem (wieniec w świetle)",
+    "en": "Drag onto the 3D scene — slanted L/R with miter (top in clear width)",
+    "de": "Auf die 3D-Szene ziehen — schräg L/R mit Gehrung (Deckplatte im Lichtmaß)"
+  },
+  "cards.skosny_lr_uc.label": {
+    "pl": "Skośny L/P ucięty",
+    "en": "Slanted L/R miter",
+    "de": "Schräg L/R Gehrung"
+  },
+  "skosny_lr_uc.title": {
+    "pl": "Skos w poprzek — ucięcie na stykach (wieniec w świetle)",
+    "en": "Sideways slant — mitered joints (top in clear width)",
+    "de": "Seitenschräge — Gehrungen (Deckplatte im Lichtmaß)"
+  },
+  "skosny_lr.height_left": {
+    "pl": "Wys. lewa",
+    "en": "Left height",
+    "de": "Höhe links"
+  },
+  "skosny_lr.height_right": {
+    "pl": "Wys. prawa",
+    "en": "Right height",
+    "de": "Höhe rechts"
+  },
+  "params.title": {
+    "pl": "PARAMETRY KORPUSU",
+    "en": "CABINET PARAMETERS",
+    "de": "KORPUSPARAMETER"
+  },
+  "params.title_named": {
+    "pl": "PARAMETRY KORPUSU: {name}",
+    "en": "CABINET PARAMETERS: {name}",
+    "de": "KORPUSPARAMETER: {name}"
+  },
+  "dims.width": {
+    "pl": "Szerokość",
+    "en": "Width",
+    "de": "Breite"
+  },
+  "dims.height": {
+    "pl": "Wysokość",
+    "en": "Height",
+    "de": "Höhe"
+  },
+  "dims.depth": {
+    "pl": "Głębokość",
+    "en": "Depth",
+    "de": "Tiefe"
+  },
+  "blind.title": {
+    "pl": "Panel zaślepiający",
+    "en": "Filler panel",
+    "de": "Blende"
+  },
+  "blind.width": {
+    "pl": "Szerokość panelu",
+    "en": "Panel width",
+    "de": "Blendenbreite"
+  },
+  "blind.side": {
+    "pl": "Strona",
+    "en": "Side",
+    "de": "Seite"
+  },
+  "blind.side_LEFT": {
+    "pl": "Lewa",
+    "en": "Left",
+    "de": "Links"
+  },
+  "blind.side_RIGHT": {
+    "pl": "Prawa",
+    "en": "Right",
+    "de": "Rechts"
+  },
+  "corner90.title": {
+    "pl": "Kątownik 90°",
+    "en": "90° corner",
+    "de": "Eckwinkel 90°"
+  },
+  "corner90.side_left": {
+    "pl": "Bok lewy",
+    "en": "Left side",
+    "de": "Linke Seite"
+  },
+  "corner90.side_right": {
+    "pl": "Bok prawy",
+    "en": "Right side",
+    "de": "Rechte Seite"
+  },
+  "zones.title": {
+    "pl": "Wysokości Stref",
+    "en": "Zone heights",
+    "de": "Zonenhöhen"
+  },
+  "zones.bottom": {
+    "pl": "Wysokość dołu",
+    "en": "Bottom height",
+    "de": "Untere Höhe"
+  },
+  "zones.middle": {
+    "pl": "Wysokość środka",
+    "en": "Middle height",
+    "de": "Mittlere Höhe"
+  },
+  "zones.top": {
+    "pl": "Wysokość góry",
+    "en": "Top height",
+    "de": "Obere Höhe"
+  }
+}

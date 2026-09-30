@@ -72,7 +72,7 @@ D) "throttleHoverMs"
 --------------------------------------------------------------------------------
 Typ: Liczba całkowita w milisekundach (np. 20, 35, 50, 100)
 Gdzie działa: FacePicker (podświetlanie ścian, krawędzi, narożników) oraz
-              SmartBoxBayController (wykrywanie wnęk meblowych na żywo)
+              BlokiBayController (wykrywanie wnęk meblowych na żywo)
 Opis:
   Minimalny odstęp czasowy między testami kolizji myszy z geometrią (raycasting):
   - 20 ms  = Próbkowanie do 50 razy na sekundę. Natychmiastowa reakcja podświetlenia

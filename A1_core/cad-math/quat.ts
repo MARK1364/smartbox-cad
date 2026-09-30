@@ -2,7 +2,7 @@
  * SmartPanel Web — CAD Math: Quat (Quaternion)
  *
  * Kwaternion jednostkowy do reprezentacji obrotów w domenie CAD.
- * Zero zależności od Babylon.js, OCCT, DOM.
+ * Zero zależności od Babylon.js i DOM.
  *
  * Konwencja: q = (x, y, z, w) gdzie w to część skalarna.
  * Kolejność mnożenia: this × other (right-to-left, jak OpenGL / glMatrix).

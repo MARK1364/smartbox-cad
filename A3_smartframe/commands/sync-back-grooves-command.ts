@@ -7,7 +7,7 @@ import { Command } from '../../A1_core/commands/command.js';
 import { buildBackGrooves, PanelState } from '../back-groove-builder.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
-import { defaultBackOverlapMm, readBackEdgeOffset } from '../back-overlap.js';
+import { defaultBackEdgeOverlapMm, readBackEdgeOffset } from '../back-overlap.js';
 
 export class SyncBackGroovesCommand implements Command {
     readonly id: string;
@@ -30,7 +30,9 @@ export class SyncBackGroovesCommand implements Command {
         if (!cntNode || cntNode.children.length === 0) return;
 
         const offsetsMm = ((cntNode.domainData as any)?.generatorParams?.offsets || {}) as Record<string, number>;
-        const defaultOverlapMm = defaultBackOverlapMm();
+        const cabinetType = String((cntNode.domainData as any)?.generatorParams?.type || '');
+        // Skośny v1: brak wpustów (doczołowo) — OBB-builder zakłada prostopadłe pudła.
+        if (cabinetType.toLowerCase().includes('skosny')) return;
 
         const panelStates: PanelState[] = [];
         for (const childNode of cntNode.children) {
@@ -44,12 +46,18 @@ export class SyncBackGroovesCommand implements Command {
                     zonePrefix: child.zonePrefix
                 };
                 if (child.role === 'BACK_PANEL') {
-                    const panelName = child.name || 'Plecy';
+                    // Strict: klucz offsetu z key (rename-proof). Display name użytkownik może zmienić
+                    // w drzewie (rename-part) — stary `${name}_*` sierociłby zapisane offsety.
+                    const panelKey = child.key || child.role || '';
+                    const edge = (suf: '+X' | '-X' | '+Y' | '-Y') => {
+                        const def = defaultBackEdgeOverlapMm(`${panelKey}_${suf}`, cabinetType);
+                        return mmToNm(readBackEdgeOffset(offsetsMm, panelKey, suf, def, child.zonePrefix));
+                    };
                     state.backMarginsNm = {
-                        left: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '-X', defaultOverlapMm, child.zonePrefix)),
-                        right: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '+X', defaultOverlapMm, child.zonePrefix)),
-                        bottom: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '-Y', defaultOverlapMm, child.zonePrefix)),
-                        top: mmToNm(readBackEdgeOffset(offsetsMm, panelName, '+Y', defaultOverlapMm, child.zonePrefix))
+                        left: edge('-X'),
+                        right: edge('+X'),
+                        bottom: edge('-Y'),
+                        top: edge('+Y')
                     };
                 }
                 panelStates.push(state);

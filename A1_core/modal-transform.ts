@@ -14,8 +14,7 @@ import { renderToCAD, lockCadDelta } from './cad-math/coord-system.js';
 import { Vec3 } from './cad-math/vec3.js';
 import { nmToMm, mmToNm } from './cad-math/units.js';
 import { Quat } from './cad-math/quat.js';
-import { ConstraintStore } from '../S2_solver/constraint-store.js';
-import { ConstraintDragGroup } from '../S2_solver/constraint-drag-group.js';
+import { getConstraintDragPort } from './constraint-drag-port.js';
 
 declare const BABYLON: any;
 
@@ -164,6 +163,7 @@ export class ModalTransformManager {
     }
 
     public startTransform(mode: ModalTransformMode): void {
+        ContextManager.instance.deactivatePmiToolsIfActive();
         const doc = ContextManager.instance.document;
         const viewport = ContextManager.instance.viewport;
         if (!doc || !viewport || !viewport.scene) return;
@@ -221,7 +221,7 @@ export class ModalTransformManager {
         }
 
         (ContextManager.instance as any).solverController?.beginInteractiveTransform();
-        ConstraintDragGroup.instance.begin(doc, actualEntity.id, ConstraintStore.instance.constraints);
+        getConstraintDragPort()?.begin(doc, actualEntity.id);
 
         this.startPointerX = viewport.scene.pointerX;
         this.startPointerY = viewport.scene.pointerY;
@@ -281,7 +281,7 @@ export class ModalTransformManager {
                         this.initialTranslationNm.z + mmToNm(moveDelta.z)
                     );
                     cadNode.setLocalTransform(newPosNm, this.initialRotationQuat, this.initialScaleVec);
-                    ConstraintDragGroup.instance.propagateTransform(
+                    getConstraintDragPort()?.propagateTransform(
                         ContextManager.instance.document!,
                         this.targetEntity.id,
                     );
@@ -306,7 +306,7 @@ export class ModalTransformManager {
                     const newRot = this.initialRotationQuat.multiply(deltaQuat);
                     
                     cadNode.setLocalTransform(this.initialTranslationNm, newRot, this.initialScaleVec);
-                    ConstraintDragGroup.instance.propagateTransform(
+                    getConstraintDragPort()?.propagateTransform(
                         ContextManager.instance.document!,
                         this.targetEntity.id,
                     );
@@ -331,7 +331,7 @@ export class ModalTransformManager {
         this.activeMode = 'none';
         this.lockedAxis = 'none';
 
-        ConstraintDragGroup.instance.end();
+        getConstraintDragPort()?.end();
         (ContextManager.instance as any).solverController?.endInteractiveTransform();
 
         const api = ContextManager.instance.appAPI;
@@ -357,11 +357,11 @@ export class ModalTransformManager {
         if (this.targetEntity) {
             const doc = ContextManager.instance.document;
             if (doc) {
-                ConstraintDragGroup.instance.restoreInitial(doc);
+                getConstraintDragPort()?.restoreInitial(doc);
             }
         }
 
-        ConstraintDragGroup.instance.end();
+        getConstraintDragPort()?.end();
         (ContextManager.instance as any).solverController?.endInteractiveTransform();
 
         this.activeMode = 'none';
@@ -650,7 +650,7 @@ export class ModalTransformManager {
         const { translation, scale } = cadNode.localMatrix.decompose();
 
         cadNode.setLocalTransform(translation, newRot, scale);
-        ConstraintDragGroup.instance.propagateTransform(ContextManager.instance.document!, this.targetEntity.id);
+        getConstraintDragPort()?.propagateTransform(ContextManager.instance.document!, this.targetEntity.id);
         ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(this.targetEntity.id);
 
         if (ContextManager.instance.gizmoController) {
@@ -672,7 +672,7 @@ export class ModalTransformManager {
         const { rotation, scale } = cadNode.localMatrix.decompose();
 
         cadNode.setLocalTransform(newPosNm, rotation, scale);
-        ConstraintDragGroup.instance.propagateTransform(ContextManager.instance.document!, this.targetEntity.id);
+        getConstraintDragPort()?.propagateTransform(ContextManager.instance.document!, this.targetEntity.id);
         ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(this.targetEntity.id);
 
         if (ContextManager.instance.gizmoController) {

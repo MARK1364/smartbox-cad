@@ -39,6 +39,9 @@ export function anchorShortLabel(anchor: ConstraintAnchor | null, document: any)
     if (!anchor) {
         return '';
     }
+    if (anchor.kind === 'DATUM' || String(anchor.nodeId || '').startsWith('__DATUM__:')) {
+        return `Datum ${anchor.faceName || 'plane'}`;
+    }
     const node = geomNodeForAnchor(anchor, document);
     const name = node?.name ?? anchor.nodeId.slice(0, 8);
     return `${name}[${elementIndexLabel(anchor, document)}]`;

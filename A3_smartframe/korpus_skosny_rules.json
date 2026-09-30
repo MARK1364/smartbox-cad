@@ -1,0 +1,241 @@
+{
+  "metadata": {
+    "module_type": "SMARTFRAME_KORPUS_SKOSNY",
+    "version": "0.1.0",
+    "description": "Prototyp: korpus 1-strefowy ze skosem w głąb (przód niski, tył wysoki) — meble pod schody. Boki-trapezoidy przez outline2d (osobne obrysy L/P przez lustro osi u), wieniec górny pochylony, plecy pełne. V1 bez wpustów (doczołowo)."
+  },
+  "parameters": {
+    "defaults": {
+      "width": 1.2,
+      "height": 2.2,
+      "depth": 0.7,
+      "bottom_height": 2.2,
+      "middle_height": 0,
+      "height_front": 1.0,
+      "height_back": 2.2,
+      "height_left": 1.0,
+      "height_right": 2.2
+    },
+    "validation": {
+      "min_dimension": 0.1,
+      "max_dimension": 5,
+      "min_slope_rise": 0.05
+    },
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "LEFT_SIDE_PANEL": {
+          "edge_banding": {
+            "+X": { "active": true, "type_id": "0.008x0.022" },
+            "-X": { "active": false, "type_id": "none" },
+            "+Y": { "active": true, "type_id": "0.008x0.022" },
+            "-Y": { "active": true, "type_id": "0.008x0.022" }
+          },
+          "wcs_origin_corner": { "X": "-", "Y": "-", "Z": "+" },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" },
+          "wcs_axis_rotation": { "X": 0, "Y": 0, "Z": 0 }
+        },
+        "RIGHT_SIDE_PANEL": {
+          "edge_banding": {
+            "+X": { "active": false, "type_id": "none" },
+            "-X": { "active": true, "type_id": "0.008x0.022" },
+            "+Y": { "active": true, "type_id": "0.008x0.022" },
+            "-Y": { "active": true, "type_id": "0.008x0.022" }
+          },
+          "wcs_origin_corner": { "X": "+", "Y": "-", "Z": "+" },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" },
+          "wcs_axis_rotation": { "X": 0, "Y": 0, "Z": 0 }
+        },
+        "TOP_PANEL": {
+          "edge_banding": {
+            "+X": { "active": false, "type_id": "none" },
+            "-X": { "active": false, "type_id": "none" },
+            "+Y": { "active": false, "type_id": "none" },
+            "-Y": { "active": true, "type_id": "0.008x0.022" }
+          },
+          "wcs_origin_corner": { "X": "-", "Y": "-", "Z": "-" },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" },
+          "wcs_axis_rotation": { "X": 0, "Y": 0, "Z": 0 }
+        },
+        "BOTTOM_PANEL": {
+          "edge_banding": {
+            "+X": { "active": false, "type_id": "none" },
+            "-X": { "active": false, "type_id": "none" },
+            "+Y": { "active": false, "type_id": "none" },
+            "-Y": { "active": true, "type_id": "0.008x0.022" }
+          },
+          "wcs_origin_corner": { "X": "-", "Y": "-", "Z": "+" },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" },
+          "wcs_axis_rotation": { "X": 0, "Y": 0, "Z": 0 }
+        },
+        "BACK_PANEL": {
+          "edge_banding": {
+            "+X": { "active": false, "type_id": "none" },
+            "-X": { "active": false, "type_id": "none" },
+            "+Y": { "active": false, "type_id": "none" },
+            "-Y": { "active": false, "type_id": "none" }
+          },
+          "wcs_origin_corner": { "X": "-", "Y": "-", "Z": "+" },
+          "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" },
+          "wcs_axis_rotation": { "X": 0, "Y": 0, "Z": 0 }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "KorpusSkosny_Global",
+      "type": "Assembly",
+      "subtype": "Empty",
+      "object": "Arrows",
+      "subcomponents": {
+        "SEKCJA_B": {
+          "name": "Sekcja_Dolna",
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "role": "ZONE",
+          "zone": {
+            "stack_axis": "Z",
+            "size_mode": "FIXED",
+            "size": 2.2,
+            "prefix": "B_"
+          },
+          "subcomponents": {
+            "B_BOK_L": {
+              "name": "Dol_Bok_L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "LEFT_SIDE_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_bloki_child": true
+              },
+              "lcs": {
+                "mapping": { "X": "y", "Y": "x", "Z": "z" },
+                "rotation": [0, 0, -90],
+                "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+              }
+            },
+            "B_BOK_P": {
+              "name": "Dol_Bok_P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "RIGHT_SIDE_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_bloki_child": true
+              },
+              "lcs": {
+                "mapping": { "X": "y", "Y": "x", "Z": "z" },
+                "rotation": [0, 0, 90],
+                "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+              }
+            },
+            "B_WIENIEC_D": {
+              "name": "Dol_Wieniec_D",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOTTOM_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_bloki_child": true
+              },
+              "lcs": {
+                "mapping": { "X": "x", "Y": "y", "Z": "z" },
+                "rotation": [90, 180, 0],
+                "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+              }
+            },
+            "B_WIENIEC_G": {
+              "name": "Dol_Wieniec_G",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "TOP_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_bloki_child": true
+              },
+              "lcs": {
+                "mapping": { "X": "x", "Y": "y", "Z": "z" },
+                "rotation": [-90, 0, 0],
+                "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+              }
+            },
+            "B_PLECY": {
+              "name": "Dol_Plecy",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BACK_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_bloki_child": true
+              },
+              "lcs": {
+                "mapping": { "X": "x", "Y": "z", "Z": "y" },
+                "rotation": [180, 0, 0],
+                "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "cabinet_construction_rules": {
+    "defaults": {
+      "back_inset": 0.003,
+      "back_groove_depth": 0,
+      "plecy_margin_defaults": {
+        "mode": "fixed",
+        "fixed": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        }
+      }
+    }
+  },
+  "side_references": {
+    "B_side.X_MIN_INNER": {
+      "kind": "plane",
+      "provenance": { "source_type": "component", "part_key": "B_BOK_L", "surface": "INNER" }
+    },
+    "B_side.X_MAX_INNER": {
+      "kind": "plane",
+      "provenance": { "source_type": "component", "part_key": "B_BOK_P", "surface": "INNER" }
+    },
+    "B_side.Y_MIN_INNER": {
+      "kind": "plane",
+      "provenance": { "source_type": "symbolic" }
+    },
+    "B_side.Y_MAX_INNER": {
+      "kind": "plane",
+      "provenance": { "source_type": "component", "part_key": "B_PLECY", "surface": "INNER" }
+    },
+    "B_side.Z_MIN_INNER": {
+      "kind": "plane",
+      "provenance": { "source_type": "component", "part_key": "B_WIENIEC_D", "surface": "INNER" }
+    },
+    "B_side.Z_MAX_INNER": {
+      "kind": "plane",
+      "provenance": { "source_type": "component", "part_key": "B_WIENIEC_G", "surface": "INNER" }
+    }
+  }
+}

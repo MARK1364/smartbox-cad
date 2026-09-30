@@ -14,6 +14,7 @@ export interface SmartNumericInputProps {
     readOnly?: boolean;
     debounceMs?: number;
     unit?: string;
+    id?: string;
 }
 
 /**
@@ -39,7 +40,8 @@ export function SmartNumericInput({
     disabled = false,
     readOnly = false,
     debounceMs = 120,
-    unit
+    unit,
+    id
 }: SmartNumericInputProps) {
     const effectiveStep = step !== undefined ? step : (decimals !== undefined && decimals === 0 ? 1 : 0.01);
 
@@ -127,6 +129,7 @@ export function SmartNumericInput({
 
     const inputElement = (
         <input
+            id={id}
             type="number"
             value={localVal}
             step={effectiveStep}

@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "smartbox://A2_smartbox/smart_panel.schema.json",
-  "title": "SmartBox Smart Panel Core Library Schema",
-  "description": "Schemat dla A2_smartbox/smart_panel_V1.json (baza materials_database).",
+  "$id": "bloki://A2_bloki/smart_panel.schema.json",
+  "title": "Bloki Smart Panel Core Library Schema",
+  "description": "Schemat dla A2_bloki/smart_panel_V1.json (baza materials_database).",
   "type": "object",
   "required": [
     "metadata",

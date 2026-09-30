@@ -23,10 +23,17 @@ import { DrawingSheet } from './drawing-sheet';
 import { ContextManager } from '../A1_core/context-manager';
 import { PMIStore } from '../A8_pmi/pmi-data';
 import { resolveAnchorWorld } from '../A8_pmi/pmi-id-bridge';
+import { TOP_BETA, BOTTOM_BETA } from '../S3_scena/named-camera-view.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import exportTekstRaw from './export_tekst.json';
+
+const exportTekst = exportTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'export';
 
 declare const BABYLON: any;
 
-const SAVED_VIEWS_STORAGE_KEY = 'smartbox_cad_manual_sheets_v3';
+const SAVED_VIEWS_STORAGE_KEY = 'bloki_cad_manual_sheets_v3';
 
 export interface SheetScreenLayout {
     sheetPixelX: number;
@@ -63,7 +70,7 @@ export class ExportEngine {
     public titleBlock: TitleBlockInfo = {
         projectName: 'Projekt Mebla CAD',
         furnitureName: 'Szafa Korpusowa',
-        author: 'SmartBox CAD',
+        author: 'Bloki CAD',
         date: new Date().toISOString().split('T')[0],
         scale: '1:10',
         sheetNumber: '1/1',
@@ -186,11 +193,11 @@ export class ExportEngine {
         scene.clearColor = new BABYLON.Color4(1.0, 1.0, 1.0, 1.0);
 
         scene.meshes.forEach((mesh: any) => {
-            if (!mesh || mesh.name?.includes('Passepartout') || mesh.name?.includes('grid') || mesh.name?.includes('axis') || mesh.name?.includes('Plane')) return;
+            if (!mesh) return;
+            if (mesh.metadata?.isHelper || mesh.metadata?.type === 'datum_plane' || mesh.metadata?.type === 'grid') return;
 
-            const name = mesh.name || '';
-            const isFace = name.startsWith('face_') || mesh.metadata?.faceName;
-            const isFeature = mesh.metadata?.type === 'feature' || name.startsWith('hole_') || name.startsWith('pocket_') || name.startsWith('groove_');
+            const isFace = mesh.metadata?.type === 'face' || Boolean(mesh.metadata?.faceName);
+            const isFeature = mesh.metadata?.type === 'feature';
 
             if (isFace || isFeature) {
                 if (style === 'technical') {
@@ -389,7 +396,7 @@ export class ExportEngine {
         const ifh = fh - 2 * innerInset;
 
         const titleDisplayName = this.titleBlock.furnitureName || this.titleBlock.projectName || 'Mebel CAD';
-        const author = this.titleBlock.author || 'SmartBox';
+        const author = this.titleBlock.author || 'Bloki';
         const dateStr = this.titleBlock.date || '';
         const scaleStr = this.titleBlock.scale || '1:10';
         const drawingNr = this.titleBlock.drawingNumber || 'SB-001';
@@ -457,7 +464,7 @@ export class ExportEngine {
                     <text x="${(82 * scale).toFixed(1)}" y="${(23.5 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b" font-family="'Segoe UI', sans-serif">Skala: <tspan fill="#0f172a" font-weight="bold">${scaleStr}</tspan></text>
                     <text x="${(102 * scale).toFixed(1)}" y="${(23.5 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b" font-family="'Segoe UI', sans-serif">Format: <tspan fill="#0f172a" font-weight="bold">${formatLabel}</tspan></text>
 
-                    <text x="${(tbw - 3).toFixed(1)}" y="${(tbh - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end" font-family="'Segoe UI', sans-serif">SmartBox CAD</text>
+                    <text x="${(tbw - 3).toFixed(1)}" y="${(tbh - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end" font-family="'Segoe UI', sans-serif">Bloki CAD</text>
                 </g>
             </svg>
         `;
@@ -481,11 +488,11 @@ export class ExportEngine {
                 break;
             case 'top':
                 cam.alpha = Math.PI / 2;
-                cam.beta = 0.001;
+                cam.beta = TOP_BETA;
                 break;
             case 'bottom':
                 cam.alpha = Math.PI / 2;
-                cam.beta = Math.PI - 0.001;
+                cam.beta = BOTTOM_BETA;
                 break;
             case 'left':
                 cam.alpha = Math.PI;
@@ -745,10 +752,11 @@ export class ExportEngine {
             const isFrozen = Boolean(node.frozen || node.domainData?.frozen || node.parameters?.frozen || node.params?.frozen);
             if (isFrozen) return;
 
-            if (node.type === 'PANEL' || (node.name && node.name.includes('Płyta'))) {
+            // Strict: formatka po typie systemu (type/nodeType), nigdy po display name.
+            if (node.type === 'PANEL' || node.nodeType === 'PART') {
                 const params = node.parameters || node.params || {};
                 rows.push({
-                    name: node.name || 'Formatka',
+                    name: node.name || tx(exportTekst, 'default_panel_name', TX_NS),
                     material: node.materialName || params.material || 'Laminat 18mm',
                     length: params.height || params.length || 720,
                     width: params.width || 560,
@@ -996,9 +1004,9 @@ export class ExportEngine {
     private loadSavedViews(): void {
         try {
             // Usuwamy stare klucze jeśli istniały w przeglądarce
-            localStorage.removeItem('smartbox_cad_export_saved_views');
-            localStorage.removeItem('smartbox_cad_export_saved_views_v1');
-            localStorage.removeItem('smartbox_cad_manual_sheets_v2');
+            localStorage.removeItem('bloki_cad_export_saved_views');
+            localStorage.removeItem('bloki_cad_export_saved_views_v1');
+            localStorage.removeItem('bloki_cad_manual_sheets_v2');
             const raw = localStorage.getItem(SAVED_VIEWS_STORAGE_KEY);
             if (raw) {
                 this.savedViews = JSON.parse(raw);

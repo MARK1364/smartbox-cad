@@ -12,7 +12,7 @@ Aplikacja meblarska nie może być tworzona z myślą o stacjach roboczych za 10
 Program **SolveSpace** udowodnił, że pełny, precyzyjny parametryczny CAD może:
 - Ważyć **poniżej 3 MB** (zamiast setek megabajtów),
 - Działać w **60–120 FPS na 10-letnim sprzęcie biurowym**,
-- Nie posiadać **żadnych ciężkich zależności zewnętrznych** (brak OpenCASCADE, Boost, CGAL),
+- Nie posiadać **żadnych ciężkich zależności zewnętrznych** (własne, zwięzłe algorytmy),
 - Opierać się w 100% na **własnych, zwięzłych, wyspecjalizowanych algorytmach**.
 
 ### 1.3. Specyfika Meblarstwa (98% Geometrii to 2.5D)

@@ -119,7 +119,7 @@ export function applyAllAssociativeDims(doc: any): void {
     if (changed) {
         doc.emitChange?.('dimensions');
         if (typeof window !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('smartbox-panel-changed'));
+            window.document.dispatchEvent(new CustomEvent('bloki-panel-changed'));
         }
         resyncSolver();
     }

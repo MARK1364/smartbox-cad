@@ -1,6 +1,6 @@
 /**
  * web/src/e3-entry.tsx
- * Punkt wejściowy dla dedykowanej podstrony e3_drawing.html (SmartBox Eksport 3).
+ * Punkt wejściowy dla dedykowanej podstrony e3_drawing.html (Bloki Eksport 3).
  * Uruchamia Studio Multi-Kamera 3D (E3MultiStudio).
  */
 

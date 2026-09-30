@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +17,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-package-lock
+
+      - name: Verify types, tests, and audits
+        run: npm run verify
+
   deploy:
+    needs: verify
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

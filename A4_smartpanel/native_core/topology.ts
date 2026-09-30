@@ -1,6 +1,9 @@
 /**
  * SmartPanel — sztywna topologia komórki pierwotnej (prostopadłościan).
  * 8 narożników, 12 krawędzi, 6 ścian. Niezależne od wymiarów i otworów.
+ *
+ * Płyty z outline2d (np. wieniec L) — polygon-extrusion.ts (caps + boki z jednego obrysu).
+ * Prostopadłościan — box-topology.ts (krawędzie CAD z tej tabeli, nigdy z bounding box L).
  */
 
 // ---------------------------------------------------------------------------

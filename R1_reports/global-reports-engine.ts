@@ -11,11 +11,11 @@ export interface PanelPricingResult {
     length_mm: number;
     width_mm: number;
     area_m2: number;
-    price_per_m2: number | 'BRAK CENY';
-    material_cost: number | 'BRAK CENY';
+    price_per_m2: number | null;
+    material_cost: number | null;
     edge_length_mb: number;
-    edge_cost: number | 'BRAK CENY';
-    total_netto_pln: number | 'BRAK CENY';
+    edge_cost: number | null;
+    total_netto_pln: number | null;
     edge_config: any;
     is_x_longer: boolean;
     furniture_name: string;
@@ -28,22 +28,22 @@ export interface AccessoryPricingResult {
     role: string;
     library_id: string;
     qty: number;
-    unit_price_pln: number | 'BRAK CENY';
-    total_price_pln: number | 'BRAK CENY';
+    unit_price_pln: number | null;
+    total_price_pln: number | null;
     furniture_name: string;
 }
 
 export interface GlobalProjectSummary {
     Liczba_elementow: number;
     Calkowite_powierzchnia_m2: number;
-    Calkowite_cena_plyt_PLN: number | 'BRAK CENY';
+    Calkowite_cena_plyt_PLN: number | null;
     Calkowite_dlugosc_obrzezy_mb: number;
-    Calkowite_cena_obrzezy_PLN: number | 'BRAK CENY';
-    SUMA_PLYTY_PLN: number | 'BRAK CENY';
+    Calkowite_cena_obrzezy_PLN: number | null;
+    SUMA_PLYTY_PLN: number | null;
     Calkowite_liczba_akcesorii_szt: number;
-    Calkowite_cena_akcesorii_PLN: number | 'BRAK CENY';
-    SUMA_AKCESORIA_PLN: number | 'BRAK CENY';
-    SUMA_CALKOWITA_PLN: number | 'BLAD W WYCENIE';
+    Calkowite_cena_akcesorii_PLN: number | null;
+    SUMA_AKCESORIA_PLN: number | null;
+    SUMA_CALKOWITA_PLN: number | null;
     furnituresBreakdown: Array<{ name: string; cost: number }>;
 }
 
@@ -157,7 +157,7 @@ export class GlobalReportsEngineWeb {
         const pricePerM2 = this.getMaterialPricePerM2(panel.material);
         const material_name = this.resolveMaterialName(panel.material);
 
-        let material_cost: number | 'BRAK CENY' = 'BRAK CENY';
+        let material_cost: number | null = null;
         if (pricePerM2 !== null) {
             material_cost = Math.round(area_m2 * pricePerM2 * 100) / 100.0;
         }
@@ -186,10 +186,10 @@ export class GlobalReportsEngineWeb {
         }
 
         const edge_length_mb = Math.round(total_edge_length * 100) / 100.0;
-        const edge_cost: number | 'BRAK CENY' = edge_error ? 'BRAK CENY' : Math.round(edge_price * 100) / 100.0;
+        const edge_cost: number | null = edge_error ? null : Math.round(edge_price * 100) / 100.0;
 
-        let total_netto_pln: number | 'BRAK CENY' = 'BRAK CENY';
-        if (material_cost !== 'BRAK CENY' && edge_cost !== 'BRAK CENY') {
+        let total_netto_pln: number | null = null;
+        if (material_cost !== null && edge_cost !== null) {
             total_netto_pln = Math.round((material_cost + edge_cost) * 100) / 100.0;
         }
 
@@ -202,7 +202,7 @@ export class GlobalReportsEngineWeb {
             length_mm: panel.length_mm,
             width_mm: panel.width_mm,
             area_m2,
-            price_per_m2: pricePerM2 !== null ? pricePerM2 : 'BRAK CENY',
+            price_per_m2: pricePerM2 !== null ? pricePerM2 : null,
             material_cost,
             edge_length_mb,
             edge_cost,
@@ -215,6 +215,21 @@ export class GlobalReportsEngineWeb {
     }
 
     public calculateAccessoryPricing(acc: AccessoryItem): AccessoryPricingResult {
+        if (acc.custom_unit_price !== undefined) {
+            const unit_price = Number(acc.custom_unit_price);
+            const total_price = Math.round(unit_price * acc.qty * 100) / 100.0;
+            return {
+                id: acc.id,
+                name: acc.name,
+                role: acc.role,
+                library_id: acc.library_id,
+                qty: acc.qty,
+                unit_price_pln: unit_price,
+                total_price_pln: total_price,
+                furniture_name: acc.furniture_name
+            };
+        }
+
         const pricesHw = (this.prices?.prices_hardware as Record<string, any>) || {};
         let hwPrice = pricesHw[acc.library_id];
         if (hwPrice === undefined) {
@@ -228,13 +243,18 @@ export class GlobalReportsEngineWeb {
             }
         }
 
-        let unit_price: number | 'BRAK CENY' = 'BRAK CENY';
-        let total_price: number | 'BRAK CENY' = 'BRAK CENY';
+        let unit_price: number | null = null;
+        let total_price: number | null = null;
 
         if (hwPrice !== undefined) {
             const val = typeof hwPrice === 'object' ? Number(hwPrice.price) : Number(hwPrice);
-            unit_price = val;
-            total_price = Math.round(val * acc.qty * 100) / 100.0;
+            const unit = typeof hwPrice === 'object' ? hwPrice.unit : 'szt';
+            if (unit === 'm2' && acc.area_m2) {
+                unit_price = Math.round(val * acc.area_m2 * 100) / 100.0;
+            } else {
+                unit_price = val;
+            }
+            total_price = Math.round(unit_price * acc.qty * 100) / 100.0;
         }
 
         return {
@@ -266,14 +286,14 @@ export class GlobalReportsEngineWeb {
             total_area_m2 += p.area_m2 * qty;
             total_edge_mb += p.edge_length_mb * qty;
 
-            if (p.material_cost === 'BRAK CENY' || p.edge_cost === 'BRAK CENY') {
+            if (p.material_cost === null || p.edge_cost === null) {
                 has_plyty_error = true;
             } else {
                 total_mat_cost += Number(p.material_cost) * qty;
                 total_edge_cost += Number(p.edge_cost) * qty;
             }
 
-            if (p.total_netto_pln !== 'BRAK CENY') {
+            if (p.total_netto_pln !== null) {
                 furnitureCosts[p.furniture_name] = (furnitureCosts[p.furniture_name] || 0) + (Number(p.total_netto_pln) * qty);
             }
         }
@@ -284,7 +304,7 @@ export class GlobalReportsEngineWeb {
 
         for (const a of accessories) {
             total_acc_qty += a.qty;
-            if (a.total_price_pln === 'BRAK CENY') {
+            if (a.total_price_pln === null) {
                 has_acc_error = true;
             } else {
                 total_acc_cost += Number(a.total_price_pln);
@@ -292,11 +312,11 @@ export class GlobalReportsEngineWeb {
             }
         }
 
-        const suma_plyty: number | 'BRAK CENY' = has_plyty_error ? 'BRAK CENY' : Math.round((total_mat_cost + total_edge_cost) * 100) / 100.0;
-        const suma_akcesoria: number | 'BRAK CENY' = has_acc_error ? 'BRAK CENY' : Math.round(total_acc_cost * 100) / 100.0;
+        const suma_plyty: number | null = has_plyty_error ? null : Math.round((total_mat_cost + total_edge_cost) * 100) / 100.0;
+        const suma_akcesoria: number | null = has_acc_error ? null : Math.round(total_acc_cost * 100) / 100.0;
 
-        let suma_calkowita: number | 'BLAD W WYCENIE' = 'BLAD W WYCENIE';
-        if (suma_plyty !== 'BRAK CENY' && suma_akcesoria !== 'BRAK CENY') {
+        let suma_calkowita: number | null = null;
+        if (suma_plyty !== null && suma_akcesoria !== null) {
             suma_calkowita = Math.round((suma_plyty + suma_akcesoria) * 100) / 100.0;
         }
 
@@ -308,9 +328,9 @@ export class GlobalReportsEngineWeb {
         return {
             Liczba_elementow: panels.reduce((acc, p) => acc + (p.qty || 1), 0),
             Calkowite_powierzchnia_m2: Math.round(total_area_m2 * 1000) / 1000.0,
-            Calkowite_cena_plyt_PLN: has_plyty_error ? 'BRAK CENY' : Math.round(total_mat_cost * 100) / 100.0,
+            Calkowite_cena_plyt_PLN: has_plyty_error ? null : Math.round(total_mat_cost * 100) / 100.0,
             Calkowite_dlugosc_obrzezy_mb: Math.round(total_edge_mb * 100) / 100.0,
-            Calkowite_cena_obrzezy_PLN: has_plyty_error ? 'BRAK CENY' : Math.round(total_edge_cost * 100) / 100.0,
+            Calkowite_cena_obrzezy_PLN: has_plyty_error ? null : Math.round(total_edge_cost * 100) / 100.0,
             SUMA_PLYTY_PLN: suma_plyty,
             Calkowite_liczba_akcesorii_szt: total_acc_qty,
             Calkowite_cena_akcesorii_PLN: suma_akcesoria,

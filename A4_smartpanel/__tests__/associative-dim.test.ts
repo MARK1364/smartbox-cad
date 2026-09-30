@@ -77,7 +77,7 @@ describe('associative-dim', () => {
 
     it('round-trip associativeDims w JSON panelu', () => {
         const doc = new ProjectDocument();
-        const panel = doc.createPanel({ name: 'Płyta' }) as PanelModel;
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Płyta' }) as PanelModel;
         panel.associativeDims = {
             width: {
                 planeA: { nodeId: 'n1', face: 'FACE_X_PLUS', label: 'Bok' },

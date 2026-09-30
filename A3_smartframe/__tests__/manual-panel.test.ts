@@ -9,13 +9,14 @@ import {
     reparentManualPanel,
     resolveActiveSmartFrame,
     resolveManualPanelParent,
-} from '../../A1_core/app-commands.js';
+} from '../../src/application/cad-app-commands.js';
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { applyPlanToContainer } from '../smartframe-adapter.js';
+import { ContainerModel } from '../../A1_core/container-model.js';
 
 function makeSmartFrame(doc: ProjectDocument, name: string) {
-    const cabinet = doc.createContainer({ name });
+    const cabinet = doc.createAssembly({ name }) as ContainerModel;
     cabinet.generatorParams = { type: 'korpus3_2' };
     return cabinet;
 }
@@ -43,7 +44,7 @@ describe('resolveActiveSmartFrame / resolveManualPanelParent', () => {
     it('gdy zaznaczona jest formatka, aktywny jest jej SmartFrame', () => {
         const doc = new ProjectDocument();
         const cabinet = makeSmartFrame(doc, 'Szafa');
-        const side = doc.createPanel({ name: 'Bok' }, cabinet.id);
+        const side = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok' }, cabinet.id);
         doc.setActiveEntity(side);
         expect(resolveActiveSmartFrame(doc)?.id).toBe(cabinet.id);
         expect(resolveManualPanelParent(doc, true)).toEqual({ parentId: cabinet.id, inAssembly: true });
@@ -68,7 +69,7 @@ describe('reparentManualPanel', () => {
         ContextManager.instance.commandHistory = null;
         const a = makeSmartFrame(doc, 'Szafa A');
         const b = makeSmartFrame(doc, 'Szafa B');
-        const panel = doc.createPanel({ name: 'Wzmocnienie', engineManaged: false }, a.id);
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Wzmocnienie', engineManaged: false }, a.id);
         const panelNode = doc.findNode(panel.id)!;
 
         expect(canReparentManualPanel(doc, panel.id, b.id)).toBe(true);
@@ -80,7 +81,7 @@ describe('reparentManualPanel', () => {
         const doc = new ProjectDocument();
         const a = makeSmartFrame(doc, 'Szafa A');
         const b = makeSmartFrame(doc, 'Szafa B');
-        const side = doc.createPanel({ name: 'Bok lewy' }, a.id);
+        const side = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok lewy' }, a.id);
         expect(canReparentManualPanel(doc, side.id, b.id)).toBe(false);
         expect(reparentManualPanel(doc, side.id, b.id)).toBe(false);
         expect(doc.findNode(side.id)!.parent?.id).toBe(a.id);
@@ -96,12 +97,12 @@ describe('applyPlanToContainer — panel ręczny', () => {
     });
 
     it('nie kasuje i nie nadpisuje panelu ręcznego przy przebudowie', () => {
-        const cabinet = doc.createContainer({
+        const cabinet = doc.createAssembly({
             name: 'Szafa',
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
-        });
+        }) as ContainerModel;
         const enginePanel = doc.createPanel({
             name: 'Bok lewy',
             role: 'LEFT_SIDE_PANEL',

@@ -23,6 +23,10 @@ export interface HoleFeature {
     position: Vector3D;
     /** Opcjonalna lista wszystkich pozycji dla grupy otworów (mm) */
     positions?: Vector3D[];
+    /** Pozycja w układzie lokalnym formatki (PanelView root) przed transformacją WCS */
+    panelPosition?: Vector3D;
+    /** Wszystkie pozycje w układzie lokalnym formatki (PanelView root) przed transformacją WCS */
+    panelPositions?: Vector3D[];
     /** Liczba otworów w grupie */
     holeCount?: number;
     /** Średnica otworu (mm) */
@@ -47,8 +51,18 @@ export interface HoleFeature {
     childFeatureIds?: string[];
 }
 
+/**
+ * Intencja obróbki rowka — DLACZEGO cięcie istnieje.
+ * Nadawana u źródła (emiter CAD / extractor), nigdy zgadywana z nazwy.
+ * - LED_CHANNEL: kanał pod profil LED (frez palcowy, nie piła)
+ * - BACK_GROOVE: gniazdo pleców (rezerwa pod przyszłą regułę)
+ * - GENERIC / brak: czysta geometria decyduje (szerokość)
+ */
+export type GroovePurpose = 'LED_CHANNEL' | 'BACK_GROOVE' | 'GENERIC';
+
 export interface GrooveFeature {
     name?: string;
+    purpose?: GroovePurpose;
     /** Punkt początkowy wpustu (mm) */
     startPoint: Vector3D;
     /** Punkt końcowy wpustu (mm) */
@@ -120,6 +134,7 @@ export interface CAMProject {
     toolAssignments: Record<string, string>; // featureId -> toolId
     projectName: string;
     postprocessor: string; // np. "Mach3", "Fanuc", "Biesse"
+    workpieceDimensions?: { width: number; height: number; thickness: number };
 }
 
 export interface CNCMove {
@@ -146,13 +161,12 @@ export interface CNCOperation {
     parameters: CNCOperationParameters;
 }
 
-export interface ProcessedCAMProject {
-    projectName: string;
-    wcsOrigin: Vector3D;
-    wcsName: string;
-    operations: CNCOperation[];
-    postprocessor: string;
-}
+/**
+ * Wycofane: `ProcessedCAMProject` był równoległą ścieżką do `CLDataProgram`
+ * (ta sama matematyka, dwa formaty). Postprocessory przyjmują WYŁĄCZNIE
+ * `CLDataProgram`; symulator 3D operuje na `CNCOperation[]`.
+ * Wejście procesora: `CAMProcessor.processProject()` / `buildCLProgram()`.
+ */
 
 export interface CAMData {
     objectName: string;

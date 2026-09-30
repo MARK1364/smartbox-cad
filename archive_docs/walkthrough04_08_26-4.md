@@ -1,4 +1,4 @@
-# Ostateczna Poprawka Błędów Niewidocznych Elementów (SmartFrame, SmartBox)
+# Ostateczna Poprawka Błędów Niewidocznych Elementów (SmartFrame, Bloki)
 
 Podczas procesu refaktoryzacji wprowadziliśmy `SceneSyncAdapter`, który elegancko tłumaczy układy współrzędnych:
 - **Domena CAD**: `Z-up` (X = szerokość, Y = głębokość, Z = wysokość)
@@ -7,7 +7,7 @@ Podczas procesu refaktoryzacji wprowadziliśmy `SceneSyncAdapter`, który elegan
 Wszystkie obiekty tworzone przez `ProjectDocument` są natywnie w przestrzeni domenowej CAD, a adapter ma za zadanie podczas renderowania przeliczyć te punkty do Babylon.js.
 
 ## Przyczyna dzisiejszej awarii (Dług Legacy)
-Wewnątrz rdzenia generatorów `smartframe-adapter.ts` i `smartbox-core.ts` pozostały stare przeliczenia, które ręcznie konwertowały osie (tzw. _hardcoded swaps_), np.:
+Wewnątrz rdzenia generatorów `smartframe-adapter.ts` i `bloki-core.ts` pozostały stare przeliczenia, które ręcznie konwertowały osie (tzw. _hardcoded swaps_), np.:
 ```typescript
 localCenterY = part.loc.z;   // CAD Z (wysokość) -> Babylon Y (Up)
 ```
@@ -33,8 +33,8 @@ Wycięliśmy stare "ręczne" transformacje w generatorach - teraz budujemy konte
      const cornerZ = part.loc.z; // Wysokość
      ```
 
-2. **Poprawka w `smartbox-core.ts`**:
-   - Usunięto wadliwe obliczanie Y/Z SmartBoxa na podstawie `zMinVal` i `yMinVal`.
+2. **Poprawka w `bloki-core.ts`**:
+   - Usunięto wadliwe obliczanie Y/Z Bloku na podstawie `zMinVal` i `yMinVal`.
    - Zmapowano wprost wymiary CAD do domenowego wektora lokalnego:
      ```typescript
      const sbPosX = nmToMm(cabinetPos.x) + (xMinVal + xMaxVal) / 2;

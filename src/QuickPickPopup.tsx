@@ -8,8 +8,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CAD_OPEN_QUICK_PICK, CAD_CLOSE_QUICK_PICK } from '../A1_core/quick-pick/quick-pick-events.js';
 import type { QuickPickRequest, QuickPickCandidate } from '../A1_core/quick-pick/quick-pick-types.js';
 import { QuickPickPreview } from '../A1_core/quick-pick/quick-pick-preview.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 export const QuickPickPopup: React.FC = () => {
+    useLocale();
     const [request, setRequest] = useState<QuickPickRequest | null>(null);
     const [selectedIndex, setSelectedIndex] = useState<number>(0);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -173,7 +181,7 @@ export const QuickPickPopup: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ color: '#06b6d4', fontSize: '13px', lineHeight: 1 }}>☷</span>
                     <span style={{ fontWeight: 600, fontSize: '11px', color: '#e4e4e7' }}>
-                        Wybór płaszczyzny
+                        {tx(srcTekst, 'quick.title', TX_NS)}
                     </span>
                     <span
                         style={{
@@ -301,7 +309,7 @@ export const QuickPickPopup: React.FC = () => {
                     justifyContent: 'space-between',
                 }}
             >
-                <span>↑↓ wybór</span>
+                <span>{tx(srcTekst, 'quick.hint', TX_NS)}</span>
                 <span>↵ Enter</span>
                 <span>Esc</span>
             </div>

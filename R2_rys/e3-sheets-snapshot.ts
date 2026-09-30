@@ -4,6 +4,7 @@
  */
 
 import { PROJECT_SNAPSHOT_KEY } from '../src/module-data/session.js';
+import { storageAdapter } from '../src/storage/storage-adapter.js';
 import type { E3SavedSheet } from './e3-library-types';
 
 export const E3_SHEETS_UPDATED_MSG = 'SHEETS_UPDATED';
@@ -24,9 +25,8 @@ function cloneSheets(sheets: E3SavedSheet[] | undefined | null): E3SavedSheet[] 
 }
 
 function readSnapshotJson(): any | null {
-    if (typeof localStorage === 'undefined') return null;
     try {
-        const raw = localStorage.getItem(PROJECT_SNAPSHOT_KEY);
+        const raw = storageAdapter.getItem(PROJECT_SNAPSHOT_KEY);
         if (!raw) return null;
         return JSON.parse(raw);
     } catch {
@@ -54,7 +54,6 @@ export function writeE3MultiToSnapshot(
     currentSheetId: string | null,
     projectId?: string | null,
 ): void {
-    if (typeof localStorage === 'undefined') return;
     const json = readSnapshotJson();
     if (!json) return;
     if (projectId && json.id !== projectId) return;
@@ -72,7 +71,7 @@ export function writeE3MultiToSnapshot(
     json.extensions.drawings = drawings;
 
     try {
-        localStorage.setItem(PROJECT_SNAPSHOT_KEY, JSON.stringify(json));
+        storageAdapter.setItem(PROJECT_SNAPSHOT_KEY, JSON.stringify(json));
     } catch (err) {
         console.warn('Nie udało się zapisać arkuszy E3 w snapshocie projektu:', err);
     }
@@ -80,7 +79,7 @@ export function writeE3MultiToSnapshot(
 
 export function broadcastE3SheetsUpdated(sheets: E3SavedSheet[], currentSheetId: string | null): void {
     try {
-        const channel = new BroadcastChannel('smartbox_cad_e3_sync');
+        const channel = new BroadcastChannel('bloki_cad_e3_sync');
         channel.postMessage({
             type: E3_SHEETS_UPDATED_MSG,
             sheets: cloneSheets(sheets),

@@ -1,16 +1,16 @@
 /**
  * Typ danych domenowych przypinanych do CADNode.domainData.
- * PanelModel (A4) + ContainerModel (A1) — import type, bez cykli runtime.
+ * PanelLike — kontrakt bez klasy A4 PanelModel.
+ * Type guard klasy: `isPanelModel` w A4_smartpanel/panel-model.ts.
  */
 import type { ContainerModel } from './container-model.js';
-import type { PanelModel } from '../A4_smartpanel/panel-model.js';
+import type { PanelLike } from './panel-like.js';
+import { isPanelLike } from './panel-like.js';
 
-export type DomainData = ContainerModel | PanelModel;
+export type DomainData = ContainerModel | PanelLike;
 
-export function isPanelModel(data: DomainData): data is PanelModel {
-    return data.type === 'part';
-}
+export { isPanelLike };
 
 export function isContainerModel(data: DomainData): data is ContainerModel {
-    return data.type === 'container';
+    return (data as any)?.type === 'container';
 }

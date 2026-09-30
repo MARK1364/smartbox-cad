@@ -12,7 +12,8 @@ export interface CNCProgramState {
     id: string;
     name: string;
     targetPanel: any;
-    targetPanelName: string;
+    targetPanelId?: string;
+    targetPanelLabel?: string;
     wcsName: string;
     /** -1 = origin z JSON roli; 0..7 = ręcznie wybrane naroże panelu */
     cornerIndex: number;

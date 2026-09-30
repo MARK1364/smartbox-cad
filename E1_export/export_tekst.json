@@ -1,0 +1,12 @@
+{
+  "default_panel_name": {
+    "pl": "Formatka",
+    "en": "Panel",
+    "de": "Platte"
+  },
+  "default_plate_name": {
+    "pl": "Płyta",
+    "en": "Board",
+    "de": "Platte"
+  }
+}

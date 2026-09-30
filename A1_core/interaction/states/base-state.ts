@@ -1,12 +1,12 @@
-import { BootstrapContext } from "../../scene-bootstrap";
+import type { CadModuleContext } from "../../cad-module-context.js";
 import { Intent } from "../interaction-types";
 import { StateMachine } from "../state-machine";
 
 export abstract class BaseState {
-    protected ctx: BootstrapContext;
+    protected ctx: CadModuleContext;
     protected stateMachine: StateMachine;
 
-    constructor(ctx: BootstrapContext, stateMachine: StateMachine) {
+    constructor(ctx: CadModuleContext, stateMachine: StateMachine) {
         this.ctx = ctx;
         this.stateMachine = stateMachine;
     }

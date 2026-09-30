@@ -17,12 +17,13 @@ import { CAMProcessor } from '../processor/cam-processor.js';
 import { GeometryDataExtractor } from '../geometry/geometry-detector.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { TooltipManager } from '../../A1_core/tooltip-manager.js';
+import { isExcludedFromProduction } from '../../S4_sciany/smartwall-types.js';
 import { Mach3Postprocessor } from '../postprocessors/mach3-postprocessor.js';
 import { FanucPostprocessor } from '../postprocessors/fanuc-postprocessor.js';
 import { BiessePostprocessor } from '../postprocessors/biesse-postprocessor.js';
 import { WoodWOPPostprocessor } from '../postprocessors/woodwop-postprocessor.js';
 import { SCMPostprocessor } from '../postprocessors/scm-postprocessor.js';
-import { CAMFeature, ContourFeature, ProcessedCAMProject, Tool } from '../dto/cam-dto.js';
+import { CAMFeature, ContourFeature, Tool } from '../dto/cam-dto.js';
 import { CAMVisualizer } from '../visualization/cam-visualizer.js';
 import { CNCSimulator } from '../visualization/cnc-simulator.js';
 import { WcsRulesMapper } from '../wcs/wcs-rules-mapper.js';
@@ -34,16 +35,31 @@ import { DrillingStrategy } from '../strategies/drilling-strategy.js';
 import { ProfilingStrategy } from '../strategies/profiling-strategy.js';
 import { PocketingStrategy } from '../strategies/pocketing-strategy.js';
 import { GCodeTab } from './tabs/GCodeTab.js';
+import { tx } from '../../T1_tlumaczenia/core.js';
+import { useLocale } from '../../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
+import cncTekstRaw from '../cnc_tekst.json';
+
+const cncTekst = cncTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'cnc';
 
 declare const BABYLON: any;
 
 // Helper do bezpiecznego konwertowania wymiarów formatki z nanometrów (nm) na milimetry (mm)
 export const getPanelDimensionsMM = (panel: any) => {
-    if (!panel) return { width: 600, height: 720, thickness: 18 };
-    const w = typeof panel.width === 'number' ? nmToMm(panel.width) : 600;
-    const h = typeof panel.height === 'number' ? nmToMm(panel.height) : 720;
-    const t = typeof panel.thickness === 'number' ? nmToMm(panel.thickness) : 18;
-    return { width: w, height: h, thickness: t };
+    if (!panel) {
+        throw new Error('[C1_cnc/CncPanel] Brak referencji do wybranej formatki (panel is null).');
+    }
+    if (typeof panel.width !== 'number' || panel.width <= 0 ||
+        typeof panel.height !== 'number' || panel.height <= 0 ||
+        typeof panel.thickness !== 'number' || panel.thickness <= 0) {
+        throw new Error(`[C1_cnc/CncPanel] Formatka "${panel.name || 'unknown'}" nie posiada poprawnych wymiarów fizycznych (W=${panel.width}, H=${panel.height}, T=${panel.thickness}).`);
+    }
+    return {
+        width: nmToMm(panel.width),
+        height: nmToMm(panel.height),
+        thickness: nmToMm(panel.thickness)
+    };
 };
 
 // Helper do łączenia zaznaczonych krawędzi w jeden spójny profil (polyline)
@@ -141,7 +157,8 @@ interface CNCProgram {
     id: string;
     name: string;
     targetPanel: any; // Na sztywno przypisana instancja PanelModel
-    targetPanelName: string;
+    targetPanelId?: string;
+    targetPanelLabel?: string;
     wcsName: string;
     cornerIndex: number;
     wcsOffsetX?: number;
@@ -162,6 +179,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     // Subskrypcja do globalnego stanu (Zamiast dziesiątek useState)
     const store = CAMStateStore.getInstance();
     const [storeState, setStoreState] = useState(() => store.getState());
+    useLocale();
 
     useEffect(() => {
         const unsubscribe = store.subscribe(setStoreState);
@@ -186,6 +204,8 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     const [toolsList, setToolsList] = useState<Tool[]>([]);
     const [gcodeOutput, setGcodeOutput] = useState<string>('');
     const [selectedSegmentCount, setSelectedSegmentCount] = useState<number>(0);
+    const [hoveredFeatureIdx, setHoveredFeatureIdx] = useState<number | null>(null);
+    const [pinnedPreviewIdx, setPinnedPreviewIdx] = useState<number | null>(null);
 
     const isSelectingProfileRef = useRef(false);
     useEffect(() => {
@@ -213,11 +233,16 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
 
     // Sprawdzanie czy zaznaczona w drzewie formatka jest prawidłowym pojedynczym panelem
     const effectiveActivePanel = activePanel || ContextManager.instance.activePanel || ContextManager.instance.selectedPanel || (ContextManager.instance.panelViews && ContextManager.instance.panelViews.keys().next().value);
-    const isValidFormatka = Boolean(effectiveActivePanel && effectiveActivePanel.type !== 'container');
+    const isValidFormatka = Boolean(
+        effectiveActivePanel
+        && effectiveActivePanel.type !== 'container'
+        && !isExcludedFromProduction(effectiveActivePanel),
+    );
     
     // Formatka docelowa dla wybranego programu CNC jest ZABLOKOWANA na przypisanym obiekcie!
     const lockedPanel = currentProgram ? currentProgram.targetPanel : (isValidFormatka ? effectiveActivePanel : null);
-    const panelName = lockedPanel ? (lockedPanel.name || 'Formatka') : (isValidFormatka && activePanel ? (activePanel.name || 'Formatka') : null);
+    const defPanelName = tx(cncTekst, 'extractor.panel_default', TX_NS);
+    const panelName = lockedPanel ? (lockedPanel.name || defPanelName) : (isValidFormatka && activePanel ? (activePanel.name || defPanelName) : null);
 
     const updateProg = useCallback((updaterOrUpdates: Partial<CNCProgramState> | ((p: CNCProgramState) => CNCProgramState)) => {
         if (!activeProgIdRef.current) return;
@@ -297,7 +322,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
 
         const newContourFeat: ContourFeature = {
             featureId: `contour_${Date.now()}`,
-            name: `Profil_Krawędzi_${features.length + 1}`,
+            name: tx(cncTekst, 'feature.default_profile', TX_NS, { n: features.length + 1 }),
             points: wcsPoints,
             depth: initialZ,
             objectName: panelName || 'Formatka',
@@ -431,7 +456,115 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             newFeatures.splice(index, 1);
             return { ...p, features: newFeatures };
         });
-    }, []);
+        if (pinnedPreviewIdx === index) {
+            setPinnedPreviewIdx(null);
+            CNCEngine.getInstance().visualizer?.clearHighlight();
+        }
+    }, [pinnedPreviewIdx]);
+
+    const resolveCurrentPanelView = useCallback(() => {
+        const pvs = ContextManager.instance.panelViews as Map<any, any> | undefined;
+        if (!pvs || pvs.size === 0) return null;
+        if (lockedPanel && pvs.has(lockedPanel)) return pvs.get(lockedPanel);
+        if (lockedPanel) {
+            for (const [p, v] of pvs.entries()) {
+                if (p === lockedPanel || (p?.id && lockedPanel?.id && p.id === lockedPanel.id)) {
+                    return v;
+                }
+            }
+        }
+        const act = ContextManager.instance.activePanel || ContextManager.instance.selectedPanel;
+        if (act && pvs.has(act)) return pvs.get(act);
+        if (act) {
+            for (const [p, v] of pvs.entries()) {
+                if (p === act || (p?.id && act?.id && p.id === act.id)) {
+                    return v;
+                }
+            }
+        }
+        return pvs.values().next().value || null;
+    }, [lockedPanel]);
+
+    const handleFeatureHover = useCallback((feat: any, idx: number) => {
+        setHoveredFeatureIdx(idx);
+        const engine = CNCEngine.getInstance();
+        const view = resolveCurrentPanelView();
+        let handled = false;
+        if (view && typeof view.highlightFeature === 'function') {
+            handled = Boolean(view.highlightFeature(feat, true));
+        }
+        if (!handled) {
+            engine.visualizer?.highlightFeature(feat, view?.root || null);
+        } else {
+            engine.visualizer?.clearHighlight();
+        }
+    }, [resolveCurrentPanelView]);
+
+    const handleFeatureLeave = useCallback((_idx: number) => {
+        setHoveredFeatureIdx(null);
+        const engine = CNCEngine.getInstance();
+        const view = resolveCurrentPanelView();
+        if (view && typeof view.clearFeatureHighlights === 'function') {
+            view.clearFeatureHighlights();
+        }
+        if (pinnedPreviewIdx !== null) {
+            const pinnedFeat = features[pinnedPreviewIdx];
+            if (pinnedFeat) {
+                let handled = false;
+                if (view && typeof view.highlightFeature === 'function') {
+                    handled = Boolean(view.highlightFeature(pinnedFeat, true));
+                }
+                if (!handled) {
+                    engine.visualizer?.highlightFeature(pinnedFeat, view?.root || null);
+                } else {
+                    engine.visualizer?.clearHighlight();
+                }
+                return;
+            }
+        }
+        engine.visualizer?.clearHighlight();
+    }, [pinnedPreviewIdx, features, resolveCurrentPanelView]);
+
+    const handleTogglePinFeature = useCallback((feat: any, idx: number) => {
+        const engine = CNCEngine.getInstance();
+        const view = resolveCurrentPanelView();
+
+        if (pinnedPreviewIdx === idx) {
+            setPinnedPreviewIdx(null);
+            if (view && typeof view.clearFeatureHighlights === 'function') {
+                view.clearFeatureHighlights();
+            }
+            engine.visualizer?.clearHighlight();
+        } else {
+            setPinnedPreviewIdx(idx);
+            if (view && typeof view.clearFeatureHighlights === 'function') {
+                view.clearFeatureHighlights();
+            }
+            let handled = false;
+            if (view && typeof view.highlightFeature === 'function') {
+                handled = Boolean(view.highlightFeature(feat, true));
+            }
+            if (!handled) {
+                engine.visualizer?.highlightFeature(feat, view?.root || null);
+            } else {
+                engine.visualizer?.clearHighlight();
+            }
+            if (ContextManager.instance.viewport?.scene?.activeCamera) {
+                const pos = (feat.panelPositions && feat.panelPositions[0]) || feat.panelPosition || (feat.positions && feat.positions[0]) || feat.position || feat.startPoint;
+                if (pos && view?.root) {
+                    try {
+                        const worldPos = BABYLON.Vector3.TransformCoordinates(
+                            new BABYLON.Vector3(pos.x, pos.y, pos.z || 0),
+                            view.root.getWorldMatrix()
+                        );
+                        ContextManager.instance.viewport.scene.activeCamera.setTarget(worldPos);
+                    } catch {
+                        // ignore camera target transform failure
+                    }
+                }
+            }
+        }
+    }, [pinnedPreviewIdx, resolveCurrentPanelView]);
 
     // Helper: scala nowe cechy z istniejącymi (deduplikacja po featureId, zachowuje ręczne profile)
     const mergeExtractedFeatures = useCallback((
@@ -497,7 +630,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     // Tworzenie nowego programu CNC przypisanego na sztywno do aktywnej formatki
     const handleCreateProgramForFormatka = () => {
         if (!isValidFormatka || !effectiveActivePanel) {
-            setWarningMessage("Zaznacz dokładnie jedną formatkę w drzewie projektu CAD!");
+            setWarningMessage(tx(cncTekst, 'warnings.pick_single_panel', TX_NS));
             return;
         }
 
@@ -507,14 +640,15 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             targetPanel.cncPrograms = [];
         }
 
-        const tName = targetPanel.name || 'Formatka';
+        const tName = targetPanel.name || tx(cncTekst, 'extractor.panel_default', TX_NS);
         const progName = `Program_${tName}_${targetPanel.cncPrograms.length + 1}`;
         const newId = `prog_${Date.now()}`;
         const newProg: CNCProgramState = {
             id: newId,
             name: progName,
             targetPanel: targetPanel,
-            targetPanelName: tName,
+            targetPanelId: String(targetPanel.id || ''),
+            targetPanelLabel: tName,
             wcsName: 'G55',
             // -1 = origin z JSON roli (korpus3_3_rules); >=0 dopiero po picku naroża w 3D
             cornerIndex: -1,
@@ -568,14 +702,14 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         if (!lockedPanel) return;
 
         if (lockedPanel.frozen === true || lockedPanel.params?.frozen === true) {
-            setWarningMessage('Formatka jest zamrożona (obiekt wykluczony z obróbki CNC). Odmroź formatkę w drzewie obiektów, aby wygenerować kod.');
+            setWarningMessage(tx(cncTekst, 'warnings.panel_frozen_code', TX_NS));
             return;
         }
 
         // Sprawdź czy są operacje bez przypisanego narzędzia
         const missingToolFeats = features.filter(f => !f.toolId);
         if (missingToolFeats.length > 0) {
-            setWarningMessage(`Błąd: Brak przypisanego narzędzia dla ${missingToolFeats.length} operacji! Przypisz narzędzia we wszystkich operacjach przed generowaniem kodu.`);
+            setWarningMessage(tx(cncTekst, 'warnings.no_tool_code', TX_NS, { n: missingToolFeats.length }));
             return;
         }
 
@@ -585,16 +719,15 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         const dims = getPanelDimensionsMM(lockedPanel);
         CNCEngine.getInstance().wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
 
-        const project = CNCEngine.getInstance().camProcessor.processProject({
+        const program = CNCEngine.getInstance().camProcessor.buildCLProgram({
             projectName: projectName,
             wcsOrigin: CNCEngine.getInstance().wcsManager.getOrigin(),
             wcsName: wcsName,
             features: features,
             toolAssignments: {},
-            postprocessor: postprocessorName
+            postprocessor: postprocessorName,
+            workpieceDimensions: dims
         });
-
-        /* setProcessedProject */(project);
 
         let post: any;
         if (postprocessorName === 'WoodWOP') post = new WoodWOPPostprocessor();
@@ -603,7 +736,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         else if (postprocessorName === 'Fanuc') post = new FanucPostprocessor();
         else post = new Mach3Postprocessor();
 
-        const nc = post.generateNcCode(project);
+        const nc = post.generateNcCode(program);
         setGcodeOutput(nc);
     };
 
@@ -612,14 +745,14 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         if (!CNCEngine.getInstance().simulator || !lockedPanel) return;
 
         if (lockedPanel.frozen === true || lockedPanel.params?.frozen === true) {
-            setWarningMessage('Formatka jest zamrożona (obiekt wykluczony z obróbki CNC). Odmroź formatkę w drzewie obiektów, aby uruchomić symulację.');
+            setWarningMessage(tx(cncTekst, 'warnings.panel_frozen_sim', TX_NS));
             return;
         }
 
         // Sprawdź czy są operacje bez przypisanego narzędzia
         const missingToolFeats = features.filter(f => !f.toolId);
         if (missingToolFeats.length > 0) {
-            setWarningMessage(`Błąd: Brak przypisanego narzędzia dla ${missingToolFeats.length} operacji! Przypisz narzędzia przed uruchomieniem symulacji.`);
+            setWarningMessage(tx(cncTekst, 'warnings.no_tool_sim', TX_NS, { n: missingToolFeats.length }));
             return;
         }
 
@@ -639,7 +772,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         // Rodzicem dla symulatora (i frezu) jest układ WCS przypięty do widoku 3D formatki
         CNCEngine.getInstance().simulator.setWcsTransform(CNCEngine.getInstance().wcsManager, targetViewRoot);
 
-        const project = CNCEngine.getInstance().camProcessor.processProject({
+        const operations = CNCEngine.getInstance().camProcessor.processProject({
             projectName: projectName,
             wcsOrigin: CNCEngine.getInstance().wcsManager.getOrigin(),
             wcsName: wcsName,
@@ -649,7 +782,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         });
 
         CNCEngine.getInstance().simulator.setSpeed(storeState.simulationSpeed);
-        CNCEngine.getInstance().simulator.loadOperations(project.operations);
+        CNCEngine.getInstance().simulator.loadOperations(operations);
         CNCEngine.getInstance().simulator.start();
         store.setSimulationState(true);
     };
@@ -664,10 +797,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         store.setSimulationState(false);
     };
 
-    const corners = [
-        "0: Lewy-Dół-Tył", "1: Prawy-Dół-Tył", "2: Lewy-Góra-Tył", "3: Prawy-Góra-Tył",
-        "4: Lewy-Dół-Przód", "5: Prawy-Dół-Przód", "6: Lewy-Góra-Przód", "7: Prawy-Góra-Przód"
-    ];
+
 
     const saveFeatureEdit = () => {
         if (editingFeatureIndex === null || !tempFeatureEdit) return;
@@ -718,7 +848,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         >
             {!isEmbedded && (
                 <div style={{ background: '#27272a', padding: '8px 12px', borderBottom: `1px solid ${b.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700, color: b.accentBlue }}>⚙️ Płytowy Moduł CNC (N-Panel)</span>
+                    <span style={{ fontWeight: 700, color: b.accentBlue }}>{tx(cncTekst, 'panel.title', TX_NS)}</span>
                     {onClose && (
                         <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#999', cursor: 'pointer', fontSize: '14px' }}>✕</button>
                     )}
@@ -756,7 +886,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                         cursor: 'pointer', outline: 'none',
                     }}
                 >
-                    <span style={{ fontSize: '12px' }}>➕</span> Utwórz nowy program
+                    <span style={{ fontSize: '12px' }}>{tx(cncTekst, 'panel.create_program', TX_NS)}</span>
                 </button>
 
 
@@ -773,7 +903,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                         style={{ background: '#383838', padding: '6px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', borderBottom: showProjectSettings ? '1px solid #282828' : 'none' }}
                     >
                         <span style={{ fontWeight: 600, color: '#eeeeee', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            ⚙️ Ustawienia Projektu
+                            {tx(cncTekst, 'project.title', TX_NS)}
                         </span>
                         <span style={{ fontSize: '8px', color: '#aaaaaa' }}>{showProjectSettings ? '▼' : '▶'}</span>
                     </div>
@@ -781,10 +911,10 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                     {showProjectSettings && (
                         <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <div style={{ fontSize: '11px', color: '#eeeeee', display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid #444', paddingBottom: '4px' }}>
-                                ⚙️ Parametry Programu
+                                {tx(cncTekst, 'project.program_params', TX_NS)}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', gap: '4px', alignItems: 'center' }}>
-                                <label style={{ fontSize: '11px', color: '#cccccc' }}>Nazwa:</label>
+                                <label style={{ fontSize: '11px', color: '#cccccc' }}>{tx(cncTekst, 'project.name', TX_NS)}</label>
                                 <input type="text" value={projectName} onChange={e => { updateProg({ projectName: e.target.value, name: e.target.value }); }} style={{ background: '#222', border: '1px solid #111', color: '#eee', padding: '4px', fontSize: '11px', borderRadius: '2px' }} />
                                 
                                 <label style={{ fontSize: '11px', color: '#cccccc' }}>Postpr...</label>
@@ -803,7 +933,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                 {/* Lista Programów (Aktywny program) */}
                 <div style={{ background: '#333333', border: '1px solid #282828', borderRadius: '4px', padding: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {programs.length === 0 ? (
-                        <div style={{ fontSize: '11px', color: '#aaa', padding: '4px', textAlign: 'center' }}>Brak utworzonych programów</div>
+                        <div style={{ fontSize: '11px', color: '#aaa', padding: '4px', textAlign: 'center' }}>{tx(cncTekst, 'panel.no_programs', TX_NS)}</div>
                     ) : (
                         programs.map(prog => (
                             <div key={prog.id} style={{ display: 'flex', gap: '4px' }}>
@@ -812,14 +942,15 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                     style={{ display: 'flex', alignItems: 'center', background: activeProgramId === prog.id ? '#4f80bd' : '#444', color: '#fff', flex: 1, borderRadius: '3px', padding: '4px 6px', gap: '6px', border: '1px solid #222', cursor: 'pointer' }}
                                 >
                                     <input type="checkbox" checked={activeProgramId === prog.id} readOnly style={{ accentColor: '#4f80bd', margin: 0 }} />
-                                    <span style={{ fontSize: '11px', flex: 1, textAlign: 'left' }}>{prog.name} ({prog.targetPanelName})</span>
+                                    <span style={{ fontSize: '11px', flex: 1, textAlign: 'left' }}>{prog.name} ({prog.targetPanelLabel || prog.targetPanelId || ''})</span>
                                 </div>
                                 <button 
-                                    onClick={() => handleDeleteProgram(prog.id)}
-                                    style={{ background: '#444', border: '1px solid #222', borderRadius: '3px', padding: '4px 8px', color: '#eee', cursor: 'pointer' }}
-                                >
-                                    🗑️
-                                </button>
+onClick={() => handleDeleteProgram(prog.id)}
+style={{ background: '#444', border: '1px solid #222', borderRadius: '3px', padding: '4px 8px', color: '#eee', cursor: 'pointer', fontSize: '11px' }}
+title={tx(cncTekst, 'panel.delete', TX_NS)}
+>
+{tx(cncTekst, 'panel.delete', TX_NS)}
+</button>
                             </div>
                         ))
                     )}
@@ -843,18 +974,18 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                         gap: '6px'
                     }}>
                         <span>❄️</span>
-                        <span><strong>Formatka zamrożona:</strong> wykluczona z obróbki CNC, generowania G-kodu oraz nestingu.</span>
+                        <span><strong>{tx(cncTekst, 'panel.frozen_title', TX_NS)}</strong> {tx(cncTekst, 'panel.frozen_body', TX_NS)}</span>
                     </div>
                 )}
 
                 {/* TAB GRID */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gridTemplateRows: 'auto auto', gap: '1px', background: '#222', border: '1px solid #222', borderRadius: '3px', overflow: 'hidden' }}>
-                    <button onClick={() => store.setActiveSubTab('wcs')} style={{ gridColumn: '1 / 2', gridRow: '1', background: activeSubTab === 'wcs' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>📍 WCS</button>
-                    <button onClick={() => store.setActiveSubTab('tool')} style={{ gridColumn: '2 / 3', gridRow: '1', background: activeSubTab === 'tool' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>🪛 Narzedzie</button>
-                    <button onClick={() => store.setActiveSubTab('operation')} style={{ gridColumn: '3 / 4', gridRow: '1', background: activeSubTab === 'operation' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>🔧 Operacja</button>
+                    <button onClick={() => store.setActiveSubTab('wcs')} style={{ gridColumn: '1 / 2', gridRow: '1', background: activeSubTab === 'wcs' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>{tx(cncTekst, 'tabs.wcs', TX_NS)}</button>
+                    <button onClick={() => store.setActiveSubTab('tool')} style={{ gridColumn: '2 / 3', gridRow: '1', background: activeSubTab === 'tool' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>{tx(cncTekst, 'tabs.tool', TX_NS)}</button>
+                    <button onClick={() => store.setActiveSubTab('operation')} style={{ gridColumn: '3 / 4', gridRow: '1', background: activeSubTab === 'operation' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>{tx(cncTekst, 'tabs.operation', TX_NS)}</button>
                     
-                    <button onClick={() => store.setActiveSubTab('simulate')} style={{ gridColumn: '1 / 3', gridRow: '2', background: activeSubTab === 'simulate' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>▶ Symulacja</button>
-                    <button onClick={() => store.setActiveSubTab('generate')} style={{ gridColumn: '3 / 4', gridRow: '2', background: activeSubTab === 'generate' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>Generuj NC</button>
+                    <button onClick={() => store.setActiveSubTab('simulate')} style={{ gridColumn: '1 / 3', gridRow: '2', background: activeSubTab === 'simulate' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>{tx(cncTekst, 'tabs.simulate', TX_NS)}</button>
+                    <button onClick={() => store.setActiveSubTab('generate')} style={{ gridColumn: '3 / 4', gridRow: '2', background: activeSubTab === 'generate' ? '#4f80bd' : '#444', color: '#fff', border: 'none', padding: '4px', fontSize: '11px', cursor: 'pointer' }}>{tx(cncTekst, 'tabs.generate', TX_NS)}</button>
                 </div>
 
                 {/* TAB CONTENT */}
@@ -868,7 +999,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', gap: '6px', alignItems: 'center' }}>
-                                <label style={{ fontSize: '11px', color: '#cccccc' }}>Nazwa</label>
+                                <label style={{ fontSize: '11px', color: '#cccccc' }}>{tx(cncTekst, 'wcs.name', TX_NS)}</label>
                                 <select
                                     value={wcsName}
                                     onChange={e => { updateProg({ wcsName: e.target.value }); }}
@@ -900,7 +1031,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                     boxShadow: isPickingWcsCorner ? '0 0 0 2px rgba(217,119,6,0.35)' : undefined,
                                 }}
                             >
-                                {isPickingWcsCorner ? '🎯 Kliknij naroże w 3D…' : 'Zmień naroże WCS'}
+                                {isPickingWcsCorner ? tx(cncTekst, 'panel.pick_wcs_corner', TX_NS) : tx(cncTekst, 'panel.change_wcs_corner', TX_NS)}
                             </button>
 
                             <div style={{ background: 'rgba(0,0,0,0.22)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', overflow: 'hidden' }}>
@@ -916,9 +1047,9 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                         borderBottom: showWcsLayoutEdit ? '1px solid rgba(255,255,255,0.08)' : 'none',
                                     }}
                                 >
-                                    <span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '11px' }}>
-                                        Edycja układu
-                                    </span>
+<span style={{ fontWeight: 600, color: '#e2e8f0', fontSize: '11px' }}>
+{tx(cncTekst, 'panel.layout_edit', TX_NS)}
+</span>
                                     <span style={{ fontSize: '9px', color: '#94a3b8' }}>{showWcsLayoutEdit ? '▼' : '▶'}</span>
                                 </div>
 
@@ -926,7 +1057,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                     <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                                             <div>
-                                                <div style={{ fontSize: '11px', color: '#eee', marginBottom: '4px' }}>Pozycja</div>
+                                                <div style={{ fontSize: '11px', color: '#eee', marginBottom: '4px' }}>{tx(cncTekst, 'panel.position', TX_NS)}</div>
                                                 <div style={{ background: '#444', borderRadius: '3px', border: '1px solid #222', overflow: 'hidden' }}>
                                                     <div style={{ display: 'flex', padding: '2px 6px', borderBottom: '1px solid #222', alignItems: 'center', justifyContent: 'space-between' }}>
                                                         <span style={{ fontSize: '11px', color: '#ccc', width: '20px' }}>X</span>
@@ -946,7 +1077,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                                 </div>
                                             </div>
                                             <div>
-                                                <div style={{ fontSize: '11px', color: '#eee', marginBottom: '4px' }}>Rotacja</div>
+                                                <div style={{ fontSize: '11px', color: '#eee', marginBottom: '4px' }}>{tx(cncTekst, 'panel.rotation', TX_NS)}</div>
                                                 <div style={{ background: '#444', borderRadius: '3px', border: '1px solid #222', overflow: 'hidden' }}>
                                                     <div style={{ display: 'flex', padding: '2px 6px', borderBottom: '1px solid #222', alignItems: 'center', justifyContent: 'space-between' }}>
                                                         <span style={{ fontSize: '11px', color: '#ccc', width: '20px' }}>X</span>
@@ -973,7 +1104,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                     {activeSubTab === 'tool' && (
                         <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <div style={{ fontSize: '11px', color: '#eeeeee', borderBottom: '1px solid #444', paddingBottom: '4px' }}>
-                                🪛 Biblioteka Narzędzi
+                                {tx(cncTekst, 'panel.tools_library', TX_NS)}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '150px', overflowY: 'auto' }}>
                                 {toolsList.map(t => (
@@ -997,78 +1128,212 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                 <button onClick={handleDetectHoles} style={{ flex: 1, background: '#444', color: '#eee', border: 'none', borderRight: '1px solid #222', padding: '4px', fontSize: '11px', cursor: 'pointer', textAlign: 'center' }}>🔍 Wykryj cechy (otwory)</button>
                                 <button onClick={handleDetectGrooves} style={{ flex: 1, background: '#444', color: '#eee', border: 'none', borderRight: '1px solid #222', padding: '4px', fontSize: '11px', cursor: 'pointer', textAlign: 'center' }}>🔍 Wykryj cechy (wpusty)</button>
                                 <button onClick={handleStartSelectProfile} style={{ flex: 1, background: '#444', color: '#eee', border: 'none', borderRight: '1px solid #222', padding: '4px', fontSize: '11px', cursor: 'pointer', textAlign: 'center' }}>➕ Wybierz profil</button>
-                                <button onClick={() => updateProg({ features: [] })} style={{ background: '#444', color: '#eee', border: 'none', padding: '4px 8px', cursor: 'pointer' }}>🗑️</button>
+                                <button
+                                    type="button"
+                                    onClick={() => updateProg({ features: [] })}
+                                    title={tx(cncTekst, 'panel.clear_features', TX_NS) || 'Wyczyść wszystkie operacje'}
+                                    style={{ background: '#444', color: '#eee', border: 'none', padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="3 6 5 6 21 6" />
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                    </svg>
+                                </button>
                             </div>
 
                             {isSelectingProfile && (
                                 <div style={{ background: '#27272a', padding: '6px', borderRadius: '4px', border: '1px solid #d97706', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                     <div style={{ color: '#f59e0b', fontWeight: 600, fontSize: '10px', textAlign: 'center' }}>
-                                        ✏️ Wybierz Krawędzie 3D ({selectedSegmentCount})
+                                        {tx(cncTekst, 'panel.pick_edges', TX_NS, { n: selectedSegmentCount })}
                                     </div>
                                     <div style={{ display: 'flex', gap: '4px' }}>
-                                        <button onClick={handleConfirmProfileUI} style={{ flex: 1, padding: '4px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '3px', fontWeight: 700, cursor: 'pointer', fontSize: '10px' }}>✓ Zatwierdź</button>
-                                        <button onClick={handleCancelProfile} style={{ flex: 1, padding: '4px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '3px', fontWeight: 600, cursor: 'pointer', fontSize: '10px' }}>✕ Anuluj</button>
+                                        <button onClick={handleConfirmProfileUI} style={{ flex: 1, padding: '4px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '3px', fontWeight: 700, cursor: 'pointer', fontSize: '10px' }}>{tx(cncTekst, 'panel.confirm', TX_NS)}</button>
+                                        <button onClick={handleCancelProfile} style={{ flex: 1, padding: '4px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '3px', fontWeight: 600, cursor: 'pointer', fontSize: '10px' }}>{tx(cncTekst, 'panel.cancel', TX_NS)}</button>
                                     </div>
                                 </div>
                             )}
 
                             <div style={{ fontSize: '11px', color: '#eeeeee', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                                ≣ Kolejność Operacji (generowanie kodu):
+                                {tx(cncTekst, 'panel.operations_order', TX_NS)}
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '120px', overflowY: 'auto' }}>
                                 {features.length === 0 && (
                                     <div style={{ fontSize: '11px', color: '#eeeeee', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <span style={{background: '#fff', color: '#000', width: '12px', height: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '2px', fontSize: '9px', fontWeight: 'bold'}}>i</span>
-                                        Brak przypisanych operacji.
+                                        {tx(cncTekst, 'panel.no_operations', TX_NS)}
                                     </div>
                                 )}
                                 {features.map((feat, idx) => {
                                     const isComplete = !!feat.toolId;
-                                    const rowBg = isComplete ? '#0f2918' : '#222';
-                                    const rowBorder = isComplete ? '1px solid #166534' : '1px solid #111';
-                                    const indexColor = isComplete ? '#4ade80' : '#60a5fa';
+                                    const isHovered = hoveredFeatureIdx === idx;
+                                    const isPinned = pinnedPreviewIdx === idx;
+                                    const isActiveHighlight = isHovered || isPinned;
+
+                                    let rowBg = '#222';
+                                    let rowBorder = '1px solid #111';
+                                    if (isActiveHighlight) {
+                                        rowBg = '#0c2340';
+                                        rowBorder = '1px solid #0284c7';
+                                    } else if (isComplete) {
+                                        rowBg = '#0f2918';
+                                        rowBorder = '1px solid #166534';
+                                    }
+
+                                    const indexColor = isActiveHighlight ? '#38bdf8' : (isComplete ? '#4ade80' : '#60a5fa');
+                                    const isHole = 'diameter' in feat || (feat as any).type === 'hole';
+                                    const isGroove = 'startPoint' in feat || (feat as any).type === 'groove';
+                                    const count = (feat as any).holeCount || ((feat as any).positions ? (feat as any).positions.length : 1);
+                                    const dimText = isHole
+                                        ? `Ø${(feat as any).diameter} × ${(feat as any).depth}mm${count > 1 ? ` (${count}×)` : ''}`
+                                        : (isGroove ? `szer. ${(feat as any).width} × ${(feat as any).depth}mm` : '');
+
                                     return (
-                                    <div key={idx} style={{ background: rowBg, padding: '4px', border: rowBorder, display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#eee', borderRadius: '2px' }}>
+                                    <div 
+                                        key={idx} 
+                                        onMouseEnter={() => handleFeatureHover(feat, idx)}
+                                        onMouseLeave={() => handleFeatureLeave(idx)}
+                                        style={{ 
+                                            background: rowBg, 
+                                            padding: '4px 6px', 
+                                            border: rowBorder, 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '4px', 
+                                            fontSize: '11px', 
+                                            color: '#eee', 
+                                            borderRadius: '3px',
+                                            transition: 'background 0.15s ease, border-color 0.15s ease'
+                                        }}
+                                    >
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                             <button onClick={() => moveFeature(idx, -1)} disabled={idx === 0} style={{ padding: 0, background: 'transparent', border: 'none', color: idx === 0 ? '#555' : '#aaa', cursor: idx === 0 ? 'default' : 'pointer', fontSize: '8px' }}>▲</button>
                                             <button onClick={() => moveFeature(idx, 1)} disabled={idx === features.length - 1} style={{ padding: 0, background: 'transparent', border: 'none', color: idx === features.length - 1 ? '#555' : '#aaa', cursor: idx === features.length - 1 ? 'default' : 'pointer', fontSize: '8px' }}>▼</button>
                                         </div>
+
+                                        {/* Ikonka Oka — podgląd / przypięcie podświetlenia 3D (bez obwódki) */}
+                                        <button
+                                            type="button"
+                                            className="tree-action-btn"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleTogglePinFeature(feat, idx);
+                                            }}
+                                            title={isPinned ? 'Wyłącz podgląd 3D' : 'Podgląd w 3D'}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: isPinned ? '#38bdf8' : (isActiveHighlight ? '#38bdf8' : '#94a3b8'),
+                                                padding: '2px 3px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                opacity: (isPinned || isActiveHighlight) ? 1 : 0.6,
+                                                transition: 'opacity 0.15s ease, color 0.15s ease'
+                                            }}
+                                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                                            onMouseLeave={(e) => {
+                                                if (!isPinned && !isActiveHighlight) (e.currentTarget as HTMLElement).style.opacity = '0.6';
+                                            }}
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                                <circle cx="12" cy="12" r="3" />
+                                            </svg>
+                                        </button>
                                         
                                         <span style={{ width: '16px', textAlign: 'center', color: indexColor, fontWeight: 'bold' }}>{idx + 1}.</span>
                                         
-                                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={feat.name || ('diameter' in feat ? 'Otwór' : 'Profil')}>
-                                            {feat.name || ('diameter' in feat ? 'Otwór' : 'Profil')}
-                                        </span>
+                                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }} title={feat.name || (isHole ? tx(cncTekst, 'feature.fallback_hole', TX_NS) : tx(cncTekst, 'feature.fallback_profile', TX_NS))}>
+                                                {feat.name || (isHole ? tx(cncTekst, 'feature.fallback_hole', TX_NS) : tx(cncTekst, 'feature.fallback_profile', TX_NS))}
+                                            </span>
+                                            {dimText && (
+                                                <span style={{ fontSize: '9px', color: '#38bdf8', fontWeight: 500, letterSpacing: '0.2px' }}>
+                                                    {dimText}
+                                                </span>
+                                            )}
+                                        </div>
                                         
                                         <select 
                                             value={feat.toolId || ''} 
                                             onChange={(e) => updateFeatureTool(idx, e.target.value)}
                                             style={{ background: isComplete ? '#052e16' : '#111', border: `1px solid ${isComplete ? '#166534' : '#333'}`, color: '#eee', padding: '2px', fontSize: '10px', borderRadius: '2px', width: '70px', outline: 'none' }}
                                         >
-                                            <option value="">Narzędzie...</option>
+                                            <option value="">{tx(cncTekst, 'operations.tool_none', TX_NS)}</option>
                                             {toolsList.map(t => (
                                                 <option key={t.id} value={t.id}>{t.name}</option>
                                             ))}
                                         </select>
                                         
+                                        {/* Ikonka Ołówek / Długopis — edycja operacji (bez obwódki) */}
                                         <button
+                                            type="button"
+                                            className="tree-action-btn"
                                             onClick={() => {
                                                 setEditingFeatureIndex(idx);
                                                 setTempFeatureEdit(JSON.parse(JSON.stringify(feat)));
                                             }}
-                                            title="Ustawienia"
-                                            style={{ background: '#4f80bd', color: '#fff', border: 'none', padding: '3px', borderRadius: '2px', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            title={tx(cncTekst, 'operations.edit', TX_NS)}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: '#94a3b8',
+                                                padding: '2px 3px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                opacity: 0.6,
+                                                transition: 'opacity 0.15s ease, color 0.15s ease'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                (e.currentTarget as HTMLElement).style.opacity = '1';
+                                                (e.currentTarget as HTMLElement).style.color = '#60a5fa';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                (e.currentTarget as HTMLElement).style.opacity = '0.6';
+                                                (e.currentTarget as HTMLElement).style.color = '#94a3b8';
+                                            }}
                                         >
-                                            ⚙️
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M12 20h9" />
+                                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                            </svg>
                                         </button>
-                                        
+
+                                        {/* Ikonka Kosz — usuwanie operacji (bez obwódki) */}
                                         <button
+                                            type="button"
+                                            className="tree-action-btn"
                                             onClick={() => deleteFeature(idx)}
-                                            title="Usuń"
-                                            style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '3px', borderRadius: '2px', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            title={tx(cncTekst, 'panel.delete', TX_NS)}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: '#94a3b8',
+                                                padding: '2px 3px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                opacity: 0.6,
+                                                transition: 'opacity 0.15s ease, color 0.15s ease'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                (e.currentTarget as HTMLElement).style.opacity = '1';
+                                                (e.currentTarget as HTMLElement).style.color = '#ef4444';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                (e.currentTarget as HTMLElement).style.opacity = '0.6';
+                                                (e.currentTarget as HTMLElement).style.color = '#94a3b8';
+                                            }}
                                         >
-                                            🗑️
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <polyline points="3 6 5 6 21 6" />
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                            </svg>
                                         </button>
                                     </div>
                                     );
@@ -1091,7 +1356,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px', background: '#222', padding: '6px', borderRadius: '3px', border: '1px solid #333' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#ccc' }}>
-                                    <span>⚡ Prędkość symulacji:</span>
+                                    <span>{tx(cncTekst, 'panel.sim_speed', TX_NS)}</span>
                                     <span style={{ fontWeight: 'bold', color: '#60a5fa' }}>{storeState.simulationSpeed.toFixed(1)}x</span>
                                 </div>
                                 <input 
@@ -1128,7 +1393,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                     )}
                     {activeSubTab === 'generate' && !currentProgram && (
                         <div style={{ padding: '12px', fontSize: '11px', color: '#aaa', textAlign: 'center' }}>
-                            Wybierz lub utwórz program CNC, aby wygenerować kod.
+                            {tx(cncTekst, 'panel.no_program_hint', TX_NS)}
                         </div>
                     )}
 
@@ -1139,13 +1404,13 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
                     <div style={{ background: '#1d1d1d', border: '1px solid #111', width: '380px', color: '#eee', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', borderRadius: '4px', overflow: 'hidden' }}>
                         
-                        <div style={{ padding: '8px 12px', borderBottom: '1px solid #333', fontSize: '11px', fontWeight: 600 }}>
-                            Ustawienia Operacji
-                        </div>
+<div style={{ padding: '8px 12px', borderBottom: '1px solid #333', fontSize: '11px', fontWeight: 600 }}>
+{tx(cncTekst, 'operations.settings', TX_NS)}
+</div>
 
                         <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', alignItems: 'center' }}>
-                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>Nazwa</label>
+                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>{tx(cncTekst, 'wcs.name', TX_NS)}</label>
                                 <input 
                                     type="text" 
                                     value={tempFeatureEdit.name || `Profil_${editingFeatureIndex + 1}`} 
@@ -1155,13 +1420,13 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', alignItems: 'center' }}>
-                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>Narzędzie</label>
-                                <select 
-                                    value={tempFeatureEdit.toolId || ''} 
-                                    onChange={(e) => setTempFeatureEdit({ ...tempFeatureEdit, toolId: e.target.value })} 
-                                    style={{ background: '#222', border: '1px solid #111', color: '#eee', padding: '4px', fontSize: '11px', borderRadius: '3px' }}
-                                >
-                                    <option value="">Brak</option>
+<label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>{tx(cncTekst, 'operations.tool_label', TX_NS)}</label>
+<select
+value={tempFeatureEdit.toolId || ''}
+onChange={(e) => setTempFeatureEdit({ ...tempFeatureEdit, toolId: e.target.value })}
+style={{ background: '#222', border: '1px solid #111', color: '#eee', padding: '4px', fontSize: '11px', borderRadius: '3px' }}
+>
+<option value="">{tx(cncTekst, 'operations.tool_none', TX_NS)}</option>
                                     {toolsList.map(t => (
                                         <option key={t.id} value={t.id}>{t.name} (FI {t.diameter}mm)</option>
                                     ))}
@@ -1169,7 +1434,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', alignItems: 'center' }}>
-                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>Głębokość / Z (mm)</label>
+                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>{tx(cncTekst, 'operations.depth_z', TX_NS)}</label>
                                 <input 
                                     type="text" 
                                     inputMode="decimal"
@@ -1188,7 +1453,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', alignItems: 'center' }}>
-                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>Wydłuż wejście</label>
+                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>{tx(cncTekst, 'operations.lead_in', TX_NS)}</label>
                                 <input 
                                     type="number" 
                                     value={tempFeatureEdit.leadIn ?? 0}
@@ -1198,7 +1463,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', alignItems: 'center' }}>
-                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>Wydłuż wyjście</label>
+                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>{tx(cncTekst, 'operations.lead_out', TX_NS)}</label>
                                 <input 
                                     type="number" 
                                     value={tempFeatureEdit.leadOut ?? 0}
@@ -1215,7 +1480,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                         checked={Boolean(tempFeatureEdit.reverseDirection)}
                                         onChange={(e) => setTempFeatureEdit({ ...tempFeatureEdit, reverseDirection: e.target.checked })}
                                         style={{ accentColor: '#4f80bd', cursor: 'pointer' }} 
-                                    /> Odwróć kierunek wejścia
+                                    /> {tx(cncTekst, 'operations.reverse_entry', TX_NS)}
                                 </label>
                             </div>
 
@@ -1227,20 +1492,20 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                         checked={Boolean((tempFeatureEdit as any).flipDepthDirection)}
                                         onChange={(e) => setTempFeatureEdit({ ...tempFeatureEdit, flipDepthDirection: e.target.checked } as any)}
                                         style={{ accentColor: '#4f80bd', cursor: 'pointer' }} 
-                                    /> Odwróć głębokość wpustu
+                                    /> {tx(cncTekst, 'operations.reverse_groove_depth', TX_NS)}
                                 </label>
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', alignItems: 'center' }}>
-                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>Kompensacja</label>
+                                <label style={{ fontSize: '11px', color: '#ccc', textAlign: 'right' }}>{tx(cncTekst, 'operations.comp_title', TX_NS)}</label>
                                 <select 
                                     value={tempFeatureEdit.compensation || 'Center'}
                                     onChange={(e) => setTempFeatureEdit({ ...tempFeatureEdit, compensation: e.target.value })} 
                                     style={{ background: '#222', border: '1px solid #111', color: '#eee', padding: '4px', fontSize: '11px', borderRadius: '3px' }}
                                 >
-                                    <option value="Center">Brak</option>
-                                    <option value="Left">Wewnątrz (G41)</option>
-                                    <option value="Right">Na zewnątrz (G42)</option>
+                                    <option value="Center">{tx(cncTekst, 'operations.comp_none_short', TX_NS)}</option>
+<option value="Left">{tx(cncTekst, 'operations.comp_inside', TX_NS)}</option>
+<option value="Right">{tx(cncTekst, 'operations.comp_outside', TX_NS)}</option>
                                 </select>
                             </div>
                         </div>
@@ -1250,13 +1515,13 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                                 onClick={saveFeatureEdit} 
                                 style={{ flex: 1, background: '#4f80bd', color: '#fff', border: '1px solid #3b608e', padding: '6px', fontSize: '11px', borderRadius: '3px', cursor: 'pointer', fontWeight: 600 }}
                             >
-                                OK
+                                {tx(cncTekst, 'operations.ok', TX_NS)}
                             </button>
                             <button 
                                 onClick={() => { setEditingFeatureIndex(null); setTempFeatureEdit(null); }} 
                                 style={{ flex: 1, background: '#444', color: '#eee', border: '1px solid #333', padding: '6px', fontSize: '11px', borderRadius: '3px', cursor: 'pointer' }}
                             >
-                                Cancel
+                                {tx(cncTekst, 'operations.cancel', TX_NS)}
                             </button>
                         </div>
                     </div>

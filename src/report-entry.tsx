@@ -20,6 +20,12 @@ import {
     installModulePageLifecycle,
 } from './module-data/session';
 import type { ReportModulePayload } from './module-data/types';
+import { tx, getLocale } from '../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 installModulePageLifecycle('report');
 
@@ -55,7 +61,7 @@ function parseReportJson(text: string, fileName: string): ReportModulePayload {
               containers: data.containers || [],
           }
         : data;
-    if (!next.panels) throw new Error('JSON musi zawierać tablicę panels');
+    if (!next.panels) throw new Error(tx(srcTekst, 'entry.report_panels', TX_NS));
     return next;
 }
 
@@ -64,7 +70,7 @@ function ReportStandaloneApp() {
         () => readModuleSession<ReportModulePayload>('report')
     );
     const [error, setError] = useState<string | null>(
-        payload ? null : 'Brak danych. Otwórz raport z drzewa CAD (PPM) albo wczytaj JSON.'
+        payload ? null : tx(srcTekst, 'entry.report_empty', TX_NS)
     );
     const [refreshHint, setRefreshHint] = useState<string | null>(null);
 
@@ -75,8 +81,8 @@ function ReportStandaloneApp() {
             setError(null);
             setRefreshHint(
                 next.meta?.loadedAt
-                    ? `Odświeżono ${new Date(next.meta.loadedAt).toLocaleTimeString('pl-PL')}`
-                    : 'Odświeżono'
+                    ? `${tx(srcTekst, 'entry.refreshed', TX_NS)} ${new Date(next.meta.loadedAt).toLocaleTimeString(getLocale())}`
+                    : tx(srcTekst, 'entry.refreshed', TX_NS)
             );
         }
     }, []);
@@ -84,7 +90,7 @@ function ReportStandaloneApp() {
     const askCadRefresh = useCallback(() => {
         const scope = payload?.scope;
         if (!scope) {
-            setRefreshHint('Brak zakresu — otwórz raport ponownie z CAD.');
+            setRefreshHint(tx(srcTekst, 'entry.no_scope', TX_NS));
             return;
         }
         setRefreshHint('Pobieram z CAD…');
@@ -172,7 +178,7 @@ function ReportStandaloneApp() {
             )}
             {payload && !html && (
                 <div style={{ padding: 24, color: '#f87171' }}>
-                    Nie udało się wygenerować raportu HTML.
+                    {tx(srcTekst, 'entry.report_fail', TX_NS)}
                 </div>
             )}
             {html && (

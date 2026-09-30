@@ -1,0 +1,132 @@
+{
+  "panel.title": {
+    "pl": "SmartWall",
+    "en": "SmartWall",
+    "de": "SmartWall"
+  },
+  "panel.subtitle": {
+    "pl": "Ściany i podłoga — osobne kontenery pod projektem (PART). Poza produkcją / nest.",
+    "en": "Walls and floor — separate containers under the project (PART). Excluded from production / nesting.",
+    "de": "Wände und Boden — eigene Container unter dem Projekt (PART). Ohne Produktion / Nesting."
+  },
+  "cards.add_title": {
+    "pl": "+DODAJ ŚCIANY",
+    "en": "+ADD WALLS",
+    "de": "+WÄNDE HINZUFÜGEN"
+  },
+  "cards.hint_status": {
+    "pl": "Przeciągnij ikonę na scenę 3D. Klik nie wstawia elementu.",
+    "en": "Drag the icon onto the 3D scene. Click does not insert anything.",
+    "de": "Ziehen Sie das Symbol auf die 3D-Szene. Klicken fügt nichts ein."
+  },
+  "cards.drag_hint": {
+    "pl": "Chwyć i przeciągnij na scenę 3D",
+    "en": "Grab and drag onto the 3D scene",
+    "de": "Greifen und auf die 3D-Szene ziehen"
+  },
+  "cards.rect.label": {
+    "pl": "Pokój □",
+    "en": "Room □",
+    "de": "Raum □"
+  },
+  "cards.rect.title": {
+    "pl": "Przeciągnij na scenę 3D, aby wstawić pokój (4 ściany)",
+    "en": "Drag onto the 3D scene to insert a room (4 walls)",
+    "de": "Auf die 3D-Szene ziehen, um einen Raum einzufügen (4 Wände)"
+  },
+  "cards.single.label": {
+    "pl": "Ściana",
+    "en": "Wall",
+    "de": "Wand"
+  },
+  "cards.single.title": {
+    "pl": "Przeciągnij na scenę 3D, aby wstawić pojedynczą ścianę",
+    "en": "Drag onto the 3D scene to insert a single wall",
+    "de": "Auf die 3D-Szene ziehen, um eine einzelne Wand einzufügen"
+  },
+  "cards.skos.label": {
+    "pl": "Skos",
+    "en": "Slant",
+    "de": "Schräge"
+  },
+  "cards.skos.title": {
+    "pl": "Przeciągnij na scenę 3D, aby wstawić skos pod schody (trapez)",
+    "en": "Drag onto the 3D scene to insert an under-stair slant (trapezoid)",
+    "de": "Auf die 3D-Szene ziehen, um eine Schräge unter der Treppe einzufügen (Trapez)"
+  },
+  "cards.floor.label": {
+    "pl": "Podłoga",
+    "en": "Floor",
+    "de": "Boden"
+  },
+  "cards.floor.title": {
+    "pl": "Przeciągnij na scenę 3D, aby wstawić podłogę (osobny kontener, na dole)",
+    "en": "Drag onto the 3D scene to insert a floor (separate container, at the bottom)",
+    "de": "Auf die 3D-Szene ziehen, um einen Boden einzufügen (eigener Container, unten)"
+  },
+  "params.active": {
+    "pl": "Aktywny SmartWall:",
+    "en": "Active SmartWall:",
+    "de": "Aktive SmartWall:"
+  },
+  "params.active_floor": {
+    "pl": "Aktywna podłoga:",
+    "en": "Active floor:",
+    "de": "Aktiver Boden:"
+  },
+  "params.empty_hint": {
+    "pl": "Przeciągnij pokój, ścianę lub skos na scenę, albo zaznacz element w drzewie.",
+    "en": "Drag a room, wall or slant onto the scene, or select an element in the tree.",
+    "de": "Raum, Wand oder Schräge auf die Szene ziehen oder Element im Baum wählen."
+  },
+  "params.room_width": {
+    "pl": "Szerokość",
+    "en": "Width",
+    "de": "Breite"
+  },
+  "params.room_depth": {
+    "pl": "Głębokość",
+    "en": "Depth",
+    "de": "Tiefe"
+  },
+  "params.wall_height": {
+    "pl": "Wysokość",
+    "en": "Height",
+    "de": "Höhe"
+  },
+  "params.wall_thickness": {
+    "pl": "Grubość",
+    "en": "Thickness",
+    "de": "Stärke"
+  },
+  "params.single_length": {
+    "pl": "Długość",
+    "en": "Length",
+    "de": "Länge"
+  },
+  "params.skos_height_left": {
+    "pl": "Wys. lewa",
+    "en": "Left height",
+    "de": "Höhe links"
+  },
+  "params.skos_height_right": {
+    "pl": "Wys. prawa",
+    "en": "Right height",
+    "de": "Höhe rechts"
+  },
+  "params.skos_slant": {
+    "pl": "Ukos",
+    "en": "Slant",
+    "de": "Schräge"
+  },
+  "params.skos_slant_bottom": {
+    "pl": "Na dole",
+    "en": "At bottom",
+    "de": "Unten"
+  },
+  "params.skos_slant_top": {
+    "pl": "U góry",
+    "en": "At top",
+    "de": "Oben"
+  }
+}

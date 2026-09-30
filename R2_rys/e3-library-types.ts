@@ -33,7 +33,7 @@ export interface E3LibraryItem {
     id: string;
     uid: string;
     name: string;
-    type: 'CONTAINER' | 'PANEL' | 'SMARTBOX' | 'ASSEMBLY';
+    type: 'CONTAINER' | 'PANEL' | 'BLOKI' | 'ASSEMBLY';
     width: number;      // mm (X)
     height: number;     // mm (Y / Długość)
     depth: number;      // mm (Z / Grubość / Głębokość)
@@ -52,7 +52,7 @@ export interface E3PlacedView {
     id: string;
     sourceItemId: string;
     sourceItemName: string;
-    itemType: 'CONTAINER' | 'PANEL' | 'SMARTBOX' | 'ASSEMBLY';
+    itemType: 'CONTAINER' | 'PANEL' | 'BLOKI' | 'ASSEMBLY';
     
     // Wymiary rzeczywiste modelu w mm
     dimX: number;

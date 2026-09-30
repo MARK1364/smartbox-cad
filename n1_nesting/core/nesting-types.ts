@@ -5,12 +5,12 @@
 export type GrainDirection = 'horizontal' | 'vertical' | 'none';
 export type RotationRule = 'any' | 'none' | 'prefer_length';
 export type MachineType = 'saw' | 'cnc';
-export type NestingScope = 'PROJECT' | 'CONTAINER' | 'SMARTBOX';
+export type NestingScope = 'PROJECT' | 'CONTAINER' | 'BLOKI';
 
 export interface ContainerScopeInfo {
     id: string;
     name: string;
-    type: 'furniture' | 'smartbox';
+    type: 'furniture' | 'bloki';
     partsCount: number;
 }
 
@@ -28,7 +28,7 @@ export interface NestingPart {
     material?: string;      // Nazwa materiału (np. "Biel Alpejska", "HDF Biały")
     grain?: GrainDirection;
     containerId?: string;   // ID szafki / korpusu nadrzędnego
-    smartboxId?: string;    // ID SmartBoxa
+    blokId?: string;    // ID Bloku
     furnitureName?: string; // Nazwa mebla (np. "Szafka Dolna")
     sourceNodeId?: string;  // Powiązanie z węzłem CAD
     metadata?: Record<string, any>;
@@ -77,7 +77,7 @@ export interface PackedPart {
     thickness?: number;
     thickness_nm?: number;
     containerId?: string;
-    smartboxId?: string;
+    blokId?: string;
     furnitureName?: string;
     sourceNodeId?: string;
 }
@@ -132,9 +132,9 @@ export interface NestingOptions {
     stopOnFirstFit?: boolean;
     selectedMaterial?: string;      // 'ALL' lub klucz materiału
     machineType?: MachineType;      // 'saw' lub 'cnc'
-    scope?: NestingScope;           // 'PROJECT' | 'CONTAINER' | 'SMARTBOX'
-    targetContainerId?: string;     // Konkretny ID szafki lub SmartBoxa
-    targetContainerIds?: string[];   // Lista ID wybranych korpusów / SmartBoxów (Multi-wybór z Ctrl)
+    scope?: NestingScope;           // 'PROJECT' | 'CONTAINER' | 'BLOKI'
+    targetContainerId?: string;     // Konkretny ID szafki lub Bloku
+    targetContainerIds?: string[];   // Lista ID wybranych korpusów / Bloków (Multi-wybór z Ctrl)
 }
 
 export interface MaterialGroupSummary {

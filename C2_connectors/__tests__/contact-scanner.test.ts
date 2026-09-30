@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import '../../A1_core/project-domain.js';
+import '../../src/application/project-domain.js';
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';

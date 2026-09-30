@@ -58,6 +58,11 @@ export interface CADTreeNode {
     frozen?: boolean;
     isManual?: boolean;
     engineManaged?: boolean;
+    panelForm?: 'SOLID' | 'ALU_FRAME';
+    frameTemplateId?: string;
+    frameComponents?: any[];
+    /** Parametry generatora (smartwall / bloki / korpus) — do UI drzewa. */
+    generatorParams?: Record<string, any>;
 }
 
 export interface PartDrawingGeometry {

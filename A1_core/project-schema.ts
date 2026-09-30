@@ -12,7 +12,6 @@
  *
  * Konwersje:
  *   UI (mm)    ← unit.toMM(nm)      /  unit.fromMM(mm) → nm
- *   OCCT (m)   ← unit.toOCCT(nm)    /  unit.fromOCCT(m) → nm
  *   Babylon    ← unit.toBabylon(nm)  /  unit.fromBabylon(mm) → nm
  */
 
@@ -77,7 +76,7 @@ export interface SmartFrameJSON {
     parent_id: string | null;
     name: string;
     type: "container";
-    subtype: "SMARTFRAME" | "SMARTBOX" | string;
+    subtype: "SMARTFRAME" | "BLOKI" | string;
     properties?: {
         /** Szerokość kontenera [nm] */
         width: NM;
@@ -99,7 +98,7 @@ export interface ProjectStateJSON {
         timestamp: string;
         project_name: string;
         type: "project";
-        /** Wszystkie kontenery (korpusy, SmartBoxy itp.) */
+        /** Wszystkie kontenery (korpusy, Bloki itp.) */
         containers: SmartFrameJSON[];
         constraints?: any[];
         materials_catalog?: Record<string, any>;
@@ -107,5 +106,5 @@ export interface ProjectStateJSON {
     };
 }
 
-// Re-eksport dla wstecznej kompatybilności
-export type { Nanometers as Microns } from './unit-system.js';
+// Jednostka domenowa jest jawnie nazwana — bez aliasów typu `Microns`.
+export type { Nanometers } from './unit-system.js';

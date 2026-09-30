@@ -9,11 +9,42 @@ const BACK_EDGE_SUFFIX = /_(?:\+X|-X|\+Y|-Y)$/;
 
 export function defaultBackOverlapMm(rules: any = korpusRules): number {
     const raw = rules?.cabinet_construction_rules?.defaults?.back_groove_depth;
+    if (raw === undefined || raw === null) return rulesMToMm(0.011);
     return rulesMToMm(raw);
+}
+
+/**
+ * Domyślna zakładka krawędzi pleców.
+ * Rogowy90: 11 mm przy wieńcach/bokach, 0 tylko na styku dwóch pleców w narożniku.
+ */
+export function defaultBackEdgeOverlapMm(
+    paramName: string,
+    cabinetType?: string,
+    rules?: any
+): number {
+    const base = defaultBackOverlapMm(rules);
+    const t = String(cabinetType || '').toLowerCase();
+    if (!t.includes('rogowy90') && !t.includes('rogowy_90')) return base;
+
+    const m = String(paramName || '').match(/_(\+X|-X|\+Y|-Y)$/i);
+    if (!m) return base;
+    const suf = m[1] as '+X' | '-X' | '+Y' | '-Y';
+    const name = String(paramName).replace(/_(\+X|-X|\+Y|-Y)$/i, '').toUpperCase();
+
+    // Narożnik styku PLECY_Y (−X) ↔ PLECY_X (+X w LCS płyty = tył korpusu)
+    if ((name.includes('PLECY_Y') || name.includes('BACK_Y')) && suf === '-X') return 0;
+    if ((name.includes('PLECY_X') || name.includes('BACK_X')) && suf === '+X') return 0;
+    return base;
+}
+
+/** @deprecated Użyj defaultBackEdgeOverlapMm — zostawione dla kompatybilności. */
+export function defaultBackOverlapForCabinetMm(cabinetType?: string, rules?: any): number {
+    return defaultBackOverlapMm(rules);
 }
 
 export function defaultBackOverlapNm(rules: any = korpusRules): number {
     const raw = rules?.cabinet_construction_rules?.defaults?.back_groove_depth;
+    if (raw === undefined || raw === null) return rulesMToNm(0.011);
     return rulesMToNm(raw);
 }
 
@@ -26,8 +57,10 @@ export function readOffsetMm(
     offsets: Record<string, number> | undefined,
     paramName: string,
     role?: string,
-    rules?: any
+    rules?: any,
+    cabinetType?: string
 ): number {
+    const def = defaultBackEdgeOverlapMm(paramName, cabinetType, rules);
     if (offsets) {
         const v = offsets[paramName];
         if (v !== undefined && v !== null && !Number.isNaN(Number(v))) return Number(v);
@@ -37,11 +70,11 @@ export function readOffsetMm(
             if (m) {
                 const suffix = m[1] as '+X' | '-X' | '+Y' | '-Y';
                 const baseName = paramName.replace(/_(\+X|-X|\+Y|-Y)$/, '');
-                return readBackEdgeOffset(offsets, baseName, suffix, defaultBackOverlapMm(rules));
+                return readBackEdgeOffset(offsets, baseName, suffix, def);
             }
         }
     }
-    if (isBackPanelEdgeParam(paramName, role)) return defaultBackOverlapMm(rules);
+    if (isBackPanelEdgeParam(paramName, role)) return def;
     return 0;
 }
 

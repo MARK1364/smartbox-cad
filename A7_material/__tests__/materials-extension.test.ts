@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { attachMaterialsExtension, collectUsedMaterials, MATERIALS_DOCUMENT_SECTION } from '../materials-document-extension.js';
 import { materialDatabase } from '../material-database.js';
@@ -13,7 +14,7 @@ describe('extensions.materials', () => {
     });
 
     it('writes only materials referenced by panels, under extensions.materials', () => {
-        const panel = doc.createPanel({ name: 'Bok' }) as PanelModel;
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok' }) as PanelModel;
         panel.materialId = 'W1100_ST9_18';
         panel.setEdgeBand('+X', { type_id: 'ABS_0.8x22', name: 'ABS 0.8' });
 
@@ -27,7 +28,7 @@ describe('extensions.materials', () => {
     });
 
     it('round-trips overlay and merges unknown ids into the catalog', () => {
-        const panel = doc.createPanel({ name: 'Custom' }) as PanelModel;
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Custom' }) as PanelModel;
         panel.materialId = 'CUSTOM_PROJECT_MAT';
         panel.materialName = 'Koronka projektowa';
         panel.materialCode = 'CUST 01';
@@ -47,7 +48,7 @@ describe('extensions.materials', () => {
     });
 
     it('omits materials from undo snapshots', () => {
-        const panel = doc.createPanel({ name: 'Bok' }) as PanelModel;
+        const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok' }) as PanelModel;
         panel.materialId = 'W1100_ST9_18';
         expect(doc.serialize().extensions[MATERIALS_DOCUMENT_SECTION].materials.length).toBeGreaterThan(0);
         expect(doc.serialize({ snapshot: true }).extensions?.[MATERIALS_DOCUMENT_SECTION]).toBeUndefined();

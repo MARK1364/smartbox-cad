@@ -11,7 +11,30 @@ import { cabinetLibraryStore } from '../B1_biblioteka/korpusy/cabinet-library-st
 import { instantiateCabinetTemplate } from '../B1_biblioteka/korpusy/cabinet-instantiator.js';
 import type { CabinetCategory, CabinetTemplate } from '../B1_biblioteka/korpusy/types.js';
 import { ContextManager } from '../A1_core/context-manager.js';
+import { nmToMm } from '../A1_core/cad-math/units.js';
 import { SmartFrameDragController } from '../A3_smartframe/smartframe-drag-controller.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
+
+const CATEGORY_TABS = [
+    { id: 'all', labelKey: 'lib.tabs.all' },
+    { id: 'dolne', labelKey: 'lib.tabs.dolne' },
+    { id: 'gorne', labelKey: 'lib.tabs.gorne' },
+    { id: 'slupki', labelKey: 'lib.tabs.slupki' },
+    { id: 'inne', labelKey: 'lib.tabs.inne' },
+] as const;
+
+const CATEGORY_BADGE_KEYS: Record<string, string> = {
+    dolne: 'save_cabinet.categories.dolne',
+    gorne: 'save_cabinet.categories.gorne',
+    slupki: 'save_cabinet.categories.slupki',
+    inne: 'save_cabinet.categories.inne',
+};
 
 interface Props {
     projectModel: any;
@@ -19,6 +42,7 @@ interface Props {
 }
 
 export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
+    useLocale();
     const [templates, setTemplates] = useState<CabinetTemplate[]>(() => cabinetLibraryStore.getAll());
     const [selectedCategory, setSelectedCategory] = useState<CabinetCategory | 'all'>('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -51,7 +75,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             const matchName = t.name.toLowerCase().includes(q);
-            const matchDims = `${t.dimensions.width}x${t.dimensions.height}x${t.dimensions.depth}`.includes(q);
+            const matchDims = `${t.dimensions.szerokosc_mm}x${t.dimensions.wysokosc_mm}x${t.dimensions.glebokosc_mm}`.includes(q);
             const matchDesc = (t.description || '').toLowerCase().includes(q);
             if (!matchName && !matchDims && !matchDesc) return false;
         }
@@ -84,8 +108,8 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
             const last = containers[containers.length - 1];
             const lastNode = doc.findNode(last.id);
             if (lastNode?.transform?.position) {
-                const posX = Math.round(lastNode.transform.position.x / 1_000_000);
-                const lastW = Math.round(last.width / 1_000_000);
+                const posX = Math.round(nmToMm(lastNode.transform.position.x));
+                const lastW = Math.round(nmToMm(last.width));
                 nextX = posX + lastW + 50; // odstęp 50mm
             }
         }
@@ -96,20 +120,20 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
         }, doc);
 
         if (node) {
-            showNotice(`Wstawiono: ${template.name}`);
+            showNotice(tx(srcTekst, 'lib.inserted', TX_NS, { name: template.name }));
         }
     };
 
     const handleDelete = (id: string, name: string) => {
-        if (window.confirm(`Czy na pewno usunąć szafkę "${name}" z biblioteki?`)) {
+        if (window.confirm(tx(srcTekst, 'lib.confirm_delete', TX_NS, { name }))) {
             cabinetLibraryStore.remove(id);
-            showNotice(`Usunięto szafkę: ${name}`);
+            showNotice(tx(srcTekst, 'lib.deleted', TX_NS, { name }));
         }
     };
 
     const handleExportSingle = (template: CabinetTemplate) => {
         cabinetLibraryStore.exportToJsonFile(template);
-        showNotice(`Pobrano plik: ${template.name}.json`);
+        showNotice(tx(srcTekst, 'lib.downloaded', TX_NS, { name: template.name }));
     };
 
     const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,9 +147,9 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
             if (content) {
                 const res = cabinetLibraryStore.importFromJson(content);
                 if (res.success) {
-                    showNotice(`Pomyślnie zaimportowano ${res.count} szafek!`);
+                    showNotice(tx(srcTekst, 'lib.imported', TX_NS, { n: res.count }));
                 } else {
-                    alert(`Błąd importu: ${res.error}`);
+                    alert(tx(srcTekst, 'lib.import_error', TX_NS, { error: res.error }));
                 }
             }
         };
@@ -148,11 +172,8 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#f8fafc' }}>
-                        Biblioteka Korpusów
+                        {tx(srcTekst, 'lib.title', TX_NS)}
                     </h3>
-                    <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                        Gotowe szablony meblowe jak w PRO100
-                    </span>
                 </div>
             </div>
 
@@ -177,7 +198,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                 {onOpenSaveModal && (
                     <button
                         onClick={onOpenSaveModal}
-                        title="Zapisz zaznaczoną szafkę ze sceny do biblioteki"
+                        title={tx(srcTekst, 'lib.save_selected_title', TX_NS)}
                         style={{
                             padding: '8px 10px',
                             background: '#2563eb',
@@ -194,12 +215,12 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                             transition: 'background 0.15s ease'
                         }}
                     >
-                        <span>💾</span> Zapisz zaznaczony
+                        {tx(srcTekst, 'lib.save_selected', TX_NS)}
                     </button>
                 )}
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    title="Wczytaj plik .json szafki lub całej biblioteki z dysku komputera"
+                    title={tx(srcTekst, 'lib.load_from_disk_title', TX_NS)}
                     style={{
                         padding: '8px 10px',
                         background: '#27272a',
@@ -215,8 +236,8 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                         gap: '6px'
                     }}
                 >
-                    <span>📂</span> Wczytaj z dysku
-                </button>
+                        {tx(srcTekst, 'lib.load_from_disk', TX_NS)}
+                    </button>
                 <input 
                     type="file" 
                     ref={fileInputRef} 
@@ -232,7 +253,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="🔍 Szukaj szafki (nazwa, wymiar np. 600)..."
+                    placeholder={tx(srcTekst, 'lib.search_placeholder', TX_NS)}
                     style={{
                         width: '100%',
                         boxSizing: 'border-box',
@@ -249,13 +270,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
 
             {/* Zakładki kategorii */}
             <div style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '2px' }}>
-                {[
-                    { id: 'all', label: 'Wszystkie' },
-                    { id: 'dolne', label: 'Dolne' },
-                    { id: 'gorne', label: 'Górne' },
-                    { id: 'slupki', label: 'Słupki' },
-                    { id: 'inne', label: 'Inne' }
-                ].map((cat) => (
+                {CATEGORY_TABS.map((cat) => (
                     <button
                         key={cat.id}
                         onClick={() => setSelectedCategory(cat.id as any)}
@@ -272,7 +287,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                             whiteSpace: 'nowrap'
                         }}
                     >
-                        {cat.label}
+                        {tx(srcTekst, cat.labelKey, TX_NS)}
                     </button>
                 ))}
             </div>
@@ -289,8 +304,8 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                     border: '1px dashed #334155',
                     marginTop: '4px'
                 }}>
-                    Brak szafek w wybranej kategorii.<br />
-                    Zaprojektuj korpus na scenie i kliknij <strong>„Zapisz zaznaczony”</strong>!
+                    {tx(srcTekst, 'lib.empty_title', TX_NS)}<br />
+                    {tx(srcTekst, 'lib.empty_hint', TX_NS)} <strong>{tx(srcTekst, 'lib.empty_action', TX_NS)}</strong>!
                 </div>
             ) : (
                 <div style={{
@@ -300,9 +315,9 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                     marginTop: '4px'
                 }}>
                     {filteredTemplates.map((template) => {
-                        const w = template.dimensions.width;
-                        const h = template.dimensions.height;
-                        const d = template.dimensions.depth;
+                        const w = template.dimensions.szerokosc_mm;
+                        const h = template.dimensions.wysokosc_mm;
+                        const d = template.dimensions.glebokosc_mm;
 
                         return (
                             <div
@@ -310,7 +325,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                                 draggable
                                 onDragStart={(e) => handleDragStart(template, e)}
                                 onDragEnd={handleDragEnd}
-                                title={`${template.name} (${w}×${h}×${d} mm) - Chwyć i przeciągnij na scenę 3D`}
+                                title={`${template.name} (${w}×${h}×${d} mm) - ${tx(srcTekst, 'lib.card_drag_title', TX_NS)}`}
                                 style={{
                                     height: '148px',
                                     borderRadius: '8px',
@@ -393,7 +408,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                                         textTransform: 'uppercase',
                                         border: '1px solid rgba(56, 189, 248, 0.3)'
                                     }}>
-                                        {template.category}
+                                        {tx(srcTekst, CATEGORY_BADGE_KEYS[template.category] || 'save_cabinet.categories.inne', TX_NS)}
                                     </span>
 
                                     {/* Pływające akcje: Pobierz JSON, Usuń */}
@@ -403,11 +418,11 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                                     >
                                         <button
                                             onClick={() => handleExportSingle(template)}
-                                            title="Pobierz plik JSON na dysk"
+                                            title={tx(srcTekst, 'lib.download_json', TX_NS)}
                                             style={{
-                                                width: '22px',
+                                                width: 'auto',
                                                 height: '22px',
-                                                padding: 0,
+                                                padding: '0 5px',
                                                 background: 'rgba(0, 0, 0, 0.75)',
                                                 backdropFilter: 'blur(4px)',
                                                 color: '#cbd5e1',
@@ -420,15 +435,13 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                                                 justifyContent: 'center'
                                             }}
                                         >
-                                            ⬇
+                                            {tx(srcTekst, 'lib.download_short', TX_NS)}
                                         </button>
                                         <button
                                             onClick={() => handleDelete(template.id, template.name)}
-                                            title="Usuń z biblioteki"
+                                            title={tx(srcTekst, 'lib.delete_from_lib', TX_NS)}
                                             style={{
-                                                width: '22px',
                                                 height: '22px',
-                                                padding: 0,
                                                 background: 'rgba(0, 0, 0, 0.75)',
                                                 backdropFilter: 'blur(4px)',
                                                 color: '#ef4444',
@@ -438,10 +451,12 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                                                 cursor: 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                justifyContent: 'center'
+                                                justifyContent: 'center',
+                                                padding: '0 4px',
+                                                width: 'auto'
                                             }}
                                         >
-                                            🗑
+                                            {tx(srcTekst, 'lib.delete_short', TX_NS)}
                                         </button>
                                     </div>
                                 </div>
@@ -480,17 +495,6 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                                         }}>
                                             {w}×{h}×{d}
                                         </span>
-                                        <span 
-                                            title="Chwyć i przeciągnij na scenę 3D"
-                                            style={{
-                                                fontSize: '0.75rem',
-                                                color: '#94a3b8',
-                                                display: 'flex',
-                                                alignItems: 'center'
-                                            }}
-                                        >
-                                            ✋
-                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -510,11 +514,11 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                 fontSize: '0.72rem',
                 color: '#64748b'
             }}>
-                <span>Łącznie w bibliotece: {templates.length}</span>
+                <span>{tx(srcTekst, 'lib.total', TX_NS, { n: templates.length })}</span>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                         onClick={() => cabinetLibraryStore.exportAllToJsonFile()}
-                        title="Pobierz całą bibliotekę jako jeden plik JSON na dysk"
+                        title={tx(srcTekst, 'lib.export_all_title', TX_NS)}
                         style={{
                             background: 'transparent',
                             border: 'none',
@@ -524,13 +528,13 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                             textDecoration: 'underline'
                         }}
                     >
-                        Eksportuj wszystko
+                        {tx(srcTekst, 'lib.export_all', TX_NS)}
                     </button>
                     <button
                         onClick={() => {
-                            if (window.confirm('Czy na pewno przywrócić szablony startowe?')) {
+                            if (window.confirm(tx(srcTekst, 'lib.confirm_reset', TX_NS))) {
                                 cabinetLibraryStore.resetToDefaults();
-                                showNotice('Przywrócono szablony domyślne');
+                                showNotice(tx(srcTekst, 'lib.reset_done', TX_NS));
                             }
                         }}
                         style={{
@@ -541,7 +545,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
                             fontSize: '0.72rem'
                         }}
                     >
-                        Reset
+                        {tx(srcTekst, 'lib.reset', TX_NS)}
                     </button>
                 </div>
             </div>

@@ -7,7 +7,7 @@
 import { ProjectDocument } from '../project-document.js';
 import { Command } from './command.js';
 import { CADNode } from '../cad-node/cad-node.js';
-import { ClearSmartBoxDrillingsCommand, collectSmartBoxIds } from './clear-smartbox-drillings-command.js';
+import { collectNodeCleanupCommands } from '../node-cleanup-port.js';
 
 export class RemoveNodeCommand implements Command {
     readonly id: string;
@@ -20,8 +20,8 @@ export class RemoveNodeCommand implements Command {
     readonly previousIndex: number;
     readonly node: CADNode;
 
-    /** Czyszczenie otworów SmartBoxa, odtwarzane przy Undo razem z węzłem. */
-    private drillingsClears: ClearSmartBoxDrillingsCommand[] = [];
+    /** Czyszczenie podpiętych zasobów / otworów (z portu NodeCleanupPort), odtwarzane przy Undo. */
+    private cleanupCmds: Command[] = [];
 
     constructor(document: ProjectDocument, nodeId: string, label: string = 'Usunięcie obiektu') {
         this.id = `cmd_remove_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -39,22 +39,17 @@ export class RemoveNodeCommand implements Command {
     }
 
     execute(document: ProjectDocument): void {
-        // Najpierw zdejmij z korpusu otwory, które ten SmartBox (lub SmartBoxy w poddrzewie)
-        // nawiercił — po usunięciu węzła nikt już ich nie posprząta.
-        this.drillingsClears = [];
-        for (const smartBoxId of collectSmartBoxIds(this.node)) {
-            const clearCmd = new ClearSmartBoxDrillingsCommand(smartBoxId);
-            clearCmd.execute(document);
-            this.drillingsClears.push(clearCmd);
+        this.cleanupCmds = collectNodeCleanupCommands(this.node);
+        for (const cmd of this.cleanupCmds) {
+            cmd.execute(document);
         }
         document.removeNode(this.nodeId);
     }
 
     undo(document: ProjectDocument): void {
-        // Najpierw przywróć węzeł (reregistracja w indeksie), potem otwory na formatkach korpusu.
         document.addNode(this.previousParentId, this.node, this.previousIndex);
-        for (let i = this.drillingsClears.length - 1; i >= 0; i--) {
-            this.drillingsClears[i].undo(document);
+        for (let i = this.cleanupCmds.length - 1; i >= 0; i--) {
+            this.cleanupCmds[i].undo(document);
         }
     }
 }

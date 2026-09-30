@@ -37,7 +37,7 @@ export function expectedKindForBind(bindType: BindType, groundKind: AnchorKind =
 }
 
 function warnConflict(): void {
-    ContextManager.instance.appAPI?.setStatus?.(CONFLICT_REJECT_MESSAGE, true);
+    ContextManager.instance.appAPI?.setStatus?.(CONFLICT_REJECT_MESSAGE, true, 'error');
     window.dispatchEvent(
         new CustomEvent('solver-conflict', { detail: { message: CONFLICT_REJECT_MESSAGE } }),
     );
@@ -60,7 +60,7 @@ export function beginConstraintSlotPick(opts: {
         opts.expectedKind === 'VERTEX'
             ? 'narożnik'
             : opts.expectedKind === 'FACE'
-              ? 'ścianę formatki lub krawędź'
+              ? 'ścianę / datum (Top·Front·Right)'
               : 'korpus';
 
     activePick = { constraintId: opts.constraintId, slot: opts.slot };
@@ -77,7 +77,12 @@ export function beginConstraintSlotPick(opts: {
             }
             if (live.bindType !== 'GROUND' && opts.slot === 'B') {
                 const other = live.anchorA;
-                if (other && other.nodeId === anchor.nodeId) {
+                if (
+                    other &&
+                    other.nodeId === anchor.nodeId &&
+                    other.kind !== 'DATUM' &&
+                    anchor.kind !== 'DATUM'
+                ) {
                     ContextManager.instance.appAPI?.setStatus?.(
                         'Nie można wiązać korpusu z samym sobą.',
                         true,

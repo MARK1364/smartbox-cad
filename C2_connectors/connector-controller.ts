@@ -8,7 +8,7 @@ import { ConnectorStore } from './connector-store.js';
 import { ConnectorVisualizer } from './connector-visualizer.js';
 import { NodeType } from '../A1_core/cad-node/node-type.js';
 import { ContextManager } from '../A1_core/context-manager.js';
-import { SyncConnectorDrillingsCommand } from '../A1_core/commands/sync-connector-drillings-command.js';
+import { SyncConnectorDrillingsCommand } from './commands/sync-connector-drillings-command.js';
 
 /** Debounce timer — zapobiega wielokrotnemu sync w jednej pętli zdarzeń. */
 let _syncTimer: ReturnType<typeof setTimeout> | null = null;

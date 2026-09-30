@@ -1,15 +1,33 @@
 /**
  * SmartPanel Web — Base Postprocessor
- * 
- * Klasa abstrakcyjna dla wszystkich postprocesorów CNC. Obsługuje zarówno legacy ProcessedCAMProject, jak i nowy CLDataProgram.
+ *
+ * Klasa abstrakcyjna dla wszystkich postprocesorów CNC.
+ *
+ * Wejście jest WYŁĄCZNIE `CLDataProgram` (ISO 4343 / APT) — neutralna
+ * reprezentacja ścieżki narzędzia. Zero akceptacji innych formatów.
  */
 
-import { ProcessedCAMProject } from '../dto/cam-dto.js';
 import { CLDataProgram } from '../core/cl-data.js';
 
 export abstract class Postprocessor {
-    abstract generateNcCode(project: ProcessedCAMProject | CLDataProgram): string;
+    abstract generateNcCode(program: CLDataProgram): string;
     abstract getSupportedOperations(): string[];
+
+    /**
+     * Wymiary obrabianej formatki w mm — wymagane przez postprocesory CNC.
+     * Fail-fast: bez nich nie ma poprawnego G-kodu.
+     */
+    protected requireWorkpieceDimensions(program: CLDataProgram, postName: string): { width: number; height: number; thickness: number } {
+        const dims = program.workpieceDimensions;
+        if (!dims || dims.thickness <= 0 || dims.width <= 0 || dims.height <= 0) {
+            throw new Error(
+                `[${postName}] Brak zdefiniowanych poprawnych wymiarów formatki ` +
+                `(workpieceDimensions: W=${dims?.width}, H=${dims?.height}, T=${dims?.thickness}). ` +
+                `Postprocesor wymaga LPX, LPY, LPZ.`
+            );
+        }
+        return dims;
+    }
 
     /**
      * Konwertuje neutralne komendy CLDataProgram bezpośrednio na G-kod ISO.

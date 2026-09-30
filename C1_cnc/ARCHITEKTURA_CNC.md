@@ -23,8 +23,8 @@ Głównym celem modułu `C1_cnc` jest generowanie gotowych programów maszynowyc
 
 ## 2. Zasady Główne Architektury
 
-1. **Niezależność od OCCT (B-Rep / Mesh)**:
-   - System CAM nie wymaga ciężkiego kernela OCCT na froncie. Operuje na **algebraicznym modelu cech meblarskich** (`CAMFeature`: `HoleFeature`, `GrooveFeature`, `ContourFeature`) oraz natywnych punktach matematycznych `brepPoints`.
+1. **Cechy algebraiczne, nie siatka**:
+   - System CAM operuje na **modelu cech meblarskich** (`CAMFeature`: `HoleFeature`, `GrooveFeature`, `ContourFeature`) oraz natywnych punktach matematycznych `brepPoints`.
 2. **Warstwa Kodowania Pośredniego (CLData - ISO 4343)**:
    - Operacje obróbcze **nigdy nie tworzą od razu napisów G-kodu**. Generują neutralną reprezentację pośrednią `CLDataProgram` (pliki w `core/cl-data.ts`).
    - Dedykowane postprocesory meblarskie (`postprocessors/`) tłumaczą `CLDataProgram` na pliki fabryczne maszyn.

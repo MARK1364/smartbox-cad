@@ -97,12 +97,12 @@ describe('validateConstraints', () => {
 
     it('zregenerowana formatka daje ostrzeżenie, ale więz zostaje aktywny', () => {
         const document = new ProjectDocument();
-        const cabA = document.createContainer({
+        const cabA = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
         });
-        const cabB = document.createContainer({
+        const cabB = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -147,12 +147,12 @@ describe('validateConstraints', () => {
 
     it('nierównoległe płaszczyzny przed rozwiązaniem nie blokują więzu ani nie emitują fałszywego ostrzeżenia', () => {
         const document = new ProjectDocument();
-        const cabA = document.createContainer({
+        const cabA = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
         });
-        const cabB = document.createContainer({
+        const cabB = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),

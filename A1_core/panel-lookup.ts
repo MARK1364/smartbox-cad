@@ -6,14 +6,14 @@
  * Zasady:
  * 1. Dopasowanie wyłącznie po `role` i `zoneId` (żadnego zgadywania po nazwach czy prefiksach).
  * 2. Brak podanej strefy (`zoneId` undefined/null/'') oznacza przeszukiwanie wszystkich stref.
- * 3. Ignorowanie poddrzew kontenerów SmartBox (oraz formatek do nich należących).
+ * 3. Ignorowanie poddrzew kontenerów Bloki (oraz formatek do nich należących).
  * 4. Ignorowanie formatek ręcznych (`engineManaged === false` / `isManualPanel`).
  * 5. Pełna diagnostyka w przypadku braku lub konfliktu wielu formatek.
  */
 
 import type { CADNode } from './cad-node/cad-node.js';
 import { NodeType } from './cad-node/node-type.js';
-import { PanelModel, isManualPanel } from '../A4_smartpanel/panel-model.js';
+import { isManualPanel, isPanelLike, type PanelLike } from './panel-like.js';
 import {
     tryNormalizeToCanonicalZoneId,
     type CanonicalZoneId
@@ -37,13 +37,13 @@ export type PanelLookupStatus = 'OK' | 'NOT_FOUND' | 'MULTIPLE_FOUND' | 'INVALID
 
 export interface PanelLookupCandidate {
     node: CADNode;
-    panel: PanelModel;
+    panel: PanelLike;
 }
 
 export interface PanelLookupResult {
     status: PanelLookupStatus;
     node: CADNode | null;
-    panel: PanelModel | null;
+    panel: PanelLike | null;
     candidatesCount: number;
     candidateKeys: string[];
     candidateZoneIds: string[];
@@ -52,25 +52,25 @@ export interface PanelLookupResult {
 }
 
 /**
- * Sprawdza czy dany węzeł jest kontenerem SmartBox, którego całe poddrzewo należy pominąć.
+ * Sprawdza czy dany węzeł jest kontenerem Bloki, którego całe poddrzewo należy pominąć.
  * Bazuje wyłącznie na danych semantycznych (brak zgadywania po nazwie).
  */
-function isSmartBoxSubtree(node: CADNode): boolean {
+function isBlokiSubtree(node: CADNode): boolean {
     if (!node) return false;
     const d = node.domainData as any;
     const gp = d?.generatorParams;
 
     return Boolean(
-        d?.type === 'smartbox' ||
-        d?.type === 'smartbox_container' ||
-        String(gp?.type ?? '').startsWith('smartbox') ||
+        d?.type === 'bloki' ||
+        d?.type === 'bloki_container' ||
+        String(gp?.type ?? '').startsWith('bloki') ||
         Boolean(gp?.boxType)
     );
 }
 
 /**
  * Zwraca listę wszystkich formatek korpusu pasujących do zapytania.
- * Pomija poddrzewa SmartBoxów oraz formatki ręczne.
+ * Pomija poddrzewa Bloków oraz formatki ręczne.
  */
 export function findCabinetPanels(
     cabinetNode: CADNode | null | undefined,
@@ -89,11 +89,11 @@ export function findCabinetPanels(
     const collectRecursive = (node: CADNode) => {
         if (!node) return;
 
-        // Pomiń całe poddrzewo SmartBoxa
-        if (isSmartBoxSubtree(node)) return;
+        // Pomiń całe poddrzewo Bloku
+        if (isBlokiSubtree(node)) return;
 
         const data = node.domainData as any;
-        if (data && (data instanceof PanelModel || data.type === 'panel' || data.type === 'part')) {
+        if (data && isPanelLike(data)) {
             // Pomiń formatki ręczne
             if (!isManualPanel(data) && data.engineManaged !== false) {
                 const panelRole = data.role as CabinetPanelRole;
@@ -105,7 +105,7 @@ export function findCabinetPanels(
                 if (roleMatches && zoneMatches) {
                     results.push({
                         node,
-                        panel: data as PanelModel
+                        panel: data
                     });
                 }
             }

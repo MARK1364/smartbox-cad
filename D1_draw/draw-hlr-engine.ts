@@ -1,6 +1,6 @@
 /**
  * D1_draw - draw-hlr-engine.ts
- * Hidden Line Removal w stylu OpenCASCADE HLRBRep / FreeCAD TechDraw / SolidWorks.
+ * Hidden Line Removal w stylu FreeCAD TechDraw / SolidWorks.
  *
  * Zasada (HLRBRep_Algo):
  * - Każda krawędź jest porównywana z każdą ścianą-zasłoną w rzucie 2D.

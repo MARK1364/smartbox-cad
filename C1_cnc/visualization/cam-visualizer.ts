@@ -8,6 +8,7 @@
 import { HoleFeature, GrooveFeature, ContourFeature, CAMFeature, Vector3D, Tool } from '../dto/cam-dto.js';
 import { CNCToolMeshFactory } from './tool-mesh-factory.js';
 import { generateEffectiveContourPath } from '../geometry/cnc-geometry-utils.js';
+import { ContextManager } from '../../A1_core/context-manager.js';
 
 declare const BABYLON: any;
 
@@ -176,9 +177,9 @@ export class CAMVisualizer {
         }
 
         const holeMat = new BABYLON.StandardMaterial("CAM_Hole_Mat", this.scene);
-        holeMat.diffuseColor = new BABYLON.Color3(1.0, 0.5, 0.0);
-        holeMat.emissiveColor = new BABYLON.Color3(0.3, 0.15, 0.0);
-        holeMat.alpha = 0.65;
+        holeMat.diffuseColor = new BABYLON.Color3(0.12, 0.12, 0.12);
+        holeMat.emissiveColor = BABYLON.Color3.Black();
+        holeMat.alpha = 0.9;
 
         const grooveMat = new BABYLON.StandardMaterial("CAM_Groove_Mat", this.scene);
         grooveMat.diffuseColor = new BABYLON.Color3(0.0, 0.8, 1.0);
@@ -206,6 +207,11 @@ export class CAMVisualizer {
                     cyl.rotation.x = Math.PI / 2;
                     cyl.material = holeMat;
                     cyl.position = new BABYLON.Vector3(pt.x, pt.y, pt.z - hole.depth / 2);
+                    if (typeof cyl.enableEdgesRendering === 'function') {
+                        cyl.enableEdgesRendering();
+                        cyl.edgesWidth = 1.5;
+                        cyl.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                    }
                     cyl.parent = this.camRootNode;
                 }
 
@@ -363,6 +369,7 @@ export class CAMVisualizer {
         mat.emissiveColor = new BABYLON.Color3(0.0, 1.0, 0.9); // MOCNE ŚWIATŁO EMISYJNE W 3D
         mat.specularColor = new BABYLON.Color3(1, 1, 1);
         mat.backFaceCulling = false;
+        mat.disableDepthWrite = true;
 
         if (feature.points && Array.isArray(feature.points) && feature.points.length > 0) {
             // Profil krawędzi / contour path (elegancka linia podświetlenia 1.8mm)
@@ -382,26 +389,41 @@ export class CAMVisualizer {
                 }, this.scene);
             }
             highlightMesh.material = mat;
+            highlightMesh.renderingGroupId = 2;
             highlightMesh.parent = this.highlightRootNode;
         } else if ('position' in feature || feature.type === 'hole') {
-            // Otwór / Grupa otworów -> Świecący pierścień / walec dla każdego punktu
+            // Otwór / Grupa otworów -> Świecący pierścień i walec dla każdego punktu
             const diam = feature.diameter || feature.params?.diameter || 5;
             const depth = feature.depth || feature.params?.depth || 12;
-            const positions = (feature.positions && feature.positions.length > 0)
-                ? feature.positions
-                : [feature.position || { x: feature.params?.u || 0, y: feature.params?.v || 0, z: 0 }];
+            const positions = (feature.panelPositions && feature.panelPositions.length > 0)
+                ? feature.panelPositions
+                : (feature.panelPosition
+                    ? [feature.panelPosition]
+                    : ((feature.positions && feature.positions.length > 0)
+                        ? feature.positions
+                        : [feature.position || { x: feature.params?.u ?? feature.params?.x ?? 0, y: feature.params?.v ?? feature.params?.y ?? 0, z: 0 }]));
 
             for (let idx = 0; idx < positions.length; idx++) {
                 const pos = positions[idx];
                 const cyl = BABYLON.MeshBuilder.CreateCylinder(`Highlight_Hole_${idx}`, {
-                    diameter: diam + 3,
-                    height: depth + 3,
+                    diameter: diam + 2.5,
+                    height: Math.max(1, depth + 1.5),
                     tessellation: 24
                 }, this.scene);
                 cyl.rotation.x = Math.PI / 2;
                 cyl.material = mat;
                 cyl.position = new BABYLON.Vector3(pos.x, pos.y, pos.z - depth / 2);
+                cyl.renderingGroupId = 2;
                 cyl.parent = this.highlightRootNode;
+
+                const ring = BABYLON.MeshBuilder.CreateDisc(`Highlight_Ring_${idx}`, {
+                    radius: (diam + 2.5) / 2,
+                    tessellation: 32
+                }, this.scene);
+                ring.material = mat;
+                ring.position = new BABYLON.Vector3(pos.x, pos.y, pos.z + 0.3);
+                ring.renderingGroupId = 2;
+                ring.parent = this.highlightRootNode;
             }
         } else if ('startPoint' in feature || feature.type === 'groove') {
             // Wpust
@@ -415,6 +437,8 @@ export class CAMVisualizer {
             line.material = mat;
             line.parent = this.highlightRootNode;
         }
+
+        (ContextManager.instance as any)?.viewport?.requestRender?.(5);
     }
 
     private previewToolNode: any = null;
@@ -452,6 +476,7 @@ export class CAMVisualizer {
         if (this.highlightRootNode) {
             this.highlightRootNode.dispose(false, true);
             this.highlightRootNode = null;
+            (ContextManager.instance as any)?.viewport?.requestRender?.(5);
         }
     }
 }

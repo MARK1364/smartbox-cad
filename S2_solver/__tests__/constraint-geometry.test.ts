@@ -39,7 +39,7 @@ function docWithPanel() {
 
 function docWithContainer() {
     const document = new ProjectDocument();
-    const container = document.createContainer({
+    const container = document.createAssembly({
         width: mmToNm(600),
         height: mmToNm(720),
         depth: mmToNm(500),
@@ -121,12 +121,14 @@ describe('Ściany', () => {
         ]);
     });
 
-    it('akceptuje aliasy nazw ścian tak jak reszta aplikacji', () => {
+    it('odrzuca aliasy nazw ścian (tylko kanoniczne FACE_*)', () => {
         const { node } = docWithPanel();
-        // Aliasy są panelowe: front = FACE_Z_PLUS = CAD +Y (grubość),
-        // top = FACE_Y_PLUS = CAD +Z (wysokość).
-        expect(resolveFaceLocalMm(node, 'front')).toEqual(resolveFaceLocalMm(node, 'FACE_Z_PLUS'));
-        expect(resolveFaceLocalMm(node, 'top')).toEqual(resolveFaceLocalMm(node, 'FACE_Y_PLUS'));
+        expect(resolveFaceLocalMm(node, 'front')).toBeNull();
+        expect(resolveFaceLocalMm(node, 'top')).toBeNull();
+        expect(resolveFaceLocalMm(node, 'EDGE_X_MINUS')).toBeNull();
+        // Kanoniczne nadal działają.
+        expect(resolveFaceLocalMm(node, 'FACE_Z_PLUS')).not.toBeNull();
+        expect(resolveFaceLocalMm(node, 'FACE_Y_PLUS')).not.toBeNull();
     });
 
     it('odrzuca nieznaną nazwę ściany', () => {
@@ -181,7 +183,7 @@ describe('resolveAnchor', () => {
 
     it('kotwica FACE na formatce używa ściany panelu (front = +Z), nie AABB korpusu', () => {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -191,19 +193,17 @@ describe('resolveAnchor', () => {
             container.id,
         );
         const node = document.findNode(panel.id)!;
-        expect(resolveAnchor(node, makeAnchor({ nodeId: node.id, kind: 'FACE', faceName: 'front' }))).toEqual({
-            localPointMm: [0, 9, 0],
-            localNormal: [0, 1, 0],
-        });
         expect(resolveAnchor(node, makeAnchor({ nodeId: node.id, kind: 'FACE', faceName: 'FACE_Z_PLUS' }))).toEqual({
             localPointMm: [0, 9, 0],
             localNormal: [0, 1, 0],
         });
+        // Alias 'front' nie jest obsługiwany — kotwica nie powstaje.
+        expect(resolveAnchor(node, makeAnchor({ nodeId: node.id, kind: 'FACE', faceName: 'front' }))).toBeNull();
     });
 
     it('utracona formatka nie degraduje kotwicy do ściany korpusu', () => {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -379,7 +379,7 @@ describe('Snap do bryły węzła', () => {
 describe('Mapowanie ściany formatki do LCS korpusu', () => {
     it('przesunięta formatka: front panelu ląduje w LCS korpusu, nie na AABB korpusu', () => {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -403,7 +403,7 @@ describe('Mapowanie ściany formatki do LCS korpusu', () => {
             makeAnchor({
                 nodeId: cab.id,
                 kind: 'FACE',
-                faceName: 'front',
+                faceName: 'FACE_Z_PLUS',
                 sourceNodeId: panelNode.id,
             }),
             panelNode,
@@ -417,7 +417,7 @@ describe('Mapowanie ściany formatki do LCS korpusu', () => {
 describe('Prostokąt podglądu = geometria solvera', () => {
     function cabinetWithFront() {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -520,8 +520,7 @@ describe('Etykiety ścian', () => {
         expect(faceAnchorLabel('FACE_Z_PLUS', NodeType.PART)).toBe('front (+Z)');
         expect(faceAnchorLabel('FACE_Z_PLUS', NodeType.ASSEMBLY)).toBe('góra (+Z)');
         expect(faceAnchorLabel('FACE_Y_MINUS', NodeType.ASSEMBLY)).toBe('przód (-Y)');
-        expect(faceAnchorLabel('front', NodeType.PART)).toBe('front (+Z)');
-        expect(faceAnchorLabel('back', NodeType.PART)).toBe('tył (-Z)');
+        expect(faceAnchorLabel('FACE_Z_MINUS', NodeType.PART)).toBe('tył (-Z)');
         expect(faceAnchorLabel('FACE_X_PLUS', NodeType.ASSEMBLY)).toBe('prawy (+X)');
         expect(faceAnchorLabel('FACE_X_MINUS', NodeType.PART)).toBe('lewy (-X)');
     });
@@ -530,7 +529,7 @@ describe('Etykiety ścian', () => {
 describe('Dosuń ściany — OUTER vs odwrócona normalna mesha', () => {
     function cabinetWithLeftSide() {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -551,8 +550,8 @@ describe('Dosuń ściany — OUTER vs odwrócona normalna mesha', () => {
 
     it('namedFaceFromPick: back/OUTER to CAD −Y grubości, nie INNER', () => {
         const { node } = docWithPanel();
-        const outer = namedFaceFromPick(node, 'back', [10, 0, 20])!;
-        const inner = namedFaceFromPick(node, 'front', [10, 0, 20])!;
+        const outer = namedFaceFromPick(node, 'FACE_Z_MINUS', [10, 0, 20])!;
+        const inner = namedFaceFromPick(node, 'FACE_Z_PLUS', [10, 0, 20])!;
         expect(outer.localNormalMm).toEqual([0, -1, 0]);
         expect(outer.localPointMm[1]).toBeCloseTo(-9);
         expect(inner.localNormalMm).toEqual([0, 1, 0]);

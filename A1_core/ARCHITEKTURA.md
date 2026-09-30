@@ -2,7 +2,7 @@
 
 Niniejszy dokument opisuje docelową i aktualnie obowiązującą architekturę systemu Web CAD. System opiera się na wzorcu **Modularnym (Domain-Driven Design)** ze ścisłą separacją danych domenowych od reprezentacji wizualnej (Babylon.js).
 
-W toku rozwoju zrezygnowaliśmy z wykorzystania ciężkiego jądra OpenCASCADE (OCCT) na froncie na rzecz lekkiego, natywnego generatora siatek (NativePanelBuilder) oraz scentralizowanego drzewa hierarchii CAD.
+System opiera się na wzorcu **Modularnym (Domain-Driven Design)** ze ścisłą separacją danych domenowych od reprezentacji wizualnej (Babylon.js). Geometrię formatki liczy natywny generator siatek (`NativePanelBuilder`) oraz drzewo hierarchii CAD.
 
 ## 1. Single Source of Truth: Drzewo Hierarchii (`ProjectDocument` i `CADNode`)
 
@@ -27,7 +27,7 @@ Moduł odpowiedzialny za definiowanie logicznych złożeń i grup (np. szafek) b
 ### `A4_smartpanel` (Formatki / Części)
 Najniższy, produkcyjny poziom budulcowy: fizyczne płyty stolarskie.
 - Reprezentowane w domenie jako `PanelModel`.
-- **Budowanie geometrii (NativePanelBuilder):** System wykorzystuje własny budowniczy oparty na algorytmie triangulacji (EarCut) oraz ścieżkach 2D. Całkowicie porzucono pomysł opierania frontendu o powolny port WASM-OCCT (OpenCASCADE został odesłany do modułów legacy / importu STEP).
+- **Budowanie geometrii (NativePanelBuilder):** własny budowniczy (EarCut + ścieżki 2D / ekstruzja wielokąta).
 - Wyświetlane na scenie dzięki `PanelView` – klasie-pośrednikowi spinającej `PanelModel` z siatką `Mesh` w Babylon.js.
 
 ## 3. Architektura Interakcji (Narzędzia i Stan)
@@ -58,4 +58,4 @@ Interakcje zachodzące w czasie rzeczywistym – jak na przykład ciągnięcie w
 2. **B-Rep ponad BoundingBox:** Przy generowaniu obróbek, współrzędnych maszynowych i ścieżek (CLData) w module C1_cnc/CAM zawsze odwołujemy się do precyzyjnych matematycznych danych domenowych (b-rep) przechowywanych w metadanych lub głęboko w formacie JSON (`PanelModel`), pomijając siatki wyświetlania.
 
 ---
-*Status na dzień: 04.08.2026. Dokument ten konsoliduje ostatecznie odrzucone plany takie jak `PLAN_AGENTOW_WEB_CAD.txt` oraz starsze plany implementacji OCCT na froncie. Drzewo CADNode i interakcje StateMachine są od teraz Jedynym Źródłem Prawdy dla architektury aplikacji.*
+*Status na dzień: 04.08.2026. Drzewo CADNode i interakcje StateMachine są Jedynym Źródłem Prawdy dla architektury aplikacji.*

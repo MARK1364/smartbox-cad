@@ -4,19 +4,19 @@ import { ContainerModel } from '../../../A1_core/container-model.js';
 import { CADNode } from '../../../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../../../A1_core/cad-node/node-type.js';
 import { mmToNm } from '../../../A1_core/cad-math/units.js';
-import { serializeActiveCabinet, sanitizeSmartBoxParams } from '../cabinet-serializer.js';
+import { serializeActiveCabinet, sanitizeBlokiParams } from '../cabinet-serializer.js';
 import { instantiateCabinetTemplate } from '../cabinet-instantiator.js';
 import { cabinetLibraryStore, DEFAULT_TEMPLATES } from '../cabinet-library-store.js';
 import type { CabinetTemplate } from '../types.js';
 
-describe('B1_biblioteka — Cabinet Library System', () => {
+describe('B1_biblioteka â€” Cabinet Library System', () => {
     let doc: ProjectDocument;
 
     beforeEach(() => {
         doc = new ProjectDocument({ name: 'Test Project' });
     });
 
-    it('sanitizes smartbox parameters properly', () => {
+    it('sanitizes bloki parameters properly', () => {
         const raw = {
             shelfCount: 3,
             thickness: 18,
@@ -25,7 +25,7 @@ describe('B1_biblioteka — Cabinet Library System', () => {
             detectedBay: { fake: 'data' },
             active: true
         };
-        const safe = sanitizeSmartBoxParams(raw);
+        const safe = sanitizeBlokiParams(raw);
         expect(safe.shelfCount).toBe(3);
         expect(safe.thickness).toBe(18);
         expect(safe.drawerHeights).toEqual([150, 200, 300]);
@@ -34,8 +34,8 @@ describe('B1_biblioteka — Cabinet Library System', () => {
         expect(safe.detectedBay).toBeUndefined();
     });
 
-    it('serializes an active korpus and smartbox into CabinetTemplate', () => {
-        // 1. Stwórz korpus
+    it('serializes an active korpus and bloki into CabinetTemplate', () => {
+        // 1. StwĂłrz korpus
         const korpusContainer = new ContainerModel({
             name: 'Korpus (SmartFrame) 1',
             width: mmToNm(600),
@@ -44,17 +44,17 @@ describe('B1_biblioteka — Cabinet Library System', () => {
         });
         korpusContainer.generatorParams = {
             type: 'korpus3_2',
-            zoneCount: 1,
-            bottomHeight: 820,
-            middleHeight: 0,
-            backOffset: 3
+            liczba_stref: 1,
+            wysokosc_strefy_dolnej_mm: 820,
+            wysokosc_strefy_srodkowej_mm: 0,
+            cofniecie_plecow_mm: 3
         };
 
         const korpusNode = CADNode.create(NodeType.ASSEMBLY, korpusContainer.name, korpusContainer.id);
         korpusNode.domainData = korpusContainer;
         doc.addNode(doc.rootNode.id, korpusNode);
 
-        // 2. Dodaj SmartBox półki
+        // 2. Dodaj Bloki pĂłĹ‚ki
         const sbContainer = new ContainerModel({
             name: 'Polki_SB',
             width: mmToNm(564),
@@ -62,7 +62,7 @@ describe('B1_biblioteka — Cabinet Library System', () => {
             depth: mmToNm(540)
         });
         sbContainer.generatorParams = {
-            type: 'smartbox_shelves',
+            type: 'blok_shelves',
             boxType: 'SHELVES',
             shelfCount: 2,
             shelfOffsetFrontMm: 10
@@ -84,10 +84,10 @@ describe('B1_biblioteka — Cabinet Library System', () => {
         expect(template?.name).toBe('Moja Szafka Dolna');
         expect(template?.category).toBe('dolne');
         expect(template?.units).toBe('mm');
-        expect(template?.dimensions.width).toBe(600);
-        expect(template?.dimensions.height).toBe(820);
-        expect(template?.dimensions.depth).toBe(560);
-        expect(template?.frameParams.zoneCount).toBe(1);
+        expect(template?.dimensions.szerokosc_mm).toBe(600);
+        expect(template?.dimensions.wysokosc_mm).toBe(820);
+        expect(template?.dimensions.glebokosc_mm).toBe(560);
+        expect(template?.frameParams.liczba_stref).toBe(1);
         expect(template?.submodules.length).toBe(1);
         expect(template?.submodules[0].boxType).toBe('SHELVES');
         expect(template?.submodules[0].params.shelfCount).toBe(2);
@@ -100,19 +100,19 @@ describe('B1_biblioteka — Cabinet Library System', () => {
             category: 'dolne',
             units: 'mm',
             dimensions: {
-                width: 800,
-                height: 820,
-                depth: 560
+                szerokosc_mm: 800,
+                wysokosc_mm: 820,
+                glebokosc_mm: 560
             },
             frameParams: {
-                zoneCount: 1,
-                bottomHeight: 820,
-                middleHeight: 0,
-                backOffset: 3
+                liczba_stref: 1,
+                wysokosc_strefy_dolnej_mm: 820,
+                wysokosc_strefy_srodkowej_mm: 0,
+                cofniecie_plecow_mm: 3
             },
             submodules: [
                 {
-                    type: 'smartbox_shelves',
+                    type: 'blok_shelves',
                     boxType: 'SHELVES',
                     label: 'Polki_SB',
                     zoneIndex: 0,
@@ -136,23 +136,23 @@ describe('B1_biblioteka — Cabinet Library System', () => {
         expect(container.depth).toBe(mmToNm(560));
 
         // Sprawdzenie czy dodano podmoduł
-        const sbChild = createdNode?.children.find((c) => c.name?.includes('Polki') || c.name?.includes('smartbox'));
+        const sbChild = createdNode?.children.find((c) => c.name?.toLowerCase().includes('polki') || c.name?.toLowerCase().includes('blok'));
         expect(sbChild).toBeDefined();
     });
 
     it('manages cabinetLibraryStore CRUD and JSON import/export', () => {
         const customTpl: CabinetTemplate = {
             id: 'custom_test_tpl',
-            name: 'Własny Regał 900',
+            name: 'WĹ‚asny RegaĹ‚ 900',
             category: 'inne',
             units: 'mm',
-            dimensions: { width: 900, height: 2000, depth: 400 },
-            frameParams: { zoneCount: 1 },
+            dimensions: { szerokosc_mm: 900, wysokosc_mm: 2000, glebokosc_mm: 400 },
+            frameParams: { liczba_stref: 1 },
             submodules: []
         };
 
         cabinetLibraryStore.save(customTpl);
-        expect(cabinetLibraryStore.getById('custom_test_tpl')?.name).toBe('Własny Regał 900');
+        expect(cabinetLibraryStore.getById('custom_test_tpl')?.name).toBe('WĹ‚asny RegaĹ‚ 900');
 
         const jsonStr = JSON.stringify([customTpl]);
         const importRes = cabinetLibraryStore.importFromJson(jsonStr);

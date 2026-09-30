@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
+import { tx } from '../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 const LAYOUT_REGIONS = [
-    { id: 'drzewo-obiektow', name: 'Drzewo obiektów' },
-    { id: 'belka-widokowa', name: 'Belka widokowa' },
-    { id: 'panel-edycji', name: 'Panel edycji' },
+    { id: 'drzewo-obiektow', key: 'region.tree' },
+    { id: 'belka-widokowa', key: 'region.bar' },
+    { id: 'panel-edycji', key: 'region.panel' },
 ] as const;
 
 /** Pas wokół ramki (px) — od strony sceny, nie wnętrze panelu. */
@@ -14,7 +20,7 @@ const SHOW_DELAY_MS = 420;
 
 function nameAtEdge(x: number, y: number): string | null {
     let hit: string | null = null;
-    for (const { id, name } of LAYOUT_REGIONS) {
+    for (const { id, key } of LAYOUT_REGIONS) {
         const el = document.getElementById(id);
         if (!el) continue;
         const r = el.getBoundingClientRect();
@@ -22,13 +28,13 @@ function nameAtEdge(x: number, y: number): string | null {
         if (outside) {
             const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
             const dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
-            if (Math.hypot(dx, dy) <= EDGE_OUTSIDE_PX) hit = name;
+            if (Math.hypot(dx, dy) <= EDGE_OUTSIDE_PX) hit = key;
         } else {
             const inward = Math.min(x - r.left, r.right - x, y - r.top, r.bottom - y);
-            if (inward <= EDGE_INSIDE_PX) hit = name;
+            if (inward <= EDGE_INSIDE_PX) hit = key;
         }
     }
-    return hit;
+    return hit ? tx(srcTekst, hit, TX_NS) : null;
 }
 
 /** Podpowiedź szkoleniowa tylko przy krawędzi regionu — nie przy pracy wewnątrz. */

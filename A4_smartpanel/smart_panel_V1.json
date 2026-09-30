@@ -2,7 +2,7 @@
   "metadata": {
     "name": "CORE_TECHNOLOGY_LIBRARY",
     "version": "4.1",
-    "author": "SmartBox"
+    "author": "Bloki"
   },
   "materials_database": {
     "PLYTY_18": {
@@ -20,7 +20,10 @@
         "H1137_ST12_18": { "name": "Dąb Sorano czarnobrązowy", "code": "H1137 ST12" },
         "H1145_ST10_18": { "name": "Dąb Bardolino naturalny", "code": "H1145 ST10" },
         "H1146_ST10_18": { "name": "Dąb Bardolino szary", "code": "H1146 ST10" },
-        "H1150_ST10_18": { "name": "Dąb Arizona szary", "code": "H1150 ST10" }
+        "H1150_ST10_18": { "name": "Dąb Arizona szary", "code": "H1150 ST10" },
+        "H1180_ST37_18": { "name": "Dąb Halifax naturalny", "code": "H1180 ST37" },
+        "H1181_ST37_18": { "name": "Dąb Halifax tabak", "code": "H1181 ST37" },
+        "H1344_ST32_18": { "name": "Dąb Sherman koniakowy", "code": "H1344 ST32" }
       }
     },
     "PLYTY_16": {
@@ -86,6 +89,17 @@
       "density_kg_m3": 2500.0,
       "items": {
         "LUSTRO_SREBRNE_4": { "name": "Lustro Srebrne" }
+      }
+    },
+    "RAMKI_ALU": {
+      "category_name": "Ramki Aluminiowe",
+      "default_thickness_mm": 20.0,
+      "density_kg_m3": 1200.0,
+      "items": {
+        "RAMKA_ALU_SZKLO_Z1": { "name": "Ramka alu Z-1 ze szkłem", "code": "ALU_Z1" },
+        "RAMKA_ALU_SZKLO_Z9": { "name": "Ramka alu Z-9 ze szkłem", "code": "ALU_Z9" },
+        "RAMKA_ALU_SZKLO_Z11": { "name": "Ramka alu Z-11 ze szkłem", "code": "ALU_Z11" },
+        "RAMKA_ALU_SZKLO": { "name": "Ramka alu ze szkłem", "code": "ALU_FRAME" }
       }
     }
   },

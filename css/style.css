@@ -1301,6 +1301,71 @@ body, html {
     margin: 0 4px;
 }
 
+/* --- Hierarchia zaznaczenia (pod belką widokową) --- */
+#belka-hierarchia,
+.belka-hierarchia {
+    position: absolute;
+    top: 112px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: min(920px, calc(100vw - 360px));
+    background: transparent;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    border-radius: 8px;
+    box-shadow: none;
+    padding: 3px 6px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 3px;
+    z-index: 14;
+    pointer-events: auto;
+}
+
+.belka-hierarchia-sep {
+    color: #000000;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 0 2px;
+    user-select: none;
+}
+
+.belka-hierarchia-btn {
+    background: transparent;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    color: #000000;
+    padding: 3px 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.belka-hierarchia-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #000000;
+    border-color: #000000;
+}
+
+.belka-hierarchia-btn.is-current {
+    color: #000000;
+    background: rgba(37, 99, 235, 0.12);
+    border-color: #2563eb;
+    font-weight: 800;
+}
+
+.belka-hierarchia-btn.is-current:hover {
+    border-color: #1d4ed8;
+    background: rgba(37, 99, 235, 0.18);
+}
+
 .belka-dropdown-panel {
     position: absolute;
     top: 100%;
@@ -2536,7 +2601,7 @@ body, html {
 .panel-edycji,
 .panel-inner-content,
 .tab-content,
-#tab-a2-smartbox {
+#tab-a2-bloki {
     scrollbar-width: thin;
     scrollbar-color: #52525b rgba(0, 0, 0, 0.4);
 }
@@ -2544,7 +2609,7 @@ body, html {
 .panel-edycji::-webkit-scrollbar,
 .panel-inner-content::-webkit-scrollbar,
 .tab-content::-webkit-scrollbar,
-#tab-a2-smartbox::-webkit-scrollbar,
+#tab-a2-bloki::-webkit-scrollbar,
 .panel-edycji *::-webkit-scrollbar,
 .panel-inner-content *::-webkit-scrollbar,
 .tab-content *::-webkit-scrollbar {
@@ -2555,7 +2620,7 @@ body, html {
 .panel-edycji::-webkit-scrollbar-track,
 .panel-inner-content::-webkit-scrollbar-track,
 .tab-content::-webkit-scrollbar-track,
-#tab-a2-smartbox::-webkit-scrollbar-track,
+#tab-a2-bloki::-webkit-scrollbar-track,
 .panel-edycji *::-webkit-scrollbar-track,
 .panel-inner-content *::-webkit-scrollbar-track,
 .tab-content *::-webkit-scrollbar-track {
@@ -2565,7 +2630,7 @@ body, html {
 .panel-edycji::-webkit-scrollbar-thumb,
 .panel-inner-content::-webkit-scrollbar-thumb,
 .tab-content::-webkit-scrollbar-thumb,
-#tab-a2-smartbox::-webkit-scrollbar-thumb,
+#tab-a2-bloki::-webkit-scrollbar-thumb,
 .panel-edycji *::-webkit-scrollbar-thumb,
 .panel-inner-content *::-webkit-scrollbar-thumb,
 .tab-content *::-webkit-scrollbar-thumb {
@@ -2577,7 +2642,7 @@ body, html {
 .panel-edycji::-webkit-scrollbar-thumb:hover,
 .panel-inner-content::-webkit-scrollbar-thumb:hover,
 .tab-content::-webkit-scrollbar-thumb:hover,
-#tab-a2-smartbox::-webkit-scrollbar-thumb:hover,
+#tab-a2-bloki::-webkit-scrollbar-thumb:hover,
 .panel-edycji *::-webkit-scrollbar-thumb:hover,
 .panel-inner-content *::-webkit-scrollbar-thumb:hover,
 .tab-content *::-webkit-scrollbar-thumb:hover {

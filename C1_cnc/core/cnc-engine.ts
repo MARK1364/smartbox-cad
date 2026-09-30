@@ -65,8 +65,9 @@ export class CNCEngine {
                 const store = CAMStateStore.getInstance();
                 const prog = store.getActiveProgram();
                 if (prog) {
+                    // Strict: stan symulacji po fladze running, nigdy po tekście statusText.
                     store.setSimulationState(
-                        info.progressPercent < 100 && !info.statusText.includes("Zatrzymano"), 
+                        info.running && info.progressPercent < 100,
                         undefined,
                         info.statusText,
                         info.progressPercent
@@ -101,10 +102,10 @@ export class CNCEngine {
         let targetViewRoot: any = null;
         if (panelViews) {
             for (const [keyPanel, view] of panelViews.entries()) {
-                const nameMatch = keyPanel.name && panel.name && keyPanel.name === panel.name;
+                // Strict: tożsamość po id / referencji. Nazwy to display, nie biorą udziału w matchowaniu.
                 const idMatch = keyPanel.id && panel.id && keyPanel.id === panel.id;
                 const refMatch = keyPanel === panel;
-                if (nameMatch || idMatch || refMatch) {
+                if (idMatch || refMatch) {
                     if (view && view.root) {
                         targetViewRoot = view.root;
                         break;
@@ -116,19 +117,21 @@ export class CNCEngine {
             targetViewRoot = panel.meshNode;
         }
         if (!targetViewRoot && this.initializedScene) {
-            const meshes = this.initializedScene.meshes;
-            for (const m of meshes) {
-                if (m.name === panel.name || (panel.id && m.name.includes(panel.id))) {
-                    targetViewRoot = m;
-                    break;
-                }
-            }
+            // Strict: wiązanie przez jawne CADNode.id w SceneSyncAdapter (id → mesh).
+            // Bez skanowania sceny po nazwach — zmiana nazw w warstwie widoku nic tu nie psuje.
+            try {
+                const ctxMgr = ContextManager.instance as any;
+                const doc = ctxMgr?.document;
+                const node = panel?.id && doc?.findNode ? doc.findNode(panel.id) : null;
+                const mesh = ctxMgr?.sceneSyncAdapter?.getMeshForNodeId?.(node?.id ?? panel?.id) ?? null;
+                if (mesh) targetViewRoot = mesh;
+            } catch { /* brak wiązania — jak wcześniej, visualizer dostanie null */ }
         }
 
         const dims = this.getDimensionsMM(panel);
         
-        // Pobieranie roli formatki by pobrać regułę
-        const panelRole = panel.role || panel.name;
+        // Rola formatki z pola role. Brak roli = default WCS (bez zgadywania po nazwie).
+        const panelRole = panel.role;
         const roleRule = WcsRulesMapper.getRuleForRole(panelRole);
         const rule = roleRule
             ? { ...roleRule, origin_corner: { ...roleRule.origin_corner }, directions: { ...roleRule.directions }, rotation: { ...roleRule.rotation } }
@@ -165,12 +168,20 @@ export class CNCEngine {
         this.visualizer.renderFeatures(activeProg.features || [], this.wcsManager, targetViewRoot);
     }
 
-    public getDimensionsMM(panel: any) {
-        if (!panel) return { width: 600, height: 720, thickness: 18 };
-        const w = typeof panel.width === 'number' ? nmToMm(panel.width) : 600;
-        const h = typeof panel.height === 'number' ? nmToMm(panel.height) : 720;
-        const t = typeof panel.thickness === 'number' ? nmToMm(panel.thickness) : 18;
-        return { width: w, height: h, thickness: t };
+    public getDimensionsMM(panel: any): { width: number; height: number; thickness: number } {
+        if (!panel) {
+            throw new Error('[C1_cnc/CNCEngine] Brak referencji do formatki (panel is null/undefined).');
+        }
+        if (typeof panel.width !== 'number' || panel.width <= 0 ||
+            typeof panel.height !== 'number' || panel.height <= 0 ||
+            typeof panel.thickness !== 'number' || panel.thickness <= 0) {
+            throw new Error(`[C1_cnc/CNCEngine] Formatka "${panel.name || 'unknown'}" nie posiada poprawnych wymiarów fizycznych (W=${panel.width}, H=${panel.height}, T=${panel.thickness}).`);
+        }
+        return {
+            width: nmToMm(panel.width),
+            height: nmToMm(panel.height),
+            thickness: nmToMm(panel.thickness)
+        };
     }
 
     public startSimulation(speed: number): void {
@@ -195,19 +206,23 @@ export class CNCEngine {
             if (view && view.root) targetViewRoot = view.root;
         }
 
+        const dims = this.getDimensionsMM(prog.targetPanel);
+        this.wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
         this.simulator.setWcsTransform(this.wcsManager, targetViewRoot);
         
-        const project = this.camProcessor.processProject({
+        // Symulator 3D operuje na CNCOperation[] (nie na CLDataProgram — to inny konsument).
+        const operations = this.camProcessor.processProject({
             projectName: prog.projectName || 'Program',
             wcsOrigin: this.wcsManager.getOrigin(),
             wcsName: this.wcsManager.getWcsName(),
             features: prog.features,
             toolAssignments: prog.toolAssignments || {},
-            postprocessor: prog.postprocessor || 'Mach3'
+            postprocessor: prog.postprocessor || 'Mach3',
+            workpieceDimensions: dims
         });
 
         this.simulator.setSpeed(speed);
-        this.simulator.loadOperations(project.operations);
+        this.simulator.loadOperations(operations);
         this.simulator.start();
         store.setSimulationState(true, speed);
     }

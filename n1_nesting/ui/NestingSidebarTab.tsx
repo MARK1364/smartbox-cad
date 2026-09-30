@@ -1,7 +1,7 @@
 /**
  * Panel boczny modułu Nesting w głównym interfejsie CAD (Nesting C2)
  * Tryb działania:
- * - Wybór zakresu odbywa się WYŁĄCZNIE przez Drag & Drop (przeciągnięcie Korpusu, SmartBoxa lub Formatki z lewego drzewa obiektów)
+ * - Wybór zakresu odbywa się WYŁĄCZNIE przez Drag & Drop (przeciągnięcie Korpusu, Bloku lub Formatki z lewego drzewa obiektów)
  * - Automatyczne odświeżanie danych w czasie rzeczywistym przy każdej zmianie w scenie / parametrach CAD
  * - Wybór profilu maszyny (Piła vs CNC)
  * - Podgląd grup materiałowych i natychmiastowe generowanie rozkroju
@@ -14,7 +14,7 @@ import {
     ContainerScopeInfo,
     SheetConfig
 } from '../core/nesting-types';
-import { NestingEngine } from '../core/nesting-engine';
+import { getDefaultKerf, getMaterialKey, getMaterialLabel, getMaterialInfo, resolveMaterialName, runNesting } from '../core/nesting-engine';
 import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer';
 import { ContextManager } from '../../A1_core/context-manager';
 import { UIController } from '../../A1_core/ui-controller';
@@ -24,7 +24,7 @@ interface NestingSidebarTabProps {
 }
 
 interface SelectedTarget {
-    type: 'PROJECT' | 'CONTAINER' | 'SMARTBOX' | 'PANEL';
+    type: 'PROJECT' | 'CONTAINER' | 'BLOKI' | 'PANEL';
     id: string;
     name: string;
 }
@@ -48,12 +48,12 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
             unsubscribeDoc = doc.onDocumentChanged(triggerAutoRefresh);
         }
 
-        // 2. Subskrypcje na globalne zdarzenia zmian geometrii i SmartBox/SmartFrame
+        // 2. Subskrypcje na globalne zdarzenia zmian geometrii i Bloki/SmartFrame
         const eventNames = [
-            'smartbox-project-changed',
+            'bloki-project-changed',
             'smartframe-updated',
             'material-database-updated',
-            'smartbox-properties-update',
+            'bloki-properties-update',
             'cad-document-changed',
             'cad-history-executed',
             'cad-dimension-changed',
@@ -84,12 +84,12 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
             name: p.role ? `${p.furniture_name} - ${p.role}` : p.part_id,
             width: p.length_mm,
             height: p.width_mm,
-            thickness: p.thickness_mm || 18,
+            thickness: p.thickness_mm,
             quantity: p.qty || 1,
             canRotate: true,
-            material: NestingEngine.resolveMaterialName(p.material),
+            material: resolveMaterialName(p.material),
             containerId: p.container_id,
-            smartboxId: p.smartbox_id,
+            blokId: p.blok_id,
             furnitureName: p.furniture_name
         }));
 
@@ -111,11 +111,11 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
             return;
         }
 
-        const nodeType: 'CONTAINER' | 'SMARTBOX' | 'PANEL' = 
-            type === 'SMARTBOX' ? 'SMARTBOX' : (type === 'PANEL' ? 'PANEL' : 'CONTAINER');
+        const nodeType: 'CONTAINER' | 'BLOKI' | 'PANEL' = 
+            type === 'BLOKI' ? 'BLOKI' : (type === 'PANEL' ? 'PANEL' : 'CONTAINER');
 
         const targetId = String(id || name);
-        const targetName = String(name || id || (nodeType === 'SMARTBOX' ? 'SmartBox' : (nodeType === 'PANEL' ? 'Formatka' : 'Korpus')));
+        const targetName = String(name || id || (nodeType === 'BLOKI' ? 'Bloki' : (nodeType === 'PANEL' ? 'Formatka' : 'Korpus')));
 
         setSelectedTarget({
             type: nodeType,
@@ -169,7 +169,7 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
                 } else {
                     const matched = sceneData.containers.find(c => c.id === rawId || c.name === rawId);
                     nodeData = {
-                        type: matched?.type === 'smartbox' ? 'SMARTBOX' : 'CONTAINER',
+                        type: matched?.type === 'bloki' ? 'BLOKI' : 'CONTAINER',
                         id: rawId,
                         name: matched?.name || rawId
                     };
@@ -192,8 +192,8 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
         }
 
         return sceneData.parts.filter((p) => {
-            if (type === 'SMARTBOX') {
-                return p.smartboxId === id || (p.name && p.name.includes(name)) || p.id === id;
+            if (type === 'BLOKI') {
+                return p.blokId === id || (p.name && p.name.includes(name)) || p.id === id;
             }
             if (type === 'PANEL') {
                 return p.id === id || (p.sourceNodeId && p.sourceNodeId === id) || p.name === name;
@@ -207,13 +207,14 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
     const materialGroups = useMemo(() => {
         const map = new Map<string, { key: string; name: string; thickness: number; label: string; count: number; areaM2: number }>();
         scopedParts.forEach((p) => {
-            const key = NestingEngine.getMaterialKey(p);
-            const label = NestingEngine.getMaterialLabel(p);
+            const key = getMaterialKey(p);
+            const label = getMaterialLabel(p);
+            const info = getMaterialInfo(p);
             if (!map.has(key)) {
                 map.set(key, {
                     key,
-                    name: p.material || 'Płyta podstawowa',
-                    thickness: p.thickness || 18,
+                    name: p.material || info.name,
+                    thickness: p.thickness ?? info.thickness_mm,
                     label,
                     count: 0,
                     areaM2: 0
@@ -231,13 +232,14 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
     const handleOpenNestingSubpage = (materialKey: string = 'ALL') => {
         if (!selectedTarget || scopedParts.length === 0) return;
 
-        const kerf = NestingEngine.getDefaultKerf(machineType);
+        const kerf = getDefaultKerf(machineType);
+        const activeGroup = materialGroups.find(m => m.key === materialKey) || materialGroups[0];
         const config: SheetConfig = {
             width: 2800,
             height: 2070,
             kerf,
             trimMargin: machineType === 'cnc' ? 15 : 10,
-            thickness: 18,
+            thickness: activeGroup ? activeGroup.thickness : undefined,
             machineType
         };
 
@@ -257,10 +259,10 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
 
     const targetIcon = selectedTarget?.type === 'PROJECT'
         ? '📁'
-        : (selectedTarget?.type === 'SMARTBOX' ? '🗄️' : (selectedTarget?.type === 'PANEL' ? '📄' : '📦'));
+        : (selectedTarget?.type === 'BLOKI' ? '🗄️' : (selectedTarget?.type === 'PANEL' ? '📄' : '📦'));
     const targetTypeLabel = selectedTarget?.type === 'PROJECT'
         ? 'Cały Projekt'
-        : (selectedTarget?.type === 'SMARTBOX' ? 'SmartBox' : (selectedTarget?.type === 'PANEL' ? 'Formatka' : 'Korpus'));
+        : (selectedTarget?.type === 'BLOKI' ? 'Bloki' : (selectedTarget?.type === 'PANEL' ? 'Formatka' : 'Korpus'));
 
     return (
         <div 
@@ -296,7 +298,7 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
                 }}>
                     <span style={{ fontSize: '2.4rem' }}>📥</span>
                     <div style={{ fontWeight: 700, fontSize: '1rem', color: '#ffffff', textAlign: 'center' }}>
-                        Upuść Projekt, Korpus lub SmartBox tutaj
+                        Upuść Projekt, Korpus lub Blok tutaj
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#c7d2fe' }}>
                         Rozkrój zostanie natychmiast utworzony dla wybranego zakresu
@@ -388,10 +390,10 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
                     >
                         <span style={{ fontSize: '2rem' }}>📥</span>
                         <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
-                            Przeciągnij Projekt, Korpus lub SmartBox z drzewa
+                            Przeciągnij Projekt, Korpus lub Blok z drzewa
                         </div>
                         <div style={{ fontSize: '0.72rem', color: '#94a3b8', maxWidth: '240px', lineHeight: 1.3 }}>
-                            Chwyć myszą cały Projekt, szafkę lub moduł SmartBox z drzewa obiektów i upuść tutaj.
+                            Chwyć myszą cały Projekt, szafkę lub moduł Bloków z drzewa obiektów i upuść tutaj.
                         </div>
                         <button
                             type="button"
@@ -482,7 +484,7 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto', flex: 1, maxHeight: '240px' }}>
                     {!selectedTarget ? (
                         <div style={{ textAlign: 'center', color: '#64748b', fontSize: '0.8rem', padding: '24px 0' }}>
-                            Przeciągnij szafkę lub SmartBox z drzewa, aby wyświetlić listę materiałów
+                            Przeciągnij szafkę lub Blok z drzewa, aby wyświetlić listę materiałów
                         </div>
                     ) : materialGroups.length === 0 ? (
                         <div style={{ textAlign: 'center', color: '#64748b', fontSize: '0.8rem', padding: '16px 0' }}>

@@ -1,0 +1,142 @@
+{
+  "panel.label": {
+    "pl": "Ustawienia Drzwi V2",
+    "en": "Doors Settings V2",
+    "de": "Türen V2"
+  },
+  "door_type.label": {
+    "pl": "Typ drzwi:",
+    "en": "Door type:",
+    "de": "Türtyp:"
+  },
+  "door_type.items.LEFT": {
+    "pl": "Lewe",
+    "en": "Left",
+    "de": "Links"
+  },
+  "door_type.items.RIGHT": {
+    "pl": "Prawe",
+    "en": "Right",
+    "de": "Rechts"
+  },
+  "door_type.items.DOUBLE": {
+    "pl": "Podwójne",
+    "en": "Double",
+    "de": "Doppel"
+  },
+  "gap.label": {
+    "pl": "Szczelina (Środek):",
+    "en": "Center gap:",
+    "de": "Mittenfuge:"
+  },
+  "overlaps.title": {
+    "pl": "Nałożenia frontu:",
+    "en": "Front overlaps:",
+    "de": "Frontüberlappungen:"
+  },
+  "ov_top.label": {
+    "pl": "Góra:",
+    "en": "Top:",
+    "de": "Oben:"
+  },
+  "ov_left.label": {
+    "pl": "Lewo:",
+    "en": "Left:",
+    "de": "Links:"
+  },
+  "ov_bottom.label": {
+    "pl": "Dół:",
+    "en": "Bottom:",
+    "de": "Unten:"
+  },
+  "ov_right.label": {
+    "pl": "Prawo:",
+    "en": "Right:",
+    "de": "Rechts:"
+  },
+  "hinges.title": {
+    "pl": "Okucia (Zawiasy):",
+    "en": "Hardware (Hinges):",
+    "de": "Beschläge (Scharniere):"
+  },
+  "weight_info.front_weight": {
+    "pl": "Waga frontu:",
+    "en": "Front weight:",
+    "de": "Frontgewicht:"
+  },
+  "weight_info.leaf_weight": {
+    "pl": "Waga skrzydła:",
+    "en": "Leaf weight:",
+    "de": "Flügelgewicht:"
+  },
+  "weight_info.times_2": {
+    "pl": "(x2)",
+    "en": "(x2)",
+    "de": "(x2)"
+  },
+  "weight_info.suggested_hinges": {
+    "pl": "Sugerowana ilość zawiasów:",
+    "en": "Suggested hinge count:",
+    "de": "Empfohlene Scharnieranzahl:"
+  },
+  "weight_info.unit_pcs": {
+    "pl": "szt.",
+    "en": "pcs",
+    "de": "Stk."
+  },
+  "weight_info.per_leaf": {
+    "pl": "/ skrz.",
+    "en": "/ leaf",
+    "de": "/ Flügel"
+  },
+  "hinge_template.label": {
+    "pl": "Szablon...",
+    "en": "Template...",
+    "de": "Vorlage..."
+  },
+  "hinge_row.bottom_label": {
+    "pl": "Dół {n}",
+    "en": "Bottom {n}",
+    "de": "Unten {n}"
+  },
+  "hinge_row.middle_label": {
+    "pl": "Poz. {n}",
+    "en": "Pos. {n}",
+    "de": "Pos. {n}"
+  },
+  "hinge_row.top_label": {
+    "pl": "Góra {n}",
+    "en": "Top {n}",
+    "de": "Oben {n}"
+  },
+  "hinge_out_of_panel.warning": {
+    "pl": "Ostrzeżenie: otwór zawiasu wychodzi poza formatkę drzwi",
+    "en": "Warning: hinge hole goes beyond the door panel",
+    "de": "Warnung: Scharnierbohrung ragt über die Tür hinaus"
+  },
+  "generate.label": {
+    "pl": "Odśwież Drzwi",
+    "en": "Refresh Doors",
+    "de": "Aktualisieren"
+  },
+  "hints.STEP_1_SELECT_BASE": {
+    "pl": "Krok 1: Zaznacz korpus szafki, do której chcesz dodać drzwi.",
+    "en": "Step 1: Select the cabinet body to which you want to add doors."
+  },
+  "hints.STEP_2_CHOOSE_TYPE": {
+    "pl": "Krok 2: Wybierz typ drzwi (Lewe, Prawe, Podwójne) w panelu po prawej.",
+    "en": "Step 2: Choose the door type (Left, Right, Double) in the right panel."
+  },
+  "hints.STEP_3_APPLY": {
+    "pl": "Krok 3: Kliknij 'Generuj Drzwi', aby zakończyć.",
+    "en": "Step 3: Click 'Generate Doors' to finish."
+  },
+  "errors.MISSING_BASE_OBJECT": {
+    "pl": "Brak obiektu bazowego Bloków w kontekście.",
+    "en": "Missing base Bloki object in context."
+  },
+  "warnings.INVALID_DOOR_TYPE": {
+    "pl": "Nieprawidłowy typ drzwi. Dopuszczalne: LEFT, RIGHT, DOUBLE.",
+    "en": "Invalid door type. Allowed: LEFT, RIGHT, DOUBLE."
+  }
+}

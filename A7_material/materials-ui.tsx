@@ -203,11 +203,15 @@ export function MaterialsUI({ projectModel: _projectModel }: Props) {
                                             </svg>
                                         </span>
                                         <div style={{
-                                            width: '22px',
-                                            height: '22px',
+                                            width: '26px',
+                                            height: '26px',
                                             borderRadius: '4px',
                                             backgroundColor: mat.hexColor || `rgb(${mat.color.r * 255}, ${mat.color.g * 255}, ${mat.color.b * 255})`,
-                                            border: '1px solid rgba(255,255,255,0.2)',
+                                            backgroundImage: mat.thumbnail_path ? `url("${mat.thumbnail_path}")` : undefined,
+                                            backgroundSize: 'cover',
+                                            backgroundPosition: 'center',
+                                            border: '1px solid rgba(255,255,255,0.25)',
+                                            boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
                                             flexShrink: 0
                                         }} />
                                         <div style={{ flex: 1, minWidth: 0 }}>

@@ -2,7 +2,7 @@
  * SmartPanel Web — CAD Math: Mat4
  *
  * Macierz 4×4 (Float64Array, column-major) do transformacji w domenie CAD.
- * Zero zależności od Babylon.js, OCCT, DOM.
+ * Zero zależności od Babylon.js i DOM.
  *
  * KONWENCJA: column-major, wektory kolumnowe (OpenGL / Babylon.js / glMatrix).
  *

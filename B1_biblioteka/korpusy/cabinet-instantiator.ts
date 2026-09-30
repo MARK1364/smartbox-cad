@@ -1,7 +1,7 @@
 /**
  * B1_biblioteka/korpusy/cabinet-instantiator.ts
  *
- * Odtwarza gotowy mebel (SmartFrame + SmartBox submodules) ze wzorca CabinetTemplate
+ * Odtwarza gotowy mebel (SmartFrame + Bloki submodules) ze wzorca CabinetTemplate
  * na scenie CAD na wskazanej pozycji.
  */
 
@@ -14,17 +14,17 @@ import { Quat } from '../../A1_core/cad-math/quat.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { CreateKorpusCommand } from '../../A3_smartframe/commands/create-korpus-command.js';
-import { update_smartbox_core } from '../../A2_smartbox/smartbox-core.js';
+import { update_bloki_core } from '../../A2_bloki/bloki-core.js';
 import type { CabinetTemplate, CabinetSubmoduleRecipe } from './types.js';
 
 export interface InstantiateCabinetOptions {
     template: CabinetTemplate;
     position?: { x: number; y: number; z?: number };
-    overrideDims?: { width?: number; height?: number; depth?: number };
+    overrideDims?: { szerokosc_mm?: number; wysokosc_mm?: number; glebokosc_mm?: number };
 }
 
 /**
- * Główna funkcja tworząca korpus mebla wraz z jego wyposażeniem w scenie.
+ * GĹ‚Ăłwna funkcja tworzÄ…ca korpus mebla wraz z jego wyposaĹĽeniem w scenie.
  */
 export function instantiateCabinetTemplate(
     options: InstantiateCabinetOptions,
@@ -34,25 +34,29 @@ export function instantiateCabinetTemplate(
     if (!doc) return null;
 
     const { template, position, overrideDims } = options;
-    const w = overrideDims?.width ?? template.dimensions.width;
-    const h = overrideDims?.height ?? template.dimensions.height;
-    const d = overrideDims?.depth ?? template.dimensions.depth;
+    const w = overrideDims?.szerokosc_mm ?? template.dimensions.szerokosc_mm;
+    const h = overrideDims?.wysokosc_mm ?? template.dimensions.wysokosc_mm;
+    const d = overrideDims?.glebokosc_mm ?? template.dimensions.glebokosc_mm;
 
     const fp = template.frameParams;
-    const zoneCount = fp.zoneCount || 1;
-    const bottomHeight = fp.bottomHeight !== undefined ? fp.bottomHeight : (zoneCount === 1 ? h : 500);
-    const middleHeight = fp.middleHeight !== undefined ? fp.middleHeight : (zoneCount === 3 ? 1200 : 0);
-    const backOffset = fp.backOffset ?? 3;
+    const liczba_stref = fp.liczba_stref || 1;
+    const wysokosc_strefy_dolnej_mm = fp.wysokosc_strefy_dolnej_mm !== undefined
+        ? fp.wysokosc_strefy_dolnej_mm
+        : (liczba_stref === 1 ? h : 500);
+    const wysokosc_strefy_srodkowej_mm = fp.wysokosc_strefy_srodkowej_mm !== undefined
+        ? fp.wysokosc_strefy_srodkowej_mm
+        : (liczba_stref === 3 ? 1200 : 0);
+    const cofniecie_plecow_mm = fp.cofniecie_plecow_mm ?? 3;
 
     // 1. Tworzenie korpusu bazowego przez CreateKorpusCommand (wsparcie dla Undo)
     const cmd = new CreateKorpusCommand({
-        width: w,
-        height: h,
-        depth: d,
-        zoneCount,
-        bottomHeight,
-        middleHeight,
-        backOffset,
+        szerokosc_mm: w,
+        wysokosc_mm: h,
+        glebokosc_mm: d,
+        liczba_stref,
+        wysokosc_strefy_dolnej_mm,
+        wysokosc_strefy_srodkowej_mm,
+        cofniecie_plecow_mm,
         offsets: fp.offsets || {},
         position: position || { x: 0, y: 0, z: 0 }
     });
@@ -71,15 +75,15 @@ export function instantiateCabinetTemplate(
     const korpusNode = doc.findNode(korpusContainer.id);
     if (!korpusNode) return null;
 
-    // 2. Jeśli szablon posiada podmoduły SmartBox, odtwarzamy je
+    // 2. JeĹ›li szablon posiada podmoduĹ‚y Bloki, odtwarzamy je
     if (Array.isArray(template.submodules) && template.submodules.length > 0) {
-        // Znajdź ściany korpusu do dynamicznych referencji
+        // ZnajdĹş Ĺ›ciany korpusu do dynamicznych referencji
         const allChildren = korpusNode.children || [];
         const bokL = allChildren.find((c) => c.name?.includes('BOK_L') || c.name?.includes('Bok Lewy'));
         const bokR = allChildren.find((c) => c.name?.includes('BOK_R') || c.name?.includes('Bok Prawy'));
-        const wieniecD = allChildren.find((c) => c.name?.includes('WIENIEC_D') || c.name?.includes('Dół'));
-        const wieniecG = allChildren.find((c) => c.name?.includes('WIENIEC_G') || c.name?.includes('Góra'));
-        const plecy = allChildren.find((c) => c.name?.includes('PLECY') || c.name?.includes('Tył'));
+        const wieniecD = allChildren.find((c) => c.name?.includes('WIENIEC_D') || c.name?.includes('DĂłĹ‚'));
+        const wieniecG = allChildren.find((c) => c.name?.includes('WIENIEC_G') || c.name?.includes('GĂłra'));
+        const plecy = allChildren.find((c) => c.name?.includes('PLECY') || c.name?.includes('TyĹ‚'));
 
         const leftId = bokL?.id || korpusNode.id;
         const rightId = bokR?.id || korpusNode.id;
@@ -97,9 +101,9 @@ export function instantiateCabinetTemplate(
                 korpusW: w,
                 korpusH: h,
                 korpusD: d,
-                zoneCount,
-                bottomHeight,
-                middleHeight
+                liczba_stref,
+                wysokosc_strefy_dolnej_mm,
+                wysokosc_strefy_srodkowej_mm
             }, doc);
         }
     }
@@ -108,7 +112,7 @@ export function instantiateCabinetTemplate(
     doc.setActiveEntity(korpusContainer);
 
     if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-        window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
         (window as any).__rebuildGeometry?.(`Wstawiono z biblioteki: ${template.name}`);
     }
 
@@ -127,37 +131,45 @@ function instantiateSubmodule(
         korpusW: number;
         korpusH: number;
         korpusD: number;
-        zoneCount: 1 | 2 | 3;
-        bottomHeight: number;
-        middleHeight: number;
+        liczba_stref: 1 | 2 | 3;
+        wysokosc_strefy_dolnej_mm: number;
+        wysokosc_strefy_srodkowej_mm: number;
     },
     doc: ProjectDocument
 ) {
     const isExternal = sub.boxType === 'PANELS';
-    const subName = sub.label || `smartbox_${sub.boxType.toLowerCase()}`;
+    const subName = sub.label || `blok_${sub.boxType.toLowerCase()}`;
 
-    // Wymiary wewnętrzne wnęki
+    // Wymiary wewnÄ™trzne wnÄ™ki
     const innerW = Math.max(100, ctx.korpusW - 36);
     const innerD = Math.max(100, ctx.korpusD - 20);
     let zoneH = Math.max(100, ctx.korpusH - 36);
-    let zoneZOffsetMm = 18; // nad wieńcem dolnym
+    let zoneZOffsetMm = 18; // nad wieĹ„cem dolnym
 
-    if (ctx.zoneCount === 2) {
+    if ((sub as any).customHeightMm) {
+        zoneH = (sub as any).customHeightMm;
+    } else if (ctx.liczba_stref === 2) {
         if (sub.zoneIndex === 0) {
-            zoneH = ctx.bottomHeight - 18;
+            zoneH = ctx.wysokosc_strefy_dolnej_mm - 18;
         } else {
-            zoneH = ctx.korpusH - ctx.bottomHeight - 18;
-            zoneZOffsetMm = ctx.bottomHeight + 18;
+            zoneH = ctx.korpusH - ctx.wysokosc_strefy_dolnej_mm - 18;
+            zoneZOffsetMm = ctx.wysokosc_strefy_dolnej_mm + 18;
         }
-    } else if (ctx.zoneCount === 3) {
+    } else if (ctx.liczba_stref === 3) {
         if (sub.zoneIndex === 0) {
-            zoneH = ctx.bottomHeight - 18;
+            zoneH = ctx.wysokosc_strefy_dolnej_mm - 18;
         } else if (sub.zoneIndex === 1) {
-            zoneH = ctx.middleHeight - 18;
-            zoneZOffsetMm = ctx.bottomHeight + 18;
+            if ((sub as any).zoneSpan === 2 || (sub.params as any)?.zoneSpan === 2 || (sub.params as any)?.refTop === 'WIENIEC_G') {
+                // Front obejmujÄ…cy Ĺšrodek + GĂłrÄ™ jednoczeĹ›nie (np. szafa wysoka z szufladami na dole)
+                zoneH = ctx.korpusH - ctx.wysokosc_strefy_dolnej_mm - 18;
+                zoneZOffsetMm = ctx.wysokosc_strefy_dolnej_mm + 18;
+            } else {
+                zoneH = ctx.wysokosc_strefy_srodkowej_mm - 18;
+                zoneZOffsetMm = ctx.wysokosc_strefy_dolnej_mm + 18;
+            }
         } else {
-            zoneH = ctx.korpusH - ctx.bottomHeight - ctx.middleHeight - 18;
-            zoneZOffsetMm = ctx.bottomHeight + ctx.middleHeight + 18;
+            zoneH = ctx.korpusH - ctx.wysokosc_strefy_dolnej_mm - ctx.wysokosc_strefy_srodkowej_mm - 18;
+            zoneZOffsetMm = ctx.wysokosc_strefy_dolnej_mm + ctx.wysokosc_strefy_srodkowej_mm + 18;
         }
     }
 
@@ -169,18 +181,18 @@ function instantiateSubmodule(
     });
 
     sbContainer.generatorParams = {
-        type: sub.type || `smartbox_${sub.boxType.toLowerCase()}`,
+        type: sub.type || `blok_${sub.boxType.toLowerCase()}`,
         boxType: sub.boxType,
         parentContainerId: korpusNode.id,
         targetZone: isExternal ? 'FULL' : undefined,
-        side_references_smartbox: isExternal ? 'OUTER' : 'INNER',
+        side_references_bloki: isExternal ? 'OUTER' : 'INNER',
         customReferences: {
             xMin: { partKey: 'Bok Lewy', face: isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS', panelId: ctx.leftId },
             xMax: { partKey: 'Bok Prawy', face: isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS', panelId: ctx.rightId },
-            zMin: { partKey: 'Dół', face: isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS', panelId: ctx.bottomId },
-            zMax: { partKey: 'Góra', face: isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_MINUS', panelId: ctx.topId },
-            yMin: { partKey: 'Przód', face: 'FACE_X_PLUS', panelId: ctx.leftId },
-            yMax: { partKey: 'Tył', face: isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS', panelId: ctx.backId }
+            zMin: { partKey: 'DĂłĹ‚', face: isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS', panelId: ctx.bottomId },
+            zMax: { partKey: 'GĂłra', face: isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_MINUS', panelId: ctx.topId },
+            yMin: { partKey: 'PrzĂłd', face: 'FACE_X_PLUS', panelId: ctx.leftId },
+            yMax: { partKey: 'TyĹ‚', face: isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS', panelId: ctx.backId }
         },
         offsets: { xMin: 0, xMax: 0, yMin: 0, yMax: 0, zMin: 0, zMax: 0 },
         ...(sub.params || {})
@@ -198,10 +210,10 @@ function instantiateSubmodule(
     // Dodanie do drzewa pod korpusem
     doc.addNode(korpusNode.id, sbNode);
 
-    // Wywołanie aktualizacji SmartBoxa
+    // WywoĹ‚anie aktualizacji Bloku
     try {
-        update_smartbox_core(sbContainer, doc);
+        update_bloki_core(sbContainer, doc);
     } catch (e) {
-        console.warn(`[CabinetInstantiator] Ostrzeżenie przy aktualizacji podmodułu ${subName}:`, e);
+        console.warn(`[CabinetInstantiator] OstrzeĹĽenie przy aktualizacji podmoduĹ‚u ${subName}:`, e);
     }
 }

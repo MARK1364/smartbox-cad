@@ -1,7 +1,7 @@
 /**
  * zone-helper.ts
  *
- * Jedno źródło prawdy (SSOT) dla identyfikatorów stref w korpusach i SmartBoxach.
+ * Jedno źródło prawdy (SSOT) dla identyfikatorów stref w korpusach i Blokach.
  * 
  * Kanoniczne identyfikatory stref:
  * - zoneId: 'SEKCJA_B' | 'SEKCJA_M' | 'SEKCJA_T'

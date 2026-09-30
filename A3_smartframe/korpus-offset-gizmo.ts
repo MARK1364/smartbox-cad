@@ -13,14 +13,25 @@ import { rebuildSmartFrameContainer } from './smartframe-adapter.js';
 import { SetKorpusOffsetCommand } from './commands/set-korpus-offset-command.js';
 import { readOffsetMm } from './back-overlap.js';
 
+/** Klucze to kanoniczne FaceName — `normalizeFaceName` nie przyjmuje aliasów. */
 const FACE_MAPPING: Record<string, Record<string, string>> = {
-    LEFT_SIDE_PANEL: { top: '-Y', bottom: '+Y', left: '+X', right: '-X' },
-    SIDE_LEFT: { top: '-Y', bottom: '+Y', left: '+X', right: '-X' },
-    RIGHT_SIDE_PANEL: { bottom: '-Y', top: '+Y', right: '+X', left: '-X' },
-    SIDE_RIGHT: { bottom: '-Y', top: '+Y', right: '+X', left: '-X' },
-    BOTTOM_PANEL: { bottom: '+X', top: '-X', left: '-Y', right: '+Y' },
-    TOP_PANEL: { bottom: '-X', top: '+X', left: '-Y', right: '+Y' },
-    BACK_PANEL: { top: '-Y', bottom: '+Y', left: '-X', right: '+X', front: 'shiftY' }
+    LEFT_SIDE_PANEL: { FACE_Y_PLUS: '-Y', FACE_Y_MINUS: '+Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
+    SIDE_LEFT: { FACE_Y_PLUS: '-Y', FACE_Y_MINUS: '+Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
+    RIGHT_SIDE_PANEL: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
+    SIDE_RIGHT: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
+    // [90,180,0]: Ry=180 lustrzy lokalne ±X względem starego [90,0,0]
+    BOTTOM_PANEL: { FACE_Y_MINUS: '-X', FACE_Y_PLUS: '+X', FACE_X_MINUS: '-Y', FACE_X_PLUS: '+Y' },
+    TOP_PANEL: { FACE_Y_MINUS: '-X', FACE_Y_PLUS: '+X', FACE_X_MINUS: '-Y', FACE_X_PLUS: '+Y' },
+    BACK_PANEL: { FACE_Y_PLUS: '-Y', FACE_Y_MINUS: '+Y', FACE_X_MINUS: '-X', FACE_X_PLUS: '+X', FACE_Z_PLUS: 'shiftY' }
+};
+
+/** PLECY_X (Rogowy90): LCS jak bok — pełne odbicie mapowania względem zwykłych pleców. */
+const BACK_PANEL_PLECY_X_MAPPING: Record<string, string> = {
+    FACE_Y_PLUS: '+Y',
+    FACE_Y_MINUS: '-Y',
+    FACE_X_MINUS: '+X',
+    FACE_X_PLUS: '-X',
+    FACE_Z_PLUS: 'shiftX'
 };
 
 const SHIFT: Record<string, OffsetShiftSpec> = {
@@ -32,6 +43,33 @@ const SHIFT: Record<string, OffsetShiftSpec> = {
     TOP_PANEL: { paramSuffix: 'shiftZ', cadAxis: 'Z', sign: 1 },
     BACK_PANEL: { paramSuffix: 'shiftY', cadAxis: 'Y', sign: 1 }
 };
+
+/**
+ * Strict: PLECY_X wykrywamy po key / corner_arm nadawanych przez silnik.
+ * Celowo BEZ panel.name — użytkownik może zmienić nazwę w drzewie (rename-part),
+ * a key i corner_arm są rename-proof.
+ */
+function isPlecyXPanel(panel: any): boolean {
+    const key = String(panel?.key || '');
+    const arm = String(
+        panel?.custom_properties?.corner_arm ||
+        panel?.customProperties?.corner_arm ||
+        ''
+    ).toUpperCase();
+    const tag = `${key}|${arm}`.toUpperCase();
+    return tag.includes('PLECY_X') || tag.includes('BACK_X') || arm === 'X';
+}
+
+/**
+ * Mapowanie krawędzi gizmo → offset dla BACK_PANEL.
+ * PLECY_X (kątownik, orientacja boku) ma odwrócone top/bottom i left/right.
+ */
+export function resolveBackPanelFaceMapping(panel?: any): Record<string, string> {
+    if (panel && isPlecyXPanel(panel)) {
+        return { ...BACK_PANEL_PLECY_X_MAPPING };
+    }
+    return { ...FACE_MAPPING.BACK_PANEL };
+}
 
 export function findOwningKorpus(doc: any, entityId: string): any | null {
     if (!doc || !entityId) return null;
@@ -47,6 +85,35 @@ export function findOwningKorpus(doc: any, entityId: string): any | null {
     return null;
 }
 
+/**
+ * Parametr gizmo „front” dla BACK_PANEL:
+ * - Korpus3 (jedne plecy) → globalny backOffset
+ * - Rogowy90 PLECY_Y → shiftY (oś CAD Y)
+ * - Rogowy90 PLECY_X → shiftX (oś CAD X)
+ */
+export function resolveBackPanelFrontParam(panel: any): {
+    kind: 'backOffset' | 'shiftX' | 'shiftY';
+    paramName: string;
+} {
+    // Strict: stem klucza offsetu z key (rename-proof), nie z display name.
+    // rename-part w drzewie zmienia panel.name i stary `${name}_shiftX` sierocił zapis.
+    const stem = String(panel?.key || panel?.role || 'BACK_PANEL');
+    if (isPlecyXPanel(panel)) {
+        return { kind: 'shiftX', paramName: `${stem}_shiftX` };
+    }
+    const key = String((panel as any)?.key || '');
+    const arm = String(
+        panel?.custom_properties?.corner_arm ||
+        panel?.customProperties?.corner_arm ||
+        ''
+    ).toUpperCase();
+    const tag = `${key}|${arm}`.toUpperCase();
+    if (tag.includes('PLECY_Y') || tag.includes('BACK_Y') || arm === 'Y') {
+        return { kind: 'shiftY', paramName: `${stem}_shiftY` };
+    }
+    return { kind: 'backOffset', paramName: 'backOffset' };
+}
+
 function ensureOffsets(container: any): Record<string, number> {
     if (!container.generatorParams) container.generatorParams = {};
     if (!container.generatorParams.offsets) container.generatorParams.offsets = {};
@@ -56,7 +123,10 @@ function ensureOffsets(container: any): Record<string, number> {
 export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
     id: 'A3_korpus',
 
-    getFaceMapping(role: string) {
+    getFaceMapping(role: string, panel?: any) {
+        if (role === 'BACK_PANEL') {
+            return resolveBackPanelFaceMapping(panel);
+        }
         return FACE_MAPPING[role] || null;
     },
 
@@ -68,8 +138,18 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
         return findOwningKorpus(doc, panel?.id);
     },
 
+    resolveFrontParam(panel: any) {
+        return resolveBackPanelFrontParam(panel);
+    },
+
     readOffsetMm(container: any, paramName: string, role?: string) {
-        return readOffsetMm(container?.generatorParams?.offsets, paramName, role);
+        return readOffsetMm(
+            container?.generatorParams?.offsets,
+            paramName,
+            role,
+            undefined,
+            container?.generatorParams?.type
+        );
     },
 
     previewOffset(container: any, paramName: string, value: number) {

@@ -8,7 +8,7 @@ import { collectExportNodePoses, restoreExportNodePoses } from '../export-view-s
 describe('export-view-state', () => {
     it('captures and restores korpus rotation for a saved export frame', () => {
         const doc = new ProjectDocument({ name: 'Kadry' });
-        const cabinet = doc.createContainer({ name: 'Szafa', width: mmToNm(800) });
+        const cabinet = doc.createAssembly({ name: 'Szafa', width: mmToNm(800) });
         const node = doc.findNode(cabinet.id)!;
         expect(node.nodeType).toBe(NodeType.ASSEMBLY);
 

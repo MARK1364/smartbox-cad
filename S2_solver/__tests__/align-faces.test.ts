@@ -35,7 +35,7 @@ function bind(init: Partial<SolverConstraint> & { bindType: SolverConstraint['bi
 }
 
 function newContainer(document: ProjectDocument, parentId?: string) {
-    const container = document.createContainer(
+    const container = document.createAssembly(
         { width: mmToNm(600), height: mmToNm(720), depth: mmToNm(500) },
         parentId,
     );
@@ -367,13 +367,13 @@ describe('Wyrównaj ściany (COPLANAR)', () => {
                 anchorA: makeAnchor({
                     nodeId: cabA.id,
                     kind: 'FACE',
-                    faceName: 'front',
+                    faceName: 'FACE_Z_PLUS',
                     sourceNodeId: nodeA.id,
                 }),
                 anchorB: makeAnchor({
                     nodeId: cabB.id,
                     kind: 'FACE',
-                    faceName: 'front',
+                    faceName: 'FACE_Z_PLUS',
                     sourceNodeId: nodeB.id,
                 }),
             }),

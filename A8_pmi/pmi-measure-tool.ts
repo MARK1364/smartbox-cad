@@ -11,7 +11,7 @@ declare const BABYLON: any;
 
 import { BaseState } from '../A1_core/interaction/states/base-state';
 import { Intent } from '../A1_core/interaction/interaction-types';
-import { BootstrapContext } from '../A1_core/scene-bootstrap';
+import type { CadModuleContext } from '../A1_core/cad-module-context.js';
 import { StateMachine } from '../A1_core/interaction/state-machine';
 import { UIController } from '../A1_core/ui-controller';
 import { Vec3, v3Len, v3Sub } from './dimension-solver';
@@ -47,7 +47,7 @@ export class MeasureTool extends BaseState {
     private lastClickTime = 0;
     private static readonly DOUBLE_CLICK_MS = 350;
 
-    constructor(ctx: BootstrapContext, stateMachine: StateMachine, renderer: PMIRenderer) {
+    constructor(ctx: CadModuleContext, stateMachine: StateMachine, renderer: PMIRenderer) {
         super(ctx, stateMachine);
         this.renderer = renderer;
     }

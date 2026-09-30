@@ -1,6 +1,10 @@
 import React from 'react';
 import type { ModuleId, ModuleSourceId } from './types';
+import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
+import { useLocale } from '../../T1_tlumaczenia/react.js';
+import srcTekstRaw from '../src_tekst.json';
 import { returnToCad } from './session';
+import { tx } from '../../T1_tlumaczenia/core.js';
 
 interface ModuleSourceBarProps {
     module: ModuleId;
@@ -14,11 +18,15 @@ interface ModuleSourceBarProps {
     jsonAccept?: string;
 }
 
-const TITLES: Record<ModuleId, string> = {
-    report: 'Raport',
-    nesting: 'Nesting',
-    cnc: 'CNC',
-    draw: 'Rysunek',
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
+
+const TITLE_KEYS: Record<ModuleId, string> = {
+report: 'modbar.title_report',
+    nesting: 'modbar.title_nesting',
+    cnc: 'modbar.title_cnc',
+    draw: 'modbar.title_draw',
+    dag: 'modbar.title_dag',
 };
 
 export function ModuleSourceBar({
@@ -31,8 +39,9 @@ export function ModuleSourceBar({
     statusHint,
     jsonAccept = 'application/json,.json',
 }: ModuleSourceBarProps) {
-    const fileJson = React.useRef<HTMLInputElement>(null);
-    const fileCsv = React.useRef<HTMLInputElement>(null);
+const fileJson = React.useRef<HTMLInputElement>(null);
+const fileCsv = React.useRef<HTMLInputElement>(null);
+useLocale();
 
     return (
         <header
@@ -59,7 +68,7 @@ export function ModuleSourceBar({
             >
                 ← CAD
             </a>
-            <strong style={{ letterSpacing: '0.02em' }}>{title || TITLES[module]}</strong>
+            <strong style={{ letterSpacing: '0.02em' }}>{title || tx(srcTekst, TITLE_KEYS[module], TX_NS)}</strong>
             {originLabel && (
                 <span style={{ color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {originLabel}
@@ -69,15 +78,15 @@ export function ModuleSourceBar({
                 <span style={{ color: '#6ee7b7', fontSize: '11px', whiteSpace: 'nowrap' }}>{statusHint}</span>
             )}
             <span style={{ flex: 1 }} />
-            <span style={{ color: '#6b7280', fontSize: '11px' }}>Źródło danych</span>
+            <span style={{ color: '#6b7280', fontSize: '11px' }}>{tx(srcTekst, 'sourcebar.data_source', TX_NS)}</span>
             {onRefreshFromCad && (
                 <button
                     type="button"
                     onClick={onRefreshFromCad}
                     style={btnStyle}
-                    title="Pobierz aktualne dane z ProjectDocument w CAD (SSOT)"
+                    title={tx(srcTekst, "modbar.refresh_title", TX_NS)}
                 >
-                    Odśwież z CAD
+                    {tx(srcTekst, "sourcebar.refresh", TX_NS)}
                 </button>
             )}
             {onLoadJson && (
@@ -86,7 +95,7 @@ export function ModuleSourceBar({
                         type="button"
                         onClick={() => fileJson.current?.click()}
                         style={btnStyle}
-                        title="Wczytaj JSON (testowe źródło — ten sam kontrakt co CAD)"
+                        title={tx(srcTekst, 'sourcebar.load_json', TX_NS)}
                     >
                         JSON
                     </button>
@@ -110,7 +119,7 @@ export function ModuleSourceBar({
                         type="button"
                         onClick={() => fileCsv.current?.click()}
                         style={btnStyle}
-                        title="Wczytaj listę formatek z CSV"
+                        title={tx(srcTekst, 'sourcebar.load_csv', TX_NS)}
                     >
                         CSV
                     </button>

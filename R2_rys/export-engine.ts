@@ -23,10 +23,12 @@ import { DrawingSheet } from './drawing-sheet';
 import { ContextManager } from '../A1_core/context-manager';
 import { PMIStore } from '../A8_pmi/pmi-data';
 import { resolveAnchorWorld } from '../A8_pmi/pmi-id-bridge';
+import { TOP_BETA, BOTTOM_BETA } from '../S3_scena/named-camera-view.js';
+import { NodeType } from '../A1_core/cad-node/node-type.js';
 
 declare const BABYLON: any;
 
-const SAVED_VIEWS_STORAGE_KEY = 'smartbox_cad_manual_sheets_v3_e3';
+const SAVED_VIEWS_STORAGE_KEY = 'bloki_cad_manual_sheets_v3_e3';
 
 export interface SheetScreenLayout {
     sheetPixelX: number;
@@ -63,7 +65,7 @@ export class ExportEngineV3 {
     public titleBlock: TitleBlockInfo = {
         projectName: 'Projekt Mebla CAD',
         furnitureName: 'Szafa Korpusowa',
-        author: 'SmartBox CAD',
+        author: 'Bloki CAD',
         date: new Date().toISOString().split('T')[0],
         scale: '1:10',
         sheetNumber: '1/1',
@@ -375,7 +377,7 @@ export class ExportEngineV3 {
         const ifh = fh - 2 * innerInset;
 
         const titleDisplayName = this.titleBlock.furnitureName || this.titleBlock.projectName || 'Mebel CAD';
-        const author = this.titleBlock.author || 'SmartBox';
+        const author = this.titleBlock.author || 'Bloki';
         const dateStr = this.titleBlock.date || '';
         const scaleStr = this.titleBlock.scale || '1:10';
         const drawingNr = this.titleBlock.drawingNumber || 'SB-001';
@@ -431,7 +433,7 @@ export class ExportEngineV3 {
                     <text x="${(82 * scale).toFixed(1)}" y="${(23.5 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b" font-family="'Segoe UI', sans-serif">Skala: <tspan fill="#0f172a" font-weight="bold">${scaleStr}</tspan></text>
                     <text x="${(102 * scale).toFixed(1)}" y="${(23.5 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b" font-family="'Segoe UI', sans-serif">Format: <tspan fill="#0f172a" font-weight="bold">${formatLabel}</tspan></text>
 
-                    <text x="${(tbw - 3).toFixed(1)}" y="${(tbh - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end" font-family="'Segoe UI', sans-serif">SmartBox CAD E3</text>
+                    <text x="${(tbw - 3).toFixed(1)}" y="${(tbh - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end" font-family="'Segoe UI', sans-serif">Bloki CAD E3</text>
                 </g>
             </svg>
         `;
@@ -453,11 +455,11 @@ export class ExportEngineV3 {
                 break;
             case 'top':
                 cam.alpha = Math.PI / 2;
-                cam.beta = 0.001;
+                cam.beta = TOP_BETA;
                 break;
             case 'bottom':
                 cam.alpha = Math.PI / 2;
-                cam.beta = Math.PI - 0.001;
+                cam.beta = BOTTOM_BETA;
                 break;
             case 'left':
                 cam.alpha = Math.PI;
@@ -704,7 +706,8 @@ export class ExportEngineV3 {
             const isFrozen = Boolean(node.frozen || node.domainData?.frozen || node.parameters?.frozen || node.params?.frozen);
             if (isFrozen) return;
 
-            if (node.type === 'PANEL' || (node.name && node.name.includes('Płyta'))) {
+            const isPanel = node.nodeType === NodeType.PART || node.type === 'PANEL' || node.domainData?.type === 'panel' || node.type === 'PART';
+            if (isPanel) {
                 const params = node.parameters || node.params || {};
                 rows.push({
                     name: node.name || 'Formatka',

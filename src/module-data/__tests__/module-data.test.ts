@@ -4,13 +4,13 @@ import { filterPanelsByScope } from '../scope-filter';
 import { hydrateCncWorkpiece, snapshotPanelForCnc } from '../cad-extract';
 import { ProjectDocument } from '../../../A1_core/project-document';
 import { ContextManager } from '../../../A1_core/context-manager';
-import { registerProjectDomain } from '../../../A1_core/project-domain';
+import { registerProjectDomain } from '../../application/project-domain.js';
 import type { CuttingPanelContract } from '../../../R1_reports/report-data-normalizer';
 import type { CncWorkpiece } from '../types';
 
 describe('parseNestingCsv', () => {
     it('czyta CSV z nagłówkiem PL/EN', () => {
-        const csv = `nazwa;długość;szerokość;szt;grubość;materiał;obrót
+        const csv = `nazwa;długość;szerokość;szt;gruboĹ›ć;materiał;obrót
 Bok Lewy;2000;600;1;18;Biel;tak
 Plecy;1964;796;2;3;HDF;nie`;
         const parts = parseNestingCsv(csv);
@@ -34,8 +34,8 @@ B,100,50,1`;
 
 describe('filterPanelsByScope', () => {
     const panels = [
-        { part_id: 'a', node_id: 'n1', container_id: 'c1', smartbox_id: 's1', furniture_name: 'Szafa', role: 'BOK', material: 'x', thickness_mm: 18, length_mm: 700, width_mm: 500, edge_config: {}, is_x_longer: true, qty: 1 },
-        { part_id: 'b', node_id: 'n2', container_id: 'c2', smartbox_id: 's2', furniture_name: 'Inna', role: 'Wieniec', material: 'x', thickness_mm: 18, length_mm: 600, width_mm: 400, edge_config: {}, is_x_longer: true, qty: 1 },
+        { part_id: 'a', node_id: 'n1', container_id: 'c1', blok_id: 's1', furniture_name: 'Szafa', role: 'BOK', material: 'x', thickness_mm: 18, length_mm: 700, width_mm: 500, edge_config: {}, is_x_longer: true, qty: 1 },
+        { part_id: 'b', node_id: 'n2', container_id: 'c2', blok_id: 's2', furniture_name: 'Inna', role: 'Wieniec', material: 'x', thickness_mm: 18, length_mm: 600, width_mm: 400, edge_config: {}, is_x_longer: true, qty: 1 },
     ] as CuttingPanelContract[];
 
     it('PROJECT zwraca wszystkie', () => {
@@ -47,8 +47,8 @@ describe('filterPanelsByScope', () => {
         expect(out.map((p) => p.part_id)).toEqual(['a']);
     });
 
-    it('SMARTBOX filtruje po smartbox_id', () => {
-        const out = filterPanelsByScope(panels, { type: 'SMARTBOX', id: 's1', name: 'Szuflady' });
+    it('BLOKI filtruje po blok_id', () => {
+        const out = filterPanelsByScope(panels, { type: 'BLOKI', id: 's1', name: 'Szuflady' });
         expect(out.map((p) => p.part_id)).toEqual(['a']);
     });
 
@@ -76,7 +76,7 @@ describe('CNC workpiece', () => {
         expect(snap.features).toHaveLength(1);
     });
 
-    it('hydratuje żywy PanelModel z cechami i programem CAM', () => {
+    it('hydratuje żyły PanelModel z cechami i programem CAM', () => {
         const doc = new ProjectDocument();
         registerProjectDomain(doc);
         const workpiece: CncWorkpiece = {
@@ -102,8 +102,8 @@ describe('tree-context-menu', () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
         const doc = new ProjectDocument();
         registerProjectDomain(doc);
-        const container = doc.createContainer({ name: 'Korpus (SmartFrame) 1' });
-        container.generatorParams = { type: 'korpus3_2', zoneCount: 3 };
+        const container = doc.createAssembly({ name: 'Korpus (SmartFrame) 1' });
+        container.generatorParams = { type: 'korpus3_2', liczba_stref: 3 };
         ContextManager.instance.document = doc;
 
         const { ContextMenu } = await import('../../../A1_core/context-menu.js');
@@ -129,7 +129,7 @@ describe('tree-context-menu', () => {
         }
     });
 
-    it('shows "Edytuj operację" and "Usuń" for smart library operations, but not for native engine operations', async () => {
+    it('shows "Edytuj operację" for smart library operations and excludes "Usuń" and "Ukryj / Pokaż" in tree context menu', async () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
         const { ContextMenu } = await import('../../../A1_core/context-menu.js');
         let shownItems: any[] = [];
@@ -143,7 +143,7 @@ describe('tree-context-menu', () => {
             showCadTreeContextMenu({
                 type: 'feature',
                 id: 'feat_123',
-                name: 'Przetłoczenie / Wycięcie',
+                name: 'Przetoczenie / Wycięcie',
                 panelId: 'panel_1',
                 libraryId: 'przetloczenie',
                 isSmart: true,
@@ -156,7 +156,8 @@ describe('tree-context-menu', () => {
             let labels = shownItems.map(i => i.label);
             expect(labels).toContain('Edytuj operację');
             expect(labels).toContain('Właściwości');
-            expect(labels).toContain('Usuń');
+            expect(labels).not.toContain('Usuń');
+            expect(labels).not.toContain('Ukryj / Pokaż');
             expect(labels).not.toContain('Zamroź obróbkę');
 
             // 2. Engine feature (e.g. wpust / groove / drill)
@@ -176,6 +177,7 @@ describe('tree-context-menu', () => {
             labels = shownItems.map(i => i.label);
             expect(labels).not.toContain('Edytuj operację');
             expect(labels).not.toContain('Usuń');
+            expect(labels).not.toContain('Ukryj / Pokaż');
             expect(labels).toContain('Zamroź obróbkę');
 
             // 3. Native panel (assembly managed)
@@ -192,6 +194,7 @@ describe('tree-context-menu', () => {
             labels = shownItems.map(i => i.label);
             expect(labels).toContain('Edytuj formatkę');
             expect(labels).not.toContain('Usuń');
+            expect(labels).not.toContain('Ukryj / Pokaż');
             expect(labels).toContain('Zamroź formatkę');
 
             // 4. Manual panel
@@ -207,15 +210,16 @@ describe('tree-context-menu', () => {
 
             labels = shownItems.map(i => i.label);
             expect(labels).toContain('Edytuj formatkę');
-            expect(labels).toContain('Usuń');
+            expect(labels).not.toContain('Usuń');
+            expect(labels).not.toContain('Ukryj / Pokaż');
             expect(labels).not.toContain('Zamroź formatkę');
             expect(labels).toContain('Raport z formatki');
 
-            // 5. SmartBox container
+            // 5. Bloki container
             const doc2 = new ProjectDocument();
             registerProjectDomain(doc2);
-            const sbContainer = doc2.createContainer({ name: 'smartbox_szuflady' });
-            sbContainer.generatorParams = { type: 'smartbox_drawers', boxType: 'DRAWERS' };
+            const sbContainer = doc2.createAssembly({ name: 'blok_szuflady' });
+            sbContainer.generatorParams = { type: 'blok_drawers', boxType: 'DRAWERS' };
             ContextManager.instance.document = doc2;
 
             showCadTreeContextMenu({
@@ -227,8 +231,63 @@ describe('tree-context-menu', () => {
             });
 
             labels = shownItems.map(i => i.label);
-            expect(labels).toContain('Raport ze SmartBoxa');
+            expect(labels).toContain('Raport ze Bloku');
             expect(labels).not.toContain('Edytuj korpus');
+            expect(labels).not.toContain('Usuń');
+            expect(labels).not.toContain('Ukryj / Pokaż');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('shows "Pokaż tylko" for panel/container and "Pokaż wszystko" only for project root', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        const container = doc.createAssembly({ name: 'Korpus 1' });
+        container.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        ContextManager.instance.document = doc;
+
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'container',
+                id: container.id,
+                name: container.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            let labels = shownItems.map(i => i.label);
+            expect(labels).toContain('Pokaż tylko');
+            expect(labels).not.toContain('Pokaż wszystko');
+
+            showCadTreeContextMenu({
+                type: 'part',
+                id: 'bok_l',
+                name: 'Bok Lewy',
+                clientX: 10,
+                clientY: 10,
+            });
+            labels = shownItems.map(i => i.label);
+            expect(labels).toContain('Pokaż tylko');
+            expect(labels).not.toContain('Pokaż wszystko');
+
+            showCadTreeContextMenu({
+                type: 'project',
+                id: 'root',
+                name: 'Projekt WebCAD',
+                clientX: 10,
+                clientY: 10,
+            });
+            labels = shownItems.map(i => i.label);
+            expect(labels).toContain('Pokaż wszystko');
+            expect(labels).not.toContain('Pokaż tylko');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }

@@ -1,44 +1,68 @@
 # Jedno Źródło Prawdy (SSOT) — Architektura Wymiany Danych (Web CAD)
 
-Ten katalog (`A1_core`) zawiera definicje i silnik obsługi formatu wymiany danych **SSOT (Single Source of Truth)**. 
-Projekt ewoluował z prototypu opartego na Blenderze w kierunku w pełni niezależnego systemu **Web CAD**, którego natywną jednostką są **MIKRONY (µm)**.
+Ten katalog (`A1_core`) zawiera definicje i silnik formatu wymiany danych **SSOT (Single Source of Truth)**.
+
+Natywna jednostka geometrii w silniku, na `CADNode` / modelach domenowych i w zapisie projektu to **nanometry (nm)** jako liczby całkowite.
+
+| Warstwa | Jednostka | Konwersja |
+|---|---|---|
+| Silnik, `CADNode`, plik projektu | **nm** | SSOT |
+| UI, formularze | mm | `nmToMm` / `mmToNm` (lub `unit.toMM` / `unit.fromMM`) |
+| JSON rules / katalog okuć | metry | `rulesMToNm` |
+
+- `1 mm = 1_000_000 nm` → płyta 18 mm = **18_000_000 nm** (nie 18_000 µm).
+- `1 inch = 25.4 mm = 25_400_000 nm`.
+- Porównania pozycji są binarne (`a === b`), bez dryfu floatów z metrów/mm.
 
 ---
 
-## 🗺️ Jak to działa (Przepływ danych)
+## Przepływ danych
 
 ```mermaid
 graph TD
-    JSON[Wspólny plik JSON (Standard SSOT w mikronach)]
-    AI[Asystent AI (Gemini)] -- "Generuje/Modyfikuje" --> JSON
-    JSON -- "ProjectSerializer (Import)" --> WebCAD[Przeglądarka Web (React + TS + OCCT)]
-    WebCAD -- "ProjectSerializer (Zapisz)" --> JSON
-    Blender[Blender SceneSerializer] -- "Import Legacy (metry)" --> WebCAD
+    JSON["Plik projektu (smartpanel-project v4, wartości w nm)"]
+    AI[Asystent AI] -- "Generuje/Modyfikuje" --> JSON
+    JSON -- "ProjectDocument.load" --> WebCAD[Przeglądarka Web React + TS]
+    WebCAD -- "ProjectDocument.serialize" --> JSON
+    FileIO[ProjectFileIO] -- "odczyt/zapis .spp.json" --> JSON
 ```
 
----
-
-## 📁 Główne pliki systemu SSOT
-
-1. **[unit-system.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/smartbox/web/A1_core/unit-system.ts)**
-   * **Rola:** Definicja natywnej jednostki Web CAD.
-   * **Opis:** Wprowadza typ `Microns` (zawsze `integer`). Pozwala to na absolutną dokładność geometrii bez błędów zmiennoprzecinkowych, które mogą wystąpić przy użyciu milimetrów jako `float`. W tym pliku znajdują się wszystkie narzędzia konwersji (np. `unit.fromMM`, `unit.toMM`).
-2. **[project_schema.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/smartbox/web/A1_core/project_schema.ts)**
-   * **Rola:** Ścisły kontrakt typów w TypeScript.
-   * **Opis:** Definiuje strukturę JSON. Zwróć uwagę, że wszystkie wielkości fizyczne (wymiary, pozycje) są definiowane w typie `Microns`.
-3. **[project-serializer.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/smartbox/web/A1_core/project-serializer.ts)**
-   * **Rola:** Warstwa tłumaczenia danych i konwersji jednostek.
-   * **Opis:** Podczas importu rozpoznaje czy plik pochodzi z Blendera (`smartbox_scene` - metry) czy z nowego formatu Web CAD (`project` - mikrony) i bezbłędnie przelicza wszystko do wewnętrznego stanu przeglądarki. Eksport zawsze generuje strukturę Web CAD opartą o mikrony.
+- Stan drzewa: **`ProjectDocument`** (`serialize` / `load`).
+- Walidacja formatu / wersji / `domainUnit`: **`project-file-format.ts`** (`migrateProjectToCurrent`).
+- I/O przeglądarki: **`ProjectFileIO`**. Nie ma osobnego `ProjectSerializer`.
+- Błędy rozszerzeń, hydracji i `toJSON` **przerywają** zapis/odczyt — bez cichego gubienia danych.
 
 ---
 
-## 📐 Dlaczego używamy Mikronów?
+## Główne pliki
 
-Wcześniejszy prototyp oparty na Blenderze używał metrów (`float`), co przy wysokiej precyzji w Web CAD prowadzi do tzw. "floating point drift" (np. grubość płyty to `18.00000001` mm).
+1. **[unit-system.ts](./unit-system.ts)**  
+   Typ `Nanometers` i helper `unit` (`fromMM` / `toMM` / Babylon).
 
-Przejście na system w mikronach zapisywanych jako liczby całkowite rozwiązuje najważniejsze problemy systemów inżynieryjnych:
-- `18 mm` to dokładnie `18000 µm`.
-- `1 cal (inch)` to dokładnie `25400 µm`.
-- Porównania pozycji są binarne (`a === b`), a nie przybliżone.
+2. **[cad-math/units.ts](./cad-math/units.ts)**  
+   Kanoniczne `mmToNm` / `nmToMm` / `rulesMToNm` — preferowane w nowym kodzie.
 
-*Notatka: Modele w pamięci RAM (`ProjectModel`, `PanelModel`) są w trakcie pełnej tranzycji na mikrony. Na ten moment `ProjectSerializer` nadal używa milimetrów (`float`) do zasilania OCCT, jednak sam plik JSON w spoczynku zawsze jest nieskazitelnie precyzyjny.*
+3. **[project-file-format.ts](./project-file-format.ts)**  
+   `PROJECT_FORMAT` / `PROJECT_FORMAT_VERSION` (obecnie **4**) / `PROJECT_DOMAIN_UNIT` (`nm`), typy JSON, `migrateProjectToCurrent`.
+
+4. **[project-document.ts](./project-document.ts)**  
+   Dokument, serializacja drzewa, hydracja. `domainUnit: 'nm'` (inne wartości są odrzucane). Hydratory PART/ASSEMBLY rejestruje warstwa aplikacji: `src/application/project-domain.ts`.
+
+5. **[project-file-io.ts](./project-file-io.ts)**  
+   Zapis/odczyt pliku w przeglądarce (File System Access API / download).
+
+6. **[project-schema.ts](./project-schema.ts)**  
+   Starszy kontrakt interchange (płaska lista `containers[]`), wielkości w **nm**.  
+   **Żywy** format `.spp.json` to drzewo `smartpanel-project` v4 (`rootNode` + `extensions`) — nie traktuj `project-schema.ts` jako SSOT zapisu.
+
+---
+
+## Dlaczego nanometry?
+
+Wcześniejsze prototypy używały metrów (`float`) albo mikronów. Obecny kod trzyma **nm** end-to-end w domenie i pliku, żeby:
+
+- uniknąć dryfu floatów przy typowych wymiarach meblowych,
+- mieć jedną skalę w silniku, drzewie CAD i zapisie,
+- miescić typowe wymiary w safe integer JS (`Number.isSafeInteger`).
+
+UI zawsze pokazuje **mm**; Babylon renderuje w mm (`nm / 1e6`).

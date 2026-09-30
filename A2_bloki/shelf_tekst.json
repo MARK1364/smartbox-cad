@@ -1,0 +1,17 @@
+{
+  "panel.label": {
+    "pl": "Wieniec",
+    "en": "Cornice",
+    "de": "Kranz"
+  },
+  "offset_bottom.label": {
+    "pl": "Przestrzeń od dołu:",
+    "en": "Space from bottom:",
+    "de": "Abstand von unten:"
+  },
+  "offset_top.label": {
+    "pl": "Przestrzeń od góry:",
+    "en": "Space from top:",
+    "de": "Abstand von oben:"
+  }
+}

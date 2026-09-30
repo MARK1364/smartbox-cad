@@ -14,6 +14,7 @@ import {
     DrawModelItem,
 } from './draw-types';
 import { DrawHLREngine } from './draw-hlr-engine';
+import { nmToMm } from '../A1_core/cad-math/units';
 import {
     resolveGeometrySnapshot,
     E3GeometrySnapshot,
@@ -190,9 +191,9 @@ export class DrawProjectionEngine {
                 const d = node.depth || node.thickness || 18;
 
                 const raw = node.rawNode;
-                const tx = raw?.translationNm ? raw.translationNm[0] / 1000000 : (raw?.x || 0);
-                const ty = raw?.translationNm ? raw.translationNm[1] / 1000000 : (raw?.y || 0);
-                const tz = raw?.translationNm ? raw.translationNm[2] / 1000000 : (raw?.z || 0);
+                const tx = raw?.translationNm ? nmToMm(raw.translationNm[0]) : (raw?.x || 0);
+                const ty = raw?.translationNm ? nmToMm(raw.translationNm[1]) : (raw?.y || 0);
+                const tz = raw?.translationNm ? nmToMm(raw.translationNm[2]) : (raw?.z || 0);
 
                 parts.push({
                     id: node.id,

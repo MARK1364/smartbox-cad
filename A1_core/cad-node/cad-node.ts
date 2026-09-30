@@ -7,7 +7,7 @@
  * Kluczone właściwości:
  *  - Transformacje przechowywane jako macierz 4×4 (nie kąty Eulera).
  *  - worldMatrix obliczana lazy z kaskadą dirty-flag.
- *  - Zero zależności od Babylon.js, OCCT, DOM.
+ *  - Zero zależności od Babylon.js i DOM.
  *  - domainData: opcjonalne dane domenowe (ContainerModel, PanelModel itp.)
  *    przechowywane przez referencję — CADNode nie wie co to jest.
  */

@@ -1,10 +1,12 @@
 import type { ModuleId, AnyModulePayload } from './types';
+import { storageAdapter } from '../storage/storage-adapter.js';
 
 export const MODULE_SESSION_KEYS: Record<ModuleId, string> = {
     report: 'CAD_MODULE_REPORT',
     nesting: 'CAD_MODULE_NESTING',
     cnc: 'CAD_MODULE_CNC',
     draw: 'CAD_MODULE_DRAW',
+    dag: 'CAD_MODULE_DAG',
 };
 
 export const MODULE_PAGES: Record<ModuleId, string> = {
@@ -12,6 +14,7 @@ export const MODULE_PAGES: Record<ModuleId, string> = {
     nesting: './nesting.html',
     cnc: './cnc.html',
     draw: './draw.html',
+    dag: './dag.html',
 };
 
 /** Nazwa okna CAD — powrót z CAM/modułów fokusuje tę kartę, bez nowego pustego projektu. */
@@ -22,6 +25,7 @@ export const MODULE_WINDOW_NAMES: Record<ModuleId, string> = {
     nesting: 'SmartPanelNesting',
     cnc: 'SmartPanelCNC',
     draw: 'SmartPanelDraw',
+    dag: 'SmartPanelDAG',
 };
 
 export const PROJECT_SNAPSHOT_KEY = 'smartpanel_project_current_v3';
@@ -38,7 +42,7 @@ export const MODULE_SESSION_UPDATED_MSG = 'smartpanel:module-session-updated';
 /** CAD się odświeża / zamyka — wszystkie podstrony mają się zamknąć. */
 export const CAD_SHUTDOWN_MSG = 'smartpanel:cad-shutdown';
 
-const ALL_MODULES: ModuleId[] = ['report', 'nesting', 'cnc', 'draw'];
+const ALL_MODULES: ModuleId[] = ['report', 'nesting', 'cnc', 'draw', 'dag'];
 
 const LEGACY_NESTING_KEY = 'NESTING_SESSION_DATA';
 
@@ -53,10 +57,10 @@ function getModuleWindowStore(): ModuleWindowMap {
 export function writeModuleSession<T extends AnyModulePayload>(module: ModuleId, payload: T): void {
     const key = MODULE_SESSION_KEYS[module];
     const raw = JSON.stringify(payload);
-    localStorage.setItem(key, raw);
+    storageAdapter.setItem(key, raw);
     if (module === 'nesting') {
         const nest = payload as any;
-        localStorage.setItem(LEGACY_NESTING_KEY, JSON.stringify({
+        storageAdapter.setItem(LEGACY_NESTING_KEY, JSON.stringify({
             parts: nest.parts,
             config: nest.config,
             selectedMaterial: nest.selectedMaterial || 'ALL',
@@ -68,7 +72,7 @@ export function writeModuleSession<T extends AnyModulePayload>(module: ModuleId,
 
 export function readModuleSession<T>(module: ModuleId): T | null {
     const key = MODULE_SESSION_KEYS[module];
-    const raw = localStorage.getItem(key);
+    const raw = storageAdapter.getItem(key);
     if (!raw) return null;
     try {
         return JSON.parse(raw) as T;
@@ -133,7 +137,7 @@ export function persistProjectSnapshot(document: any): void {
     if (!document || typeof document.serialize !== 'function') return;
     try {
         const json = document.serialize();
-        localStorage.setItem(PROJECT_SNAPSHOT_KEY, JSON.stringify(json));
+        storageAdapter.setItem(PROJECT_SNAPSHOT_KEY, JSON.stringify(json));
     } catch (e) {
         console.warn('Nie udało się zapisać snapshotu projektu:', e);
     }
@@ -170,9 +174,8 @@ export function installCadModuleBridge(): () => void {
     } catch { /* BroadcastChannel niedostępny */ }
 
     const onCadUnload = () => {
-        broadcastCadShutdown();
-        // Tylko znane referencje — bez window.open (nie twórz pustych kart przy F5)
-        closeAllModuleWindows({ namedLookup: false });
+        // Nie ubijamy podstron przy zwykłym przeładowaniu (F5) okna CAD,
+        // aby praca w modułach (np. CNC) nie została utracona.
     };
     window.addEventListener('pagehide', onCadUnload);
     window.addEventListener('beforeunload', onCadUnload);
@@ -188,12 +191,21 @@ export function installCadModuleBridge(): () => void {
 }
 
 /**
- * Podstrona modułu: nazwa okna + zamknięcie gdy CAD się odświeży / zamknie.
+ * Podstrona modułu: nazwa okna + bezpieczny cykl życia (CNC i standalone są niezależne).
  */
 export function installModulePageLifecycle(module: ModuleId): () => void {
     try {
         window.name = MODULE_WINDOW_NAMES[module];
     } catch { /* ignore */ }
+
+    const isStandalone = typeof window !== 'undefined' && (
+        new URLSearchParams(window.location.search).has('standalone') ||
+        module === 'cnc'
+    );
+    // CNC oraz tryb standalone pracują w pełni niezależnie — nie nasłuchują na shutdown z CAD
+    if (isStandalone) {
+        return () => {};
+    }
 
     const closeSelf = () => {
         try {
@@ -330,13 +342,17 @@ export function requestModuleRefresh(module: ModuleId, scope: { type: string; id
 
 /** Po starcie CAD: jeśli wróciliśmy bez openersa — wczytaj ostatni snapshot. */
 export function consumeCadRestoreFlag(): boolean {
-    if (sessionStorage.getItem(CAD_RESTORE_FLAG) !== '1') return false;
-    sessionStorage.removeItem(CAD_RESTORE_FLAG);
-    return true;
+    try {
+        if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(CAD_RESTORE_FLAG) === '1') {
+            sessionStorage.removeItem(CAD_RESTORE_FLAG);
+            return true;
+        }
+    } catch {}
+    return false;
 }
 
 export function readProjectSnapshot(): any | null {
-    const raw = localStorage.getItem(PROJECT_SNAPSHOT_KEY);
+    const raw = storageAdapter.getItem(PROJECT_SNAPSHOT_KEY);
     if (!raw) return null;
     try {
         return JSON.parse(raw);

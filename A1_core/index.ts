@@ -10,14 +10,12 @@ export {
     migrateProjectToCurrent,
     PROJECT_FORMAT,
     PROJECT_FORMAT_VERSION,
+    PROJECT_DOMAIN_UNIT,
     PROJECT_APP_VERSION,
 } from './project-document.js';
 export type { ProjectDocumentJSON, ProjectMetadataJSON, DocumentExtension, SerializeOptions, LoadOptions } from './project-document.js';
 export { ProjectFileIO, stampProjectFileMetadata, suggestedProjectFileName } from './project-file-io.js';
-export { registerProjectDomain } from './project-domain.js';
-export { attachDrawingsExtension, DRAWINGS_DOCUMENT_SECTION } from './drawings-document-extension.js';
 export { FacePicker } from './face-picker.js';
-export { HistoryManager } from './history-manager.js';
 export { UIController } from './ui-controller.js';
 export { unit } from './unit-system.js';
 export { TRANSLATIONS as translations } from './translations.js';
@@ -26,3 +24,8 @@ export { GeometryDetector, GeometryType } from './geometry-detector.js';
 export type { DetectionResult } from './geometry-detector.js';
 export { TooltipManager } from './tooltip-manager.js';
 export type { ToolHint } from './tooltip-manager.js';
+export { normalizeFaceName, FACE_NAMES } from './face-name.js';
+export type { FaceName } from './face-name.js';
+export { isManualPanel, isPanelLike } from './panel-like.js';
+export type { PanelLike } from './panel-like.js';
+export { getGrooveParamsMm } from './groove-params.js';

@@ -6,7 +6,7 @@
  */
 
 import type { DocumentExtension, ProjectDocument } from '../A1_core/project-document.js';
-import { isPanelModel } from '../A1_core/domain-data.js';
+import { isPanelModel } from '../A4_smartpanel/panel-model.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import type { EdgeBandingType, MaterialItem } from './material-types.js';
 import { materialDatabase } from './material-database.js';
@@ -21,12 +21,19 @@ export interface MaterialsExtensionJSON {
 }
 
 function stubFromPanelData(data: { materialId: string; materialName?: string; materialCode?: string; thickness: number; color?: MaterialItem['color'] }): MaterialItem {
+    const thicknessMm = nmToMm(data.thickness);
+    if (!(thicknessMm > 0)) {
+        throw new Error(
+            `[A7_material] Panel z materialId="${data.materialId}" nie ma poprawnej grubości w nm ` +
+            `(thickness=${data.thickness}). Zabronione domyślne 18 mm.`
+        );
+    }
     return {
         id: data.materialId,
         name: data.materialName || data.materialId,
         code: data.materialCode || '',
         category: 'Projekt',
-        thickness_mm: nmToMm(data.thickness) || 18,
+        thickness_mm: thicknessMm,
         density_kg_m3: 680,
         color: data.color || { r: 0.95, g: 0.95, b: 0.95 },
     };

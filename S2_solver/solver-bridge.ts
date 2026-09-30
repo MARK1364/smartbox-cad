@@ -32,8 +32,16 @@ import { NodeType } from '../A1_core/cad-node/node-type.js';
 import { isManualPanel } from '../A4_smartpanel/panel-model.js';
 import type { CADNode } from '../A1_core/cad-node/cad-node.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
+import { isSmartFloorContainer } from '../S4_sciany/smartfloor-types.js';
+import { isSmartWallContainer, isWallPart } from '../S4_sciany/smartwall-types.js';
 import { resolveAnchor } from './constraint-geometry.js';
 import type { ConstraintAnchor, SolverConstraint } from './constraint-types.js';
+import {
+    isDatumAnchor,
+    getDatumWorldPose,
+    datumNameFromNodeId,
+    type DatumPlaneName,
+} from './datum-planes.js';
 import {
     makeConstraintItem,
     makeObjectState,
@@ -50,6 +58,9 @@ import {
     type Quat as SolverQuat,
     type Vec3 as SolverVec3,
 } from './core/math3d.js';
+
+const IDENTITY_QUAT: SolverQuat = [1, 0, 0, 0];
+const DATUM_FACE_INDEX = 0;
 
 const SCALE_EPSILON = 1e-6;
 
@@ -183,9 +194,27 @@ export function buildSolverInput(
             continue;
         }
 
-        const nodeA = document.findNode(constraint.anchorA.nodeId);
+        // Ściana↔datum: zawsze licz ruchomą ścianę jako A
+        let workA = constraint.anchorA;
+        let workB = constraint.anchorB;
+        if (
+            (constraint.bindType === 'COPLANAR' || constraint.bindType === 'FLUSH') &&
+            workB &&
+            isDatumAnchor(workA) &&
+            !isDatumAnchor(workB)
+        ) {
+            workA = workB;
+            workB = constraint.anchorA;
+        }
+
+        if (isDatumAnchor(workA)) {
+            warnings.push(`Więz ${constraint.id}: kotwica A musi być formatką / korpusem.`);
+            continue;
+        }
+
+        const nodeA = document.findNode(workA.nodeId);
         if (!nodeA) {
-            warnings.push(`Więz ${constraint.id}: brak węzła ${constraint.anchorA.nodeId}.`);
+            warnings.push(`Więz ${constraint.id}: brak węzła ${workA.nodeId}.`);
             continue;
         }
 
@@ -194,10 +223,10 @@ export function buildSolverInput(
             continue;
         }
 
-        const indexA = registerAnchor(nodeA, stateA, constraint.anchorA);
+        const indexA = registerAnchor(nodeA, stateA, workA);
         if (indexA === null) {
             warnings.push(
-                `Więz ${constraint.id}: nie udało się rozwiązać kotwicy A (${anchorKey(constraint.anchorA)}).`,
+                `Więz ${constraint.id}: nie udało się rozwiązać kotwicy A (${anchorKey(workA)}).`,
             );
             continue;
         }
@@ -211,7 +240,7 @@ export function buildSolverInput(
         });
 
         if (constraint.bindType === 'GROUND') {
-            const groundMode = constraint.anchorA.kind as GroundMode;
+            const groundMode = workA.kind as GroundMode;
             item.groundMode = groundMode;
             if (groundMode === 'FACE') {
                 item.faceA = indexA;
@@ -219,7 +248,7 @@ export function buildSolverInput(
                 item.vertA = indexA;
             }
 
-            const target = resolveGroundTarget(constraint, stateA, item);
+            const target = resolveGroundTarget({ ...constraint, anchorA: workA }, stateA, item);
             item.groundPos = target.groundPosMm;
             item.groundNormal = target.groundNormal ?? [0, 0, 0];
             if (target.wasCaptured) {
@@ -230,46 +259,108 @@ export function buildSolverInput(
                 });
             }
         } else {
-            // Więzy relatywne dojdą wraz z portem gałęzi VERTEX/COPLANAR/FLUSH.
-            if (!constraint.anchorB) {
-                continue;
-            }
-            const nodeB = document.findNode(constraint.anchorB.nodeId);
-            if (!nodeB) {
-                warnings.push(`Więz ${constraint.id}: brak węzła ${constraint.anchorB.nodeId}.`);
-                continue;
-            }
-            const stateB = ensureState(nodeB);
-            if (!stateB) {
-                continue;
-            }
-            const indexB = registerAnchor(nodeB, stateB, constraint.anchorB);
-            if (indexB === null) {
-                warnings.push(
-                    `Więz ${constraint.id}: nie udało się rozwiązać kotwicy B (${anchorKey(constraint.anchorB)}).`,
-                );
+            // Więzy relatywne: VERTEX / COPLANAR / FLUSH (B może być datum WCS).
+            if (!workB) {
                 continue;
             }
 
-            item.objBId = nodeB.id;
+            const anchorA = workA;
+            const anchorB = workB;
+            const datumB = isDatumAnchor(anchorB);
+
             if (constraint.bindType === 'VERTEX') {
-                if (constraint.anchorA.kind !== 'VERTEX' || constraint.anchorB.kind !== 'VERTEX') {
+                if (datumB) {
+                    warnings.push(`Więz ${constraint.id}: VERTEX nie obsługuje datum.`);
+                    continue;
+                }
+                const nodeB = document.findNode(anchorB.nodeId);
+                if (!nodeB) {
+                    warnings.push(`Więz ${constraint.id}: brak węzła ${anchorB.nodeId}.`);
+                    continue;
+                }
+                const stateB = ensureState(nodeB);
+                if (!stateB) {
+                    continue;
+                }
+                const indexB = registerAnchor(nodeB, stateB, anchorB);
+                if (indexB === null) {
+                    warnings.push(
+                        `Więz ${constraint.id}: nie udało się rozwiązać kotwicy B (${anchorKey(anchorB)}).`,
+                    );
+                    continue;
+                }
+                if (anchorA.kind !== 'VERTEX' || anchorB.kind !== 'VERTEX') {
                     warnings.push(
                         `Więz ${constraint.id}: VERTEX wymaga dwóch kotwic typu wierzchołek.`,
                     );
                     continue;
                 }
+                item.objBId = nodeB.id;
                 item.vertA = indexA;
                 item.vertB = indexB;
             } else if (constraint.bindType === 'COPLANAR' || constraint.bindType === 'FLUSH') {
-                if (constraint.anchorA.kind !== 'FACE' || constraint.anchorB.kind !== 'FACE') {
+                const faceOk = (a: typeof anchorA) => a.kind === 'FACE' || a.kind === 'DATUM';
+                if (!faceOk(anchorA) || !faceOk(anchorB)) {
                     warnings.push(
-                        `Więz ${constraint.id}: ${constraint.bindType} wymaga dwóch kotwic typu ściana.`,
+                        `Więz ${constraint.id}: ${constraint.bindType} wymaga ścian / datum.`,
                     );
                     continue;
                 }
-                item.faceA = indexA;
-                item.faceB = indexB;
+
+                if (datumB) {
+                    const name =
+                        (anchorB.faceName as DatumPlaneName) ||
+                        datumNameFromNodeId(anchorB.nodeId);
+                    if (!name) {
+                        warnings.push(`Więz ${constraint.id}: nieznany datum.`);
+                        continue;
+                    }
+                    const pose =
+                        anchorB.localPointMm && anchorB.localNormalMm
+                            ? {
+                                  pointMm: anchorB.localPointMm as SolverVec3,
+                                  normalMm: anchorB.localNormalMm as SolverVec3,
+                              }
+                            : getDatumWorldPose(name);
+                    const datumId = anchorB.nodeId;
+                    let datumState = states.get(datumId);
+                    if (!datumState) {
+                        datumState = makeObjectState({
+                            id: datumId,
+                            location: [0, 0, 0],
+                            rotation: [...IDENTITY_QUAT] as SolverQuat,
+                        });
+                        datumState.localFaces.set(DATUM_FACE_INDEX, [
+                            [...pose.pointMm] as SolverVec3,
+                            vec3Normalize([...pose.normalMm] as SolverVec3),
+                        ]);
+                        states.set(datumId, datumState);
+                        anchorIndex.set(datumId, new Map());
+                    }
+                    item.objBId = datumId;
+                    item.faceA = indexA;
+                    item.faceB = DATUM_FACE_INDEX;
+                } else {
+                    const nodeB = document.findNode(anchorB.nodeId);
+                    if (!nodeB) {
+                        warnings.push(`Więz ${constraint.id}: brak węzła ${anchorB.nodeId}.`);
+                        continue;
+                    }
+                    const stateB = ensureState(nodeB);
+                    if (!stateB) {
+                        continue;
+                    }
+                    const indexB = registerAnchor(nodeB, stateB, anchorB);
+                    if (indexB === null) {
+                        warnings.push(
+                            `Więz ${constraint.id}: nie udało się rozwiązać kotwicy B (${anchorKey(anchorB)}).`,
+                        );
+                        continue;
+                    }
+                    item.objBId = nodeB.id;
+                    item.faceA = indexA;
+                    item.faceB = indexB;
+                }
             } else {
                 warnings.push(`Więz ${constraint.id}: nieobsługiwany typ relatywny ${constraint.bindType}.`);
                 continue;
@@ -291,31 +382,31 @@ export function buildSolverInput(
     };
 }
 
-/** Sprawdza, czy węzeł to kontener SmartBox (np. smartbox_shelf, smartbox_shelves itp.). */
-export function isSmartBoxContainer(node: CADNode | null): boolean {
+/** Sprawdza, czy węzeł to kontener Bloki (np. blok_shelf, blok_shelves itp.). */
+export function isBlokiContainer(node: CADNode | null): boolean {
     if (!node || node.nodeType !== NodeType.ASSEMBLY) return false;
     const data = node.domainData as any;
     const genType = data?.generatorParams?.type || '';
-    const isCustomSb = Boolean((node as any).customData?.smartbox || data?.customData?.smartbox);
+    const isCustomSb = Boolean((node as any).customData?.bloki || data?.customData?.bloki);
     return (
-        genType.startsWith('smartbox_') ||
-        node.name?.startsWith('smartbox_') ||
+        genType.startsWith('blok_') ||
+        node.name?.startsWith('blok_') ||
         node.name?.endsWith('_SB') ||
         isCustomSb
     );
 }
 
-/** Sprawdza, czy węzeł to formatka wewnątrz SmartBoxa. */
-export function isSmartBoxComponent(node: CADNode | null): boolean {
+/** Sprawdza, czy węzeł to formatka wewnątrz Bloku. */
+export function isBlokiComponent(node: CADNode | null): boolean {
     if (!node || node.nodeType !== NodeType.PART) return false;
-    const isCustomSbPart = Boolean((node as any).customData?.smartbox_component || (node.domainData as any)?.customData?.smartbox_component);
-    return isSmartBoxContainer(node.parent) || isCustomSbPart;
+    const isCustomSbPart = Boolean((node as any).customData?.blok_component || (node.domainData as any)?.customData?.blok_component);
+    return isBlokiContainer(node.parent) || isCustomSbPart;
 }
 
 /** Sprawdza, czy węzeł to korpus szafy SmartFrame. */
 export function isSmartFrameContainer(node: CADNode | null): boolean {
     if (!node || node.nodeType !== NodeType.ASSEMBLY) return false;
-    if (isSmartBoxContainer(node)) return false;
+    if (isBlokiContainer(node)) return false;
     const data = node.domainData as any;
     const isCustomSf = Boolean((node as any).customData?.smartframe || data?.customData?.smartframe);
     const genType = data?.generatorParams?.type || '';
@@ -335,30 +426,76 @@ export function isSmartFrameEngineComponent(node: CADNode | null): boolean {
 /** Sprawdza, czy węzeł to SmartPanel (ręczna formatka dokładana do sceny lub szafy). */
 export function isSmartPanel(node: CADNode | null): boolean {
     if (!node || node.nodeType !== NodeType.PART) return false;
-    if (isSmartBoxComponent(node)) return false;
+    if (isBlokiComponent(node)) return false;
     if (isSmartFrameEngineComponent(node)) return false;
+    if (isSmartWallPart(node) || isSmartFloorPart(node)) return false;
     return true;
 }
 
+function domainOf(node: CADNode): any {
+    return node.domainData as any;
+}
+
+/** Kontener SmartWall (pomieszczenie / ściany architektoniczne). */
+export function isSmartWallAssembly(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.ASSEMBLY) return false;
+    return isSmartWallContainer(domainOf(node));
+}
+
+/** PART ściany / filaru / podłogi w SmartWall. */
+export function isSmartWallPart(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.PART) return false;
+    if (isWallPart(domainOf(node))) return true;
+    return isSmartWallAssembly(node.parent);
+}
+
+/** Kontener SmartFloor (podłoga pomieszczenia). */
+export function isSmartFloorAssembly(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.ASSEMBLY) return false;
+    return isSmartFloorContainer(domainOf(node));
+}
+
+/** PART podłogi w SmartFloor. */
+export function isSmartFloorPart(node: CADNode | null): boolean {
+    if (!node || node.nodeType !== NodeType.PART) return false;
+    const data = domainOf(node);
+    if (String(data?.role || '').toUpperCase() === 'FLOOR') return true;
+    return isSmartFloorAssembly(node.parent);
+}
+
+/** Architektura pomieszczenia — baza odniesienia dla mebli, nie odwrotnie. */
+export function isRoomArchitecture(node: CADNode | null): boolean {
+    return (
+        isSmartWallAssembly(node) ||
+        isSmartWallPart(node) ||
+        isSmartFloorAssembly(node) ||
+        isSmartFloorPart(node)
+    );
+}
+
 /**
- * Wyznacza wagę sztywności (utwierdzenia) węzła w solverze:
- * Wyższa wartość = bardziej utwierdzony obiekt (baza odniesienia),
- * Niższa wartość = obiekt ruchomy, który dojeżdża do bazy.
+ * Waga przy wyborze JEDNEJ bazy w wolnej składowej grafu więzów.
+ * Nie blokuje wielu brył naraz — tylko ranking kandydata na seed (jak Fixed
+ * w SolidWorks: jedno utwierdzenie na łańcuch, reszta dojeżdża).
  */
 export function getNodeGroundingPriority(node: CADNode | null): number {
     if (!node) return 0;
-    if (isSmartFrameEngineComponent(node)) return 50; // komponent silnika SmartFrame — zawsze sztywny
-    if (isSmartFrameContainer(node)) return 40;       // korpus SmartFrame — sztywny względem SmartBoxów i SmartPaneli
-    if (isSmartBoxComponent(node)) return 35;          // komponent SmartBoxa (np. wieniec) — sztywny w SmartBoxie
-    if (isSmartBoxContainer(node)) return 30;          // kontener SmartBox — sztywny względem SmartPaneli
-    if (isSmartPanel(node)) return 10;                 // SmartPanel — ruchomy cel
+    if (isSmartFrameEngineComponent(node)) return 50;
+    if (isSmartFrameContainer(node)) return 40;
+    if (isBlokiComponent(node)) return 35;
+    if (isBlokiContainer(node)) return 30;
+    if (isRoomArchitecture(node)) return 20; // miękka preferencja ściany nad luźnym panelem
+    if (isSmartPanel(node)) return 10;
     return 0;
 }
 
 /**
- * Bryły, których solver nie może ruszyć przy więzach relatywnych:
- * GROUND, komponenty silnika SmartFrame/SmartBox oraz węzły o wyższym priorytecie
- * utwierdzenia (SmartFrame/SmartBox w relacji ze SmartPanelem).
+ * Bryły, których solver nie rusza:
+ * 1) twarde: GROUND, datum, komponenty silnika SmartFrame/Bloki,
+ * 2) w każdej wolnej składowej grafu — dokładnie JEDEN seed (SolidWorks-style).
+ *
+ * Priorytet typów NIE dodaje wielu locków z osobnych więzów (to dawało fałszywą
+ * sprzeczność: dwie szafy FLUSH do tej samej ściany). Służy tylko do wyboru seeda.
  */
 export function computeReferenceLockedIds(
     constraints: SolverConstraint[],
@@ -376,40 +513,23 @@ export function computeReferenceLockedIds(
         }
         if (c.bindType !== 'GROUND' && c.anchorB) {
             usedAsB.add(c.anchorB.nodeId);
+            if (isDatumAnchor(c.anchorB)) {
+                locked.add(c.anchorB.nodeId);
+            }
+        }
+        if (c.anchorA && isDatumAnchor(c.anchorA)) {
+            locked.add(c.anchorA.nodeId);
         }
     }
 
     if (document) {
-        // Wszystkie komponenty algorytmiczne SmartFrame i SmartBox są z definicji sztywne
         for (const node of document.rootNode.findAll()) {
-            if (isSmartFrameEngineComponent(node) || isSmartBoxComponent(node)) {
+            if (isSmartFrameEngineComponent(node) || isBlokiComponent(node)) {
                 locked.add(node.id);
-            }
-        }
-
-        // Badamy więzy relatywne pod kątem hierarchii utwierdzenia (SmartFrame / SmartBox vs SmartPanel)
-        for (const c of constraints) {
-            if (!c.enabled || c.conflict || c.bindType === 'GROUND' || !c.anchorA || !c.anchorB) {
-                continue;
-            }
-            const nodeA = document.findNode(c.anchorA.nodeId);
-            const nodeB = document.findNode(c.anchorB.nodeId);
-            if (!nodeA || !nodeB) continue;
-
-            const prioA = getNodeGroundingPriority(nodeA);
-            const prioB = getNodeGroundingPriority(nodeB);
-
-            if (prioA > prioB) {
-                // A jest bardziej sztywne niż B (np. A to SmartBox/SmartFrame, B to SmartPanel) -> A jest locked, B dojeżdża
-                locked.add(nodeA.id);
-            } else if (prioB > prioA) {
-                // B jest bardziej sztywne niż A (np. A to SmartPanel, B to SmartBox/SmartFrame) -> B jest locked, A dojeżdża
-                locked.add(nodeB.id);
             }
         }
     }
 
-    // Budujemy graf nieskierowany aktywnych więzów relatywnych
     const adj = new Map<string, Set<string>>();
     function addEdge(u: string, v: string) {
         if (!adj.has(u)) adj.set(u, new Set());
@@ -425,9 +545,7 @@ export function computeReferenceLockedIds(
         addEdge(c.anchorA.nodeId, c.anchorB.nodeId);
     }
 
-    // Znajdujemy wszystkie węzły, które należą do składowej spójnej zawierającej już węzeł utwierdzony (locked).
-    // Jeśli składowa ma już choć jeden węzeł locked (np. GROUND lub z priorytetu), żaden inny węzeł
-    // z tej składowej NIE MOŻE zostać dodany do locked!
+    // Składowe już mające twarde utwierdzenie — bez dodatkowego seeda.
     const anchoredComponentNodes = new Set<string>();
     const queue: string[] = [];
     for (const id of locked) {
@@ -447,8 +565,6 @@ export function computeReferenceLockedIds(
         }
     }
 
-    // Dla składowych spójnych, które NIE MAJĄ żadnego punktu utwierdzenia (całkowicie swobodne obiekty):
-    // wybieramy dokładnie JEDEN stabilny węzeł referencyjny na składową spójną.
     const visited = new Set<string>(anchoredComponentNodes);
 
     for (const [nodeId] of adj) {
@@ -456,7 +572,6 @@ export function computeReferenceLockedIds(
             continue;
         }
 
-        // BFS zbierający całą wolną składową spójną
         const component: string[] = [];
         const compQueue = [nodeId];
         visited.add(nodeId);
@@ -475,12 +590,19 @@ export function computeReferenceLockedIds(
             }
         }
 
-        // W wyodrębnionej wolnej składowej wybieramy dokładnie jeden węzeł bazowy:
-        // preferujemy węzeł, który występuje jako anchorA i nie był użyty jako anchorB (!usedAsB.has(id)).
-        let chosenSeed = component.find(id => !usedAsB.has(id));
-        if (!chosenSeed) {
-            // Jeśli cykl lub wszystkie były jako B — bierzemy pierwszy węzeł w składowej
-            chosenSeed = component[0];
+        // Dokładnie jeden seed: najwyższy priorytet; remis → preferuj nie-użyty-jako-B (kolejność BFS).
+        let chosenSeed = component[0];
+        let bestPrio = Number.NEGATIVE_INFINITY;
+        let bestNotB = false;
+        for (const id of component) {
+            const node = document?.findNode(id) ?? null;
+            const prio = getNodeGroundingPriority(node);
+            const notB = !usedAsB.has(id);
+            if (prio > bestPrio || (prio === bestPrio && notB && !bestNotB)) {
+                chosenSeed = id;
+                bestPrio = prio;
+                bestNotB = notB;
+            }
         }
 
         if (chosenSeed) {
@@ -597,12 +719,12 @@ export function collectTransformDeltas(
             continue;
         }
 
-        // Komponenty wewnętrzne algorytmiczne SmartFrame i SmartBox nigdy nie mogą zmienić pozycji lokalnej w szafie
+        // Komponenty wewnętrzne algorytmiczne SmartFrame i Bloki nigdy nie mogą zmienić pozycji lokalnej w szafie
         // (chyba że zostały bezpośrednio uziemione więzem GROUND).
         const hasDirectGround = input.contract.constraints.some(
             (c) => c.enabled && c.bindType === 'GROUND' && c.objAId === nodeId,
         );
-        if (!hasDirectGround && (isSmartFrameEngineComponent(node) || isSmartBoxComponent(node))) {
+        if (!hasDirectGround && (isSmartFrameEngineComponent(node) || isBlokiComponent(node))) {
             continue;
         }
 

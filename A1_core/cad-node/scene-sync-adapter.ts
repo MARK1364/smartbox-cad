@@ -178,6 +178,15 @@ export class SceneSyncAdapter {
         this.meshToNode.clear();
     }
 
+    /**
+     * Mesh Babylona dla danego CADNode.id — jawne wiązanie, bez szukania po nazwach.
+     * Używane m.in. przez CNC do podpięcia wizualizacji pod formatkę.
+     */
+    getMeshForNodeId(nodeId: string | null | undefined): any | null {
+        if (!nodeId) return null;
+        return this.nodeBindings.get(nodeId)?.mesh ?? null;
+    }
+
     // ─── Sync domena → render (local matrix) ─────────────────
 
     /**
@@ -239,8 +248,7 @@ export class SceneSyncAdapter {
     }
 
     /** CADNode → mesh (po klamrowaniu więzów, gdy gizmo wyprzedziło domenę). */
-    syncNodeToMesh(nodeOrId: CADNode | string): void {
-        const node =
+    syncNodeToMesh(nodeOrId: CADNode | string): void {        const node =
             typeof nodeOrId === 'string'
                 ? this.nodeBindings.get(nodeOrId)?.node ?? null
                 : nodeOrId;

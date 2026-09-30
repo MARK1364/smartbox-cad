@@ -6,8 +6,6 @@
 
 import { ProjectDocument } from '../project-document.js';
 import { Command } from './command.js';
-import { ContainerModel } from '../container-model.js';
-import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 
 export interface DimensionValues {
     width?: number;

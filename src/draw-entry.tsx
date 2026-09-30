@@ -1,6 +1,6 @@
 /**
  * web/src/draw-entry.tsx
- * Punkt wejścia dla podstrony draw.html (SmartBox Draw Studio 2D).
+ * Punkt wejścia dla podstrony draw.html (Bloki Draw Studio 2D).
  */
 
 import React, { useState } from 'react';

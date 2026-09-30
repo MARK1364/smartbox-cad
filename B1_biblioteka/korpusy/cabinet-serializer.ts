@@ -1,7 +1,7 @@
 /**
  * B1_biblioteka/korpusy/cabinet-serializer.ts
  *
- * Serializuje aktywny mebel (SmartFrame + dzieci SmartBox) do lekkiego szablonu CabinetTemplate (w mm).
+ * Serializuje aktywny mebel (SmartFrame + dzieci Bloki) do lekkiego szablonu CabinetTemplate (w mm).
  */
 
 import { nmToMm } from '../../A1_core/cad-math/units.js';
@@ -9,9 +9,9 @@ import { getActiveContainer } from '../../A3_smartframe/smartframe-adapter.js';
 import type { CabinetCategory, CabinetTemplate, CabinetSubmoduleRecipe } from './types.js';
 
 /**
- * Wyciąga bezpieczne, prymitywne parametry generatora SmartBox bez wskaźników i cykli.
+ * Wyciąga bezpieczne, prymitywne parametry generatora Bloki bez wskaźników i cykli.
  */
-export function sanitizeSmartBoxParams(rawParams: any): Record<string, any> {
+export function sanitizeBlokiParams(rawParams: any): Record<string, any> {
     if (!rawParams || typeof rawParams !== 'object') return {};
 
     const safe: Record<string, any> = {};
@@ -63,22 +63,27 @@ export function serializeActiveCabinet(
     const dMm = Math.round(nmToMm(container.depth));
 
     const genParams = container.generatorParams || {};
-    const zoneCount = (genParams.zoneCount as 1 | 2 | 3) || 1;
-    const bottomHeight = genParams.bottomHeight !== undefined ? genParams.bottomHeight : (zoneCount === 1 ? hMm : 500);
-    const middleHeight = genParams.middleHeight !== undefined ? genParams.middleHeight : (zoneCount === 3 ? 1200 : 0);
-    const backOffset = genParams.backOffset !== undefined ? genParams.backOffset : 3;
+    const liczba_stref = (genParams.liczba_stref as 1 | 2 | 3) || 1;
+    const wysokosc_strefy_dolnej_mm = genParams.wysokosc_strefy_dolnej_mm !== undefined
+        ? genParams.wysokosc_strefy_dolnej_mm
+        : (liczba_stref === 1 ? hMm : 500);
+    const wysokosc_strefy_srodkowej_mm = genParams.wysokosc_strefy_srodkowej_mm !== undefined
+        ? genParams.wysokosc_strefy_srodkowej_mm
+        : (liczba_stref === 3 ? 1200 : 0);
+    // Wyjątek gizmo: `backOffset` zapisuje A1_core/gizmo-controller.
+    const cofniecie_plecow_mm = genParams.cofniecie_plecow_mm ?? genParams.backOffset ?? 3;
 
-    // Przeszukiwanie dzieci w poszukiwaniu modułów SmartBox (_SB)
+    // Przeszukiwanie dzieci w poszukiwaniu modułów Bloki (_SB)
     const submodules: CabinetSubmoduleRecipe[] = [];
     if (korpusNode && Array.isArray(korpusNode.children)) {
         for (const childNode of korpusNode.children) {
             const childDomain = childNode.domainData;
             const childName = childNode.name || '';
-            const isSmartBox = childName.endsWith('_SB') ||
-                childName.includes('smartbox') ||
-                (childDomain?.generatorParams?.type && String(childDomain.generatorParams.type).startsWith('smartbox_'));
+            const isBlok = childName.endsWith('_SB') ||
+                childName.includes('bloki') ||
+                (childDomain?.generatorParams?.type && String(childDomain.generatorParams.type).startsWith('blok_'));
 
-            if (!isSmartBox || !childDomain) continue;
+            if (!isBlok || !childDomain) continue;
 
             const p = childDomain.generatorParams || {};
             const boxType = p.boxType || (
@@ -90,19 +95,19 @@ export function serializeActiveCabinet(
                 'CUSTOM'
             );
 
-            const safeParams = sanitizeSmartBoxParams(p);
+            const safeParams = sanitizeBlokiParams(p);
 
             // Obliczamy strefę (jeśli określona)
             let zoneIndex = p.targetZoneIndex;
             if (zoneIndex === undefined && childNode.transform?.position) {
                 // Heurystyka: pozycja Z w korpusie
                 const zPosMm = nmToMm(childNode.transform.position.z);
-                if (zoneCount === 3) {
-                    if (zPosMm < bottomHeight) zoneIndex = 0;
-                    else if (zPosMm < bottomHeight + middleHeight) zoneIndex = 1;
+                if (liczba_stref === 3) {
+                    if (zPosMm < wysokosc_strefy_dolnej_mm) zoneIndex = 0;
+                    else if (zPosMm < wysokosc_strefy_dolnej_mm + wysokosc_strefy_srodkowej_mm) zoneIndex = 1;
                     else zoneIndex = 2;
-                } else if (zoneCount === 2) {
-                    zoneIndex = zPosMm < bottomHeight ? 0 : 1;
+                } else if (liczba_stref === 2) {
+                    zoneIndex = zPosMm < wysokosc_strefy_dolnej_mm ? 0 : 1;
                 } else {
                     zoneIndex = 0;
                 }
@@ -110,7 +115,7 @@ export function serializeActiveCabinet(
 
             submodules.push({
                 id: childNode.id,
-                type: p.type || `smartbox_${boxType.toLowerCase()}`,
+                type: p.type || `blok_${boxType.toLowerCase()}`,
                 boxType,
                 label: childNode.name,
                 zoneIndex: zoneIndex ?? 0,
@@ -128,15 +133,15 @@ export function serializeActiveCabinet(
         thumbnail: options.thumbnail,
         createdAt: Date.now(),
         dimensions: {
-            width: wMm,
-            height: hMm,
-            depth: dMm
+            szerokosc_mm: wMm,
+            wysokosc_mm: hMm,
+            glebokosc_mm: dMm
         },
         frameParams: {
-            zoneCount,
-            bottomHeight,
-            middleHeight,
-            backOffset,
+            liczba_stref,
+            wysokosc_strefy_dolnej_mm,
+            wysokosc_strefy_srodkowej_mm,
+            cofniecie_plecow_mm,
             offsets: genParams.offsets ? { ...genParams.offsets } : {}
         },
         submodules

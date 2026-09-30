@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "module_type": "SMART_WALL_WALLS",
+    "version": "1.0.0"
+  },
+  "defaults": {
+    "wall_height_m": 2.7,
+    "wall_thickness_m": 0.1,
+    "room_width_m": 4.0,
+    "room_depth_m": 3.0
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "exclude_from_production": true,
+      "role_overrides": {
+        "WALL": {
+          "exclude_from_production": true,
+          "edge_banding": {}
+        }
+      }
+    }
+  }
+}

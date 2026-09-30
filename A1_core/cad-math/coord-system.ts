@@ -21,7 +21,7 @@
  *
  * Zastępuje 6+ rozproszonych miejsc z // CAD Y = 3D Z / CAD Z = 3D Y
  *
- * Zero zależności od Babylon.js, OCCT, DOM.
+ * Zero zależności od Babylon.js i DOM.
  */
 
 import { Vec3 } from './vec3.js';

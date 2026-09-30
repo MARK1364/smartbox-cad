@@ -9,6 +9,12 @@ import { createVector3D, vecAdd, vecScale } from './cnc-geometry-utils.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
 import { WcsRulesMapper } from '../wcs/wcs-rules-mapper.js';
 import { nearestEndFace } from '../../C2_connectors/connectors-embedment.js';
+import { tx } from '../../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
+import cncTekstRaw from '../cnc_tekst.json';
+
+const cncTekst = cncTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'cnc';
 
 export interface FaceData3D {
     origin: number[];  // [x, y, z]
@@ -31,27 +37,34 @@ export class GeometryDataExtractor {
 
         if (!panel || panel.frozen === true || panel.params?.frozen === true) {
             return {
-                objectName: panel ? (panel.name || "Płyta") : "Unknown",
+                objectName: panel ? (panel.name || tx(cncTekst, 'extractor.panel_default', TX_NS)) : tx(cncTekst, 'extractor.unknown', TX_NS),
                 features: [],
                 wcsOffset: wcsManager ? wcsManager.getOrigin() : createVector3D(),
                 isDirty: false
             };
         }
 
-        const pW = typeof panel.width === 'number' ? nmToMm(panel.width) : 600;
-        const pH = typeof panel.height === 'number' ? nmToMm(panel.height) : 720;
-        const pT = typeof panel.thickness === 'number' ? nmToMm(panel.thickness) : 18;
+        if (typeof panel.width !== 'number' || panel.width <= 0 ||
+            typeof panel.height !== 'number' || panel.height <= 0 ||
+            typeof panel.thickness !== 'number' || panel.thickness <= 0) {
+            throw new Error(`[C1_cnc/geometry-extractor] Panel "${panel?.name || 'unknown'}" nie posiada poprawnych wymiarów fizycznych (W=${panel?.width}, H=${panel?.height}, T=${panel?.thickness}). Wymiary w nanometrach są wymagane do wygenerowania cech CAM.`);
+        }
+
+        const pW = nmToMm(panel.width);
+        const pH = nmToMm(panel.height);
+        const pT = nmToMm(panel.thickness);
 
         if (wcsManager) {
             wcsManager.updateForPanelDimensions(pW, pH, pT);
-            const role = panel.role || panel.name;
+            // Strict: reguła WCS tylko z roli. Brak roli = brak reguły.
+            const role = panel.role;
             const rule = WcsRulesMapper.getRuleForRole(role);
             if (rule) {
                 wcsManager.setRule(rule);
             }
         }
 
-        const panelName = panel.name || "Płyta";
+        const panelName = panel.name || tx(cncTekst, 'extractor.panel_default', TX_NS);
         const panelFeatures = panel.features || [];
 
         for (const feat of panelFeatures) {
@@ -139,13 +152,19 @@ export class GeometryDataExtractor {
                     !!(f as HoleFeature).through === !!through
                 ) as HoleFeature | undefined;
 
-                const holeLabel = feat.name || params.name || `Otwór ⌀${diameter}x${depth}mm`;
+                const featLabel = feat.name ?? params?.name;
+                const holeLabel = featLabel || tx(cncTekst, 'extractor.hole_label', TX_NS, { d: diameter, h: depth });
 
                 if (existingGroup) {
                     if (!existingGroup.positions) {
                         existingGroup.positions = [existingGroup.position];
                     }
                     existingGroup.positions.push(pos);
+                    if (!existingGroup.panelPositions) {
+                        existingGroup.panelPositions = existingGroup.positions.map(p => ({ ...p }));
+                    } else {
+                        existingGroup.panelPositions.push({ ...pos });
+                    }
                     existingGroup.holeCount = existingGroup.positions.length;
                     if (feat.id && existingGroup.childFeatureIds) {
                         existingGroup.childFeatureIds.push(feat.id);
@@ -160,6 +179,8 @@ export class GeometryDataExtractor {
                         depth,
                         position: pos,
                         positions: [pos],
+                        panelPosition: { ...pos },
+                        panelPositions: [{ ...pos }],
                         holeCount: 1,
                         childFeatureIds: feat.id ? [feat.id] : [],
                         axis,
@@ -219,14 +240,20 @@ export class GeometryDataExtractor {
                         z: faceData.origin[2] + u2 * faceData.uAxis[2] + v2 * faceData.vAxis[2]
                     };
                 } else {
-                    const pW = typeof panel.width === 'number' ? nmToMm(panel.width) : 600;
+                    // Panel już zwalidowany na wejściu ekstraktora — użyj pW, bez zgadywania 600.
                     startPoint = { x: 0, y: 0, z: 0 };
                     endPoint = { x: pW, y: 0, z: 0 };
                 }
 
+                const grooveLabel = feat.name ?? params?.name;
                 features.push({
                     featureId: `groove_${feat.id || Math.random().toString(36).substring(2, 9)}`,
-                    name: feat.name || params.name || `Wpust_${features.length + 1}`,
+                    name: grooveLabel || tx(cncTekst, 'extractor.groove_label', TX_NS, { n: features.length + 1 }),
+                    // Intencja z kodu źródłowego cechy CAD, nie z nazwy:
+                    // BLOKI_LED = sync A2 (led-internal-engine), assembly_led_channel = A5 (led-channel-engine).
+                    purpose: (params.source === 'BLOKI_LED' || params.source === 'assembly_led_channel')
+                        ? 'LED_CHANNEL'
+                        : undefined,
                     objectName: panelName,
                     width,
                     depth,
@@ -239,13 +266,13 @@ export class GeometryDataExtractor {
                 } as GrooveFeature);
 
             } else if (feat.type === 'contour' || feat.type === 'CONTOUR' || feat.type === 'profile') {
-                const pThickness = typeof panel.thickness === 'number' ? nmToMm(panel.thickness) : 18;
-                const depth = Number(params.depth !== undefined ? params.depth : pThickness);
+                const depth = Number(params.depth !== undefined ? params.depth : pT);
                 const points: Vector3D[] = (params.points || []).map((p: any) => ({ x: p.x || 0, y: p.y || 0, z: p.z || 0 }));
 
+                const contourLabel = feat.name ?? params?.name;
                 features.push({
                     featureId: `contour_${feat.id || Math.random().toString(36).substring(2, 9)}`,
-                    name: feat.name || params.name || `Profil_${features.length + 1}`,
+                    name: contourLabel || tx(cncTekst, 'extractor.contour_label', TX_NS, { n: features.length + 1 }),
                     objectName: panelName,
                     depth,
                     points,
@@ -258,11 +285,17 @@ export class GeometryDataExtractor {
         if (wcsManager) {
             for (const f of features) {
                 if ('position' in f) {
+                    const hf = f as HoleFeature;
+                    if (!hf.panelPosition) {
+                        hf.panelPosition = { ...hf.position };
+                    }
+                    if (!hf.panelPositions && hf.positions) {
+                        hf.panelPositions = hf.positions.map(p => ({ ...p }));
+                    }
                     f.position = wcsManager.toWcsCoordinates(f.position);
                     if ('axis' in f && f.axis) {
                         f.axis = wcsManager.transformVector(f.axis);
                     }
-                    const hf = f as HoleFeature;
                     if (hf.positions && Array.isArray(hf.positions)) {
                         hf.positions = hf.positions.map(p => wcsManager.toWcsCoordinates(p));
                     }

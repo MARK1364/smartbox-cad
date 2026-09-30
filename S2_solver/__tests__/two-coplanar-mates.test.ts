@@ -18,7 +18,7 @@ import { SolveConstraintsCommand } from '../solve-constraints-command.js';
 
 /** Korpus 600x500x720 z formatką frontu (Rx90) i dnem (bez obrotu). */
 function makeCabinet(document: ProjectDocument, xMm: number, yMm: number, zMm: number) {
-    const container = document.createContainer({
+    const container = document.createAssembly({
         width: mmToNm(600),
         height: mmToNm(720),
         depth: mmToNm(500),

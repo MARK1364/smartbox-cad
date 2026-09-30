@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { NestingEngine } from '../core/nesting-engine';
+import { getDefaultKerf, getMaterialKey, getMaterialLabel, getMaterialInfo, resolveMaterialName, runNesting } from '../core/nesting-engine';
 import { NestingPart, SheetConfig } from '../core/nesting-types';
 
-describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
+describe('nesting-engine (n1_nesting) with Machine Profiles and Scope', () => {
     const config: SheetConfig = {
         width: 2800,
         height: 2070,
@@ -15,11 +15,11 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
         { id: '2', name: 'Bok Prawy', width: 2000, height: 600, quantity: 1, thickness: 18, material: 'Biel Alpejska', containerId: 'Szafka_01', furnitureName: 'Szafka_01', canRotate: true },
         { id: '3', name: 'Plecy HDF', width: 1964, height: 796, quantity: 1, thickness: 3, material: 'HDF Biały', containerId: 'Szafka_01', furnitureName: 'Szafka_01', canRotate: false },
         { id: '4', name: 'Bok Garderoby', width: 2400, height: 600, quantity: 2, thickness: 18, material: 'Biel Alpejska', containerId: 'Garderoba_02', furnitureName: 'Garderoba_02', canRotate: true },
-        { id: '5', name: 'Szuflada Bok', width: 500, height: 150, quantity: 4, thickness: 18, material: 'Biel Alpejska', smartboxId: 'SmartBox_Drawer_01', canRotate: true }
+        { id: '5', name: 'Szuflada Bok', width: 500, height: 150, quantity: 4, thickness: 18, material: 'Biel Alpejska', blokId: 'Bloki_Drawer_01', canRotate: true }
     ];
 
     it('should separate parts by material and create independent boards when selectedMaterial is ALL', async () => {
-        const result = await NestingEngine.runNesting(multiCabinetParts, config, {
+        const result = await runNesting(multiCabinetParts, config, {
             mode: 'fast',
             selectedMaterial: 'ALL',
             machineType: 'saw'
@@ -45,7 +45,7 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
             { id: '4', name: 'Formatka 4', width: 500, height: 400, quantity: 1, thickness: 18, material: 'W1100_ST9', canRotate: true },
         ];
 
-        const result = await NestingEngine.runNesting(mixedParts, config, { mode: 'fast' });
+        const result = await runNesting(mixedParts, config, { mode: 'fast' });
 
         expect(result.materialGroups.length).toBe(1);
         expect(result.materialGroups[0].materialName).toBe('Biały Alpejski');
@@ -59,7 +59,7 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
             { id: '2', name: 'Formatka 10mm', width: 500, height: 400, quantity: 1, thickness: 10, material: 'W1100_ST9_10', canRotate: true },
         ];
 
-        const result = await NestingEngine.runNesting(differentThicknessParts, config, { mode: 'fast' });
+        const result = await runNesting(differentThicknessParts, config, { mode: 'fast' });
 
         expect(result.materialGroups.length).toBe(2);
         expect(result.materialGroups.some(g => g.thickness === 18 && g.materialLabel.includes('18mm'))).toBe(true);
@@ -67,7 +67,7 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
     });
 
     it('should filter parts by container scope (Szafka_01)', async () => {
-        const result = await NestingEngine.runNesting(multiCabinetParts, config, {
+        const result = await runNesting(multiCabinetParts, config, {
             mode: 'fast',
             scope: 'CONTAINER',
             targetContainerId: 'Szafka_01'
@@ -77,15 +77,15 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
         expect(result.boards.every(b => b.layout.every(p => p.containerId === 'Szafka_01' || p.furnitureName === 'Szafka_01'))).toBe(true);
     });
 
-    it('should filter parts by SmartBox scope (SmartBox_Drawer_01)', async () => {
-        const result = await NestingEngine.runNesting(multiCabinetParts, config, {
+    it('should filter parts by Bloki scope (Bloki_Drawer_01)', async () => {
+        const result = await runNesting(multiCabinetParts, config, {
             mode: 'fast',
-            scope: 'SMARTBOX',
-            targetContainerId: 'SmartBox_Drawer_01'
+            scope: 'BLOKI',
+            targetContainerId: 'Bloki_Drawer_01'
         });
 
         expect(result.totalPartsPlaced).toBe(4); // Szuflada Bok (4 szt)
-        expect(result.boards.every(b => b.layout.every(p => p.smartboxId === 'SmartBox_Drawer_01'))).toBe(true);
+        expect(result.boards.every(b => b.layout.every(p => p.blokId === 'Bloki_Drawer_01'))).toBe(true);
     });
 
     it('should configure CNC router profile with 10mm tool diameter and kerf', async () => {
@@ -97,7 +97,7 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
             machineType: 'cnc'
         };
 
-        const result = await NestingEngine.runNesting(multiCabinetParts, cncConfig, {
+        const result = await runNesting(multiCabinetParts, cncConfig, {
             mode: 'fast',
             machineType: 'cnc',
             scope: 'PROJECT'
@@ -108,13 +108,13 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
     });
 
     it('should filter parts by multiple containers (targetContainerIds array)', async () => {
-        const result = await NestingEngine.runNesting(multiCabinetParts, config, {
+        const result = await runNesting(multiCabinetParts, config, {
             mode: 'fast',
-            targetContainerIds: ['Szafka_01', 'SmartBox_Drawer_01']
+            targetContainerIds: ['Szafka_01', 'Bloki_Drawer_01']
         });
 
-        expect(result.totalPartsPlaced).toBe(7); // 3 from Szafka_01 + 4 from SmartBox_Drawer_01
-        expect(result.boards.every(b => b.layout.every(p => p.containerId === 'Szafka_01' || p.furnitureName === 'Szafka_01' || p.smartboxId === 'SmartBox_Drawer_01'))).toBe(true);
+        expect(result.totalPartsPlaced).toBe(7); // 3 from Szafka_01 + 4 from Bloki_Drawer_01
+        expect(result.boards.every(b => b.layout.every(p => p.containerId === 'Szafka_01' || p.furnitureName === 'Szafka_01' || p.blokId === 'Bloki_Drawer_01'))).toBe(true);
     });
 
     it('should generate rotated label in SVG for slender vertical parts (e.g. Cokół 100x1500)', async () => {
@@ -122,7 +122,7 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
             { id: '1', name: 'Cokół Dolny', width: 100, height: 1500, quantity: 1, thickness: 18, material: 'Biel Alpejska', canRotate: false }
         ];
 
-        const result = await NestingEngine.runNesting(slenderParts, config, { mode: 'fast' });
+        const result = await runNesting(slenderParts, config, { mode: 'fast' });
         expect(result.boards.length).toBe(1);
 
         const { NestingExporter } = await import('../export/nesting-exporter');
@@ -137,7 +137,7 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
             { id: 'p1', name: 'Panel Precyzyjny', width: 600, height: 400, quantity: 1, thickness: 18, material: 'Biel Alpejska', canRotate: false }
         ];
 
-        const result = await NestingEngine.runNesting(parts, config, { mode: 'fast' });
+        const result = await runNesting(parts, config, { mode: 'fast' });
         expect(result.boards.length).toBe(1);
         const packed = result.boards[0].layout[0];
 
@@ -148,4 +148,18 @@ describe('NestingEngine (n1_nesting) with Machine Profiles and Scope', () => {
         expect(result.boards[0].width_nm).toBe(2800_000_000);
         expect(result.boards[0].height_nm).toBe(2070_000_000);
     });
+
+    it('should throw Fail-Fast error when part has non-positive or invalid thickness', () => {
+        const invalidPart = { id: 'bad1', name: 'Zły Bok', width: 500, height: 400, quantity: 1, thickness: 0, material: 'Biel Alpejska' };
+        expect(() => getMaterialKey(invalidPart)).toThrowError(/nieprawidłową grubość/);
+
+        const negativePart = { id: 'bad2', name: 'Ujemny Bok', width: 500, height: 400, quantity: 1, thickness: -5, material: 'Biel Alpejska' };
+        expect(() => getMaterialKey(negativePart)).toThrowError(/nieprawidłową grubość/);
+    });
+
+    it('should throw Fail-Fast error when part has no thickness and material decor lacks thickness info', () => {
+        const noThicknessPart = { id: 'noThk', name: 'Formatka Bez Grubości', width: 500, height: 400, quantity: 1, thickness: undefined as any, material: 'NiestandardowyMateriałBezGrubości' };
+        expect(() => getMaterialKey(noThicknessPart)).toThrowError(/nie posiada zdefiniowanej grubości/);
+    });
 });
+

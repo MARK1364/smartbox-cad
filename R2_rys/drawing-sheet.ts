@@ -1,6 +1,6 @@
 /**
  * E3_export - drawing-sheet.ts
- * SmartBox CAD Drawing Sheet Generator dla modułu Eksport 3.
+ * Bloki CAD Drawing Sheet Generator dla modułu Eksport 3.
  * 
  * Generuje profesjonalny arkusz rysunkowy CAD w formacie SVG
  * ze standardowymi rozmiarami papieru (A4/A3/A2), podwójną ramką,
@@ -102,7 +102,7 @@ export class DrawingSheet {
         this.titleBlock = {
             projectName: '',
             furnitureName: '',
-            author: 'SmartBox CAD',
+            author: 'Bloki CAD',
             date: today,
             scale: '1:10',
             sheetNumber: '1/1',
@@ -257,7 +257,7 @@ export class DrawingSheet {
         lines.push(svgText(tbX + 2, curY + 2.5, 'Wykonał', 1.2, 'start', 'normal', undefined, '#666666'));
         lines.push(svgText(tbX + colSplit + 2, curY + 2.5, 'Data', 1.2, 'start', 'normal', undefined, '#666666'));
 
-        lines.push(svgText(tbX + 2, curY + 6.5, this.titleBlock.author || 'SmartBox CAD', 2.5));
+        lines.push(svgText(tbX + 2, curY + 6.5, this.titleBlock.author || 'Bloki CAD', 2.5));
         lines.push(svgText(tbX + colSplit + 2, curY + 6.5, this.titleBlock.date || '', 2.5));
 
         curY += r1H;
@@ -278,7 +278,7 @@ export class DrawingSheet {
         lines.push(svgText(tbX + col2Split + 2, curY + 6.5, formatLabel, 2.5, 'start', 'bold'));
 
         // Branding w rogu tabelki
-        lines.push(svgText(tbX + tbW - 2, tbY + tbH - 1.2, 'SmartBox CAD Web', 1.4, 'end', 'normal', undefined, '#999999'));
+        lines.push(svgText(tbX + tbW - 2, tbY + tbH - 1.2, 'Bloki CAD Web', 1.4, 'end', 'normal', undefined, '#999999'));
 
         return lines.join('\n');
     }
@@ -502,7 +502,7 @@ export class DrawingSheet {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Drukuj Arkusz CAD - SmartBox</title>
+                <title>Drukuj Arkusz CAD - Bloki</title>
                 <style>
                     @page {
                         size: ${this.paperW}mm ${this.paperH}mm;

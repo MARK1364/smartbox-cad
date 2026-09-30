@@ -119,7 +119,7 @@
   <a href="#s3">6. S3 — Scena / Viewport 3D</a>
   <a href="#a1">7. A1 — Jądro / Projekt</a>
   <a href="#a3">8. A3 — SmartFrame (Korpus)</a>
-  <a href="#a2">9. A2 — SmartBox (Wnętrze)</a>
+  <a href="#a2">9. A2 — Bloki (Wnętrze)</a>
   <a href="#a4">10. A4 — SmartPanel (Formatka)</a>
   <a href="#a7">11. A7 — Materiały i obrzeża</a>
   <a href="#c2">12. C2 — Złącza</a>
@@ -175,7 +175,7 @@
 <tr><td><b>Projekt</b></td><td>Cały mebel lub zestaw mebli. Jeden plik <kbd>.spp.json</kbd>.</td></tr>
 <tr><td><b>Korpus (SmartFrame)</b></td><td>„Skrzynia” mebla — boki, dno, wieniec, plecy. Rodzic konstrukcji.</td></tr>
 <tr><td><b>Strefa / wnęka (Bay)</b></td><td>Pusta przestrzeń w korpusie na półki, szuflady itd.</td></tr>
-<tr><td><b>SmartBox</b></td><td>Gotowy moduł wyposażenia: półki, szuflady, drzwi, drążek…</td></tr>
+<tr><td><b>Bloki</b></td><td>Gotowy moduł wyposażenia: półki, szuflady, drzwi, drążek…</td></tr>
 <tr><td><b>Formatka (Panel)</b></td><td>Pojedyncza płyta: bok, półka, front. Ma W × H × T.</td></tr>
 <tr><td><b>Drzewo obiektów</b></td><td>Lista po lewej: Projekt → Korpus → Formatka → Operacje.</td></tr>
 <tr><td><b>Viewport</b></td><td>Okno 3D na środku — tu oglądasz i klikasz mebel.</td></tr>
@@ -225,7 +225,7 @@
 <h2 id="szybki-start"><span class="nr">5</span>Szybki start — pierwszy mebel w 10 minut</h2>
 <div class="steps"><ol>
 <li><b>Korpus</b> (rozdz. 8): <kbd>SmartFrame → Utwórz Korpus</kbd>, 600 × 720 × 560 mm, 1 strefa.</li>
-<li><b>Półki</b> (rozdz. 9): kliknij wnękę → <kbd>SmartBox → Półki</kbd>, dodaj 2.</li>
+<li><b>Półki</b> (rozdz. 9): kliknij wnękę → <kbd>Bloki → Półki</kbd>, dodaj 2.</li>
 <li><b>Materiał</b> (rozdz. 11): przeciągnij np. Egger Biały 18 mm na korpus.</li>
 <li><b>Złącza</b> (rozdz. 12): pipeta na styk boku z dnem → Konfirmat → Zatwierdź.</li>
 <li><b>Wymiar</b> (rozdz. 16): narzędzie <kbd>Wymiaruj</kbd>, kliknij krawędź korpusu.</li>
@@ -280,8 +280,8 @@
 <div class="shot" data-shot="8b-korpus-3d"><span class="num">ZRZUT 8b</span><div class="icon">🖼️</div><div class="t">Pusty korpus w 3D + w drzewie</div><div class="d">Widok ISO, tryb Shaded; obok drzewo z nowym korpusem.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 8b"><input type="file" accept="image/*" hidden></div>
 
 <!-- ================= 9 A2 ================= -->
-<h2 id="a2"><span class="nr">9</span>Moduł A2 — SmartBox (Wyposażenie wnętrza)</h2>
-<p class="lead">Wypełnia wnękę korpusu gotowymi modułami. Kliknij wnękę (podświetli się), wybierz typ, ustaw parametry w panelu <kbd>smartbox-ui</kbd>. Program dokłada nawierty systemowe co 32 mm.</p>
+<h2 id="a2"><span class="nr">9</span>Moduł A2 — Bloki (Wyposażenie wnętrza)</h2>
+<p class="lead">Wypełnia wnękę korpusu gotowymi modułami. Kliknij wnękę (podświetli się), wybierz typ, ustaw parametry w panelu <kbd>bloki-ui</kbd>. Program dokłada nawierty systemowe co 32 mm.</p>
 <table><tr><th>Typ</th><th>Co wstawia</th><th>Kiedy</th></tr>
 <tr><td>Półki</td><td>Poziome płyty</td><td>Szafka / regał</td></tr>
 <tr><td>Wieniec</td><td>Płyta zamykająca</td><td>Podział na strefy</td></tr>
@@ -291,7 +291,7 @@
 <tr><td>Przegrody</td><td>Pionowe podziały</td><td>Segregacja wnętrza</td></tr>
 <tr><td>Blendy</td><td>Maskownice</td><td>Zabudowa / estetyka</td></tr>
 <tr><td>Klapy</td><td>Fronty uchylne w górę</td><td>Szafki wiszące</td></tr></table>
-<div class="shot" data-shot="9a-wneka"><span class="num">ZRZUT 9a</span><div class="icon">🖼️</div><div class="t">Wykryta wnęka + wybór typu</div><div class="d">Podświetlona wnęka i menu 8 typów SmartBox.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 9a"><input type="file" accept="image/*" hidden></div>
+<div class="shot" data-shot="9a-wneka"><span class="num">ZRZUT 9a</span><div class="icon">🖼️</div><div class="t">Wykryta wnęka + wybór typu</div><div class="d">Podświetlona wnęka i menu 8 typów Bloki.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 9a"><input type="file" accept="image/*" hidden></div>
 <div class="shot" data-shot="9b-polki"><span class="num">ZRZUT 9b</span><div class="icon">🖼️</div><div class="t">Panel parametrów półek + wynik</div><div class="d">Liczba, grubość, rozstaw — oraz półki w modelu 3D.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 9b"><input type="file" accept="image/*" hidden></div>
 <div class="shot" data-shot="9c-fronty"><span class="num">ZRZUT 9c</span><div class="icon">🖼️</div><div class="t">Szuflady i drzwi — przykład</div><div class="d">Mebel z frontami i szufladami, widok z przodu.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 9c"><input type="file" accept="image/*" hidden></div>
 
@@ -311,11 +311,11 @@
 <table><tr><th>Narzędzie</th><th>Jak</th><th>Efekt</th></tr>
 <tr><td>Lista materiałów</td><td>Filtruj: kategoria, grubość, szukajka</td><td>Znajdujesz dekor</td></tr>
 <tr><td>Drag &amp; drop</td><td>Przeciągnij materiał na formatkę</td><td>Nadanie dekoru</td></tr>
-<tr><td>Zakres</td><td>SINGLE / CONTAINER / SMARTBOX / PROJECT</td><td>Jedna płyta → cały projekt</td></tr>
+<tr><td>Zakres</td><td>SINGLE / CONTAINER / BLOKI / PROJECT</td><td>Jedna płyta → cały projekt</td></tr>
 <tr><td>Obrzeże ABS</td><td>0.8×22, 1×22, 2×22, 0.8×43 → kliknij krawędź +X/−X/+Y/−Y</td><td>Oklejona krawędź (liczy się w raporcie)</td></tr></table>
 <div class="tip">💡 Na fronty zwykle 2 mm, na niewidoczne krawędzie 0,8 mm.</div>
 <div class="shot" data-shot="11a-materialy"><span class="num">ZRZUT 11a</span><div class="icon">🖼️</div><div class="t">Lista materiałów</div><div class="d">Filtry, szukajka, miniaturki Egger; strzałka drag &amp; drop na model.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 11a"><input type="file" accept="image/*" hidden></div>
-<div class="shot" data-shot="11b-zakres"><span class="num">ZRZUT 11b</span><div class="icon">🖼️</div><div class="t">Wybór zakresu nadania</div><div class="d">Okno SINGLE / CONTAINER / SMARTBOX / PROJECT.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 11b"><input type="file" accept="image/*" hidden></div>
+<div class="shot" data-shot="11b-zakres"><span class="num">ZRZUT 11b</span><div class="icon">🖼️</div><div class="t">Wybór zakresu nadania</div><div class="d">Okno SINGLE / CONTAINER / BLOKI / PROJECT.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 11b"><input type="file" accept="image/*" hidden></div>
 <div class="shot" data-shot="11c-obrzeze"><span class="num">ZRZUT 11c</span><div class="icon">🖼️</div><div class="t">Wybór obrzeża i krawędzi</div><div class="d">Grubość ABS i podgląd płyty z krawędziami +X/−X/+Y/−Y.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 11c"><input type="file" accept="image/*" hidden></div>
 
 <!-- ================= 12 C2 ================= -->
@@ -435,7 +435,7 @@
 
 <!-- ================= 23 BIB ================= -->
 <h2 id="bib"><span class="nr">23</span>Moduł Biblioteki — Okucia i szuflady</h2>
-<p>Fabryczne dane: Blum Antaro M, Tandem, Sevroll SlimBox, Merivo — długości 300–500 mm z gotowymi otworami boku i frontu. Działa <b>pośrednio</b>: wybierasz system szuflady w SmartBox, otwory ustawiają się same.</p>
+<p>Fabryczne dane: Blum Antaro M, Tandem, Sevroll SlimBox, Merivo — długości 300–500 mm z gotowymi otworami boku i frontu. Działa <b>pośrednio</b>: wybierasz system szuflady w Bloki, otwory ustawiają się same.</p>
 <div class="shot" data-shot="23-okucia"><span class="num">ZRZUT 23</span><div class="icon">🖼️</div><div class="t">Systemy szuflad</div><div class="d">Lista systemów + schemat otworów boku i frontu.</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 23"><input type="file" accept="image/*" hidden></div>
 
 <!-- ================= 24 ================= -->
@@ -446,7 +446,7 @@
 <p>Korpus 1200×2000×600, 2 strefy → drążek + półka / 3 szuflady Blum → drzwi → wyrównaj fronty (FLUSH) → dalej jak wariant A.</p>
 <h3>Wariant C — sama wycena</h3>
 <p>Sam korpus + materiał → Raport → Odśwież → PDF. Bez CNC i nestingu.</p>
-<div class="shot" data-shot="24-schemat"><span class="num">ZRZUT 24</span><div class="icon">🖼️</div><div class="t">Schemat przepływu</div><div class="d">Diagram: Korpus → SmartBox → Materiał → Złącza → PMI → Nesting → CNC → Draw/E3 → Raport (może być odręczny).</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 24"><input type="file" accept="image/*" hidden></div>
+<div class="shot" data-shot="24-schemat"><span class="num">ZRZUT 24</span><div class="icon">🖼️</div><div class="t">Schemat przepływu</div><div class="d">Diagram: Korpus → Bloki → Materiał → Złącza → PMI → Nesting → CNC → Draw/E3 → Raport (może być odręczny).</div><div class="click-hint">Kliknij, aby wstawić zrzut z dysku</div><img alt="Zrzut 24"><input type="file" accept="image/*" hidden></div>
 
 <!-- ================= 25 ================= -->
 <h2 id="skroty"><span class="nr">25</span>Skróty klawiszowe i mysz (ściąga)</h2>

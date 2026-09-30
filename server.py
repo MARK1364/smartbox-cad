@@ -1,5 +1,5 @@
 """
-SmartBox Web - Local Development Server
+Bloki Web - Local Development Server
 Serwer HTTP z CORS i MIME type dla WASM.
 Uruchom: python server.py
 """
@@ -11,11 +11,11 @@ import sys
 import webbrowser
 import socket
 
-PORT = 8080
+PORT = 8085
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 
-class SmartBoxHandler(http.server.SimpleHTTPRequestHandler):
+class BlokiHandler(http.server.SimpleHTTPRequestHandler):
     """Handler z poprawnym MIME type dla WASM i CORS headers."""
 
     def __init__(self, *args, **kwargs):
@@ -71,11 +71,11 @@ def main():
 
     socketserver.TCPServer.allow_reuse_address = True
 
-    with socketserver.TCPServer(("", port), SmartBoxHandler) as httpd:
+    with socketserver.TCPServer(("", port), BlokiHandler) as httpd:
         url = f"http://localhost:{port}"
         print(f"")
         print(f"  +--------------------------------------+")
-        print(f"  |   SmartBox Web Dev Server            |")
+        print(f"  |   Bloki Web Dev Server            |")
         print(f"  |   {url:<35s}|")
         print(f"  |   Ctrl+C aby zatrzymac               |")
         print(f"  +--------------------------------------+")

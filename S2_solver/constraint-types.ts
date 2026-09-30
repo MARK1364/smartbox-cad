@@ -18,7 +18,7 @@ import type { Vec3 } from './core/math3d.js';
  * Rodzaj elementu, do którego przyczepiony jest więz. Dla GROUND ten rodzaj
  * wyznacza zarazem `groundMode` w kontrakcie rdzenia.
  */
-export type AnchorKind = 'OBJECT' | 'VERTEX' | 'FACE';
+export type AnchorKind = 'OBJECT' | 'VERTEX' | 'FACE' | 'DATUM';
 
 /**
  * Numeracja narożników bryły lokalnej: bit 0 = X, bit 1 = Y, bit 2 = Z,
@@ -114,10 +114,14 @@ export function constraintHasGeometry(constraint: SolverConstraint): boolean {
     return Boolean(constraint.anchorA && constraint.anchorB);
 }
 
-/** Zbiera identyfikatory węzłów, do których odwołuje się więz. */
+/** Zbiera identyfikatory węzłów, do których odwołuje się więz (bez virtuali DATUM). */
 export function constraintNodeIds(constraint: SolverConstraint): string[] {
     const ids: string[] = [];
-    if (constraint.anchorA) ids.push(constraint.anchorA.nodeId);
-    if (constraint.anchorB) ids.push(constraint.anchorB.nodeId);
+    if (constraint.anchorA && constraint.anchorA.kind !== 'DATUM') {
+        ids.push(constraint.anchorA.nodeId);
+    }
+    if (constraint.anchorB && constraint.anchorB.kind !== 'DATUM') {
+        ids.push(constraint.anchorB.nodeId);
+    }
     return ids;
 }

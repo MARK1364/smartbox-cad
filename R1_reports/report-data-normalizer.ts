@@ -1,6 +1,14 @@
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { UIController } from '../A1_core/ui-controller.js';
+import { LedChannelStore } from '../A5_smartparts/index.js';
+import { isExcludedFromProduction } from '../S4_sciany/smartwall-types.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import reportsTekstRaw from './reports_tekst.json';
+
+const reportsTekst = reportsTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'reports';
 
 export interface EdgeBandInfo {
     active: boolean;
@@ -19,7 +27,7 @@ export interface CuttingPanelContract {
     part_id: string;
     node_id?: string;
     container_id?: string;
-    smartbox_id?: string;
+    blok_id?: string;
     role: string;
     material: string;
     thickness_mm: number;
@@ -34,7 +42,7 @@ export interface CuttingPanelContract {
 export interface ContainerScopeItem {
     id: string;
     name: string;
-    type: 'furniture' | 'smartbox';
+    type: 'furniture' | 'bloki';
     partsCount: number;
 }
 
@@ -46,19 +54,22 @@ export interface AccessoryItem {
     qty: number;
     furniture_name: string;
     container_id?: string;
-    smartbox_id?: string;
+    blok_id?: string;
+    custom_unit_price?: number;
+    area_m2?: number;
 }
 
 export class ReportDataNormalizer {
     /**
-     * Bezpieczna konwersja wymiaru (obsługuje nanometry lub milimetry)
+     * PanelModel / ContainerModel trzymają nm — jawne wejście, bez progu heurystyki.
+     * Nieobsłużone/<=0 → defaultVal.
      */
-    static safeMm(val: any, defaultVal = 0): number {
+    static nmValToMm(val: any, defaultVal = 0): number {
         if (typeof val !== 'number') {
             val = parseFloat(val);
         }
-        if (isNaN(val) || val <= 0) return defaultVal;
-        return nmToMm(val);
+        if (!Number.isFinite(val) || val <= 0) return defaultVal;
+        return Math.round(nmToMm(val));
     }
 
     /**
@@ -105,14 +116,14 @@ export class ReportDataNormalizer {
         panel: any,
         furnitureName: string = 'Projekt',
         containerId?: string,
-        smartboxId?: string,
+        blokId?: string,
         nodeId?: string
     ): CuttingPanelContract | null {
         if (!panel) return null;
 
-        const wRaw = this.safeMm(panel.width || panel.dim?.[0] || panel.dimX || 0);
-        const hRaw = this.safeMm(panel.height || panel.dim?.[1] || panel.dimY || 0);
-        let tRaw = this.safeMm(panel.thickness || panel.dim?.[2] || panel.dimZ || 0, 18);
+        const wRaw = this.nmValToMm(panel.width || panel.dim?.[0] || panel.dimX || 0);
+        const hRaw = this.nmValToMm(panel.height || panel.dim?.[1] || panel.dimY || 0);
+        let tRaw = this.nmValToMm(panel.thickness || panel.dim?.[2] || panel.dimZ || 0, 18);
         if (tRaw <= 0) tRaw = 18;
 
         if (wRaw <= 0 || hRaw <= 0) return null;
@@ -121,19 +132,46 @@ export class ReportDataNormalizer {
         const width_mm = Math.min(wRaw, hRaw);
         const is_x_longer = wRaw >= hRaw;
 
+        const isAluFrame = panel.panelForm === 'ALU_FRAME' || (typeof panel.isAluFrame === 'function' && panel.isAluFrame());
+
         const role = panel.role || panel.sb_role || 'PART';
-        const part_id = panel.name || panel.id || panel.smartId?.uid || role;
-        const material = panel.materialId || panel.material || panel.custom_properties?.material || 'W1100_ST9_18';
-        const edge_config = this.normalizeEdgeConfig(panel.edgeBanding || panel.edge_banding || panel.custom_properties?.edge_banding);
+        // Strict: part_id z id (normalizer dostaje nodeId). Display name nie jest tożsamością.
+        const rawPartId = nodeId || panel.id || panel.smartId?.uid || role;
+        const part_id = isAluFrame ? `${rawPartId} [Ramka Alu]` : rawPartId;
+
+        let material = panel.materialId || panel.material || panel.custom_properties?.material;
+        if (isAluFrame) {
+            const tplId = panel.frameTemplateId || 'Z1_BLACK';
+            if (tplId === 'Z9_WIDE_BLACK') {
+                material = 'RAMKA_ALU_SZKLO_Z9';
+            } else if (tplId === 'Z11_FLUTED') {
+                material = 'RAMKA_ALU_SZKLO_Z11';
+            } else {
+                material = 'RAMKA_ALU_SZKLO_Z1';
+            }
+        } else if (!material) {
+            material = 'W1100_ST9_18';
+        }
+
+        const edge_config = isAluFrame
+            ? {
+                '+X': { active: false, type_id: 'none' },
+                '-X': { active: false, type_id: 'none' },
+                '+Y': { active: false, type_id: 'none' },
+                '-Y': { active: false, type_id: 'none' }
+              }
+            : this.normalizeEdgeConfig(panel.edgeBanding || panel.edge_banding || panel.custom_properties?.edge_banding);
+
+        const thickness_mm = isAluFrame ? Math.max(20, Math.round(tRaw * 10) / 10) : Math.round(tRaw * 10) / 10;
 
         return {
             part_id: String(part_id),
             node_id: nodeId ? String(nodeId) : undefined,
             container_id: containerId ? String(containerId) : (panel.containerId || panel.container_id ? String(panel.containerId || panel.container_id) : undefined),
-            smartbox_id: smartboxId ? String(smartboxId) : (panel.smartbox_id || panel.smartboxId ? String(panel.smartbox_id || panel.smartboxId) : undefined),
+            blok_id: blokId ? String(blokId) : (panel.blok_id || panel.blokId ? String(panel.blok_id || panel.blokId) : undefined),
             role: String(role),
             material: String(material),
-            thickness_mm: Math.round(tRaw * 10) / 10,
+            thickness_mm,
             length_mm: Math.round(length_mm * 10) / 10,
             width_mm: Math.round(width_mm * 10) / 10,
             edge_config,
@@ -167,65 +205,112 @@ export class ReportDataNormalizer {
 
         const visitedIds = new Set<string>();
 
-        const processPanel = (domain: any, furnName: string, containerId?: string, smartboxId?: string, nodeId?: string) => {
+        const processPanel = (domain: any, furnName: string, containerId?: string, blokId?: string, nodeId?: string) => {
             if (!domain) return;
             // Obiekt zamrożony zachowuje się jak usunięty — nie trafia na listę raportów ani nestingu
             if (domain.frozen === true || domain.params?.frozen === true) return;
+            // SmartWall PART (WALL / WALL_PILLAR) — poza produkcją
+            if (isExcludedFromProduction(domain)) return;
 
-            const uniqueId = String(nodeId || domain.id || domain.name || Math.random());
-            if (visitedIds.has(uniqueId)) return;
+            // Strict: dedup po id. Brak id = brak wpisu (bez losowych kluczy).
+            const uniqueId = String(nodeId || domain.id || '');
+            if (!uniqueId || visitedIds.has(uniqueId)) return;
             visitedIds.add(uniqueId);
 
-            const nameUpper = String(domain.name || '').toUpperCase();
-            const isHardwareOrHole = ['HOLE', 'OTW', 'PUSZKA', 'WKRET', 'PROWADNICA', 'RAIL'].some(x => nameUpper.includes(x)) ||
+            // Strict: sprzęt wykrywamy po roli, nie po nazwie. Obiekty bez roli i wymiarów
+            // odpadną w buildContractFromPanel (w/h <= 0 -> null).
+            const isHardwareOrHole =
                 domain.role === 'PROWADNICA' || domain.role === 'RAIL';
             if (!isHardwareOrHole) {
-                const contract = this.buildContractFromPanel(domain, furnName, containerId, smartboxId, nodeId);
+                const isAluFrame = domain.panelForm === 'ALU_FRAME' || (typeof domain.isAluFrame === 'function' && domain.isAluFrame());
+                if (isAluFrame) {
+                    // Ramka aluminiowa jako gotowy OSPRZĘT / WYRÓB ZEWNĘTRZNY (nie trafia na piłę do płyt!)
+                    const wMm = this.nmValToMm(domain.width || domain.dim?.[0] || domain.dimX || 0);
+                    const hMm = this.nmValToMm(domain.height || domain.dim?.[1] || domain.dimY || 0);
+                    const areaM2 = Math.round((wMm * hMm / 1_000_000) * 1000) / 1000;
+
+                    const tplId = domain.frameTemplateId || 'Z1_BLACK';
+                    let pricePerM2 = 300.0;
+                    let libId = 'RAMKA_ALU_Z1_BLACK';
+                    let frameName = 'Z-1 20x20mm';
+
+                    if (tplId === 'Z9_WIDE_BLACK') {
+                        pricePerM2 = 340.0;
+                        libId = 'RAMKA_ALU_Z9_WIDE_BLACK';
+                        frameName = 'Z-9 45x20mm (szeroki)';
+                    } else if (tplId === 'Z11_FLUTED') {
+                        pricePerM2 = 350.0;
+                        libId = 'RAMKA_ALU_Z11_FLUTED';
+                        frameName = 'Z-11 20x20mm (ryflowany)';
+                    }
+
+                    const customUnitPrice = Math.round(areaM2 * pricePerM2 * 100) / 100;
+                    const panelDisplayName = domain.name || tx(reportsTekst, 'default_front_name', TX_NS);
+
+                    accessories.push({
+                        id: `alu_frame_${uniqueId}`,
+                        name: `${panelDisplayName} [Ramka alu ${frameName}, ${wMm}x${hMm}mm, szkło Antisol]`,
+                        role: 'RAMKA_ALU',
+                        library_id: libId,
+                        qty: 1,
+                        furniture_name: furnName || 'Projekt',
+                        container_id: containerId,
+                        blok_id: blokId,
+                        custom_unit_price: customUnitPrice,
+                        area_m2: areaM2
+                    });
+                    return;
+                }
+
+                const contract = this.buildContractFromPanel(domain, furnName, containerId, blokId, nodeId);
                 if (contract) {
                     panels.push(contract);
                     if (containerId && containerMap.has(containerId)) {
                         containerMap.get(containerId)!.partsCount += 1;
                     }
-                    if (smartboxId && containerMap.has(smartboxId)) {
-                        containerMap.get(smartboxId)!.partsCount += 1;
+                    if (blokId && containerMap.has(blokId)) {
+                        containerMap.get(blokId)!.partsCount += 1;
                     }
                 }
             }
         };
 
-        const scanNode = (node: any, currentFurniture: string, currentContainerId?: string, currentSmartboxId?: string) => {
+        const scanNode = (node: any, currentFurniture: string, currentContainerId?: string, currentBlokId?: string) => {
             if (!node) return;
 
             let furn = currentFurniture;
             let activeContainerId = currentContainerId;
-            let activeSmartboxId = currentSmartboxId;
+            let activeBlokId = currentBlokId;
             const domain = node.domainData || node;
 
-            const isSmartBox = domain?.is_smartbox || 
-                domain?.type === 'smartbox' || 
-                domain?.type === 'SMARTBOX' || 
-                (domain?.name && String(domain.name).toLowerCase().includes('smartbox')) || 
-                (domain?.name && String(domain.name).endsWith('_SB')) ||
-                domain?.generatorParams?.type?.startsWith('smartbox') ||
+            // Strict: Bloki tylko po flagach strukturalnych, nigdy po nazwie.
+            const isBlok = domain?.is_blok ||
+                domain?.type === 'bloki' ||
+                domain?.type === 'BLOKI' ||
+                domain?.generatorParams?.type?.startsWith('bloki') ||
                 domain?.generatorParams?.boxType !== undefined ||
                 domain?.sb_role !== undefined ||
-                domain?.role === 'SMARTBOX';
-            const isSmartFrame = !isSmartBox && (domain?.is_smartframe || domain?.type === 'container' || String(node.nodeType) === 'ASSEMBLY' || node.type === 'CONTAINER');
+                domain?.role === 'BLOKI';
+            const isSmartFrame = !isBlok && (domain?.is_smartframe || domain?.type === 'container' || String(node.nodeType) === 'ASSEMBLY' || node.type === 'CONTAINER');
 
-            if (isSmartBox) {
-                activeSmartboxId = String(node.id || domain?.id || node.name);
-                const sbName = domain?.name || node.name || 'SmartBox';
-                if (!containerMap.has(activeSmartboxId)) {
-                    containerMap.set(activeSmartboxId, {
-                        id: activeSmartboxId,
+            if (isBlok) {
+                // Strict: klucz mapy tylko z id. Nazwa (sbName) to display.
+                activeBlokId = String(node.id || domain?.id || '');
+                const rawSbName = domain?.name ?? node?.name;
+                const sbName = rawSbName || tx(reportsTekst, 'default_bloki_name', TX_NS);
+                if (!containerMap.has(activeBlokId)) {
+                    containerMap.set(activeBlokId, {
+                        id: activeBlokId,
                         name: sbName,
-                        type: 'smartbox',
+                        type: 'bloki',
                         partsCount: 0
                     });
                 }
             } else if (isSmartFrame) {
-                activeContainerId = String(node.id || domain?.id || node.name);
-                furn = domain?.name || node.name || 'Szafka';
+                // Strict: klucz mapy tylko z id. furn to display (tekst UI -> faza tekstów raportów).
+                activeContainerId = String(node.id || domain?.id || '');
+                const rawFurnName = domain?.name ?? node?.name;
+                furn = rawFurnName || tx(reportsTekst, 'default_cabinet_name', TX_NS);
                 furnitureSet.add(furn);
                 if (!containerMap.has(activeContainerId)) {
                     containerMap.set(activeContainerId, {
@@ -240,24 +325,23 @@ export class ReportDataNormalizer {
             // Formatka
             const isPart = domain && domain.type !== 'container' && (domain.width || domain.role || domain.thickness || domain.dim || String(node.nodeType) === 'PART');
             if (isPart) {
-                processPanel(domain, furn, activeContainerId, activeSmartboxId, node.id);
+                processPanel(domain, furn, activeContainerId, activeBlokId, node.id);
             }
 
-            // Akcesoria / Okucia
+            // Akcesoria / Okucia — strict: report_type / nodeType / rola. Bez zgadywania po nazwach.
             const roleUpper = String(domain?.role || '').toUpperCase();
-            const nameUpper = String(node.name || domain?.name || '').toUpperCase();
             const isAccessory = (domain?.report_type === 'akcesoria') ||
                 String(node.nodeType) === 'HARDWARE' || domain?.type === 'hardware' ||
-                ['HINGE_LOCATOR', 'PROWADNICA', 'RAIL', 'HOLDER', 'TUBE_ROD', 'BOX', 'SZUFLADA', 'DRAWER'].includes(roleUpper) ||
-                nameUpper.includes('HINGE') || nameUpper.includes('ZAWIAS') || nameUpper.includes('PROWADNICA') || nameUpper.includes('BOCZEK');
+                ['HINGE_LOCATOR', 'PROWADNICA', 'RAIL', 'HOLDER', 'TUBE_ROD', 'BOX', 'SZUFLADA', 'DRAWER', 'LED'].includes(roleUpper);
 
             if (isAccessory) {
                 // Obiekt zamrożony (np. zawias) zachowuje się jak usunięty — nie trafia do raportów
                 const isFrozen = Boolean(node.frozen || domain?.frozen || domain?.params?.frozen);
                 if (!isFrozen) {
-                    let library_id = domain?.library_id || domain?.price_id || domain?.name || roleUpper;
-                    if (roleUpper === 'PROWADNICA' || roleUpper === 'RAIL' || nameUpper.includes('PROWADNICA') || nameUpper.includes('BOCZEK')) {
-                        const rawHw = String(domain?.hardwareId || domain?.library_id || domain?.price_id || domain?.params?.railId || nameUpper).toUpperCase();
+                    // Strict: library_id tylko ze strukturalnych pól. Bez nazw display.
+                    let library_id = domain?.library_id || domain?.price_id || roleUpper;
+                    if (roleUpper === 'PROWADNICA' || roleUpper === 'RAIL') {
+                        const rawHw = String(domain?.hardwareId || domain?.library_id || domain?.price_id || domain?.params?.railId || roleUpper).toUpperCase();
                         const len = domain?.params?.lengthMm || 500;
                         if (rawHw.includes('ANTARO') || rawHw.includes('M94') || rawHw.includes('D214') || rawHw.includes('KOSZ')) {
                             const roundedLen = Math.round(len / 50) * 50;
@@ -267,22 +351,28 @@ export class ReportDataNormalizer {
                             library_id = domain?.library_id || 'PROWADNICA_KPL';
                         }
                     }
-                    if (roleUpper === 'HINGE_LOCATOR' || nameUpper.includes('ZAWIAS') || nameUpper.includes('HINGE')) {
-                        const rawHw = String(domain?.hardwareId || domain?.library_id || domain?.price_id || nameUpper).toUpperCase();
-                        if (rawHw.includes('71T3550') || rawHw.includes('BEZ HAMULCA')) {
+                    // Strict: szablon zawiasu po kodzie (71T3550 = bez hamulca). Bez polskich literałów.
+                    if (roleUpper === 'HINGE_LOCATOR') {
+                        const rawHw = String(domain?.hardwareId || domain?.library_id || domain?.price_id || roleUpper).toUpperCase();
+                        if (rawHw.includes('71T3550')) {
                             library_id = 'HINGE_BLUM_71T3550';
                         } else {
                             library_id = 'HINGE_BLUM_71B3550';
                         }
                     }
+                    if (roleUpper === 'LED') {
+                        library_id = 'LED_PROFILE_WPUSZCZANY';
+                    }
 
-                    const isRailItem = roleUpper === 'PROWADNICA' || roleUpper === 'RAIL' || nameUpper.includes('PROWADNICA') || nameUpper.includes('BOCZEK');
+                    const isRailItem = roleUpper === 'PROWADNICA' || roleUpper === 'RAIL';
+                    const isLedItem = roleUpper === 'LED';
                     if (isRailItem) {
-                        const drawerIdx = domain?.params?.drawerIndex ?? 
-                            (node.name?.match(/(\d+)[LP]/i)?.[1] || node.id?.match(/drawer_(\d+)/i)?.[1]);
+                        // Strict: indeks szuflady z params albo z id. Bez regexów po display name.
+                        const drawerIdx = domain?.params?.drawerIndex ??
+                            (node.id?.match(/drawer_(\d+)/i)?.[1]);
                         
                         // Unikalne gniazdo szuflady (aby nie liczyć podwójnie lewej i prawej prowadnicy)
-                        const drawerSlotKey = `${furn}_${activeSmartboxId || 'sb'}_drawer_${drawerIdx ?? node.id}`;
+                        const drawerSlotKey = `${furn}_${activeBlokId || 'sb'}_drawer_${drawerIdx ?? node.id}`;
 
                         if (!seenDrawerSlots.has(drawerSlotKey)) {
                             seenDrawerSlots.add(drawerSlotKey);
@@ -305,11 +395,26 @@ export class ReportDataNormalizer {
                                     qty: 1,
                                     furniture_name: furn,
                                     container_id: activeContainerId,
-                                    smartbox_id: activeSmartboxId,
+                                    blok_id: activeBlokId,
                                 };
                                 drawerKitsByFurnAndType.set(furnTypeKey, kitItem);
                                 accessories.push(kitItem);
                             }
+                        }
+                    } else if (isLedItem) {
+                        const ledSlotKey = `${furn}_${activeBlokId || node.id}_led`;
+                        if (!seenDrawerSlots.has(ledSlotKey)) {
+                            seenDrawerSlots.add(ledSlotKey);
+                            accessories.push({
+                                id: node.id || domain?.id || String(Math.random()),
+                                name: 'Zestaw Profil LED wpuszczany',
+                                role: 'LED',
+                                library_id: 'LED_PROFILE_WPUSZCZANY',
+                                qty: 1,
+                                furniture_name: furn,
+                                container_id: activeContainerId,
+                                blok_id: activeBlokId,
+                            });
                         }
                     } else {
                         accessories.push({
@@ -320,7 +425,7 @@ export class ReportDataNormalizer {
                             qty: 1,
                             furniture_name: furn,
                             container_id: activeContainerId,
-                            smartbox_id: activeSmartboxId,
+                            blok_id: activeBlokId,
                         });
                     }
                 }
@@ -329,7 +434,7 @@ export class ReportDataNormalizer {
             const children = node.children || node._children;
             if (children && Array.isArray(children)) {
                 for (const child of children) {
-                    scanNode(child, furn, activeContainerId, activeSmartboxId);
+                    scanNode(child, furn, activeContainerId, activeBlokId);
                 }
             }
         };
@@ -347,6 +452,30 @@ export class ReportDataNormalizer {
                 if (p.parent) furnitureSet.add(parentFurn);
                 processPanel(p.domainData || p, parentFurn, p.parent?.id, undefined, p.id);
             }
+        }
+
+        // Pozycje SmartParts / Kanały LED
+        try {
+            const ledStore = LedChannelStore.instance;
+            const placedChannels = (ledStore.channels || []).filter(
+                (ch) => !ch.frozen && ch.visible !== false && ch.enabled !== false && Boolean(ch.refBottom || ch.detectedWidthMm)
+            );
+            for (const ch of placedChannels) {
+                const widthMm = Math.round(ch.detectedWidthMm || 0);
+                const widthLabel = widthMm > 0 ? ` [${widthMm} mm]` : '';
+                const furnName = ch.refBottom?.label ? `Szafka (${ch.refBottom.label})` : 'Szafki wiszące';
+                furnitureSet.add(furnName);
+                accessories.push({
+                    id: ch.id,
+                    name: `Zestaw Profil LED wpuszczany${widthLabel}`,
+                    role: 'LED',
+                    library_id: 'LED_PROFILE_WPUSZCZANY',
+                    qty: 1, // Liczy się sztuka
+                    furniture_name: furnName,
+                });
+            }
+        } catch (err) {
+            console.warn('Błąd odczytu kanałów LED w raporcie:', err);
         }
 
         if (furnitureSet.size === 0 && panels.length > 0) {

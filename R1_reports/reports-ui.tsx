@@ -9,7 +9,7 @@ interface ReportsUIProps {
     document?: any;
     /** Payload z podstrony (CAD / JSON) — bez żywego ProjectDocument. */
     initialPayload?: {
-        scope?: { type: 'PROJECT' | 'CONTAINER' | 'SMARTBOX' | 'PANEL'; id: string; name: string };
+        scope?: { type: 'PROJECT' | 'CONTAINER' | 'BLOKI' | 'PANEL'; id: string; name: string };
         panels: any[];
         accessories?: any[];
         furnitures?: string[];
@@ -19,10 +19,13 @@ interface ReportsUIProps {
 }
 
 interface SelectedTarget {
-    type: 'CONTAINER' | 'SMARTBOX' | 'PANEL';
+    type: 'CONTAINER' | 'BLOKI' | 'PANEL';
     id: string;
     name: string;
 }
+
+// Display: tekst braku ceny TYLKO na brzegu renderu. W danych: null. Docelowo klucz z *_tekst.json.
+const NO_PRICE_LABEL = 'BRAK CENY';
 
 export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initialPayload, isStandalone = false }) => {
     const engine = useMemo(() => new GlobalReportsEngineWeb(), []);
@@ -50,10 +53,10 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
         }
 
         const eventNames = [
-            'smartbox-project-changed',
+            'bloki-project-changed',
             'smartframe-updated',
             'material-database-updated',
-            'smartbox-properties-update',
+            'bloki-properties-update',
             'cad-document-changed',
             'cad-history-executed',
             'cad-dimension-changed',
@@ -86,11 +89,11 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
             return;
         }
 
-        const nodeType: 'CONTAINER' | 'SMARTBOX' | 'PANEL' = 
-            type === 'SMARTBOX' ? 'SMARTBOX' : (type === 'PANEL' ? 'PANEL' : 'CONTAINER');
+        const nodeType: 'CONTAINER' | 'BLOKI' | 'PANEL' = 
+            type === 'BLOKI' ? 'BLOKI' : (type === 'PANEL' ? 'PANEL' : 'CONTAINER');
 
         const targetId = String(id || name);
-        const targetName = String(name || id || (nodeType === 'SMARTBOX' ? 'SmartBox' : (nodeType === 'PANEL' ? 'Formatka' : 'Korpus')));
+        const targetName = String(name || id || (nodeType === 'BLOKI' ? 'Bloki' : (nodeType === 'PANEL' ? 'Formatka' : 'Korpus')));
 
         setSelectedTarget({
             type: nodeType,
@@ -171,45 +174,39 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
     // Przefiltrowane formatki pod kątem wybranego elementu
     const scopedPanels = useMemo(() => {
         if (!selectedTarget) return projectRawData.panels;
-        const { type, id, name } = selectedTarget;
+        const { type, id } = selectedTarget;
 
         return projectRawData.panels.filter((p) => {
-            if (type === 'SMARTBOX') {
+            if (type === 'BLOKI') {
+                // Strict: filtrowanie tylko po id. Nazwy to display.
                 return (
-                    p.smartbox_id === id || 
-                    p.smartbox_id === name || 
-                    (p.node_id && p.node_id === id) || 
-                    (p.part_id && (p.part_id === id || p.part_id === name)) || 
-                    (p.role && p.role.includes(name))
+                    p.blok_id === id ||
+                    (p.node_id && p.node_id === id) ||
+                    (p.part_id && p.part_id === id)
                 );
             }
             if (type === 'PANEL') {
-                return p.part_id === id || p.node_id === id || p.part_id === name;
+                return p.part_id === id || p.node_id === id;
             }
             // CONTAINER (Korpus / Szafka)
-            return p.container_id === id || p.furniture_name === name || p.furniture_name === id || p.container_id === name;
+            return p.container_id === id || p.furniture_name === id;
         });
     }, [projectRawData.panels, selectedTarget]);
 
     // Przefiltrowane akcesoria/okucia pod kątem wybranego elementu
     const scopedAccessories = useMemo(() => {
         if (!selectedTarget) return projectRawData.accessories;
-        const { type, id, name } = selectedTarget;
+        const { type, id } = selectedTarget;
 
         if (type === 'PANEL') return [];
 
         return projectRawData.accessories.filter((a) => {
-            if (type === 'SMARTBOX') {
-                return (
-                    a.smartbox_id === id ||
-                    a.smartbox_id === name ||
-                    a.id === id ||
-                    (a.name && a.name.includes(name)) ||
-                    (a.furniture_name && a.furniture_name.includes(name))
-                );
+            if (type === 'BLOKI') {
+                // Strict: tylko po id.
+                return a.blok_id === id || a.id === id;
             }
             // CONTAINER
-            return a.container_id === id || a.container_id === name || a.furniture_name === name || a.furniture_name === id;
+            return a.container_id === id || a.furniture_name === id;
         });
     }, [projectRawData.accessories, selectedTarget]);
 
@@ -242,8 +239,8 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
         generator.openHtmlInNewTab(html);
     };
 
-    const targetIcon = selectedTarget?.type === 'SMARTBOX' ? '🗄️' : (selectedTarget?.type === 'PANEL' ? '📄' : '📦');
-    const targetTypeLabel = selectedTarget?.type === 'SMARTBOX' ? 'SmartBox' : (selectedTarget?.type === 'PANEL' ? 'Formatka' : 'Korpus');
+    const targetIcon = selectedTarget?.type === 'BLOKI' ? '🗄️' : (selectedTarget?.type === 'PANEL' ? '📄' : '📦');
+    const targetTypeLabel = selectedTarget?.type === 'BLOKI' ? 'Bloki' : (selectedTarget?.type === 'PANEL' ? 'Formatka' : 'Korpus');
 
     return (
         <div 
@@ -281,7 +278,7 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                 }}>
                     <span style={{ fontSize: '2.4rem' }}>📥</span>
                     <div style={{ fontWeight: 700, fontSize: '1rem', color: '#ffffff', textAlign: 'center' }}>
-                        Upuść Korpus, SmartBox lub Formatkę tutaj
+                        Upuść Korpus, Blok lub Formatkę tutaj
                     </div>
                     <div style={{ fontSize: '0.78rem', color: '#bae6fd' }}>
                         Wycena i raport zostaną natychmiast przeliczone dla tego elementu
@@ -337,7 +334,7 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                                 Wycena: Cały Projekt
                             </div>
                             <div style={{ fontSize: '10px', color: '#71717a' }}>
-                                Przeciągnij Korpus, SmartBox lub Formatkę z lewego drzewa, aby wycenić pojedynczy element.
+                                Przeciągnij Korpus, Blok lub Formatkę z lewego drzewa, aby wycenić pojedynczy element.
                             </div>
                         </div>
                     </div>
@@ -389,7 +386,7 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#38bdf8', marginTop: '2px' }}>
                         {typeof projectData.summary.SUMA_CALKOWITA_PLN === 'number'
                             ? `${projectData.summary.SUMA_CALKOWITA_PLN.toFixed(2)} PLN`
-                            : <span style={{ color: '#f87171', fontSize: '11px' }}>{projectData.summary.SUMA_CALKOWITA_PLN}</span>}
+                            : <span style={{ color: '#f87171', fontSize: '11px' }}>{NO_PRICE_LABEL}</span>}
                     </div>
                 </div>
 
@@ -398,7 +395,7 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#c084fc', marginTop: '2px' }}>
                         {typeof projectData.summary.SUMA_AKCESORIA_PLN === 'number'
                             ? `${projectData.summary.SUMA_AKCESORIA_PLN.toFixed(2)} PLN`
-                            : <span style={{ color: '#f87171', fontSize: '11px' }}>{projectData.summary.SUMA_AKCESORIA_PLN}</span>}
+                            : <span style={{ color: '#f87171', fontSize: '11px' }}>{NO_PRICE_LABEL}</span>}
                     </div>
                 </div>
 
@@ -407,7 +404,7 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#e4e4e7', marginTop: '2px' }}>
                         {typeof projectData.summary.SUMA_PLYTY_PLN === 'number'
                             ? `${projectData.summary.SUMA_PLYTY_PLN.toFixed(2)} PLN`
-                            : <span style={{ color: '#f87171', fontSize: '11px' }}>{projectData.summary.SUMA_PLYTY_PLN}</span>}
+                            : <span style={{ color: '#f87171', fontSize: '11px' }}>{NO_PRICE_LABEL}</span>}
                     </div>
                 </div>
 

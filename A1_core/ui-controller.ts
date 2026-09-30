@@ -1,7 +1,23 @@
 import { ProjectDocument } from './project-document.js';
-import { rebuildSmartFrameContainer } from '../A3_smartframe/smartframe-adapter.js';
+import { getCabinetModule } from './cabinet-port.js';
+import uiTekstRaw from './ui-tekst.json';
 import { unit } from './unit-system.js';
 import { NodeType } from './cad-node/node-type.js';
+
+type UiTekstBag = Record<string, { pl?: string; en?: string; de?: string }>;
+const uiTekst = uiTekstRaw as UiTekstBag;
+
+/** Lokalny resolver — A1 nie zależy od T1; PL jako domyślny. */
+function uiTx(key: string, vars?: Record<string, string | number>): string {
+    const entry = uiTekst[key];
+    let text = entry?.pl ?? entry?.en ?? key;
+    if (vars) {
+        for (const [name, value] of Object.entries(vars)) {
+            text = text.replace(new RegExp(`\\{${name}\\}`, 'g'), String(value));
+        }
+    }
+    return text;
+}
 
 /** Ręczny wymiar płyty [mm]: min 0,1 — max pełna szafa. */
 export const PANEL_DIM_MIN_MM = 0.1;
@@ -11,7 +27,16 @@ export class UIController {
     document: ProjectDocument;
     viewport: any;
     static instance: UIController | null = null;
-    
+
+    /** Kody ścian -> klucze tekstów (display tłumaczony, kody stabilne). */
+    private static FACE_LABEL_KEYS: Record<string, string> = {
+        front: 'app.face_front',
+        back: 'app.face_back',
+        left: 'app.face_left',
+        right: 'app.face_right',
+        top: 'app.face_top',
+        bottom: 'app.face_bottom',
+    };
     _treeListeners: Set<any>;
     _addFilletListeners: Set<any>;
     _resetListeners: Set<any>;
@@ -20,8 +45,12 @@ export class UIController {
     state: {
         statusText: string;
         statusBarActive: boolean;
+        /** Wizualny wariant paska statusu — logika czyta TYLKO to, nigdy statusText. */
+        statusKind: 'info' | 'error';
         consoleText: string;
         faceInfoHtml: string;
+        /** Strukturalny rodzaj selekcji — logika czyta TYLKO to, nigdy faceInfoHtml. */
+        faceKind: 'none' | 'face' | 'edge' | 'corner' | 'feature';
         coordsInfoText: string;
         inputWidthValue: string;
         inputHeightValue: string;
@@ -39,10 +68,12 @@ export class UIController {
         this._resetListeners = new Set();
 
         this.state = {
-            statusText: "Ładowanie...",
+            statusText: uiTx('app.status_default'),
             statusBarActive: false,
-            consoleText: "Gotowy. Najedź na element.",
-            faceInfoHtml: '<span class="face-none">Kliknij element</span>',
+            statusKind: 'info',
+            consoleText: uiTx('app.console_default'),
+            faceInfoHtml: `<span class="face-none">${uiTx('app.face_none')}</span>`,
+            faceKind: 'none',
             coordsInfoText: "",
             inputWidthValue: "",
             inputHeightValue: "",
@@ -104,25 +135,26 @@ export class UIController {
                 activeEntity.depth = thickness;
                 
                 // Regeneruj płyty korpusu przy zmianie wymiarów z głównych inputów
-                rebuildSmartFrameContainer(activeEntity);
+                getCabinetModule()?.rebuild(activeEntity);
                 
-                console.log('[UIController] Dispatched smartbox-project-changed');
-                document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+                console.log('[UIController] Dispatched bloki-project-changed');
+                document.dispatchEvent(new CustomEvent('bloki-project-changed'));
             } else {
                 const wMm = Math.min(PANEL_DIM_MAX_MM, Math.max(PANEL_DIM_MIN_MM, width));
                 const hMm = Math.min(PANEL_DIM_MAX_MM, Math.max(PANEL_DIM_MIN_MM, height));
                 const thicknessNm = activeEntity.thickness;
                 activeEntity.setDimensions(unit.fromMM(wMm), unit.fromMM(hMm), thicknessNm);
                 this.document.emitChange('dimensions');
-                console.log('[UIController] Dispatched smartbox-panel-changed');
-                document.dispatchEvent(new CustomEvent('smartbox-panel-changed', { detail: { panelModel: activeEntity } }));
+                console.log('[UIController] Dispatched bloki-panel-changed');
+                document.dispatchEvent(new CustomEvent('bloki-panel-changed', { detail: { panelModel: activeEntity } }));
             }
         }
     }
 
-    setStatus(text: string, active = false) {
+    setStatus(text: string, active = false, kind: 'info' | 'error' = 'info') {
         this.state.statusText = text;
         this.state.statusBarActive = active;
+        this.state.statusKind = kind;
         if (this.onStateChange) this.onStateChange();
     }
 
@@ -131,37 +163,45 @@ export class UIController {
         if (this.onStateChange) this.onStateChange();
     }
 
-    showSelectedFace(faceName: string | null, faceData: any | null, smartId: any | null = null) {
+    showSelectedFace(faceName: string | null, faceData: any | null, smartId: any | null = null, kind: 'face' | 'edge' | 'corner' | 'feature' = 'face') {
         if (!faceName) {
-            this.state.faceInfoHtml = '<span class="face-none">Kliknij element</span>';
+            this.state.faceInfoHtml = `<span class="face-none">${uiTx('app.face_none')}</span>`;
+            this.state.faceKind = 'none';
             this.state.coordsInfoText = '';
             if (this.onStateChange) this.onStateChange();
             return;
         }
+        this.state.faceKind = kind;
 
-        const labels: Record<string, string> = {
-            front: 'Przód (Front)',
-            back: 'Tył (Back)',
-            left: 'Lewy bok (Left)',
-            right: 'Prawy bok (Right)',
-            top: 'Góra (Top)',
-            bottom: 'Dół (Bottom)'
-        };
-
+        // Display ścian po kodach (kody stabilne, tekst z tekstów). Pseudo-nazwy
+        // ('Krawędź', 'Narożnik N', 'Cecha geometryczna') mapowane po kind.
+        const label = UIController.faceDisplayName(faceName, kind);
         this.state.faceInfoHtml = `
             <div class="face-badge">
                 <span class="dot"></span>
-                ${labels[faceName] || faceName}
+                ${label}
             </div>
             ${smartId ? `<div style="font-size: 11px; opacity: 0.6; margin-top: 4px; font-family: monospace;">ID: ${smartId.fullPath}</div>` : ''}
         `;
 
         if (faceData) {
-            this.state.coordsInfoText = `Wymiary: ${faceData.width} × ${faceData.height} mm`;
+            this.state.coordsInfoText = uiTx('app.face_dims', { w: faceData.width, h: faceData.height });
         } else {
             this.state.coordsInfoText = '';
         }
         if (this.onStateChange) this.onStateChange();
+    }
+
+    private static faceDisplayName(faceName: string, kind: string): string {
+        const key = UIController.FACE_LABEL_KEYS[faceName];
+        if (key) return uiTx(key);
+        if (kind === 'edge') return uiTx('app.face_edge');
+        if (kind === 'feature') return uiTx('app.face_feature');
+        if (kind === 'corner') {
+            const m = String(faceName).match(/(\d+)\s*$/);
+            return uiTx('app.face_corner', { i: m ? m[1] : faceName });
+        }
+        return faceName;
     }
 
     clearSelectedFace() {

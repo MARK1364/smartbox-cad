@@ -15,13 +15,53 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PropertiesManager, PropertiesData, CustomProperty } from '../A1_core/properties';
 import { ContextManager } from '../A1_core/context-manager';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput';
-import { isPanelModel } from '../A1_core/domain-data';
+import { isPanelModel } from '../A4_smartpanel/panel-model';
 import { updateLibraryOperationParams } from '../o1_operacji';
 import { AssociativeDimInputs } from '../A4_smartpanel/associative-dim-ui';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 type TabName = 'item' | 'properties' | 'custom';
 
+function normalizePropsData(raw: any): PropertiesData {
+    if (!raw) {
+        return {
+            name: tx(srcTekst, 'prop.object_default', TX_NS),
+            objectType: tx(srcTekst, 'prop.type_object', TX_NS),
+            kind: 'unknown',
+            transform: { loc: { x: 0, y: 0, z: 0 }, worldLoc: { x: 0, y: 0, z: 0 } },
+            customProperties: [],
+        };
+    }
+    return {
+        name: raw.name || tx(srcTekst, 'prop.object_default', TX_NS),
+        objectType: raw.objectType || (raw.kind === 'groove' ? tx(srcTekst, 'prop.type_groove', TX_NS) : raw.kind === 'hole' ? tx(srcTekst, 'prop.type_hole', TX_NS) : tx(srcTekst, 'prop.type_object', TX_NS)),
+        kind: raw.kind || 'unknown',
+        parentName: raw.parentName,
+        featureId: raw.featureId,
+        panelId: raw.panelId,
+        containerId: raw.containerId,
+        transform: {
+            loc: raw.transform?.loc || { x: 0, y: 0, z: 0 },
+            worldLoc: raw.transform?.worldLoc || { x: 0, y: 0, z: 0 },
+            rot: raw.transform?.rot,
+            scale: raw.transform?.scale,
+        },
+        holeProps: raw.holeProps,
+        grooveProps: raw.grooveProps,
+        panelProps: raw.panelProps,
+        containerProps: raw.containerProps,
+        customProperties: Array.isArray(raw.customProperties) ? raw.customProperties : [],
+    };
+}
+
 export const PropertiesPanel: React.FC = () => {
+    useLocale();
     const [visible, setVisible] = useState(false);
     const [data, setData] = useState<PropertiesData | null>(null);
     const [activeTab, setActiveTab] = useState<TabName>('properties');
@@ -34,14 +74,14 @@ export const PropertiesPanel: React.FC = () => {
     useEffect(() => {
         const handleOpen = (e: any) => {
             if (e.detail) {
-                setData(e.detail as PropertiesData);
+                setData(normalizePropsData(e.detail));
             }
             setVisible(true);
         };
 
         const handleUpdate = (e: any) => {
             if (e.detail) {
-                setData(e.detail as PropertiesData);
+                setData(prev => normalizePropsData(prev ? { ...prev, ...e.detail } : e.detail));
             }
         };
 
@@ -55,15 +95,15 @@ export const PropertiesPanel: React.FC = () => {
             }
         };
 
-        document.addEventListener('smartbox-open-properties', handleOpen);
-        document.addEventListener('smartbox-properties-update', handleUpdate);
-        document.addEventListener('smartbox-toggle-item-panel', handleToggle);
+        document.addEventListener('bloki-open-properties', handleOpen);
+        document.addEventListener('bloki-properties-update', handleUpdate);
+        document.addEventListener('bloki-toggle-item-panel', handleToggle);
         document.addEventListener('keydown', handleKeyDown);
 
         return () => {
-            document.removeEventListener('smartbox-open-properties', handleOpen);
-            document.removeEventListener('smartbox-properties-update', handleUpdate);
-            document.removeEventListener('smartbox-toggle-item-panel', handleToggle);
+            document.removeEventListener('bloki-open-properties', handleOpen);
+            document.removeEventListener('bloki-properties-update', handleUpdate);
+            document.removeEventListener('bloki-toggle-item-panel', handleToggle);
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, []);
@@ -158,7 +198,7 @@ export const PropertiesPanel: React.FC = () => {
         <div className="blender-item-panel">
             {/* ─── Header ─── */}
             <div className="item-panel-header">
-                <span>📊 Właściwości</span>
+                <span>{tx(srcTekst, 'prop.title', TX_NS)}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <kbd>N</kbd>
                     <button className="item-panel-close" onClick={() => setVisible(false)}>×</button>
@@ -201,21 +241,21 @@ export const PropertiesPanel: React.FC = () => {
                     <>
                         <div className="item-section-divider">Pozycja lokalna (Location)</div>
                         <div className="item-xyz-grid">
-                            <div><span style={{ color: '#ef4444' }}>X:</span> {data.transform.loc.x ?? 0} mm</div>
-                            <div><span style={{ color: '#22c55e' }}>Y:</span> {data.transform.loc.y ?? 0} mm</div>
-                            <div><span style={{ color: '#3b82f6' }}>Z:</span> {data.transform.loc.z ?? 0} mm</div>
+                            <div><span style={{ color: '#ef4444' }}>X:</span> {data.transform?.loc?.x ?? 0} mm</div>
+                            <div><span style={{ color: '#22c55e' }}>Y:</span> {data.transform?.loc?.y ?? 0} mm</div>
+                            <div><span style={{ color: '#3b82f6' }}>Z:</span> {data.transform?.loc?.z ?? 0} mm</div>
                         </div>
 
                         <div className="item-section-divider">Pozycja w scenie (World)</div>
                         <div className="item-xyz-grid">
-                            <div><span style={{ color: '#ef4444' }}>X:</span> {data.transform.worldLoc.x} mm</div>
-                            <div><span style={{ color: '#22c55e' }}>Y:</span> {data.transform.worldLoc.y} mm</div>
-                            <div><span style={{ color: '#3b82f6' }}>Z:</span> {data.transform.worldLoc.z} mm</div>
+                            <div><span style={{ color: '#ef4444' }}>X:</span> {data.transform?.worldLoc?.x ?? 0} mm</div>
+                            <div><span style={{ color: '#22c55e' }}>Y:</span> {data.transform?.worldLoc?.y ?? 0} mm</div>
+                            <div><span style={{ color: '#3b82f6' }}>Z:</span> {data.transform?.worldLoc?.z ?? 0} mm</div>
                         </div>
 
-                        {data.transform.rot && (
+                        {data.transform?.rot && (
                             <>
-                                <div className="item-section-divider">Obrót (Rotation)</div>
+                                <div className="item-section-divider">{tx(srcTekst, 'prop.rotation', TX_NS)}</div>
                                 <div className="item-xyz-grid">
                                     <div><span style={{ color: '#ef4444' }}>X:</span> {data.transform.rot.x}°</div>
                                     <div><span style={{ color: '#22c55e' }}>Y:</span> {data.transform.rot.y}°</div>
@@ -224,7 +264,7 @@ export const PropertiesPanel: React.FC = () => {
                             </>
                         )}
 
-                        {data.transform.scale && (
+                        {data.transform?.scale && (
                             <>
                                 <div className="item-section-divider">Skala (Scale)</div>
                                 <div className="item-xyz-grid">
@@ -246,18 +286,18 @@ export const PropertiesPanel: React.FC = () => {
                             <>
                                 <div className="item-section-divider">Parametry otworu</div>
                                 <div className="item-field">
-                                    <label>Średnica (⌀):</label>
+                                    <label>{tx(srcTekst, 'prop.diameter', TX_NS)}</label>
                                     <span className="item-highlight">{data.holeProps.diameter} mm</span>
                                 </div>
                                 <div className="item-field">
-                                    <label>Głębokość:</label>
+                                    <label>{tx(srcTekst, 'prop.depth', TX_NS)}</label>
                                     <span className="item-highlight">{data.holeProps.depth} mm</span>
                                 </div>
                                 <div className="item-field">
-                                    <label>Ściana (Face):</label>
+                                    <label>{tx(srcTekst, 'prop.face', TX_NS)}</label>
                                     <span style={{ color: '#60a5fa' }}>{data.holeProps.face}</span>
                                 </div>
-                                <div className="item-section-divider">Współrzędne UV</div>
+                                <div className="item-section-divider">{tx(srcTekst, 'prop.uv', TX_NS)}</div>
                                 <div className="item-field">
                                     <label>U (poziomo):</label>
                                     <span>{data.holeProps.u} mm</span>
@@ -271,23 +311,23 @@ export const PropertiesPanel: React.FC = () => {
 
                         {data.kind === 'panel' && data.panelProps && (
                             <>
-                                <div className="item-section-divider">Wymiary płyty</div>
+                                <div className="item-section-divider">{tx(srcTekst, 'prop.panel_dims', TX_NS)}</div>
                                 <div className="item-field">
-                                    <label>Szerokość (W):</label>
+                                    <label>{tx(srcTekst, 'prop.width_w', TX_NS)}</label>
                                     <span className="item-highlight">{data.panelProps.width} mm</span>
                                 </div>
                                 {data.panelId && ContextManager.instance.document?.findNode(data.panelId)?.domainData && (
                                     <AssociativeDimInputs panel={ContextManager.instance.document.findNode(data.panelId)!.domainData as any} axis="width" />
                                 )}
                                 <div className="item-field">
-                                    <label>Wysokość (H):</label>
+                                    <label>{tx(srcTekst, 'prop.height_h', TX_NS)}</label>
                                     <span className="item-highlight">{data.panelProps.height} mm</span>
                                 </div>
                                 {data.panelId && ContextManager.instance.document?.findNode(data.panelId)?.domainData && (
                                     <AssociativeDimInputs panel={ContextManager.instance.document.findNode(data.panelId)!.domainData as any} axis="height" />
                                 )}
                                 <div className="item-field">
-                                    <label>Grubość (T):</label>
+                                    <label>{tx(srcTekst, 'prop.thickness_t', TX_NS)}</label>
                                     <span className="item-highlight">{data.panelProps.thickness} mm</span>
                                 </div>
                             </>
@@ -297,20 +337,20 @@ export const PropertiesPanel: React.FC = () => {
                             <>
                                 <div className="item-section-divider">Gabaryty kontenera</div>
                                 <div className="item-field">
-                                    <label>Szerokość (W):</label>
+                                    <label>{tx(srcTekst, 'prop.width_w', TX_NS)}</label>
                                     <span className="item-highlight">{data.containerProps.width} mm</span>
                                 </div>
                                 <div className="item-field">
-                                    <label>Wysokość (H):</label>
+                                    <label>{tx(srcTekst, 'prop.height_h', TX_NS)}</label>
                                     <span className="item-highlight">{data.containerProps.height} mm</span>
                                 </div>
                                 <div className="item-field">
-                                    <label>Głębokość (D):</label>
+                                    <label>{tx(srcTekst, 'prop.depth_d', TX_NS)}</label>
                                     <span className="item-highlight">{data.containerProps.depth} mm</span>
                                 </div>
                                 {data.containerProps.panelCount !== undefined && (
                                     <div className="item-field">
-                                        <label>Liczba płyt:</label>
+                                        <label>{tx(srcTekst, 'prop.count', TX_NS)}</label>
                                         <span>{data.containerProps.panelCount}</span>
                                     </div>
                                 )}
@@ -324,13 +364,13 @@ export const PropertiesPanel: React.FC = () => {
                                 </div>
                                 {!data.grooveProps.editable && (
                                     <div style={{ color: '#71717a', fontSize: '0.78rem', padding: '4px 0 8px' }}>
-                                        Sterowany parametrami korpusu — bez edycji ręcznej.
+                                        {tx(srcTekst, 'prop.manual_note', TX_NS)}
                                     </div>
                                 )}
                                 {data.grooveProps.editable && data.grooveProps.placement === 'edge_dims' ? (
                                     <>
                                         <div className="item-field">
-                                            <label>Szerokość:</label>
+                                            <label>{tx(srcTekst, 'prop.width', TX_NS)}</label>
                                             <SmartNumericInput
                                                 value={data.grooveProps.width || 120}
                                                 min={1}
@@ -346,7 +386,7 @@ export const PropertiesPanel: React.FC = () => {
                                             />
                                         </div>
                                         <div className="item-field">
-                                            <label>Wysokość:</label>
+                                            <label>{tx(srcTekst, 'prop.height', TX_NS)}</label>
                                             <SmartNumericInput
                                                 value={data.grooveProps.length || 80}
                                                 min={1}
@@ -362,7 +402,7 @@ export const PropertiesPanel: React.FC = () => {
                                             />
                                         </div>
                                         <div className="item-field">
-                                            <label>Od krawędzi (szer.):</label>
+                                            <label>{tx(srcTekst, 'prop.from_edge_w', TX_NS)}</label>
                                             <SmartNumericInput
                                                 value={data.grooveProps.uRef ?? 0}
                                                 min={0}
@@ -378,7 +418,7 @@ export const PropertiesPanel: React.FC = () => {
                                             />
                                         </div>
                                         <div className="item-field">
-                                            <label>Od krawędzi (wys.):</label>
+                                            <label>{tx(srcTekst, 'prop.from_edge_h', TX_NS)}</label>
                                             <SmartNumericInput
                                                 value={data.grooveProps.vRef ?? 0}
                                                 min={0}
@@ -431,7 +471,7 @@ export const PropertiesPanel: React.FC = () => {
                                             />
                                         </div>
                                         <div className="item-field">
-                                            <label>Margines góra (G):</label>
+                                            <label>{tx(srcTekst, 'prop.margin_top', TX_NS)}</label>
                                             <SmartNumericInput
                                                 value={data.grooveProps.insetTMm ?? data.grooveProps.frameHMm ?? 60}
                                                 min={0}
@@ -448,7 +488,7 @@ export const PropertiesPanel: React.FC = () => {
                                             />
                                         </div>
                                         <div className="item-field">
-                                            <label>Margines dół (D):</label>
+                                            <label>{tx(srcTekst, 'prop.margin_bottom', TX_NS)}</label>
                                             <SmartNumericInput
                                                 value={data.grooveProps.insetBMm ?? data.grooveProps.frameHMm ?? 60}
                                                 min={0}
@@ -465,7 +505,7 @@ export const PropertiesPanel: React.FC = () => {
                                             />
                                         </div>
                                         <div className="item-field">
-                                            <label>Głębokość:</label>
+                                            <label>{tx(srcTekst, 'prop.depth', TX_NS)}</label>
                                             <SmartNumericInput
                                                 value={data.grooveProps.depth}
                                                 min={0.1}
@@ -493,15 +533,15 @@ export const PropertiesPanel: React.FC = () => {
                                             return (
                                                 <>
                                                     <div className="item-field">
-                                                        <label>Długość:</label>
+                                                        <label>{tx(srcTekst, 'prop.length', TX_NS)}</label>
                                                         <span className="item-highlight">{grooveLength} mm</span>
                                                     </div>
                                                     <div className="item-field">
-                                                        <label>Szerokość:</label>
+<label>{tx(srcTekst, 'prop.width', TX_NS)}</label>
                                                         <span className="item-highlight">{grooveWidth} mm</span>
                                                     </div>
                                                     <div className="item-field">
-                                                        <label>Głębokość:</label>
+                                                        <label>{tx(srcTekst, 'prop.depth', TX_NS)}</label>
                                                         <span className="item-highlight">{data.grooveProps.depth} mm</span>
                                                     </div>
                                                 </>
@@ -510,7 +550,7 @@ export const PropertiesPanel: React.FC = () => {
                                     </>
                                 )}
                                 <div className="item-field">
-                                    <label>Ściana:</label>
+                                    <label>{tx(srcTekst, 'prop.wall', TX_NS)}</label>
                                     <span style={{ color: '#60a5fa' }}>{data.grooveProps.face}</span>
                                 </div>
                             </>
@@ -518,17 +558,17 @@ export const PropertiesPanel: React.FC = () => {
 
                         {data.kind === 'fillet' && (
                             <>
-                                <div className="item-section-divider">Parametry zaokrąglenia</div>
+                                <div className="item-section-divider">{tx(srcTekst, 'prop.fillet_title', TX_NS)}</div>
                                 <div className="item-field">
-                                    <label>Typ:</label>
-                                    <span>Zaokrąglenie krawędzi (Fillet)</span>
+                                    <label>{tx(srcTekst, 'prop.type_label', TX_NS)}</label>
+                                    <span>{tx(srcTekst, 'prop.fillet_edge', TX_NS)}</span>
                                 </div>
                             </>
                         )}
 
                         {data.kind === 'unknown' && (
                             <div style={{ color: '#64748b', fontStyle: 'italic', fontSize: '0.78rem', padding: '8px 0' }}>
-                                Brak szczegółowych parametrów dla tego obiektu.
+                                {tx(srcTekst, 'prop.no_params', TX_NS)}
                             </div>
                         )}
                     </>
@@ -537,60 +577,63 @@ export const PropertiesPanel: React.FC = () => {
                 {/* ═══════════════════════════════════════════════ */}
                 {/* TAB: Custom — Właściwości użytkownika           */}
                 {/* ═══════════════════════════════════════════════ */}
-                {activeTab === 'custom' && (
-                    <>
-                        <div className="item-section-divider">Custom Properties</div>
+                {activeTab === 'custom' && (() => {
+                    const customProps = Array.isArray(data.customProperties) ? data.customProperties : [];
+                    return (
+                        <>
+                            <div className="item-section-divider">Custom Properties</div>
 
-                        {data.customProperties.length === 0 && (
-                            <div style={{ color: '#64748b', fontStyle: 'italic', fontSize: '0.78rem', padding: '4px 0' }}>
-                                Brak zdefiniowanych właściwości.
-                            </div>
-                        )}
+                            {customProps.length === 0 && (
+                                <div style={{ color: '#64748b', fontStyle: 'italic', fontSize: '0.78rem', padding: '4px 0' }}>
+                                    {tx(srcTekst, 'prop.no_custom', TX_NS)}
+                                </div>
+                            )}
 
-                        {data.customProperties.map((cp: CustomProperty) => (
-                            <div key={cp.key} className="custom-prop-row">
-                                <span className="custom-prop-key">{cp.key}</span>
+                            {customProps.map((cp: CustomProperty) => (
+                                <div key={cp.key} className="custom-prop-row">
+                                    <span className="custom-prop-key">{cp.key}</span>
+                                    <input
+                                        className="custom-prop-value"
+                                        type={cp.type === 'number' ? 'number' : 'text'}
+                                        value={cp.value}
+                                        onChange={(e) => handleUpdateCustomProp(cp.key, e.target.value)}
+                                    />
+                                    <button
+                                        className="custom-prop-delete"
+                                        onClick={() => handleRemoveCustomProp(cp.key)}
+                                        title={tx(srcTekst, 'prop.delete', TX_NS)}
+                                    >×</button>
+                                </div>
+                            ))}
+
+                            <div className="item-section-divider" style={{ marginTop: '10px' }}>{tx(srcTekst, 'prop.add_new', TX_NS)}</div>
+                            <div className="custom-prop-add-row">
                                 <input
-                                    className="custom-prop-value"
-                                    type={cp.type === 'number' ? 'number' : 'text'}
-                                    value={cp.value}
-                                    onChange={(e) => handleUpdateCustomProp(cp.key, e.target.value)}
+                                    className="custom-prop-input"
+                                    type="text"
+                                    placeholder="Klucz"
+                                    value={newPropKey}
+                                    onChange={(e) => setNewPropKey(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomProp(); }}
+                                />
+                                <input
+                                    className="custom-prop-input"
+                                    type="text"
+                                    placeholder={tx(srcTekst, 'prop.value_placeholder', TX_NS)}
+                                    value={newPropValue}
+                                    onChange={(e) => setNewPropValue(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomProp(); }}
                                 />
                                 <button
-                                    className="custom-prop-delete"
-                                    onClick={() => handleRemoveCustomProp(cp.key)}
-                                    title="Usuń"
-                                >×</button>
+                                    className="custom-prop-add-btn"
+                                    onClick={handleAddCustomProp}
+                                    disabled={!newPropKey.trim()}
+                                    title={tx(srcTekst, 'prop.add_prop', TX_NS)}
+                                >+</button>
                             </div>
-                        ))}
-
-                        <div className="item-section-divider" style={{ marginTop: '10px' }}>Dodaj nową</div>
-                        <div className="custom-prop-add-row">
-                            <input
-                                className="custom-prop-input"
-                                type="text"
-                                placeholder="Klucz"
-                                value={newPropKey}
-                                onChange={(e) => setNewPropKey(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomProp(); }}
-                            />
-                            <input
-                                className="custom-prop-input"
-                                type="text"
-                                placeholder="Wartość"
-                                value={newPropValue}
-                                onChange={(e) => setNewPropValue(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomProp(); }}
-                            />
-                            <button
-                                className="custom-prop-add-btn"
-                                onClick={handleAddCustomProp}
-                                disabled={!newPropKey.trim()}
-                                title="Dodaj właściwość"
-                            >+</button>
-                        </div>
-                    </>
-                )}
+                        </>
+                    );
+                })()}
             </div>
         </div>
     );

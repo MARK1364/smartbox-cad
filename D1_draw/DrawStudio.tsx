@@ -184,7 +184,7 @@ export const DrawStudio: React.FC<{
 
     // ─── Tabelka ISO 7200 ───
     const [titleBlock, setTitleBlock] = useState<TitleBlockInfo>({
-        projectName: 'Projekt SmartBox',
+        projectName: 'Projekt Bloków',
         furnitureName: 'Rysunek Wykonawczy CAD',
         author: 'Projektant',
         date: new Date().toISOString().split('T')[0],
@@ -362,7 +362,7 @@ export const DrawStudio: React.FC<{
                 setActiveModel(targeted || items[0]);
             }
             showToast('Zsynchronizowano drzewo modeli ze sceny 3D!');
-            window.document.dispatchEvent(new Event('smartbox-project-changed'));
+            window.document.dispatchEvent(new Event('bloki-project-changed'));
         } catch (e) {
             console.warn('Błąd odczytu modeli:', e);
         }

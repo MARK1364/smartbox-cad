@@ -2,7 +2,7 @@
  * Typy i interfejsy dla modułu A7_material (Baza Materiałów, Okleiny, Wycena).
  */
 
-export type MaterialScope = 'SINGLE' | 'CONTAINER' | 'SMARTBOX' | 'PROJECT';
+export type MaterialScope = 'SINGLE' | 'CONTAINER' | 'BLOKI' | 'PROJECT';
 
 export interface MaterialItem {
     id: string;
@@ -14,6 +14,7 @@ export interface MaterialItem {
     color: { r: number; g: number; b: number; a?: number };
     hexColor?: string;
     texture_path?: string;
+    thumbnail_path?: string;
     price_key?: string;
     price_per_m2?: number;
     price_per_m3?: number;

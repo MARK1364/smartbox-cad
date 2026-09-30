@@ -1,5 +1,5 @@
 /**
- * Port sprzątania przy usuwaniu węzła — Core nie zna SmartBoxa.
+ * Port sprzątania przy usuwaniu węzła — Core nie zna Bloku.
  * A2 rejestruje handler: zbierz ID, stwórz komendę czyszczenia nawierceń.
  */
 

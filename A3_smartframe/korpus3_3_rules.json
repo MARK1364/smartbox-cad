@@ -1,8 +1,8 @@
-{
+﻿{
   "metadata": {
     "module_type": "SMARTFRAME_KORPUS3",
     "version": "3.0.0",
-    "description": "Korpus wielostrefowy (1/2/3). Silnik: korpus3_2_engine | UI: korpus3_1_addon. Dół/Środek FIXED, Góra FILL. Referencje namespace B/M/T_side."
+    "description": "Korpus wielostrefowy (1/2/3). Silnik: korpus3_2_engine | UI: korpus3_1_addon. DÄ‚Ĺ‚Äąâ€š/ÄąĹˇrodek FIXED, GÄ‚Ĺ‚ra FILL. Referencje namespace B/M/T_side."
   },
   "parameters": {
     "defaults": {
@@ -26,16 +26,16 @@
               "type_id": "0.008x0.022"
             },
             "-X": {
-              "active": true,
-              "type_id": "0.008x0.022"
+              "active": false,
+              "type_id": "none"
             },
             "+Y": {
               "active": true,
               "type_id": "0.008x0.022"
             },
             "-Y": {
-              "active": false,
-              "type_id": "none"
+              "active": true,
+              "type_id": "0.008x0.022"
             }
           },
           "wcs_origin_corner": {
@@ -57,8 +57,8 @@
         "RIGHT_SIDE_PANEL": {
           "edge_banding": {
             "+X": {
-              "active": true,
-              "type_id": "0.008x0.022"
+              "active": false,
+              "type_id": "none"
             },
             "-X": {
               "active": true,
@@ -69,8 +69,8 @@
               "type_id": "0.008x0.022"
             },
             "-Y": {
-              "active": false,
-              "type_id": "none"
+              "active": true,
+              "type_id": "0.008x0.022"
             }
           },
           "wcs_origin_corner": {
@@ -135,12 +135,12 @@
               "type_id": "none"
             },
             "+Y": {
-              "active": true,
-              "type_id": "0.008x0.022"
-            },
-            "-Y": {
               "active": false,
               "type_id": "none"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
             }
           },
           "wcs_origin_corner": {
@@ -227,7 +227,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -256,7 +256,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -285,7 +285,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -293,11 +293,7 @@
                   "Y": "y",
                   "Z": "z"
                 },
-                "rotation": [
-                  90,
-                  0,
-                  0
-                ],
+                "rotation": [90, 180, 0],
                 "faces": {
                   "INNER": "FACE_Z_PLUS",
                   "OUTER": "FACE_Z_MINUS"
@@ -314,7 +310,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -322,11 +318,7 @@
                   "Y": "y",
                   "Z": "z"
                 },
-                "rotation": [
-                  90,
-                  0,
-                  0
-                ],
+                "rotation": [90, 180, 0],
                 "faces": {
                   "INNER": "FACE_Z_PLUS",
                   "OUTER": "FACE_Z_MINUS"
@@ -343,7 +335,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -372,7 +364,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -401,7 +393,7 @@
               "thickness": 0.003,
               "custom_properties": {
                 "material": "HDF_3",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -445,7 +437,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -474,7 +466,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -503,7 +495,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -511,11 +503,7 @@
                   "Y": "y",
                   "Z": "z"
                 },
-                "rotation": [
-                  90,
-                  0,
-                  0
-                ],
+                "rotation": [90, 180, 0],
                 "faces": {
                   "INNER": "FACE_Z_PLUS",
                   "OUTER": "FACE_Z_MINUS"
@@ -532,7 +520,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -540,11 +528,7 @@
                   "Y": "y",
                   "Z": "z"
                 },
-                "rotation": [
-                  90,
-                  0,
-                  0
-                ],
+                "rotation": [90, 180, 0],
                 "faces": {
                   "INNER": "FACE_Z_PLUS",
                   "OUTER": "FACE_Z_MINUS"
@@ -561,7 +545,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -590,7 +574,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -619,7 +603,7 @@
               "thickness": 0.003,
               "custom_properties": {
                 "material": "HDF_3",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -662,7 +646,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -691,7 +675,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -720,7 +704,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -728,11 +712,7 @@
                   "Y": "y",
                   "Z": "z"
                 },
-                "rotation": [
-                  90,
-                  0,
-                  0
-                ],
+                "rotation": [90, 180, 0],
                 "faces": {
                   "INNER": "FACE_Z_PLUS",
                   "OUTER": "FACE_Z_MINUS"
@@ -749,7 +729,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -757,11 +737,7 @@
                   "Y": "y",
                   "Z": "z"
                 },
-                "rotation": [
-                  90,
-                  0,
-                  0
-                ],
+                "rotation": [90, 180, 0],
                 "faces": {
                   "INNER": "FACE_Z_PLUS",
                   "OUTER": "FACE_Z_MINUS"
@@ -778,7 +754,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -807,7 +783,7 @@
               "thickness": 0.018,
               "custom_properties": {
                 "material": "MDF_SUROWY_18",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -836,7 +812,7 @@
               "thickness": 0.003,
               "custom_properties": {
                 "material": "HDF_3",
-                "is_smartbox_child": true
+                "is_bloki_child": true
               },
               "lcs": {
                 "mapping": {
@@ -1008,7 +984,7 @@
         "type": "FLOAT",
         "widget": "DRAG_NUMBER",
         "label": {
-          "pl": "Sekcja Środkowa",
+          "pl": "Sekcja ÄąĹˇrodkowa",
           "en": "Middle Zone"
         },
         "default": 1.2,

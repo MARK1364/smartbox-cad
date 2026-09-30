@@ -13,6 +13,13 @@ import { getActiveContainer } from '../A3_smartframe/smartframe-adapter.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { CabinetFramingOverlay } from './CabinetFramingOverlay.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 interface Props {
     open: boolean;
@@ -22,6 +29,7 @@ interface Props {
 }
 
 export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props) {
+    useLocale();
     const [name, setName] = useState('');
     const [category, setCategory] = useState<CabinetCategory>('dolne');
     const [description, setDescription] = useState('');
@@ -32,7 +40,6 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
 
     const doc = projectModel?.document || projectModel;
     const activeContainer = open && doc ? getActiveContainer(doc) : null;
-    const fileInputImgRef = useRef<HTMLInputElement>(null);
     const prevOpenRef = useRef(false);
 
     // Inicjalizacja pól TYLKO przy otwarciu okna (gdy open przechodzi z false na true)
@@ -42,8 +49,8 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                 const w = Math.round(nmToMm(activeContainer.width));
                 const h = Math.round(nmToMm(activeContainer.height));
                 const d = Math.round(nmToMm(activeContainer.depth));
-                const baseName = activeContainer.name?.replace(/_SB$/, '') || 'Korpus';
-                setName(`${baseName} ${w}x${h}x${d}`);
+                const baseName = activeContainer.name?.replace(/_SB$/, '') || tx(srcTekst, 'save_cabinet.default_name', TX_NS);
+                setName(baseName);
                 setErrorMsg(null);
 
                 // Automatyczne dopasowanie kategorii po wysokości
@@ -55,7 +62,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                     setCategory('dolne');
                 }
             } else {
-                setName('Nowy Korpus');
+                setName(tx(srcTekst, 'save_cabinet.default_name', TX_NS));
             }
             setDescription('');
             setThumbnail(null);
@@ -64,71 +71,18 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
         prevOpenRef.current = open;
     }, [open]);
 
-    const handleQuickSnapshot = () => {
-        const vp = ContextManager.instance.viewport;
-        const canvas: HTMLCanvasElement | null = vp?.canvas || document.querySelector('#renderCanvas') || document.querySelector('canvas');
-        if (!canvas) {
-            setErrorMsg('Nie znaleziono płótna 3D do wykonania zrzutu.');
-            return;
-        }
-        if (vp?.requestRender) {
-            vp.requestRender(5);
-        }
-        if (vp?.scene) {
-            vp.scene.render();
-        }
-        try {
-            const size = Math.min(canvas.width, canvas.height);
-            const startX = Math.max(0, Math.round((canvas.width - size) / 2));
-            const startY = Math.max(0, Math.round((canvas.height - size) / 2));
 
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 360;
-            tempCanvas.height = 360;
-            const ctx = tempCanvas.getContext('2d');
-            if (ctx) {
-                ctx.fillStyle = '#18181b';
-                ctx.fillRect(0, 0, 360, 360);
-                ctx.drawImage(canvas, startX, startY, size, size, 0, 0, 360, 360);
-                const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.88);
-                setThumbnail(dataUrl);
-            } else {
-                setThumbnail(canvas.toDataURL('image/jpeg', 0.88));
-            }
-            setErrorMsg(null);
-        } catch (e) {
-            console.warn('[SaveCabinetModal] Błąd szybkiego zrzutu:', e);
-            try {
-                setThumbnail(canvas.toDataURL('image/jpeg', 0.85));
-            } catch { /* ignoruj */ }
-        }
-    };
-
-    const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-            const res = evt.target?.result as string;
-            if (res) {
-                setThumbnail(res);
-                setErrorMsg(null);
-            }
-        };
-        reader.readAsDataURL(file);
-        e.target.value = '';
-    };
 
     if (!open) return null;
 
     const handleSave = () => {
         if (!activeContainer) {
-            setErrorMsg('Nie znaleziono aktywnego korpusu na scenie. Zaznacz szafkę przed zapisem.');
+            setErrorMsg(tx(srcTekst, 'save_cabinet.err_no_active', TX_NS));
             return;
         }
 
         if (!name.trim()) {
-            setErrorMsg('Wpisz nazwę dla zapisywanej szafki.');
+            setErrorMsg(tx(srcTekst, 'save_cabinet.err_no_name', TX_NS));
             return;
         }
 
@@ -140,7 +94,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
         });
 
         if (!template) {
-            setErrorMsg('Błąd podczas odczytu danych korpusu. Upewnij się, że korpus jest prawidłowy.');
+            setErrorMsg(tx(srcTekst, 'save_cabinet.err_read', TX_NS));
             return;
         }
 
@@ -211,8 +165,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                         justifyContent: 'space-between'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontSize: '20px' }}>💾</span>
-                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Zapisz korpus do biblioteki</h3>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>{tx(srcTekst, 'save_cabinet.title', TX_NS)}</h3>
                         </div>
                         <button 
                             onClick={onClose}
@@ -238,7 +191,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                 color: '#fca5a5',
                                 fontSize: '0.85rem'
                             }}>
-                                ⚠️ <strong>Brak aktywnego mebla:</strong> Zaznacz na scenie korpus lub jego element, aby go zapisać.
+                                <strong>{tx(srcTekst, 'save_cabinet.no_active_title', TX_NS)}</strong> {tx(srcTekst, 'save_cabinet.no_active_body', TX_NS)}
                             </div>
                         ) : (
                             <div style={{
@@ -251,7 +204,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                 alignItems: 'center',
                                 color: '#cbd5e1'
                             }}>
-                                <span>Wymiary mebla:</span>
+                                <span>{tx(srcTekst, 'save_cabinet.dims', TX_NS)}</span>
                                 <span style={{ color: '#38bdf8', fontWeight: 600 }}>
                                     {wMm} × {hMm} × {dMm} mm
                                 </span>
@@ -275,11 +228,11 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <label style={{ fontSize: '0.85rem', color: '#a1a1aa', fontWeight: 500 }}>
-                                    Zdjęcie / Podgląd mebla:
+                                    {tx(srcTekst, 'save_cabinet.photo_label', TX_NS)}
                                 </label>
                                 {thumbnail && (
                                     <span style={{ fontSize: '0.74rem', color: '#4ade80', fontWeight: 600 }}>
-                                        ✓ Podgląd gotowy do zapisu
+                                        ✓ {tx(srcTekst, 'save_cabinet.preview_ready', TX_NS)}
                                     </span>
                                 )}
                             </div>
@@ -309,7 +262,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                         }}>
                                             <img 
                                                 src={thumbnail} 
-                                                alt="Podgląd szafki" 
+                                                alt={tx(srcTekst, 'save_cabinet.photo_label', TX_NS)}
                                                 style={{
                                                     width: '100%',
                                                     height: '100%',
@@ -319,7 +272,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                                             <div style={{ fontSize: '0.78rem', color: '#cbd5e1' }}>
-                                                To zdjęcie będzie dużą ikoną w bibliotece korpusów.
+                                                {tx(srcTekst, 'save_cabinet.photo_hint', TX_NS)}
                                             </div>
                                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                                 <button
@@ -335,22 +288,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                                         cursor: 'pointer'
                                                     }}
                                                 >
-                                                    📷 Zmień kadr
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleQuickSnapshot}
-                                                    style={{
-                                                        padding: '5px 10px',
-                                                        background: '#27272a',
-                                                        border: '1px solid #3f3f46',
-                                                        borderRadius: '5px',
-                                                        color: '#e2e8f0',
-                                                        fontSize: '0.76rem',
-                                                        cursor: 'pointer'
-                                                    }}
-                                                >
-                                                    ⚡ Szybki zrzut
+                                                    {tx(srcTekst, 'save_cabinet.change_frame', TX_NS)}
                                                 </button>
                                                 <button
                                                     type="button"
@@ -365,7 +303,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                                         cursor: 'pointer'
                                                     }}
                                                 >
-                                                    Usuń
+                                                    {tx(srcTekst, 'save_cabinet.remove', TX_NS)}
                                                 </button>
                                             </div>
                                         </div>
@@ -393,64 +331,8 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                                 transition: 'all 0.15s ease'
                                             }}
                                         >
-                                            <span style={{ fontSize: '1.2rem' }}>📷</span>
-                                            <span>Kadruj mebel na scenie (Wizjer 1:1)</span>
+                                            <span>{tx(srcTekst, 'save_cabinet.frame_scene', TX_NS)}</span>
                                         </button>
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                            <button
-                                                type="button"
-                                                onClick={handleQuickSnapshot}
-                                                disabled={!activeContainer}
-                                                title="Błyskawiczny zrzut bieżącej pozycji kamery bez przechodzenia do wizjera"
-                                                style={{
-                                                    padding: '7px 10px',
-                                                    background: '#27272a',
-                                                    border: '1px solid #3f3f46',
-                                                    borderRadius: '6px',
-                                                    color: '#cbd5e1',
-                                                    fontSize: '0.76rem',
-                                                    fontWeight: 500,
-                                                    cursor: activeContainer ? 'pointer' : 'not-allowed',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '6px'
-                                                }}
-                                            >
-                                                <span>⚡</span> Szybki zrzut (1 klik)
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => fileInputImgRef.current?.click()}
-                                                disabled={!activeContainer}
-                                                title="Wybierz plik graficzny (JPG/PNG) ze swojego komputera"
-                                                style={{
-                                                    padding: '7px 10px',
-                                                    background: '#27272a',
-                                                    border: '1px solid #3f3f46',
-                                                    borderRadius: '6px',
-                                                    color: '#cbd5e1',
-                                                    fontSize: '0.76rem',
-                                                    fontWeight: 500,
-                                                    cursor: activeContainer ? 'pointer' : 'not-allowed',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    gap: '6px'
-                                                }}
-                                            >
-                                                <span>📁</span> Plik z dysku
-                                            </button>
-                                            <input 
-                                                type="file" 
-                                                ref={fileInputImgRef} 
-                                                accept="image/*" 
-                                                style={{ display: 'none' }} 
-                                                onChange={handleImageFileChange} 
-                                            />
-                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -459,13 +341,13 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                         {/* Nazwa */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <label style={{ fontSize: '0.85rem', color: '#a1a1aa', fontWeight: 500 }}>
-                                Nazwa szafki w katalogu:
+                                {tx(srcTekst, 'save_cabinet.name_label', TX_NS)}
                             </label>
                             <input 
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                placeholder="np. Szafka dolna 600 3 szuflady"
+                                placeholder={tx(srcTekst, 'save_cabinet.name_placeholder', TX_NS)}
                                 disabled={!activeContainer}
                                 style={{
                                     padding: '10px 12px',
@@ -482,7 +364,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                         {/* Kategoria */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <label style={{ fontSize: '0.85rem', color: '#a1a1aa', fontWeight: 500 }}>
-                                Kategoria mebla:
+                                {tx(srcTekst, 'save_cabinet.category_label', TX_NS)}
                             </label>
                             <select 
                                 value={category}
@@ -499,22 +381,22 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                     cursor: 'pointer'
                                 }}
                             >
-                                <option value="dolne">Szafki dolne</option>
-                                <option value="gorne">Szafki górne (wiszące)</option>
-                                <option value="slupki">Słupki wysokie</option>
-                                <option value="inne">Inne korpusy</option>
+                                <option value="dolne">{tx(srcTekst, 'save_cabinet.categories.dolne', TX_NS)}</option>
+                                <option value="gorne">{tx(srcTekst, 'save_cabinet.categories.gorne', TX_NS)}</option>
+                                <option value="slupki">{tx(srcTekst, 'save_cabinet.categories.slupki', TX_NS)}</option>
+                                <option value="inne">{tx(srcTekst, 'save_cabinet.categories.inne', TX_NS)}</option>
                             </select>
                         </div>
 
                         {/* Opis */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <label style={{ fontSize: '0.85rem', color: '#a1a1aa', fontWeight: 500 }}>
-                                Krótki opis (opcjonalnie):
+                                {tx(srcTekst, 'save_cabinet.desc_label', TX_NS)}
                             </label>
                             <textarea 
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
-                                placeholder="np. Korpus pod zlew, fronty z frezem, 2 półki regulowane"
+                                placeholder={tx(srcTekst, 'save_cabinet.desc_placeholder', TX_NS)}
                                 disabled={!activeContainer}
                                 rows={2}
                                 style={{
@@ -547,7 +429,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                 disabled={!activeContainer}
                                 style={{ width: '16px', height: '16px', accentColor: '#2563eb', cursor: 'pointer' }}
                             />
-                            <span>Pobierz także plik <strong>.json</strong> na dysk komputera</span>
+                            <span>{tx(srcTekst, 'save_cabinet.download_json', TX_NS)} <strong>.json</strong> {tx(srcTekst, 'save_cabinet.download_json_suffix', TX_NS)}</span>
                         </label>
                     </div>
 
@@ -572,7 +454,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                 fontSize: '0.85rem'
                             }}
                         >
-                            Anuluj
+                            {tx(srcTekst, 'save_cabinet.cancel', TX_NS)}
                         </button>
                         <button 
                             onClick={handleSave}
@@ -591,7 +473,7 @@ export function SaveCabinetModal({ open, onClose, projectModel, onSaved }: Props
                                 gap: '6px'
                             }}
                         >
-                            <span>💾</span> Zapisz do biblioteki
+                            {tx(srcTekst, 'save_cabinet.save', TX_NS)}
                         </button>
                     </div>
                 </div>

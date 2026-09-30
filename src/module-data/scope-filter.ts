@@ -11,8 +11,8 @@ export function filterPanelsByScope(panels: CuttingPanelContract[], scope: Modul
     if (!scope || scope.type === 'PROJECT') return panels;
     const { type, id, name } = scope;
     return panels.filter((p) => {
-        if (type === 'SMARTBOX') {
-            return matches(p.smartbox_id, id, name) || matches(p.part_id, id, name) || matches(p.node_id, id, name);
+        if (type === 'BLOKI') {
+            return matches(p.blok_id, id, name) || matches(p.part_id, id, name) || matches(p.node_id, id, name);
         }
         if (type === 'PANEL') {
             return matches(p.part_id, id, name) || matches(p.node_id, id, name);
@@ -26,9 +26,9 @@ export function filterAccessoriesByScope(accessories: AccessoryItem[], scope: Mo
     if (scope.type === 'PANEL') return [];
     const { type, id, name } = scope;
     return accessories.filter((a) => {
-        if (type === 'SMARTBOX') {
+        if (type === 'BLOKI') {
             return (
-                matches(a.smartbox_id, id, name) ||
+                matches(a.blok_id, id, name) ||
                 a.id === id ||
                 (a.name && a.name.includes(name)) ||
                 matches(a.furniture_name, id, name)
@@ -42,8 +42,8 @@ export function filterNestingPartsByScope(parts: NestingPart[], scope: ModuleSco
     if (!scope || scope.type === 'PROJECT') return parts;
     const { type, id, name } = scope;
     return parts.filter((p) => {
-        if (type === 'SMARTBOX') {
-            return matches(p.smartboxId, id, name) || p.id === id;
+        if (type === 'BLOKI') {
+            return matches(p.blokId, id, name) || p.id === id;
         }
         if (type === 'PANEL') {
             return p.id === id || p.sourceNodeId === id || p.name === name;

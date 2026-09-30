@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { GoogleDriveService, GoogleDriveFile } from './google-drive/google-drive-service';
 import { ContextManager } from '../A1_core/context-manager';
 import { UIController } from '../A1_core/ui-controller';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 interface GoogleDriveModalProps {
   isOpen: boolean;
@@ -23,9 +30,10 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const [projectName, setProjectName] = useState('Projekt_Meble');
+  const [projectName, setProjectName] = useState(tx(srcTekst, 'gdrive.default_name', TX_NS));
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [statusNotice, setStatusNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  useLocale();
 
   useEffect(() => {
     if (isOpen) {
@@ -63,7 +71,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       const list = await GoogleDriveService.instance.listProjects();
       setFiles(list);
     } catch (err: any) {
-      setStatusNotice({ type: 'error', text: err.message || 'Błąd ładowania listy plików.' });
+      setStatusNotice({ type: 'error', text: err.message || tx(srcTekst, 'gdrive.err_list', TX_NS) });
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +79,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
 
   const handleSignIn = async () => {
     if (!clientId.trim()) {
-      setStatusNotice({ type: 'error', text: 'Wpisz identyfikator Google Client ID w zakładce Ustawienia.' });
+      setStatusNotice({ type: 'error', text: tx(srcTekst, 'gdrive.err_client_id', TX_NS) });
       setActiveTab('settings');
       return;
     }
@@ -80,10 +88,10 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     setStatusNotice(null);
     try {
       await GoogleDriveService.instance.signIn(clientId.trim());
-      setStatusNotice({ type: 'success', text: 'Pomyślnie połączono z kontem Google!' });
+      setStatusNotice({ type: 'success', text: tx(srcTekst, 'gdrive.ok_connected', TX_NS) });
       await loadFilesList();
     } catch (err: any) {
-      setStatusNotice({ type: 'error', text: err.message || 'Logowanie nie powiodło się.' });
+      setStatusNotice({ type: 'error', text: err.message || tx(srcTekst, 'gdrive.err_login', TX_NS) });
     } finally {
       setIsLoading(false);
     }
@@ -109,13 +117,13 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
       const targetName = projectName.trim() || 'Projekt_Meble';
       const savedFile = await GoogleDriveService.instance.saveProject(targetName, projectJson, overwriteId);
       
-      setStatusNotice({ type: 'success', text: `Projekt "${savedFile.name}" został pomyślnie zapisany w chmurze!` });
+      setStatusNotice({ type: 'success', text: tx(srcTekst, 'gdrive.ok_saved', TX_NS, { name: savedFile.name }) });
       await loadFilesList();
       setTimeout(() => {
         onClose();
       }, 1200);
     } catch (err: any) {
-      setStatusNotice({ type: 'error', text: err.message || 'Nie udało się zapisać projektu.' });
+      setStatusNotice({ type: 'error', text: err.message || tx(srcTekst, 'gdrive.err_save', TX_NS) });
     } finally {
       setIsLoading(false);
     }
@@ -126,23 +134,22 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
     setStatusNotice(null);
     try {
       const projectJson = await GoogleDriveService.instance.loadProject(file.id);
-      const doc = ContextManager.instance.document;
-      if (!doc) throw new Error('Brak aktywnego silnika CAD.');
-
-      doc.load(projectJson);
-      
-      // Zaktualizuj widok
-      if (UIController.instance) {
-        (UIController.instance as any).syncDocument();
+      const api = ContextManager.instance.appAPI;
+      if (api && typeof api.loadProjectData === 'function') {
+        api.loadProjectData(projectJson, `Wczytano z Google Drive: ${file.name}`);
+      } else {
+        const doc = ContextManager.instance.document;
+        if (!doc) throw new Error('Brak aktywnego silnika CAD.');
+        doc.load(projectJson);
+        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
       }
-      window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
 
       setStatusNotice({ type: 'success', text: `Wczytano projekt: ${file.name}` });
       setTimeout(() => {
         onClose();
       }, 800);
     } catch (err: any) {
-      setStatusNotice({ type: 'error', text: err.message || 'Błąd otwierania projektu.' });
+      setStatusNotice({ type: 'error', text: err.message || tx(srcTekst, 'gdrive.err_open', TX_NS) });
     } finally {
       setIsLoading(false);
     }
@@ -150,15 +157,15 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
 
   const handleDeleteFile = async (fileId: string, fileName: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`Czy na pewno usunąć projekt "${fileName}" z Dysku Google?`)) return;
+    if (!window.confirm(tx(srcTekst, 'gdrive.confirm_delete', TX_NS, { name: fileName }))) return;
 
     setIsLoading(true);
     try {
       await GoogleDriveService.instance.deleteProject(fileId);
       setFiles(prev => prev.filter(f => f.id !== fileId));
-      setStatusNotice({ type: 'info', text: `Usunięto projekt "${fileName}".` });
+      setStatusNotice({ type: 'info', text: tx(srcTekst, 'gdrive.ok_deleted', TX_NS, { name: fileName }) });
     } catch (err: any) {
-      setStatusNotice({ type: 'error', text: err.message || 'Błąd usuwania pliku.' });
+      setStatusNotice({ type: 'error', text: err.message || tx(srcTekst, 'gdrive.err_delete', TX_NS) });
     } finally {
       setIsLoading(false);
     }
@@ -166,7 +173,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
 
   const handleSaveClientId = () => {
     GoogleDriveService.instance.setClientId(clientId.trim());
-    setStatusNotice({ type: 'success', text: 'Zapisano Google Client ID dla tej przeglądarki.' });
+    setStatusNotice({ type: 'success', text: tx(srcTekst, 'gdrive.ok_client_id', TX_NS) });
   };
 
   const filteredFiles = files.filter(f => 
@@ -220,10 +227,10 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
         >
           <div>
             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#f8fafc' }}>
-              Dysk Google (Chmura CAD)
+              {tx(srcTekst, 'gdrive.title', TX_NS)}
             </h3>
             <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
-              Synchronizacja projektów pomiędzy stanowiskami pracy
+              {tx(srcTekst, 'gdrive.subtitle', TX_NS)}
             </p>
           </div>
           <button
@@ -270,7 +277,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                 cursor: 'pointer',
               }}
             >
-              Otwórz z chmury
+{tx(srcTekst, 'gdrive.tabs.open', TX_NS)}
             </button>
             <button
               type="button"
@@ -286,7 +293,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                 cursor: 'pointer',
               }}
             >
-              Zapisz w chmurze
+              {tx(srcTekst, 'gdrive.tabs.save', TX_NS)}
             </button>
             <button
               type="button"
@@ -302,7 +309,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                 cursor: 'pointer',
               }}
             >
-              Ustawienia połączenia
+              {tx(srcTekst, 'gdrive.tabs.settings', TX_NS)}
             </button>
           </div>
 
@@ -310,7 +317,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
             {isAuthenticated ? (
               <>
                 <span style={{ color: '#86efac' }}>
-                  Zalogowano: <strong>{user?.email || 'Konto Google'}</strong>
+                  {tx(srcTekst, 'gdrive.logged_in', TX_NS)} <strong>{user?.email || 'Konto Google'}</strong>
                 </span>
                 <button
                   type="button"
@@ -325,7 +332,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                     fontSize: '0.75rem',
                   }}
                 >
-                  Wyloguj
+                  {tx(srcTekst, 'gdrive.logout', TX_NS)}
                 </button>
               </>
             ) : (
@@ -343,7 +350,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                   fontSize: '0.78rem',
                 }}
               >
-                Zaloguj przez Google
+                {tx(srcTekst, 'gdrive.login', TX_NS)}
               </button>
             )}
           </div>
@@ -402,7 +409,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                     fontSize: '0.82rem',
                   }}
                 >
-                  Odśwież
+                  {tx(srcTekst, 'gdrive.refresh', TX_NS)}
                 </button>
               </div>
 
@@ -421,7 +428,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
               >
                 {!isAuthenticated ? (
                   <div style={{ margin: 'auto', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
-                    <p>Połącz się z kontem Google, aby wczytać listę projektów.</p>
+                    <p>{tx(srcTekst, 'gdrive.connect_hint', TX_NS)}</p>
                     <button
                       type="button"
                       onClick={handleSignIn}
@@ -436,16 +443,16 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                         fontSize: '0.82rem',
                       }}
                     >
-                      Zaloguj do Google Drive
+                      {tx(srcTekst, 'gdrive.login_drive', TX_NS)}
                     </button>
                   </div>
                 ) : isLoading ? (
                   <div style={{ margin: 'auto', color: '#94a3b8', fontSize: '0.85rem' }}>
-                    Trwa ładowanie projektów z chmury...
+                    {tx(srcTekst, 'gdrive.loading', TX_NS)}
                   </div>
                 ) : filteredFiles.length === 0 ? (
                   <div style={{ margin: 'auto', color: '#94a3b8', fontSize: '0.85rem', textAlign: 'center' }}>
-                    <p>Brak zapisanych projektów w folderze "SmartPanel CAD Projects".</p>
+                    <p>{tx(srcTekst, 'gdrive.no_files', TX_NS)}</p>
                     <button
                       type="button"
                       onClick={() => setActiveTab('save')}
@@ -459,7 +466,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                         fontSize: '0.8rem',
                       }}
                     >
-                      Zapisz bieżący projekt
+                      {tx(srcTekst, 'gdrive.save_current', TX_NS)}
                     </button>
                   </div>
                 ) : (
@@ -503,7 +510,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                             fontWeight: 500,
                           }}
                         >
-                          Wczytaj
+                          {tx(srcTekst, 'gdrive.load', TX_NS)}
                         </button>
                         <button
                           type="button"
@@ -517,9 +524,9 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                             fontSize: '0.75rem',
                             cursor: 'pointer',
                           }}
-                          title="Usuń plik z Dysku Google"
+                          title={tx(srcTekst, 'gdrive.delete_title', TX_NS)}
                         >
-                          Usuń
+                          {tx(srcTekst, 'gdrive.delete', TX_NS)}
                         </button>
                       </div>
                     </div>
@@ -534,7 +541,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#cbd5e1' }}>
-                  Nazwa projektu w chmurze:
+                  {tx(srcTekst, 'gdrive.cloud_name', TX_NS)}
                 </label>
                 <input
                   type="text"
@@ -553,7 +560,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                   }}
                 />
                 <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px' }}>
-                  Plik zostanie zapisany w formacie JSON w folderze "SmartPanel CAD Projects" na Twoim Dysku Google.
+                  {tx(srcTekst, 'gdrive.save_note', TX_NS)}
                 </div>
               </div>
 
@@ -561,7 +568,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
               {files.length > 0 && (
                 <div>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#cbd5e1' }}>
-                    Lub wybierz istniejący projekt do nadpisania:
+                    {tx(srcTekst, 'gdrive.overwrite_hint', TX_NS)}
                   </label>
                   <select
                     value={selectedFileId || ''}
@@ -581,7 +588,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                       fontSize: '0.82rem',
                     }}
                   >
-                    <option value="">-- Zapisz jako nowy plik --</option>
+                    <option value="">{tx(srcTekst, 'gdrive.save_as_new', TX_NS)}</option>
                     {files.map(f => (
                       <option key={f.id} value={f.id}>
                         {f.name} ({new Date(f.modifiedTime).toLocaleDateString('pl-PL')})
@@ -608,7 +615,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                     opacity: (!isAuthenticated || isLoading || !projectName.trim()) ? 0.6 : 1,
                   }}
                 >
-                  {isLoading ? 'Zapisywanie...' : selectedFileId ? 'Nadpisz projekt w chmurze' : 'Zapisz nowy projekt w chmurze'}
+                  {isLoading ? tx(srcTekst, 'gdrive.saving', TX_NS) : selectedFileId ? tx(srcTekst, 'gdrive.overwrite', TX_NS) : tx(srcTekst, 'gdrive.save_new', TX_NS)}
                 </button>
               </div>
             </div>
@@ -619,7 +626,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.82rem' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, color: '#f8fafc' }}>
-                  Google OAuth 2.0 Client ID:
+                  {tx(srcTekst, 'gdrive.client_id', TX_NS)}
                 </label>
                 <input
                   type="text"
@@ -638,7 +645,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                   }}
                 />
                 <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '4px', lineHeight: 1.4 }}>
-                  Identyfikator Client ID jest generowany w darmowej konsoli Google Cloud (Credentials $\rightarrow$ OAuth Client ID dla aplikacji webowych z adresem Twojego CADa).
+                  {tx(srcTekst, 'gdrive.client_id_note', TX_NS)} {tx(srcTekst, 'gdrive.client_id_note_tail', TX_NS)}
                 </div>
               </div>
 
@@ -656,7 +663,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                     fontWeight: 500,
                   }}
                 >
-                  Zapisz Client ID
+                  {tx(srcTekst, 'gdrive.save_client_id', TX_NS)}
                 </button>
               </div>
 
@@ -671,11 +678,11 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                 }}
               >
                 <div style={{ fontWeight: 600, color: '#cbd5e1', marginBottom: '4px' }}>
-                  Instrukcja dla 3 komputerów:
+                  {tx(srcTekst, 'gdrive.manual_title', TX_NS)}
                 </div>
-                1. Na każdym komputerze wprowadź ten sam Client ID (lub zaloguj się swoim kontem Google).<br />
-                2. Pliki zapisane w jednym miejscu pojawią się automatycznie w oknie "Otwórz z chmury" na pozostałych maszynach.<br />
-                3. Aplikacja tworzy dedykowany folder <strong>SmartPanel CAD Projects</strong> na Twoim Dysku Google.
+                1. {tx(srcTekst, 'gdrive.manual_1', TX_NS)}<br />
+                2. {tx(srcTekst, 'gdrive.manual_2', TX_NS)}<br />
+                3. {tx(srcTekst, 'gdrive.manual_3', TX_NS)} <strong>SmartPanel CAD Projects</strong> {tx(srcTekst, 'gdrive.manual_3_tail', TX_NS)}
               </div>
             </div>
           )}
@@ -706,7 +713,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
               cursor: 'pointer',
             }}
           >
-            Zamknij
+            {tx(srcTekst, 'gdrive.close', TX_NS)}
           </button>
         </div>
       </div>

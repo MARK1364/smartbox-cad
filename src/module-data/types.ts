@@ -1,5 +1,5 @@
 /**
- * Kontrakty danych podstron (raport / nesting / CNC / draw).
+ * Kontrakty danych podstron (raport / nesting / CNC / draw / dag).
  *
  * Moduły nie czytają ProjectDocument. Dostają ten payload — z CAD, JSON albo CSV.
  * Dodatkowe źródła (STEP/DXF dla CNC) podpinają się pod ten sam kształt.
@@ -10,11 +10,11 @@ import type { NestingPart, ContainerScopeInfo, SheetConfig } from '../../n1_nest
 import type { CAMFeature } from '../../C1_cnc/dto/cam-dto';
 import type { CADTreeNode } from '../../R2_rys/drawing-types';
 
-export type ModuleId = 'report' | 'nesting' | 'cnc' | 'draw';
+export type ModuleId = 'report' | 'nesting' | 'cnc' | 'draw' | 'dag';
 
-export type ModuleSourceId = 'cad' | 'json' | 'csv' | 'session';
+export type ModuleSourceId = 'cad' | 'json' | 'csv' | 'session' | 'dxf';
 
-export type ModuleScopeType = 'PROJECT' | 'CONTAINER' | 'SMARTBOX' | 'PANEL';
+export type ModuleScopeType = 'PROJECT' | 'CONTAINER' | 'BLOKI' | 'PANEL';
 
 export interface ModuleScope {
     type: ModuleScopeType;
@@ -78,11 +78,56 @@ export interface DrawModulePayload {
     treeRoot?: CADTreeNode | null;
 }
 
+export type DagNodeType = 'ROOM' | 'CONTAINER' | 'PANEL' | 'FEATURE' | 'HARDWARE' | 'CONSTRAINT';
+
+export interface DagNode {
+    id: string;
+    label: string;
+    type: DagNodeType;
+    role?: string;
+    parentId?: string;
+    dimensions?: { widthMm: number; heightMm: number; thicknessMm: number };
+    status?: {
+        frozen?: boolean;
+        visible?: boolean;
+        conflict?: boolean;
+        residual?: number;
+    };
+    meta?: Record<string, any>;
+}
+
+export type DagEdgeKind = 'HIERARCHY' | 'CONSTRAINT' | 'FEATURE_PARENT' | 'HARDWARE_LINK';
+
+export interface DagEdge {
+    id: string;
+    source: string;
+    target: string;
+    kind: DagEdgeKind;
+    label?: string;
+    conflict?: boolean;
+}
+
+export interface DagModulePayload {
+    meta: ModuleSessionMeta;
+    scope: ModuleScope;
+    nodes: DagNode[];
+    edges: DagEdge[];
+    stats?: {
+        containerCount: number;
+        panelCount: number;
+        featureCount: number;
+        hardwareCount: number;
+        constraintCount: number;
+        conflictCount: number;
+    };
+}
+
 export type AnyModulePayload =
     | ReportModulePayload
     | NestingModulePayload
     | CncModulePayload
-    | DrawModulePayload;
+    | DrawModulePayload
+    | DagModulePayload;
 
 export interface ModuleDataSource<T> {
     id: ModuleSourceId;

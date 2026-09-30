@@ -22,10 +22,10 @@ describe('SmartFrameDragController', () => {
         expect(controller.draggedZoneCount).toBeNull();
 
         controller.startDrag(2, {
-            width: 800,
-            height: 2000,
-            depth: 600,
-            bottomHeight: 600
+            szerokosc_mm: 800,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            wysokosc_strefy_dolnej_mm: 600
         });
 
         expect(controller.isDragging).toBe(true);
@@ -38,14 +38,14 @@ describe('SmartFrameDragController', () => {
 
     it('calculates ground intersection (Y=0) and drops a 1-zone cabinet firmly on the ground', () => {
         controller.startDrag(1, {
-            width: 900,
-            height: 2100,
-            depth: 550
+            szerokosc_mm: 900,
+            wysokosc_mm: 2100,
+            glebokosc_mm: 550
         });
 
-        // Mock sceny z kamerą rzucającą promień na podłogę Y=0
-        // Kamera na (1200, 1500, 800), promień w dół (0, -1, 0)
-        // Punkt przecięcia z Y=0: (1200, 0, 800)
+        // Mock sceny z kamerÄ… rzucajÄ…cÄ… promieĹ„ na podĹ‚ogÄ™ Y=0
+        // Kamera na (1200, 1500, 800), promieĹ„ w dĂłĹ‚ (0, -1, 0)
+        // Punkt przeciÄ™cia z Y=0: (1200, 0, 800)
         const mockScene = {
             activeCamera: {},
             createPickingRay: () => ({
@@ -69,7 +69,7 @@ describe('SmartFrameDragController', () => {
         expect(pt!.x).toBe(1200);
         expect(pt!.y).toBe(800);
 
-        // Upuszczenie na scenę
+        // Upuszczenie na scenÄ™
         const success = controller.onDropOnScene(doc);
         expect(success).toBe(true);
         expect(controller.isDragging).toBe(false);
@@ -81,9 +81,9 @@ describe('SmartFrameDragController', () => {
         const cntNode = containers[0];
         const cntData = cntNode.domainData as any;
         expect(cntData).toBeDefined();
-        expect(cntData.generatorParams.zoneCount).toBe(1);
+        expect(cntData.generatorParams.liczba_stref).toBe(1);
 
-        // Weryfikacja pozycji na podłodze Z=0 (w mm)
+        // Weryfikacja pozycji na podĹ‚odze Z=0 (w mm)
         const trans = cntNode.localMatrix.getTranslation();
         expect(Math.round(nmToMm(trans.x))).toBe(1200);
         expect(Math.round(nmToMm(trans.y))).toBe(800);
@@ -93,11 +93,11 @@ describe('SmartFrameDragController', () => {
     it('creates cabinets for 2 and 3 zones and supports Undo', () => {
         // Upuszczenie korpusu 3-strefowego
         controller.startDrag(3, {
-            width: 1000,
-            height: 2200,
-            depth: 600,
-            bottomHeight: 500,
-            middleHeight: 1200
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2200,
+            glebokosc_mm: 600,
+            wysokosc_strefy_dolnej_mm: 500,
+            wysokosc_strefy_srodkowej_mm: 1200
         });
 
         // Wirtualne rzucenie promienia na X=500, Y=300
@@ -124,24 +124,24 @@ describe('SmartFrameDragController', () => {
 
         const containers = doc.getContainers();
         expect(containers.length).toBe(1);
-        expect((containers[0].domainData as any).generatorParams.zoneCount).toBe(3);
+        expect((containers[0].domainData as any).generatorParams.liczba_stref).toBe(3);
 
-        // Cofnięcie przez Undo
+        // CofniÄ™cie przez Undo
         ContextManager.instance.commandHistory.undo();
         expect(doc.getContainers().length).toBe(0);
     });
 
     it('correctly handles dragging 1-zone, then 2-zone, then 3-zone sequentially without dirty state interference', () => {
         // 1. Upuszczenie 1-strefowego
-        controller.startDrag(1, { width: 1000, height: 2200, depth: 600, bottomHeight: 2200, middleHeight: 0 });
+        controller.startDrag(1, { szerokosc_mm: 1000, wysokosc_mm: 2200, glebokosc_mm: 600, wysokosc_strefy_dolnej_mm: 2200, wysokosc_strefy_srodkowej_mm: 0 });
         controller.onDropOnScene(doc);
 
-        // 2. Upuszczenie 2-strefowego z domyślnie przekazanymi wysokościami z poprzedniego stanu
-        controller.startDrag(2, { width: 1000, height: 2200, depth: 600, bottomHeight: 2200, middleHeight: 0 });
+        // 2. Upuszczenie 2-strefowego z domyĹ›lnie przekazanymi wysokoĹ›ciami z poprzedniego stanu
+        controller.startDrag(2, { szerokosc_mm: 1000, wysokosc_mm: 2200, glebokosc_mm: 600, wysokosc_strefy_dolnej_mm: 2200, wysokosc_strefy_srodkowej_mm: 0 });
         controller.onDropOnScene(doc);
 
-        // 3. Upuszczenie 3-strefowego z domyślnie przekazanymi wysokościami z poprzedniego stanu
-        controller.startDrag(3, { width: 1000, height: 2200, depth: 600, bottomHeight: 2200, middleHeight: 0 });
+        // 3. Upuszczenie 3-strefowego z domyĹ›lnie przekazanymi wysokoĹ›ciami z poprzedniego stanu
+        controller.startDrag(3, { szerokosc_mm: 1000, wysokosc_mm: 2200, glebokosc_mm: 600, wysokosc_strefy_dolnej_mm: 2200, wysokosc_strefy_srodkowej_mm: 0 });
         controller.onDropOnScene(doc);
 
         const containers = doc.getContainers();
@@ -151,15 +151,15 @@ describe('SmartFrameDragController', () => {
         const c2Params = (containers[1].domainData as any).generatorParams;
         const c3Params = (containers[2].domainData as any).generatorParams;
 
-        expect(c1Params.zoneCount).toBe(1);
-        expect(c2Params.zoneCount).toBe(2);
-        expect(c3Params.zoneCount).toBe(3);
+        expect(c1Params.liczba_stref).toBe(1);
+        expect(c2Params.liczba_stref).toBe(2);
+        expect(c3Params.liczba_stref).toBe(3);
 
-        // Upewnijmy się, że 2-strefowy ma poprawny domyślny podział (2000 mm) a nie 2200 mm
-        expect(c2Params.bottomHeight).toBe(2000);
+        // Upewnijmy siÄ™, ĹĽe 2-strefowy ma poprawny domyĹ›lny podziaĹ‚ (2000 mm) a nie 2200 mm
+        expect(c2Params.wysokosc_strefy_dolnej_mm).toBe(2000);
 
-        // Upewnijmy się, że 3-strefowy ma poprawny podział (500 mm dół, 1200 mm środek) a nie 2200 / 0
-        expect(c3Params.bottomHeight).toBe(500);
-        expect(c3Params.middleHeight).toBe(1200);
+        // Upewnijmy siÄ™, ĹĽe 3-strefowy ma poprawny podziaĹ‚ (500 mm dĂłĹ‚, 1200 mm Ĺ›rodek) a nie 2200 / 0
+        expect(c3Params.wysokosc_strefy_dolnej_mm).toBe(500);
+        expect(c3Params.wysokosc_strefy_srodkowej_mm).toBe(1200);
     });
 });

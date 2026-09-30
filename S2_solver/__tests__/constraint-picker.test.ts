@@ -21,7 +21,7 @@ import { makeAnchor } from '../constraint-types.js';
 describe('resolveBindingTarget / resolveRigidBody', () => {
     it('geometria z formatki, bryła sztywna to korpus', () => {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -40,7 +40,7 @@ describe('resolveBindingTarget / resolveRigidBody', () => {
 
     it('panel ręczny w korpusie jest własną bryłą sztywną', () => {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -73,7 +73,7 @@ describe('resolveBindingTarget / resolveRigidBody', () => {
 
     it('kliknięty korpus zostaje korpusem', () => {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -87,7 +87,7 @@ describe('resolveBindingTarget / resolveRigidBody', () => {
 describe('bindAnchorToRigidBody', () => {
     it('przepina kotwicę formatki na korpus i zachowuje sourceNodeId', () => {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -116,7 +116,7 @@ describe('bindAnchorToRigidBody', () => {
 
     it('OUTER boczka (back) mapuje się na −X korpusu, nie na INNER', () => {
         const document = new ProjectDocument();
-        const container = document.createContainer({
+        const container = document.createAssembly({
             width: mmToNm(600),
             height: mmToNm(720),
             depth: mmToNm(500),
@@ -130,7 +130,7 @@ describe('bindAnchorToRigidBody', () => {
             new Vec3(mmToNm(-300 + 9), 0, mmToNm(360)),
             Quat.fromEulerXYZ(0, 0, -Math.PI / 2),
         );
-        const named = namedFaceFromPick(panelNode, 'back')!;
+        const named = namedFaceFromPick(panelNode, 'FACE_Z_MINUS')!;
         const bound = bindAnchorToRigidBody(
             panelNode,
             makeAnchor({

@@ -5,14 +5,14 @@
  */
 
 import { ContextManager } from './context-manager.js';
-import type { BootstrapContext } from './scene-bootstrap.js';
+import type { CadModuleContext } from './cad-module-context.js';
 import {
     getSelectionModeForTab,
     isConnectorsPlanePickActive,
     shouldSuppressEntitySelectionHighlight,
 } from './selection-mode.js';
 
-export function syncSelectionHighlights(ctx: BootstrapContext): void {
+export function syncSelectionHighlights(ctx: CadModuleContext): void {
     const active = ctx.document.activeEntity;
     const suppressed = ContextManager.instance.suppressSelectionHighlight;
 
@@ -38,7 +38,7 @@ export function syncSelectionHighlights(ctx: BootstrapContext): void {
     }
 }
 
-export function setSelectionHighlightSuppressed(suppressed: boolean, ctx: BootstrapContext): void {
+export function setSelectionHighlightSuppressed(suppressed: boolean, ctx: CadModuleContext): void {
     ContextManager.instance.suppressSelectionHighlight = suppressed;
     syncSelectionHighlights(ctx);
 }
@@ -71,6 +71,6 @@ export function applyTabSelectionPolicy(tabId?: string | null): void {
             document: doc,
             panelViews: cm.panelViews,
             containerViews: cm.containerViews,
-        } as BootstrapContext);
+        } as CadModuleContext);
     }
 }

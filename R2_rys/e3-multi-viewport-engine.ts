@@ -27,8 +27,8 @@ const TARGET_VIEW_MM = 110;
 const MIN_VIEW_SCALE = 0.01;
 const MAX_VIEW_SCALE = 2.0;
 const FRAME_REVEAL_DELAY_MS = 700;
-const E3_SHEETS_STORAGE_KEY = 'smartbox_cad_e3_sheets_v1';
-const E3_CURRENT_SHEET_KEY = 'smartbox_cad_e3_current_sheet_id';
+const E3_SHEETS_STORAGE_KEY = 'bloki_cad_e3_sheets_v1';
+const E3_CURRENT_SHEET_KEY = 'bloki_cad_e3_current_sheet_id';
 
 export interface E3SheetModel {
     id: string;
@@ -571,7 +571,7 @@ export class E3MultiViewportEngine {
     public addModelFromItem(item: E3LibraryItem, sheetX?: number, sheetY?: number, angle: E3ProjectionAngle = 'front'): E3SheetModel {
         const id = 'model_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
         const paperDims = E3_PAPER_FORMATS[this.paperFormat] || E3_PAPER_FORMATS['A4_LANDSCAPE'];
-        const isContainer = item.type === 'CONTAINER' || item.type === 'SMARTBOX' || (item.children && item.children.length > 0);
+        const isContainer = item.type === 'CONTAINER' || item.type === 'BLOKI' || (item.children && item.children.length > 0);
 
         const rawX = sheetX !== undefined ? sheetX : paperDims.width / 2;
         const rawY = sheetY !== undefined ? sheetY : paperDims.height / 2;

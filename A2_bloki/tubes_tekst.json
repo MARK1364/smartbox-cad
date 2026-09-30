@@ -1,0 +1,22 @@
+{
+  "panel.label": {
+    "pl": "Drążek",
+    "en": "Tube",
+    "de": "Kleiderstange"
+  },
+  "offset_top.label": {
+    "pl": "Dystans od góry:",
+    "en": "Distance from top:",
+    "de": "Abstand von oben:"
+  },
+  "show_shelf.label": {
+    "pl": "Półka nad drążkiem",
+    "en": "Shelf above tube",
+    "de": "Boden über der Stange"
+  },
+  "space_above_shelf.label": {
+    "pl": "Luz nad półką:",
+    "en": "Clearance above shelf:",
+    "de": "Luft über dem Boden:"
+  }
+}

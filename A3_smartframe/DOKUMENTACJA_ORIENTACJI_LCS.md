@@ -2,43 +2,56 @@
 
 Niniejszy dokument opisuje oficjalny standard orientacji lokalnych układów współrzędnych **LCS (Local Coordinate System)** dla wszystkich formatek meblowych w projekcie CAD.
 
----
+## Gdzie jest „opcja” (SSOT)
 
-## 1. Układ Globalny Sceny 3D (GCS / BabylonJS)
-- 🔴 **Oś X (Szerokość / Width)**: Lewo $\leftrightarrow$ Prawo
-- 🟢 **Oś Y (Wysokość / Height)**: Dół $\leftrightarrow$ Góra (Wysokość pionowa)
-- 🔵 **Oś Z (Głębokość / Depth)**: Przód $\leftrightarrow$ Tył
+W JSON rules — blok **`lcs`** przy każdej formatce, np. `B_WIENIEC_D` w:
+- `korpus3_3_rules.json`
+- `korpus_rogowy1_rules.json`
+- `korpus_rogowy90_rules.json`
 
----
+```json
+"lcs": {
+  "mapping": { "X": "x", "Y": "y", "Z": "z" },
+  "rotation": [90, 180, 0],
+  "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+}
+```
 
-## 2. Standard Przypisania Osie LCS dla poszczególnych typów formatek
-
-### A. Wieńce i Półki (`BOTTOM_PANEL`, `TOP_PANEL`, `SHELF_PANEL`, `HORIZONTAL_DIVIDER`)
-Wieńce leżą płasko w meblu, a ich układ LCS jest w 100% zgodny z układem globalnym GCS:
-- **LCS X (`bbWidth`)**: Szerokość formatki $W$ (np. $1000\text{ mm}$)
-- **LCS Y (`bbHeight`)**: Grubość pionowa formatki $T$ (np. $18\text{ mm}$)
-- **LCS Z (`bbThickness`)**: Głębokość formatki $D$ (np. $600\text{ mm}$)
-- **Kwaternion rotacji (`rotQuat`)**: `Quat.IDENTITY` ($0^\circ$)
-
----
-
-### B. Plecy i Fronty (`BACK_PANEL`, `FRONT_PANEL`)
-Plecy stoją pionowo na tyłach mebla, z grubością ukierunkowaną w głębokość:
-- **LCS X (`bbWidth`)**: Szerokość formatki $W$ (np. $1000\text{ mm}$)
-- **LCS Y (`bbHeight`)**: Wysokość pionowa formatki $H$ (np. $2200\text{ mm}$)
-- **LCS Z (`bbThickness`)**: Grubość formatki $T$ (np. $3\text{ mm}$)
-- **Kwaternion rotacji (`rotQuat`)**: `Quat.fromEulerXYZ(Math.PI, 0, 0)` ($180^\circ$ wokół osi X)
+- `mapping` — które `dim.x/y/z` → szerokość / wysokość / grubość PanelModel  
+- **`rotation`** — Euler XYZ ° → `Quat.fromEulerXYZ` w `smartframe-adapter.ts`  
+- `faces.INNER` / `OUTER` — zwykle `FACE_Z_PLUS` / `FACE_Z_MINUS`
 
 ---
 
-### C. Boczki i Przegrody Pionowe (`LEFT_SIDE_PANEL`, `RIGHT_SIDE_PANEL`, `VERTICAL_DIVIDER`)
-Boczki stoją pionowo po bokach mebla:
-- **LCS X (`bbWidth`)**: Głębokość formatki $D$ (np. $600\text{ mm}$)
-- **LCS Y (`bbHeight`)**: Wysokość pionowa formatki $H$ (np. $2200\text{ mm}$)
-- **LCS Z (`bbThickness`)**: Grubość formatki $T$ (np. $18\text{ mm}$)
-- **Kwaternion rotacji (`rotQuat`)**: `Quat.fromAxisAngle(Vec3.UNIT_Z, Math.PI / 2)` ($90^\circ$ wokół osi Z)
+## 1. Układ Globalny CAD (Z-up)
+- 🔴 **X**: Lewo ↔ Prawo  
+- 🟢 **Y**: Przód (−Y) ↔ **Tył (+Y)**  
+- 🔵 **Z**: Dół ↔ Góra  
+
+Babylon (Y-up): zamiana Y↔Z w `cad-math/coord-system.ts`.
 
 ---
 
-## 3. Implementacja w Kodzie
-Mapowanie powyższych zasad jest realizowane w funkcji `applyPlanToContainer()` w pliku [`web/A3_smartframe/smartframe-adapter.ts`](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A3_smartframe/smartframe-adapter.ts).
+## 2. Zasada LCS formatek
+
+**+Y formatki (strzałka zielona) ma wskazywać tył korpusu (+CAD Y).**  
+`FACE_Y_PLUS` = tył, `FACE_Y_MINUS` = przód.
+
+### Wieńce
+| Rola | `rotation` | Skutek |
+|------|------------|--------|
+| Wieniec **dolny** | `[90, 180, 0]` | Rx=90 + **180° wokół grubości** (niebieska LCS Z na ekranie = Ry) → **+Y → tył** |
+| Wieniec **górny** | `[-90, 0, 0]` | INNER w dół; **+Y_LCS → tył** |
+
+> W JSON Euler to `[Rx, Ry, Rz]`. Obrót 180° wokół widocznej osi Z płyty (grubość) = **`Ry = 180`**, czyli `[90, 180, 0]` — nie trzeci kąt.
+
+### Boczki / plecy
+- Boki: `[0, 0, ±90]`  
+- Plecy: zwykle `[180, 0, 0]` + mapping grubości
+
+---
+
+## 3. Implementacja
+- Aplikacja: `applyPlanToContainer()` → `smartframe-adapter.ts`  
+- Strzałki: `PanelView._buildLCSNode()`  
+- Wieniec L (Rogowy90): UV w `_resolveCorner90Geometry` — przy `Ry=180` lustro **U** (bez lustra V)

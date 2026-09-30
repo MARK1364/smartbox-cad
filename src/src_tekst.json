@@ -1,0 +1,3067 @@
+{
+  "save_cabinet.title": {
+    "pl": "Zapisz korpus do biblioteki",
+    "en": "Save cabinet to library",
+    "de": "Korpus in Bibliothek speichern"
+  },
+  "save_cabinet.default_name": {
+    "pl": "Nowy Korpus",
+    "en": "New Cabinet",
+    "de": "Neuer Korpus"
+  },
+  "save_cabinet.no_active_title": {
+    "pl": "Brak aktywnego mebla:",
+    "en": "No active furniture:",
+    "de": "Kein aktives Möbel:"
+  },
+  "save_cabinet.no_active_body": {
+    "pl": "Zaznacz na scenie korpus lub jego element, aby go zapisać.",
+    "en": "Select a cabinet or its part on the scene to save it.",
+    "de": "Korpus oder Bauteil in Szene wählen, um zu speichern."
+  },
+  "save_cabinet.dims": {
+    "pl": "Wymiary mebla:",
+    "en": "Furniture dimensions:",
+    "de": "Möbelmaße:"
+  },
+  "save_cabinet.photo_label": {
+    "pl": "Zdjęcie / Podgląd mebla:",
+    "en": "Photo / Furniture preview:",
+    "de": "Foto / Möbelvorschau:"
+  },
+  "save_cabinet.preview_ready": {
+    "pl": "Podgląd gotowy do zapisu",
+    "en": "Preview ready to save",
+    "de": "Vorschau speicherbereit"
+  },
+  "save_cabinet.photo_hint": {
+    "pl": "To zdjęcie będzie dużą ikoną w bibliotece korpusów.",
+    "en": "This photo will be the large icon in the cabinet library.",
+    "de": "Dieses Foto wird Icon in Korpusbibliothek."
+  },
+  "save_cabinet.change_frame": {
+    "pl": "Zmień kadr",
+    "en": "Change frame",
+    "de": "Ausschnitt ändern"
+  },
+  "save_cabinet.remove": {
+    "pl": "Usuń",
+    "en": "Remove",
+    "de": "Entfernen"
+  },
+  "save_cabinet.frame_scene": {
+    "pl": "Kadruj mebel na scenie (Wizjer 1:1)",
+    "en": "Frame furniture on scene (1:1 viewfinder)",
+    "de": "Möbel in Szene kadrieren (Sucher 1:1)"
+  },
+  "save_cabinet.name_label": {
+    "pl": "Nazwa szafki w katalogu:",
+    "en": "Cabinet name in catalog:",
+    "de": "Schrankname im Katalog:"
+  },
+  "save_cabinet.name_placeholder": {
+    "pl": "np. Szafka dolna 600 3 szuflady",
+    "en": "e.g. Base cabinet 600 3 drawers",
+    "de": "z.B. Unterschrank 600 3 Schubladen"
+  },
+  "save_cabinet.category_label": {
+    "pl": "Kategoria mebla:",
+    "en": "Furniture category:",
+    "de": "Möbelkategorie:"
+  },
+  "save_cabinet.categories.dolne": {
+    "pl": "Szafki dolne",
+    "en": "Base cabinets",
+    "de": "Unterschränke"
+  },
+  "save_cabinet.categories.gorne": {
+    "pl": "Szafki górne (wiszące)",
+    "en": "Wall cabinets",
+    "de": "Oberschränke"
+  },
+  "save_cabinet.categories.slupki": {
+    "pl": "Słupki wysokie",
+    "en": "Tall units",
+    "de": "Hochschränke"
+  },
+  "save_cabinet.categories.inne": {
+    "pl": "Inne korpusy",
+    "en": "Other cabinets",
+    "de": "Andere Korpusse"
+  },
+  "save_cabinet.desc_label": {
+    "pl": "Krótki opis (opcjonalnie):",
+    "en": "Short description (optional):",
+    "de": "Kurzbeschreibung (optional):"
+  },
+  "save_cabinet.desc_placeholder": {
+    "pl": "np. Korpus pod zlew, fronty z frezem, 2 półki regulowane",
+    "en": "e.g. Sink cabinet, milled fronts, 2 adjustable shelves",
+    "de": "z.B. Spülenkorpus, gefräste Fronten, 2 verstellbare Böden"
+  },
+  "save_cabinet.download_json": {
+    "pl": "Pobierz także plik",
+    "en": "Also download file",
+    "de": "Datei zusätzlich laden"
+  },
+  "save_cabinet.download_json_suffix": {
+    "pl": "na dysk komputera",
+    "en": "to this computer",
+    "de": "auf diesen Rechner"
+  },
+  "save_cabinet.cancel": {
+    "pl": "Anuluj",
+    "en": "Cancel",
+    "de": "Abbrechen"
+  },
+  "save_cabinet.save": {
+    "pl": "Zapisz do biblioteki",
+    "en": "Save to library",
+    "de": "In Bibliothek speichern"
+  },
+  "save_cabinet.err_no_active": {
+    "pl": "Nie znaleziono aktywnego korpusu na scenie. Zaznacz szafkę przed zapisem.",
+    "en": "No active cabinet on scene. Select a cabinet before saving.",
+    "de": "Kein aktiver Korpus in Szene. Vor dem Speichern wählen."
+  },
+  "save_cabinet.err_no_name": {
+    "pl": "Wpisz nazwę dla zapisywanej szafki.",
+    "en": "Enter a name for the cabinet.",
+    "de": "Namen für den Schrank eingeben."
+  },
+  "save_cabinet.err_read": {
+    "pl": "Błąd podczas odczytu danych korpusu. Upewnij się, że korpus jest prawidłowy.",
+    "en": "Error reading cabinet data. Make sure the cabinet is valid.",
+    "de": "Fehler beim Lesen der Korpusdaten. Korpus prüfen."
+  },
+  "new_project.title": {
+    "pl": "Nowy projekt",
+    "en": "New project",
+    "de": "Neues Projekt"
+  },
+  "new_project.default_name": {
+    "pl": "Projekt",
+    "en": "Project",
+    "de": "Projekt"
+  },
+  "new_project.close": {
+    "pl": "Zamknij (Esc)",
+    "en": "Close (Esc)",
+    "de": "Schließen (Esc)"
+  },
+  "new_project.ask_save": {
+    "pl": "Zapisać zmiany w projekcie „{name}”?",
+    "en": "Save changes to project \"{name}\"?",
+    "de": "Änderungen am Projekt „{name}“ speichern?"
+  },
+  "new_project.ask_discard": {
+    "pl": "Zamknąć projekt „{name}” i utworzyć nowy?",
+    "en": "Close project \"{name}\" and create a new one?",
+    "de": "Projekt „{name}“ schließen und neues erstellen?"
+  },
+  "new_project.cancel": {
+    "pl": "Anuluj",
+    "en": "Cancel",
+    "de": "Abbrechen"
+  },
+  "new_project.discard": {
+    "pl": "Nie zapisuj",
+    "en": "Don't save",
+    "de": "Nicht speichern"
+  },
+  "new_project.save": {
+    "pl": "Zapisz",
+    "en": "Save",
+    "de": "Speichern"
+  },
+  "new_project.saving": {
+    "pl": "Zapisywanie...",
+    "en": "Saving...",
+    "de": "Speichern..."
+  },
+  "new_project.create": {
+    "pl": "Nowy projekt",
+    "en": "New project",
+    "de": "Neues Projekt"
+  },
+  "gdrive.title": {
+    "pl": "Dysk Google (Chmura CAD)",
+    "en": "Google Drive (CAD Cloud)",
+    "de": "Google Drive (CAD-Cloud)"
+  },
+  "gdrive.subtitle": {
+    "pl": "Synchronizacja projektów pomiędzy stanowiskami pracy",
+    "en": "Project sync between workstations",
+    "de": "Projekt-Sync zwischen Arbeitsplätzen"
+  },
+  "gdrive.tabs.open": {
+    "pl": "Otwórz z chmury",
+    "en": "Open from cloud",
+    "de": "Aus Cloud öffnen"
+  },
+  "gdrive.tabs.save": {
+    "pl": "Zapisz w chmurze",
+    "en": "Save to cloud",
+    "de": "In Cloud speichern"
+  },
+  "gdrive.tabs.settings": {
+    "pl": "Ustawienia połączenia",
+    "en": "Connection settings",
+    "de": "Verbindungseinstellungen"
+  },
+  "gdrive.logged_in": {
+    "pl": "Zalogowano:",
+    "en": "Signed in:",
+    "de": "Angemeldet:"
+  },
+  "gdrive.logout": {
+    "pl": "Wyloguj",
+    "en": "Sign out",
+    "de": "Abmelden"
+  },
+  "gdrive.login": {
+    "pl": "Zaloguj przez Google",
+    "en": "Sign in with Google",
+    "de": "Mit Google anmelden"
+  },
+  "gdrive.refresh": {
+    "pl": "Odśwież",
+    "en": "Refresh",
+    "de": "Aktualisieren"
+  },
+  "gdrive.connect_hint": {
+    "pl": "Połącz się z kontem Google, aby wczytać listę projektów.",
+    "en": "Connect your Google account to load the project list.",
+    "de": "Google-Konto verbinden, um Projektliste zu laden."
+  },
+  "gdrive.login_drive": {
+    "pl": "Zaloguj do Google Drive",
+    "en": "Sign in to Google Drive",
+    "de": "Bei Google Drive anmelden"
+  },
+  "gdrive.loading": {
+    "pl": "Trwa ładowanie projektów z chmury...",
+    "en": "Loading projects from cloud...",
+    "de": "Projekte aus Cloud laden..."
+  },
+  "gdrive.no_files": {
+    "pl": "Brak zapisanych projektów w folderze \"SmartPanel CAD Projects\".",
+    "en": "No saved projects in \"SmartPanel CAD Projects\" folder.",
+    "de": "Keine gespeicherten Projekte im Ordner „SmartPanel CAD Projects“."
+  },
+  "gdrive.save_current": {
+    "pl": "Zapisz bieżący projekt",
+    "en": "Save current project",
+    "de": "Aktuelles Projekt speichern"
+  },
+  "gdrive.load": {
+    "pl": "Wczytaj",
+    "en": "Load",
+    "de": "Laden"
+  },
+  "gdrive.delete": {
+    "pl": "Usuń",
+    "en": "Delete",
+    "de": "Löschen"
+  },
+  "gdrive.delete_title": {
+    "pl": "Usuń plik z Dysku Google",
+    "en": "Delete file from Google Drive",
+    "de": "Datei von Google Drive löschen"
+  },
+  "gdrive.cloud_name": {
+    "pl": "Nazwa projektu w chmurze:",
+    "en": "Cloud project name:",
+    "de": "Cloud-Projektname:"
+  },
+  "gdrive.save_note": {
+    "pl": "Plik zostanie zapisany w formacie JSON w folderze \"SmartPanel CAD Projects\" na Twoim Dysku Google.",
+    "en": "File will be saved as JSON in \"SmartPanel CAD Projects\" on your Google Drive.",
+    "de": "Datei wird als JSON im Ordner „SmartPanel CAD Projects“ auf Google Drive gespeichert."
+  },
+  "gdrive.overwrite_hint": {
+    "pl": "Lub wybierz istniejący projekt do nadpisania:",
+    "en": "Or pick an existing project to overwrite:",
+    "de": "Oder vorhandenes Projekt zum Überschreiben wählen:"
+  },
+  "gdrive.save_as_new": {
+    "pl": "-- Zapisz jako nowy plik --",
+    "en": "-- Save as new file --",
+    "de": "-- Als neue Datei speichern --"
+  },
+  "gdrive.saving": {
+    "pl": "Zapisywanie...",
+    "en": "Saving...",
+    "de": "Speichern..."
+  },
+  "gdrive.overwrite": {
+    "pl": "Nadpisz projekt w chmurze",
+    "en": "Overwrite cloud project",
+    "de": "Cloud-Projekt überschreiben"
+  },
+  "gdrive.save_new": {
+    "pl": "Zapisz nowy projekt w chmurze",
+    "en": "Save new cloud project",
+    "de": "Neues Cloud-Projekt speichern"
+  },
+  "gdrive.client_id": {
+    "pl": "Google OAuth 2.0 Client ID:",
+    "en": "Google OAuth 2.0 Client ID:",
+    "de": "Google OAuth 2.0 Client ID:"
+  },
+  "gdrive.client_id_note": {
+    "pl": "Identyfikator Client ID jest generowany w darmowej konsoli Google Cloud",
+    "en": "Client ID is generated in the free Google Cloud console",
+    "de": "Client ID wird in der kostenlosen Google Cloud Console erzeugt"
+  },
+  "gdrive.client_id_note_tail": {
+    "pl": "(Credentials → OAuth Client ID dla aplikacji webowych z adresem Twojego CADa).",
+    "en": "(Credentials → OAuth Client ID for web apps with your CAD address).",
+    "de": "(Credentials → OAuth Client ID für Web-Apps mit CAD-Adresse)."
+  },
+  "gdrive.save_client_id": {
+    "pl": "Zapisz Client ID",
+    "en": "Save Client ID",
+    "de": "Client ID speichern"
+  },
+  "gdrive.manual_title": {
+    "pl": "Instrukcja dla 3 komputerów:",
+    "en": "3-computer guide:",
+    "de": "Anleitung für 3 Rechner:"
+  },
+  "gdrive.manual_1": {
+    "pl": "Na każdym komputerze wprowadź ten sam Client ID (lub zaloguj się swoim kontem Google).",
+    "en": "On each computer enter the same Client ID (or sign in with your Google account).",
+    "de": "Auf jedem Rechner dieselbe Client ID eingeben (oder mit Google-Konto anmelden)."
+  },
+  "gdrive.manual_2": {
+    "pl": "Pliki zapisane w jednym miejscu pojawią się automatycznie w oknie \"Otwórz z chmury\" na pozostałych maszynach.",
+    "en": "Files saved in one place appear automatically in \"Open from cloud\" on the other machines.",
+    "de": "An einem Ort gespeicherte Dateien erscheinen automatisch unter „Aus Cloud öffnen“ auf den anderen Rechnern."
+  },
+  "gdrive.manual_3": {
+    "pl": "Aplikacja tworzy dedykowany folder",
+    "en": "The app creates a dedicated folder",
+    "de": "Die App erstellt einen eigenen Ordner"
+  },
+  "gdrive.manual_3_tail": {
+    "pl": "na Twoim Dysku Google.",
+    "en": "on your Google Drive.",
+    "de": "auf Google Drive."
+  },
+  "gdrive.close": {
+    "pl": "Zamknij",
+    "en": "Close",
+    "de": "Schließen"
+  },
+  "gdrive.default_name": {
+    "pl": "Projekt_Meble",
+    "en": "Furniture_Project",
+    "de": "Möbel_Projekt"
+  },
+  "gdrive.err_list": {
+    "pl": "Błąd ładowania listy plików.",
+    "en": "Error loading file list.",
+    "de": "Fehler beim Laden der Dateiliste."
+  },
+  "gdrive.err_client_id": {
+    "pl": "Wpisz identyfikator Google Client ID w zakładce Ustawienia.",
+    "en": "Enter the Google Client ID in the Settings tab.",
+    "de": "Google Client ID im Reiter Einstellungen eingeben."
+  },
+  "gdrive.ok_connected": {
+    "pl": "Pomyślnie połączono z kontem Google!",
+    "en": "Successfully connected to Google account!",
+    "de": "Erfolgreich mit Google-Konto verbunden!"
+  },
+  "gdrive.err_login": {
+    "pl": "Logowanie nie powiodło się.",
+    "en": "Sign-in failed.",
+    "de": "Anmeldung fehlgeschlagen."
+  },
+  "gdrive.ok_saved": {
+    "pl": "Projekt \"{name}\" został pomyślnie zapisany w chmurze!",
+    "en": "Project \"{name}\" saved to cloud!",
+    "de": "Projekt „{name}“ in Cloud gespeichert!"
+  },
+  "gdrive.err_save": {
+    "pl": "Nie udało się zapisać projektu.",
+    "en": "Failed to save project.",
+    "de": "Projekt konnte nicht gespeichert werden."
+  },
+  "gdrive.err_open": {
+    "pl": "Błąd otwierania projektu.",
+    "en": "Error opening project.",
+    "de": "Fehler beim Öffnen des Projekts."
+  },
+  "gdrive.confirm_delete": {
+    "pl": "Czy na pewno usunąć projekt \"{name}\" z Dysku Google?",
+    "en": "Really delete project \"{name}\" from Google Drive?",
+    "de": "Projekt „{name}“ wirklich von Google Drive löschen?"
+  },
+  "gdrive.ok_deleted": {
+    "pl": "Usunięto projekt \"{name}\".",
+    "en": "Deleted project \"{name}\".",
+    "de": "Projekt „{name}“ gelöscht."
+  },
+  "gdrive.err_delete": {
+    "pl": "Błąd usuwania pliku.",
+    "en": "Error deleting file.",
+    "de": "Fehler beim Löschen der Datei."
+  },
+  "gdrive.ok_client_id": {
+    "pl": "Zapisano Google Client ID dla tej przeglądarki.",
+    "en": "Google Client ID saved for this browser.",
+    "de": "Google Client ID für diesen Browser gespeichert."
+  },
+  "perf.title": {
+    "pl": "Opcje Wydajności i Grafiki 3D",
+    "en": "Performance and 3D Graphics Options",
+    "de": "Leistungs- und 3D-Grafikoptionen"
+  },
+  "perf.subtitle": {
+    "pl": "Wybierz profil zoptymalizowany pod kartę graficzną tego komputera",
+    "en": "Pick a profile optimized for this computer's GPU",
+    "de": "Profil für GPU dieses Rechners wählen"
+  },
+  "perf.stored_note": {
+    "pl": "Ustawienia są zapamiętywane w pamięci tej przeglądarki (możesz ustawić inną opcję na warsztacie, a inną w biurze).",
+    "en": "Settings are stored in this browser (e.g. one option in the workshop, another in the office).",
+    "de": "Einstellungen werden in diesem Browser gespeichert (z.B. andere Option in Werkstatt und Büro)."
+  },
+  "perf.high": {
+    "pl": "Wysoka wydajność i ostrość (Dedykowana GPU)",
+    "en": "High performance and sharpness (dedicated GPU)",
+    "de": "Hohe Leistung und Schärfe (dedizierte GPU)"
+  },
+  "perf.high_desc": {
+    "pl": "Pełna ostrość 100% (żyleta), włączony antyaliasing, natychmiastowe podświetlanie elementów (20 ms).",
+    "en": "Full 100% sharpness, antialiasing on, instant element highlight (20 ms).",
+    "de": "Volle 100% Schärfe, Antialiasing an, sofortiges Highlighten (20 ms)."
+  },
+  "perf.balanced": {
+    "pl": "Zrównoważony",
+    "en": "Balanced",
+    "de": "Ausgeglichen"
+  },
+  "perf.balanced_sub": {
+    "pl": "Średnie laptopy / Biuro",
+    "en": "Mid laptops / Office",
+    "de": "Mittlere Laptops / Büro"
+  },
+  "perf.balanced_desc": {
+    "pl": "Skalowanie 1.25 (80% rozdzielczości), włączony antyaliasing, zrównoważona reakcja (35 ms).",
+    "en": "1.25 scaling (80% resolution), antialiasing on, balanced response (35 ms).",
+    "de": "Skalierung 1.25 (80% Auflösung), Antialiasing an, ausgewogene Reaktion (35 ms)."
+  },
+  "perf.light": {
+    "pl": "Lekki / Słaby komputer (Zintegrowana grafika)",
+    "en": "Light / Weak computer (integrated graphics)",
+    "de": "Leicht / Schwacher Rechner (integrierte Grafik)"
+  },
+  "perf.light_desc": {
+    "pl": "Skalowanie 1.5 (lżejszy render o 55%), wyłączony antyaliasing (płynny obrót), odciążony procesor (50 ms).",
+    "en": "1.5 scaling (55% lighter render), antialiasing off (smooth orbit), unloaded CPU (50 ms).",
+    "de": "Skalierung 1.5 (55% leichteres Rendering), Antialiasing aus (flüssiges Drehen), entlastete CPU (50 ms)."
+  },
+  "perf.advanced_show": {
+    "pl": "Pokaż ustawienia zaawansowane (suwaki)",
+    "en": "Show advanced settings (sliders)",
+    "de": "Erweiterte Einstellungen anzeigen (Regler)"
+  },
+  "perf.advanced_hide": {
+    "pl": "Ukryj ustawienia zaawansowane",
+    "en": "Hide advanced settings",
+    "de": "Erweiterte Einstellungen ausblenden"
+  },
+  "perf.scaling": {
+    "pl": "Skalowanie rozdzielczości (DPI):",
+    "en": "Resolution scaling (DPI):",
+    "de": "Auflösungsskalierung (DPI):"
+  },
+  "perf.sharp_100": {
+    "pl": "(100% ostrość)",
+    "en": "(100% sharpness)",
+    "de": "(100% Schärfe)"
+  },
+  "perf.scaled_pct": {
+    "pl": "(~{n}% rozdzielczości)",
+    "en": "(~{n}% resolution)",
+    "de": "(~{n}% Auflösung)"
+  },
+  "perf.scale_10": {
+    "pl": "1.0 (Żyleta)",
+    "en": "1.0 (Razor)",
+    "de": "1.0 (Rasiermesserscharf)"
+  },
+  "perf.aa_title": {
+    "pl": "Wygładzanie krawędzi (Antyaliasing / MSAA)",
+    "en": "Edge smoothing (Antialiasing / MSAA)",
+    "de": "Kantenglättung (Antialiasing / MSAA)"
+  },
+  "perf.aa_desc": {
+    "pl": "Wyłączenie drastycznie przyspiesza karty Intel Graphics",
+    "en": "Disabling massively speeds up Intel Graphics",
+    "de": "Deaktivieren beschleunigt Intel Graphics drastisch"
+  },
+  "perf.hover_title": {
+    "pl": "Częstotliwość próbkowania kursora (Raycast Hover):",
+    "en": "Cursor sampling rate (Raycast Hover):",
+    "de": "Cursor-Abtastrate (Raycast Hover):"
+  },
+  "perf.hover_save": {
+    "pl": "100 ms (Oszczędza CPU)",
+    "en": "100 ms (Saves CPU)",
+    "de": "100 ms (Spart CPU)"
+  },
+  "perf.engine": {
+    "pl": "Silnik renderujący 3D:",
+    "en": "3D render engine:",
+    "de": "3D-Render-Engine:"
+  },
+  "perf.engine_restart": {
+    "pl": "Wymaga odświeżenia (F5)",
+    "en": "Requires refresh (F5)",
+    "de": "Aktualisierung erforderlich (F5)"
+  },
+  "perf.restore": {
+    "pl": "Przywróć domyślne",
+    "en": "Restore defaults",
+    "de": "Standard wiederherstellen"
+  },
+  "perf.saved": {
+    "pl": "Zapisano! Odśwież stronę (F5), aby przełączyć silnik 3D.",
+    "en": "Saved! Refresh the page (F5) to switch the 3D engine.",
+    "de": "Gespeichert! Seite aktualisieren (F5), um 3D-Engine zu wechseln."
+  },
+  "perf.restored": {
+    "pl": "Przywrócono ustawienia fabryczne!",
+    "en": "Factory settings restored!",
+    "de": "Werkseinstellungen wiederhergestellt!"
+  },
+  "perf.apply_fail": {
+    "pl": "Nie udało się zaaplikować do silnika natychmiast:",
+    "en": "Failed to apply to engine immediately:",
+    "de": "Konnte nicht sofort auf Engine angewendet werden:"
+  },
+  "float.face_outer": {
+    "pl": "Zewnętrzna",
+    "en": "Outer",
+    "de": "Außen"
+  },
+  "float.face_inner": {
+    "pl": "Wewnętrzna",
+    "en": "Inner",
+    "de": "Innen"
+  },
+  "float.face_bottom": {
+    "pl": "Dół",
+    "en": "Bottom",
+    "de": "Unten"
+  },
+  "float.face_top": {
+    "pl": "Góra",
+    "en": "Top",
+    "de": "Oben"
+  },
+  "float.face_side_l": {
+    "pl": "Bok L",
+    "en": "Left side",
+    "de": "Seite L"
+  },
+  "float.face_side_r": {
+    "pl": "Bok P",
+    "en": "Right side",
+    "de": "Seite R"
+  },
+  "float.panel_default": {
+    "pl": "Formatka",
+    "en": "Panel",
+    "de": "Platte"
+  },
+  "float.edit_panel_title": {
+    "pl": "Edycja formatki: {name}",
+    "en": "Panel edit: {name}",
+    "de": "Platte bearbeiten: {name}"
+  },
+  "float.close": {
+    "pl": "Zamknij (Esc)",
+    "en": "Close (Esc)",
+    "de": "Schließen (Esc)"
+  },
+  "float.subtitle_dims": {
+    "pl": "Wymiary i asocjacje",
+    "en": "Dimensions and associatives",
+    "de": "Maße und Assoziative"
+  },
+  "float.subtitle_side": {
+    "pl": "Strona:",
+    "en": "Side:",
+    "de": "Seite:"
+  },
+  "float.from_edge": {
+    "pl": "Od {edge}",
+    "en": "From {edge}",
+    "de": "Ab {edge}"
+  },
+  "float.margin_left": {
+    "pl": "Margines lewy (L)",
+    "en": "Left margin (L)",
+    "de": "Rand links (L)"
+  },
+  "float.margin_right": {
+    "pl": "Margines prawy (P)",
+    "en": "Right margin (P)",
+    "de": "Rand rechts (P)"
+  },
+  "float.default_op": {
+    "pl": "Przetłoczenie / Wycięcie",
+    "en": "Emboss / Cutout",
+    "de": "Prägung / Ausschnitt"
+  },
+  "float.dim_w": {
+    "pl": "Szerokość (W)",
+    "en": "Width (W)",
+    "de": "Breite (W)"
+  },
+  "float.dim_h": {
+    "pl": "Wysokość (H)",
+    "en": "Height (H)",
+    "de": "Höhe (H)"
+  },
+  "float.dim_t": {
+    "pl": "Grubość (T)",
+    "en": "Thickness (T)",
+    "de": "Dicke (T)"
+  },
+  "float.margin_top": {
+    "pl": "Margines góra (G)",
+    "en": "Top margin (G)",
+    "de": "Rand oben (G)"
+  },
+  "float.margin_bottom": {
+    "pl": "Margines dół (D)",
+    "en": "Bottom margin (D)",
+    "de": "Rand unten (D)"
+  },
+  "float.depth": {
+    "pl": "Głębokość",
+    "en": "Depth",
+    "de": "Tiefe"
+  },
+  "float.margins_overflow": {
+    "pl": "Marginesy przekraczają wymiar formatki ({w}×{h} mm)",
+    "en": "Margins exceed panel size ({w}×{h} mm)",
+    "de": "Ränder überschreiten Plattenmaß ({w}×{h} mm)"
+  },
+  "float.cut_overflow": {
+    "pl": "Wycięcie wykracza poza obrys formatki ({w}×{h} mm)",
+    "en": "Cutout goes beyond panel outline ({w}×{h} mm)",
+    "de": "Ausschnitt ragt über Plattenumriss hinaus ({w}×{h} mm)"
+  },
+  "lib.title": {
+    "pl": "Biblioteka Korpusów",
+    "en": "Cabinet Library",
+    "de": "Korpusbibliothek"
+  },
+  "lib.save_selected": {
+    "pl": "Zapisz zaznaczony",
+    "en": "Save selected",
+    "de": "Auswahl speichern"
+  },
+  "lib.save_selected_title": {
+    "pl": "Zapisz zaznaczoną szafkę ze sceny do biblioteki",
+    "en": "Save selected scene cabinet to library",
+    "de": "Gewählten Schrank aus Szene in Bibliothek speichern"
+  },
+  "lib.load_from_disk": {
+    "pl": "Wczytaj z dysku",
+    "en": "Load from disk",
+    "de": "Von Platte laden"
+  },
+  "lib.load_from_disk_title": {
+    "pl": "Wczytaj plik .json szafki lub całej biblioteki z dysku komputera",
+    "en": "Load a cabinet .json file or whole library from this computer",
+    "de": ".json-Datei eines Schranks oder der ganzen Bibliothek laden"
+  },
+  "lib.search_placeholder": {
+    "pl": "Szukaj szafki (nazwa, wymiar np. 600)...",
+    "en": "Search cabinets (name, size e.g. 600)...",
+    "de": "Schränke suchen (Name, Maß z.B. 600)..."
+  },
+  "lib.tabs.all": {
+    "pl": "Wszystkie",
+    "en": "All",
+    "de": "Alle"
+  },
+  "lib.tabs.dolne": {
+    "pl": "Dolne",
+    "en": "Base",
+    "de": "Unten"
+  },
+  "lib.tabs.gorne": {
+    "pl": "Górne",
+    "en": "Wall",
+    "de": "Oben"
+  },
+  "lib.tabs.slupki": {
+    "pl": "Słupki",
+    "en": "Tall",
+    "de": "Hoch"
+  },
+  "lib.tabs.inne": {
+    "pl": "Inne",
+    "en": "Other",
+    "de": "Andere"
+  },
+  "lib.empty_title": {
+    "pl": "Brak szafek w wybranej kategorii.",
+    "en": "No cabinets in this category.",
+    "de": "Keine Schränke in dieser Kategorie."
+  },
+  "lib.empty_hint": {
+    "pl": "Zaprojektuj korpus na scenie i kliknij",
+    "en": "Design a cabinet on the scene and click",
+    "de": "Korpus in Szene planen und klicken"
+  },
+  "lib.empty_action": {
+    "pl": "„Zapisz zaznaczony”",
+    "en": "\"Save selected\"",
+    "de": "„Auswahl speichern“"
+  },
+  "lib.card_drag_title": {
+    "pl": "Chwyć i przeciągnij na scenę 3D",
+    "en": "Grab and drag onto the 3D scene",
+    "de": "Greifen und auf die 3D-Szene ziehen"
+  },
+  "lib.download_json": {
+    "pl": "Pobierz plik JSON na dysk",
+    "en": "Download JSON file to disk",
+    "de": "JSON-Datei auf Platte laden"
+  },
+  "lib.download_short": {
+    "pl": "JSON",
+    "en": "JSON",
+    "de": "JSON"
+  },
+  "lib.delete_from_lib": {
+    "pl": "Usuń z biblioteki",
+    "en": "Delete from library",
+    "de": "Aus Bibliothek löschen"
+  },
+  "lib.delete_short": {
+    "pl": "Usuń",
+    "en": "Delete",
+    "de": "Löschen"
+  },
+  "lib.total": {
+    "pl": "Łącznie w bibliotece: {n}",
+    "en": "Total in library: {n}",
+    "de": "Gesamt in Bibliothek: {n}"
+  },
+  "lib.export_all": {
+    "pl": "Eksportuj wszystko",
+    "en": "Export all",
+    "de": "Alle exportieren"
+  },
+  "lib.export_all_title": {
+    "pl": "Pobierz całą bibliotekę jako jeden plik JSON na dysk",
+    "en": "Download the whole library as one JSON file",
+    "de": "Ganze Bibliothek als eine JSON-Datei laden"
+  },
+  "lib.reset": {
+    "pl": "Reset",
+    "en": "Reset",
+    "de": "Reset"
+  },
+  "lib.confirm_delete": {
+    "pl": "Czy na pewno usunąć szafkę \"{name}\" z biblioteki?",
+    "en": "Really delete cabinet \"{name}\" from library?",
+    "de": "Schrank „{name}“ wirklich aus Bibliothek löschen?"
+  },
+  "lib.deleted": {
+    "pl": "Usunięto szafkę: {name}",
+    "en": "Deleted cabinet: {name}",
+    "de": "Schrank gelöscht: {name}"
+  },
+  "lib.inserted": {
+    "pl": "Wstawiono: {name}",
+    "en": "Inserted: {name}",
+    "de": "Eingefügt: {name}"
+  },
+  "lib.imported": {
+    "pl": "Pomyślnie zaimportowano {n} szafek!",
+    "en": "Successfully imported {n} cabinets!",
+    "de": "Erfolgreich {n} Schränke importiert!"
+  },
+  "lib.import_error": {
+    "pl": "Błąd importu: {error}",
+    "en": "Import error: {error}",
+    "de": "Importfehler: {error}"
+  },
+  "lib.confirm_reset": {
+    "pl": "Czy na pewno przywrócić szablony startowe?",
+    "en": "Really restore starter templates?",
+    "de": "Startvorlagen wirklich wiederherstellen?"
+  },
+  "lib.reset_done": {
+    "pl": "Przywrócono szablony domyślne",
+    "en": "Default templates restored",
+    "de": "Standardvorlagen wiederhergestellt"
+  },
+  "lib.downloaded": {
+    "pl": "Pobrano plik: {name}.json",
+    "en": "Downloaded file: {name}.json",
+    "de": "Datei geladen: {name}.json"
+  },
+  "prop.object_default": {
+    "pl": "Obiekt",
+    "en": "Object",
+    "de": "Objekt"
+  },
+  "prop.type_groove": {
+    "pl": "Operacja / Wpust",
+    "en": "Operation / Groove",
+    "de": "Operation / Nut"
+  },
+  "prop.type_hole": {
+    "pl": "Otwór",
+    "en": "Hole",
+    "de": "Bohrung"
+  },
+  "prop.type_object": {
+    "pl": "Obiekt 3D",
+    "en": "3D Object",
+    "de": "3D-Objekt"
+  },
+  "prop.title": {
+    "pl": "Właściwości",
+    "en": "Properties",
+    "de": "Eigenschaften"
+  },
+  "prop.rotation": {
+    "pl": "Obrót (Rotation)",
+    "en": "Rotation",
+    "de": "Rotation"
+  },
+  "prop.diameter": {
+    "pl": "Średnica (⌀):",
+    "en": "Diameter (⌀):",
+    "de": "Durchmesser (⌀):"
+  },
+  "prop.depth": {
+    "pl": "Głębokość:",
+    "en": "Depth:",
+    "de": "Tiefe:"
+  },
+  "prop.face": {
+    "pl": "Ściana (Face):",
+    "en": "Face:",
+    "de": "Fläche:"
+  },
+  "prop.uv": {
+    "pl": "Współrzędne UV",
+    "en": "UV Coordinates",
+    "de": "UV-Koordinaten"
+  },
+  "prop.panel_dims": {
+    "pl": "Wymiary płyty",
+    "en": "Panel dimensions",
+    "de": "Plattenmaße"
+  },
+  "prop.width_w": {
+    "pl": "Szerokość (W):",
+    "en": "Width (W):",
+    "de": "Breite (W):"
+  },
+  "prop.height_h": {
+    "pl": "Wysokość (H):",
+    "en": "Height (H):",
+    "de": "Höhe (H):"
+  },
+  "prop.thickness_t": {
+    "pl": "Grubość (T):",
+    "en": "Thickness (T):",
+    "de": "Dicke (T):"
+  },
+  "prop.depth_d": {
+    "pl": "Głębokość (D):",
+    "en": "Depth (D):",
+    "de": "Tiefe (D):"
+  },
+  "prop.count": {
+    "pl": "Liczba płyt:",
+    "en": "Panel count:",
+    "de": "Plattenanzahl:"
+  },
+  "prop.manual_note": {
+    "pl": "Sterowany parametrami korpusu — bez edycji ręcznej.",
+    "en": "Driven by cabinet parameters — no manual edit.",
+    "de": "Von Korpusparametern gesteuert — keine manuelle Bearbeitung."
+  },
+  "prop.width": {
+    "pl": "Szerokość:",
+    "en": "Width:",
+    "de": "Breite:"
+  },
+  "prop.height": {
+    "pl": "Wysokość:",
+    "en": "Height:",
+    "de": "Höhe:"
+  },
+  "prop.from_edge_w": {
+    "pl": "Od krawędzi (szer.):",
+    "en": "From edge (width):",
+    "de": "Ab Kante (Breite):"
+  },
+  "prop.from_edge_h": {
+    "pl": "Od krawędzi (wys.):",
+    "en": "From edge (height):",
+    "de": "Ab Kante (Höhe):"
+  },
+  "prop.margin_top": {
+    "pl": "Margines góra (G):",
+    "en": "Top margin (G):",
+    "de": "Rand oben (G):"
+  },
+  "prop.margin_bottom": {
+    "pl": "Margines dół (D):",
+    "en": "Bottom margin (D):",
+    "de": "Rand unten (D):"
+  },
+  "prop.length": {
+    "pl": "Długość:",
+    "en": "Length:",
+    "de": "Länge:"
+  },
+  "prop.wall": {
+    "pl": "Ściana:",
+    "en": "Wall:",
+    "de": "Wand:"
+  },
+  "prop.fillet_title": {
+    "pl": "Parametry zaokrąglenia",
+    "en": "Fillet parameters",
+    "de": "Verrundungsparameter"
+  },
+  "prop.fillet_edge": {
+    "pl": "Zaokrąglenie krawędzi (Fillet)",
+    "en": "Edge fillet",
+    "de": "Kantenverrundung"
+  },
+  "prop.no_params": {
+    "pl": "Brak szczegółowych parametrów dla tego obiektu.",
+    "en": "No detailed parameters for this object.",
+    "de": "Keine Detailparameter für dieses Objekt."
+  },
+  "prop.no_custom": {
+    "pl": "Brak zdefiniowanych właściwości.",
+    "en": "No custom properties defined.",
+    "de": "Keine benutzerdefinierten Eigenschaften."
+  },
+  "prop.delete": {
+    "pl": "Usuń",
+    "en": "Delete",
+    "de": "Löschen"
+  },
+  "prop.add_new": {
+    "pl": "Dodaj nową",
+    "en": "Add new",
+    "de": "Neu hinzufügen"
+  },
+  "prop.value_placeholder": {
+    "pl": "Wartość",
+    "en": "Value",
+    "de": "Wert"
+  },
+  "prop.add_prop": {
+    "pl": "Dodaj właściwość",
+    "en": "Add property",
+    "de": "Eigenschaft hinzufügen"
+  },
+  "prop.type_label": {
+    "pl": "Typ:",
+    "en": "Type:",
+    "de": "Typ:"
+  },
+  "tree.hole_label": {
+    "pl": "Otwór ⌀{d}x{h}",
+    "en": "Hole ⌀{d}x{h}",
+    "de": "Bohrung ⌀{d}x{h}"
+  },
+  "tree.unfreeze_op": {
+    "pl": "Odmroź obróbkę (silnik)",
+    "en": "Unfreeze operation (engine)",
+    "de": "Operation auftauen (Engine)"
+  },
+  "tree.freeze_op": {
+    "pl": "Zamroź obróbkę (silnik)",
+    "en": "Freeze operation (engine)",
+    "de": "Operation einfrieren (Engine)"
+  },
+  "tree.smart_op": {
+    "pl": "Operacja Smart — kliknij PPM, aby edytować operację",
+    "en": "Smart operation — right-click to edit",
+    "de": "Smart-Operation — Rechtsklick zum Bearbeiten"
+  },
+  "tree.engine_groove": {
+    "pl": "Wpust silnika — sterowany parametrami korpusu",
+    "en": "Engine groove — driven by cabinet parameters",
+    "de": "Engine-Nut — von Korpusparametern gesteuert"
+  },
+  "tree.delete_op": {
+    "pl": "Usuń operację",
+    "en": "Delete operation",
+    "de": "Operation löschen"
+  },
+  "tree.toggle": {
+    "pl": "Ukryj/Pokaż",
+    "en": "Hide/Show",
+    "de": "Aus-/Einblenden"
+  },
+  "tree.delete_panel": {
+    "pl": "Usuń formatkę",
+    "en": "Delete panel",
+    "de": "Platte löschen"
+  },
+  "tree.toggle_hw": {
+    "pl": "Ukryj okucie",
+    "en": "Hide hardware",
+    "de": "Beschlag ausblenden"
+  },
+  "tree.show_hw": {
+    "pl": "Pokaż okucie",
+    "en": "Show hardware",
+    "de": "Beschlag einblenden"
+  },
+  "tree.toggle_led": {
+    "pl": "Ukryj kanał LED",
+    "en": "Hide LED channel",
+    "de": "LED-Kanal ausblenden"
+  },
+  "tree.show_led": {
+    "pl": "Pokaż kanał LED",
+    "en": "Show LED channel",
+    "de": "LED-Kanal einblenden"
+  },
+  "tree.led_default": {
+    "pl": "Kanał LED",
+    "en": "LED channel",
+    "de": "LED-Kanal"
+  },
+  "tree.delete_led": {
+    "pl": "Usuń kanał LED",
+    "en": "Delete LED channel",
+    "de": "LED-Kanal löschen"
+  },
+  "tree.delete_container": {
+    "pl": "Usuń kontener",
+    "en": "Delete container",
+    "de": "Container löschen"
+  },
+  "tree.no_dims": {
+    "pl": "Brak wymiarów",
+    "en": "No dimensions",
+    "de": "Keine Maße"
+  },
+  "tree.delete_dim": {
+    "pl": "Usuń wymiar",
+    "en": "Delete dimension",
+    "de": "Maß löschen"
+  },
+  "tree.delete_measure": {
+    "pl": "Usuń pomiar",
+    "en": "Delete measurement",
+    "de": "Messung löschen"
+  },
+  "tree.no_joints": {
+    "pl": "Brak złączy",
+    "en": "No joints",
+    "de": "Keine Verbinder"
+  },
+  "tree.joints": {
+    "pl": "Złącza",
+    "en": "Joints",
+    "de": "Verbinder"
+  },
+  "tree.loading": {
+    "pl": "Ładowanie drzewa obiektów...",
+    "en": "Loading object tree...",
+    "de": "Objektbaum laden..."
+  },
+  "tree.project_default": {
+    "pl": "Cały Projekt",
+    "en": "Whole Project",
+    "de": "Gesamtprojekt"
+  },
+  "saas.err_load": {
+    "pl": "Błąd wczytywania projektów z chmury.",
+    "en": "Error loading projects from cloud.",
+    "de": "Fehler beim Laden der Cloud-Projekte."
+  },
+  "saas.ok_saved": {
+    "pl": "Projekt \"{name}\" został zapisany w chmurze!",
+    "en": "Project \"{name}\" saved to cloud!",
+    "de": "Projekt „{name}“ in Cloud gespeichert!"
+  },
+  "saas.err_save": {
+    "pl": "Nie udało się zapisać projektu.",
+    "en": "Failed to save project.",
+    "de": "Projekt konnte nicht gespeichert werden."
+  },
+  "saas.err_open": {
+    "pl": "Błąd otwierania projektu.",
+    "en": "Error opening project.",
+    "de": "Fehler beim Öffnen des Projekts."
+  },
+  "saas.confirm_delete": {
+    "pl": "Czy na pewno usunąć projekt \"{name}\" z chmury?",
+    "en": "Really delete project \"{name}\" from cloud?",
+    "de": "Projekt „{name}“ wirklich aus Cloud löschen?"
+  },
+  "saas.ok_deleted": {
+    "pl": "Usunięto projekt \"{name}\".",
+    "en": "Deleted project \"{name}\".",
+    "de": "Projekt „{name}“ gelöscht."
+  },
+  "saas.err_delete": {
+    "pl": "Błąd usuwania projektu.",
+    "en": "Error deleting project.",
+    "de": "Fehler beim Löschen des Projekts."
+  },
+  "saas.ok_link": {
+    "pl": "Skopiowano link do podglądu 3D dla klienta: {url}",
+    "en": "Copied 3D preview link for client: {url}",
+    "de": "3D-Vorschaulink für Kunden kopiert: {url}"
+  },
+  "saas.ok_unshared": {
+    "pl": "Wyłączono publiczne udostępnianie projektu.",
+    "en": "Disabled public project sharing.",
+    "de": "Öffentliche Projektfreigabe deaktiviert."
+  },
+  "saas.account": {
+    "pl": "Konto:",
+    "en": "Account:",
+    "de": "Konto:"
+  },
+  "saas.anonymous": {
+    "pl": "Niezalogowany",
+    "en": "Not signed in",
+    "de": "Nicht angemeldet"
+  },
+  "saas.plan": {
+    "pl": "Plan:",
+    "en": "Plan:",
+    "de": "Plan:"
+  },
+  "saas.current_name_ph": {
+    "pl": "Nazwa bieżącego projektu...",
+    "en": "Current project name...",
+    "de": "Aktueller Projektname..."
+  },
+  "saas.save_current": {
+    "pl": "Zapisz bieżący CAD",
+    "en": "Save current CAD",
+    "de": "Aktuelles CAD speichern"
+  },
+  "saas.loading": {
+    "pl": "Ładowanie projektów z chmury...",
+    "en": "Loading projects from cloud...",
+    "de": "Cloud-Projekte laden..."
+  },
+  "saas.no_projects": {
+    "pl": "Brak zapisanych projektów w chmurze",
+    "en": "No saved projects in cloud",
+    "de": "Keine gespeicherten Projekte in Cloud"
+  },
+  "saas.no_projects_hint": {
+    "pl": "Wpisz nazwę u góry i kliknij \"Zapisz bieżący CAD\", aby zachować projekt.",
+    "en": "Type a name above and click \"Save current CAD\" to keep the project.",
+    "de": "Namen oben eingeben und „Aktuelles CAD speichern“ klicken."
+  },
+  "saas.unshare": {
+    "pl": "Wyłącz udostępnianie",
+    "en": "Disable sharing",
+    "de": "Freigabe deaktivieren"
+  },
+  "saas.share_3d": {
+    "pl": "Udostępnij link 3D dla klienta (PRO)",
+    "en": "Share 3D link for client (PRO)",
+    "de": "3D-Link für Kunden teilen (PRO)"
+  },
+  "saas.delete_cloud": {
+    "pl": "Usuń projekt z chmury",
+    "en": "Delete project from cloud",
+    "de": "Projekt aus Cloud löschen"
+  },
+  "saas.upgrade": {
+    "pl": "Zwiększ limit do 100 projektów (Przejdź na PRO)",
+    "en": "Raise limit to 100 projects (Go PRO)",
+    "de": "Limit auf 100 Projekte erhöhen (PRO werden)"
+  },
+  "saas.auth_email": {
+    "pl": "Wprowadź adres e-mail.",
+    "en": "Enter your e-mail address.",
+    "de": "E-Mail-Adresse eingeben."
+  },
+  "saas.auth_error": {
+    "pl": "Wystąpił błąd podczas uwierzytelniania.",
+    "en": "An authentication error occurred.",
+    "de": "Authentifizierungsfehler aufgetreten."
+  },
+  "saas.auth_demo": {
+    "pl": "Błąd logowania kontem demo.",
+    "en": "Demo account sign-in error.",
+    "de": "Demo-Konto-Anmeldefehler."
+  },
+  "saas.auth_google": {
+    "pl": "Błąd logowania Google.",
+    "en": "Google sign-in error.",
+    "de": "Google-Anmeldefehler."
+  },
+  "saas.login_title": {
+    "pl": "Zaloguj się do SmartPanel Cloud",
+    "en": "Sign in to SmartPanel Cloud",
+    "de": "Bei SmartPanel Cloud anmelden"
+  },
+  "saas.register_title": {
+    "pl": "Utwórz konto w chmurze",
+    "en": "Create a cloud account",
+    "de": "Cloud-Konto erstellen"
+  },
+  "saas.name_label": {
+    "pl": "Imię i nazwisko / Nazwa firmy",
+    "en": "Full name / Company",
+    "de": "Name / Firmenname"
+  },
+  "saas.password": {
+    "pl": "Hasło",
+    "en": "Password",
+    "de": "Passwort"
+  },
+  "saas.processing": {
+    "pl": "Przetwarzanie...",
+    "en": "Processing...",
+    "de": "Verarbeiten..."
+  },
+  "saas.login_btn": {
+    "pl": "Zaloguj się",
+    "en": "Sign in",
+    "de": "Anmelden"
+  },
+  "saas.register_btn": {
+    "pl": "Zarejestruj konto",
+    "en": "Register account",
+    "de": "Konto registrieren"
+  },
+  "saas.pro_congrats": {
+    "pl": "Gratulacje! Twój plan został zaktualizowany do wersji PRO. Wszystkie funkcje są teraz odblokowane.",
+    "en": "Congratulations! Your plan was upgraded to PRO. All features are now unlocked.",
+    "de": "Glückwunsch! Dein Plan wurde auf PRO aktualisiert. Alle Funktionen sind freigeschaltet."
+  },
+  "saas.pro_feature_locked": {
+    "pl": "Funkcja \"{name}\" wymaga aktywnej subskrypcji PRO.",
+    "en": "Feature \"{name}\" requires an active PRO subscription.",
+    "de": "Funktion „{name}“ erfordert aktives PRO-Abo."
+  },
+  "saas.pro_subtitle": {
+    "pl": "Zwiększ wydajność stolarni dzięki automatyzacji CNC i nielimitowanej chmurze.",
+    "en": "Boost your workshop with CNC automation and unlimited cloud.",
+    "de": "Werkstatt mit CNC-Automatisierung und unbegrenzter Cloud stärken."
+  },
+  "saas.pro_paths": {
+    "pl": "Bezpośredni eksport ścieżek narzędziowych na centra obróbcze (Homag, Biesse, SCM, Felder, Fanuc).",
+    "en": "Direct toolpath export to machining centers (Homag, Biesse, SCM, Felder, Fanuc).",
+    "de": "Direkter Werkzeugbahn-Export an Bearbeitungszentren (Homag, Biesse, SCM, Felder, Fanuc)."
+  },
+  "saas.pro_nesting": {
+    "pl": "Rozkrój wielu arkuszy jednocześnie z uwzględnieniem kierunku usłojenia i etykietami formatek.",
+    "en": "Nest multiple sheets at once with grain direction and panel labels.",
+    "de": "Mehrere Platten gleichzeitig mit Maserung und Plattenetiketten verschachteln."
+  },
+  "saas.pro_cloud": {
+    "pl": "Przechowuj do 100 projektów w bezpiecznej chmurze i otwieraj je z dowolnego komputera.",
+    "en": "Store up to 100 projects in a secure cloud and open them from any computer.",
+    "de": "Bis zu 100 Projekte in sicherer Cloud speichern und von jedem Rechner öffnen."
+  },
+  "saas.pro_preview_title": {
+    "pl": "Podgląd 3D dla klienta przez link",
+    "en": "Client 3D preview via link",
+    "de": "3D-Kundenvorschau per Link"
+  },
+  "saas.pro_preview": {
+    "pl": "Wysyłaj interaktywny link do szafek 3D prosto do smartfona inwestora bez instalacji programów.",
+    "en": "Send an interactive 3D cabinet link straight to the client's phone, no installs.",
+    "de": "Interaktiven 3D-Schrank-Link direkt aufs Kunden-Smartphone, ohne Installation."
+  },
+  "saas.later": {
+    "pl": "Może później, wracam do projektowania",
+    "en": "Maybe later, back to designing",
+    "de": "Vielleicht später, zurück zum Planen"
+  },
+  "saas.login_hint": {
+    "pl": "Zaloguj się, aby zapisywać projekty w chmurze",
+    "en": "Sign in to save projects to cloud",
+    "de": "Anmelden, um Projekte in Cloud zu speichern"
+  },
+  "saas.browse": {
+    "pl": "Przeglądaj projekty w chmurze",
+    "en": "Browse cloud projects",
+    "de": "Cloud-Projekte durchsuchen"
+  },
+  "saas.go_pro": {
+    "pl": "Przejdź na plan PRO",
+    "en": "Go PRO",
+    "de": "PRO werden"
+  },
+  "saas.logout": {
+    "pl": "Wyloguj się",
+    "en": "Sign out",
+    "de": "Abmelden"
+  },
+  "app.status_zoom": {
+    "pl": "Zoom - Zaznacz ramką obszar do powiększenia.",
+    "en": "Zoom - drag a frame over the area to enlarge.",
+    "de": "Zoom - Bereich mit Rahmen zum Vergrößern wählen."
+  },
+  "app.feat_fillet": {
+    "pl": "Zaokrąglenie",
+    "en": "Fillet",
+    "de": "Verrundung"
+  },
+  "app.feat_hole": {
+    "pl": "Otwór",
+    "en": "Hole",
+    "de": "Bohrung"
+  },
+  "app.freeze_op": {
+    "pl": "Zamrożona obróbka (kliknij aby odmrozić)",
+    "en": "Frozen operation (click to unfreeze)",
+    "de": "Eingefrorene Operation (klicken zum Auftauen)"
+  },
+  "app.unfreeze_op": {
+    "pl": "Zamroź obróbkę (kliknij aby zablokować)",
+    "en": "Freeze operation (click to lock)",
+    "de": "Operation einfrieren (klicken zum Sperren)"
+  },
+  "app.toggle": {
+    "pl": "Ukryj/Pokaż",
+    "en": "Hide/Show",
+    "de": "Aus-/Einblenden"
+  },
+  "app.delete": {
+    "pl": "Usuń",
+    "en": "Delete",
+    "de": "Löschen"
+  },
+  "app.panel_default": {
+    "pl": "Płyta",
+    "en": "Panel",
+    "de": "Platte"
+  },
+  "app.freeze_panel": {
+    "pl": "Zamrożona formatka (kliknij aby odmrozić)",
+    "en": "Frozen panel (click to unfreeze)",
+    "de": "Eingefrorene Platte (klicken zum Auftauen)"
+  },
+  "app.unfreeze_panel": {
+    "pl": "Zamroź formatkę (zablokuj przed automatycznym przeliczaniem)",
+    "en": "Freeze panel (lock against auto recalc)",
+    "de": "Platte einfrieren (gegen Auto-Neuberechnung sperren)"
+  },
+  "app.copy_panel_3d": {
+    "pl": "Utwórz kopię 3D formatki na scenie",
+    "en": "Create 3D copy of panel on scene",
+    "de": "3D-Kopie der Platte in Szene erstellen"
+  },
+  "app.copy_body_3d": {
+    "pl": "Utwórz kopię 3D korpusu na scenie",
+    "en": "Create 3D copy of cabinet on scene",
+    "de": "3D-Kopie des Korpus in Szene erstellen"
+  },
+  "app.delete_container": {
+    "pl": "Usuń kontener",
+    "en": "Delete container",
+    "de": "Container löschen"
+  },
+  "app.project_default": {
+    "pl": "Cały Projekt",
+    "en": "Whole Project",
+    "de": "Gesamtprojekt"
+  },
+  "app.edge_bands_title": {
+    "pl": "Obrzeża ({n}/4)",
+    "en": "Edge bands ({n}/4)",
+    "de": "Kanten ({n}/4)"
+  },
+  "app.edge_side_top": {
+    "pl": "Górna (+Y)",
+    "en": "Top (+Y)",
+    "de": "Oben (+Y)"
+  },
+  "app.edge_side_bottom": {
+    "pl": "Dolna / Przód (-Y)",
+    "en": "Bottom / Front (-Y)",
+    "de": "Unten / Vorne (-Y)"
+  },
+  "app.edge_side_left": {
+    "pl": "Lewa (-X)",
+    "en": "Left (-X)",
+    "de": "Links (-X)"
+  },
+  "app.edge_side_right": {
+    "pl": "Prawa (+X)",
+    "en": "Right (+X)",
+    "de": "Rechts (+X)"
+  },
+  "app.edge_none": {
+    "pl": "Brak (surowy rdzeń)",
+    "en": "None (raw core)",
+    "de": "Keine (roher Kern)"
+  },
+  "app.edge_delete": {
+    "pl": "Usuń to obrzeże",
+    "en": "Delete this edge band",
+    "de": "Diese Kante löschen"
+  },
+  "app.edge_add": {
+    "pl": "Dodaj obrzeże",
+    "en": "Add edge band",
+    "de": "Kante hinzufügen"
+  },
+  "app.menu.file": {
+    "pl": "Plik",
+    "en": "File",
+    "de": "Datei"
+  },
+  "app.menu.new": {
+    "pl": "Nowy projekt",
+    "en": "New project",
+    "de": "Neues Projekt"
+  },
+  "app.menu.open": {
+    "pl": "Otwórz...",
+    "en": "Open...",
+    "de": "Öffnen..."
+  },
+  "app.menu.save": {
+    "pl": "Zapisz",
+    "en": "Save",
+    "de": "Speichern"
+  },
+  "app.menu.save_as": {
+    "pl": "Zapisz jako...",
+    "en": "Save as...",
+    "de": "Speichern unter..."
+  },
+  "app.menu.save_cabinet": {
+    "pl": "Zapisz korpus do biblioteki...",
+    "en": "Save cabinet to library...",
+    "de": "Korpus in Bibliothek speichern..."
+  },
+  "app.menu.export_step": {
+    "pl": "Eksport do STEP",
+    "en": "Export to STEP",
+    "de": "STEP-Export"
+  },
+  "app.menu.export_stl": {
+    "pl": "Eksport do STL",
+    "en": "Export to STL",
+    "de": "STL-Export"
+  },
+  "app.menu.saas_cloud": {
+    "pl": "Moje projekty w chmurze (SaaS Cloud)...",
+    "en": "My cloud projects (SaaS Cloud)...",
+    "de": "Meine Cloud-Projekte (SaaS Cloud)..."
+  },
+  "app.menu.saas_login": {
+    "pl": "Konto w chmurze / Logowanie...",
+    "en": "Cloud account / Sign in...",
+    "de": "Cloud-Konto / Anmelden..."
+  },
+  "app.menu.gdrive_open": {
+    "pl": "Otwórz z Google Drive...",
+    "en": "Open from Google Drive...",
+    "de": "Von Google Drive öffnen..."
+  },
+  "app.menu.gdrive_save": {
+    "pl": "Zapisz na Google Drive...",
+    "en": "Save to Google Drive...",
+    "de": "Auf Google Drive speichern..."
+  },
+  "app.menu.perf": {
+    "pl": "Opcje wydajności (GPU)...",
+    "en": "Performance options (GPU)...",
+    "de": "Leistungsoptionen (GPU)..."
+  },
+  "app.menu.landing": {
+    "pl": "Strona główna / Prezentacja (Landing Page)...",
+    "en": "Home / Showcase (Landing Page)...",
+    "de": "Startseite / Präsentation (Landing Page)..."
+  },
+  "app.menu.brand": {
+    "pl": "SmartPanel CAD 3D",
+    "en": "SmartPanel CAD 3D",
+    "de": "SmartPanel CAD 3D"
+  },
+  "app.menu.undo": {
+    "pl": "Cofnij (Ctrl+Z)",
+    "en": "Undo (Ctrl+Z)",
+    "de": "Rückgängig (Strg+Z)"
+  },
+  "app.menu.redo": {
+    "pl": "Ponów (Ctrl+Y)",
+    "en": "Redo (Ctrl+Y)",
+    "de": "Wiederholen (Strg+Y)"
+  },
+  "app.tabs.library": {
+    "pl": "Biblioteka",
+    "en": "Library",
+    "de": "Bibliothek"
+  },
+  "app.tabs.library_title": {
+    "pl": "Biblioteka — Gotowe szablony szafek i korpusów",
+    "en": "Library — ready cabinet templates",
+    "de": "Bibliothek — fertige Schrankvorlagen"
+  },
+  "app.tabs.frame": {
+    "pl": "Korpus",
+    "en": "Cabinet",
+    "de": "Korpus"
+  },
+  "app.tabs.frame_title": {
+    "pl": "SmartFrame — Prosty korpus szafy i mebla",
+    "en": "SmartFrame — simple cabinet body",
+    "de": "SmartFrame — einfacher Schrankkorpus"
+  },
+  "app.tabs.box": {
+    "pl": "Bloki",
+    "en": "Bloki",
+    "de": "Bloki"
+  },
+  "app.tabs.parts": {
+    "pl": "SmartParts",
+    "en": "SmartParts",
+    "de": "SmartParts"
+  },
+  "app.tabs.panel": {
+    "pl": "SmartPanel",
+    "en": "SmartPanel",
+    "de": "SmartPanel"
+  },
+  "app.tabs.relations": {
+    "pl": "Relacje",
+    "en": "Relations",
+    "de": "Beziehungen"
+  },
+  "app.tabs.box_title": {
+    "pl": "Bloki — Korpus z półkami i przegrodami (konfigurator wnętrz)",
+    "en": "Bloki — cabinet with shelves and dividers (interior configurator)",
+    "de": "Bloki — Korpus mit Böden und Trennwänden (Innenkonfigurator)"
+  },
+  "app.tabs.parts_title": {
+    "pl": "SmartParts — Parametryczne elementy montażowe (LED, wentylacja, kratki)",
+    "en": "SmartParts — parametric mounting parts (LED, vents, grilles)",
+    "de": "SmartParts — parametrische Montageteile (LED, Lüftung, Gitter)"
+  },
+  "app.tabs.panel_title": {
+    "pl": "SmartPanel — Płaska formatka / płyta meblowa",
+    "en": "SmartPanel — flat panel / furniture board",
+    "de": "SmartPanel — flache Platte / Möbelplatte"
+  },
+  "app.tabs.relations_title": {
+    "pl": "Relacje — Więzy geometryczne i relacje 3D",
+    "en": "Relations — geometric constraints and 3D relations",
+    "de": "Beziehungen — geometrische Zwänge und 3D-Beziehungen"
+  },
+  "app.tabs.materials": {
+    "pl": "Materiały",
+    "en": "Materials",
+    "de": "Materialien"
+  },
+  "app.tabs.materials_title": {
+    "pl": "Materiały — Dekory płyt, obrzeża i wycena",
+    "en": "Materials — board decors, edges and pricing",
+    "de": "Materialien — Plattendekore, Kanten und Preise"
+  },
+  "app.tabs.joints": {
+    "pl": "Złącza",
+    "en": "Joints",
+    "de": "Verbinder"
+  },
+  "app.tabs.joints_title": {
+    "pl": "Złącza — Kołki, konfirmaty i minifix na styku płaszczyzn (wieniec–bok)",
+    "en": "Joints — dowels, confirmat and minifix at plane joints",
+    "de": "Verbinder — Dübel, Confirmat und Minifix an Flächenstößen"
+  },
+  "app.tabs.ops": {
+    "pl": "Operacje",
+    "en": "Operations",
+    "de": "Operationen"
+  },
+  "app.tabs.ops_title": {
+    "pl": "Operacje — ramka, przetłoczenie, szkło, rewizja na formatce",
+    "en": "Operations — frame, emboss, glass, hatch on panel",
+    "de": "Operationen — Rahmen, Prägung, Glas, Revision auf Platte"
+  },
+  "app.tabs.walls": {
+    "pl": "Ściany",
+    "en": "Walls",
+    "de": "Wände"
+  },
+  "app.tabs.walls_title": {
+    "pl": "Ściany — słup parametryczny, uskok, presety pomieszczenia",
+    "en": "Walls — parametric pillar, opening, room presets",
+    "de": "Wände — parametrische Säule, Öffnung, Raum-Presets"
+  },
+  "app.tabs.e3_title": {
+    "pl": "Rys 2D — Otwórz dedykowaną podstronę CAD (w nowej karcie)",
+    "en": "2D Drawing — open dedicated CAD subpage (new tab)",
+    "de": "2D-Zeichnung — eigene CAD-Unterseite öffnen (neuer Tab)"
+  },
+  "app.tools.move": {
+    "pl": "Przesuń",
+    "en": "Move",
+    "de": "Verschieben"
+  },
+  "app.tools.move_title": {
+    "pl": "Przesuń obiekt w przestrzeni 3D (skrót klawiszowy: G)",
+    "en": "Move object in 3D space (hotkey: G)",
+    "de": "Objekt in 3D verschieben (Taste: G)"
+  },
+  "app.tools.rotate": {
+    "pl": "Obróć",
+    "en": "Rotate",
+    "de": "Drehen"
+  },
+  "app.tools.rotate_title": {
+    "pl": "Obróć obiekt w przestrzeni 3D wokół osi (skrót klawiszowy: R)",
+    "en": "Rotate object in 3D around axis (hotkey: R)",
+    "de": "Objekt in 3D um Achse drehen (Taste: R)"
+  },
+  "app.tools.transform_title": {
+    "pl": "Narzędzia transformacji 3D (Blender-style)",
+    "en": "3D transform tools (Blender-style)",
+    "de": "3D-Transformationswerkzeuge (Blender-Stil)"
+  },
+  "app.studio_title": {
+    "pl": "Studio Nagrań i Odtwarzacz Ruchów (Replay): Nagraj swoje ruchy lub odtwórz gotowe demo",
+    "en": "Motion Recorder & Replay Studio: record moves or replay demo",
+    "de": "Bewegungs-Rekorder & Replay-Studio: Bewegungen aufnehmen oder Demo abspielen"
+  },
+  "app.studio": {
+    "pl": "Studio Nagrań / Replay",
+    "en": "Recorder / Replay Studio",
+    "de": "Rekorder / Replay-Studio"
+  },
+  "app.tree.title": {
+    "pl": "Drzewo obiektów",
+    "en": "Object tree",
+    "de": "Objektbaum"
+  },
+  "app.tree.expand": {
+    "pl": "Kliknij lub przeciągnij, aby rozwinąć drzewo obiektów",
+    "en": "Click or drag to expand the object tree",
+    "de": "Klicken oder ziehen, um Objektbaum zu erweitern"
+  },
+  "app.tree.collapse": {
+    "pl": "Przeciągnij krawędź lub kliknij, aby schować drzewo obiektów",
+    "en": "Drag edge or click to collapse the object tree",
+    "de": "Kante ziehen oder klicken, um Objektbaum einzuklappen"
+  },
+  "app.view.preview": {
+    "pl": "Podgląd",
+    "en": "Preview",
+    "de": "Vorschau"
+  },
+  "app.view.preview_title": {
+    "pl": "Podgląd - włącz/wyłącz elementy graficzne",
+    "en": "Preview - toggle graphic elements",
+    "de": "Vorschau - Grafikelemente ein-/ausblenden"
+  },
+  "app.view.grid": {
+    "pl": "Siatka i płaszczyzny",
+    "en": "Grid and planes",
+    "de": "Raster und Ebenen"
+  },
+  "app.view.pan": {
+    "pl": "Przesuwanie widoku (Pan) — możesz też przytrzymać mały boczny przycisk myszy lub kółko z Shift",
+    "en": "Pan view — or hold side mouse button or wheel with Shift",
+    "de": "Ansicht verschieben (Pan) — Seitentaste oder Rad mit Shift halten"
+  },
+  "app.view.pan_btn": {
+    "pl": "Przesuń",
+    "en": "Pan",
+    "de": "Schieben"
+  },
+  "app.view.zoom": {
+    "pl": "Powiększ zaznaczony obszar (Zoom Window) — przeciągnij ramkę myszą na scenie [Esc aby anulować]",
+    "en": "Zoom selected area (Zoom Window) — drag a frame on scene [Esc to cancel]",
+    "de": "Bereich vergrößern (Zoom-Fenster) — Rahmen in Szene ziehen [Esc zum Abbrechen]"
+  },
+  "app.tree_dump": {
+    "pl": "Drzewo Sceny CAD & Babylon zostało wypisane w Konsoli (F12)!\n\nFragment wyniku:\n",
+    "en": "CAD & Babylon scene tree printed to Console (F12)!\n\nExcerpt:\n",
+    "de": "CAD- & Babylon-Szenenbaum in Konsole (F12) ausgegeben!\n\nAuszug:\n"
+  },
+  "app.preview_error": {
+    "pl": "Błąd generowania podglądu: {error}",
+    "en": "Preview generation error: {error}",
+    "de": "Vorschaufehler: {error}"
+  },
+  "app.sheet_preview": {
+    "pl": "Otwórz pełny podgląd arkusza rysunkowego CAD (ze stemplem ISO i tabelą)",
+    "en": "Open full CAD sheet preview (with ISO stamp and table)",
+    "de": "Volle CAD-Blattvorschau öffnen (mit ISO-Stempel und Tabelle)"
+  },
+  "app.quick_preview": {
+    "pl": "Szybki Podgląd",
+    "en": "Quick Preview",
+    "de": "Schnellvorschau"
+  },
+  "app.print_error": {
+    "pl": "Błąd druku: {error}",
+    "en": "Print error: {error}",
+    "de": "Druckfehler: {error}"
+  },
+  "app.jpg_error": {
+    "pl": "Błąd pobierania JPG: {error}",
+    "en": "JPG download error: {error}",
+    "de": "JPG-Downloadfehler: {error}"
+  },
+  "app.jpg_title": {
+    "pl": "Pobierz wysokiej jakości raster JPG (300 DPI)",
+    "en": "Download high-quality JPG raster (300 DPI)",
+    "de": "Hochwertiges JPG-Raster laden (300 DPI)"
+  },
+  "app.svg_error": {
+    "pl": "Błąd pobierania SVG: {error}",
+    "en": "SVG download error: {error}",
+    "de": "SVG-Downloadfehler: {error}"
+  },
+  "app.cube.front": {
+    "pl": "PRZÓD",
+    "en": "FRONT",
+    "de": "VORNE"
+  },
+  "app.cube.back": {
+    "pl": "TYŁ",
+    "en": "BACK",
+    "de": "HINTEN"
+  },
+  "app.cube.top": {
+    "pl": "GÓRA",
+    "en": "TOP",
+    "de": "OBEN"
+  },
+  "app.cube.bottom": {
+    "pl": "DÓŁ",
+    "en": "BOTTOM",
+    "de": "UNTEN"
+  },
+  "app.panel.expand": {
+    "pl": "Kliknij lub przeciągnij, aby rozwinąć panel edycji",
+    "en": "Click or drag to expand the edit panel",
+    "de": "Klicken oder ziehen, um Panel zu erweitern"
+  },
+  "app.panel.collapse": {
+    "pl": "Przeciągnij krawędź lub kliknij, aby schować panel edycji",
+    "en": "Drag edge or click to collapse the edit panel",
+    "de": "Kante ziehen oder klicken, um Panel einzuklappen"
+  },
+  "app.add_panel_title": {
+    "pl": "Kliknij lub przeciągnij na scenę 3D, aby wstawić formatkę (720x510x18 mm)",
+    "en": "Click or drag onto 3D scene to insert a panel (720x510x18 mm)",
+    "de": "Klicken oder in 3D-Szene ziehen, um Platte einzufügen (720x510x18 mm)"
+  },
+  "app.add_panel_drag": {
+    "pl": "Chwyć i przeciągnij na scenę 3D",
+    "en": "Grab and drag onto the 3D scene",
+    "de": "Greifen und auf die 3D-Szene ziehen"
+  },
+  "app.add_panel": {
+    "pl": "Dodaj formatkę",
+    "en": "Add panel",
+    "de": "Platte hinzufügen"
+  },
+  "app.materials_title": {
+    "pl": "Materiały",
+    "en": "Materials",
+    "de": "Materialien"
+  },
+  "app.materials_sub": {
+    "pl": "Wycena i obrzeża",
+    "en": "Pricing and edges",
+    "de": "Preise und Kanten"
+  },
+  "app.relations_sub": {
+    "pl": "Wiązania",
+    "en": "Constraints",
+    "de": "Zwänge"
+  },
+  "app.joints_sub": {
+    "pl": "Styk płaszczyzn",
+    "en": "Plane joints",
+    "de": "Flächenstöße"
+  },
+  "app.ops_sub": {
+    "pl": "Wcięcia na płycie",
+    "en": "Board cutouts",
+    "de": "Plattenausschnitte"
+  },
+  "app.manual_panel": {
+    "pl": "Formatka ręczna",
+    "en": "Manual panel",
+    "de": "Manuelle Platte"
+  },
+  "app.cmd_add_panel": {
+    "pl": "Wstawiono formatkę ręczną",
+    "en": "Inserted manual panel",
+    "de": "Manuelle Platte eingefügt"
+  },
+  "app.status_panel_added": {
+    "pl": "Wstawiono formatkę ({w}×{h} mm) na scenę",
+    "en": "Inserted panel ({w}×{h} mm) on scene",
+    "de": "Platte ({w}×{h} mm) in Szene eingefügt"
+  },
+  "app.apply_material": {
+    "pl": "Zastosuj Materiał",
+    "en": "Apply Material",
+    "de": "Material anwenden"
+  },
+  "app.drop_panel": {
+    "pl": "Formatka:",
+    "en": "Panel:",
+    "de": "Platte:"
+  },
+  "app.scope_body": {
+    "pl": "Cały korpus / szafka",
+    "en": "Whole cabinet",
+    "de": "Gesamter Korpus"
+  },
+  "app.scope_box": {
+    "pl": "Wnętrze Bloków",
+    "en": "Bloki interior",
+    "de": "Bloki-Innenraum"
+  },
+  "app.scope_project": {
+    "pl": "Cały projekt (globalnie)",
+    "en": "Whole project (globally)",
+    "de": "Gesamtprojekt (global)"
+  },
+  "app.status_default": {
+    "pl": "Ładowanie...",
+    "en": "Loading...",
+    "de": "Laden..."
+  },
+  "app.console_default": {
+    "pl": "Gotowy. Najedź na element.",
+    "en": "Ready. Hover an element.",
+    "de": "Bereit. Element hovern."
+  },
+  "app.hint_confirm": {
+    "pl": "Zatwierdź",
+    "en": "Confirm",
+    "de": "Bestätigen"
+  },
+  "app.face_none": {
+    "pl": "Kliknij element",
+    "en": "Click an element",
+    "de": "Element klicken"
+  },
+  "app.face_edge": {
+    "pl": "Krawędź",
+    "en": "Edge",
+    "de": "Kante"
+  },
+  "app.face_corner": {
+    "pl": "Narożnik {i}",
+    "en": "Corner {i}",
+    "de": "Ecke {i}"
+  },
+  "app.face_feature": {
+    "pl": "Cecha geometryczna",
+    "en": "Geometric feature",
+    "de": "Geometriemerkmal"
+  },
+  "app.face_front": {
+    "pl": "Przód (Front)",
+    "en": "Front",
+    "de": "Vorne"
+  },
+  "app.face_back": {
+    "pl": "Tył (Back)",
+    "en": "Back",
+    "de": "Hinten"
+  },
+  "app.face_left": {
+    "pl": "Lewy bok (Left)",
+    "en": "Left side",
+    "de": "Linke Seite"
+  },
+  "app.face_right": {
+    "pl": "Prawy bok (Right)",
+    "en": "Right side",
+    "de": "Rechte Seite"
+  },
+  "app.face_top": {
+    "pl": "Góra (Top)",
+    "en": "Top",
+    "de": "Oben"
+  },
+  "app.face_bottom": {
+    "pl": "Dół (Bottom)",
+    "en": "Bottom",
+    "de": "Unten"
+  },
+  "app.face_dims": {
+    "pl": "Wymiary: {w} × {h} mm",
+    "en": "Dimensions: {w} × {h} mm",
+    "de": "Maße: {w} × {h} mm"
+  },
+  "belka.view": {
+    "pl": "Widok",
+    "en": "View",
+    "de": "Ansicht"
+  },
+  "belka.view_title": {
+    "pl": "Widok (Tryb wyświetlania)",
+    "en": "View (Display mode)",
+    "de": "Ansicht (Darstellungsmodus)"
+  },
+  "belka.mode_edges": {
+    "pl": "Krawędzie",
+    "en": "Edges",
+    "de": "Kanten"
+  },
+  "belka.mode_edges_title": {
+    "pl": "Cieniowanie z krawędziami (domyślny)",
+    "en": "Shading with edges (default)",
+    "de": "Schattierung mit Kanten (Standard)"
+  },
+  "belka.mode_wire": {
+    "pl": "Szkielet",
+    "en": "Wireframe",
+    "de": "Drahtgitter"
+  },
+  "belka.mode_wire_title": {
+    "pl": "Tylko krawędzie",
+    "en": "Edges only",
+    "de": "Nur Kanten"
+  },
+  "belka.mode_xray": {
+    "pl": "Półprzezroczyste",
+    "en": "X-Ray",
+    "de": "Transparent"
+  },
+  "belka.mode_xray_title": {
+    "pl": "Półprzezroczyste bryły",
+    "en": "Translucent solids",
+    "de": "Transparente Körper"
+  },
+  "belka.mode_shaded": {
+    "pl": "Cieniowany",
+    "en": "Shaded",
+    "de": "Schattiert"
+  },
+  "belka.mode_shaded_title": {
+    "pl": "Cieniowanie powierzchni",
+    "en": "Surface shading",
+    "de": "Flächenschattierung"
+  },
+  "belka.proj_title": {
+    "pl": "Projekcja kamery",
+    "en": "Camera projection",
+    "de": "Kameraprojektion"
+  },
+  "belka.proj_ortho": {
+    "pl": "Ortogonalny",
+    "en": "Orthographic",
+    "de": "Orthogonal"
+  },
+  "belka.proj_ortho_title": {
+    "pl": "Rzut prostokątny (CAD)",
+    "en": "Orthographic view (CAD)",
+    "de": "Rechtwinklige Projektion (CAD)"
+  },
+  "belka.proj_persp": {
+    "pl": "Perspektywa",
+    "en": "Perspective",
+    "de": "Perspektive"
+  },
+  "belka.proj_persp_title": {
+    "pl": "Rzut perspektywiczny",
+    "en": "Perspective view",
+    "de": "Perspektivische Ansicht"
+  },
+  "belka.info": {
+    "pl": "Info",
+    "en": "Info",
+    "de": "Info"
+  },
+  "belka.info_title": {
+    "pl": "Informacje i narzędzia diagnostyczne",
+    "en": "Information and diagnostics",
+    "de": "Infos und Diagnosewerkzeuge"
+  },
+  "belka.inspector": {
+    "pl": "Inspector (Ctrl+I)",
+    "en": "Inspector (Ctrl+I)",
+    "de": "Inspector (Strg+I)"
+  },
+  "belka.inspector_title": {
+    "pl": "Przełącz widoczność Babylon.js Inspector (Skrót: Ctrl+I)",
+    "en": "Toggle Babylon.js Inspector (Shortcut: Ctrl+I)",
+    "de": "Babylon.js Inspector umschalten (Strg+I)"
+  },
+  "belka.dump_tree": {
+    "pl": "SceneTree (Konsola)",
+    "en": "SceneTree (Console)",
+    "de": "SceneTree (Konsole)"
+  },
+  "belka.dump_tree_title": {
+    "pl": "Wypisz drzewo hierarchii CADNode oraz Babylon.js w konsoli F12",
+    "en": "Print CADNode and Babylon.js hierarchy to F12 console",
+    "de": "CADNode- und Babylon.js-Hierarchie in F12-Konsole ausgeben"
+  },
+  "belka.ssot": {
+    "pl": "JSON SSOT",
+    "en": "JSON SSOT",
+    "de": "JSON SSOT"
+  },
+  "belka.ssot_title": {
+    "pl": "Wyświetl drzewo JSON SSOT (Single Source of Truth) projektu",
+    "en": "Show project JSON SSOT tree (Single Source of Truth)",
+    "de": "Projekt-JSON-SSOT-Baum anzeigen (Single Source of Truth)"
+  },
+  "crumb.cabinet": {
+    "pl": "Korpus: {name}\n• Kliknij, aby przejść do trybu SmartFrame",
+    "en": "Cabinet: {name}\n• Click to enter SmartFrame mode",
+    "de": "Korpus: {name}\n• Klicken für SmartFrame-Modus"
+  },
+  "crumb.box": {
+    "pl": "Bloki: {name}\n• Kliknij, aby przejść do trybu Bloków",
+    "en": "Bloki: {name}\n• Click to enter Bloki mode",
+    "de": "Bloki: {name}\n• Klicken für Bloki-Modus"
+  },
+  "crumb.panel": {
+    "pl": "Formatka: {name}\n• Kliknij, aby przejść do trybu SmartPanel",
+    "en": "Panel: {name}\n• Click to enter SmartPanel mode",
+    "de": "Platte: {name}\n• Klicken für SmartPanel-Modus"
+  },
+  "crumb.assembly": {
+    "pl": "Złożenie",
+    "en": "Assembly",
+    "de": "Baugruppe"
+  },
+  "crumb.feature": {
+    "pl": "Operacja: {name}\n• Kliknij, aby otworzyć panel Operacji",
+    "en": "Operation: {name}\n• Click to open Operations panel",
+    "de": "Operation: {name}\n• Klicken für Operationspanel"
+  },
+  "crumb.hardware": {
+    "pl": "Okucie: {name}",
+    "en": "Hardware: {name}",
+    "de": "Beschlag: {name}"
+  },
+  "crumb.hierarchy": {
+    "pl": "Hierarchia zaznaczenia",
+    "en": "Selection hierarchy",
+    "de": "Auswahlhierarchie"
+  },
+  "crumb.d_panel": {
+    "pl": "Panel",
+    "en": "Panel",
+    "de": "Platte"
+  },
+  "crumb.d_hw": {
+    "pl": "Okucie",
+    "en": "Hardware",
+    "de": "Beschlag"
+  },
+  "crumb.d_box": {
+    "pl": "Bloki",
+    "en": "Bloki",
+    "de": "Bloki"
+  },
+  "crumb.d_frame": {
+    "pl": "Korpus",
+    "en": "Cabinet",
+    "de": "Korpus"
+  },
+  "crumb.d_zone": {
+    "pl": "Strefa",
+    "en": "Zone",
+    "de": "Zone"
+  },
+  "crumb.d_op": {
+    "pl": "Operacja",
+    "en": "Operation",
+    "de": "Operation"
+  },
+  "frame.no_canvas": {
+    "pl": "Nie znaleziono płótna 3D do wykonania zrzutu.",
+    "en": "3D canvas for snapshot not found.",
+    "de": "3D-Canvas für Snapshot nicht gefunden."
+  },
+  "frame.capture_fail": {
+    "pl": "Nie udało się przechwycić klatki 3D. Upewnij się, że widok 3D jest aktywny.",
+    "en": "Failed to capture 3D frame. Make sure the 3D view is active.",
+    "de": "3D-Frame konnte nicht erfasst werden. 3D-Ansicht muss aktiv sein."
+  },
+  "frame.hint": {
+    "pl": "Ustaw mebel w kadrze myszką (obracaj / przybliżaj), a następnie kliknij",
+    "en": "Frame the furniture with the mouse (orbit / zoom), then click",
+    "de": "Möbel mit Maus kadrieren (drehen / zoomen), dann klicken"
+  },
+  "frame.save": {
+    "pl": "Zapisz kadr",
+    "en": "Save frame",
+    "de": "Ausschnitt speichern"
+  },
+  "frame.cancel": {
+    "pl": "Anuluj",
+    "en": "Cancel",
+    "de": "Abbrechen"
+  },
+  "quick.title": {
+    "pl": "Wybór płaszczyzny",
+    "en": "Plane pick",
+    "de": "Ebenenauswahl"
+  },
+  "quick.hint": {
+    "pl": "↑↓ wybór",
+    "en": "↑↓ pick",
+    "de": "↑↓ Auswahl"
+  },
+  "sourcebar.data_source": {
+    "pl": "Źródło danych",
+    "en": "Data source",
+    "de": "Datenquelle"
+  },
+  "sourcebar.refresh": {
+    "pl": "Odśwież z CAD",
+    "en": "Refresh from CAD",
+    "de": "Aus CAD aktualisieren"
+  },
+  "sourcebar.load_json": {
+    "pl": "Wczytaj JSON (testowe źródło — ten sam kontrakt co CAD)",
+    "en": "Load JSON (test source — same contract as CAD)",
+    "de": "JSON laden (Testquelle — gleicher Vertrag wie CAD)"
+  },
+  "sourcebar.load_csv": {
+    "pl": "Wczytaj listę formatek z CSV",
+    "en": "Load panel list from CSV",
+    "de": "Plattenliste aus CSV laden"
+  },
+  "modbar.title_report": {
+    "pl": "Raport",
+    "en": "Report",
+    "de": "Bericht"
+  },
+  "modbar.title_nesting": {
+    "pl": "Nesting",
+    "en": "Nesting",
+    "de": "Nesting"
+  },
+  "modbar.title_cnc": {
+    "pl": "CNC",
+    "en": "CNC",
+    "de": "CNC"
+  },
+  "modbar.title_draw": {
+    "pl": "Rysunek",
+    "en": "Drawing",
+    "de": "Zeichnung"
+  },
+  "modbar.title_dag": {
+    "pl": "Graf DAG",
+    "en": "DAG graph",
+    "de": "DAG-Graph"
+  },
+  "modbar.refresh_title": {
+    "pl": "Pobierz aktualne dane z ProjectDocument w CAD (SSOT)",
+    "en": "Fetch current data from CAD ProjectDocument (SSOT)",
+    "de": "Aktuelle Daten aus CAD-ProjectDocument holen (SSOT)"
+  },
+  "cmd.move_panel_scene": {
+    "pl": "Przeniesiono panel ręczny na scenę",
+    "en": "Moved manual panel to scene",
+    "de": "Manuelle Platte in Szene verschoben"
+  },
+  "cmd.move_panel_frame": {
+    "pl": "Przeniesiono panel ręczny do SmartFrame",
+    "en": "Moved manual panel to SmartFrame",
+    "de": "Manuelle Platte zu SmartFrame verschoben"
+  },
+  "cmd.confirm_unsaved": {
+    "pl": "Projekt ma niezapisane zmiany. Kontynuować i je odrzucić?",
+    "en": "Project has unsaved changes. Continue and discard them?",
+    "de": "Projekt hat ungespeicherte Änderungen. Fortfahren und verwerfen?"
+  },
+  "cmd.add_to_frame": {
+    "pl": "Dodać panel do aktywnego obiektu „{name}”?",
+    "en": "Add panel to active object \"{name}\"?",
+    "de": "Platte zum aktiven Objekt „{name}“ hinzufügen?"
+  },
+  "cmd.manual_panel": {
+    "pl": "Formatka ręczna",
+    "en": "Manual panel",
+    "de": "Manuelle Platte"
+  },
+  "cmd.added_to_body": {
+    "pl": "Dodano panel ręczny do korpusu",
+    "en": "Added manual panel to cabinet",
+    "de": "Manuelle Platte zu Korpus hinzugefügt"
+  },
+  "cmd.added_panel": {
+    "pl": "Dodano panel ręczny",
+    "en": "Added manual panel",
+    "de": "Manuelle Platte hinzugefügt"
+  },
+  "cmd.added_to_named": {
+    "pl": "Dodano panel ręczny do „{name}” — w drzewie możesz go przeciągnąć do innego",
+    "en": "Added manual panel to \"{name}\" — drag it elsewhere in the tree",
+    "de": "Manuelle Platte zu „{name}“ hinzugefügt — im Baum anderswohin ziehen"
+  },
+  "cmd.added_scene": {
+    "pl": "Dodano panel ręczny na scenę",
+    "en": "Added manual panel to scene",
+    "de": "Manuelle Platte in Szene eingefügt"
+  },
+  "cmd.project_loaded": {
+    "pl": "Wczytano projekt pomyślnie!",
+    "en": "Project loaded successfully!",
+    "de": "Projekt erfolgreich geladen!"
+  },
+  "cmd.project_copy": {
+    "pl": "Pobrano kopię projektu (.spp.json) — dokument nadal oznaczony jako niezapisany",
+    "en": "Downloaded project copy (.spp.json) — document still marked unsaved",
+    "de": "Projektkopie geladen (.spp.json) — Dokument weiter als ungespeichert markiert"
+  },
+  "cmd.save_error": {
+    "pl": "Błąd podczas zapisu projektu!",
+    "en": "Error saving project!",
+    "de": "Fehler beim Speichern des Projekts!"
+  },
+  "cmd.load_error": {
+    "pl": "Błąd wczytywania pliku!",
+    "en": "Error loading file!",
+    "de": "Fehler beim Laden der Datei!"
+  },
+  "cmd.click_wall": {
+    "pl": "Najpierw kliknij ścianę",
+    "en": "Click a wall first",
+    "de": "Zuerst Wand klicken"
+  },
+  "cmd.pick_wall": {
+    "pl": "Zaznacz ścianę płyty",
+    "en": "Pick panel wall",
+    "de": "Plattenwand wählen"
+  },
+  "cmd.undo_action": {
+    "pl": "Cofnięto: {label}",
+    "en": "Undone: {label}",
+    "de": "Rückgängig: {label}"
+  },
+  "cmd.undo_bare": {
+    "pl": "Cofnięto akcję",
+    "en": "Undone",
+    "de": "Rückgängig"
+  },
+  "cmd.redo_action": {
+    "pl": "Ponowiono: {label}",
+    "en": "Redone: {label}",
+    "de": "Wiederholt: {label}"
+  },
+  "cmd.undo_default": {
+    "pl": "akcję",
+    "en": "action",
+    "de": "Aktion"
+  },
+  "ctxmenu.project_default": {
+    "pl": "Cały projekt",
+    "en": "Whole project",
+    "de": "Gesamtprojekt"
+  },
+  "ctxmenu.alu_done": {
+    "pl": "Formatka skonwertowana na ramkę aluminiową ze szkłem",
+    "en": "Panel converted to aluminium frame with glass",
+    "de": "Platte in Alurahmen mit Glas umgewandelt"
+  },
+  "ctxmenu.alu_reverted": {
+    "pl": "Przywrócono pełną formatkę",
+    "en": "Restored full panel",
+    "de": "Volle Platte wiederhergestellt"
+  },
+  "ctxmenu.edit_op": {
+    "pl": "Edytuj operację",
+    "en": "Edit operation",
+    "de": "Operation bearbeiten"
+  },
+  "ctxmenu.freeze_op": {
+    "pl": "Zamroź obróbkę",
+    "en": "Freeze operation",
+    "de": "Operation einfrieren"
+  },
+  "ctxmenu.unfreeze_op": {
+    "pl": "Odmroź obróbkę",
+    "en": "Unfreeze operation",
+    "de": "Operation auftauen"
+  },
+  "ctxmenu.edit_panel": {
+    "pl": "Edytuj formatkę",
+    "en": "Edit panel",
+    "de": "Platte bearbeiten"
+  },
+  "ctxmenu.restore_panel": {
+    "pl": "Przywróć pełną formatkę",
+    "en": "Restore full panel",
+    "de": "Volle Platte wiederherstellen"
+  },
+  "ctxmenu.to_alu": {
+    "pl": "Konwertuj na ramkę aluminiową",
+    "en": "Convert to aluminium frame",
+    "de": "In Alurahmen umwandeln"
+  },
+  "ctxmenu.rename": {
+    "pl": "Zmień nazwę",
+    "en": "Rename",
+    "de": "Umbenennen"
+  },
+  "ctxmenu.props": {
+    "pl": "Właściwości",
+    "en": "Properties",
+    "de": "Eigenschaften"
+  },
+  "ctxmenu.freeze_panel": {
+    "pl": "Zamroź formatkę",
+    "en": "Freeze panel",
+    "de": "Platte einfrieren"
+  },
+  "ctxmenu.unfreeze_panel": {
+    "pl": "Odmroź formatkę",
+    "en": "Unfreeze panel",
+    "de": "Platte auftauen"
+  },
+  "ctxmenu.show_all": {
+    "pl": "Pokaż wszystko",
+    "en": "Show all",
+    "de": "Alle einblenden"
+  },
+  "ctxmenu.show_only": {
+    "pl": "Pokaż tylko",
+    "en": "Show only",
+    "de": "Nur einblenden"
+  },
+  "ctxmenu.nesting": {
+    "pl": "Rozkrój (nesting)",
+    "en": "Nesting",
+    "de": "Verschachtelung"
+  },
+  "ctxmenu.batch_cnc": {
+    "pl": "Generuj programy CNC dla całego projektu",
+    "en": "Generate CNC programs for whole project",
+    "de": "CNC-Programme für Gesamtprojekt erzeugen"
+  },
+  "cncval.synced": {
+    "pl": "Pomyślnie zsynchronizowano utworzone programy CNC z modelem CAD!",
+    "en": "Successfully synced CNC programs with CAD model!",
+    "de": "CNC-Programme erfolgreich mit CAD-Modell synchronisiert!"
+  },
+  "cncval.generated": {
+    "pl": "Wygenerowano {n} plików dla postprocesora {pp}!",
+    "en": "Generated {n} files for {pp} postprocessor!",
+    "de": "{n} Dateien für {pp}-Postprozessor erzeugt!"
+  },
+  "cncval.title": {
+    "pl": "Weryfikacja i Generowanie Programów CNC",
+    "en": "CNC Program Verification and Generation",
+    "de": "CNC-Programm-Verifizierung und -Erzeugung"
+  },
+  "cncval.no_programs": {
+    "pl": "Brak utworzonych programów CNC w wybranym zakresie.",
+    "en": "No CNC programs in selected scope.",
+    "de": "Keine CNC-Programme im gewählten Bereich."
+  },
+  "cncval.howto": {
+    "pl": "System nie generuje programów automatycznie bez Twojej wiedzy. Aby utworzyć program, otwórz wybraną formatkę w edytorze",
+    "en": "The system never generates programs without you. To create one, open the panel in the editor",
+    "de": "Das System erzeugt nie Programme ohne dich. Zum Erstellen Platte im Editor öffnen"
+  },
+  "cncval.issues": {
+    "pl": "Wykryto {n} rozbieżności w utworzonych programach CNC!",
+    "en": "Found {n} discrepancies in CNC programs!",
+    "de": "{n} Abweichungen in CNC-Programmen gefunden!"
+  },
+  "cncval.issues_hint_a": {
+    "pl": "W formatek doszły nowe cechy (np.",
+    "en": "Panels gained new features (e.g.",
+    "de": "Platten haben neue Merkmale (z.B."
+  },
+  "cncval.issues_hint_b": {
+    "pl": ", nowe nawierty) lub zmieniono parametry, których brak w utworzonych programach.",
+    "en": ", new drillings) or changed params missing from programs.",
+    "de": ", neue Bohrungen) oder geänderte Parameter."
+  },
+  "cncval.issues_hint": {
+    "pl": "W formatek doszły nowe cechy (np. Kanał LED, nowe nawierty) lub zmieniono parametry, których brak w utworzonych programach.",
+    "en": "Panels gained new features (e.g. LED channel, new drillings) or changed params missing from programs.",
+    "de": "Platten haben neue Merkmale (z.B. LED-Kanal, neue Bohrungen) oder geänderte Parameter."
+  },
+  "cncval.all_ok": {
+    "pl": "Wszystkie utworzone programy CNC ({n} szt.) są w 100% zsynchronizowane z modelem CAD!",
+    "en": "All CNC programs ({n}) are 100% in sync with the CAD model!",
+    "de": "Alle CNC-Programme ({n} Stk.) sind 100% mit CAD-Modell synchron!"
+  },
+  "cncval.ready": {
+    "pl": "Programy CNC zawierają wszystkie obróbki. Gotowe do wygenerowania na maszynę.",
+    "en": "CNC programs contain all machining. Ready for the machine.",
+    "de": "CNC-Programme enthalten alle Bearbeitungen. Bereit für die Maschine."
+  },
+  "cncval.all_current": {
+    "pl": "Wszystkie utworzone programy CNC ({n} szt.) są aktualne:",
+    "en": "All CNC programs ({n}) are current:",
+    "de": "Alle CNC-Programme ({n} Stk.) sind aktuell:"
+  },
+  "cncval.outdated_list": {
+    "pl": "Lista formatek z nieaktualnymi programami CNC ({n} szt.):",
+    "en": "Panels with outdated CNC programs ({n}):",
+    "de": "Platten mit veralteten CNC-Programmen ({n} Stk.):"
+  },
+  "cncval.issues_n": {
+    "pl": "{n} rozbieżności",
+    "en": "{n} discrepancies",
+    "de": "{n} Abweichungen"
+  },
+  "cncval.consistent": {
+    "pl": "Spójny",
+    "en": "Consistent",
+    "de": "Konsistent"
+  },
+  "cncval.open_cnc": {
+    "pl": "Otwórz formatkę w edytorze CNC",
+    "en": "Open panel in CNC editor",
+    "de": "Platte in CNC-Editor öffnen"
+  },
+  "cncval.open_cnc_btn": {
+    "pl": "Otwórz CNC",
+    "en": "Open CNC",
+    "de": "CNC öffnen"
+  },
+  "cncval.download_file": {
+    "pl": "Kliknij, aby pobrać ten plik",
+    "en": "Click to download this file",
+    "de": "Klicken, um diese Datei zu laden"
+  },
+  "entry.cnc_workpiece": {
+    "pl": "JSON CNC musi zawierać workpiece (width/height/thickness w nm, features).",
+    "en": "CNC JSON must contain workpiece (width/height/thickness in nm, features).",
+    "de": "CNC-JSON muss Workpiece enthalten (width/height/thickness in nm, features)."
+  },
+  "entry.cnc_empty": {
+    "pl": "Brak formatki. Wskaż formatkę w CAD (PPM → CNC), otwórz plik DXF lub JSON.",
+    "en": "No panel. Pick a panel in CAD (RMB → CNC), open a DXF or JSON file.",
+    "de": "Keine Platte. Platte in CAD wählen (RMB → CNC), DXF- oder JSON-Datei öffnen."
+  },
+  "entry.dxf_parse": {
+    "pl": "Błąd parsowania pliku DXF",
+    "en": "DXF parse error",
+    "de": "DXF-Parsefehler"
+  },
+  "entry.drag_files": {
+    "pl": "Obsługiwane pliki do przeciągania to: .dxf oraz .json",
+    "en": "Supported drag files: .dxf and .json",
+    "de": "Unterstützte Drag-Dateien: .dxf und .json"
+  },
+  "entry.no_babylon": {
+    "pl": "Brak Babylon.js — odśwież stronę CNC.",
+    "en": "Babylon.js missing — refresh the CNC page.",
+    "de": "Babylon.js fehlt — CNC-Seite aktualisieren."
+  },
+  "entry.cnc_scene": {
+    "pl": "Nie udało się uruchomić sceny CNC",
+    "en": "Failed to start CNC scene",
+    "de": "CNC-Szene konnte nicht gestartet werden"
+  },
+  "entry.drop_dxf": {
+    "pl": "Upuść plik DXF (.dxf) lub JSON (.json), aby załadować formatkę do CNC",
+    "en": "Drop a DXF (.dxf) or JSON (.json) file to load a panel into CNC",
+    "de": "DXF- (.dxf) oder JSON-Datei (.json) ablegen, um Platte in CNC zu laden"
+  },
+  "entry.back_cad": {
+    "pl": "Wróć do projektu CAD i zamknij CNC",
+    "en": "Back to CAD project and close CNC",
+    "de": "Zurück zum CAD-Projekt und CNC schließen"
+  },
+  "entry.back_cad_btn": {
+    "pl": "Wróć do CAD",
+    "en": "Back to CAD",
+    "de": "Zurück zu CAD"
+  },
+  "entry.open_dxf": {
+    "pl": "Wczytaj zewnętrzny plik DXF (2D/2.5D) formatki",
+    "en": "Load external DXF file (2D/2.5D) of panel",
+    "de": "Externe DXF-Datei (2D/2.5D) der Platte laden"
+  },
+  "entry.open_dxf_btn": {
+    "pl": "Otwórz DXF",
+    "en": "Open DXF",
+    "de": "DXF öffnen"
+  },
+  "entry.open_json_btn": {
+    "pl": "Otwórz JSON",
+    "en": "Open JSON",
+    "de": "JSON öffnen"
+  },
+  "entry.machining": {
+    "pl": "Obróbka formatki",
+    "en": "Panel machining",
+    "de": "Plattenbearbeitung"
+  },
+  "entry.pick_hint": {
+    "pl": "Wskaż formatkę w CAD (PPM → CNC), otwórz plik",
+    "en": "Pick a panel in CAD (RMB → CNC), open a file",
+    "de": "Platte in CAD wählen (RMB → CNC), Datei öffnen"
+  },
+  "entry.nesting_parts": {
+    "pl": "JSON nestingu musi mieć tablicę parts",
+    "en": "Nesting JSON must contain a parts array",
+    "de": "Nesting-JSON muss parts-Array enthalten"
+  },
+  "entry.csv_empty": {
+    "pl": "CSV nie zawiera formatek (wymagane: nazwa, długość, szerokość).",
+    "en": "CSV has no panels (required: name, length, width).",
+    "de": "CSV enthält keine Platten (erforderlich: Name, Länge, Breite)."
+  },
+  "entry.report_panels": {
+    "pl": "JSON musi zawierać tablicę panels",
+    "en": "JSON must contain a panels array",
+    "de": "JSON muss panels-Array enthalten"
+  },
+  "entry.report_empty": {
+    "pl": "Brak danych. Otwórz raport z drzewa CAD (PPM) albo wczytaj JSON.",
+    "en": "No data. Open the report from the CAD tree (RMB) or load JSON.",
+    "de": "Keine Daten. Bericht aus CAD-Baum öffnen (RMB) oder JSON laden."
+  },
+  "entry.refreshed": {
+    "pl": "Odświeżono",
+    "en": "Refreshed",
+    "de": "Aktualisiert"
+  },
+  "entry.no_scope": {
+    "pl": "Brak zakresu — otwórz raport ponownie z CAD.",
+    "en": "No scope — reopen the report from CAD.",
+    "de": "Kein Bereich — Bericht erneut aus CAD öffnen."
+  },
+  "entry.report_fail": {
+    "pl": "Nie udało się wygenerować raportu HTML.",
+    "en": "Failed to generate HTML report.",
+    "de": "HTML-Bericht konnte nicht erzeugt werden."
+  },
+  "region.tree": {
+    "pl": "Drzewo obiektów",
+    "en": "Object tree",
+    "de": "Objektbaum"
+  },
+  "region.bar": {
+    "pl": "Belka widokowa",
+    "en": "View bar",
+    "de": "Ansichtleiste"
+  },
+  "region.panel": {
+    "pl": "Panel edycji",
+    "en": "Edit panel",
+    "de": "Bearbeitungspanel"
+  },
+  "cadapp.geom_error": {
+    "pl": "Błąd podczas przeliczania geometrii!",
+    "en": "Geometry recalc error!",
+    "de": "Fehler bei Geometrie-Neuberechnung!"
+  },
+  "cadapp.freeze_feature": {
+    "pl": "Zamrożono cechę geometryczną",
+    "en": "Froze geometric feature",
+    "de": "Geometriemerkmal eingefroren"
+  },
+  "cadapp.unfreeze_feature": {
+    "pl": "Odmrożono cechę geometryczną",
+    "en": "Unfroze geometric feature",
+    "de": "Geometriemerkmal aufgetaut"
+  },
+  "cadapp.freeze_hw": {
+    "pl": "Zamrożono okucie",
+    "en": "Froze hardware",
+    "de": "Beschlag eingefroren"
+  },
+  "cadapp.unfreeze_hw": {
+    "pl": "Odmrożono okucie",
+    "en": "Unfroze hardware",
+    "de": "Beschlag aufgetaut"
+  },
+  "cadapp.freeze_panel": {
+    "pl": "Zamrożono formatkę",
+    "en": "Froze panel",
+    "de": "Platte eingefroren"
+  },
+  "cadapp.unfreeze_panel": {
+    "pl": "Odmrożono formatkę",
+    "en": "Unfroze panel",
+    "de": "Platte aufgetaut"
+  },
+  "cadapp.remove_container": {
+    "pl": "Usunięto kontener",
+    "en": "Deleted container",
+    "de": "Container gelöscht"
+  },
+  "cadapp.remove_panel": {
+    "pl": "Usunięto panel ręczny",
+    "en": "Deleted manual panel",
+    "de": "Manuelle Platte gelöscht"
+  },
+  "cadapp.smartframe_single": {
+    "pl": "Pojedyncze formatki wewnątrz zespołu SmartFrame nie mogą być usuwane indywidualnie.",
+    "en": "Single panels inside a SmartFrame assembly cannot be deleted individually.",
+    "de": "Einzelne Platten in SmartFrame-Baugruppe können nicht einzeln gelöscht werden."
+  },
+  "cadapp.remove_feature": {
+    "pl": "Usunięto cechę geometryczną",
+    "en": "Deleted geometric feature",
+    "de": "Geometriemerkmal gelöscht"
+  },
+  "cadapp.project_restored": {
+    "pl": "Przywrócono projekt",
+    "en": "Project restored",
+    "de": "Projekt wiederhergestellt"
+  },
+  "cadapp.project_restored_back": {
+    "pl": "Przywrócono projekt (powrót z modułu)",
+    "en": "Project restored (back from module)",
+    "de": "Projekt wiederhergestellt (zurück aus Modul)"
+  },
+  "cadapp.start_error": {
+    "pl": "Błąd startu aplikacji. Zobacz konsolę.",
+    "en": "Application start error. See console.",
+    "de": "Startfehler der App. Siehe Konsole."
+  },
+  "moddata.extract_feat": {
+    "pl": "Cechy: {type}",
+    "en": "Features: {type}",
+    "de": "Merkmale: {type}"
+  },
+  "moddata.hole_idx": {
+    "pl": "Otwór {i}",
+    "en": "Hole {i}",
+    "de": "Bohrung {i}"
+  },
+  "moddata.machining": {
+    "pl": "obróbka",
+    "en": "machining",
+    "de": "Bearbeitung"
+  },
+  "moddata.joint": {
+    "pl": "Więz: {type}",
+    "en": "Joint: {type}",
+    "de": "Verbinder: {type}"
+  },
+  "moddata.wall_anchor": {
+    "pl": "Ściana: {face}",
+    "en": "Wall: {face}",
+    "de": "Wand: {face}"
+  },
+  "moddata.anchor": {
+    "pl": "Kotwica",
+    "en": "Anchor",
+    "de": "Anker"
+  },
+  "moddata.anchor_a": {
+    "pl": "Kotwica A",
+    "en": "Anchor A",
+    "de": "Anker A"
+  },
+  "moddata.anchor_b": {
+    "pl": "Kotwica B",
+    "en": "Anchor B",
+    "de": "Anker B"
+  },
+  "moddata.cnc_no_panel": {
+    "pl": "Nie udało się otworzyć CNC. Zaznacz formatkę.",
+    "en": "Failed to open CNC. Select a panel.",
+    "de": "CNC konnte nicht geöffnet werden. Platte wählen."
+  },
+  "moddata.cnc_scene": {
+    "pl": "CNC — formatka na scenie. Utwórz program, potem wskaż cechy.",
+    "en": "CNC — panel on scene. Create a program, then pick features.",
+    "de": "CNC — Platte in Szene. Programm erstellen, dann Merkmale wählen."
+  },
+  "moddata.click_wall": {
+    "pl": "Najpierw kliknij ścianę formatki",
+    "en": "Click a panel wall first",
+    "de": "Zuerst Plattenwand klicken"
+  },
+  "moddata.view_normal": {
+    "pl": "Widok normalny: {face}",
+    "en": "Normal view: {face}",
+    "de": "Normalansicht: {face}"
+  },
+  "moddata.wall_default": {
+    "pl": "ściana",
+    "en": "wall",
+    "de": "Wand"
+  },
+  "dag.node_inspector": {
+    "pl": "Inspektor węzła",
+    "en": "Node inspector",
+    "de": "Knoteninspektor"
+  },
+  "dag.click_node": {
+    "pl": "Kliknij dowolny węzeł na grafie, aby zobaczyć szczegóły.",
+    "en": "Click any graph node for details.",
+    "de": "Beliebigen Graphknoten für Details klicken."
+  },
+  "dag.frozen": {
+    "pl": "Zamrożony",
+    "en": "Frozen",
+    "de": "Eingefroren"
+  },
+  "dag.free_panels": {
+    "pl": "Formatki wolnostojące / Inne",
+    "en": "Free panels / Other",
+    "de": "Freie Platten / Andere"
+  },
+  "dag.zoom_in": {
+    "pl": "Przybliż",
+    "en": "Zoom in",
+    "de": "Vergrößern"
+  },
+  "dag.zoom_in_title": {
+    "pl": "Przybliż (Ctrl + kółko)",
+    "en": "Zoom in (Ctrl + wheel)",
+    "de": "Vergrößern (Strg + Rad)"
+  },
+  "dag.zoom_out_title": {
+    "pl": "Oddal (Ctrl + kółko)",
+    "en": "Zoom out (Ctrl + wheel)",
+    "de": "Verkleinern (Strg + Rad)"
+  },
+  "dag.zoom_fit": {
+    "pl": "Dopasuj cały diagram do ekranu",
+    "en": "Fit whole diagram to screen",
+    "de": "Gesamtes Diagramm an Bildschirm anpassen"
+  },
+  "dag.zoom_out": {
+    "pl": "Oddal",
+    "en": "Zoom out",
+    "de": "Verkleinern"
+  },
+  "dag.no_objects": {
+    "pl": "W scenie nie wykryto obiektów lub sesja nie została przekazana.",
+    "en": "No objects detected in scene or session not passed.",
+    "de": "Keine Objekte in Szene oder Sitzung nicht übergeben."
+  },
+  "dag.no_objects_hint": {
+    "pl": "Upewnij się, że w projekcie znajduje się mebel, kliknij prawym przyciskiem myszy (PPM) na drzewie obiektów i wybierz",
+    "en": "Make sure the project has furniture, right-click (RMB) the object tree and pick",
+    "de": "Sicherstellen, dass Projekt Möbel enthält, Rechtsklick (RMB) auf Objektbaum und wählen"
+  },
+  "dag.connected_title": {
+    "pl": "Pokaż wyłącznie węzły powiązane bezpośrednio z zaznaczonym elementem",
+    "en": "Show only nodes directly linked to the selected element",
+    "de": "Nur direkt verknüpfte Knoten anzeigen"
+  },
+  "dag.collapse_title": {
+    "pl": "Zwiń wyjścia (formatki) wszystkich korpusów",
+    "en": "Collapse outputs (panels) of all cabinets",
+    "de": "Ausgänge (Platten) aller Korpusse einklappen"
+  },
+  "dag.expand_title": {
+    "pl": "Rozwiń wyjścia (formatki) wszystkich korpusów",
+    "en": "Expand outputs (panels) of all cabinets",
+    "de": "Ausgänge (Platten) aller Korpusse erweitern"
+  },
+  "dag.refresh": {
+    "pl": "Spróbuj odświeżyć",
+    "en": "Try refreshing",
+    "de": "Aktualisieren versuchen"
+  },
+  "dag.empty_title": {
+    "pl": "Brak elementów w grafie DAG",
+    "en": "No elements in DAG graph",
+    "de": "Keine Elemente im DAG-Graphen"
+  },
+  "dag.empty_hint": {
+    "pl": "„Graf powiązań (DAG)”",
+    "en": "\"Relation graph (DAG)\"",
+    "de": "„Beziehungsgraph (DAG)“"
+  },
+  "dag.back_editor": {
+    "pl": "Wróć do edytora CAD",
+    "en": "Back to CAD editor",
+    "de": "Zurück zum CAD-Editor"
+  },
+  "dag.inspector": {
+    "pl": "DAG Inspector",
+    "en": "DAG Inspector",
+    "de": "DAG-Inspektor"
+  },
+  "dag.refresh_cad": {
+    "pl": "Odśwież z CAD",
+    "en": "Refresh from CAD",
+    "de": "Aus CAD aktualisieren"
+  },
+  "dag.back_cad": {
+    "pl": "Powrót do CAD",
+    "en": "Back to CAD",
+    "de": "Zurück zu CAD"
+  },
+  "dag.f_bodies": {
+    "pl": "Korpusy",
+    "en": "Cabinets",
+    "de": "Korpusse"
+  },
+  "dag.f_panels": {
+    "pl": "Formatki",
+    "en": "Panels",
+    "de": "Platten"
+  },
+  "dag.f_features": {
+    "pl": "Obróbki",
+    "en": "Machinings",
+    "de": "Bearbeitungen"
+  },
+  "dag.f_joints": {
+    "pl": "Więzy",
+    "en": "Joints",
+    "de": "Verbinder"
+  },
+  "dag.stat_asm": {
+    "pl": "Złożenia",
+    "en": "Assemblies",
+    "de": "Baugruppen"
+  },
+  "dag.stat_panels": {
+    "pl": "Płyty meblowe",
+    "en": "Furniture boards",
+    "de": "Möbelplatten"
+  },
+  "dag.stat_features": {
+    "pl": "Nawierty / Rowki",
+    "en": "Drillings / Grooves",
+    "de": "Bohrungen / Nuten"
+  },
+  "dag.stat_constraints": {
+    "pl": "kinematyczne",
+    "en": "kinematic",
+    "de": "kinematisch"
+  },
+  "dag.stat_conflicts": {
+    "pl": "Konflikty solvera",
+    "en": "Solver conflicts",
+    "de": "Solver-Konflikte"
+  },
+  "dag.conflict_count": {
+    "pl": "Konflikty: {n}",
+    "en": "Conflicts: {n}",
+    "de": "Konflikte: {n}"
+  },
+  "dag.parents": {
+    "pl": "Węzły nadrzędne ({n})",
+    "en": "Parent nodes ({n})",
+    "de": "Übergeordnete Knoten ({n})"
+  },
+  "dag.children": {
+    "pl": "Węzły podrzędne / powiązane ({n})",
+    "en": "Child / related nodes ({n})",
+    "de": "Untergeordnete / verknüpfte Knoten ({n})"
+  },
+  "dag.expand_node": {
+    "pl": "Rozwiń formatki i obróbki tego korpusu",
+    "en": "Expand panels and machining of this cabinet",
+    "de": "Platten und Bearbeitungen dieses Korpus erweitern"
+  },
+  "dag.collapse_node": {
+    "pl": "Zwiń formatki i obróbki tego korpusu",
+    "en": "Collapse panels and machining of this cabinet",
+    "de": "Platten und Bearbeitungen dieses Korpus einklappen"
+  },
+  "dag.details_open": {
+    "pl": "Zwiń szczegóły",
+    "en": "Collapse details",
+    "de": "Details einklappen"
+  },
+  "dag.details_closed": {
+    "pl": "Pokaż wymiary i rolę",
+    "en": "Show dimensions and role",
+    "de": "Maße und Rolle anzeigen"
+  },
+  "dag.fetch_fresh": {
+    "pl": "Pobierz świeży stan z otwartego okna CAD",
+    "en": "Fetch fresh state from open CAD window",
+    "de": "Frischen Stand aus offenem CAD-Fenster holen"
+  },
+  "dag.back_3d": {
+    "pl": "Powrót do okna 3D",
+    "en": "Back to 3D window",
+    "de": "Zurück zum 3D-Fenster"
+  },
+  "dag.toggle_cards": {
+    "pl": "Pokaż lub ukryj wymiary i role bezpośrednio na kartach węzłów",
+    "en": "Show or hide dimensions and roles on node cards",
+    "de": "Maße und Rollen auf Knotenkarten ein-/ausblenden"
+  },
+  "dag.compact_labels": {
+    "pl": "Zwarte etykiety",
+    "en": "Compact labels",
+    "de": "Kompakte Labels"
+  },
+  "dag.show_details": {
+    "pl": "Pokaż szczegóły",
+    "en": "Show details",
+    "de": "Details anzeigen"
+  },
+  "dag.connected_only": {
+    "pl": "Tylko powiązane",
+    "en": "Connected only",
+    "de": "Nur verbundene"
+  },
+  "dag.collapse": {
+    "pl": "Zwiń korpusy",
+    "en": "Collapse cabinets",
+    "de": "Korpusse einklappen"
+  },
+  "dag.expand": {
+    "pl": "Rozwiń",
+    "en": "Expand",
+    "de": "Erweitern"
+  },
+  "dag.no_match": {
+    "pl": "Brak węzłów spełniających kryteria",
+    "en": "No nodes match the criteria",
+    "de": "Keine Knoten für Kriterien"
+  },
+  "dag.no_match_hint": {
+    "pl": "Włącz filtry typów u góry lub wyczyść pole wyszukiwania",
+    "en": "Enable type filters above or clear the search box",
+    "de": "Typfilter oben aktivieren oder Suche löschen"
+  },
+  "dag.frozen": {
+    "pl": "Zamrożony",
+    "en": "Frozen",
+    "de": "Eingefroren"
+  },
+  "dag.joint_conflict": {
+    "pl": "Konflikt więzu kinematycznego",
+    "en": "Kinematic joint conflict",
+    "de": "Kinematischer Verbinderkonflikt"
+  },
+  "dag.joint_conflict_hint": {
+    "pl": "Solver nie może spełnić tego wiązania jednocześnie z innymi więzami bryły. Sprawdź sprzeczne płaszczyzny.",
+    "en": "Solver cannot satisfy this joint with the body's other joints. Check conflicting planes.",
+    "de": "Solver kann diesen Verbinder nicht mit anderen Verbindern erfüllen. Ebenen prüfen."
+  },
+  "dag.phys_dims": {
+    "pl": "Wymiary fizyczne (mm)",
+    "en": "Physical dimensions (mm)",
+    "de": "Physische Maße (mm)"
+  },
+  "dag.width": {
+    "pl": "Szerokość:",
+    "en": "Width:",
+    "de": "Breite:"
+  },
+  "dag.height_len": {
+    "pl": "Wysokość / Długość:",
+    "en": "Height / Length:",
+    "de": "Höhe / Länge:"
+  },
+  "dag.thickness": {
+    "pl": "Grubość:",
+    "en": "Thickness:",
+    "de": "Dicke:"
+  },
+  "dag.cad_class": {
+    "pl": "Klasyfikacja CAD",
+    "en": "CAD classification",
+    "de": "CAD-Klassifizierung"
+  },
+  "dag.role": {
+    "pl": "Rola:",
+    "en": "Role:",
+    "de": "Rolle:"
+  },
+  "dag.node_type": {
+    "pl": "Typ węzła:",
+    "en": "Node type:",
+    "de": "Knotentyp:"
+  },
+  "dag.residual": {
+    "pl": "Błąd resztkowy:",
+    "en": "Residual error:",
+    "de": "Restfehler:"
+  },
+  "dag.json_meta": {
+    "pl": "Szczegóły JSON (Meta)",
+    "en": "JSON details (Meta)",
+    "de": "JSON-Details (Meta)"
+  },
+  "saas_svc.login_required": {
+    "pl": "Musisz być zalogowany.",
+    "en": "You must be signed in.",
+    "de": "Anmeldung erforderlich."
+  },
+  "saas_svc.browse_required": {
+    "pl": "Musisz być zalogowany, aby przeglądać projekty w chmurze.",
+    "en": "Sign in to browse cloud projects.",
+    "de": "Anmelden, um Cloud-Projekte zu durchsuchen."
+  },
+  "saas_svc.save_required": {
+    "pl": "Musisz być zalogowany, aby zapisać projekt w chmurze.",
+    "en": "Sign in to save projects to cloud.",
+    "de": "Anmelden, um Projekte in Cloud zu speichern."
+  },
+  "saas_svc.limit": {
+    "pl": "Osiągnięto limit projektów w chmurze ({n}) dla planu {tier}. Uaktualnij do PRO, aby zapisywać bez ograniczeń.",
+    "en": "Cloud project limit reached ({n}) for {tier} plan. Upgrade to PRO for unlimited saves.",
+    "de": "Cloud-Projektlimit erreicht ({n}) für {tier}-Plan. Auf PRO upgraden für unbegrenztes Speichern."
+  },
+  "saas_svc.auth_fallback": {
+    "pl": "Błąd logowania do bazy w chmurze.",
+    "en": "Cloud database sign-in error.",
+    "de": "Cloud-Datenbank-Anmeldefehler."
+  },
+  "saas_svc.google_user": {
+    "pl": "Użytkownik Google",
+    "en": "Google user",
+    "de": "Google-Benutzer"
+  },
+  "saas_svc.share_pro": {
+    "pl": "Udostępnianie projektów linkiem 3D wymaga planu PRO.",
+    "en": "3D-link project sharing requires the PRO plan.",
+    "de": "Projektfreigabe per 3D-Link erfordert PRO-Plan."
+  },
+  "entry.cleared": {
+    "pl": "CNC — wyczyszczono formatkę. Wczytaj DXF lub formatkę z CAD.",
+    "en": "CNC — panel cleared. Load a DXF or a panel from CAD.",
+    "de": "CNC — Platte gelöscht. DXF oder Platte aus CAD laden."
+  },
+  "entry.clear_title": {
+    "pl": "Wyczyść obecną formatkę i zresetuj scenę CNC",
+    "en": "Clear current panel and reset CNC scene",
+    "de": "Aktuelle Platte löschen und CNC-Szene zurücksetzen"
+  },
+  "entry.clear_btn": {
+    "pl": "Wyczyść",
+    "en": "Clear",
+    "de": "Löschen"
+  },
+  "entry.hint_dxf": {
+    "pl": "Wczytaj plik DXF 2D/2.5D, upuść plik",
+    "en": "Load a 2D/2.5D DXF file, drop a file",
+    "de": "2D/2.5D-DXF-Datei laden, Datei ablegen"
+  },
+  "entry.hint_cad": {
+    "pl": "na ekranie lub wskaż formatkę w CAD Meble.",
+    "en": "on screen or pick a panel in Furniture CAD.",
+    "de": "auf Bildschirm oder Platte in Möbel-CAD wählen."
+  }
+}

@@ -8,15 +8,15 @@
  */
 
 export const LEGACY_E1_SHEETS_KEYS = [
-    'smartbox_cad_manual_sheets_v3',
-    'smartbox_cad_export_saved_views',
-    'smartbox_cad_export_saved_views_v1',
-    'smartbox_cad_manual_sheets_v2',
+    'bloki_cad_manual_sheets_v3',
+    'bloki_cad_export_saved_views',
+    'bloki_cad_export_saved_views_v1',
+    'bloki_cad_manual_sheets_v2',
 ] as const;
 
-export const LEGACY_E3_VIEWS_KEY = 'smartbox_cad_manual_sheets_v3_e3';
-export const LEGACY_E3_MULTI_SHEETS_KEY = 'smartbox_cad_e3_sheets_v1';
-export const LEGACY_E3_CURRENT_SHEET_KEY = 'smartbox_cad_e3_current_sheet_id';
+export const LEGACY_E3_VIEWS_KEY = 'bloki_cad_manual_sheets_v3_e3';
+export const LEGACY_E3_MULTI_SHEETS_KEY = 'bloki_cad_e3_sheets_v1';
+export const LEGACY_E3_CURRENT_SHEET_KEY = 'bloki_cad_e3_current_sheet_id';
 
 export const LEGACY_EXPORT_STORAGE_KEYS = [
     ...LEGACY_E1_SHEETS_KEYS,

@@ -21,6 +21,7 @@ const MATERIAL_VISUAL_PROPERTIES: Record<string, { color: { r: number; g: number
     "H1150_ST10": { color: { r: 0.58, g: 0.54, b: 0.50 }, hex: "#948a80", roughness: 0.6 },
     "H1180_ST37": { color: { r: 0.72, g: 0.62, b: 0.48 }, hex: "#b89e7a", roughness: 0.7 },
     "H1181_ST37": { color: { r: 0.45, g: 0.36, b: 0.28 }, hex: "#735c47", roughness: 0.7 },
+    "H1344_ST32": { color: { r: 0.58, g: 0.42, b: 0.28 }, hex: "#946b47", roughness: 0.65 },
     "H3170_ST12": { color: { r: 0.75, g: 0.65, b: 0.50 }, hex: "#bfa680", roughness: 0.6 },
     "H3309_ST28": { color: { r: 0.70, g: 0.60, b: 0.45 }, hex: "#b39973", roughness: 0.65 },
 
@@ -51,6 +52,33 @@ const DEFAULT_CATEGORY_PRICES_M2: Record<string, number> = {
     "Lustro": 140.0
 };
 
+// Cena katalogowa kategorii podawana jest względem płyty referencyjnej 18 mm (skalowanie ceny, nie fallback geometrii).
+const PRICE_REFERENCE_THICKNESS_MM = 18.0;
+
+/** Grubość pozycji katalogu: item → sufiks id → default grupy. Bez zgadywania 18 mm. */
+export function resolveCatalogThicknessMm(
+    itemId: string,
+    itemData: { thickness_mm?: number } | null | undefined,
+    groupDefaultThicknessMm: number | undefined
+): number {
+    const fromItem = Number(itemData?.thickness_mm);
+    if (Number.isFinite(fromItem) && fromItem > 0) return fromItem;
+
+    const suffixMatch = String(itemId || '').match(/_(\d+(?:\.\d+)?)$/);
+    if (suffixMatch) {
+        const fromId = parseFloat(suffixMatch[1]);
+        if (Number.isFinite(fromId) && fromId > 0) return fromId;
+    }
+
+    const fromGroup = Number(groupDefaultThicknessMm);
+    if (Number.isFinite(fromGroup) && fromGroup > 0) return fromGroup;
+
+    throw new Error(
+        `[A7_material] Materiał "${itemId}" nie ma poprawnej grubości ` +
+        `(brak thickness_mm, sufiksu w id oraz default_thickness_mm grupy).`
+    );
+}
+
 class MaterialDatabase {
     private materials: MaterialItem[] = [];
     private edgeBandings: EdgeBandingType[] = [];
@@ -65,12 +93,14 @@ class MaterialDatabase {
 
         for (const [groupId, groupData] of Object.entries<any>(rawDb)) {
             const categoryName = groupData.category_name || 'Płyta Wiórowa';
-            const defaultThickness = Number(groupData.default_thickness_mm) || 18.0;
+            const rawGroupDefault = Number(groupData.default_thickness_mm);
+            const groupDefaultThickness =
+                Number.isFinite(rawGroupDefault) && rawGroupDefault > 0 ? rawGroupDefault : undefined;
             const density = Number(groupData.density_kg_m3) || 680.0;
             const items = groupData.items || {};
 
             for (const [itemId, itemData] of Object.entries<any>(items)) {
-                const thickness = Number(itemData.thickness_mm) || defaultThickness;
+                const thickness = resolveCatalogThicknessMm(itemId, itemData, groupDefaultThickness);
                 const name = itemData.name || itemId;
                 const code = itemData.code || '';
 
@@ -84,11 +114,20 @@ class MaterialDatabase {
                     roughness: 0.6
                 };
 
-                // Mapowanie tekstury Egger (np. H1145_ST10_Dab Bardolino naturalny_Albedo.png)
-                const safeCode = code.replace(/\s+/g, '_');
-                const texturePath = itemData.texture_path || (code ? `/textures/egger/${safeCode}_Albedo.png` : undefined);
+                // Kody dekorów, dla których rzeczywiście posiadamy przygotowane mapy tekstur Albedo i miniaturki
+                const KNOWN_TEXTURE_DECOR_CODES = new Set([
+                    'H1180_ST37',
+                    'H1181_ST37',
+                    'H1344_ST32'
+                ]);
 
-                const priceM2 = itemData.price_per_m2 || (DEFAULT_CATEGORY_PRICES_M2[categoryName] || 65.0) * (thickness / 18.0);
+                // Mapowanie tekstury Egger (tylko dla dekorów posiadających pliki na dysku)
+                const safeCode = code.replace(/\s+/g, '_');
+                const hasTexture = Boolean(itemData.texture_path || KNOWN_TEXTURE_DECOR_CODES.has(safeCode));
+                const texturePath = itemData.texture_path || (hasTexture ? `/textures/egger/${safeCode}_Albedo.png` : undefined);
+                const thumbnailPath = itemData.thumbnail_path || (KNOWN_TEXTURE_DECOR_CODES.has(safeCode) ? `/textures/thumbnails/${safeCode}.webp` : undefined);
+
+                const priceM2 = itemData.price_per_m2 || (DEFAULT_CATEGORY_PRICES_M2[categoryName] || 65.0) * (thickness / PRICE_REFERENCE_THICKNESS_MM);
 
                 loaded.push({
                     id: itemId,
@@ -103,6 +142,7 @@ class MaterialDatabase {
                     isTransparent: visual.isTransparent || false,
                     opacity: visual.opacity !== undefined ? visual.opacity : 1.0,
                     texture_path: texturePath,
+                    thumbnail_path: thumbnailPath,
                     price_key: itemData.price_key || itemId,
                     price_per_m2: Math.round(priceM2 * 100) / 100,
                     price_per_m3: Math.round((priceM2 / (thickness / 1000.0)) * 100) / 100
@@ -119,7 +159,7 @@ class MaterialDatabase {
                     ...mat,
                     id: id16,
                     thickness_mm: 16.0,
-                    price_per_m2: Math.round(mat.price_per_m2! * (16.0 / 18.0) * 100) / 100
+                    price_per_m2: Math.round(mat.price_per_m2! * (16.0 / PRICE_REFERENCE_THICKNESS_MM) * 100) / 100
                 });
             }
         }
@@ -152,17 +192,21 @@ class MaterialDatabase {
      */
     public getMaterialInfo(rawInput?: string, fallbackThickness?: number): MaterialInfo {
         const cleaned = (rawInput || '').trim();
-        const thickness = fallbackThickness ? Math.round(fallbackThickness * 10) / 10 : 18.0;
+        const suffixMatch = cleaned.match(/_(\d+(?:\.\d+)?)$/);
+        const derivedThk = fallbackThickness !== undefined 
+            ? fallbackThickness 
+            : (suffixMatch ? parseFloat(suffixMatch[1]) : 0);
+        const thickness = Math.round(derivedThk * 10) / 10;
 
         const buildLabel = (name: string, code: string, thk: number) => {
             const cleanName = name.replace(/\s+\d+(\.\d+)?\s*mm$/i, '').trim();
             const codePart = code ? ` (${code})` : '';
-            return `${cleanName}${codePart} ${Math.round(thk * 10) / 10}mm`;
+            return thk > 0 ? `${cleanName}${codePart} ${Math.round(thk * 10) / 10}mm` : `${cleanName}${codePart}`;
         };
 
         if (!cleaned) {
             return {
-                id: `W1100_ST9_${Math.round(thickness)}`,
+                id: thickness > 0 ? `W1100_ST9_${Math.round(thickness)}` : 'W1100_ST9',
                 code: 'W1100 ST9',
                 name: 'Biały Alpejski',
                 thickness_mm: thickness,
@@ -192,12 +236,16 @@ class MaterialDatabase {
         );
         if (byNameOrCode) {
             const cleanName = byNameOrCode.name.replace(/\s+\d+(\.\d+)?\s*mm$/i, '').trim();
+            // Bez jawnej grubości (parametr / sufiks) nie dziedzicz pierwszej trafionej płyty z katalogu.
+            const finalThk = thickness > 0 ? thickness : 0;
             return {
-                id: byNameOrCode.id,
+                id: finalThk > 0
+                    ? `${byNameOrCode.id.replace(/_\d+(?:\.\d+)?$/, '')}_${Math.round(finalThk)}`
+                    : byNameOrCode.id.replace(/_\d+(?:\.\d+)?$/, ''),
                 code: byNameOrCode.code || '',
                 name: cleanName,
-                thickness_mm: byNameOrCode.thickness_mm,
-                fullLabel: buildLabel(cleanName, byNameOrCode.code || '', byNameOrCode.thickness_mm),
+                thickness_mm: finalThk,
+                fullLabel: buildLabel(cleanName, byNameOrCode.code || '', finalThk),
                 category: byNameOrCode.category
             };
         }
@@ -207,12 +255,13 @@ class MaterialDatabase {
         const byBase = this.materials.find(m => m.id.startsWith(baseKey));
         if (byBase) {
             const cleanName = byBase.name.replace(/\s+\d+(\.\d+)?\s*mm$/i, '').trim();
+            const finalThk = thickness > 0 ? thickness : (suffixMatch ? parseFloat(suffixMatch[1]) : 0);
             return {
-                id: `${baseKey}_${Math.round(thickness)}`,
+                id: finalThk > 0 ? `${baseKey}_${Math.round(finalThk)}` : baseKey,
                 code: byBase.code || '',
                 name: cleanName,
-                thickness_mm: thickness,
-                fullLabel: buildLabel(cleanName, byBase.code || '', thickness),
+                thickness_mm: finalThk,
+                fullLabel: buildLabel(cleanName, byBase.code || '', finalThk),
                 category: byBase.category
             };
         }
@@ -221,7 +270,7 @@ class MaterialDatabase {
         const lower = cleaned.toLowerCase();
         if (lower.includes('biel alpejska') || lower.includes('bialy alpejski') || lower.includes('biały alpejski') || lower.startsWith('w1100')) {
             return {
-                id: `W1100_ST9_${Math.round(thickness)}`,
+                id: thickness > 0 ? `W1100_ST9_${Math.round(thickness)}` : 'W1100_ST9',
                 code: 'W1100 ST9',
                 name: 'Biały Alpejski',
                 thickness_mm: thickness,

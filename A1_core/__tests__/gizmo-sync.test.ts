@@ -25,7 +25,7 @@ describe('Gizmo & SceneSyncAdapter Integration', () => {
     });
 
     it('should bind mock mesh to CADNode in shared SceneSyncAdapter', () => {
-        const container = doc.createContainer({ name: 'Szafa' });
+        const container = doc.createAssembly({ name: 'Szafa' });
         const cadNode = doc.findNode(container.id)!;
         const mockMesh = {
             position: { x: 0, y: 0, z: 0, set: function(x: number, y: number, z: number) { this.x = x; this.y = y; this.z = z; } },

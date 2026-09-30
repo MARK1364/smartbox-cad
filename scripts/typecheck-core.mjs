@@ -1,6 +1,6 @@
 /**
- * Bramka TypeScript dla A1_core + A2_smartbox.
- * tsc --noEmit pada na starych błędach poza tymi folderami (sketcher, CNC…).
+ * Bramka TypeScript dla A1_core + A2 + A3 + A4 + A5 + C1_cnc (+ powiązane).
+ * tsc --noEmit pada na starych błędach poza tymi folderami (sketcher…).
  * Vite/esbuild nie łapie braku importu — to wychodzi w runtime.
  */
 import { spawnSync } from 'node:child_process';
@@ -21,12 +21,16 @@ const gateErrors = text
     .filter((line) =>
         /error TS\d+/.test(line) &&
         (/A1_core[/\\]/.test(line) ||
-            /A2_smartbox[/\\]/.test(line) ||
+            /A2_bloki[/\\]/.test(line) ||
+            /A3_smartframe[/\\]/.test(line) ||
+            /A5_smartparts[/\\]/.test(line) ||
+            /C1_cnc[/\\]/.test(line) ||
             /B1_biblioteka[/\\]/.test(line) ||
             /A4_smartpanel[/\\]/.test(line) ||
             /A7_material[/\\]/.test(line) ||
             /S2_solver[/\\]/.test(line) ||
             /C2_connectors[/\\]/.test(line) ||
+            /A6_agd[/\\]/.test(line) ||
             /o1_operacji[/\\]/.test(line))
     );
 
@@ -36,4 +40,4 @@ if (gateErrors.length > 0) {
     process.exit(1);
 }
 
-console.log('Core typecheck ok (A1 + A2 + B1_biblioteka + A4 + A7 + S2 + C2 + O1).');
+console.log('Core typecheck ok (A1 + A2 + A3 + A4 + A5 + C1 + B1_biblioteka + A7 + S2 + C2 + O1).');

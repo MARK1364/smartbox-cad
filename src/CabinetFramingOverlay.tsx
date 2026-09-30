@@ -8,6 +8,13 @@
 
 import React, { useRef } from 'react';
 import { ContextManager } from '../A1_core/context-manager.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 declare const BABYLON: any;
 
@@ -18,6 +25,7 @@ interface Props {
 }
 
 export function CabinetFramingOverlay({ open, onCapture, onCancel }: Props) {
+    useLocale();
     const frameBoxRef = useRef<HTMLDivElement>(null);
 
     if (!open) return null;
@@ -29,7 +37,7 @@ export function CabinetFramingOverlay({ open, onCapture, onCancel }: Props) {
         const viewport = ContextManager.instance.viewport;
         const canvas: HTMLCanvasElement | null = viewport?.canvas || document.querySelector('#renderCanvas') || document.querySelector('canvas');
         if (!canvas) {
-            alert('Nie znaleziono płótna 3D do wykonania zrzutu.');
+            alert(tx(srcTekst, 'frame.no_canvas', TX_NS));
             onCancel();
             return;
         }
@@ -99,7 +107,7 @@ export function CabinetFramingOverlay({ open, onCapture, onCancel }: Props) {
         }
 
         if (!fullScreenshotUrl) {
-            alert('Nie udało się przechwycić klatki 3D. Upewnij się, że widok 3D jest aktywny.');
+            alert(tx(srcTekst, 'frame.capture_fail', TX_NS));
             onCancel();
             return;
         }
@@ -186,7 +194,7 @@ export function CabinetFramingOverlay({ open, onCapture, onCancel }: Props) {
                 }}
             >
                 <span style={{ fontSize: '1.1rem' }}>📷</span>
-                <span>Ustaw mebel w kadrze myszką (obracaj / przybliżaj), a następnie kliknij <strong>Zapisz kadr</strong>.</span>
+                <span>{tx(srcTekst, 'frame.hint', TX_NS)} <strong>{tx(srcTekst, 'frame.save', TX_NS)}</strong>.</span>
             </div>
 
             {/* Prostokąt kadrowania (Ramka podglądu) */}
@@ -264,9 +272,8 @@ export function CabinetFramingOverlay({ open, onCapture, onCancel }: Props) {
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        <span style={{ fontSize: '1.1rem' }}>📷</span>
-                        <span>Zapisz kadr</span>
-                    </button>
+<span>{tx(srcTekst, 'frame.save', TX_NS)}</span>
+</button>
 
                     <button
                         onClick={onCancel}
@@ -281,8 +288,8 @@ export function CabinetFramingOverlay({ open, onCapture, onCancel }: Props) {
                             transition: 'all 0.15s ease'
                         }}
                     >
-                        ✕ Anuluj
-                    </button>
+✕ {tx(srcTekst, 'frame.cancel', TX_NS)}
+</button>
                 </div>
             </div>
         </div>

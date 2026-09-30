@@ -1,5 +1,4 @@
 import { ProjectDocument } from './project-document.js';
-import { Viewport } from '../S3_scena/viewport.js';
 import { FacePicker } from './face-picker.js';
 import { ModalTransformManager } from './modal-transform.js';
 import { TooltipManager } from './tooltip-manager.js';
@@ -18,6 +17,7 @@ export interface IAppAPI {
     newProject?: () => void;
     forceResetProject?: () => void;
     openProject?: () => void;
+    loadProjectData?: (data: any, status?: string) => void;
     saveProject?: () => Promise<boolean> | void;
     saveProjectAs?: () => Promise<boolean> | void;
     exportStep?: () => void;
@@ -29,7 +29,7 @@ export interface IAppAPI {
     viewNormalToFace?: () => void;
     setView?: (viewName: string) => void;
     setSelectionMode?: (mode: 'object' | 'subgeometry') => void;
-    setStatus?: (status: string, highlight?: boolean) => void;
+    setStatus?: (status: string, highlight?: boolean, kind?: 'info' | 'error') => void;
     setLcsVisible?: (visible: boolean) => void;
     [key: string]: any;
 }
@@ -45,7 +45,8 @@ export class ContextManager {
     public document: ProjectDocument | null = null;
     public projectFileIO: ProjectFileIO | null = null;
     public commandHistory: CommandHistory | null = null;
-    public viewport: Viewport | null = null;
+    /** Viewport Babylon (S3) — typed `any`, żeby A1 nie zależało od S3_scena. */
+    public viewport: any = null;
     public facePicker: FacePicker | null = null;
     public modalTransformManager: ModalTransformManager = ModalTransformManager.instance;
     public gizmoController: any = null;
@@ -54,11 +55,34 @@ export class ContextManager {
     public containerViews: Map<any, any> = new Map();
     public hardwareViews: Map<any, any> = new Map();
     public sceneSyncAdapter: SceneSyncAdapter = new SceneSyncAdapter();
-    public smartBoxBayController: any = null;
+    public blokiBayController: any = null;
     public smartFrameDragController: any = null;
+    public smartWallDragController: any = null;
     
     // Zmienne używane z poziomu Reacta i UI
-    public activeTab = 'tab-a4-smartpanel';
+    private _activeTab = 'tab-a4-smartpanel';
+
+    public get activeTab(): string {
+        return this._activeTab;
+    }
+
+    public set activeTab(tab: string) {
+        this._activeTab = tab;
+        if (tab !== 'tab-a8-pmi') {
+            this.deactivatePmiToolsIfActive();
+        }
+    }
+
+    /** Uniwersalne wyjście z narzędzi PMI i powrót do SELECTION_TOOL. */
+    public deactivatePmiToolsIfActive(): void {
+        const sm = this.stateMachine;
+        if (!sm) return;
+        const current = (sm.getCurrentStateName?.() || '').toUpperCase();
+        if (current.includes('DIMENSION') || current.includes('MEASURE') || current.startsWith('PMI')) {
+            sm.changeState('SELECTION_TOOL');
+        }
+    }
+
     public activeReferencePicker: any = null;
     /** Pipeta więzów S2_solver — aktywna podczas wskazywania slotu A/B. */
     public activeConstraintPicker: any = null;

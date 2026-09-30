@@ -1,0 +1,67 @@
+{
+  "app.status_default": {
+    "pl": "Ładowanie...",
+    "en": "Loading...",
+    "de": "Laden..."
+  },
+  "app.console_default": {
+    "pl": "Gotowy. Najedź na element.",
+    "en": "Ready. Hover an element.",
+    "de": "Bereit. Element hovern."
+  },
+  "app.face_none": {
+    "pl": "Kliknij element",
+    "en": "Click an element",
+    "de": "Element klicken"
+  },
+  "app.face_edge": {
+    "pl": "Krawędź",
+    "en": "Edge",
+    "de": "Kante"
+  },
+  "app.face_corner": {
+    "pl": "Narożnik {i}",
+    "en": "Corner {i}",
+    "de": "Ecke {i}"
+  },
+  "app.face_feature": {
+    "pl": "Cecha geometryczna",
+    "en": "Geometric feature",
+    "de": "Geometriemerkmal"
+  },
+  "app.face_front": {
+    "pl": "Przód (Front)",
+    "en": "Front",
+    "de": "Vorne"
+  },
+  "app.face_back": {
+    "pl": "Tył (Back)",
+    "en": "Back",
+    "de": "Hinten"
+  },
+  "app.face_left": {
+    "pl": "Lewy bok (Left)",
+    "en": "Left side",
+    "de": "Linke Seite"
+  },
+  "app.face_right": {
+    "pl": "Prawy bok (Right)",
+    "en": "Right side",
+    "de": "Rechte Seite"
+  },
+  "app.face_top": {
+    "pl": "Góra (Top)",
+    "en": "Top",
+    "de": "Oben"
+  },
+  "app.face_bottom": {
+    "pl": "Dół (Bottom)",
+    "en": "Bottom",
+    "de": "Unten"
+  },
+  "app.face_dims": {
+    "pl": "Wymiary: {w} × {h} mm",
+    "en": "Dimensions: {w} × {h} mm",
+    "de": "Maße: {w} × {h} mm"
+  }
+}

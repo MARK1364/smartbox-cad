@@ -3,10 +3,11 @@ import { ProjectDocument } from '../A1_core/project-document.js';
 import { MaterialItem, MaterialScope } from './material-types.js';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import { rebuildSmartFrameContainer } from '../A3_smartframe/smartframe-adapter.js';
-import { update_smartbox_core } from '../A2_smartbox/smartbox-core.js';
+import { update_bloki_core } from '../A2_bloki/bloki-core.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { CADNode } from '../A1_core/cad-node/cad-node.js';
-import { isContainerModel, isPanelModel } from '../A1_core/domain-data.js';
+import { isContainerModel } from '../A1_core/domain-data.js';
+import { isPanelModel } from '../A4_smartpanel/panel-model.js';
 
 interface PanelMaterialSnapshot {
     panelId: string;
@@ -15,6 +16,36 @@ interface PanelMaterialSnapshot {
     materialCode: string;
     thickness: number; // in nm
     color: { r: number; g: number; b: number; a?: number };
+}
+
+/** Bloki drzwi/klapy/fronty szuflad — grubość siedzi w generatorParams, nie w custom_properties. */
+interface BlokiFrontThicknessSnapshot {
+    containerId: string;
+    grubosc_frontu_mm: number | undefined;
+}
+
+function isBlokiFrontModule(gp: Record<string, any> | undefined | null): boolean {
+    if (!gp) return false;
+    const boxType = String(gp.boxType || '').toUpperCase();
+    if (boxType === 'DOORS' || boxType === 'CORNER_DOORS' || boxType === 'FLAPS' || boxType === 'DRAWERS') {
+        return true;
+    }
+    const t = String(gp.type || '').toLowerCase();
+    return (
+        t.includes('door') ||
+        t.includes('flap') ||
+        t.includes('drawer') ||
+        t.includes('corner_doors') ||
+        t.includes('drzwi') ||
+        t.includes('klap')
+    );
+}
+
+function isFrontLikePanel(p: { role?: string; name?: string }): boolean {
+    const role = String(p.role || '').toUpperCase();
+    if (role === 'FRONT' || role === 'DOOR' || role === 'FLAP') return true;
+    const name = String(p.name || '').toUpperCase();
+    return name.includes('DRZWI') || name.startsWith('FRONT') || name.includes('KLAPA');
 }
 
 export class AssignMaterialCommand implements Command {
@@ -27,6 +58,7 @@ export class AssignMaterialCommand implements Command {
     private newMaterial: MaterialItem;
     private scope: MaterialScope;
     private previousSnapshots: PanelMaterialSnapshot[] = [];
+    private previousFrontThickness: BlokiFrontThicknessSnapshot[] = [];
     private affectedContainerIds: Set<string> = new Set();
 
     constructor(targetNodeId: string, newMaterial: MaterialItem, scope: MaterialScope = 'SINGLE') {
@@ -45,7 +77,13 @@ export class AssignMaterialCommand implements Command {
         if (!targetNode?.domainData || !isPanelModel(targetNode.domainData)) return;
 
         const targetPanel = targetNode.domainData;
-        const targetThNm = targetPanel.thickness || 18_000_000;
+        if (!(typeof targetPanel.thickness === 'number' && targetPanel.thickness > 0)) {
+            throw new Error(
+                `[A7_material] Formatka "${targetPanel.name || targetNode.id}" nie ma poprawnej grubości ` +
+                `(thickness=${targetPanel.thickness}). Zabronione domyślne 18 mm.`
+            );
+        }
+        const targetThNm = targetPanel.thickness;
         const targetMatId = targetPanel.materialId || targetPanel.material || 'W1100_ST9_18';
         const targetRole = (targetPanel.role || '').toUpperCase();
         const isTargetBack = targetRole === 'BACK_PANEL' || (targetPanel.name && targetPanel.name.toUpperCase().includes('PLECY'));
@@ -55,9 +93,10 @@ export class AssignMaterialCommand implements Command {
             if (candidateNode.id === targetNode.id) return true;
             const p = candidateNode.domainData;
             if (!isPanelModel(p)) return false;
+            if (!(typeof p.thickness === 'number' && p.thickness > 0)) return false;
 
             const cMatId = p.materialId || p.material || 'W1100_ST9_18';
-            const cThNm = p.thickness || 18_000_000;
+            const cThNm = p.thickness;
             const cRole = (p.role || '').toUpperCase();
             const isCandBack = cRole === 'BACK_PANEL' || (p.name && p.name.toUpperCase().includes('PLECY'));
 
@@ -100,8 +139,8 @@ export class AssignMaterialCommand implements Command {
                 }
             };
             collect(document.rootNode);
-        } else if (this.scope === 'SMARTBOX') {
-            const sbContainer = this.findParentSmartBoxNode(targetNode);
+        } else if (this.scope === 'BLOKI') {
+            const sbContainer = this.findParentBlokiNode(targetNode);
             if (sbContainer) {
                 this.affectedContainerIds.add(sbContainer.id);
                 const collect = (n: CADNode) => {
@@ -137,9 +176,11 @@ export class AssignMaterialCommand implements Command {
 
         // Zapisz migawkę poprzednich stanów (dla Undo)
         this.previousSnapshots = [];
+        this.previousFrontThickness = [];
         this.affectedNodeIds.length = 0;
 
         const newThNm = mmToNm(this.newMaterial.thickness_mm);
+        const newThMm = this.newMaterial.thickness_mm;
 
         for (const n of nodesToUpdate) {
             const p = n.domainData;
@@ -150,7 +191,7 @@ export class AssignMaterialCommand implements Command {
                 materialId: p.materialId || p.material || '',
                 materialName: p.materialName || '',
                 materialCode: p.materialCode || '',
-                thickness: p.thickness || 18_000_000,
+                thickness: p.thickness,
                 color: p.color ? { ...p.color } : { r: 0.8, g: 0.8, b: 0.8 }
             });
 
@@ -182,19 +223,11 @@ export class AssignMaterialCommand implements Command {
             }
         }
 
-        // Przelicz powiązane kontenery SmartFrame / SmartBox
-        for (const cId of this.affectedContainerIds) {
-            const cNode = document.findNode(cId);
-            if (cNode?.domainData && isContainerModel(cNode.domainData)) {
-                const container = cNode.domainData;
-                const pType = (container.generatorParams?.type || '').toLowerCase();
-                if (pType.startsWith('smartbox')) {
-                    update_smartbox_core(container, document);
-                } else {
-                    rebuildSmartFrameContainer(container);
-                }
-            }
-        }
+        // Drzwi / klapy / fronty szuflad: silnik czyta generatorParams, nie custom_properties
+        this.syncBlokiFrontThickness(document, nodesToUpdate, newThMm);
+
+        // Przelicz powiązane kontenery SmartFrame / Bloki
+        this.rebuildAffectedContainers(document);
 
         if (typeof document.notifyDocumentChanged === 'function') {
             document.notifyDocumentChanged();
@@ -235,23 +268,69 @@ export class AssignMaterialCommand implements Command {
             }
         }
 
-        for (const cId of this.affectedContainerIds) {
-            const cNode = document.findNode(cId);
-            if (cNode?.domainData && isContainerModel(cNode.domainData)) {
-                const container = cNode.domainData;
-                const pType = (container.generatorParams?.type || '').toLowerCase();
-                if (pType.startsWith('smartbox')) {
-                    update_smartbox_core(container, document);
-                } else {
-                    rebuildSmartFrameContainer(container);
-                }
-            }
+        for (const snap of this.previousFrontThickness) {
+            const cNode = document.findNode(snap.containerId);
+            if (!cNode?.domainData || !isContainerModel(cNode.domainData)) continue;
+            const gp = cNode.domainData.generatorParams;
+            if (!gp) continue;
+            if (snap.grubosc_frontu_mm === undefined) delete gp.grubosc_frontu_mm;
+            else gp.grubosc_frontu_mm = snap.grubosc_frontu_mm;
         }
+
+        this.rebuildAffectedContainers(document);
 
         if (typeof document.notifyDocumentChanged === 'function') {
             document.notifyDocumentChanged();
         }
     }
+
+    /** Jak korpus czyta custom_properties — fronty Bloku muszą dostać grubość w params przed rebuild. */
+    private syncBlokiFrontThickness(
+        document: ProjectDocument,
+        nodesToUpdate: CADNode[],
+        thicknessMm: number
+    ): void {
+        for (const cId of this.affectedContainerIds) {
+            const cNode = document.findNode(cId);
+            if (!cNode?.domainData || !isContainerModel(cNode.domainData)) continue;
+            const container = cNode.domainData;
+            const gp = container.generatorParams;
+            if (!gp || !String(gp.type || '').toLowerCase().startsWith('blok')) continue;
+            if (!isBlokiFrontModule(gp)) continue;
+
+            const touchesFront = nodesToUpdate.some((n) => {
+                if (!n.domainData || !isPanelModel(n.domainData) || !isFrontLikePanel(n.domainData)) return false;
+                let curr: CADNode | null | undefined = n.parent;
+                while (curr) {
+                    if (curr.id === cId) return true;
+                    curr = curr.parent;
+                }
+                return false;
+            });
+            if (!touchesFront) continue;
+
+            this.previousFrontThickness.push({
+                containerId: cId,
+                grubosc_frontu_mm: gp.grubosc_frontu_mm,
+            });
+            gp.grubosc_frontu_mm = thicknessMm;
+        }
+    }
+
+    private rebuildAffectedContainers(document: ProjectDocument): void {
+        for (const cId of this.affectedContainerIds) {
+            const cNode = document.findNode(cId);
+            if (!cNode?.domainData || !isContainerModel(cNode.domainData)) continue;
+            const container = cNode.domainData;
+            const pType = (container.generatorParams?.type || '').toLowerCase();
+            if (pType.startsWith('blok')) {
+                update_bloki_core(container, document);
+            } else {
+                rebuildSmartFrameContainer(container);
+            }
+        }
+    }
+
 
     private findParentContainerNode(node: CADNode): CADNode | null {
         let curr = node.parent;
@@ -273,11 +352,11 @@ export class AssignMaterialCommand implements Command {
         return null;
     }
 
-    private findParentSmartBoxNode(node: CADNode): CADNode | null {
+    private findParentBlokiNode(node: CADNode): CADNode | null {
         let curr = node.parent;
         while (curr) {
             const d = curr.domainData;
-            if (d && isContainerModel(d) && (d.generatorParams?.type?.startsWith('smartbox') || (d as any).boxType)) {
+            if (d && isContainerModel(d) && (d.generatorParams?.type?.startsWith('bloki') || (d as any).boxType)) {
                 return curr;
             }
             curr = curr.parent;
@@ -328,7 +407,7 @@ export class SetEdgeBandingCommand implements Command {
             };
             collect(document.rootNode);
         } else {
-            // Scope === 'CONTAINER' or 'SMARTBOX'
+            // Scope === 'CONTAINER' or 'BLOKI'
             let parentContainer = targetNode.parent;
             while (parentContainer && !(parentContainer.domainData && isContainerModel(parentContainer.domainData)) && parentContainer.nodeType !== 'ASSEMBLY') {
                 parentContainer = parentContainer.parent;
@@ -383,7 +462,7 @@ export class SetEdgeBandingCommand implements Command {
         }
 
         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-            window.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+            window.dispatchEvent(new CustomEvent('bloki-project-changed'));
         }
     }
 
@@ -406,7 +485,7 @@ export class SetEdgeBandingCommand implements Command {
             document.notifyDocumentChanged();
         }
         if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-            window.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+            window.dispatchEvent(new CustomEvent('bloki-project-changed'));
         }
     }
 }

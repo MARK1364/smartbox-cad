@@ -1,12 +1,11 @@
 /**
  * Instancja operacji na PanelModel.features.
- * Silnik korpusu/SmartBox nie kasuje cech source=library.
+ * Silnik korpusu/Bloki nie kasuje cech source=library.
  */
 
 import { ContextManager } from '../A1_core/context-manager.js';
-import { isPanelModel } from '../A1_core/domain-data.js';
 import { NativePanelBuilder } from '../A4_smartpanel/native-panel-builder.js';
-import { normalizeFaceName, type FaceName, type PanelModel } from '../A4_smartpanel/panel-model.js';
+import { isPanelModel, normalizeFaceName, type FaceName, type PanelModel } from '../A4_smartpanel/panel-model.js';
 import { getOperation } from './operacje-catalog.js';
 import { buildOperationFeature, faceHintToFace, recipeWithOverrides } from './operacje-builder.js';
 import type { OperationApplyOverrides } from './operacje-builder.js';
@@ -54,7 +53,7 @@ function notifyPanelGeometry(panel?: PanelModel | null): void {
         return;
     }
     if (typeof window !== 'undefined') {
-        window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
     }
 }
 

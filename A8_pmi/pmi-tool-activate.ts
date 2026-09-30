@@ -40,9 +40,23 @@ export function activateMeasureTool(sm: StateMachine): void {
     sm.changeState('MEASURE_TOOL');
 }
 
+export function isPmiToolActive(sm?: StateMachine | null): boolean {
+    if (!sm) return false;
+    const name = (sm.getCurrentStateName() || '').toUpperCase();
+    return name.includes('DIMENSION') || name.includes('MEASURE') || name.startsWith('PMI');
+}
+
 /** Wyłącza narzędzie tworzenia wymiaru / pomiaru. */
 export function deactivateDimensionTool(sm: StateMachine): void {
     sm.changeState('SELECTION_TOOL');
+}
+
+/** Uniwersalne wyłączenie wszelkich aktywnych narzędzi PMI i powrót do SELECTION_TOOL. */
+export function deactivateAllPmiTools(sm?: StateMachine | null): void {
+    if (!sm) return;
+    if (isPmiToolActive(sm)) {
+        sm.changeState('SELECTION_TOOL');
+    }
 }
 
 /** Przełącza narzędzie tworzenia wymiaru. */
@@ -53,3 +67,4 @@ export function toggleDimensionTool(sm: StateMachine): void {
         activateDimensionTool(sm);
     }
 }
+

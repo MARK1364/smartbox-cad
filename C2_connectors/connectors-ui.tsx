@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { ContextManager } from '../A1_core/context-manager.js';
-import { ConnectorsEngine } from './connectors-engine.js';
+import { getPlacementRuleDefinition, getPlacementRuleKeys } from './connectors-engine.js';
 import {
     confirmConnectorPick,
     getConnectorPickCount,
@@ -28,7 +28,6 @@ function openDrzewoZlaczaTab() {
 
 export function ConnectorsUI({ projectModel }: Props) {
     const store = ConnectorStore.instance;
-    const engine = new ConnectorsEngine();
     const [tick, setTick] = useState(0);
     const [picking, setPicking] = useState(false);
 
@@ -56,7 +55,7 @@ export function ConnectorsUI({ projectModel }: Props) {
     void tick;
     const refresh = useCallback(() => setTick((t) => t + 1), []);
 
-    const ruleKeys = engine.getPlacementRuleKeys();
+    const ruleKeys = getPlacementRuleKeys();
     const pickCount = getConnectorPickCount();
 
     const onTogglePick = () => {
@@ -95,7 +94,7 @@ export function ConnectorsUI({ projectModel }: Props) {
                     >
                         {ruleKeys.map((key) => (
                             <option key={key} value={key}>
-                                {engine.getPlacementRuleDefinition(key)?.name || key}
+                                {getPlacementRuleDefinition(key)?.name || key}
                             </option>
                         ))}
                     </select>

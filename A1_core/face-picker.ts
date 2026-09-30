@@ -12,6 +12,8 @@ import { shouldPromoteSubgeometryToEntity } from './selection-mode.js';
 import { findFacesAlongRay } from './quick-pick/quick-pick-detector.js';
 import { openQuickPick } from './quick-pick/quick-pick-events.js';
 import type { QuickPickCandidate } from './quick-pick/quick-pick-types.js';
+import { getGrooveParamsMm } from './groove-params.js';
+import { normalizeFaceName } from './face-name.js';
 
 declare const BABYLON: any;
 
@@ -23,6 +25,33 @@ function shouldPromotePickToActiveEntity(): boolean {
     return shouldPromoteSubgeometryToEntity(cm.activeTab);
 }
 
+function isPickingReference(): boolean {
+    return Boolean(ContextManager.instance.activeReferencePicker);
+}
+
+function sortFaceHitsForPick(hits: any[]): any[] {
+    const pickingRef = isPickingReference();
+    return hits.slice().sort((a: any, b: any) => {
+        if (pickingRef) {
+            const aName = String(a.pickedMesh?.metadata?.faceName || '').toUpperCase();
+            const bName = String(b.pickedMesh?.metadata?.faceName || '').toUpperCase();
+            const aOut = aName.startsWith('OUTLINE_') ? 0 : 1;
+            const bOut = bName.startsWith('OUTLINE_') ? 0 : 1;
+            if (aOut !== bOut && Math.abs(a.distance - b.distance) < 2) return aOut - bOut;
+            const aFeat = a.pickedMesh?.metadata?.type === 'feature' ? 1 : 0;
+            const bFeat = b.pickedMesh?.metadata?.type === 'feature' ? 1 : 0;
+            if (aFeat !== bFeat && Math.abs(a.distance - b.distance) < 0.5) return aFeat - bFeat;
+            return a.distance - b.distance;
+        }
+        const aFeat = a.pickedMesh.metadata?.type === 'feature' ? 0 : 1;
+        const bFeat = b.pickedMesh.metadata?.type === 'feature' ? 0 : 1;
+        if (aFeat !== bFeat && Math.abs(a.distance - b.distance) < 0.5) {
+            return aFeat - bFeat;
+        }
+        return a.distance - b.distance;
+    });
+}
+
 function isMeshHierarchicallyEnabled(mesh: any): boolean {
     let curr = mesh;
     while (curr) {
@@ -30,6 +59,25 @@ function isMeshHierarchicallyEnabled(mesh: any): boolean {
         curr = curr.parent;
     }
     return true;
+}
+
+/** Klik w obszar UV wpustu na FACE → ta sama operacja (gdy ray nie trafił w feature_*). */
+function findGrooveFeatureAtUv(panel: any, faceName: string, uv: { u: number; v: number } | null): any | null {
+    if (!panel?.features || !uv) return null;
+    const face = normalizeFaceName(faceName);
+    for (const f of panel.features) {
+        if (!f || f.type !== 'groove') continue;
+        if (f.visible === false || f.params?.visible === false) continue;
+        if (f.face !== face) continue;
+        const gp = getGrooveParamsMm(f.params);
+        if (
+            uv.u >= gp.u && uv.u <= gp.u + gp.width &&
+            uv.v >= gp.v && uv.v <= gp.v + gp.length
+        ) {
+            return f;
+        }
+    }
+    return null;
 }
 
 export class FacePicker {
@@ -111,21 +159,28 @@ export class FacePicker {
                 this._lastHoverTime = now;
 
                 // Priorytet 1: Narożniki, krawędzie, cechy CAM (z tolerancją próbkowania ekranowego 18px)
-                let pickResult = this.targetSubgeometryType === 'face'
+                // Referencja Bloki: tylko ściany (wcięcie L = OUTLINE_SIDE, nie krawędź B-rep).
+                let pickResult = (this.targetSubgeometryType === 'face' || isPickingReference())
                     ? null
                     : this._pickSubgeometryWithTolerance(this.scene.pointerX, this.scene.pointerY);
 
-                // Priorytet 2: Ściany 3D formatki (tylko gdy filtr nie jest ograniczony do samych krawędzi/wierzchołków)
+                // Priorytet 2: Ściany 3D formatki (+ datum przy pipetcie FACE)
                 if (
                     (!pickResult || !pickResult.hit) &&
                     this.targetSubgeometryType !== 'edge' &&
                     this.targetSubgeometryType !== 'vertex'
                 ) {
+                    const pickingDatumFace =
+                        ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
                     const faceHits = this.scene.multiPick(
                         this.scene.pointerX,
                         this.scene.pointerY,
                         (mesh: any) => {
-                            if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata || !mesh.metadata.faceName) return false;
+                            if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata) return false;
+                            if (pickingDatumFace && mesh.metadata.type === 'datum_plane') {
+                                return mesh.isPickable !== false;
+                            }
+                            if (!mesh.metadata.faceName) return false;
                             const pVis = mesh.metadata.panelModel ? mesh.metadata.panelModel.visible !== false : true;
                             const mVis = mesh.metadata.model ? mesh.metadata.model.visible !== false : true;
                             return pVis && mVis;
@@ -134,14 +189,17 @@ export class FacePicker {
                     if (faceHits && faceHits.length > 0) {
                         const validFaceHits = faceHits.filter((h: any) => h.hit && h.pickedMesh);
                         if (validFaceHits.length > 0) {
-                            validFaceHits.sort((a: any, b: any) => a.distance - b.distance);
-                            pickResult = validFaceHits[0];
+                            pickResult = sortFaceHitsForPick(validFaceHits)[0];
                         }
                     }
                 }
 
                 const newFace = (pickResult && pickResult.hit) ? pickResult.pickedMesh.metadata.faceName : null;
                 const smartId = (pickResult && pickResult.hit) ? pickResult.pickedMesh.metadata.smartId : null;
+                const isDatumHover =
+                    pickResult?.hit &&
+                    pickResult.pickedMesh?.metadata?.type === 'datum_plane' &&
+                    ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
 
                 if (newFace && pickResult.pickedPoint) {
                     const panelModel = pickResult.pickedMesh ? pickResult.pickedMesh.metadata.panelModel : null;
@@ -166,6 +224,8 @@ export class FacePicker {
                                 this._hoveredEntity.material.emissiveColor = this._hoveredEntity.metadata.baseColor || BABYLON.Color3.Black();
                                 this._hoveredEntity.material.diffuseColor = this._hoveredEntity.metadata.baseDiffuse || new BABYLON.Color3(0.25, 0.2, 0.15);
                             }
+                        } else if (this._hoveredEntity.metadata.type === 'datum_plane') {
+                            this._setDatumHoverVisual(this._hoveredEntity, false);
                         }
                     }
                     this._hoveredEntity = null;
@@ -177,13 +237,18 @@ export class FacePicker {
 
                     if (metaType === 'vertex') {
                         this._emit('hover-vertex', { mesh: pickResult.pickedMesh, point: pickResult.pickedPoint, smartId });
-                        if (!this.selectedVertices.has(this._hoveredEntity)) {
+                        // SolidWorks: naroże / krawędź / ściana — bez podświetlenia na hover.
+                        // Wyjątek: pipeta naroży albo filtr wyłącznie „vertex”.
+                        if (
+                            !this.selectedVertices.has(this._hoveredEntity) &&
+                            (this._vertexPickPreview || this.targetSubgeometryType === 'vertex')
+                        ) {
                             this._setVertexHoverVisual(this._hoveredEntity, true);
                         }
                     } else if (metaType === 'edge') {
                         this._emit('hover-edge', { mesh: pickResult.pickedMesh, point: pickResult.pickedPoint, smartId });
                         if (!this.selectedEdges.has(this._hoveredEntity)) {
-                            // Brak podświetlania (hover)
+                            // Brak podświetlania (hover) — jak naroże i ściana
                         }
                     } else if (metaType === 'feature') {
                         this._emit('hover-feature', { 
@@ -196,17 +261,24 @@ export class FacePicker {
                         if (!this.selectedFeatures.has(this._hoveredEntity)) {
                             // Brak podświetlania (hover)
                         }
+                    } else if (metaType === 'datum_plane' && isDatumHover) {
+                        this._setDatumHoverVisual(this._hoveredEntity, true);
+                        this._emit('hover-datum', {
+                            name: pickResult.pickedMesh.metadata.name,
+                            point: pickResult.pickedPoint,
+                            mesh: pickResult.pickedMesh,
+                        });
                     }
                 }
 
-                if (this._hoveredFace && (!pickResult || !pickResult.hit || this._hoveredFace !== pickResult.pickedMesh)) {
+                if (this._hoveredFace && (!pickResult || !pickResult.hit || this._hoveredFace !== pickResult.pickedMesh || isDatumHover)) {
                     if (!this.selectedFaces.has(this._hoveredFace)) {
                         this._setFaceHighlight(this._hoveredFace, 'none');
                     }
                     this._hoveredFace = null;
                 }
 
-                if (newFace && this._hoveredFace !== pickResult.pickedMesh) {
+                if (newFace && !isDatumHover && this._hoveredFace !== pickResult.pickedMesh) {
                     this._hoveredFace = pickResult.pickedMesh;
                     if (!this.selectedFaces.has(this._hoveredFace)) {
                         this._setFaceHighlight(this._hoveredFace, 'hover');
@@ -316,7 +388,7 @@ export class FacePicker {
         const isMulti = Boolean(evt && (evt.ctrlKey || evt.metaKey));
 
         // Priorytet 1: Narożniki, krawędzie, cechy CAM (z tolerancją próbkowania ekranowego 18px)
-        let pickResult = this.targetSubgeometryType === 'face'
+        let pickResult = (this.targetSubgeometryType === 'face' || isPickingReference())
             ? null
             : this._pickSubgeometryWithTolerance(pointerX, pointerY);
 
@@ -329,7 +401,15 @@ export class FacePicker {
                 pointerX,
                 pointerY,
                 (mesh: any) => {
-                    if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata || !mesh.metadata.faceName) return false;
+                    if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata) return false;
+                    if (isPickingReference() && mesh.metadata.type === 'feature') return false;
+                    const isDatum =
+                        mesh.metadata.type === 'datum_plane' &&
+                        ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
+                    if (isDatum) return mesh.isPickable !== false;
+                    const isFace = !!mesh.metadata.faceName;
+                    const isFeature = mesh.metadata.type === 'feature';
+                    if (!isFace && !isFeature) return false;
                     const pVis = mesh.metadata.panelModel ? mesh.metadata.panelModel.visible !== false : true;
                     const mVis = mesh.metadata.model ? mesh.metadata.model.visible !== false : true;
                     return pVis && mVis;
@@ -338,8 +418,17 @@ export class FacePicker {
             if (faceHits && faceHits.length > 0) {
                 const validFaceHits = faceHits.filter((h: any) => h.hit && h.pickedMesh);
                 if (validFaceHits.length > 0) {
-                    validFaceHits.sort((a: any, b: any) => a.distance - b.distance);
-                    pickResult = validFaceHits[0];
+                    const pickingDatum =
+                        ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
+                    if (pickingDatum) {
+                        // Najbliższy hit — datum albo ściana (bez preferowania datum z tyłu)
+                        pickResult = sortFaceHitsForPick(validFaceHits)[0];
+                    } else {
+                        const nonDatum = validFaceHits.filter(
+                            (h: any) => h.pickedMesh?.metadata?.type !== 'datum_plane'
+                        );
+                        pickResult = sortFaceHitsForPick(nonDatum.length ? nonDatum : validFaceHits)[0];
+                    }
                 }
             }
         }
@@ -347,15 +436,34 @@ export class FacePicker {
         if (pickResult && pickResult.hit && pickResult.pickedMesh.metadata) {
             const smartId = pickResult.pickedMesh.metadata.smartId;
             const panelModel = pickResult.pickedMesh.metadata.panelModel;
+            const meta = pickResult.pickedMesh.metadata;
+
+            // Datum plane — tylko przy pipetcie więzów FACE
+            if (
+                meta.type === 'datum_plane' &&
+                ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE'
+            ) {
+                this._emit('select', {
+                    face: null,
+                    smartId: null,
+                    uv: null,
+                    worldPoint: pickResult.pickedPoint,
+                    faceData: null,
+                    panelModel: null,
+                    datumPlane: meta.name || pickResult.pickedMesh.name,
+                    mesh: pickResult.pickedMesh,
+                });
+                return;
+            }
 
             if (this.selectionMode === 'object') {
                 const constraintPicker = ContextManager.instance.activeConstraintPicker;
                 if (constraintPicker?.expectedKind === 'OBJECT') {
-                    const targetModel = panelModel ?? pickResult.pickedMesh.metadata?.model;
+                    const targetModel = panelModel ?? meta?.model;
                     if (targetModel) {
                         this._emit('select', {
                             face: null,
-                            smartId: pickResult.pickedMesh.metadata?.smartId ?? null,
+                            smartId: meta?.smartId ?? null,
                             uv: null,
                             worldPoint: pickResult.pickedPoint,
                             faceData: null,
@@ -364,7 +472,40 @@ export class FacePicker {
                     }
                     return;
                 }
-                const targetModel = panelModel ?? pickResult.pickedMesh.metadata?.model;
+
+                // Operacje (płaszczyzna feature_* / krawędź e_groove_*) — też w trybie object (zakładka Korpus)
+                if (meta.type === 'feature' || meta.featureId) {
+                    this._selectFeature(pickResult.pickedMesh, smartId, pickResult.pickedPoint, isMulti);
+                    return;
+                }
+                if (meta.faceName && panelModel) {
+                    const uv = this._worldToFaceUV(meta.faceName, pickResult.pickedPoint, panelModel);
+                    const grooveFeat = findGrooveFeatureAtUv(panelModel, meta.faceName, uv);
+                    if (grooveFeat) {
+                        let featMesh: any = null;
+                        const pv = this.panelViews?.get(panelModel) || this.panelViews?.get(panelModel.id);
+                        if (pv?.faceMeshes) {
+                            featMesh = Object.values(pv.faceMeshes).find(
+                                (m: any) => m?.metadata?.featureId === grooveFeat.id
+                            );
+                        }
+                        if (featMesh) {
+                            this._selectFeature(featMesh, smartId, pickResult.pickedPoint, isMulti);
+                        } else {
+                            this._emit('select-feature', {
+                                smartId,
+                                worldPoint: pickResult.pickedPoint,
+                                mesh: pickResult.pickedMesh,
+                                featureId: grooveFeat.id,
+                                panelId: panelModel.id,
+                                panelModel,
+                            });
+                        }
+                        return;
+                    }
+                }
+
+                const targetModel = panelModel ?? meta?.model;
                 if (targetModel && shouldPromotePickToActiveEntity()) {
                     this._clearSelectionExcept(null);
                     this.selectedFace = null;
@@ -374,22 +515,56 @@ export class FacePicker {
                 return;
             }
 
-            if (pickResult.pickedMesh.metadata.faceName) {
+            if (meta.faceName) {
                 if (this.targetSubgeometryType !== 'edge' && this.targetSubgeometryType !== 'vertex') {
-                    const worldNormal = pickResult.getNormal ? pickResult.getNormal(true) : null;
-                    this._selectFace(
-                        pickResult.pickedMesh,
-                        pickResult.pickedPoint,
-                        smartId,
-                        panelModel,
-                        isMulti,
-                        worldNormal,
-                    );
+                    const faceName = pickResult.pickedMesh.metadata.faceName;
+                    const uv = this._worldToFaceUV(faceName, pickResult.pickedPoint, panelModel);
+                    const grooveFeat = !this.targetSubgeometryType && !isPickingReference()
+                        ? findGrooveFeatureAtUv(panelModel, faceName, uv)
+                        : null;
+                    if (grooveFeat) {
+                        let featMesh: any = null;
+                        const pv = panelModel && this.panelViews
+                            ? (this.panelViews.get(panelModel) || this.panelViews.get(panelModel.id))
+                            : null;
+                        if (pv?.faceMeshes) {
+                            featMesh = Object.values(pv.faceMeshes).find(
+                                (m: any) => m?.metadata?.featureId === grooveFeat.id
+                            );
+                        }
+                        if (featMesh) {
+                            this._selectFeature(featMesh, smartId, pickResult.pickedPoint, isMulti);
+                        } else {
+                            this._emit('select-feature', {
+                                smartId,
+                                worldPoint: pickResult.pickedPoint,
+                                mesh: pickResult.pickedMesh,
+                                featureId: grooveFeat.id,
+                                panelId: panelModel?.id || null,
+                                panelModel,
+                            });
+                        }
+                    } else {
+                        const worldNormal = pickResult.getNormal ? pickResult.getNormal(true) : null;
+                        this._selectFace(
+                            pickResult.pickedMesh,
+                            pickResult.pickedPoint,
+                            smartId,
+                            panelModel,
+                            isMulti,
+                            worldNormal,
+                        );
+                    }
                 }
             } else if (pickResult.pickedMesh.metadata.type) {
                 const metaType = pickResult.pickedMesh.metadata.type;
                 if (metaType === 'edge' && this.targetSubgeometryType !== 'vertex' && this.targetSubgeometryType !== 'face') {
-                    this._selectEdge(pickResult.pickedMesh, smartId, pickResult.pickedPoint, isMulti);
+                    // Krawędź wpustu/otworu → ta sama operacja co płaszczyzna feature_*
+                    if (pickResult.pickedMesh.metadata.featureId && !this.targetSubgeometryType) {
+                        this._selectFeature(pickResult.pickedMesh, smartId, pickResult.pickedPoint, isMulti);
+                    } else {
+                        this._selectEdge(pickResult.pickedMesh, smartId, pickResult.pickedPoint, isMulti);
+                    }
                 } else if (metaType === 'vertex' && this.targetSubgeometryType !== 'edge' && this.targetSubgeometryType !== 'face') {
                     this._selectVertex(pickResult.pickedMesh, smartId, pickResult.pickedPoint, isMulti);
                 } else if (metaType === 'feature' && !this.targetSubgeometryType) {
@@ -448,6 +623,8 @@ export class FacePicker {
                     this._hoveredEntity.material.emissiveColor = this._hoveredEntity.metadata.baseColor || BABYLON.Color3.Black();
                     this._hoveredEntity.material.diffuseColor = this._hoveredEntity.metadata.baseDiffuse || new BABYLON.Color3(0.2, 0.2, 0.2);
                 }
+            } else if (type === 'datum_plane') {
+                this._setDatumHoverVisual(this._hoveredEntity, false);
             }
             this._hoveredEntity = null;
         }
@@ -456,6 +633,25 @@ export class FacePicker {
                 this._setFaceHighlight(this._hoveredFace, 'none');
             }
             this._hoveredFace = null;
+        }
+    }
+
+    private _setDatumHoverVisual(mesh: any, hovering: boolean): void {
+        if (!mesh || mesh.isDisposed() || !mesh.material) return;
+        const meta = mesh.metadata || {};
+        const mat = mesh.material;
+        if (hovering) {
+            mat.alpha = 0.42;
+            mat.emissiveColor = new BABYLON.Color3(0.25, 0.55, 1.0);
+            mat.diffuseColor = new BABYLON.Color3(0.55, 0.75, 1.0);
+            mesh.edgesWidth = 4.0;
+            mesh.edgesColor = new BABYLON.Color4(0.45, 0.75, 1.0, 1.0);
+        } else {
+            mat.alpha = meta.baseAlpha ?? 0.12;
+            mat.emissiveColor = meta.baseEmissive || new BABYLON.Color3(0.08, 0.14, 0.28);
+            mat.diffuseColor = meta.baseDiffuse || new BABYLON.Color3(0.45, 0.62, 0.95);
+            mesh.edgesWidth = 2.0;
+            mesh.edgesColor = meta.baseEdges || new BABYLON.Color4(0.35, 0.55, 0.95, 0.85);
         }
     }
 
@@ -704,19 +900,38 @@ export class FacePicker {
     }
 
     private _selectFeature(mesh: any, smartId: any, worldPoint: any, multiSelect: boolean = false): void {
+        const paintFeature = (m: any, selected: boolean) => {
+            if (!m || m.isDisposed()) return;
+            const mat = m.material;
+            if (!mat) {
+                // CreateLines (krawędź e_groove_*) — tylko color
+                if (m.color && selected) {
+                    m.color = new BABYLON.Color3(0.25, 0.85, 0.55);
+                } else if (m.color && m.metadata?.baseColor) {
+                    m.color = m.metadata.baseColor.clone
+                        ? m.metadata.baseColor.clone()
+                        : m.metadata.baseColor;
+                }
+                return;
+            }
+            if (selected) {
+                mat.diffuseColor = new BABYLON.Color3(0.4, 0.8, 0.6);
+                mat.emissiveColor = new BABYLON.Color3(0.05, 0.3, 0.2);
+            } else if (m.metadata) {
+                mat.emissiveColor = m.metadata.baseColor || BABYLON.Color3.Black();
+                mat.diffuseColor = m.metadata.baseDiffuse || new BABYLON.Color3(0.25, 0.2, 0.15);
+            }
+        };
+
         if (multiSelect) {
             this._clearSelectionExcept('features');
 
             if (this.selectedFeatures.has(mesh)) {
                 this.selectedFeatures.delete(mesh);
-                if (!mesh.isDisposed() && mesh.metadata) {
-                    mesh.material.emissiveColor = mesh.metadata.baseColor || BABYLON.Color3.Black();
-                    mesh.material.diffuseColor = mesh.metadata.baseDiffuse || new BABYLON.Color3(0.25, 0.2, 0.15);
-                }
+                paintFeature(mesh, false);
             } else {
                 this.selectedFeatures.add(mesh);
-                mesh.material.diffuseColor = new BABYLON.Color3(0.4, 0.8, 0.6);
-                mesh.material.emissiveColor = new BABYLON.Color3(0.05, 0.3, 0.2);
+                paintFeature(mesh, true);
             }
             this.selectedFeature = this.selectedFeatures.size > 0 ? Array.from(this.selectedFeatures)[this.selectedFeatures.size - 1] : null;
         } else {
@@ -728,11 +943,17 @@ export class FacePicker {
             this.clearSelection();
             this.selectedFeatures.add(mesh);
             this.selectedFeature = mesh;
-            this.selectedFeature.material.diffuseColor = new BABYLON.Color3(0.4, 0.8, 0.6);
-            this.selectedFeature.material.emissiveColor = new BABYLON.Color3(0.05, 0.3, 0.2);
+            paintFeature(mesh, true);
         }
 
-        this._emit('select-feature', { smartId: smartId, worldPoint: worldPoint, mesh: mesh });
+        this._emit('select-feature', {
+            smartId: smartId,
+            worldPoint: worldPoint,
+            mesh: mesh,
+            featureId: mesh?.metadata?.featureId || null,
+            panelId: mesh?.metadata?.panelModel?.id || null,
+            panelModel: mesh?.metadata?.panelModel || null,
+        });
     }
 
     public resetAllFaceHighlights(): void {
@@ -858,10 +1079,18 @@ export class FacePicker {
                 return null;
             } else {
                 const vertexHit = validHits.find((h: any) => h.pickedMesh.metadata.type === 'vertex');
-                const edgeHit = validHits.find((h: any) => h.pickedMesh.metadata.type === 'edge');
-                const featureHit = validHits.find((h: any) => h.pickedMesh.metadata.type === 'feature');
-                if (vertexHit || edgeHit || featureHit) {
-                    return vertexHit || edgeHit || featureHit;
+                // Płaszczyzny / krawędzie operacji (featureId) przed zwykłymi krawędziami CAD
+                const featureHit = validHits
+                    .filter((h: any) => h.pickedMesh.metadata.type === 'feature')
+                    .sort((a: any, b: any) => a.distance - b.distance)[0];
+                const featureEdgeHit = validHits
+                    .filter((h: any) => h.pickedMesh.metadata.type === 'edge' && h.pickedMesh.metadata.featureId)
+                    .sort((a: any, b: any) => a.distance - b.distance)[0];
+                const edgeHit = validHits
+                    .filter((h: any) => h.pickedMesh.metadata.type === 'edge' && !h.pickedMesh.metadata.featureId)
+                    .sort((a: any, b: any) => a.distance - b.distance)[0];
+                if (vertexHit || featureHit || featureEdgeHit || edgeHit) {
+                    return vertexHit || featureHit || featureEdgeHit || edgeHit;
                 }
             }
         }

@@ -1,0 +1,22 @@
+{
+  "panel.title": {
+    "pl": "Profil LED podszafkowy",
+    "en": "Under-cabinet LED profile",
+    "de": "LED-Profil Unterschrank"
+  },
+  "offset_front.label": {
+    "pl": "Odsunięcie od frontu:",
+    "en": "Offset from front:",
+    "de": "Versatz von vorne:"
+  },
+  "groove.width": {
+    "pl": "Szerokość frezu / profilu:",
+    "en": "Milling / profile width:",
+    "de": "Fräs-/Profilbreite:"
+  },
+  "groove.depth": {
+    "pl": "Głębokość wpustu:",
+    "en": "Groove depth:",
+    "de": "Nuttiefe:"
+  }
+}

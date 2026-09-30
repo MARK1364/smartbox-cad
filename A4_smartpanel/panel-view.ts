@@ -1,7 +1,7 @@
 /**
  * SmartPanel Web — Panel View
  * 
- * Tworzy wizualną reprezentację płyty jako 6 osobnych meshów (ścian).
+ * Tworzy wizualną reprezentację płyty z natywnego B-rep (ściany, krawędzie, wierzchołki).
  * Każdy mesh ma metadata.faceName do identyfikacji po raycast.
  */
 
@@ -15,27 +15,70 @@ const FACE_COLORS: Record<string, { r: number, g: number, b: number }> = {
     FACE_X_MINUS: baseAlpineWhite,
     FACE_Y_PLUS:  baseAlpineWhite,
     FACE_Y_MINUS: baseAlpineWhite,
-    // Legacy aliasy
-    front:  baseAlpineWhite,
-    back:   baseAlpineWhite,
-    left:   baseAlpineWhite,
-    right:  baseAlpineWhite,
-    top:    baseAlpineWhite,
-    bottom: baseAlpineWhite,
-    feature: { r: 0.2, g: 0.2, b: 0.2 } // Czarny środek otworu
+    feature: { r: 0.2, g: 0.2, b: 0.2 }
 };
 
 declare const BABYLON: any;
 
+import { nmToMm } from '../A1_core/cad-math/units.js';
 import { IDManager, EntityType } from '../A1_core/id-manager.js';
-import { unit } from '../A1_core/unit-system.js';
+import { isCylindricalPart, isTubeRodPart } from '../A1_core/cad-node/part-shape.js';
 import { SceneSyncAdapter } from '../A1_core/cad-node/scene-sync-adapter.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { materialDatabase } from '../A7_material/material-database.js';
 import { NativePanelBuilder } from './native-panel-builder.js';
+import { AluFrameManager } from './alu-frame-manager.js';
 import { bindOperationEdge } from '../o1_operacji/operacje-apply.js';
+import { validatePanelDimensionsNm } from './native_core/panel-dimensions.js';
 import { dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound } from '../o1_operacji/operacje-placement.js';
 import { HardwareLoader } from '../B1_biblioteka/hardware-loader.js';
+import { parseFeatureFaceKey, featureIdFromBrepEdgeKey } from './native_core/cap-machining.js';
+import { PropertiesManager } from '../A1_core/properties.js';
+
+// Centralny cache tekstur dla sceny Babylon (zapobiega duplikowaniu tekstur 4K w pamięci VRAM)
+const panelTextureCache = new Map<string, any>();
+
+function getOrCreatePanelTexture(url: string, scene: any, onFailed?: () => void): any {
+    if (typeof BABYLON === 'undefined' || !BABYLON.Texture || !url || !scene) {
+        return null;
+    }
+    const key = `${scene.uid || scene.id || 'default'}_${url}`;
+    if (panelTextureCache.has(key)) {
+        const cached = panelTextureCache.get(key);
+        if (cached && !cached.isDisposed?.()) {
+            return cached;
+        }
+        if (cached === null) {
+            return null;
+        }
+    }
+    try {
+        const tex = new BABYLON.Texture(
+            url,
+            scene,
+            false,
+            false,
+            undefined,
+            undefined,
+            () => {
+                console.warn(`[PanelView] Tekstura "${url}" nie mogła zostać załadowana, przywracam kolor bazowy.`);
+                panelTextureCache.set(key, null);
+                try { tex.dispose(); } catch {}
+                if (typeof onFailed === 'function') {
+                    onFailed();
+                }
+            }
+        );
+        tex.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
+        tex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+        panelTextureCache.set(key, tex);
+        return tex;
+    } catch (e) {
+        console.warn('[PanelView] Nie udało się załadować tekstury:', url, e);
+        panelTextureCache.set(key, null);
+        return null;
+    }
+}
 
 export class PanelView {
     scene: any;
@@ -44,7 +87,6 @@ export class PanelView {
     faceMeshes: Record<string, any> = {};
     faceMaterials: Record<string, any> = {};
     _featureMarkers: any[] = [];
-    _edgeLines: any[] = [];
     _edgeMeshes: any[] = [];
     _vertexSpheres: any[] = [];
     _lcsNode: any = null;
@@ -76,7 +118,7 @@ export class PanelView {
         }
 
         this._modelChangeHandler = (type, data) => {
-            if (type === 'dimensions') {
+            if (type === 'dimensions' || type === 'panelFormChanged') {
                 this._rebuildMeshes();
                 this._updateTransform();
                 this._buildLCSNode();
@@ -139,24 +181,10 @@ export class PanelView {
     }
 
     /**
-     * Aktualizuje geometrię na podstawie danych z OCCT.
-     * @param {Object} meshData Słownik {faceName: {positions, indices, normals}}
+     * Aktualizuje geometrię z natywnego buildera (ściany, krawędzie, wierzchołki).
      */
     updateMesh(meshData) {
-        const roleUpper = String(this.model?.role || '').toUpperCase();
-        const nameLower = String(this.model?.name || '').toLowerCase();
-        const shapeUpper = String(this.model?.custom_properties?.shape || this.model?.customProperties?.shape || '').toUpperCase();
-
-        const isCylinder = roleUpper === 'TUBE_ROD' || 
-                           roleUpper === 'HOLDER' || 
-                           roleUpper.includes('TUBE') || 
-                           roleUpper.includes('HOLDER') || 
-                           shapeUpper === 'CYLINDER' || 
-                           nameLower.includes('drazek') || 
-                           nameLower.includes('uchwyt') || 
-                           nameLower.includes('rozeta');
-
-        if (isCylinder) {
+        if (isCylindricalPart(this.model)) {
             const cyl = this.faceMeshes['cylinder_body'];
             if (!cyl || cyl.isDisposed()) {
                 this._rebuildMeshes();
@@ -165,6 +193,8 @@ export class PanelView {
         }
 
         this._disposeCurrentMeshes();
+
+        const isOutlinePanel = Object.keys(meshData).some((k) => k.startsWith('OUTLINE_SIDE_'));
 
         for (const [faceName, dataRaw] of Object.entries(meshData)) {
             const data = dataRaw as any;
@@ -181,20 +211,14 @@ export class PanelView {
             let fId = null;
 
             if (isFeature) {
-                // faceName np. 'feature_12345_wall' lub 'feature_12345_bottom'
-                const rawName = faceName.substring(8); // '12345_wall'
-                const lastUnderscore = rawName.lastIndexOf('_');
-                let subType = '';
-                
-                if (lastUnderscore > 0) {
-                    fId = rawName.substring(0, lastUnderscore);
-                    subType = rawName.substring(lastUnderscore + 1);
-                } else {
-                    fId = rawName;
-                }
+                // faceName np. 'feature_<id>_bottom' / 'feature_<id>_w0' (id może mieć `_`)
+                const parsed = parseFeatureFaceKey(faceName);
+                fId = parsed?.featureId || faceName.substring(8);
+                const subType = parsed?.subType || '';
 
                 smartId = idMgr.register(EntityType.FEATURE, this.model.smartId.fullPath, fId);
                 metaType = 'feature';
+                mesh.metadata = { type: 'feature', featureId: fId, subType, smartId, panelModel: this.model };
             } else {
                 smartId = idMgr.register(EntityType.FACE, this.model.smartId.fullPath, faceName, { face: faceName });
                 metaType = 'face';
@@ -207,20 +231,87 @@ export class PanelView {
             BABYLON.VertexData.ComputeNormals(data.positions, data.indices, normals);
             vertexData.normals = normals;
 
+            // Obliczanie współrzędnych UV dla ścian płyty (skalowane do arkusza płyty Egger 2070x2800 mm)
+            const positions = data.positions;
+            const uvs: number[] = [];
+            const posLen = positions.length;
+
+            const dims = validatePanelDimensionsNm(this.model, 'PanelView.UV');
+            const pW = dims.widthMm;
+            const pH = dims.heightMm;
+            const pT = dims.thicknessMm;
+
+            const SHEET_W = 2070.0;
+            const SHEET_H = 2800.0;
+            const isHorizontalGrain = pW > pH;
+
+            for (let vi = 0; vi < posLen; vi += 3) {
+                const vx = positions[vi];
+                const vy = positions[vi + 1];
+                const vz = positions[vi + 2];
+
+                let u = 0;
+                let v = 0;
+
+                if (faceName === 'FACE_Z_PLUS' || faceName === 'FACE_Z_MINUS' || faceName === 'top' || faceName === 'bottom') {
+                    if (isHorizontalGrain) {
+                        u = (vy + pH * 0.5) / SHEET_W;
+                        v = (vx + pW * 0.5) / SHEET_H;
+                    } else {
+                        u = (vx + pW * 0.5) / SHEET_W;
+                        v = (vy + pH * 0.5) / SHEET_H;
+                    }
+                } else if (faceName === 'FACE_X_PLUS' || faceName === 'FACE_X_MINUS') {
+                    u = (vz + pT * 0.5) / SHEET_W;
+                    v = (vy + pH * 0.5) / SHEET_H;
+                } else if (faceName === 'FACE_Y_PLUS' || faceName === 'FACE_Y_MINUS') {
+                    u = (vz + pT * 0.5) / SHEET_W;
+                    v = (vx + pW * 0.5) / SHEET_H;
+                } else {
+                    const nx = normals[vi] || 0;
+                    const ny = normals[vi + 1] || 0;
+                    const nz = normals[vi + 2] || 0;
+
+                    if (Math.abs(nz) >= Math.abs(nx) && Math.abs(nz) >= Math.abs(ny)) {
+                        if (isHorizontalGrain) {
+                            u = (vy + pH * 0.5) / SHEET_W;
+                            v = (vx + pW * 0.5) / SHEET_H;
+                        } else {
+                            u = (vx + pW * 0.5) / SHEET_W;
+                            v = (vy + pH * 0.5) / SHEET_H;
+                        }
+                    } else if (Math.abs(nx) >= Math.abs(ny)) {
+                        u = (vz + pT * 0.5) / SHEET_W;
+                        v = (vy + pH * 0.5) / SHEET_H;
+                    } else {
+                        u = (vz + pT * 0.5) / SHEET_W;
+                        v = (vx + pW * 0.5) / SHEET_H;
+                    }
+                }
+
+                uvs.push(u, v);
+            }
+
+            vertexData.uvs = uvs;
             vertexData.applyToMesh(mesh);
             mesh.parent = this.root;
-            if (typeof mesh.enableEdgesRendering === 'function') {
+            // Formatka L (outline): krawędzie B-rep (CreateLines) są SSOT —
+            // Babylon enableEdgesRendering na kapach/ściankach dubluje obrys na rzucie z góry/dołu.
+            if (!isOutlinePanel && typeof mesh.enableEdgesRendering === 'function') {
                 mesh.enableEdgesRendering();
-                mesh.edgesWidth = 2.0;
-                mesh.edgesColor = new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
+                mesh.edgesWidth = 1.5;
+                mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
             }
 
             // Zapewniamy działanie hover'a
-            if (isFeature) {
-                const subType = faceName.substring(faceName.lastIndexOf('_') + 1);
-                mesh.metadata = { type: 'feature', featureId: fId, subType: subType, smartId: smartId, panelModel: this.model };
-            } else {
-                mesh.metadata = { faceName: faceName, smartId: smartId, panelModel: this.model }; // faceName dla wstecznej kompatybilności w pickerze
+            if (!isFeature) {
+                const outlineEdgeKey = data.edgeKey as string | null | undefined;
+                mesh.metadata = {
+                    faceName: faceName,
+                    smartId: smartId,
+                    panelModel: this.model,
+                    ...(outlineEdgeKey !== undefined && outlineEdgeKey !== null ? { outlineEdgeKey } : {})
+                };
             }
             mesh.isPickable = true;
 
@@ -240,7 +331,9 @@ export class PanelView {
             if (isFeature) {
                 mat.diffuseColor = new BABYLON.Color3(baseAlpineWhite.r * 0.94, baseAlpineWhite.g * 0.94, baseAlpineWhite.b * 0.94);
             } else {
-                const col = FACE_COLORS[faceName] || baseAlpineWhite;
+                const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model?.role === 'PANEL' || Boolean(this.model?.color);
+                const defaultCncGray = { r: 0.70, g: 0.72, b: 0.75 };
+                const col = this.model?.color || (isCnc ? defaultCncGray : (FACE_COLORS[faceName] || baseAlpineWhite));
                 mat.diffuseColor = new BABYLON.Color3(col.r, col.g, col.b);
             }
             mat.emissiveColor = BABYLON.Color3.Black();
@@ -259,11 +352,6 @@ export class PanelView {
             this.faceMeshes[faceName] = mesh;
         }
 
-        // Przy OCCT usuwamy stare krawędzie
-        if (this._edgeLines && Array.isArray(this._edgeLines)) {
-            this._edgeLines.forEach(l => l.dispose());
-            this._edgeLines = [];
-        }
         if (this._edgeMeshes && this._edgeMeshes.length > 0) {
             this._edgeMeshes.forEach(m => m.dispose());
             this._edgeMeshes = [];
@@ -273,14 +361,13 @@ export class PanelView {
             this._vertexSpheres = [];
         }
 
-        // Renderowanie Krawędzi z OCCT
+        // Krawędzie B-rep (pick / PMI)
         if (meshData.edges && meshData.edges.length > 0) {
             this._edgeMeshes = [];
             
             for (let i = 0; i < meshData.edges.length; i++) {
                 const edgeData = meshData.edges[i];
-                // Pętla pobiera punkt i klucz (dla wstecznej kompatybilności starej tablicy fallback na pts)
-                const pts = edgeData.points || edgeData;
+                const pts = edgeData.points;
                 const edgeKey = edgeData.key || i.toString();
 
                 const points = pts.map(p => new BABYLON.Vector3(p[0], p[1], p[2]));
@@ -300,12 +387,19 @@ export class PanelView {
                 const smartId = idMgr.register(EntityType.EDGE, this.model.smartId.fullPath, edgeKey);
                 
                 edgeMesh.isPickable = true;
+                // Obrys dołu kapu = ten sam XY co góra → na rzucie z góry/dołu podwójna krawędź.
+                // Zostaje do pick/PMI (visibility 0), widoczny jest outline_top_*.
+                if (String(edgeKey).startsWith('outline_bottom_')) {
+                    edgeMesh.visibility = 0;
+                }
+                const featureId = featureIdFromBrepEdgeKey(String(edgeKey));
                 edgeMesh.metadata = { 
                     type: 'edge', 
                     smartId: smartId, 
                     panelModel: this.model,
                     edgeKey: edgeKey,
                     brepPoints: pts, // Dokładne matematyczne punkty B-rep z modelu CAD
+                    ...(featureId ? { featureId } : {}),
                     baseColor: new BABYLON.Color3(0.1, 0.1, 0.1),
                     baseDiffuse: new BABYLON.Color3(0.15, 0.1, 0.05)
                 };
@@ -314,7 +408,7 @@ export class PanelView {
             }
         }
 
-        // Renderowanie Narożników z OCCT
+        // Narożniki B-rep
         if (meshData.vertices && meshData.vertices.length > 0) {
             this._vertexSpheres = [];
             
@@ -373,10 +467,6 @@ export class PanelView {
             this._edgeMeshes.forEach((m) => m.dispose());
             this._edgeMeshes = [];
         }
-        if (this._edgeLines && Array.isArray(this._edgeLines)) {
-            this._edgeLines.forEach((l) => l.dispose());
-            this._edgeLines = [];
-        }
         if (this._vertexSpheres && this._vertexSpheres.length > 0) {
             this._vertexSpheres.forEach((s) => s.dispose());
             this._vertexSpheres = [];
@@ -384,118 +474,27 @@ export class PanelView {
         // Nie niszczymy materiałów, użyjemy ich ponownie
     }
 
-    _buildMeshes() {
-        const w = unit.toBabylon(this.model.width);
-        const h = unit.toBabylon(this.model.height);
-        const t = unit.toBabylon(this.model.thickness);
-
-        const faceDefs = {
-            front: {
-                width: w, height: h,
-                position: [0, 0, t / 2],
-                rotation: [0, Math.PI, 0]
-            },
-            back: {
-                width: w, height: h,
-                position: [0, 0, -t / 2],
-                rotation: [0, 0, 0]
-            },
-            left: {
-                width: t, height: h,
-                position: [-w / 2, 0, 0],
-                rotation: [0, -Math.PI / 2, 0]
-            },
-            right: {
-                width: t, height: h,
-                position: [w / 2, 0, 0],
-                rotation: [0, Math.PI / 2, 0]
-            },
-            top: {
-                width: w, height: t,
-                position: [0, h / 2, 0],
-                rotation: [-Math.PI / 2, 0, 0]
-            },
-            bottom: {
-                width: w, height: t,
-                position: [0, -h / 2, 0],
-                rotation: [Math.PI / 2, 0, 0]
-            }
-        };
-
-        for (const [name, def] of Object.entries(faceDefs)) {
-            // Mesh — płaska płaszczyzna (Plane)
-            const mesh = BABYLON.MeshBuilder.CreatePlane(`face_${name}`, {
-                width: def.width,
-                height: def.height,
-                sideOrientation: BABYLON.Mesh.DOUBLESIDE
-            }, this.scene);
-
-            mesh.position = new BABYLON.Vector3(...def.position);
-            mesh.rotation = new BABYLON.Vector3(...def.rotation);
-            mesh.parent = this.root;
-
-            // Register SmartID
-            const idMgr = IDManager.getInstance();
-            const smartId = idMgr.register(EntityType.FACE, this.model.smartId?.fullPath || this.model.id, name);
-
-            // Materiał
-            const mat = new BABYLON.StandardMaterial(`mat_${name}`, this.scene);
-            const col = FACE_COLORS[name];
-            mat.diffuseColor = new BABYLON.Color3(col.r, col.g, col.b);
-            mat.specularColor = new BABYLON.Color3(0.08, 0.08, 0.08);
-            mat.specularPower = 64;
-            mat.backFaceCulling = false;
-            mat.twoSidedLighting = true;
-            
-            // MAGICZNY TRIK CAD: Z-Offset wypycha ścianę lekko do tyłu w głębi (depth buffer),
-            // dzięki czemu krawędzie (linie) na niej leżące zawsze rysują się bez zakrywania i migotania!
-            mat.zOffset = 1.0; 
-
-            // Emissive startuje na zero — face-picker będzie to zmieniać
-            mesh.actionManager = new BABYLON.ActionManager(this.scene);
-            mesh.metadata = { 
-                faceName: name,
-                smartId: smartId,
-                panelModel: this.model
-            };
-            mesh.isPickable = true;
-
-            mesh.material = mat;
-
-            this.faceMeshes[name] = mesh;
-            this.faceMaterials[name] = mat;
-
-            // Krawędzie natywne — BabylonJS EdgesRenderer wykrywa je z geometrii meshy.
-            // Zero dodatkowych obliczeń, zero duplikacji współrzędnych.
-            mesh.enableEdgesRendering();
-            mesh.edgesWidth = 2.0;
-            mesh.edgesColor = new BABYLON.Color4(0.35, 0.30, 0.25, 0.6);
-        }
-
-        this._updateMaterialAppearance();
-
-        const vp = ContextManager.instance.viewport;
-        if (vp && typeof vp.applyRenderModeToMeshes === 'function') {
-            vp.applyRenderModeToMeshes();
-        }
-    }
-
     _updateMaterialAppearance() {
+        if (typeof this.model?.isAluFrame === 'function' && this.model.isAluFrame()) {
+            return;
+        }
         const matId = this.model.materialId || this.model.material || this.model.custom_properties?.material;
         const matData = matId ? materialDatabase.getMaterialById(matId) : null;
         
-        const baseColor = this.model.color || (matData ? matData.color : baseAlpineWhite);
+        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model.role === 'PANEL' || Boolean(this.model.color);
+        const isArchWall =
+            String(this.model?.role || '').toUpperCase() === 'WALL' ||
+            String(this.model?.role || '').toUpperCase() === 'WALL_PILLAR' ||
+            this.model?.custom_properties?.domain === 'wall_segment';
+        const defaultCncGray = { r: 0.70, g: 0.72, b: 0.75 };
+        const baseColor = this.model.color || (isCnc ? defaultCncGray : (matData ? matData.color : baseAlpineWhite));
         const alpha = matData?.isTransparent ? (matData.opacity || 0.45) : 1.0;
-        const specularPower = matData?.roughness ? Math.round((1.0 - matData.roughness) * 64) : 48;
+        const specularPower = isCnc ? 32 : (matData?.roughness ? Math.round((1.0 - matData.roughness) * 64) : 48);
         
         const edgeKeyMap: Record<string, string> = {
-            'left': '-X',
             'FACE_X_MINUS': '-X',
-            'right': '+X',
             'FACE_X_PLUS': '+X',
-            'top': '+Y',
             'FACE_Y_PLUS': '+Y',
-            'bottom': '-Y',
             'FACE_Y_MINUS': '-Y'
         };
 
@@ -507,37 +506,73 @@ export class PanelView {
             if (!mat) continue;
             
             const isFeature = faceName.startsWith('feature_') || mesh.metadata?.type === 'feature';
-            const edgeKey = edgeKeyMap[faceName];
-            const isEdgeFace = !!edgeKey;
+            const isOutlineEdgeFace = faceName.startsWith('OUTLINE_');
+            const outlineEdgeKey = mesh.metadata?.outlineEdgeKey as string | undefined;
+            const edgeKey = edgeKeyMap[faceName] || outlineEdgeKey || null;
+            const isEdgeFace = !!edgeKey || isOutlineEdgeFace;
 
             if (isFeature) {
                 mat.diffuseColor = new BABYLON.Color3(baseColor.r * 0.94, baseColor.g * 0.94, baseColor.b * 0.94);
                 mat.alpha = alpha;
                 mat.specularPower = specularPower;
-                mesh.edgesColor = new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
+                mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                mesh.edgesWidth = 1.5;
+                if (mat.diffuseTexture) mat.diffuseTexture = null;
             } else if (isEdgeFace) {
-                const edgeSlot = eb[edgeKey];
-                const isEdgeBanded = edgeSlot?.active === true || (edgeSlot?.active !== false && edgeSlot?.type_id && edgeSlot.type_id !== 'none');
+                const edgeSlot = edgeKey ? eb[edgeKey] : null;
+                const isEdgeBanded = edgeKey && (
+                    edgeSlot?.active === true ||
+                    (edgeSlot?.active !== false && edgeSlot?.type_id && edgeSlot.type_id !== 'none')
+                );
                 
-                if (isEdgeBanded) {
+                if (isCnc || isArchWall) {
+                    // CNC / ściany architektoniczne: jednolity kolor (bez ciemnego rdzenia)
+                    mat.diffuseColor = new BABYLON.Color3(baseColor.r, baseColor.g, baseColor.b);
+                    mat.alpha = alpha;
+                    mat.specularPower = isArchWall ? specularPower : 32;
+                    mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                    mesh.edgesWidth = 1.5;
+                    if (mat.diffuseTexture) mat.diffuseTexture = null;
+                } else if (isEdgeBanded) {
                     // Krawędź oklejona (PVC/ABS) — kolor dekoru płyty / obrzeża
                     const edgeColor = edgeSlot.color || baseColor;
                     mat.diffuseColor = new BABYLON.Color3(edgeColor.r, edgeColor.g, edgeColor.b);
                     mat.alpha = alpha;
                     mat.specularPower = 56;
                     mesh.edgesColor = new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
+                    if (mat.diffuseTexture) mat.diffuseTexture = null;
                 } else {
-                    // Krawędź nieoklejona (brak obrzeża) — ciemny brązowy surowy rdzeń płyty wiórowej
+                    // Krawędź nieoklejona w trybie meblowym CAD — ciemny brązowy surowy rdzeń płyty wiórowej
                     mat.diffuseColor = new BABYLON.Color3(0.32, 0.20, 0.12);
                     mat.alpha = 1.0;
                     mat.specularPower = 4;
                     mesh.edgesColor = new BABYLON.Color4(0.22, 0.14, 0.08, 0.85);
+                    if (mat.diffuseTexture) mat.diffuseTexture = null;
                 }
             } else {
-                // Płaszczyzny główne płyty (front/back) — Biały Alpejski lub wybrany dekor
-                mat.diffuseColor = new BABYLON.Color3(baseColor.r, baseColor.g, baseColor.b);
+                // Płaszczyzny główne płyty (front/back) — jednolita szarość lub wybrany dekor
+                if (matData?.texture_path && !this.model?.frozen && !isCnc) {
+                    const fallback = () => {
+                        if (mat.diffuseTexture) mat.diffuseTexture = null;
+                        mat.diffuseColor = new BABYLON.Color3(baseColor.r, baseColor.g, baseColor.b);
+                    };
+                    const tex = getOrCreatePanelTexture(matData.texture_path, this.scene, fallback);
+                    if (tex) {
+                        mat.diffuseTexture = tex;
+                        mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+                    } else {
+                        fallback();
+                    }
+                } else {
+                    if (mat.diffuseTexture) {
+                        mat.diffuseTexture = null;
+                    }
+                    mat.diffuseColor = new BABYLON.Color3(baseColor.r, baseColor.g, baseColor.b);
+                }
                 mat.alpha = alpha;
                 mat.specularPower = specularPower;
+                mesh.edgesColor = isCnc ? new BABYLON.Color4(0.05, 0.05, 0.05, 1.0) : new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
+                if (isCnc) mesh.edgesWidth = 1.5;
                 if (matData?.isTransparent) {
                     mat.backFaceCulling = false;
                 }
@@ -550,35 +585,21 @@ export class PanelView {
     }
 
     _rebuildMeshes() {
-        const roleUpper = String(this.model?.role || '').toUpperCase();
-        const nameLower = String(this.model?.name || '').toLowerCase();
-        const shapeUpper = String(this.model?.custom_properties?.shape || this.model?.customProperties?.shape || '').toUpperCase();
+        if (typeof this.model?.isAluFrame === 'function' && this.model.isAluFrame()) {
+            this._rebuildAluFrame();
+            return;
+        }
 
-        const isCylinder = roleUpper === 'TUBE_ROD' || 
-                           roleUpper === 'HOLDER' || 
-                           roleUpper.includes('TUBE') ||
-                           roleUpper.includes('HOLDER') ||
-                           shapeUpper === 'CYLINDER' || 
-                           nameLower.includes('drazek') || 
-                           nameLower.includes('uchwyt') || 
-                           nameLower.includes('rozeta');
-
-        if (isCylinder) {
+        if (isCylindricalPart(this.model)) {
             this._disposeCurrentMeshes();
             this._disposeFeatureMarkers();
-            
-            const isRod = roleUpper === 'TUBE_ROD' || roleUpper.includes('TUBE') || nameLower.includes('drazek');
-            
-            const getValMm = (v: any, fallback: number) => {
-                if (v === null || v === undefined) return fallback;
-                const n = typeof v === 'number' ? v : parseFloat(v);
-                if (isNaN(n) || n <= 0) return fallback;
-                return n > 10000 ? n / 1_000_000 : n;
-            };
 
-            const wMm = getValMm(this.model.width, 600);
-            const hMm = getValMm(this.model.height, isRod ? 25 : 45);
-            const tMm = getValMm(this.model.thickness, isRod ? 25 : 5);
+            const isRod = isTubeRodPart(this.model);
+
+            const dims = validatePanelDimensionsNm(this.model, 'PanelView.cylinder');
+            const wMm = dims.widthMm;
+            const hMm = dims.heightMm;
+            const tMm = dims.thicknessMm;
             
             const len = isRod ? wMm : (wMm < hMm && wMm > 0 ? wMm : tMm);
             const dia = isRod ? (hMm > 1 && hMm < 500 ? hMm : 25) : (hMm > 1 && hMm < 500 ? hMm : 45);
@@ -627,16 +648,155 @@ export class PanelView {
                 ? ctxBuilder
                 : new NativePanelBuilder();
             const meshData = builder.build(this.model);
-            if (meshData) {
-                this.updateMesh(meshData);
-                return;
-            }
+            this.updateMesh(meshData);
         } catch (err) {
-            console.warn('PanelView: native remesh failed, fallback planes', err);
+            console.error('PanelView: native remesh failed', err);
         }
+    }
+
+    _rebuildAluFrame() {
         this._disposeCurrentMeshes();
         this._disposeFeatureMarkers();
-        this._buildMeshes();
+
+        const tpl = AluFrameManager.instance.getTemplate(this.model.frameTemplateId);
+        const p = tpl.profile;
+        const g = tpl.glass;
+
+        // Materiał profili aluminiowych (anoda matowa z lekkim metalicznym połyskiem)
+        const profMat = new BABYLON.StandardMaterial(`mat_alu_prof_${this.model.id}`, this.scene);
+        profMat.diffuseColor = new BABYLON.Color3(p.color.r, p.color.g, p.color.b);
+        profMat.specularColor = new BABYLON.Color3(0.4, 0.4, 0.4);
+        profMat.specularPower = 48;
+
+        // Materiał szkła (półprzezroczysty z refleksem)
+        const glassMat = new BABYLON.StandardMaterial(`mat_alu_glass_${this.model.id}`, this.scene);
+        glassMat.diffuseColor = new BABYLON.Color3(g.color.r, g.color.g, g.color.b);
+        glassMat.alpha = g.alpha ?? 0.35;
+        glassMat.specularColor = new BABYLON.Color3(0.85, 0.85, 0.9);
+        glassMat.specularPower = 96;
+        glassMat.backFaceCulling = false;
+
+        const idMgr = IDManager.getInstance();
+
+        // Pobieramy geometrię z autorskiego B-repa (NativePanelBuilder)
+        const ctxBuilder = (ContextManager.instance as any)?.panelBuilder;
+        const builder = (ctxBuilder && typeof ctxBuilder.build === 'function')
+            ? ctxBuilder
+            : new NativePanelBuilder();
+        const meshData = builder.build(this.model);
+
+        const partMapping: Record<string, { faceKey: string; mat: any }> = {
+            alu_prof_left: { faceKey: 'FACE_X_MINUS', mat: profMat },
+            alu_prof_right: { faceKey: 'FACE_X_PLUS', mat: profMat },
+            alu_prof_top: { faceKey: 'FACE_Y_PLUS', mat: profMat },
+            alu_prof_bottom: { faceKey: 'FACE_Y_MINUS', mat: profMat },
+            alu_glass: { faceKey: 'FACE_Z_PLUS', mat: glassMat }
+        };
+
+        for (const [partName, conf] of Object.entries(partMapping)) {
+            const data = meshData?.[partName];
+            if (!data || !data.positions || data.positions.length === 0) continue;
+
+            const mesh = new BABYLON.Mesh(`${partName}_${this.model.id}`, this.scene);
+            const vertexData = new BABYLON.VertexData();
+            vertexData.positions = data.positions;
+            vertexData.indices = data.indices;
+
+            const normals: number[] = [];
+            BABYLON.VertexData.ComputeNormals(data.positions, data.indices, normals);
+            vertexData.normals = normals;
+            vertexData.applyToMesh(mesh);
+
+            mesh.parent = this.root;
+            mesh.material = conf.mat;
+            mesh.isVisible = true;
+            mesh.visibility = 1.0;
+            mesh.isPickable = true;
+            if (typeof mesh.enableEdgesRendering === 'function') {
+                mesh.enableEdgesRendering();
+                mesh.edgesWidth = 1.5;
+                mesh.edgesColor = new BABYLON.Color4(0.12, 0.12, 0.12, 0.85);
+            }
+
+            const smartId = idMgr.register(EntityType.FACE, this.model.smartId?.fullPath || this.model.id, conf.faceKey);
+            mesh.metadata = {
+                type: 'face',
+                faceName: conf.faceKey,
+                smartId,
+                panelModel: this.model,
+                isAluFramePart: true,
+                partRole: partName,
+                baseColor: BABYLON.Color3.Black(),
+                baseDiffuse: conf.mat.diffuseColor.clone()
+            };
+            this.faceMeshes[conf.faceKey] = mesh;
+            this.faceMaterials[conf.faceKey] = conf.mat;
+
+            const vp = ContextManager.instance.viewport;
+            if (vp && typeof vp.applyRenderModeToMesh === 'function') {
+                vp.applyRenderModeToMesh(mesh);
+            }
+        }
+
+        // Renderowanie Krawędzi B-rep (w tym uciosów 45° dla rysunków 2D, PMI i CAM)
+        if (meshData?.edges && meshData.edges.length > 0) {
+            this._edgeMeshes = [];
+            for (let i = 0; i < meshData.edges.length; i++) {
+                const edgeData = meshData.edges[i];
+                const pts = edgeData.points;
+                const edgeKey = edgeData.key || i.toString();
+                const points = pts.map((pt: number[]) => new BABYLON.Vector3(pt[0], pt[1], pt[2]));
+
+                const edgeMesh = BABYLON.MeshBuilder.CreateLines(`alu_edge_${i}_${this.model.id}`, { points }, this.scene);
+                edgeMesh.color = this.model?.frozen ? new BABYLON.Color3(0.2, 0.65, 0.95) : new BABYLON.Color3(0.1, 0.1, 0.1);
+                edgeMesh.intersectionThreshold = 1.5;
+                edgeMesh.parent = this.root;
+
+                const smartId = idMgr.register(EntityType.EDGE, this.model.smartId.fullPath, edgeKey);
+                edgeMesh.isPickable = true;
+                edgeMesh.metadata = {
+                    type: 'edge',
+                    smartId,
+                    panelModel: this.model,
+                    edgeKey,
+                    brepPoints: pts,
+                    baseColor: new BABYLON.Color3(0.1, 0.1, 0.1),
+                    baseDiffuse: new BABYLON.Color3(0.15, 0.1, 0.05)
+                };
+                this._edgeMeshes.push(edgeMesh);
+            }
+        }
+
+        // Renderowanie Narożników B-rep
+        if (meshData?.vertices && meshData.vertices.length > 0) {
+            this._vertexSpheres = [];
+            for (let i = 0; i < meshData.vertices.length; i++) {
+                const p = meshData.vertices[i];
+                const sphere = BABYLON.MeshBuilder.CreateSphere(`alu_vertex_${i}_${this.model.id}`, { diameter: 10 }, this.scene);
+                const vertMat = new BABYLON.StandardMaterial(`mat_alu_vert_${i}_${this.model.id}`, this.scene);
+                vertMat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
+                vertMat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
+                vertMat.alpha = 0.0;
+
+                const smartId = idMgr.register(EntityType.VERTEX, this.model.smartId.fullPath, i.toString());
+                sphere.position = new BABYLON.Vector3(p[0], p[1], p[2]);
+                sphere.parent = this.root;
+                sphere.material = vertMat;
+                sphere.renderingGroupId = 1;
+                sphere.visibility = 0.0;
+                sphere.isPickable = true;
+                sphere.metadata = {
+                    type: 'vertex',
+                    smartId,
+                    panelModel: this.model,
+                    cornerIndex: i,
+                    baseColor: new BABYLON.Color3(0.5, 0.1, 0.1),
+                    baseDiffuse: new BABYLON.Color3(1, 0.2, 0.2)
+                };
+                this._vertexSpheres.push(sphere);
+            }
+        }
+
         this.renderFeatures();
     }
 
@@ -667,10 +827,10 @@ export class PanelView {
      */
     highlightEdgeFace(edgeKey: string, highlight: boolean) {
         const edgeFaceMap: Record<string, string[]> = {
-            '+X': ['right', 'FACE_X_PLUS'],
-            '-X': ['left', 'FACE_X_MINUS'],
-            '+Y': ['top', 'FACE_Y_PLUS'],
-            '-Y': ['bottom', 'FACE_Y_MINUS']
+            '+X': ['FACE_X_PLUS'],
+            '-X': ['FACE_X_MINUS'],
+            '+Y': ['FACE_Y_PLUS'],
+            '-Y': ['FACE_Y_MINUS']
         };
         const targets = edgeFaceMap[edgeKey] || [];
         for (const face of targets) {
@@ -687,6 +847,125 @@ export class PanelView {
                 this._updateMaterialAppearance();
             }
         }
+        for (const [faceName, mesh] of Object.entries<any>(this.faceMeshes)) {
+            const isOutlineEdgeFace = faceName.startsWith('OUTLINE_');
+            if (!isOutlineEdgeFace || mesh.metadata?.outlineEdgeKey !== edgeKey) continue;
+            const mat = this.faceMaterials[faceName];
+            if (!mat) continue;
+            if (highlight) {
+                mat.emissiveColor = new BABYLON.Color3(0.2, 0.4, 0.9);
+                mesh.edgesColor = new BABYLON.Color4(0.3, 0.7, 1.0, 1.0);
+                mesh.edgesWidth = 4.0;
+            } else {
+                mat.emissiveColor = new BABYLON.Color3(0, 0, 0);
+                mesh.edgesWidth = 2.0;
+                this._updateMaterialAppearance();
+            }
+        }
+    }
+
+    /**
+     * Podświetla wybraną cechę obróbczą (otwór, wpust) na scenie 3D neonowym błękitem.
+     * Zwraca true jeśli dopasowano i podświetlono co najmniej jeden element na formatce.
+     */
+    highlightFeature(target: any, highlight: boolean = true): boolean {
+        let idSet = new Set<string>();
+        let targetDiameter: number | undefined;
+        let targetDepth: number | undefined;
+
+        if (typeof target === 'string') {
+            idSet.add(target);
+        } else if (Array.isArray(target)) {
+            target.forEach(id => idSet.add(String(id)));
+        } else if (target && typeof target === 'object') {
+            if (target.childFeatureIds && Array.isArray(target.childFeatureIds)) {
+                target.childFeatureIds.forEach((id: any) => idSet.add(String(id)));
+            }
+            if (target.featureId) idSet.add(String(target.featureId));
+            if (target.id) idSet.add(String(target.id));
+            if (target.diameter !== undefined || target.params?.diameter !== undefined) {
+                targetDiameter = target.diameter ?? target.params?.diameter;
+                targetDepth = target.depth ?? target.params?.depth;
+            }
+        }
+
+        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model?.role === 'PANEL';
+        const defaultLineColor = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.95, 0.3, 0.1);
+        const highlightColor = new BABYLON.Color3(0.0, 0.85, 1.0); // Jaskrawy neonowy turkus / błękit
+
+        let matchCount = 0;
+        for (const m of (this._featureMarkers || [])) {
+            if (!m || m.isDisposed()) continue;
+            const fId = m.metadata?.featureId || m.metadata?.id || m.metadata?.feature?.id;
+            let matches = Boolean(fId && idSet.has(String(fId)));
+
+            if (!matches && target && m.metadata?.feature && m.metadata.feature === target) {
+                matches = true;
+            }
+
+            if (!matches && targetDiameter !== undefined && m.metadata) {
+                const mDia = m.metadata.diameter ?? m.metadata.feature?.params?.diameter;
+                const mDepth = m.metadata.depth ?? m.metadata.feature?.params?.depth;
+                if (mDia !== undefined && Math.abs(mDia - targetDiameter) < 0.1) {
+                    if (targetDepth === undefined || mDepth === undefined || Math.abs(mDepth - targetDepth) < 0.1) {
+                        matches = true;
+                    }
+                }
+            }
+
+            if (matches) {
+                matchCount++;
+                if (m.color !== undefined) {
+                    m.color = highlight ? highlightColor : defaultLineColor;
+                }
+                if (m.material) {
+                    if (highlight) {
+                        m.material.emissiveColor = highlightColor;
+                        m.material.diffuseColor = highlightColor;
+                    } else {
+                        m.material.emissiveColor = BABYLON.Color3.Black();
+                        m.material.diffuseColor = isCnc ? new BABYLON.Color3(0.12, 0.12, 0.12) : new BABYLON.Color3(0.2, 0.2, 0.25);
+                    }
+                }
+                if (typeof m.enableEdgesRendering === 'function') {
+                    if (highlight) {
+                        m.edgesColor = new BABYLON.Color4(0.0, 0.85, 1.0, 1.0);
+                        m.edgesWidth = 2.5;
+                    } else {
+                        m.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                        m.edgesWidth = 1.0;
+                    }
+                }
+            }
+        }
+
+        (ContextManager.instance as any)?.viewport?.requestRender?.(5);
+        return matchCount > 0;
+    }
+
+    /**
+     * Wygasza wszystkie aktywne podświetlenia cech obróbkowych.
+     */
+    clearFeatureHighlights() {
+        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model?.role === 'PANEL';
+        const defaultLineColor = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.95, 0.3, 0.1);
+
+        for (const m of (this._featureMarkers || [])) {
+            if (!m || m.isDisposed()) continue;
+            if (m.color !== undefined) {
+                m.color = defaultLineColor;
+            }
+            if (m.material) {
+                m.material.emissiveColor = BABYLON.Color3.Black();
+                m.material.diffuseColor = isCnc ? new BABYLON.Color3(0.12, 0.12, 0.12) : new BABYLON.Color3(0.2, 0.2, 0.25);
+            }
+            if (typeof m.enableEdgesRendering === 'function') {
+                m.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                m.edgesWidth = 1.0;
+            }
+        }
+
+        (ContextManager.instance as any)?.viewport?.requestRender?.(5);
     }
 
     // ─── Feature visualization ───────────────────────
@@ -730,17 +1009,18 @@ export class PanelView {
     }
 
     _renderHole(feature) {
-        const faceName = feature.face || (feature.side ? feature.side : 'back');
+        // Feature.face jest kanoniczny; brak → lico tylne (FACE_Z_MINUS).
+        const faceName = feature.face || feature.side || 'FACE_Z_MINUS';
         let faceData;
         try {
             faceData = this.model.getFace(faceName);
         } catch {
-            faceData = this.model.getFace('back');
+            faceData = this.model.getFace('FACE_Z_MINUS');
         }
 
         const params = feature.params || {};
-        const u = params.u !== undefined ? params.u : (feature.loc?.x || 0);
-        const v = params.v !== undefined ? params.v : (feature.loc?.y || 0);
+        const u = params.u !== undefined ? params.u : (params.x !== undefined ? params.x : (feature.loc?.x || 0));
+        const v = params.v !== undefined ? params.v : (params.y !== undefined ? params.y : (feature.loc?.y || 0));
         const holeDia = params.diameter || feature.dim?.x || 5;
         const holeDepth = params.depth || feature.dim?.z || 12;
         const radius = holeDia / 2;
@@ -811,7 +1091,7 @@ export class PanelView {
 
         // Pozycja 3D na ścianie lub z położenia lokalnego
         let pos;
-        if (feature.params && feature.params.u !== undefined) {
+        if (feature.params && (feature.params.u !== undefined || feature.params.x !== undefined)) {
             pos = this._facePoint(faceData, u, v, 0.5 + clearance);
         } else if (feature.loc) {
             pos = new BABYLON.Vector3(feature.loc.x, feature.loc.y, feature.loc.z);
@@ -820,22 +1100,34 @@ export class PanelView {
         }
 
 
-        // Okrąg — ring (torus o promieniu dopasowanym do średnicy otworu)
-        const circle = BABYLON.MeshBuilder.CreateTorus(`hole_ring_${feature.id}`, {
-            diameter: holeDia,
-            thickness: Math.min(1.5, holeDia * 0.2),
-            tessellation: 32
-        }, this.scene);
-        circle.position = pos;
-        this._orientToFace(circle, faceData);
+        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model?.role === 'PANEL';
 
-        const mat = new BABYLON.StandardMaterial(`hole_mat_${feature.id}`, this.scene);
-        mat.diffuseColor = new BABYLON.Color3(0.95, 0.3, 0.1);
-        mat.emissiveColor = new BABYLON.Color3(0.6, 0.15, 0.05);
-        mat.backFaceCulling = false;
-        circle.material = mat;
+        const holeMeta = {
+            type: 'feature',
+            featureId: feature.id,
+            id: feature.id,
+            panelModel: this.model,
+            feature: feature,
+            diameter: holeDia,
+            depth: holeDepth
+        };
+
+        // Okrąg — cienka, czysta linia wektorowa CAD (CreateLines) zamiast grubej bryły 3D Torus
+        const circlePts: any[] = [];
+        const segCount = 48;
+        for (let i = 0; i <= segCount; i++) {
+            const angle = (i / segCount) * Math.PI * 2;
+            const uPt = u + Math.cos(angle) * radius;
+            const vPt = v + Math.sin(angle) * radius;
+            circlePts.push(this._facePoint(faceData, uPt, vPt, 0.1 + clearance));
+        }
+        const circle = BABYLON.MeshBuilder.CreateLines(`hole_ring_${feature.id}`, {
+            points: circlePts
+        }, this.scene);
+        circle.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.95, 0.3, 0.1);
         circle.isPickable = true;
         circle.parent = this.root;
+        circle.metadata = holeMeta;
         this._featureMarkers.push(circle);
 
         // Cylinder reprezentujący czarny walec otworu (symbole walce CAD)
@@ -845,7 +1137,7 @@ export class PanelView {
             tessellation: 32
         }, this.scene);
         
-        if (feature.params && feature.params.u !== undefined) {
+        if (feature.params && (feature.params.u !== undefined || feature.params.x !== undefined)) {
             // W głąb płyty (−normal), jak mesh_builder.localTo3D. +normal wystawiał walec
             // na zewnątrz (np. z boczka w stronę wieńca).
             cyl.position = this._facePoint(faceData, u, v, -(holeDepth / 2) + clearance);
@@ -855,37 +1147,55 @@ export class PanelView {
         }
 
         const cylMat = new BABYLON.StandardMaterial(`hole_cyl_mat_${feature.id}`, this.scene);
-        cylMat.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.25);
-        cylMat.emissiveColor = new BABYLON.Color3(0.1, 0.1, 0.15);
-        cylMat.alpha = 0.9;
+        cylMat.diffuseColor = isCnc ? new BABYLON.Color3(0.12, 0.12, 0.12) : new BABYLON.Color3(0.2, 0.2, 0.25);
+        cylMat.emissiveColor = BABYLON.Color3.Black();
+        cylMat.alpha = 0.95;
         cylMat.backFaceCulling = false;
         cyl.material = cylMat;
         cyl.isPickable = true;
+        if (typeof cyl.enableEdgesRendering === 'function') {
+            cyl.enableEdgesRendering();
+            cyl.edgesWidth = 1.0;
+            cyl.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+        }
         cyl.parent = this.root;
+        cyl.metadata = holeMeta;
         this._featureMarkers.push(cyl);
 
-        // Krzyżyk w środku otworu
+        // Krzyżyk w środku otworu — cienkie linie wektorowe CAD
         const crossSize = Math.max(1, radius * 0.7);
         const crossLines = [
             [
-                this._facePoint(faceData, u - crossSize, v, 0.6 + clearance),
-                this._facePoint(faceData, u + crossSize, v, 0.6 + clearance)
+                this._facePoint(faceData, u - crossSize, v, 0.15 + clearance),
+                this._facePoint(faceData, u + crossSize, v, 0.15 + clearance)
             ],
             [
-                this._facePoint(faceData, u, v - crossSize, 0.6 + clearance),
-                this._facePoint(faceData, u, v + crossSize, 0.6 + clearance)
+                this._facePoint(faceData, u, v - crossSize, 0.15 + clearance),
+                this._facePoint(faceData, u, v + crossSize, 0.15 + clearance)
             ]
         ];
         const cross = BABYLON.MeshBuilder.CreateLineSystem(`hole_cross_${feature.id}`, { lines: crossLines }, this.scene);
-        cross.color = new BABYLON.Color3(1, 0.5, 0.1);
+        cross.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(1, 0.5, 0.1);
         cross.isPickable = false;
         cross.parent = this.root;
+        cross.metadata = holeMeta;
         this._featureMarkers.push(cross);
     }
 
     _renderPocket(feature) {
-        // Fizyczna kieszeń i jej krawędzie są w 100% generowane w geometrii 3D formatki przez mesh_builder.ts
-        void feature;
+        const params = feature.params || {};
+        if (params.source === 'library' || params.library_id) {
+            const faceData = this.model.getFace(feature.face || 'FACE_Z_PLUS');
+            const u = params.u || 0;
+            const v = params.v || 0;
+            const w = params.width || 3;
+            const len = params.length || params.height || 600;
+            const midU = u + w / 2;
+            const midV = v + len / 2;
+            const offset = 0.6;
+            const centerPos = this._facePoint(faceData, midU, midV, offset);
+            this._createOperationCenterGizmo(feature, faceData, centerPos);
+        }
     }
 
     _renderEdgeDimLines(feature, faceData, u, v, w, len, grooveMesh) {
@@ -913,6 +1223,110 @@ export class PanelView {
         const handleV = this._createDimSnapHandle(feature, faceData, 'v', vEndPos);
         this._wireDimSnapHandle(handleU, feature, faceData, 'u', rect, lines, live, offset, grooveMesh);
         this._wireDimSnapHandle(handleV, feature, faceData, 'v', rect, lines, live, offset, grooveMesh);
+
+        // Brązowe gizmo w środku wycięcia rewizji do bezpośredniej edycji parametrów
+        this._createOperationCenterGizmo(feature, faceData, centerPos);
+    }
+
+    _createOperationCenterGizmo(feature: any, faceData: any, centerPos: any) {
+        // Brązowe gizmo w środku rewizji (średnica 16 mm z subtelnym złotawym blaskiem)
+        const gizmo = BABYLON.MeshBuilder.CreateSphere(`op_center_gizmo_${feature.id}`, {
+            diameter: 16,
+            segments: 16,
+        }, this.scene);
+        gizmo.parent = this.root;
+        gizmo.position.copyFrom(centerPos);
+        gizmo.renderingGroupId = 1;
+
+        const mat = new BABYLON.StandardMaterial(`op_center_mat_${feature.id}`, this.scene);
+        mat.diffuseColor = new BABYLON.Color3(0.58, 0.32, 0.12);
+        mat.emissiveColor = new BABYLON.Color3(0.28, 0.14, 0.05);
+        mat.specularColor = new BABYLON.Color3(0.8, 0.6, 0.3);
+        mat.specularPower = 32;
+        mat.disableLighting = false;
+        mat.backFaceCulling = false;
+        gizmo.material = mat;
+        gizmo.isPickable = true;
+
+        const defaultLibId = feature.params?.placement === 'edge_dims' ? 'rewizja' : 'przetloczenie';
+        const libId = feature.params?.library_id || defaultLibId;
+
+        gizmo.metadata = {
+            type: 'operation-center-gizmo',
+            featureId: feature.id,
+            libraryId: libId,
+            face: feature.face,
+            panelModel: this.model,
+        };
+
+        gizmo.actionManager = new BABYLON.ActionManager(this.scene);
+        gizmo.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+            BABYLON.ActionManager.OnPointerOverTrigger,
+            () => {
+                gizmo.scaling.setAll(1.25);
+                mat.emissiveColor = new BABYLON.Color3(0.52, 0.28, 0.1);
+                if (this.scene.getEngine()?.getRenderingCanvas()) {
+                    this.scene.getEngine().getRenderingCanvas().style.cursor = 'pointer';
+                }
+            },
+        ));
+        gizmo.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+            BABYLON.ActionManager.OnPointerOutTrigger,
+            () => {
+                gizmo.scaling.setAll(1.0);
+                mat.emissiveColor = new BABYLON.Color3(0.28, 0.14, 0.05);
+                if (this.scene.getEngine()?.getRenderingCanvas()) {
+                    this.scene.getEngine().getRenderingCanvas().style.cursor = '';
+                }
+            },
+        ));
+        const triggerOpen = (evt: any) => {
+            ContextManager.instance?.document?.setActiveEntity?.(this.model);
+            const pointerX = evt?.pointerX ?? (typeof window !== 'undefined' ? window.innerWidth / 2 : 300);
+            const pointerY = evt?.pointerY ?? 100;
+            // Hierarchia / właściwości — ta sama operacja co w dialogu
+            const doc = ContextManager.instance?.document;
+            if (doc && PropertiesManager.instance) {
+                PropertiesManager.instance.inspectFeature(
+                    feature.id,
+                    doc,
+                    ContextManager.instance.panelViews || new Map(),
+                    () => (typeof doc.getPanels === 'function' ? doc.getPanels().map((item: any) => item.domainData || item) : []),
+                    undefined,
+                    undefined,
+                    true
+                );
+            } else {
+                document.dispatchEvent(new CustomEvent('bloki-properties-update', {
+                    detail: {
+                        kind: 'groove',
+                        featureId: feature.id,
+                        panelId: this.model.id,
+                        name: feature.name || libId,
+                        parentName: this.model.name,
+                        customProperties: [],
+                    },
+                }));
+            }
+            window.dispatchEvent(new CustomEvent('cad-open-floating-operation', {
+                detail: {
+                    library_id: libId,
+                    libraryId: libId,
+                    featureId: feature.id,
+                    panelId: this.model.id,
+                    face: feature.face,
+                    screenX: pointerX,
+                    screenY: pointerY,
+                },
+            }));
+        };
+        gizmo.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+            BABYLON.ActionManager.OnPickTrigger,
+            triggerOpen,
+        ));
+
+        this._featureMarkers.push(gizmo);
+        return gizmo;
     }
 
     _createDimLine(name, p0, p1) {
@@ -1141,9 +1555,16 @@ export class PanelView {
         const len = params.length || params.height || 600;
 
         // Fizyczny wpust i jego krawędzie są w 100% wycinane w siatce 3D formatki przez mesh_builder.ts.
-        // Wyświetlamy linie pomocnicze wymiarów krawędziowych tylko w trybie edge_dims (rewizja).
         if (params.placement === 'edge_dims') {
+            // Rewizja (wymiary od krawędzi)
             this._renderEdgeDimLines(feature, faceData, u, v, w, len, null);
+        } else if (params.source === 'library' || params.library_id) {
+            // Ramka / przetłoczenie biblioteczne — brązowe gizmo w środku wycięcia
+            const midU = u + w / 2;
+            const midV = v + len / 2;
+            const offset = 0.6;
+            const centerPos = this._facePoint(faceData, midU, midV, offset);
+            this._createOperationCenterGizmo(feature, faceData, centerPos);
         }
     }
 
@@ -1332,11 +1753,6 @@ export class PanelView {
         if (this._edgeMeshes) {
             for (const m of this._edgeMeshes) {
                 if (m) m.setEnabled(visible);
-            }
-        }
-        if (this._edgeLines) {
-            for (const l of this._edgeLines) {
-                if (l) l.setEnabled(visible);
             }
         }
         if (this._vertexSpheres) {

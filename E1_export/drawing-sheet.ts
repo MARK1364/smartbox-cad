@@ -1,6 +1,6 @@
 /**
  * E1_export - drawing-sheet.ts
- * SmartBox CAD Drawing Sheet Generator (TypeScript / Web Port)
+ * Bloki CAD Drawing Sheet Generator (TypeScript / Web Port)
  * 
  * Generuje profesjonalny arkusz rysunkowy CAD w formacie SVG
  * ze standardowymi rozmiarami papieru (A4/A3/A2), podwójną ramką,
@@ -19,6 +19,12 @@ import {
     TitleBlockInfo,
     BOMRow,
 } from './export-types';
+import { tx } from '../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import exportTekstRaw from './export_tekst.json';
+
+const exportTekst = exportTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'export';
 
 function v(val: number): string {
     return val.toFixed(2);
@@ -102,7 +108,7 @@ export class DrawingSheet {
         this.titleBlock = {
             projectName: '',
             furnitureName: '',
-            author: 'SmartBox CAD',
+            author: 'Bloki CAD',
             date: today,
             scale: '1:10',
             sheetNumber: '1/1',
@@ -257,7 +263,7 @@ export class DrawingSheet {
         lines.push(svgText(tbX + 2, curY + 2.5, 'Wykonał', 1.2, 'start', 'normal', undefined, '#666666'));
         lines.push(svgText(tbX + colSplit + 2, curY + 2.5, 'Data', 1.2, 'start', 'normal', undefined, '#666666'));
 
-        lines.push(svgText(tbX + 2, curY + 6.5, this.titleBlock.author || 'SmartBox CAD', 2.5));
+        lines.push(svgText(tbX + 2, curY + 6.5, this.titleBlock.author || 'Bloki CAD', 2.5));
         lines.push(svgText(tbX + colSplit + 2, curY + 6.5, this.titleBlock.date || '', 2.5));
 
         curY += r1H;
@@ -278,7 +284,7 @@ export class DrawingSheet {
         lines.push(svgText(tbX + col2Split + 2, curY + 6.5, formatLabel, 2.5, 'start', 'bold'));
 
         // Branding w rogu tabelki
-        lines.push(svgText(tbX + tbW - 2, tbY + tbH - 1.2, 'SmartBox CAD Web', 1.4, 'end', 'normal', undefined, '#999999'));
+        lines.push(svgText(tbX + tbW - 2, tbY + tbH - 1.2, 'Bloki CAD Web', 1.4, 'end', 'normal', undefined, '#999999'));
 
         return lines.join('\n');
     }
@@ -354,7 +360,7 @@ export class DrawingSheet {
 
             const values = [
                 String(i + 1),
-                String(row.name || 'Płyta'),
+                String(row.name || tx(exportTekst, 'default_plate_name', TX_NS)),
                 String(row.material || 'Laminat 18mm'),
                 row.length.toFixed(0),
                 row.width.toFixed(0),
@@ -502,7 +508,7 @@ export class DrawingSheet {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Drukuj Arkusz CAD - SmartBox</title>
+                <title>Drukuj Arkusz CAD - Bloki</title>
                 <style>
                     @page {
                         size: ${this.paperW}mm ${this.paperH}mm;
@@ -600,7 +606,7 @@ export class DrawingSheet {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Dokumentacja Rysunkowa CAD — SmartBox (${sheets.length} arkuszy)</title>
+                <title>Dokumentacja Rysunkowa CAD — Bloki (${sheets.length} arkuszy)</title>
                 <style>
                     @page {
                         size: auto;

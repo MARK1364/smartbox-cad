@@ -1,0 +1,47 @@
+{
+  "panel.title": {
+    "pl": "Profil LED wnękowy",
+    "en": "Recessed LED profile",
+    "de": "LED-Nutenprofil"
+  },
+  "led_left.label": {
+    "pl": "LED Lewy offset:",
+    "en": "Left LED offset:",
+    "de": "LED-Versatz links:"
+  },
+  "led_right.label": {
+    "pl": "LED Prawy offset:",
+    "en": "Right LED offset:",
+    "de": "LED-Versatz rechts:"
+  },
+  "offset_from_front.hint": {
+    "pl": "od frontu",
+    "en": "from front",
+    "de": "von vorne"
+  },
+  "led_back.label": {
+    "pl": "LED Plecy offset od środka:",
+    "en": "Back LED offset from center:",
+    "de": "LED-Versatz Rückwand ab Mitte:"
+  },
+  "led_back.tooltip": {
+    "pl": "Zakres ujemny/dodatni, 0 = dokładnie na środku pleców",
+    "en": "Negative/positive range, 0 = exactly at back center",
+    "de": "Negativer/positiver Bereich, 0 = genau in Rückwandmitte"
+  },
+  "offset_center.hint": {
+    "pl": "0 = środek",
+    "en": "0 = center",
+    "de": "0 = Mitte"
+  },
+  "groove.width": {
+    "pl": "Szerokość frezu / profilu:",
+    "en": "Milling / profile width:",
+    "de": "Fräs-/Profilbreite:"
+  },
+  "groove.depth": {
+    "pl": "Głębokość wpustu:",
+    "en": "Groove depth:",
+    "de": "Nuttiefe:"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "metadata": {
+    "module_type": "SMART_APPLIANCE",
+    "version": "1.0.0",
+    "units": "mm",
+    "side_references_bloki": "INNER"
+  },
+  "defaults": {
+    "MICROWAVE": {
+      "frontHeight": 380,
+      "nalGoraMicro": 20,
+      "nalDolneMicro": 8,
+      "frontWidth": 595,
+      "frontDepth": 20,
+      "corpusWidth": 560,
+      "corpusDepth": 320
+    },
+    "OVEN": {
+      "frontHeight": 596,
+      "nalGoraMicro": 20,
+      "nalDolneMicro": 0,
+      "frontWidth": 595,
+      "frontDepth": 22,
+      "corpusWidth": 560,
+      "corpusDepth": 550
+    }
+  },
+  "docking": {
+    "base": "BOTTOM",
+    "horizontalAlignment": "CENTER",
+    "topMode": "FLEXIBLE",
+    "depthDirection": "INTO_CABINET"
+  },
+  "roles": {
+    "container": "APPLIANCE",
+    "corpusPart": "APPLIANCE_CORPUS",
+    "frontPart": "APPLIANCE_FRONT"
+  }
+}

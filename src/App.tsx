@@ -2,25 +2,39 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { unit } from '../A1_core/unit-system';
 import { UIController, PANEL_DIM_MAX_MM, PANEL_DIM_MIN_MM } from '../A1_core/ui-controller';
 import { SmartFrameUI } from '../A3_smartframe/smartframe-ui';
-import { SmartBoxUI } from '../A2_smartbox/smartbox-ui';
+import { ScianyUI } from '../S4_sciany/sciany-ui';
+import { BlokiUI } from '../A2_bloki/bloki-ui';
 import { CabinetLibraryPanel } from './CabinetLibraryPanel';
 import { SaveCabinetModal } from './SaveCabinetModal';
 import { SSOTUI } from './ssot-ui';
 import { PerformanceOptionsModal } from './PerformanceOptionsModal';
 import { GoogleDriveModal } from './GoogleDriveModal';
+import { SaaSUserBadge } from './saas/ui/SaaSUserBadge';
+import { SaaSAuthModal } from './saas/ui/SaaSAuthModal';
+import { SaaSProjectsDashboardModal } from './saas/ui/SaaSProjectsDashboardModal';
+import { SaaSPaywallModal } from './saas/ui/SaaSPaywallModal';
+import { RecorderStudioUI } from '../A9_agent/recorder/RecorderStudioUI';
 import { NewProjectModal } from './NewProjectModal';
 import { PropertiesPanel } from './PropertiesPanel';
 import { FloatingOperationDialog, CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
+import { CncValidationReportModal } from './module-data/CncValidationReportModal';
 import { QuickPickPopup } from './QuickPickPopup';
-import { BelkaDisplayModeMenu, BelkaProjectionMenu, BelkaInfoMenu } from './BelkaDisplayModeMenu';
+import { BelkaHierarchyBar } from './BelkaHierarchyBar';
 import { MaterialsUI } from '../A7_material/materials-ui';
 import { AssignMaterialCommand, SetEdgeBandingCommand } from '../A7_material/material-commands';
 import { materialDatabase } from '../A7_material/material-database';
 import { MaterialScope } from '../A7_material/material-types';
 import { ContextManager } from '../A1_core/context-manager';
 import { applyTabSelectionPolicy } from '../A1_core/selection-highlight';
-import { toggleDimensionTool } from '../A8_pmi/pmi-tool-activate.js';
-import { TooltipManager } from '../A1_core/tooltip-manager';
+import { toggleDimensionTool, deactivateAllPmiTools } from '../A8_pmi/pmi-tool-activate.js';
+import { LanguageSelector } from '../T1_tlumaczenia/LanguageSelector';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 import { useUiRegionEdgeHint } from './use-ui-region-edge-hint';
 import { CAMStateStore } from '../C1_cnc/core/cam-state-store';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput';
@@ -30,7 +44,10 @@ import { PMIUI } from '../A8_pmi/pmi-ui';
 import { SolverUI, SOLVER_PANEL_TITLE } from '../S2_solver/solver-ui';
 import { ConnectorsUI, CONNECTORS_PANEL_TITLE } from '../C2_connectors/connectors-ui';
 import { stopConnectorPick } from '../C2_connectors/connector-picker';
-import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOperationFromPick, CAD_EDIT_LIBRARY_OPERATION, featureOperationLabel, featureOperationDetails, isLibraryOperation, isEngineGroove } from '../o1_operacji';
+import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOperationFromPick, handleLedChannelDrop, CAD_EDIT_LIBRARY_OPERATION, featureOperationLabel, featureOperationDetails, isLibraryOperation, isEngineGroove } from '../o1_operacji';
+import { SmartPartsUI, HandleDragController } from '../A5_smartparts';
+import { AgdPanel } from './agd/AgdPanel';
+import { createSmartAppliance, createSmartApplianceInDetectedBay } from '../A6_agd';
 import { ConnectorVisualizer } from '../C2_connectors/connector-visualizer';
 import { isSolverSmartFrameIsolationActive, applyPanelViewSolverVisibility, isSolverTabActive } from '../S2_solver/solver-visibility';
 import { ExportUI, ExportEngine } from '../E1_export';
@@ -43,109 +60,51 @@ import { PanelModel } from '../A4_smartpanel/panel-model';
 import { CADNode } from '../A1_core/cad-node/cad-node';
 import { NodeType } from '../A1_core/cad-node/node-type';
 import { AddNodeCommand } from '../A1_core/commands/add-node-command';
-import { SceneTree } from './SceneTree';
 import { openCncFromCad, installModuleRefreshBridge } from './module-data/open-modules';
 import { CAD_WINDOW_NAME, installCadModuleBridge } from './module-data/session';
-import { CAD_TREE_START_RENAME } from './module-data/tree-context-menu';
-import { SmartBoxBayController } from '../A2_smartbox/smartbox-bay-controller';
+import { BlokiBayController } from '../A2_bloki/bloki-bay-controller';
 import { SmartFrameDragController } from '../A3_smartframe/smartframe-drag-controller';
-import { createSmartBoxInDetectedBay, SMARTBOX_CATEGORY_NAMES } from '../A2_smartbox/smartbox-bay-actions';
-import { clearBayHighlight, highlightBayInScene } from '../A2_smartbox/smartbox-bay-visualizer';
-import { ModalTransformManager, type ModalTransformMode } from '../A1_core/modal-transform';
+import { createBlokInDetectedBay, BLOKI_CATEGORY_NAMES } from '../A2_bloki/bloki-bay-actions';
+import { clearBayHighlight, highlightBayInScene } from '../A2_bloki/bloki-bay-visualizer';
+import { ModalTransformManager } from '../A1_core/modal-transform';
 import { HardwareLoader } from '../B1_biblioteka/hardware-loader';
-
-function useModalTransformState() {
-  const [mode, setMode] = useState<ModalTransformMode>(() => ModalTransformManager.instance.activeMode);
-
-  useEffect(() => {
-    const unsub = ModalTransformManager.instance.subscribe((currentMode) => {
-      setMode(currentMode);
-    });
-    return () => {
-      unsub();
-    };
-  }, []);
-
-  return mode;
-}
-
-// Hook to observe TooltipManager active tool hints
-function useToolHint() {
-  const [activeHint, setActiveHint] = useState<any>(null);
-
-  useEffect(() => {
-    setActiveHint(TooltipManager.instance.activeHint);
-    const unsubscribe = TooltipManager.instance.onChange((hint) => {
-      setActiveHint(hint ? { ...hint } : null);
-    });
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  return activeHint;
-}
-// Helper hook to trigger re-renders when project document updates
-function useProjectDocument() {
-  const [tick, setTick] = useState(0);
-  const [projectModel, setProjectModel] = useState<any>(null);
-
-  useEffect(() => {
-    const checkInstance = () => {
-      const model = UIController.instance?.document;
-      if (model) {
-        setProjectModel(model);
-        const listener = () => setTick(t => t + 1);
-        const unsubscribe = model.onDocumentChanged(listener);
-        // Initial sync
-        setTick(t => t + 1);
-        return () => {
-          if (typeof unsubscribe === 'function') unsubscribe();
-        };
-      } else {
-        setTimeout(checkInstance, 50);
-      }
-    };
-    checkInstance();
-  }, []);
-
-  return projectModel;
-}
-
-// Hook to observe UIController state changes (status text, console, selected face)
-function useUIState() {
-  const [uiState, setUiState] = useState<any>(null);
-
-  useEffect(() => {
-    const checkInstance = () => {
-      const controller = UIController.instance;
-      if (controller) {
-        setUiState({ ...controller.state });
-        controller.onStateChange = () => {
-          setUiState({ ...controller.state });
-        };
-      } else {
-        setTimeout(checkInstance, 50);
-      }
-    };
-    checkInstance();
-  }, []);
-
-  return uiState;
-}
+import {
+  useModalTransformState,
+  useToolHint,
+  useProjectDocument,
+  useUIState,
+} from './hooks/use-app-document-state';
+import { usePanelWidths, EDIT_MIN_CONTENT_WIDTH } from './hooks/use-panel-widths';
+import { ViewCube } from './ViewCube';
+import { BelkaWidokowa } from './BelkaWidokowa';
+import { DrzewoObiektow } from './DrzewoObiektow';
 
 export default function App({ initialTab }: { initialTab?: string } = {}) {
   const projectModel = useProjectDocument();
   const uiState = useUIState();
+  useLocale();
   const activeHint = useToolHint();
   const modalTransformMode = useModalTransformState();
+  const {
+    treeWidth,
+    editPanelWidth,
+    isDraggingTree,
+    isDraggingEdit,
+    startResizeTree,
+    startResizeEdit,
+    expandEditPanelIfCollapsed,
+  } = usePanelWidths();
   const [activeTab, setActiveTab] = useState(initialTab || 'tab-a3-smartframe');
+  const handleSwitchTab = useCallback((tab: string) => {
+    if (tab !== 'tab-a8-pmi') {
+      deactivateAllPmiTools(ContextManager.instance.stateMachine);
+    }
+    setActiveTab(tab);
+  }, []);
   const [renderMode, setRenderModeState] = useState('edges');
   const [gridVisible, setGridVisible] = useState(true);
   const [projection, setProjection] = useState('ortho');
   const [lcsVisible, setLcsVisible] = useState(false);
-  const [editingNode, setEditingNode] = useState<{ type: string; id: any; panelId?: string } | null>(null);
-  const [editValue, setEditValue] = useState('');
   const [isPanActive, setIsPanActive] = useState(false);
   const [isZoomWindowActive, setIsZoomWindowActive] = useState(false);
   const [zoomBox, setZoomBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -169,7 +128,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     setIsZoomWindowActive((prev) => {
       const next = !prev;
       if (next) {
-        UIController.instance?.setStatus('Zoom - Zaznacz ramką obszar do powiększenia.');
+        UIController.instance?.setStatus(tx(srcTekst, 'app.status_zoom', TX_NS));
       } else {
         zoomStartRef.current = null;
         setZoomBox(null);
@@ -232,8 +191,12 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const [ssotModalOpen, setSsotModalOpen] = useState(false);
   const [perfModalOpen, setPerfModalOpen] = useState(false);
   const [gdriveModalMode, setGdriveModalMode] = useState<'open' | 'save' | 'settings' | null>(null);
+  const [saasAuthModalOpen, setSaasAuthModalOpen] = useState(false);
+  const [saasDashboardOpen, setSaasDashboardOpen] = useState(false);
+  const [saasPaywallFeature, setSaasPaywallFeature] = useState<string | null>(null);
   const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
   const [saveCabinetModalOpen, setSaveCabinetModalOpen] = useState(false);
+  const [recorderStudioOpen, setRecorderStudioOpen] = useState(false);
 
   useEffect(() => {
     ContextManager.instance.requestNewProjectDialog = () => {
@@ -282,174 +245,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const uiRegionHint = useUiRegionEdgeHint();
 
-  // ─── Szerokości paneli (Drzewo obiektów i Panel edycji) z pamięcią w localStorage ───
-  const TREE_MIN_CONTENT_WIDTH = 280;
-  const EDIT_MIN_CONTENT_WIDTH = 340;
-  const COLLAPSED_PANEL_WIDTH = 32;
-  const COLLAPSE_SNAP_THRESHOLD = 75;
-
-  const lastTreeWidthRef = useRef<number>(280);
-  const lastEditWidthRef = useRef<number>(340);
-
-  const [treeWidth, setTreeWidth] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('cad_tree_panel_width');
-      const last = localStorage.getItem('cad_last_tree_width');
-      if (last) {
-        const lVal = parseInt(last, 10);
-        if (!isNaN(lVal) && lVal >= 160) lastTreeWidthRef.current = lVal;
-      }
-      if (saved) {
-        const val = parseInt(saved, 10);
-        if (!isNaN(val)) {
-          if (val <= 48) return COLLAPSED_PANEL_WIDTH;
-          if (val >= 100 && val <= 900) return val;
-        }
-      }
-    } catch {}
-    return 280;
-  });
-
-  const [editPanelWidth, setEditPanelWidth] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('cad_edit_panel_width');
-      const last = localStorage.getItem('cad_last_edit_width');
-      if (last) {
-        const lVal = parseInt(last, 10);
-        if (!isNaN(lVal) && lVal >= 200) lastEditWidthRef.current = lVal;
-      }
-      if (saved) {
-        const val = parseInt(saved, 10);
-        if (!isNaN(val)) {
-          if (val <= 48) return COLLAPSED_PANEL_WIDTH;
-          if (val >= 100 && val <= 1000) return val;
-        }
-      }
-    } catch {}
-    return 340;
-  });
-
-  const [isDraggingTree, setIsDraggingTree] = useState(false);
-  const [isDraggingEdit, setIsDraggingEdit] = useState(false);
-
-  const startResizeTree = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingTree(true);
-    const startX = e.clientX;
-    const startW = treeWidth;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const onPointerMove = (moveEv: PointerEvent) => {
-      const delta = moveEv.clientX - startX;
-      const maxW = Math.floor(window.innerWidth * 0.45);
-      const rawW = startW + delta;
-      const newW = rawW < COLLAPSE_SNAP_THRESHOLD ? COLLAPSED_PANEL_WIDTH : Math.max(COLLAPSED_PANEL_WIDTH, Math.min(maxW, rawW));
-      setTreeWidth(newW);
-    };
-
-    const onPointerUp = (upEv: PointerEvent) => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      setIsDraggingTree(false);
-
-      const dragDistance = Math.abs(upEv.clientX - startX);
-      if (dragDistance < 4) {
-        // Kliknięcie w krawędź / gizmo bez przeciągania -> toggle zwiń / rozwiń
-        if (treeWidth <= 48) {
-          const restored = lastTreeWidthRef.current || 280;
-          setTreeWidth(restored);
-          try { localStorage.setItem('cad_tree_panel_width', String(restored)); } catch {}
-        } else {
-          lastTreeWidthRef.current = treeWidth;
-          try { localStorage.setItem('cad_last_tree_width', String(treeWidth)); } catch {}
-          setTreeWidth(COLLAPSED_PANEL_WIDTH);
-          try { localStorage.setItem('cad_tree_panel_width', String(COLLAPSED_PANEL_WIDTH)); } catch {}
-        }
-        return;
-      }
-
-      // Zakończone przeciąganie
-      const finalDelta = upEv.clientX - startX;
-      const maxW = Math.floor(window.innerWidth * 0.45);
-      const rawW = startW + finalDelta;
-      const finalW = rawW < COLLAPSE_SNAP_THRESHOLD ? COLLAPSED_PANEL_WIDTH : Math.max(COLLAPSED_PANEL_WIDTH, Math.min(maxW, rawW));
-      setTreeWidth(finalW);
-      if (finalW > 48) {
-        lastTreeWidthRef.current = finalW;
-        try { localStorage.setItem('cad_last_tree_width', String(finalW)); } catch {}
-      }
-      try {
-        localStorage.setItem('cad_tree_panel_width', String(finalW));
-      } catch {}
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-  }, [treeWidth]);
-
-  const startResizeEdit = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingEdit(true);
-    const startX = e.clientX;
-    const startW = editPanelWidth;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const onPointerMove = (moveEv: PointerEvent) => {
-      const delta = startX - moveEv.clientX;
-      const maxW = Math.floor(window.innerWidth * 0.5);
-      const rawW = startW + delta;
-      const newW = rawW < COLLAPSE_SNAP_THRESHOLD ? COLLAPSED_PANEL_WIDTH : Math.max(COLLAPSED_PANEL_WIDTH, Math.min(maxW, rawW));
-      setEditPanelWidth(newW);
-    };
-
-    const onPointerUp = (upEv: PointerEvent) => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      setIsDraggingEdit(false);
-
-      const dragDistance = Math.abs(startX - upEv.clientX);
-      if (dragDistance < 4) {
-        // Kliknięcie w krawędź / gizmo bez przeciągania -> toggle zwiń / rozwiń
-        if (editPanelWidth <= 48) {
-          const restored = lastEditWidthRef.current || 340;
-          setEditPanelWidth(restored);
-          try { localStorage.setItem('cad_edit_panel_width', String(restored)); } catch {}
-        } else {
-          lastEditWidthRef.current = editPanelWidth;
-          try { localStorage.setItem('cad_last_edit_width', String(editPanelWidth)); } catch {}
-          setEditPanelWidth(COLLAPSED_PANEL_WIDTH);
-          try { localStorage.setItem('cad_edit_panel_width', String(COLLAPSED_PANEL_WIDTH)); } catch {}
-        }
-        return;
-      }
-
-      // Zakończone przeciąganie
-      const finalDelta = startX - upEv.clientX;
-      const maxW = Math.floor(window.innerWidth * 0.5);
-      const rawW = startW + finalDelta;
-      const finalW = rawW < COLLAPSE_SNAP_THRESHOLD ? COLLAPSED_PANEL_WIDTH : Math.max(COLLAPSED_PANEL_WIDTH, Math.min(maxW, rawW));
-      setEditPanelWidth(finalW);
-      if (finalW > 48) {
-        lastEditWidthRef.current = finalW;
-        try { localStorage.setItem('cad_last_edit_width', String(finalW)); } catch {}
-      }
-      try {
-        localStorage.setItem('cad_edit_panel_width', String(finalW));
-      } catch {}
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-  }, [editPanelWidth]);
-
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
@@ -473,6 +268,11 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
     if (activeTab !== 'tab-c2-connectors') {
       stopConnectorPick();
+    }
+
+    // Uniwersalna reguła: przejście na inną zakładkę automatycznie wyłącza narzędzia PMI
+    if (activeTab !== 'tab-a8-pmi') {
+      deactivateAllPmiTools(ContextManager.instance.stateMachine);
     }
 
     if (!facePicker) return;
@@ -572,7 +372,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   return;
               }
 
-              const isPanelVisible = model.visible !== false;
+              const isPanelVisible = model.visible !== false && model.frozen !== true;
               const shouldShow = isolate
                   ? isTargetPanel
                   : isPanelVisible;
@@ -705,6 +505,11 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   const showPlanes = !isolate && gridVisible;
                   mesh.setEnabled(showPlanes);
                   mesh.isVisible = showPlanes;
+                  // Pick tylko przy aktywnej pipetcie więzów (FACE) — inaczej zasłania formatki
+                  const pickingConstraint =
+                      Boolean(ContextManager.instance.activeConstraintPicker) &&
+                      ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
+                  mesh.isPickable = showPlanes && pickingConstraint;
                   return;
               }
 
@@ -729,7 +534,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   name.startsWith('container') ||
                   name.startsWith('SmartFrame') ||
                   name.startsWith('Korpus') ||
-                  name.startsWith('SmartBox') ||
+                  name.startsWith('Bloki') ||
                   name.startsWith('Szafa')
               );
 
@@ -818,14 +623,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     };
   }, [activeTab, projectModel?.activeEntity, renderMode, gridVisible]);
 
-  // Collapsible nodes state
-  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
-
-  const toggleCollapse = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCollapsedNodes(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   // Dimensions inputs state
   const [widthVal, setWidthVal] = useState('600');
   const [heightVal, setHeightVal] = useState('720');
@@ -840,10 +637,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     const uninstallBridge = installCadModuleBridge();
     const uninstallRefresh = installModuleRefreshBridge();
 
-    import('../A1_core/app.ts').then(() => {
+    import('./application/cad-app.ts').then(() => {
       console.log('Core app loaded successfully in React');
     }).catch(err => {
-      console.error('Failed to load core app.ts:', err);
+      console.error('Failed to load cad-app.ts:', err);
     });
 
     return () => {
@@ -861,21 +658,34 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     }
   }, [uiState, projectModel?.activeEntity]);
 
-  // Auto-switch tab when a SmartBox is selected
+  // Auto-switch tab when a Bloki is selected
   useEffect(() => {
     if (ContextManager.instance.activeReferencePicker) return;
     if (ContextManager.instance.activeConstraintPicker) return;
     const active = projectModel?.activeEntity;
-    if (active && active.type === 'container' && active.generatorParams?.type?.startsWith('smartbox')) {
-      setActiveTab('tab-a2-smartbox');
+    if (active && active.type === 'container' && active.generatorParams?.type?.startsWith('bloki')) {
+      deactivateAllPmiTools(ContextManager.instance.stateMachine);
+      setActiveTab('tab-a2-bloki');
     }
   }, [projectModel?.activeEntity]);
 
   useEffect(() => {
-    const onEditOp = () => setActiveTab('tab-o1-operacji');
-    const onEditSmartFrame = () => setActiveTab('tab-a3-smartframe');
+    const onEditOp = () => {
+      deactivateAllPmiTools(ContextManager.instance.stateMachine);
+      setActiveTab('tab-o1-operacji');
+    };
+    const onEditSmartFrame = () => {
+      deactivateAllPmiTools(ContextManager.instance.stateMachine);
+      setActiveTab('tab-a3-smartframe');
+    };
     const onSwitchTab = (e: any) => {
-      if (e.detail?.tabId) setActiveTab(e.detail.tabId);
+      if (e.detail?.tabId) {
+        if (e.detail.tabId !== 'tab-a8-pmi') {
+          deactivateAllPmiTools(ContextManager.instance.stateMachine);
+        }
+        setActiveTab(e.detail.tabId);
+        expandEditPanelIfCollapsed();
+      }
     };
 
     window.addEventListener(CAD_EDIT_LIBRARY_OPERATION, onEditOp);
@@ -887,7 +697,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       window.removeEventListener('cad-edit-smartframe-korpus', onEditSmartFrame);
       window.removeEventListener('cad-switch-tab', onSwitchTab as EventListener);
     };
-  }, []);
+  }, [expandEditPanelIfCollapsed]);
 
     const handleInputChange = (field: 'width' | 'height' | 'thickness', val: string) => {
     if (!UIController.instance) return;
@@ -935,58 +745,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     }
   };
 
-  // SVGs for toolbar and tree nodes
-  const icons = {
-    project: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>,
-    part: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>,
-    opsFolder: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
-    tool: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>,
-    eyeShow: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
-    eyeHide: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>,
-    trash: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
-    chevronDown: <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3" style={{ opacity: 0.6 }}><path d="M6 9l6 6 6-6"></path></svg>,
-    chevronRight: <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3" style={{ opacity: 0.6 }}><path d="M9 5l7 7-7 7"></path></svg>
-  };
-
-  // Hierarchy Node Inline Renaming Finished
-  const finishRename = (save: boolean) => {
-    if (!editingNode || !UIController.instance) return;
-    if (save && editValue.trim()) {
-      const newName = editValue.trim();
-      if (editingNode.type === 'project') {
-        UIController.instance.emitTree('rename-project', { name: newName });
-      } else if (editingNode.type === 'part') {
-        UIController.instance.emitTree('rename-part', { id: editingNode.id, uuid: editingNode.id, name: newName });
-      } else if (editingNode.type === 'container') {
-        UIController.instance.emitTree('rename-container', { id: editingNode.id, name: newName });
-      } else if (editingNode.type === 'feature') {
-        UIController.instance.emitTree('rename-feature', { id: editingNode.id, name: newName });
-      }
-    }
-    setEditingNode(null);
-  };
-
-  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
-
   useEffect(() => {
-    const handlePropsUpdate = (e: any) => {
-      if (e.detail && e.detail.featureId) {
-        setSelectedFeatureId(e.detail.featureId);
-      } else if (e.detail && e.detail.kind === 'panel') {
-        setSelectedFeatureId(null);
-      }
-    };
-    document.addEventListener('smartbox-properties-update', handlePropsUpdate);
-    const handleStartRename = (e: Event) => {
-      const d = (e as CustomEvent).detail || {};
-      if (!d.type || !d.id) return;
-      setEditingNode({ type: d.type, id: d.id, panelId: d.panelId });
-      setEditValue(String(d.name || ''));
-    };
-    window.addEventListener(CAD_TREE_START_RENAME, handleStartRename);
-
-    if (!ContextManager.instance.smartBoxBayController) {
-      ContextManager.instance.smartBoxBayController = new SmartBoxBayController();
+    if (!ContextManager.instance.blokiBayController) {
+      ContextManager.instance.blokiBayController = new BlokiBayController();
     }
     if (!ContextManager.instance.smartFrameDragController) {
       ContextManager.instance.smartFrameDragController = new SmartFrameDragController();
@@ -995,11 +756,34 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     const handleBayDetected = (bayOrEvt: any) => {
       const bay = bayOrEvt?.detail || bayOrEvt;
       if (!bay) return;
-      const ctrl = ContextManager.instance.smartBoxBayController;
-      const optId = ctrl?.pendingSmartBoxType || ctrl?.draggedSmartBoxType || 'EMPTY';
+      const ctrl = ContextManager.instance.blokiBayController;
+      const optId = ctrl?.pendingBlokType || ctrl?.draggedBlokType || 'EMPTY';
       const doc = ContextManager.instance.document || projectModel;
       if (doc) {
         const scene = ContextManager.instance.viewport?.scene;
+        const draggedAppliance = (window as any).__draggedAppliance;
+        if (optId === 'APPLIANCE' || draggedAppliance) {
+          if (scene) clearBayHighlight(scene);
+          const agdNode = createSmartApplianceInDetectedBay(doc, bay, {
+            template: draggedAppliance || undefined,
+            kind: draggedAppliance?.kind,
+            name: draggedAppliance?.name,
+            params: draggedAppliance?.defaultParams,
+          });
+          if (agdNode) {
+            (window as any).__draggedAppliance = null;
+            if (ctrl) {
+              ctrl.setPendingBlokType(null);
+              ctrl.endDrag();
+            }
+            setActiveTab('tab-agd');
+            doc.setActiveEntity(agdNode.domainData || agdNode);
+            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+            window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
+          }
+          return;
+        }
+
         if (optId === 'EMPTY') {
           if (scene) highlightBayInScene(scene, bay);
         } else {
@@ -1007,825 +791,52 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         }
 
         const typeMap: Record<string, { type: string; label: string }> = {
-          'EMPTY': { type: 'smartbox_empty', label: '' },
-          'SHELVES': { type: 'smartbox_shelves', label: 'polki' },
-          'DRAWERS': { type: 'smartbox_drawers', label: 'szuflady' },
-          'DOORS': { type: 'smartbox_doors', label: 'drzwi' },
-          'TUBES': { type: 'smartbox_tubes', label: 'drazek' },
-          'SHELF': { type: 'smartbox_shelf', label: 'wieniec' },
-          'DIVIDERS': { type: 'smartbox_dividers', label: 'przegrody' },
-          'FLAPS': { type: 'smartbox_flaps', label: 'klapy' },
-          'PANELS': { type: 'smartbox_panels', label: 'blendy' }
+          'EMPTY': { type: 'blok_empty', label: '' },
+          'SHELVES': { type: 'blok_shelves', label: 'polki' },
+          'DRAWERS': { type: 'blok_drawers', label: 'szuflady' },
+          'DOORS': { type: 'blok_doors', label: 'drzwi' },
+          'TUBES': { type: 'blok_tubes', label: 'drazek' },
+          'SHELF': { type: 'blok_shelf', label: 'wieniec' },
+          'DIVIDERS': { type: 'blok_dividers', label: 'przegrody' },
+          'FLAPS': { type: 'blok_flaps', label: 'klapy' },
+          'PANELS': { type: 'blok_panels', label: 'blendy' },
+          'LED_EXTERNAL': { type: 'blok_led_external', label: 'led_podszafkowy' },
+          'LED_INTERNAL': { type: 'blok_led_internal', label: 'led_szafowy' }
         };
-        const opt = typeMap[optId] || { type: `smartbox_${optId.toLowerCase()}`, label: optId.toLowerCase() };
+        const opt = typeMap[optId] || { type: `blok_${optId.toLowerCase()}`, label: optId.toLowerCase() };
 
-        const sbNode = createSmartBoxInDetectedBay(doc, bay, {
+        const sbNode = createBlokInDetectedBay(doc, bay, {
           id: optId,
-          type: opt.type,
-          category: optId === 'PANELS' ? 'external' : 'internal',
+          type: opt.type as any,
+          category: (optId === 'PANELS' || optId === 'LED_EXTERNAL') ? 'external' : 'internal',
           label: opt.label,
           icon: '',
           description: ''
         });
         if (sbNode) {
           if (ctrl) {
-            ctrl.setPendingSmartBoxType(null);
+            ctrl.setPendingBlokType(null);
             ctrl.endDrag(optId === 'EMPTY');
           }
-          setActiveTab('tab-a2-smartbox');
+          setActiveTab('tab-a2-bloki');
           doc.setActiveEntity(sbNode.domainData || sbNode);
         }
       }
     };
 
-    window.addEventListener('smartbox-bay-detected', handleBayDetected);
+    window.addEventListener('bloki-bay-detected', handleBayDetected);
 
     return () => {
-      document.removeEventListener('smartbox-properties-update', handlePropsUpdate);
-      window.removeEventListener(CAD_TREE_START_RENAME, handleStartRename);
-      window.removeEventListener('smartbox-bay-detected', handleBayDetected);
+      window.removeEventListener('bloki-bay-detected', handleBayDetected);
     };
   }, []);
-
-  // Render tree helper
-  const renderTree = () => {
-    if (!projectModel) return null;
-
-    const renderFeatures = (features: any[], panelId: string) => {
-      const isOpsCollapsed = collapsedNodes[panelId + '_ops'] === true;
-      if (isOpsCollapsed) return null;
-
-      if (!features || features.length === 0) {
-        return (
-          <div style={{ fontSize: '11px', padding: '2px 12px 2px 22px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-            Brak operacji
-          </div>
-        );
-      }
-
-      // Grupowanie otworów o tej samej średnicy i głębokości
-      const displayItems: Array<{
-        isGroup: boolean;
-        features: any[];
-        primary: any;
-      }> = [];
-
-      const processedHoleIds = new Set<string>();
-
-      for (let i = 0; i < features.length; i++) {
-        const f = features[i];
-        if (processedHoleIds.has(f.id)) continue;
-        // Otwory rzutowane na boki korpusu — tylko scena 3D, nie drzewo (drzewo = operacje pod półką)
-        if (f.params?.isShelfDrilling || f.params?.isDoorDrilling || f.params?.isDrawerDrilling) continue;
-
-        const isHole = f.type?.toLowerCase() === 'hole' || f.type === 'drill';
-        if (!isHole) {
-          displayItems.push({ isGroup: false, features: [f], primary: f });
-          continue;
-        }
-
-        const dia = f.params?.diameter || f.dim?.x || 5;
-        const dep = f.params?.depth || f.dim?.z || 12;
-
-        const matchingHoles = features.filter((other, otherIdx) => {
-          if (otherIdx < i) return false;
-          const otherIsHole = other.type?.toLowerCase() === 'hole' || other.type === 'drill';
-          if (!otherIsHole) return false;
-          const otherDia = other.params?.diameter || other.dim?.x || 5;
-          const otherDep = other.params?.depth || other.dim?.z || 12;
-          return dia === otherDia && dep === otherDep;
-        });
-
-        if (matchingHoles.length > 1) {
-          for (const mh of matchingHoles) processedHoleIds.add(mh.id);
-          displayItems.push({ isGroup: true, features: matchingHoles, primary: matchingHoles[0] });
-        } else {
-          displayItems.push({ isGroup: false, features: [f], primary: f });
-        }
-      }
-
-      return displayItems.map(item => {
-        const f = item.primary;
-        const count = item.features.length;
-        const isVisible = item.features.some(feat => feat.visible !== false);
-        const isEditing = !item.isGroup && editingNode?.type === 'feature' && editingNode?.id === f.id;
-        const isSelected = item.features.some(feat => selectedFeatureId === feat.id) ? 'selected' : '';
-        const dia = f.params?.diameter || f.dim?.x || 5;
-        const dep = f.params?.depth || f.dim?.z || 12;
-        
-        let defaultName = f.type === 'fillet' ? 'Zaokrąglenie' : (f.type?.toLowerCase() === 'hole' ? 'Otwór' : f.type);
-        if (f.params?.source === 'library') {
-          defaultName = f.name || f.params.library_id || 'Operacja';
-        }
-        if (item.isGroup) {
-          defaultName = `Otwory (${count}x)`;
-        }
-        const name = item.isGroup ? `Otwory (${count}x)` : (f.name || defaultName);
-        const details = f.params?.source === 'library'
-          ? `${Math.round(f.params?.width || 0)}×${Math.round(f.params?.length || 0)}×${Math.round(f.params?.depth || 0)}`
-          : (f.type === 'fillet' ? `R${f.params?.radius || 0}` : `⌀${dia}x${dep}`);
-        const isFrozen = item.features.every(feat => feat.frozen || feat.params?.frozen);
-        const isLibraryOp = item.features.some(feat => feat.params?.source === 'library');
-        const isAuto = !isLibraryOp && item.features.some(feat => feat.params?.isBackGroove || feat.is_smartbox_child || feat.is_assembly_drilling || feat.params?.isShelfDrilling || feat.params?.isDoorDrilling || feat.params?.isDrawerDrilling || feat.params?.isConnectorDrilling || feat.params?.template_id || feat.type === 'groove');
-
-        return (
-          <div key={item.isGroup ? `grp_${f.id}_${count}` : f.id} className={`tree-node ${isSelected}`} style={{ opacity: isVisible ? (isFrozen ? 0.85 : 1) : 0.6 }}>
-            <div 
-              className="tree-node-content"
-              onClick={() => {
-                for (const feat of item.features) {
-                  UIController.instance?.emitTree('select-feature', { id: feat.id, panelId: panelId });
-                }
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                UIController.instance?.emitTree('select-feature', { id: f.id, panelId: panelId });
-                UIController.instance?.emitTree('contextmenu-tree-node', {
-                  type: 'feature',
-                  id: f.id,
-                  clientX: e.clientX,
-                  clientY: e.clientY
-                });
-              }}
-              onDoubleClick={() => {
-                if (!item.isGroup) {
-                  setEditingNode({ type: 'feature', id: f.id, panelId: panelId });
-                  setEditValue(name);
-                }
-              }}
-            >
-              {/* Spacer instead of chevron to align icon */}
-              <span style={{ width: '10px', display: 'inline-block', flexShrink: 0 }} />
-              {icons.tool}
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editValue}
-                  className="node-name-input"
-                  style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #3b82f6', outline: 'none' }}
-                  onChange={e => setEditValue(e.target.value)}
-                  onBlur={() => finishRename(true)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') finishRename(true);
-                    if (e.key === 'Escape') finishRename(false);
-                  }}
-                  autoFocus
-                />
-              ) : (
-                <span className="node-name-text">{name}</span>
-              )}
-              <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>[{details}]</span>
-            </div>
-            <div className="tree-node-actions">
-              {isAuto && (
-                <button 
-                  className="tree-action-btn btn-freeze" 
-                  title={isFrozen ? "Zamrożona obróbka (kliknij aby odmrozić)" : "Zamroź obróbkę (kliknij aby zablokować)"}
-                  style={{ 
-                    color: isFrozen ? '#38bdf8' : '#ffffff', 
-                    opacity: isFrozen ? 1 : 0.4,
-                    fontSize: '12px',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    for (const feat of item.features) {
-                      UIController.instance?.emitTree('toggle-freeze-feature', { id: feat.id, panelId: panelId });
-                    }
-                  }}
-                >
-                  ❄️
-                </button>
-              )}
-              <button 
-                className="tree-action-btn btn-toggle-vis" 
-                title="Ukryj/Pokaż"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  for (const feat of item.features) {
-                    UIController.instance?.emitTree('toggle-visibility', { id: feat.id, panelId: panelId });
-                  }
-                }}
-              >
-                {isVisible ? icons.eyeShow : icons.eyeHide}
-              </button>
-              {!isAuto && (
-                <button 
-                  className="tree-action-btn btn-delete" 
-                  title="Usuń"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    for (const feat of item.features) {
-                      UIController.instance?.emitTree('delete-feature', { id: feat.id, panelId: panelId });
-                    }
-                  }}
-                >
-                  {icons.trash}
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      });
-    };
-
-    const renderPanelNode = (panel: any) => {
-      const partVisible = panel.visible !== false;
-      const isSelected = projectModel.activeEntity === panel ? 'selected' : '';
-      const panelUid = panel.smartId?.uid || panel.id;
-      const isEditing = editingNode?.type === 'part' && editingNode?.id === panelUid;
-      const isPanelCollapsed = !collapsedNodes[panelUid];
-
-      return (
-        <div key={panel.smartId?.fullPath || panel.name + Math.random()} className="tree-children">
-          <div 
-            className={`tree-node ${isSelected}`} 
-            style={{ opacity: partVisible ? 1 : 0.6, cursor: 'grab' }}
-            draggable={!editingNode}
-            onDragStart={(e) => {
-              e.stopPropagation();
-              const payload = {
-                type: 'PANEL',
-                id: panel.id,
-                uid: panel.smartId?.uid || panel.id,
-                name: panel.name || 'Formatka',
-                raw: panel
-              };
-              (window as any).__draggedCadNode = payload;
-              try {
-                e.dataTransfer.setData('application/cad-node', JSON.stringify(payload));
-                e.dataTransfer.setData('text/plain', panel.smartId?.uid || panel.id);
-                e.dataTransfer.effectAllowed = 'copyMove';
-              } catch {}
-            }}
-            onDragEnd={() => {
-              (window as any).__draggedCadNode = null;
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = 'copy';
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const matId = e.dataTransfer.getData('text/plain');
-              const mat = (window as any).__draggedMaterial || (matId ? materialDatabase.getMaterialById(matId) : null);
-              if (mat && panel) {
-                setDropModal({
-                  material: mat,
-                  targetPanel: panel,
-                  x: Math.min(e.clientX, window.innerWidth - 320),
-                  y: Math.min(e.clientY, window.innerHeight - 300)
-                });
-              }
-            }}
-          >
-            <div 
-              className="tree-node-content"
-              onClick={() => UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.smartId?.uid || panel.id })}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.smartId?.uid || panel.id });
-                UIController.instance?.emitTree('contextmenu-tree-node', {
-                  type: 'part',
-                  id: panel.smartId?.uid || panel.id || panel.name,
-                  uuid: panel.smartId?.uid,
-                  panelRef: panel,
-                  clientX: e.clientX,
-                  clientY: e.clientY
-                });
-              }}
-              onDoubleClick={() => {
-                setEditingNode({ type: 'part', id: panelUid });
-                setEditValue(panel.name || 'Płyta');
-              }}
-            >
-              <span className="tree-chevron" onClick={(e) => toggleCollapse(panelUid, e)}>
-                {isPanelCollapsed ? icons.chevronRight : icons.chevronDown}
-              </span>
-              {icons.part}
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editValue}
-                  className="node-name-input"
-                  style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #3b82f6', outline: 'none' }}
-                  onChange={e => setEditValue(e.target.value)}
-                  onBlur={() => finishRename(true)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') finishRename(true);
-                    if (e.key === 'Escape') finishRename(false);
-                  }}
-                  autoFocus
-                />
-              ) : (
-                <strong className="node-name-text">{panel.name || 'Płyta'}</strong>
-              )}
-              <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>
-                ({unit.toMM(panel.width)}x{unit.toMM(panel.height)}x{unit.toMM(panel.thickness)})
-              </span>
-              {panel.cncPrograms && panel.cncPrograms.length > 0 && (
-                <span title="Formatka posiada utworzone programy CNC" style={{ marginLeft: '6px', backgroundColor: '#1e3a8a', color: '#93c5fd', padding: '1px 5px', borderRadius: '3px', fontSize: '10px', fontWeight: 600, border: '1px solid #3b82f6' }}>
-                  ⚙️ CNC ({panel.cncPrograms.length})
-                </span>
-              )}
-            </div>
-            <div className="tree-node-actions">
-              <button 
-                className="tree-action-btn btn-freeze-part" 
-                title={panel.frozen ? "Zamrożona formatka (kliknij aby odmrozić)" : "Zamroź formatkę (zablokuj przed automatycznym przeliczaniem)"}
-                style={{ 
-                  color: panel.frozen ? '#38bdf8' : '#ffffff', 
-                  opacity: panel.frozen ? 1 : 0.4,
-                  fontSize: '12px',
-                  transition: 'all 0.15s ease'
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  UIController.instance?.emitTree('toggle-freeze-part', { id: panel.id, uuid: panel.smartId?.uid });
-                }}
-              >
-                ❄️
-              </button>
-              <button 
-                className="tree-action-btn btn-duplicate-part" 
-                title="Utwórz kopię 3D formatki na scenie"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const doc = ContextManager.instance.document;
-                  if (doc && (doc as any).duplicateCADNode) {
-                    (doc as any).duplicateCADNode(panel.id, { x: 200, y: 0, z: 0 });
-                    window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
-                  }
-                }}
-              >
-                📋
-              </button>
-              <button 
-                className="tree-action-btn btn-toggle-part-vis" 
-                title="Ukryj/Pokaż"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  UIController.instance?.emitTree('toggle-part-visibility', { id: panel.smartId?.uid || panel.id || panel.name, uuid: panel.smartId?.uid, panelRef: panel });
-                }}
-              >
-                {partVisible ? icons.eyeShow : icons.eyeHide}
-              </button>
-            </div>
-          </div>
-          
-          {!isPanelCollapsed && (
-            <div className="tree-children">
-              <div className="tree-node">
-                <div 
-                  className="tree-node-content"
-                  onClick={(e) => {
-                    UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.smartId?.uid || panel.id });
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.smartId?.uid || panel.id });
-                    UIController.instance?.emitTree('contextmenu-tree-node', {
-                      type: 'folder',
-                      id: panel.id,
-                      clientX: e.clientX,
-                      clientY: e.clientY
-                    });
-                  }}
-                >
-                  <span className="tree-chevron" onClick={(e) => toggleCollapse(panelUid + '_ops', e)}>
-                    {collapsedNodes[panelUid + '_ops'] ? icons.chevronRight : icons.chevronDown}
-                  </span>
-                  {icons.opsFolder}
-                  <strong>Operacje CAD</strong>
-                </div>
-              </div>
-              <div className="tree-children">
-                {renderFeatures(panel.features, panelUid)}
-              </div>
-
-              {panel.cncPrograms && panel.cncPrograms.length > 0 && (
-                <div style={{ marginTop: '2px' }}>
-                  <div className="tree-node">
-                    <div 
-                      className="tree-node-content"
-                      onClick={(e) => toggleCollapse(panelUid + '_cnc', e)}
-                    >
-                      <span className="tree-chevron" onClick={(e) => toggleCollapse(panelUid + '_cnc', e)}>
-                        {collapsedNodes[panelUid + '_cnc'] ? icons.chevronRight : icons.chevronDown}
-                      </span>
-                      <span style={{ marginRight: '6px', fontSize: '12px' }}>⚙️</span>
-                      <strong style={{ color: '#93c5fd' }}>Programy CNC ({panel.cncPrograms.length})</strong>
-                    </div>
-                  </div>
-                  {!collapsedNodes[panelUid + '_cnc'] && (
-                    <div className="tree-children">
-                      {panel.cncPrograms.map((prog: any, idx: number) => (
-                        <div key={prog.id || idx} className="tree-node">
-                          <div 
-                            className="tree-node-content"
-                            style={{ paddingLeft: '24px', cursor: 'pointer', color: '#e0f2fe' }}
-                            onClick={() => {
-                              UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.smartId?.uid || panel.id });
-                              const store = CAMStateStore.getInstance();
-                              store.setPrograms(panel.cncPrograms || []);
-                              store.setActiveProgramId(prog.id);
-                              openCncFromCad({
-                                type: 'PANEL',
-                                id: panel.id || panel.smartId?.uid,
-                                name: panel.name || 'Formatka',
-                              });
-                            }}
-                          >
-                            <span style={{ marginRight: '6px', color: '#60a5fa' }}>📄</span>
-                            <strong>Program {prog.name || `00${idx+1}`}</strong>
-                            <span style={{ color: '#94a3b8', fontSize: '10px', marginLeft: '6px' }}>({prog.wcsName || 'G55'})</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 🔲 Obrzeża Krawędzi */}
-              {(() => {
-                const eb = panel.edgeBanding || panel.custom_properties?.edge_banding || {};
-                const edgeList = [
-                  { key: '+Y', name: 'Górna (+Y)' },
-                  { key: '-Y', name: 'Dolna / Przód (-Y)' },
-                  { key: '-X', name: 'Lewa (-X)' },
-                  { key: '+X', name: 'Prawa (+X)' }
-                ];
-                const activeCount = edgeList.filter(e => {
-                  const s = eb[e.key];
-                  return s?.active === true || (s?.active !== false && s?.type_id && s.type_id !== 'none');
-                }).length;
-
-                const isEbCollapsed = !!collapsedNodes[panelUid + '_eb'];
-                const pv = ContextManager.instance.panelViews?.get(panel);
-
-                return (
-                  <div style={{ marginTop: '2px' }}>
-                    <div className="tree-node">
-                      <div 
-                        className="tree-node-content"
-                        onClick={(e) => toggleCollapse(panelUid + '_eb', e)}
-                      >
-                        <span className="tree-chevron" onClick={(e) => toggleCollapse(panelUid + '_eb', e)}>
-                          {isEbCollapsed ? icons.chevronRight : icons.chevronDown}
-                        </span>
-                        <span style={{ marginRight: '6px', fontSize: '12px' }}>🔲</span>
-                        <strong style={{ color: activeCount > 0 ? '#4ade80' : '#a1a1aa' }}>
-                          Obrzeża ({activeCount}/4)
-                        </strong>
-                      </div>
-                    </div>
-                    {!isEbCollapsed && (
-                      <div className="tree-children">
-                        {edgeList.map(({ key, name }) => {
-                          const slot = eb[key];
-                          const isBanded = slot?.active === true || (slot?.active !== false && slot?.type_id && slot.type_id !== 'none');
-                          const edgeTitle = isBanded ? (slot.name || slot.type_id || 'ABS 0.8x22') : 'Brak (surowy rdzeń)';
-
-                          return (
-                            <div 
-                              key={key} 
-                              className="tree-node"
-                              onMouseEnter={() => pv?.highlightEdgeFace?.(key, true)}
-                              onMouseLeave={() => pv?.highlightEdgeFace?.(key, false)}
-                              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
-                              onDrop={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const draggedEdge = (window as any).__draggedEdge || materialDatabase.getEdgeBandingTypes()[0];
-                                const doc = ContextManager.instance.document || UIController.instance?.document;
-                                const cmd = new SetEdgeBandingCommand(panel.id, key, {
-                                  active: true,
-                                  type_id: draggedEdge.id,
-                                  name: draggedEdge.name,
-                                  thickness_mm: draggedEdge.thickness_mm,
-                                  width_mm: draggedEdge.width_mm,
-                                  price_per_mb: draggedEdge.price_per_mb || 3.50
-                                }, 'SINGLE');
-                                if (ContextManager.instance.commandHistory) {
-                                  ContextManager.instance.commandHistory.execute(cmd);
-                                } else if (doc && (doc as any).executeCommand) {
-                                  (doc as any).executeCommand(cmd);
-                                } else if (doc) {
-                                  cmd.execute(doc);
-                                }
-                              }}
-                            >
-                              <div 
-                                className="tree-node-content"
-                                style={{ paddingLeft: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
-                                onClick={() => {
-                                  UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.smartId?.uid || panel.id });
-                                  setActiveTab('tab-a7-material');
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                                  <span style={{ fontSize: '10px', color: isBanded ? '#4ade80' : '#71717a' }}>
-                                    {isBanded ? '🟩' : '⬜'}
-                                  </span>
-                                  <strong style={{ fontSize: '11px', color: isBanded ? '#e4e4e7' : '#71717a' }}>
-                                    {name}:
-                                  </strong>
-                                  <span style={{ fontSize: '10px', color: isBanded ? '#38bdf8' : '#52525b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {edgeTitle}
-                                  </span>
-                                </div>
-
-                                <div className="tree-node-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                  {isBanded ? (
-                                    <button
-                                      className="tree-action-btn btn-delete"
-                                      title="Usuń to obrzeże"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const doc = ContextManager.instance.document || UIController.instance?.document;
-                                        const cmd = new SetEdgeBandingCommand(panel.id, key, { active: false, type_id: 'none' }, 'SINGLE');
-                                        if (ContextManager.instance.commandHistory) {
-                                          ContextManager.instance.commandHistory.execute(cmd);
-                                        } else if (doc && (doc as any).executeCommand) {
-                                          (doc as any).executeCommand(cmd);
-                                        } else if (doc) {
-                                          cmd.execute(doc);
-                                        }
-                                      }}
-                                    >
-                                      ✕
-                                    </button>
-                                  ) : (
-                                    <button
-                                      className="tree-action-btn"
-                                      title="Dodaj obrzeże"
-                                      style={{ color: '#60a5fa', fontSize: '11px' }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const defaultEdge = materialDatabase.getEdgeBandingTypes()[0];
-                                        const doc = ContextManager.instance.document || UIController.instance?.document;
-                                        const cmd = new SetEdgeBandingCommand(panel.id, key, {
-                                          active: true,
-                                          type_id: defaultEdge.id,
-                                          name: defaultEdge.name,
-                                          thickness_mm: defaultEdge.thickness_mm,
-                                          width_mm: defaultEdge.width_mm,
-                                          price_per_mb: defaultEdge.price_per_mb || 3.50
-                                        }, 'SINGLE');
-                                        if (ContextManager.instance.commandHistory) {
-                                          ContextManager.instance.commandHistory.execute(cmd);
-                                        } else if (doc && (doc as any).executeCommand) {
-                                          (doc as any).executeCommand(cmd);
-                                        } else if (doc) {
-                                          cmd.execute(doc);
-                                        }
-                                      }}
-                                    >
-                                      ➕
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    const renderHardwareNode = (hardware: any, hwNode: any) => {
-      const isSelected = projectModel.activeEntity === hardware || projectModel.activeEntity === hwNode ? 'selected' : '';
-      const hwName = hardware.name || hwNode.name || 'Okucie';
-      const hwId = hardware.hardwareId || '';
-      return (
-        <div key={hwNode.id || hardware.id} className="tree-children" style={{ marginLeft: '16px' }}>
-          <div 
-            className={`tree-node ${isSelected}`}
-            style={{ cursor: 'pointer', padding: '3px 6px', borderRadius: '4px' }}
-            onClick={() => {
-              projectModel.setActiveEntity(hardware);
-            }}
-          >
-            <div className="tree-node-content" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '13px' }}>🔩</span>
-              <span className="node-name-text" style={{ color: '#93c5fd', fontWeight: 500 }}>{hwName}</span>
-              {hwId && <span style={{ opacity: 0.5, fontSize: '11px' }}>({hwId})</span>}
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    const renderContainerNode = (container: any) => {
-      const containerVisible = container.visible !== false;
-      const isSelected = projectModel.activeEntity === container ? 'selected' : '';
-      const isContainerCollapsed = !collapsedNodes[container.id];
-      const isSmartBox = container.generatorParams?.type?.startsWith('smartbox') || 
-                         container.generatorParams?.boxType !== undefined || 
-                         container.is_smartbox || 
-                         container.type === 'smartbox' || 
-                         (container.name && String(container.name).toLowerCase().includes('smartbox')) ||
-                         (container.name && String(container.name).endsWith('_SB'));
-
-      return (
-        <div key={container.id} className="tree-children">
-          <div 
-            className={`tree-node ${isSelected}`} 
-            style={{ opacity: containerVisible ? 1 : 0.6, cursor: 'grab' }}
-            draggable={!editingNode}
-            onDragStart={(e) => {
-              e.stopPropagation();
-              const payload = {
-                type: isSmartBox ? 'SMARTBOX' : 'CONTAINER',
-                id: container.id,
-                name: container.name || (isSmartBox ? 'SmartBox' : 'Korpus'),
-                raw: container
-              };
-              (window as any).__draggedCadNode = payload;
-              try {
-                e.dataTransfer.setData('application/cad-node', JSON.stringify(payload));
-                e.dataTransfer.setData('text/plain', container.id);
-                e.dataTransfer.effectAllowed = 'copyMove';
-              } catch {}
-            }}
-            onDragEnd={() => {
-              (window as any).__draggedCadNode = null;
-            }}
-          >
-            <div 
-              className="tree-node-content"
-              onClick={() => UIController.instance?.emitTree('select-container', { id: container.id })}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                UIController.instance?.emitTree('select-container', { id: container.id });
-                UIController.instance?.emitTree('contextmenu-tree-node', {
-                  type: isSmartBox ? 'smartbox' : 'container',
-                  id: container.id,
-                  name: container.name || (isSmartBox ? 'SmartBox' : 'Korpus'),
-                  clientX: e.clientX,
-                  clientY: e.clientY
-                });
-              }}
-            >
-              <span className="tree-chevron" onClick={(e) => toggleCollapse(container.id, e)}>
-                {isContainerCollapsed ? icons.chevronRight : icons.chevronDown}
-              </span>
-              {icons.project}
-              <strong className="node-name-text">{container.name || 'Kontener'}</strong>
-              <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>
-                ({unit.toMM(container.width)}x{unit.toMM(container.height)}x{unit.toMM(container.depth)})
-              </span>
-            </div>
-            <div className="tree-node-actions">
-              <button 
-                className="tree-action-btn btn-duplicate-part" 
-                title="Utwórz kopię 3D korpusu na scenie"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const doc = ContextManager.instance.document;
-                  if (doc && (doc as any).duplicateCADNode) {
-                    (doc as any).duplicateCADNode(container.id, { x: 300, y: 0, z: 0 });
-                    window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
-                  }
-                }}
-              >
-                📋
-              </button>
-              <button 
-                className="tree-action-btn btn-toggle-part-vis" 
-                title="Ukryj/Pokaż"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  UIController.instance?.emitTree('toggle-container-visibility', { id: container.id });
-                }}
-              >
-                {containerVisible ? icons.eyeShow : icons.eyeHide}
-              </button>
-              <button 
-                className="tree-action-btn btn-delete" 
-                title="Usuń kontener"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  UIController.instance?.emitTree('delete-container', { id: container.id });
-                }}
-              >
-                {icons.trash}
-              </button>
-            </div>
-          </div>
-          {!isContainerCollapsed && (() => {
-            const containerNode = projectModel?.findNode(container.id);
-            if (!containerNode) return null;
-            return containerNode.children.map((childNode: any) => {
-              const child = childNode.domainData;
-              if (childNode.nodeType === 'HARDWARE' || child?.type === 'hardware') return renderHardwareNode(child || childNode, childNode);
-              if (!child) return null;
-              if (childNode.nodeType === 'ASSEMBLY' || child.type === 'container') return renderContainerNode(child);
-              return renderPanelNode(child);
-            });
-          })()}
-        </div>
-      );
-    };
-
-    const isProjectEditing = editingNode?.type === 'project';
-    const isProjectCollapsed = !!collapsedNodes['project-root'];
-
-    return (
-      <div className="tree-root">
-        <div 
-          className="tree-node" 
-          id="nodeProject"
-          style={{ cursor: 'grab' }}
-          draggable={!editingNode}
-          onDragStart={(e) => {
-            e.stopPropagation();
-            const payload = {
-              type: 'PROJECT',
-              id: 'ALL',
-              name: projectModel?.name || 'Cały Projekt'
-            };
-            (window as any).__draggedCadNode = payload;
-            try {
-              e.dataTransfer.setData('application/cad-node', JSON.stringify(payload));
-              e.dataTransfer.setData('text/plain', 'ALL');
-              e.dataTransfer.effectAllowed = 'copyMove';
-            } catch {}
-          }}
-          onDragEnd={() => {
-            (window as any).__draggedCadNode = null;
-          }}
-        >
-          <div 
-            className="tree-node-content"
-            onContextMenu={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: 'project',
-                id: 'root',
-                clientX: e.clientX,
-                clientY: e.clientY
-              });
-            }}
-            onDoubleClick={() => {
-              setEditingNode({ type: 'project', id: 'root' });
-              setEditValue(projectModel?.name || 'Projekt');
-            }}
-          >
-            <span className="tree-chevron" onClick={(e) => toggleCollapse('project-root', e)}>
-              {isProjectCollapsed ? icons.chevronRight : icons.chevronDown}
-            </span>
-            {icons.project}
-            {isProjectEditing ? (
-              <input
-                type="text"
-                value={editValue}
-                className="node-name-input"
-                style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #3b82f6', outline: 'none' }}
-                onChange={e => setEditValue(e.target.value)}
-                onBlur={() => finishRename(true)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') finishRename(true);
-                  if (e.key === 'Escape') finishRename(false);
-                }}
-                autoFocus
-              />
-            ) : (
-              <strong className="node-name-text">{projectModel?.name || 'Projekt'}</strong>
-            )}
-          </div>
-        </div>
-        {!isProjectCollapsed && projectModel?.rootNode?.children.map((childNode: any) => {
-          const entity = childNode.domainData;
-          if (childNode.nodeType === 'HARDWARE' || entity?.type === 'hardware') return renderHardwareNode(entity || childNode, childNode);
-          if (!entity) return null;
-          if (childNode.nodeType === 'ASSEMBLY' || entity.type === 'container') return renderContainerNode(entity);
-          return renderPanelNode(entity);
-        })}
-      </div>
-    );
-  };
 
   const selectedPanel = projectModel?.activeEntity;
   const selectedPart = selectedPanel && selectedPanel.type === 'part' ? selectedPanel : null;
   const widthFromPlanes = isAssocComplete(selectedPart?.associativeDims?.width);
   const heightFromPlanes = isAssocComplete(selectedPart?.associativeDims?.height);
-  const isFaceSelected = uiState && !uiState.faceInfoHtml.includes('Kliknij element');
-  const isEdgeSelected = uiState && uiState.faceInfoHtml.includes('Krawędź');
+  const isFaceSelected = uiState ? uiState.faceKind !== 'none' : uiState;
+  const isEdgeSelected = uiState ? uiState.faceKind === 'edge' : uiState;
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
@@ -1833,7 +844,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       {/* ─── Pasek menu (Plik, Cofnij…) — nie belka widokowa ── */}
       <div id="pasek-menu" className="pasek-menu" onMouseDown={handleTopBarMouseDown}>
         <div className="menu-left" style={{ display: 'flex', alignItems: 'center' }}>
-          <div ref={fileMenuRef} className={`menu-item dropdown ${fileMenuOpen ? 'open' : ''}`} style={{ position: 'relative' }}>
+          <div ref={fileMenuRef} id="topbar-file-menu" className={`menu-item dropdown ${fileMenuOpen ? 'open' : ''}`} style={{ position: 'relative' }}>
             <button 
               type="button"
               className={`menu-btn ${fileMenuOpen ? 'active' : ''}`}
@@ -1846,43 +857,58 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-              Plik
+              {tx(srcTekst, 'app.menu.file', TX_NS)}
             </button>
             {fileMenuOpen && (
               <div className="dropdown-content">
-                <a href="#" id="menuNew" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); handleNewProjectClick(); }}>Nowy projekt</a>
-                <a href="#" id="menuOpen" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('openProject'); }}>Otwórz...</a>
-                <a href="#" id="menuSave" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProject'); }}>Zapisz</a>
-                <a href="#" id="menuSaveAs" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProjectAs'); }}>Zapisz jako...</a>
+                <a href="#" id="menuNew" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); handleNewProjectClick(); }}>{tx(srcTekst, 'app.menu.new', TX_NS)}</a>
+                <a href="#" id="menuOpen" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('openProject'); }}>{tx(srcTekst, 'app.menu.open', TX_NS)}</a>
+                <a href="#" id="menuSave" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProject'); }}>{tx(srcTekst, 'app.menu.save', TX_NS)}</a>
+                <a href="#" id="menuSaveAs" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('saveProjectAs'); }}>{tx(srcTekst, 'app.menu.save_as', TX_NS)}</a>
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
                 <a href="#" id="menuSaveCabinet" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setSaveCabinetModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#60a5fa' }}>
-                  <span style={{ fontSize: '13px' }}>💾</span> Zapisz korpus do biblioteki...
+                  {tx(srcTekst, 'app.menu.save_cabinet', TX_NS)}
                 </a>
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
-                <a href="#" id="menuExportStep" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStep'); }}>Eksport do STEP</a>
-                <a href="#" id="menuExportStl" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStl'); }}>Eksport do STL</a>
+                <a href="#" id="menuExportStep" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStep'); }}>{tx(srcTekst, 'app.menu.export_step', TX_NS)}</a>
+                <a href="#" id="menuExportStl" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStl'); }}>{tx(srcTekst, 'app.menu.export_stl', TX_NS)}</a>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
+                <a href="#" id="menuSaasDashboard" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setSaasDashboardOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8' }}>
+                  {tx(srcTekst, 'app.menu.saas_cloud', TX_NS)}
+                </a>
+                <a href="#" id="menuSaasAuth" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setSaasAuthModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#93c5fd' }}>
+                  {tx(srcTekst, 'app.menu.saas_login', TX_NS)}
+                </a>
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
                 <a href="#" id="menuGdriveOpen" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setGdriveModalMode('open'); }}>
-                  Otwórz z Google Drive...
+                  {tx(srcTekst, 'app.menu.gdrive_open', TX_NS)}
                 </a>
                 <a href="#" id="menuGdriveSave" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setGdriveModalMode('save'); }}>
-                  Zapisz na Google Drive...
+                  {tx(srcTekst, 'app.menu.gdrive_save', TX_NS)}
                 </a>
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
-                <a href="#" id="menuPerfOptions" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setPerfModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#93c5fd' }}>
-                  <span style={{ fontSize: '13px' }}>⚙️</span> Opcje wydajności (GPU)...
+                <a href="#" id="menuPerfOptions" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setPerfModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8' }}>
+                  {tx(srcTekst, 'app.menu.perf', TX_NS)}
+                </a>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px' }}>
+                  <LanguageSelector compact={false} />
+                </div>
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
+                <a href="landing.html" target="_blank" id="menuLanding" onClick={() => setFileMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24' }}>
+                  {tx(srcTekst, 'app.menu.landing', TX_NS)}
                 </a>
               </div>
             )}
           </div>
-          <div className="menu-brand" style={{ marginLeft: '10px', marginRight: '6px' }}>SmartPanel CAD 3D</div>
+          <div className="menu-brand" style={{ marginLeft: '10px', marginRight: '6px' }}>{tx(srcTekst, 'app.menu.brand', TX_NS)}</div>
 
           <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.12)', margin: '0 8px' }}></div>
 
           <button 
             id="btnUndo" 
             className="menu-icon-btn" 
-            title="Cofnij (Ctrl+Z)"
+            title={tx(srcTekst, 'app.menu.undo', TX_NS)}
             onClick={() => callAPI('undo')}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1893,7 +919,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <button 
             id="btnRedo" 
             className="menu-icon-btn" 
-            title="Ponów (Ctrl+Y)"
+            title={tx(srcTekst, 'app.menu.redo', TX_NS)}
             onClick={() => callAPI('redo')}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1905,11 +931,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.12)', margin: '0 10px' }}></div>
 
           {/* ─── Pasek Narzędzi CAD ─── */}
-          <div className="topbar-tools">
+          <div id="topbar-main-tabs" className="topbar-tools">
             <button 
+              id="tab-btn-biblioteka"
+              data-tab="tab-b1-biblioteka"
               className={`topbar-tool-btn ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} 
               onClick={() => setActiveTab('tab-b1-biblioteka')}
-              title="Biblioteka — Gotowe szablony szafek i korpusów (katalog jak w PRO100)"
+              title={tx(srcTekst, 'app.tabs.library_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -1917,26 +945,46 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <line x1="9" y1="6" x2="16" y2="6" />
                 <line x1="9" y1="10" x2="16" y2="10" />
               </svg>
-              <span>Biblioteka</span>
+              <span>{tx(srcTekst, 'app.tabs.library', TX_NS)}</span>
             </button>
 
             <button 
+              id="tab-btn-smartframe"
+              data-tab="tab-a3-smartframe"
               className={`topbar-tool-btn ${activeTab === 'tab-a3-smartframe' ? 'active' : ''}`} 
               onClick={() => setActiveTab('tab-a3-smartframe')}
-              title="SmartFrame — Prosty korpus szafy i mebla"
+              title={tx(srcTekst, 'app.tabs.frame_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
                 <rect x="6" y="4.5" width="12" height="14" rx="0.5" fill="currentColor" fillOpacity="0.08" />
                 <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
               </svg>
-              <span>Korpus</span>
+              <span>{tx(srcTekst, 'app.tabs.frame', TX_NS)}</span>
+            </button>
+
+            <button
+              id="tab-btn-sciany"
+              data-tab="tab-s4-sciany"
+              className={`topbar-tool-btn ${activeTab === 'tab-s4-sciany' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tab-s4-sciany')}
+              title={tx(srcTekst, 'app.tabs.walls_title', TX_NS)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20V6h4v14H4z" />
+                <path d="M10 20V4h4v16h-4z" />
+                <path d="M16 20v-8h4v8h-4z" />
+                <line x1="3" y1="20" x2="21" y2="20" />
+              </svg>
+              <span>{tx(srcTekst, 'app.tabs.walls', TX_NS)}</span>
             </button>
 
             <button 
-              className={`topbar-tool-btn ${activeTab === 'tab-a2-smartbox' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-a2-smartbox')}
-              title="SmartBox — Korpus z półkami i przegrodami (konfigurator wnętrz)"
+              id="tab-btn-bloki"
+              data-tab="tab-a2-bloki"
+              className={`topbar-tool-btn ${activeTab === 'tab-a2-bloki' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-a2-bloki')}
+              title={tx(srcTekst, 'app.tabs.box_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
@@ -1945,13 +993,49 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <line x1="6" y1="13.5" x2="18" y2="13.5" />
                 <line x1="12" y1="8.5" x2="12" y2="18.5" />
               </svg>
-              <span>SmartBox</span>
+              <span>{tx(srcTekst, 'app.tabs.box', TX_NS)}</span>
+            </button>
+
+            <button
+              id="tab-btn-smartparts"
+              data-tab="tab-a5-smartparts"
+              className={`topbar-tool-btn ${activeTab === 'tab-a5-smartparts' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tab-a5-smartparts')}
+              title={tx(srcTekst, 'app.tabs.parts_title', TX_NS)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="8" height="8" rx="1" />
+                <rect x="13" y="3" width="8" height="8" rx="1" />
+                <rect x="3" y="13" width="8" height="8" rx="1" />
+                <path d="M13 17h8" />
+                <path d="M17 13v8" />
+              </svg>
+              <span>{tx(srcTekst, 'app.tabs.parts', TX_NS)}</span>
+            </button>
+
+            <button
+              id="tab-btn-agd"
+              data-tab="tab-agd"
+              className={`topbar-tool-btn ${activeTab === 'tab-agd' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tab-agd')}
+              title="Sprzęt AGD (mikrofale, piekarniki)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <rect x="4" y="7" width="11" height="10" rx="1" fill="currentColor" fillOpacity="0.15" />
+                <circle cx="18" cy="9" r="1.5" fill="currentColor" />
+                <circle cx="18" cy="14" r="1.5" fill="currentColor" />
+                <line x1="6" y1="16" x2="13" y2="16" />
+              </svg>
+              <span>AGD</span>
             </button>
 
             <button 
+              id="tab-btn-smartpanel"
+              data-tab="tab-a4-smartpanel"
               className={`topbar-tool-btn ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} 
               onClick={() => setActiveTab('tab-a4-smartpanel')}
-              title="SmartPanel — Płaska formatka / płyta meblowa"
+              title={tx(srcTekst, 'app.tabs.panel_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 6L21 11L12 16L3 11Z" fill="currentColor" fillOpacity="0.2" />
@@ -1963,34 +1047,40 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             </button>
 
             <button 
+              id="tab-btn-solver"
+              data-tab="tab-s2-solver"
               className={`topbar-tool-btn ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} 
               onClick={() => setActiveTab('tab-s2-solver')}
-              title="Relacje — Więzy geometryczne i relacje 3D"
+              title={tx(srcTekst, 'app.tabs.relations_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
               </svg>
-              <span>Relacje</span>
+              <span>{tx(srcTekst, 'app.tabs.relations', TX_NS)}</span>
             </button>
 
             <button 
+              id="tab-btn-material"
+              data-tab="tab-a7-material"
               className={`topbar-tool-btn ${activeTab === 'tab-a7-material' ? 'active' : ''}`} 
               onClick={() => setActiveTab('tab-a7-material')}
-              title="Materiały — Dekory płyt, obrzeża i wycena"
+              title={tx(srcTekst, 'app.tabs.materials_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" />
                 <path d="M2 17l10 5 10-5" />
                 <path d="M2 12l10 5 10-5" />
               </svg>
-              <span>Materiały</span>
+              <span>{tx(srcTekst, 'app.tabs.materials', TX_NS)}</span>
             </button>
 
             <button
+              id="tab-btn-connectors"
+              data-tab="tab-c2-connectors"
               className={`topbar-tool-btn ${activeTab === 'tab-c2-connectors' ? 'active' : ''}`}
               onClick={() => setActiveTab('tab-c2-connectors')}
-              title="Złącza — Kołki, konfirmaty i minifix na styku płaszczyzn (wieniec–bok)"
+              title={tx(srcTekst, 'app.tabs.joints_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="4" width="6" height="16" rx="0.5" />
@@ -1998,22 +1088,26 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <line x1="9" y1="8" x2="17" y2="8" />
                 <circle cx="13" cy="8" r="1.4" fill="currentColor" />
               </svg>
-              <span>Złącza</span>
+              <span>{tx(srcTekst, 'app.tabs.joints', TX_NS)}</span>
             </button>
 
             <button
+              id="tab-btn-operacji"
+              data-tab="tab-o1-operacji"
               className={`topbar-tool-btn ${activeTab === 'tab-o1-operacji' ? 'active' : ''}`}
               onClick={() => setActiveTab('tab-o1-operacji')}
-              title="Operacje — ramka, przetłoczenie, szkło, rewizja na formatce"
+              title={tx(srcTekst, 'app.tabs.ops_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="4" y="3" width="16" height="18" rx="1" />
                 <rect x="7.5" y="6.5" width="9" height="11" rx="0.5" fill="currentColor" fillOpacity="0.2" />
               </svg>
-              <span>Operacje</span>
+              <span>{tx(srcTekst, 'app.tabs.ops', TX_NS)}</span>
             </button>
 
             <button 
+              id="tab-btn-pmi"
+              data-tab="tab-a8-pmi"
               className={`topbar-tool-btn ${activeTab === 'tab-a8-pmi' ? 'active' : ''}`} 
               onClick={() => setActiveTab('tab-a8-pmi')}
               title="Wymiary — Linie wymiarowe 3D i koty (PMI)"
@@ -2029,6 +1123,8 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             </button>
 
             <button 
+              id="tab-btn-export"
+              data-tab="tab-e1-export"
               className={`topbar-tool-btn ${activeTab === 'tab-e1-export' ? 'active' : ''}`} 
               onClick={() => setActiveTab('tab-e1-export')}
               title="Eksport — Rysunki techniczne CAD, formaty A4/A3/A2, rzuty ISO 7200 i arkusze SVG"
@@ -2059,7 +1155,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 E3LibraryExtractor.instance.syncLibrary();
                 window.open(new URL('./e3_drawing.html', window.location.href).href, '_blank');
               }}
-              title="Rys 2D — Otwórz dedykowaną podstronę CAD (w nowej karcie)"
+              title={tx(srcTekst, 'app.tabs.e3_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -2072,12 +1168,12 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
           {/* ─── Narzędzia transformacji 3D (G i R) z brązowym tłem ─── */}
           <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.12)', margin: '0 8px' }}></div>
-          <div className="topbar-transform-group" title="Narzędzia transformacji 3D (Blender-style)">
+          <div className="topbar-transform-group" title={tx(srcTekst, 'app.tools.transform_title', TX_NS)}>
             <button
               type="button"
               className={`topbar-transform-btn ${modalTransformMode === 'translate' ? 'active' : ''}`}
               onClick={() => ModalTransformManager.instance.toggleTransform('translate')}
-              title="Przesuń obiekt w przestrzeni 3D (skrót klawiszowy: G)"
+              title={tx(srcTekst, 'app.tools.move_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="5 9 2 12 5 15" />
@@ -2088,323 +1184,115 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <line x1="12" y1="2" x2="12" y2="22" />
               </svg>
               <kbd className="topbar-key-badge">G</kbd>
-              <span>Przesuń</span>
+              <span>{tx(srcTekst, 'app.tools.move', TX_NS)}</span>
             </button>
 
             <button
               type="button"
               className={`topbar-transform-btn ${modalTransformMode === 'rotate' ? 'active' : ''}`}
               onClick={() => ModalTransformManager.instance.toggleTransform('rotate')}
-              title="Obróć obiekt w przestrzeni 3D wokół osi (skrót klawiszowy: R)"
+              title={tx(srcTekst, 'app.tools.rotate_title', TX_NS)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
               </svg>
               <kbd className="topbar-key-badge">R</kbd>
-              <span>Obróć</span>
+              <span>{tx(srcTekst, 'app.tools.rotate', TX_NS)}</span>
             </button>
           </div>
         </div>
-      </div>
 
-
-
-      {/* ─── Drzewo obiektów ──────────────────────────── */}
-      <div
-        id="drzewo-obiektow"
-        className={`drzewo-obiektow ${treeWidth <= 48 ? 'is-collapsed' : ''}`}
-        aria-label="Drzewo obiektów"
-        data-ui-name="Drzewo obiektów"
-        style={{ width: `${treeWidth}px` }}
-      >
-        {/* Sztywny kontener wewnętrzny — nie ulega deformacji/ściskaniu poniżej 280px, tylko jest ucinany */}
-        <div 
-          className="panel-inner-content"
-          style={{
-            minWidth: `${TREE_MIN_CONTENT_WIDTH}px`,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            opacity: treeWidth <= 48 ? 0 : 1,
-            pointerEvents: treeWidth <= 48 ? 'none' : 'auto',
-            transition: isDraggingTree ? 'none' : 'opacity 0.15s ease',
-          }}
-        >
-          <div className="panel-header" style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-            <h2 style={{ fontSize: '0.9rem', margin: 0, color: '#e2e8f0' }}>Drzewo obiektów</h2>
-          </div>
-          <div 
-            className="panel-section" 
-            style={{ padding: '6px', overflowY: 'auto', flex: 1, minHeight: 0 }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              UIController.instance?.emitTree('contextmenu-tree-bg', {
-                clientX: e.clientX,
-                clientY: e.clientY
-              });
+        {/* ─── Prawa sekcja paska menu: Studio Nagrań + SaaS User Badge & Chmura ─── */}
+        <div className="menu-right" style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingRight: '12px', gap: '8px' }}>
+          <button
+            type="button"
+            id="topbar-workflow-demo-btn"
+            title={tx(srcTekst, 'app.studio_title', TX_NS)}
+            onClick={() => setRecorderStudioOpen(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(245, 158, 11, 0.3))',
+              border: '1px solid rgba(234, 179, 8, 0.6)',
+              color: '#fef08a',
+              padding: '4px 10px',
+              borderRadius: '5px',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              boxShadow: '0 0 10px rgba(234, 179, 8, 0.25)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(234, 179, 8, 0.35)';
+              e.currentTarget.style.borderColor = '#facc15';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(245, 158, 11, 0.3))';
+              e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.6)';
             }}
           >
-            <SceneTree projectModel={projectModel} />
-          </div>
-        </div>
+            <span style={{ fontSize: '13px' }}>🎬</span>
+            <span>{tx(srcTekst, 'app.studio', TX_NS)}</span>
+          </button>
 
-        {/* Gizmo zmiany szerokości (prawa krawędź) / kliknij aby zwinąć/rozwinąć */}
-        <div
-          className={`panel-resize-handle panel-resize-handle--left-panel ${isDraggingTree ? 'is-dragging' : ''} ${treeWidth <= 48 ? 'is-collapsed' : ''}`}
-          onPointerDown={startResizeTree}
-          title={treeWidth <= 48 ? 'Kliknij lub przeciągnij, aby rozwinąć drzewo obiektów' : 'Przeciągnij krawędź lub kliknij, aby schować drzewo obiektów'}
-        >
-          <div className="panel-resize-gizmo">
-            <div className="panel-resize-gizmo-dot" />
-          </div>
+          <SaaSUserBadge
+            onOpenAuth={() => setSaasAuthModalOpen(true)}
+            onOpenDashboard={() => setSaasDashboardOpen(true)}
+            onOpenPaywall={() => setSaasPaywallFeature(tx(srcTekst, 'saas.pro_feature_locked', TX_NS, { name: 'SmartPanel Cloud' }))}
+          />
         </div>
       </div>
+
+
+
+      <DrzewoObiektow
+        projectModel={projectModel}
+        treeWidth={treeWidth}
+        isDraggingTree={isDraggingTree}
+        startResizeTree={startResizeTree}
+      />
 
       {/* ─── Belka widokowa (tryb cieniowania, siatka, kamera) ── */}
-      <div
-        id="belka-widokowa"
-        className="belka-widokowa"
-        aria-label="Belka widokowa"
-        data-ui-name="Belka widokowa"
-      >
-        <BelkaDisplayModeMenu
-          mode={renderMode}
-          open={displayMenuOpen}
-          onOpenChange={(next) => {
-            setDisplayMenuOpen(next);
-            if (next) {
-              setViewMenuOpen(false);
-              setProjMenuOpen(false);
-              setInfoMenuOpen(false);
-            }
-          }}
-          onChange={(m) => {
-            setRenderModeState(m);
-            callAPI('setRenderMode', m);
-          }}
-        />
-        <span className="tool-separator"></span>
-        <div ref={viewMenuRef} style={{ position: 'relative', display: 'inline-block' }}>
-          <button 
-            className={`tool-btn ${viewMenuOpen ? 'active' : ''}`}
-            onClick={() => {
-              setViewMenuOpen(!viewMenuOpen);
-              setDisplayMenuOpen(false);
-              setProjMenuOpen(false);
-              setInfoMenuOpen(false);
-            }}
-            title="Podgląd - włącz/wyłącz elementy graficzne"
-          >
-            {icons.eyeShow}
-            <span>Podgląd</span>
-            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="3" style={{ marginLeft: '2px', opacity: 0.8 }}><path d="M6 9l6 6 6-6"></path></svg>
-          </button>
-          
-          {viewMenuOpen && (
-            <div className="view-dropdown-content" style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              marginTop: '4px',
-              backgroundColor: 'rgba(15, 23, 42, 0.95)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              minWidth: '150px',
-              zIndex: 100,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
-            }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#e2e8f0', fontSize: '0.8rem', userSelect: 'none' }}>
-                <input 
-                  type="checkbox" 
-                  checked={gridVisible} 
-                  onChange={() => {
-                    setGridVisible(!gridVisible);
-                    callAPI('toggleGrid');
-                  }}
-                  style={{ cursor: 'pointer' }}
-                />
-                Siatka i płaszczyzny
-              </label>
-              
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#e2e8f0', fontSize: '0.8rem', userSelect: 'none' }}>
-                <input 
-                  type="checkbox" 
-                  checked={lcsVisible} 
-                  onChange={() => {
-                    const nextVal = !lcsVisible;
-                    setLcsVisible(nextVal);
-                    callAPI('setLcsVisible', nextVal);
-                  }}
-                  style={{ cursor: 'pointer' }}
-                />
-                LCS
-              </label>
-            </div>
-          )}
-        </div>
-        <BelkaProjectionMenu
-          mode={projection}
-          open={projMenuOpen}
-          onOpenChange={(next) => {
-            setProjMenuOpen(next);
-            if (next) {
-              setViewMenuOpen(false);
-              setDisplayMenuOpen(false);
-              setInfoMenuOpen(false);
-            }
-          }}
-          onChange={(next) => {
-            if (next === projection) return;
-            setProjection(next);
-            callAPI('toggleProjection');
-          }}
-        />
-        <button 
-          className={`tool-btn ${isPanActive ? 'active' : ''}`} 
-          id="toolPan" 
-          onClick={togglePanMode}
-          title="Przesuwanie widoku (Pan) — możesz też przytrzymać mały boczny przycisk myszy lub kółko z Shift"
-        >✋ Przesuń</button>
-        <button 
-          className={`tool-btn ${isZoomWindowActive ? 'active' : ''}`} 
-          id="toolZoomWindow" 
-          onClick={toggleZoomWindowMode}
-          title="Powiększ zaznaczony obszar (Zoom Window) — przeciągnij ramkę myszą na scenie [Esc aby anulować]"
-        >🔍 Zoom</button>
-        <span className="tool-separator"></span>
-        <BelkaInfoMenu
-          open={infoMenuOpen}
-          onOpenChange={(next) => {
-            setInfoMenuOpen(next);
-            if (next) {
-              setViewMenuOpen(false);
-              setDisplayMenuOpen(false);
-              setProjMenuOpen(false);
-            }
-          }}
-          onToggleInspector={() => {
-            if ((window as any).toggleInspector) {
-              (window as any).toggleInspector();
-            } else if (UIController.instance?.viewport) {
-              UIController.instance.viewport.toggleInspector();
-            }
-          }}
-          onDumpSceneTree={() => {
-            let res = '';
-            if ((window as any).debugCADSceneTree) {
-              res = (window as any).debugCADSceneTree();
-            } else if (ContextManager.instance?.sceneSyncAdapter) {
-              res = ContextManager.instance.sceneSyncAdapter.debugDumpTrees();
-            }
-            alert("🌳 Drzewo Sceny CAD & Babylon zostało wypisane w Konsoli (F12)!\n\nFragment wyniku:\n" + (res ? res.substring(0, 400) + '...' : 'Gotowe'));
-          }}
-          onOpenSSOT={() => setSsotModalOpen(true)}
-        />
+      <BelkaWidokowa
+        renderMode={renderMode}
+        projection={projection}
+        gridVisible={gridVisible}
+        lcsVisible={lcsVisible}
+        isPanActive={isPanActive}
+        isZoomWindowActive={isZoomWindowActive}
+        activeTab={activeTab}
+        displayMenuOpen={displayMenuOpen}
+        viewMenuOpen={viewMenuOpen}
+        projMenuOpen={projMenuOpen}
+        infoMenuOpen={infoMenuOpen}
+        viewMenuRef={viewMenuRef}
+        onDisplayMenuOpenChange={setDisplayMenuOpen}
+        onViewMenuOpenChange={setViewMenuOpen}
+        onProjMenuOpenChange={setProjMenuOpen}
+        onInfoMenuOpenChange={setInfoMenuOpen}
+        onRenderModeChange={setRenderModeState}
+        onToggleGrid={() => {
+          setGridVisible(!gridVisible);
+          callAPI('toggleGrid');
+        }}
+        onToggleLcs={(nextVal) => {
+          setLcsVisible(nextVal);
+          callAPI('setLcsVisible', nextVal);
+        }}
+        onProjectionChange={setProjection}
+        onTogglePan={togglePanMode}
+        onToggleZoomWindow={toggleZoomWindowMode}
+        onOpenSSOT={() => setSsotModalOpen(true)}
+        callAPI={callAPI}
+      />
 
-        {activeTab === 'tab-e1-export' && (
-          <>
-            <span className="tool-separator"></span>
-            <button
-              className="tool-btn"
-              style={{
-                backgroundColor: '#2563eb',
-                color: '#ffffff',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '4px 10px',
-                borderRadius: '4px',
-              }}
-              onClick={async () => {
-                try {
-                  const sheet = await ExportEngine.instance.generateCurrentDrawingSheet();
-                  ExportEngine.instance.setPreviewSvg(sheet.toSvgString());
-                } catch (e: any) {
-                  alert(`Błąd generowania podglądu: ${e?.message || e}`);
-                }
-              }}
-              title="Otwórz pełny podgląd arkusza rysunkowego CAD (ze stemplem ISO i tabelą)"
-            >
-              🔍 Szybki Podgląd
-            </button>
-            <button
-              className="tool-btn"
-              style={{
-                backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                color: '#34d399',
-                borderColor: 'rgba(16, 185, 129, 0.4)',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-              }}
-              onClick={async () => {
-                try {
-                  const sheet = await ExportEngine.instance.generateCurrentDrawingSheet();
-                  await sheet.printOrSavePdf();
-                } catch (e: any) {
-                  alert(`Błąd druku: ${e?.message || e}`);
-                }
-              }}
-              title="Drukuj arkusz lub zapisz do PDF w skali 1:1"
-            >
-              🖨️ Drukuj / PDF
-            </button>
-            <button
-              className="tool-btn"
-              style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
-              onClick={async () => {
-                try {
-                  const sheet = await ExportEngine.instance.generateCurrentDrawingSheet();
-                  await sheet.downloadRaster(`Arkusz_CAD_${ExportEngine.instance.paperFormat}.jpg`, 'image/jpeg');
-                } catch (e: any) {
-                  alert(`Błąd pobierania JPG: ${e?.message || e}`);
-                }
-              }}
-              title="Pobierz wysokiej jakości raster JPG (300 DPI)"
-            >
-              🖼️ JPG
-            </button>
-            <button
-              className="tool-btn"
-              style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
-              onClick={async () => {
-                try {
-                  const sheet = await ExportEngine.instance.generateCurrentDrawingSheet();
-                  sheet.downloadSvg(`Arkusz_CAD_${ExportEngine.instance.paperFormat}.svg`);
-                } catch (e: any) {
-                  alert(`Błąd pobierania SVG: ${e?.message || e}`);
-                }
-              }}
-              title="Pobierz wektorowy plik CAD SVG"
-            >
-              📐 SVG
-            </button>
-          </>
-        )}
-      </div>
+      <BelkaHierarchyBar projectModel={projectModel} />
 
-      {/* ─── Interactive View Cube Widget ──────────────── */}
-      <div id="view-cube-container" className="view-cube-container">
-        <div id="view-cube-wrapper" className="view-cube-wrapper">
-          <div className="cube-face face-front" onClick={() => callAPI('setView', 'front')}>PRZÓD</div>
-          <div className="cube-face face-back" onClick={() => callAPI('setView', 'back')}>TYŁ</div>
-          <div className="cube-face face-left" onClick={() => callAPI('setView', 'left')}>LEWY</div>
-          <div className="cube-face face-right" onClick={() => callAPI('setView', 'right')}>PRAWY</div>
-          <div className="cube-face face-top" onClick={() => callAPI('setView', 'top')}>GÓRA</div>
-          <div className="cube-face face-bottom" onClick={() => callAPI('setView', 'bottom')}>DÓŁ</div>
-        </div>
-      </div>
+      <ViewCube onSetView={(view) => callAPI('setView', view)} />
 
-      {/* ─── Panel edycji (moduły: Korpus, SmartBox, Formatka…) ── */}
+      {/* ─── Panel edycji (moduły: Korpus, Bloki, Formatka…) ── */}
       <div
         id="panel-edycji"
         className={`panel-edycji ${editPanelWidth <= 48 ? 'is-collapsed' : ''}`}
@@ -2416,7 +1304,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         <div
           className={`panel-resize-handle panel-resize-handle--right-panel ${isDraggingEdit ? 'is-dragging' : ''} ${editPanelWidth <= 48 ? 'is-collapsed' : ''}`}
           onPointerDown={startResizeEdit}
-          title={editPanelWidth <= 48 ? 'Kliknij lub przeciągnij, aby rozwinąć panel edycji' : 'Przeciągnij krawędź lub kliknij, aby schować panel edycji'}
+          title={editPanelWidth <= 48 ? tx(srcTekst, 'app.panel.expand', TX_NS) : tx(srcTekst, 'app.panel.collapse', TX_NS)}
         >
           <div className="panel-resize-gizmo">
             <div className="panel-resize-gizmo-dot" />
@@ -2478,9 +1366,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 userSelect: 'none',
                 marginBottom: '10px'
               }}
-              title="Kliknij lub przeciągnij na scenę 3D, aby wstawić formatkę (720x510x18 mm)"
+              title={tx(srcTekst, 'app.add_panel_title', TX_NS)}
             >
-              <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
+              <span className="hand-icon" title={tx(srcTekst, 'app.add_panel_drag', TX_NS)} style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
                   <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
@@ -2488,18 +1376,18 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
                 </svg>
               </span>
-              <span style={{ fontWeight: 600, fontSize: '13px', color: '#f3f4f6' }}>Dodaj formatkę</span>
+              <span style={{ fontWeight: 600, fontSize: '13px', color: '#f3f4f6' }}>{tx(srcTekst, 'app.add_panel', TX_NS)}</span>
             </div>
           </div>
         </div>
 
-        {/* Tab 2: A2 SmartBox */}
+        {/* Tab 2: A2 Bloki */}
         <div 
-          className={`tab-content ${activeTab === 'tab-a2-smartbox' ? 'active' : ''}`} 
-          id="tab-a2-smartbox"
+          className={`tab-content ${activeTab === 'tab-a2-bloki' ? 'active' : ''}`} 
+          id="tab-a2-bloki"
           style={{ 
             height: 'calc(100% - 40px)', 
-            display: activeTab === 'tab-a2-smartbox' ? 'flex' : 'none', 
+            display: activeTab === 'tab-a2-bloki' ? 'flex' : 'none', 
             flexDirection: 'column', 
             minHeight: 0, 
             overflowY: 'auto', 
@@ -2507,9 +1395,28 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           }}
         >
           <div className="panel-header" style={{ flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, background: '#18181b', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px' }}>
-            <h2 style={{ fontSize: '13px', margin: 0, fontWeight: 700, lineHeight: '1.2' }}>SmartBox</h2>
+            <h2 style={{ fontSize: '13px', margin: 0, fontWeight: 700, lineHeight: '1.2' }}>Bloki</h2>
           </div>
-          <SmartBoxUI projectModel={projectModel} />
+          <BlokiUI projectModel={projectModel} />
+        </div>
+
+        {/* Tab: A5 SmartParts */}
+        {activeTab === 'tab-a5-smartparts' && (
+          <div className="tab-content active" id="tab-a5-smartparts" style={{ height: 'calc(100% - 40px)', display: 'flex', flexDirection: 'column' }}>
+            <div className="panel-header" style={{ flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, background: '#18181b', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px' }}>
+              <h2 style={{ fontSize: '13px', margin: 0, fontWeight: 700, lineHeight: '1.2' }}>SmartParts</h2>
+            </div>
+            <SmartPartsUI />
+          </div>
+        )}
+
+        {/* Tab: AGD */}
+        <div 
+          className={`tab-content ${activeTab === 'tab-agd' ? 'active' : ''}`} 
+          id="tab-agd" 
+          style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-agd' ? 'flex' : 'none', flexDirection: 'column' }}
+        >
+          <AgdPanel projectModel={projectModel} />
         </div>
 
         {/* Tab: B1 Biblioteka Korpusów */}
@@ -2525,11 +1432,20 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <SmartFrameUI projectModel={projectModel} />
         </div>
 
+        {/* Tab: S4 Ściany */}
+        <div
+          className={`tab-content ${activeTab === 'tab-s4-sciany' ? 'active' : ''}`}
+          id="tab-s4-sciany"
+          style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-s4-sciany' ? 'flex' : 'none', flexDirection: 'column' }}
+        >
+          <ScianyUI projectModel={projectModel} />
+        </div>
+
         {/* Tab 4: A7 Material */}
         <div className={`tab-content ${activeTab === 'tab-a7-material' ? 'active' : ''}`} id="tab-a7-material" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-a7-material' ? 'flex' : 'none', flexDirection: 'column' }}>
           <div className="panel-header">
-            <h2>Materiały</h2>
-            <p className="subtitle">Wycena i obrzeża</p>
+            <h2>{tx(srcTekst, 'app.materials_title', TX_NS)}</h2>
+            <p className="subtitle">{tx(srcTekst, 'app.materials_sub', TX_NS)}</p>
           </div>
           <MaterialsUI 
             projectModel={projectModel}
@@ -2540,7 +1456,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         <div className={`tab-content ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} id="tab-s2-solver" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-s2-solver' ? 'flex' : 'none', flexDirection: 'column' }}>
           <div className="panel-header">
             <h2>{SOLVER_PANEL_TITLE}</h2>
-            <p className="subtitle">Wiązania</p>
+            <p className="subtitle">{tx(srcTekst, 'app.relations_sub', TX_NS)}</p>
           </div>
           <SolverUI projectModel={projectModel} />
         </div>
@@ -2550,7 +1466,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <div className="tab-content active" id="tab-c2-connectors" style={{ height: 'calc(100% - 40px)', display: 'flex', flexDirection: 'column' }}>
             <div className="panel-header">
               <h2>{CONNECTORS_PANEL_TITLE}</h2>
-              <p className="subtitle">Styk płaszczyzn</p>
+              <p className="subtitle">{tx(srcTekst, 'app.joints_sub', TX_NS)}</p>
             </div>
             <ConnectorsUI projectModel={projectModel} />
           </div>
@@ -2560,7 +1476,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <div className="tab-content active" id="tab-o1-operacji" style={{ height: 'calc(100% - 40px)', display: 'flex', flexDirection: 'column' }}>
             <div className="panel-header">
               <h2>{OPERACJE_PANEL_TITLE}</h2>
-              <p className="subtitle">Wcięcia na płycie</p>
+              <p className="subtitle">{tx(srcTekst, 'app.ops_sub', TX_NS)}</p>
             </div>
             <OperacjeUI />
           </div>
@@ -2589,7 +1505,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         onDragOver={(e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
-          const bayCtrl = ContextManager.instance.smartBoxBayController;
+          const bayCtrl = ContextManager.instance.blokiBayController;
           if (bayCtrl && (bayCtrl.isDragging || bayCtrl.isBayDrag())) {
             const rect = e.currentTarget.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -2614,9 +1530,34 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             }
             return;
           }
+          const wallDragCtrl = (ContextManager.instance as any).smartWallDragController;
+          if (wallDragCtrl && wallDragCtrl.isDragging) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const scene = ContextManager.instance.viewport?.scene;
+            if (scene) {
+              wallDragCtrl.onPointerMoveOnScene(scene, x, y);
+              ContextManager.instance.viewport?.requestRender(2);
+            }
+            return;
+          }
+          const handleDragCtrl = HandleDragController.instance;
+          if (handleDragCtrl && handleDragCtrl.isDragging) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const scene = ContextManager.instance.viewport?.scene;
+            const doc = ContextManager.instance.document || projectModel;
+            if (scene && doc) {
+              handleDragCtrl.onPointerMoveOnScene(scene, x, y, doc);
+              ContextManager.instance.viewport?.requestRender(2);
+            }
+            return;
+          }
         }}
         onDragLeave={() => {
-          const bayCtrl = ContextManager.instance.smartBoxBayController;
+          const bayCtrl = ContextManager.instance.blokiBayController;
           if (bayCtrl && (bayCtrl.isDragging || bayCtrl.isBayDrag())) {
             clearBayHighlight();
             ContextManager.instance.viewport?.requestRender(2);
@@ -2626,18 +1567,50 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             frameDragCtrl.endDrag();
             ContextManager.instance.viewport?.requestRender(2);
           }
+          const wallDragCtrl = (ContextManager.instance as any).smartWallDragController;
+          if (wallDragCtrl && wallDragCtrl.isDragging) {
+            wallDragCtrl.endDrag();
+            ContextManager.instance.viewport?.requestRender(2);
+          }
+          const handleDragCtrl = HandleDragController.instance;
+          if (handleDragCtrl && handleDragCtrl.isDragging) {
+            handleDragCtrl.endDrag();
+            ContextManager.instance.viewport?.requestRender(2);
+          }
         }}
         onDrop={(e) => {
           e.preventDefault();
-          const bayCtrl = ContextManager.instance.smartBoxBayController;
+          const bayCtrl = ContextManager.instance.blokiBayController;
           if (bayCtrl && (bayCtrl.isDragging || bayCtrl.isBayDrag())) {
-            bayCtrl.onDropOnScene();
-            return;
+            if (bayCtrl.lastDetectedBay) {
+              bayCtrl.onDropOnScene();
+              return;
+            } else {
+              bayCtrl.endDrag();
+            }
           }
           const frameDragCtrl = ContextManager.instance.smartFrameDragController;
           if (frameDragCtrl && frameDragCtrl.isDragging) {
             const doc = ContextManager.instance.document || projectModel;
             frameDragCtrl.onDropOnScene(doc);
+            return;
+          }
+          const wallDragCtrl = (ContextManager.instance as any).smartWallDragController;
+          if (wallDragCtrl && wallDragCtrl.isDragging) {
+            const doc = ContextManager.instance.document || projectModel;
+            wallDragCtrl.onDropOnScene(doc);
+            return;
+          }
+          const handleDragCtrl = HandleDragController.instance;
+          if (handleDragCtrl && handleDragCtrl.isDragging) {
+            const doc = ContextManager.instance.document || projectModel;
+            const created = handleDragCtrl.onDropOnScene(doc);
+            if (created) {
+              doc?.setActiveEntity?.(created.domainData || created);
+              window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+              window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
+              ContextManager.instance.viewport?.requestRender(2);
+            }
             return;
           }
           const draggedOperation = (window as any).__draggedCadOperation || (() => {
@@ -2652,6 +1625,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           const y = e.clientY - rect.top;
           const scene = ContextManager.instance.viewport?.scene;
           if (!scene) return;
+
+          if (draggedOperation && draggedOperation.library_id === 'led_channel') {
+            const pick = scene.pick(x, y);
+            handleLedChannelDrop(pick, draggedOperation.channelId);
+            (window as any).__draggedCadOperation = null;
+            return;
+          }
 
           if (draggedOperation && draggedOperation.library_id) {
             const pick = scene.pick(x, y);
@@ -2686,6 +1666,53 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             return;
           }
 
+          const draggedAppliance = (window as any).__draggedAppliance || (() => {
+            try {
+              const raw = e.dataTransfer.getData('application/cad-appliance-template');
+              return raw ? JSON.parse(raw) : null;
+            } catch { return null; }
+          })();
+
+          if (draggedAppliance) {
+            const doc = ContextManager.instance.document || projectModel;
+            if (doc) {
+              const pick = scene.pick(x, y);
+              let dropX = 0;
+              let dropY = 0;
+              let dropZ = 700;
+
+              if (pick && pick.hit && pick.pickedPoint) {
+                dropX = pick.pickedPoint.x;
+                dropY = pick.pickedPoint.z;
+                dropZ = pick.pickedPoint.y;
+              } else {
+                const ray = scene.createPickingRay(x, y, (window as any).BABYLON?.Matrix?.Identity?.() || (scene.activeCamera?.getWorldMatrix?.() ? scene.activeCamera.getWorldMatrix() : null), scene.activeCamera);
+                if (ray && (window as any).BABYLON) {
+                  const groundPlane = (window as any).BABYLON.Plane.FromPositionAndNormal(new (window as any).BABYLON.Vector3(0, 0, 0), new (window as any).BABYLON.Vector3(0, 1, 0));
+                  const dist = ray.intersectsPlane(groundPlane);
+                  if (dist !== null && dist !== undefined) {
+                    const hitPoint = ray.origin.add(ray.direction.scale(dist));
+                    dropX = hitPoint.x;
+                    dropY = hitPoint.z;
+                    dropZ = 0;
+                  }
+                }
+              }
+
+              createSmartAppliance({
+                kind: draggedAppliance.kind,
+                name: draggedAppliance.name,
+                position: { x: dropX, y: dropY, z: dropZ },
+                params: draggedAppliance.defaultParams,
+              }, doc);
+
+              (window as any).__draggedAppliance = null;
+              window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+              window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
+            }
+            return;
+          }
+
           const draggedNewPanel = (window as any).__draggedNewPanel || (() => {
             try {
               const raw = e.dataTransfer.getData('application/cad-new-panel');
@@ -2716,7 +1743,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 width: mmToNm(pWidth),
                 height: mmToNm(pHeight),
                 thickness: mmToNm(pThickness),
-                name: 'Formatka ręczna',
+                name: tx(srcTekst, 'app.manual_panel', TX_NS),
                 role: 'MANUAL_PANEL',
                 engineManaged: false,
               });
@@ -2730,18 +1757,18 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
               const cmdHist = ContextManager.instance.commandHistory;
               if (cmdHist) {
-                cmdHist.execute(new AddNodeCommand(doc.rootNode.id, pNode, undefined, 'Wstawiono formatkę ręczną'));
+                cmdHist.execute(new AddNodeCommand(doc.rootNode.id, pNode, undefined, tx(srcTekst, 'app.cmd_add_panel', TX_NS)));
               } else {
                 doc.addNode(doc.rootNode.id, pNode);
               }
               doc.setActiveEntity(newPanel);
-              window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+              window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('cad-open-floating-panel-edit', {
                   detail: { panelId: newPanel.id }
                 }));
               }
-              UIController.instance?.setStatus(`Wstawiono formatkę (${pWidth}×${pHeight} mm) na scenę`);
+              UIController.instance?.setStatus(tx(srcTekst, 'app.status_panel_added', TX_NS, { w: pWidth, h: pHeight }));
             }
             (window as any).__draggedNewPanel = null;
             return;
@@ -2774,12 +1801,12 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               if (cloned) {
                 const { rotation, scale } = cloned.localMatrix.decompose();
                 cloned.setLocalTransform(
-                  new Vec3(dropX * 1000000, 0, dropZ * 1000000),
+                  new Vec3(mmToNm(dropX), 0, mmToNm(dropZ)),
                   rotation,
                   scale
                 );
                 doc.emitChange('structure', [cloned.id]);
-                window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
               }
             }
             (window as any).__draggedCadNode = null;
@@ -2975,7 +2002,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             if (e.key === 'Escape') setDropModal(null);
             if (e.key === '1') handleApplyDropScope('SINGLE');
             if (e.key === '2') handleApplyDropScope('CONTAINER');
-            if (e.key === '3') handleApplyDropScope('SMARTBOX');
+            if (e.key === '3') handleApplyDropScope('BLOKI');
             if (e.key === '4') handleApplyDropScope('PROJECT');
           }}
           tabIndex={0}
@@ -2984,7 +2011,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #27272a', paddingBottom: '6px' }}>
             <div style={{ fontWeight: 'bold', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', color: '#60a5fa' }}>
-              <span>🎨</span> Zastosuj Materiał
+              <span>{tx(srcTekst, 'app.apply_material', TX_NS)}</span>
             </div>
             <button 
               onClick={() => setDropModal(null)}
@@ -3001,7 +2028,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               height: '32px',
               borderRadius: '4px',
               backgroundColor: dropModal.material.hexColor || `rgb(${dropModal.material.color.r * 255}, ${dropModal.material.color.g * 255}, ${dropModal.material.color.b * 255})`,
-              border: '1px solid rgba(255,255,255,0.2)',
+              backgroundImage: dropModal.material.thumbnail_path ? `url("${dropModal.material.thumbnail_path}")` : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              border: '1px solid rgba(255,255,255,0.25)',
               flexShrink: 0,
               boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
             }} />
@@ -3010,7 +2040,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 {dropModal.material.name} ({dropModal.material.thickness_mm} mm)
               </div>
               <div style={{ color: '#93c5fd' }}>
-                Formatka: <strong>{dropModal.targetPanel.name || 'Płyta'}</strong>
+                {tx(srcTekst, 'app.drop_panel', TX_NS)} <strong>{dropModal.targetPanel.name || tx(srcTekst, 'app.panel_default', TX_NS)}</strong>
               </div>
             </div>
           </div>
@@ -3054,12 +2084,12 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 textAlign: 'left'
               }}
             >
-              <span>📦 Cały korpus / szafka</span>
+              <span>{tx(srcTekst, 'app.scope_body', TX_NS)}</span>
               <span style={{ opacity: 0.75, fontSize: '10px', background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: '3px' }}>[2]</span>
             </button>
 
             <button
-              onClick={() => handleApplyDropScope('SMARTBOX')}
+              onClick={() => handleApplyDropScope('BLOKI')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -3074,7 +2104,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 textAlign: 'left'
               }}
             >
-              <span>🗄️ Wnętrze SmartBox</span>
+              <span>{tx(srcTekst, 'app.scope_box', TX_NS)}</span>
               <span style={{ opacity: 0.75, fontSize: '10px', background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: '3px' }}>[3]</span>
             </button>
 
@@ -3094,7 +2124,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 textAlign: 'left'
               }}
             >
-              <span>🌐 Cały projekt (globalnie)</span>
+              <span>{tx(srcTekst, 'app.scope_project', TX_NS)}</span>
               <span style={{ opacity: 0.75, fontSize: '10px', background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: '3px' }}>[4]</span>
             </button>
           </div>
@@ -3108,11 +2138,11 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       <div 
         id="statusBar" 
         className={`status-bar ${uiState?.statusBarActive ? 'active' : ''} ${
-          uiState?.statusText?.includes('nie będzie realizowana') ? 'status-bar--error' : ''
+          uiState?.statusKind === 'error' ? 'status-bar--error' : ''
         }`}
       >
         <span className="status-dot"></span>
-        <span id="statusText">{uiState?.statusText || 'Ładowanie...'}</span>
+        <span id="statusText">{uiState?.statusText || tx(srcTekst, 'app.status_default', TX_NS)}</span>
       </div>
 
       {/* ─── Podpowiedzi na dole z lewej (nad paskiem stanu) ─── */}
@@ -3145,7 +2175,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           <span style={{ color: '#d4d4d8', lineHeight: 1.35 }}>{activeHint.description}</span>
           {activeHint.confirmKey && (
             <span style={{ backgroundColor: '#374151', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-              [{activeHint.confirmKey}] Zatwierdź
+              [{activeHint.confirmKey}] {tx(srcTekst, 'app.hint_confirm', TX_NS)}
             </span>
           )}
           {activeHint.cancelKey && (
@@ -3242,6 +2272,28 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         onClose={() => setGdriveModalMode(null)} 
       />
 
+      {/* ─── Modale SaaS (Auth, Dashboard projektów, Paywall) ────── */}
+      <SaaSAuthModal
+        isOpen={saasAuthModalOpen}
+        onClose={() => setSaasAuthModalOpen(false)}
+        onSuccess={() => setSaasDashboardOpen(true)}
+      />
+
+      <SaaSProjectsDashboardModal
+        isOpen={saasDashboardOpen}
+        onClose={() => setSaasDashboardOpen(false)}
+        onOpenPaywall={() => {
+          setSaasDashboardOpen(false);
+          setSaasPaywallFeature(tx(srcTekst, 'saas.pro_feature_locked', TX_NS, { name: 'SmartPanel Cloud' }));
+        }}
+      />
+
+      <SaaSPaywallModal
+        isOpen={saasPaywallFeature !== null}
+        featureTitle={saasPaywallFeature || undefined}
+        onClose={() => setSaasPaywallFeature(null)}
+      />
+
       {/* ─── Modal Nowego Projektu (Zapisz / Nie zapisuj / Anuluj) ─── */}
       <NewProjectModal
         isOpen={newProjectModalOpen}
@@ -3263,16 +2315,26 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       <div id="bottomConsole" className="bottom-console">
         <span className="console-prefix">&gt;</span>
         <span id="consoleText" className="console-text">
-          {uiState?.consoleText || 'Gotowy. Najedź na element.'}
+          {uiState?.consoleText || tx(srcTekst, 'app.console_default', TX_NS)}
         </span>
       </div>
 
       {/* Okno edycji operacji (pływające, swobodne okno nad sceną 3D) */}
       <FloatingOperationDialog />
 
+      {/* Modal Weryfikacji i Raportu Rozbieżności CNC (PPM Batch) */}
+      <CncValidationReportModal />
+
       {/* Wybór zakrytych płaszczyzn QuickPick (a'la Solid Edge) */}
       <QuickPickPopup />
       
+      {/* ─── Studio Nagrywania Ruchów & Replay (Nagraj / Odtwórz własną pracę) ─── */}
+      <RecorderStudioUI
+        isOpen={recorderStudioOpen}
+        onClose={() => setRecorderStudioOpen(false)}
+        onSwitchTab={handleSwitchTab}
+      />
+
     </div>
   );
 }

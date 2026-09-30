@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartPanel Web — Pomoc</title>
+<style>
+  :root{
+    --bg:#e8e8e8;
+    --paper:#ffffff;
+    --ink:#000000;
+    --muted:#555555;
+    --line:#c8c8c8;
+    --link:#0066b3;
+    --link-hover:#004d8c;
+    --toc-bg:#f0f0f0;
+    --toc-active:#d6e8f5;
+    --h-border:#0066b3;
+    --note-bg:#f7f7f7;
+    /* kolory kategorii */
+    --cat-podstawy:#0066b3;
+    --cat-korpus:#c06a00;
+    --cat-bloki:#2e7d32;
+    --cat-bloki-z:#00796b;
+    --cat-smartpanel:#6a3fb5;
+    --cat-zlacza:#b03030;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Segoe UI",Tahoma,sans-serif;
+    font-size:14px;
+    line-height:1.5;
+  }
+  .topbar{
+    position:sticky;top:0;z-index:40;
+    background:#2a2a2a;color:#fff;
+    display:flex;align-items:center;gap:12px;
+    padding:8px 14px;border-bottom:1px solid #111;
+  }
+  .topbar h1{font-size:14px;margin:0;font-weight:600}
+  .topbar .ver{font-size:11px;color:#aaa}
+  .topbar .spacer{flex:1}
+  .topbar button{
+    background:#0066b3;border:0;color:#fff;
+    padding:5px 10px;font-size:12px;cursor:pointer;
+  }
+  .topbar button.ghost{background:transparent;border:1px solid #666}
+  .layout{display:flex;max-width:1080px;margin:0 auto;min-height:100vh}
+  nav.toc{
+    position:sticky;top:37px;
+    width:230px;max-height:calc(100vh - 37px);
+    overflow:auto;
+    background:var(--toc-bg);
+    border-right:1px solid var(--line);
+    padding:10px 0;font-size:12.5px;
+  }
+  nav.toc .grp{
+    padding:8px 12px 2px;
+    font-size:10px;font-weight:700;
+    color:var(--muted);text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+  nav.toc .grp::before{
+    content:"";display:inline-block;
+    width:9px;height:9px;margin-right:6px;
+    background:var(--cat,#888);border-radius:2px;
+    vertical-align:-1px;
+  }
+  nav.toc a{
+    display:block;color:var(--ink);text-decoration:none;
+    padding:3px 12px 3px 14px;border-left:3px solid transparent;
+  }
+  nav.toc a.sub{padding-left:26px;color:#333}
+  nav.toc a:hover{background:#e4e4e4;color:var(--link)}
+  nav.toc a.active{background:var(--toc-active);border-left-color:var(--cat,var(--link));font-weight:600}
+  main{
+    flex:1;background:var(--paper);
+    padding:20px 36px 40px;min-width:0;
+    border-right:1px solid var(--line);
+  }
+  h1.doc-title{
+    font-size:22px;font-weight:600;margin:0 0 6px;
+    color:#1a1a1a;
+  }
+  .doc-intro{color:var(--muted);margin:0 0 24px;font-size:13px}
+
+  /* ===== kategorie ===== */
+  section.cat{
+    --cat:#0066b3;
+    border-left:4px solid var(--cat);
+    padding-left:16px;margin:0 0 10px -20px;
+  }
+  section.cat[data-cat="podstawy"]{--cat:var(--cat-podstawy)}
+  section.cat[data-cat="korpus"]{--cat:var(--cat-korpus)}
+  section.cat[data-cat="bloki"]{--cat:var(--cat-bloki)}
+  section.cat[data-cat="smartpanel"]{--cat:var(--cat-smartpanel)}
+  section.cat[data-cat="zlacza"]{--cat:var(--cat-zlacza)}
+  .cat-chip{
+    display:inline-block;
+    font-size:10px;font-weight:700;
+    letter-spacing:.07em;text-transform:uppercase;
+    color:#fff;background:var(--cat);
+    padding:2px 9px;border-radius:2px;
+    margin:26px 0 0;
+  }
+  section.cat:first-of-type .cat-chip{margin-top:0}
+  .sub-chip{
+    display:inline-block;
+    font-size:9.5px;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;
+    color:var(--subcat,#fff);background:var(--subbg,#888);
+    padding:1px 7px;border-radius:2px;
+    margin:18px 0 0;
+  }
+  .sub-chip.sb-w{--subbg:var(--cat-bloki)}
+  .sub-chip.sb-z{--subbg:var(--cat-bloki-z)}
+
+  h2{
+    font-size:18px;font-weight:600;
+    margin:6px 0 12px;padding-bottom:4px;
+    border-bottom:2px solid var(--cat,var(--h-border));
+    color:#1a1a1a;
+  }
+  h3{
+    font-size:15px;font-weight:600;
+    margin:8px 0 8px;color:#1a1a1a;
+  }
+  h4{
+    font-size:13.5px;font-weight:600;
+    margin:16px 0 6px;color:#222;
+  }
+  p{margin:0 0 10px}
+  ul,ol{margin:0 0 12px;padding-left:22px}
+  li{margin-bottom:4px}
+  a{color:var(--link)}
+  a:hover{color:var(--link-hover)}
+  kbd{
+    font-family:Consolas,"Courier New",monospace;
+    font-size:12px;
+    background:#f0f0f0;border:1px solid #bbb;
+    border-bottom-width:2px;border-radius:2px;
+    padding:0 4px;color:#000;
+  }
+  /* SolidWorks-style option definitions */
+  dl.options{margin:8px 0 14px}
+  dl.options dt{
+    font-weight:600;margin-top:8px;
+  }
+  dl.options dd{
+    margin:2px 0 0 16px;color:#222;
+  }
+  .procedure{
+    margin:10px 0 14px;
+    padding:0;
+  }
+  .procedure > ol{margin:6px 0 0;padding-left:22px}
+  .note{
+    margin:12px 0;
+    padding:8px 12px;
+    background:var(--note-bg);
+    border-left:3px solid #888;
+    font-size:13px;
+  }
+  .note strong{display:inline}
+  table{
+    border-collapse:collapse;width:100%;
+    margin:10px 0 14px;font-size:13px;
+  }
+  th,td{
+    border:1px solid var(--line);
+    padding:5px 8px;text-align:left;vertical-align:top;
+  }
+  th{background:#f0f0f0;font-weight:600}
+  footer{
+    margin-top:40px;padding-top:12px;
+    border-top:1px solid var(--line);
+    color:var(--muted);font-size:12px;
+  }
+  @media (max-width:860px){
+    nav.toc{display:none}
+    main{padding:16px;border-right:0}
+    section.cat{margin-left:-16px;padding-left:12px}
+  }
+  @media print{
+    @page{size:A4;margin:14mm}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .topbar,nav.toc,.no-print{display:none !important}
+    .layout{display:block}
+    main{padding:0;border:0}
+    section.cat{margin-left:0;page-break-before:always}
+    section.cat:first-of-type{page-break-before:avoid}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>SmartPanel Web — Pomoc</h1>
+  <span class="ver">Instrukcja użytkownika · v2</span>
+  <div class="spacer"></div>
+  <button class="ghost no-print" type="button" onclick="toggleToc()">Spis treści</button>
+  <button type="button" onclick="window.print()">Drukuj</button>
+</div>
+
+<div class="layout">
+<nav class="toc" id="toc">
+  <div class="toc-cat" style="--cat:var(--cat-podstawy)">
+    <div class="grp">Podstawy</div>
+    <a href="#wprowadzenie">Wprowadzenie</a>
+    <a href="#interfejs">Interfejs użytkownika</a>
+    <a href="#myszka">Praca z myszką</a>
+    <a href="#skroty">Skróty klawiszowe</a>
+  </div>
+  <div class="toc-cat" style="--cat:var(--cat-korpus)">
+    <div class="grp">Korpus</div>
+    <a href="#korpus">Przegląd</a>
+    <a href="#korpus-dostep">Dostęp</a>
+    <a href="#korpus-utworz">Tworzenie korpusu</a>
+    <a href="#korpus-szablony">Szablony</a>
+    <a href="#korpus-edycja">Edycja parametrów</a>
+  </div>
+  <div class="toc-cat" style="--cat:var(--cat-bloki)">
+    <div class="grp">Bloki</div>
+    <a href="#bloki">Przegląd</a>
+    <a href="#bloki-wstaw">Wstawianie</a>
+    <a href="#sb-wewnetrzny">Wewnętrzny</a>
+    <a class="sub" href="#sb-polki">Półki</a>
+    <a class="sub" href="#sb-wieniec">Wieniec</a>
+    <a class="sub" href="#sb-drzwi">Drzwi</a>
+    <a class="sub" href="#sb-drzwi-narozne">Drzwi narożne</a>
+    <a class="sub" href="#sb-szuflady">Szuflady</a>
+    <a class="sub" href="#sb-klapy">Klapy</a>
+    <a class="sub" href="#sb-przegrody">Przegrody</a>
+    <a class="sub" href="#sb-drazek">Drążek</a>
+    <a class="sub" href="#sb-led-w">Kanał LED (wewn.)</a>
+    <a href="#sb-zewnetrzny" style="--cat:var(--cat-bloki-z)">Zewnętrzny</a>
+    <a class="sub" href="#sb-blendy" style="--cat:var(--cat-bloki-z)">Blendy</a>
+    <a class="sub" href="#sb-led-z" style="--cat:var(--cat-bloki-z)">Kanał LED (zewn.)</a>
+  </div>
+  <div class="toc-cat" style="--cat:var(--cat-smartpanel)">
+    <div class="grp">SmartPanel</div>
+    <a href="#smartpanel">Edycja formatki</a>
+  </div>
+  <div class="toc-cat" style="--cat:var(--cat-zlacza)">
+    <div class="grp">Złącza</div>
+    <a href="#zlacza">Dodawanie złączy</a>
+  </div>
+</nav>
+
+<main>
+
+<p class="doc-intro">Ten dokument opisuje pracę w SmartPanel Web w kolejności typowego przepływu: od interfejsu, przez korpus, do wyposażenia. Każdy temat ma stały układ: czym jest narzędzie, gdzie je znaleźć, jak wykonać operację, potem opcje panelu od góry do dołu. Rozdziały są pogrupowane w kategorie oznaczone kolorami — te same kolory obowiązują w spisie treści.</p>
+
+<!-- ========== KATEGORIA: PODSTAWY ========== -->
+<section class="cat" data-cat="podstawy">
+<span class="cat-chip">Podstawy</span>
+<h2 id="wprowadzenie">Wprowadzenie</h2>
+
+<p>SmartPanel Web jest aplikacją CAD do projektowania mebli korpusowych w przeglądarce. Jeden plik projektu (<kbd>.spp.json</kbd>) zawiera konstrukcję, wyposażenie, formatki i złącza.</p>
+
+<p>Typowa kolejność pracy:</p>
+<ol>
+  <li>Utwórz <strong>korpus</strong> (SmartFrame) — konstrukcję nośną ze strefami (wnękami).</li>
+  <li>Wypełnij wnęki modułami <strong>Bloki</strong> (półki, drzwi, szuflady itd.) albo dodaj elementy zewnętrzne (blendy, LED).</li>
+  <li>W razie potrzeby edytuj pojedyncze formatki w <strong>SmartPanel</strong>.</li>
+  <li>Dodaj <strong>złącza</strong> na styku płyt.</li>
+</ol>
+
+<p>Jednostki w formularzach to milimetry (mm). Zalecana jest mysz z kółkiem oraz aktualna przeglądarka Chrome, Edge lub Firefox.</p>
+
+<!-- ========== INTERFEJS ========== -->
+<h2 id="interfejs">Interfejs użytkownika</h2>
+
+<p>Okno programu składa się z czterech głównych obszarów. Czytaj je od góry, potem lewo–środek–prawo — tak jak leżą na ekranie.</p>
+
+<ol>
+  <li><strong>Pasek menu</strong> (góra okna) — plik projektu, cofanie i ponawianie, przełączanie modułów.</li>
+  <li><strong>Drzewo obiektów</strong> (lewa strona) — hierarchia: projekt → korpus → Bloki → formatki. Dwuklik zmienia nazwę; <kbd>Ctrl</kbd>+klik zaznacza wiele pozycji.</li>
+  <li><strong>Scena 3D</strong> (środek) z <strong>belką widokową</strong> nad nią — tu oglądasz i zaznaczasz model; belka przełącza tryby wyświetlania i widoki standardowe.</li>
+  <li><strong>Panel edycji</strong> (prawa strona) — parametry aktualnie zaznaczonego elementu. Działa jak PropertyManager: zmieniasz wartości, model się przebudowuje.</li>
+</ol>
+
+<!-- ========== MYSZ ========== -->
+<h2 id="myszka">Praca z myszką</h2>
+
+<p>W scenie 3D mysz służy najpierw do zaznaczania, potem do kamery. Poniżej kolejność od najczęściej używanych gestów.</p>
+
+<h3>Zaznaczanie</h3>
+<ul>
+  <li><strong>Lewy przycisk (LPM)</strong> — zaznacza element pod kursorem.</li>
+  <li><strong><kbd>Ctrl</kbd> + LPM</strong> — dodaje lub odejmuje element z zaznaczenia.</li>
+  <li><strong>Prawy przycisk (PPM)</strong> — menu kontekstowe (m.in. duplikuj, ukryj, usuń, CNC).</li>
+  <li><strong>Dwuklik</strong> — ustawia środek obrotu kamery na wskazanym elemencie.</li>
+</ul>
+
+<h3>Kamera</h3>
+<ul>
+  <li><strong>Środkowy przycisk</strong> lub <strong><kbd>Alt</kbd> + LPM</strong> — obrót wokół modelu.</li>
+  <li><strong><kbd>Shift</kbd> + PPM</strong> — przesunięcie widoku (pan).</li>
+  <li><strong>Kółko</strong> — powiększenie w stronę kursora.</li>
+</ul>
+
+<h3>Tryby wyświetlania</h3>
+<p>Na belce widokowej przełączasz kolejno:</p>
+<ol>
+  <li><strong>Shaded</strong> — pełne bryły (prezentacja).</li>
+  <li><strong>Edges</strong> — bryły z krawędziami.</li>
+  <li><strong>Wireframe</strong> — siatka; widać symbole złączy.</li>
+  <li><strong>Xray</strong> — model przeźroczysty; widać wnętrze i złącza.</li>
+</ol>
+<p class="note"><strong>Uwaga:</strong> Symbole złączy są widoczne w trybach Wireframe i Xray. W Shaded są ukryte celowo.</p>
+
+<h3>Gizma</h3>
+<p>Po zaznaczeniu formatki pojawiają się manipulatory. Przeciąganie daje podgląd; puszczenie przycisku zapisuje jedną zmianę w historii (Undo).</p>
+<ul>
+  <li><strong>Niebieskie</strong> — przesuwanie (środek płyty).</li>
+  <li><strong>Czerwone</strong> — offset / wymiar w osi X.</li>
+  <li><strong>Zielone</strong> — offset / wymiar w osi Y.</li>
+</ul>
+
+<!-- ========== SKROTY ========== -->
+<h2 id="skroty">Skróty klawiszowe</h2>
+
+<p>Skróty działają globalnie, o ile fokus nie jest w polu tekstowym.</p>
+<ul>
+  <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> — cofnij</li>
+  <li><kbd>Ctrl</kbd>+<kbd>Y</kbd> — ponów</li>
+  <li><kbd>Delete</kbd> — usuń zaznaczone</li>
+  <li><kbd>Ctrl</kbd>+klik — wielozaznaczenie</li>
+  <li><kbd>Alt</kbd>+LPM — obrót kamery</li>
+  <li><kbd>Shift</kbd>+PPM — pan</li>
+  <li><kbd>Enter</kbd> / <kbd>Esc</kbd> — zatwierdź / anuluj aktywne narzędzie</li>
+</ul>
+</section>
+
+<!-- ========== KATEGORIA: KORPUS ========== -->
+<section class="cat" data-cat="korpus">
+<span class="cat-chip">Korpus · SmartFrame</span>
+<h2 id="korpus">Korpus (SmartFrame)</h2>
+
+<p>Korpus jest konstrukcją nośną mebla. Generuje formatki (boki, dno, wieniec, plecy oraz w razie potrzeby elementy dzielące strefy) i łączy je w jeden obiekt w drzewie. Jednocześnie powstają <strong>strefy (wnęki)</strong> — puste przestrzenie, w które później wchodzi Bloki.</p>
+
+<p>Korpus jest <strong>parametryczny</strong>. Po utworzeniu w każdej chwili możesz zmienić szerokość, wysokość, głębokość i pozostałe pola panelu; silnik przebudowuje geometrię. Nie trzeba zakładać korpusu od nowa.</p>
+
+<p>Zwykły korpus prosty zawiera: bok lewy, bok prawy, dno (wieniec dolny), wieniec górny, plecy oraz — przy dwóch lub trzech strefach — elementy dzielące wysokość na osobne wnęki.</p>
+
+<h3 id="korpus-dostep">Dostęp</h3>
+<p>Otwórz moduł <strong>SmartFrame</strong> z paska menu lub z listy modułów. Po prawej pojawia się panel z kartami szablonów i — po zaznaczeniu istniejącego korpusu — parametrami.</p>
+
+<h3 id="korpus-utworz">Aby utworzyć korpus</h3>
+<div class="procedure">
+<ol>
+  <li>Otwórz SmartFrame.</li>
+  <li>Wybierz szablon (kartę) odpowiadający typowi mebla — patrz poniższa lista.</li>
+  <li>Przeciągnij kartę na scenę 3D albo kliknij kartę, aby wstawić korpus w domyślnym miejscu.</li>
+  <li>W panelu edycji ustaw szerokość, wysokość i głębokość (oraz pola typowe dla szablonu).</li>
+  <li>Zatwierdź. Korpus pojawia się w scenie i w drzewie obiektów.</li>
+</ol>
+</div>
+
+<h3 id="korpus-szablony">Szablony</h3>
+<p>Każda karta to gotowy typ konstrukcji. Opis w kolejności kart w panelu:</p>
+
+<dl class="options">
+  <dt>1 strefa / 2 strefy / 3 strefy</dt>
+  <dd>Korpus prostopadłościenny. Liczba stref to liczba wnęk w pionie. Przy dwóch lub trzech strefach ustawiasz wysokości dołu (i środka); góra wynika z reszty wysokości całkowitej.</dd>
+  <dt>Rogowy 1</dt>
+  <dd>Korpus narożny z panelem zaślepiającym. Dodatkowo ustawiasz szerokość panelu oraz stronę (lewa / prawa).</dd>
+  <dt>Rogowy 90</dt>
+  <dd>Kątownik 90°. Osobno podajesz głębokość boku lewego i boku prawego.</dd>
+  <dt>Skośny dach</dt>
+  <dd>Korpus pod skos dachu (przód niższy, tył wyższy). Osobno: wysokość przodu i wysokość tyłu.</dd>
+  <dt>Skośny L/P ucięty</dt>
+  <dd>Skos w poprzek z uciosem na stykach. Osobno: wysokość lewa i wysokość prawa.</dd>
+</dl>
+
+<h3 id="korpus-edycja">Aby edytować istniejący korpus</h3>
+<div class="procedure">
+<ol>
+  <li>Zaznacz korpus w drzewie obiektów albo w scenie 3D.</li>
+  <li>W panelu edycji po prawej zmień wartości od góry do dołu — najpierw gabaryty, potem strefy i pola typowe dla szablonu, na końcu plecy.</li>
+  <li>Po każdej zmianie model przebudowuje się automatycznie. Cofnięcie: <kbd>Ctrl</kbd>+<kbd>Z</kbd>.</li>
+</ol>
+</div>
+
+<p>Kolejność pól w panelu (ogólna):</p>
+<dl class="options">
+  <dt>Szerokość, wysokość, głębokość</dt>
+  <dd>Gabaryt zewnętrzny w mm.</dd>
+  <dt>Wysokości stref</dt>
+  <dd>Tylko przy 2–3 strefach: dół, ewent. środek; góra liczona automatycznie.</dd>
+  <dt>Pola typu (rogi, skosy)</dt>
+  <dd>Pojawiają się tylko dla danego szablonu (zaślepka, boki L/P, wysokości skosu).</dd>
+  <dt>Plecy</dt>
+  <dd>Odsunięcie od tylnej krawędzi oraz opcja wpustu.</dd>
+</dl>
+
+<p class="note"><strong>Uwaga:</strong> Po zmianie gabarytu wyposażenie Bloki pozostaje w wnękach i dopasowuje się do nowego światła. Najpierw ustaw korpus, potem dokładaj Bloki — ale możesz wracać do wymiarów korpusu w dowolnym momencie.</p>
+</section>
+
+<!-- ========== KATEGORIA: BLOKI ========== -->
+<section class="cat" data-cat="bloki">
+<span class="cat-chip">Bloki</span>
+<h2 id="bloki">Bloki</h2>
+
+<p>Bloki wypełnia korpus wyposażeniem albo dokłada elementy na jego obudowie. Po wyborze typu program generuje formatki, otwory systemowe i — tam gdzie to przewidziano — okucia z biblioteki.</p>
+
+<p>Są dwie kategorie. Najpierw zawsze wybierz kategorię, potem typ:</p>
+<ol>
+  <li><strong>Wewnętrzny</strong> — działa w wykrytej wnęce (bay). Wypełnia światło korpusu: półki, drzwi, szuflady, klapy, przegrody, drążek, kanał LED wnękowy.</li>
+  <li><strong>Zewnętrzny</strong> — działa na obudowie korpusu, nie we wnęce: blendy oraz kanał LED podszafkowy.</li>
+</ol>
+
+<h3 id="bloki-wstaw">Aby wstawić Bloki</h3>
+<div class="procedure">
+<ol>
+  <li>Dla kategorii wewnętrznej: kliknij wnękę w scenie (podświetli się) albo zaznacz korpus tak, by detektor wskazał bay. Dla kategorii zewnętrznej: zaznacz korpus.</li>
+  <li>Otwórz panel Bloki.</li>
+  <li>Wybierz kategorię (wewnętrzny / zewnętrzny), potem typ modułu.</li>
+  <li>Moduł pojawia się w drzewie pod korpusem. Ustaw opcje w panelu edycji — opisane poniżej w kolejności typów.</li>
+</ol>
+</div>
+
+<!-- WEWNĘTRZNY -->
+<span class="sub-chip sb-w">Bloki · wewnętrzny</span>
+<h3 id="sb-wewnetrzny">Bloki wewnętrzny</h3>
+
+<p>Poniższe typy wypełniają wnękę. Dla każdego typu: najpierw krótki opis, potem procedura, potem opcje w kolejności panelu.</p>
+
+<h4 id="sb-polki">Półki</h4>
+<p>Układa poziome półki z równomiernym podziałem wysokości wnęki. Może dodać nawierty systemowe w bokach.</p>
+<div class="procedure">
+<ol>
+  <li>Zaznacz wnękę i wstaw typ <strong>Półki</strong>.</li>
+  <li>Ustaw ilość półek.</li>
+  <li>Ustaw odsunięcia od frontu i boków.</li>
+  <li>Wybierz wzór otworów i w razie potrzeby rozstaw oraz offsety.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Ilość półek</dt>
+  <dd>Liczba półek we wnęce (limit ok. 8).</dd>
+  <dt>Odsuń przód / odsunięcia boczne</dt>
+  <dd>Cofnięcie półki od frontu oraz luzy boczne (przód / tył).</dd>
+  <dt>Wzór otworów</dt>
+  <dd>Pojedynczy, potrójny, System 32 albo brak otworów.</dd>
+  <dt>Rozstaw i offset X (przód / tył)</dt>
+  <dd>Pozycje nawiertów względem krawędzi.</dd>
+</dl>
+
+<h4 id="sb-wieniec">Wieniec</h4>
+<p>Jedna pozioma płyta dzieląca wnękę (w przeciwieństwie do zestawu wielu półek).</p>
+<div class="procedure">
+<ol>
+  <li>Wstaw typ <strong>Wieniec</strong> do wnęki.</li>
+  <li>Ustaw przestrzeń od dołu, potem od góry — pozycja wieńca wynika z tych dwóch wartości.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Przestrzeń od dołu</dt>
+  <dd>Wysokość światła pod wieńcem.</dd>
+  <dt>Przestrzeń od góry</dt>
+  <dd>Wysokość światła nad wieńcem.</dd>
+</dl>
+
+<h4 id="sb-drzwi">Drzwi</h4>
+<p>Fronty skrzydłowe z zawiasami: lewe, prawe lub podwójne.</p>
+<div class="procedure">
+<ol>
+  <li>Wstaw typ <strong>Drzwi</strong>.</li>
+  <li>Wybierz typ otwierania.</li>
+  <li>Ustaw szczelinę (przy podwójnych) i nałożenia na korpus.</li>
+  <li>Sprawdź okucia: wagę, sugerowaną liczbę zawiasów i pozycje.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Typ drzwi</dt>
+  <dd>Lewe, prawe lub podwójne.</dd>
+  <dt>Szczelina (środek)</dt>
+  <dd>Fuga między skrzydłami przy drzwiach podwójnych.</dd>
+  <dt>Nałożenia frontu</dt>
+  <dd>Góra, dół, lewo, prawo — ile front nachodzi na korpus.</dd>
+  <dt>Okucia (zawiasy)</dt>
+  <dd>Szablon, pozycje w pionie, liczba wynikająca z wagi frontu.</dd>
+</dl>
+
+<h4 id="sb-drzwi-narozne">Drzwi narożne</h4>
+<p>Dwa skrzydła w korpusie narożnym 90°, ze stykiem w fudze środkowej.</p>
+<div class="procedure">
+<ol>
+  <li>Użyj na korpusie narożnym (Rogowy 90 / odpowiednia wnęka).</li>
+  <li>Wstaw <strong>Drzwi narożne</strong>.</li>
+  <li>Wybierz tryb otwierania, potem szczelinę i nałożenia.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Otwieranie</dt>
+  <dd>Jednostronna, pierwszy lewy albo pierwszy prawy.</dd>
+  <dt>Szczelina środkowa</dt>
+  <dd>Fuga między skrzydłami.</dd>
+  <dt>Nałożenia</dt>
+  <dd>Góra, dół oraz nakładanie lewe i prawe.</dd>
+</dl>
+
+<h4 id="sb-szuflady">Szuflady</h4>
+<p>Zestaw szuflad z prowadnicami z biblioteki okuć (np. Blum).</p>
+<div class="procedure">
+<ol>
+  <li>Wstaw typ <strong>Szuflady</strong>.</li>
+  <li>Podaj ilość i producenta prowadnic.</li>
+  <li>Ustal wysokości frontów (auto albo ręczne) oraz nałożenia.</li>
+  <li>Dla każdej szuflady sprawdź długość i system prowadnicy.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Ilość szuflad</dt>
+  <dd>Liczba skrzynek we wnęce.</dd>
+  <dt>Producent prowadnic</dt>
+  <dd>Marka z katalogu; od niej zależą dostępne systemy i długości.</dd>
+  <dt>Wysokości frontów</dt>
+  <dd>Tryb auto (równy podział + wspólna szczelina) albo ręczne wysokości i szczeliny między frontami.</dd>
+  <dt>Nałożenia i dystanse L/P</dt>
+  <dd>Nakładka frontu na korpus oraz luz boczny.</dd>
+  <dt>Prowadnice (per szuflada)</dt>
+  <dd>Długość i system dla każdej pozycji osobno.</dd>
+</dl>
+
+<h4 id="sb-klapy">Klapy</h4>
+<p>Front uchylny z podnośnikami — typowo szafka wisząca lub barek.</p>
+<div class="procedure">
+<ol>
+  <li>Wstaw typ <strong>Klapy</strong>.</li>
+  <li>Wybierz typ (góra / dół).</li>
+  <li>Ustaw nałożenia, potem parametry podnośników i wagę frontu.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Typ klapy</dt>
+  <dd>Góra albo dół (barek).</dd>
+  <dt>Nałożenia</dt>
+  <dd>Góra, dół, lewo, prawo.</dd>
+  <dt>Zawiasy / podnośniki</dt>
+  <dd>Strony montażu, waga frontu, sugerowana liczba, współczynnik mocy (LF).</dd>
+</dl>
+
+<h4 id="sb-przegrody">Przegrody</h4>
+<p>Pionowe ścianki dzielące wnękę na komory.</p>
+<div class="procedure">
+<ol>
+  <li>Wstaw typ <strong>Przegrody</strong>.</li>
+  <li>Ustaw ilość.</li>
+  <li>Wybierz rozstaw równy albo własne szerokości wnęk (ostatnia komora wynika z reszty szerokości).</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Ilość przegród</dt>
+  <dd>Liczba ścianek pionowych.</dd>
+  <dt>Rozstaw</dt>
+  <dd>Równy albo własny.</dd>
+  <dt>Szerokości wnęk</dt>
+  <dd>Przy trybie własnym: szerokości komór przed ostatnią; ostatnia jest wyliczana.</dd>
+</dl>
+
+<h4 id="sb-drazek">Drążek</h4>
+<p>Drążek ubraniowy z rozetami; opcjonalnie półka nad drążkiem.</p>
+<div class="procedure">
+<ol>
+  <li>Wstaw typ <strong>Drążek</strong>.</li>
+  <li>Ustaw dystans od góry.</li>
+  <li>Włącz półkę nad drążkiem, jeśli potrzebna, i podaj luz nad półką.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Dystans od góry</dt>
+  <dd>Pozycja drążka w pionie.</dd>
+  <dt>Półka nad drążkiem</dt>
+  <dd>Włącza dodatkową półkę powyżej.</dd>
+  <dt>Luz nad półką</dt>
+  <dd>Odstęp nad tą półką (gdy jest włączona).</dd>
+</dl>
+
+<h4 id="sb-led-w">Kanał LED (wewnętrzny)</h4>
+<p>Profil LED wpuszczany w bokach wnęki lub w układzie poziomym.</p>
+<div class="procedure">
+<ol>
+  <li>Wstaw typ <strong>Kanał LED</strong> (kategoria wewnętrzna).</li>
+  <li>Ustaw offsety względem frontu i pleców.</li>
+  <li>Podaj szerokość frezu i głębokość wpustu.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>LED lewy / prawy offset</dt>
+  <dd>Pozycja kanału względem frontu na bokach.</dd>
+  <dt>Offset od środka pleców</dt>
+  <dd>Zero = środek pleców; wartość dodatnia lub ujemna przesuwa kanał.</dd>
+  <dt>Szerokość frezu / głębokość wpustu</dt>
+  <dd>Wymiary rowka pod profil.</dd>
+</dl>
+
+<!-- ZEWNĘTRZNY -->
+<span class="sub-chip sb-z">Bloki · zewnętrzny</span>
+<h3 id="sb-zewnetrzny">Bloki zewnętrzny</h3>
+
+<p>Te typy nie wypełniają wnęki. Dokładają geometrię na zewnątrz korpusu. Zaznacz korpus, wybierz kategorię zewnętrzną, potem typ.</p>
+
+<h4 id="sb-blendy">Blendy</h4>
+<p>Panele obudowy: boczne, górne oraz cokół.</p>
+<div class="procedure">
+<ol>
+  <li>Zaznacz korpus i wstaw <strong>Blendy</strong>.</li>
+  <li>Wybierz zakres montażu (co ma być objęte blendami).</li>
+  <li>Włącz strony (lewa, prawa, górna) i ustaw głębokość.</li>
+  <li>Jeśli używasz cokołu — ustaw wysokość, cofnięcie i szczelinę.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Montaż blend</dt>
+  <dd>Zakres: cokół+korpus+blenda górna, korpus+blenda górna, cokół+korpus albo sam korpus.</dd>
+  <dt>Blenda lewa / prawa / górna</dt>
+  <dd>Które strony generować.</dd>
+  <dt>Głębokość</dt>
+  <dd>Głębokość formatki blendy.</dd>
+  <dt>Cokół</dt>
+  <dd>Wysokość, cofnięcie od frontu, szczelina.</dd>
+</dl>
+
+<h4 id="sb-led-z">Kanał LED (zewnętrzny / podszafkowy)</h4>
+<p>Wpust pod profilem LED poniżej rzędu szafek.</p>
+<div class="procedure">
+<ol>
+  <li>Zaznacz korpus i wstaw <strong>Kanał LED</strong> (kategoria zewnętrzna).</li>
+  <li>Ustaw odsunięcie od frontu.</li>
+  <li>Podaj szerokość frezu i głębokość wpustu.</li>
+</ol>
+</div>
+<dl class="options">
+  <dt>Odsunięcie od frontu</dt>
+  <dd>Pozycja kanału względem przedniej płaszczyzny.</dd>
+  <dt>Szerokość frezu / profilu</dt>
+  <dd>Szerokość rowka.</dd>
+  <dt>Głębokość wpustu</dt>
+  <dd>Głębokość frezowania.</dd>
+</dl>
+</section>
+
+<!-- ========== KATEGORIA: SMARTPANEL ========== -->
+<section class="cat" data-cat="smartpanel">
+<span class="cat-chip">SmartPanel</span>
+<h2 id="smartpanel">SmartPanel</h2>
+
+<p>SmartPanel służy do edycji pojedynczej formatki (płyty) niezależnie od generatora korpusu lub Bloki.</p>
+
+<h3>Aby edytować formatkę</h3>
+<div class="procedure">
+<ol>
+  <li>Zaznacz formatkę w drzewie albo w scenie.</li>
+  <li>W panelu edycji zmień szerokość (W) i wysokość (H) w mm.</li>
+  <li>Grubość (T) zwykle pochodzi z materiału — zmieniaj świadomie.</li>
+  <li>Pozycję w przestrzeni ustaw gizmem w scenie 3D.</li>
+</ol>
+</div>
+
+<p class="note"><strong>Uwaga:</strong> Rozdział będzie uzupełniony o obrzeża, operacje na płycie i wymiary asocjacyjne.</p>
+</section>
+
+<!-- ========== KATEGORIA: ZŁĄCZA ========== -->
+<section class="cat" data-cat="zlacza">
+<span class="cat-chip">Złącza</span>
+<h2 id="zlacza">Złącza</h2>
+
+<p>Moduł złączy dodaje otwory pod okucia łączące dwie płyty (kołek, konfirmat, mimośród). Program wyszukuje styk płyt w tolerancji około 0,05&nbsp;mm.</p>
+
+<h3>Aby dodać złącze</h3>
+<div class="procedure">
+<ol>
+  <li>Przełącz belkę widokową na <strong>Xray</strong> lub <strong>Wireframe</strong>, aby widzieć symbole.</li>
+  <li>Uruchom narzędzie złączy i pipetą wskaż miejsce styku dwóch płyt (np. bok z dnem).</li>
+  <li>Wybierz typ złącza oraz regułę rozstawu (m.in. siatka 32&nbsp;mm).</li>
+  <li>Zatwierdź. Otwory pojawiają się na formatkach.</li>
+</ol>
+</div>
+
+<p class="note"><strong>Uwaga:</strong> Jeśli płyty nie stykają się (szczelina większa niż tolerancja), złącze się nie utworzy. Dosuń płyty gizmem, potem spróbuj ponownie. Rozdział będzie uzupełniony o firstOffset i tryb symetryczny.</p>
+</section>
+
+<footer>
+  SmartPanel Web — pomoc użytkownika v2.<br>
+  Pełniejsza, starsza wersja: <a href="dokumentacja-uzytkownika.html">dokumentacja-uzytkownika.html</a>
+</footer>
+</main>
+</div>
+
+<script>
+function toggleToc(){
+  var n = document.getElementById('toc');
+  n.style.display = n.style.display === 'block' ? 'none' : 'block';
+}
+var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+window.addEventListener('scroll', function(){
+  var pos = window.scrollY + 90, cur = null;
+  links.forEach(function(a){
+    var el = document.getElementById(a.getAttribute('href').slice(1));
+    if(el && el.offsetTop <= pos) cur = a;
+  });
+  links.forEach(function(a){ a.classList.toggle('active', a === cur); });
+}, {passive:true});
+</script>
+</body>
+</html>

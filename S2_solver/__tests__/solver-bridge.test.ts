@@ -31,7 +31,7 @@ function constraint(init: Partial<SolverConstraint> & { bindType: SolverConstrai
 }
 
 function newContainer(document: ProjectDocument, parentId?: string) {
-    const container = document.createContainer(
+    const container = document.createAssembly(
         { width: mmToNm(600), height: mmToNm(720), depth: mmToNm(500) },
         parentId,
     );

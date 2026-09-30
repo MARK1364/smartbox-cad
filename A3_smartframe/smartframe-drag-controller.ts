@@ -11,14 +11,28 @@ import { CreateKorpusCommand } from './commands/create-korpus-command.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
 import { instantiateCabinetTemplate } from '../B1_biblioteka/korpusy/cabinet-instantiator.js';
 
+/**
+ * Parametry przeciąganego korpusu — kanoniczne (SSOT: CabinetPlanParams).
+ * Zero aliasów legacy; brak zgadywania jednoski po wartości.
+ */
 export interface DraggedKorpusParams {
-    width: number;
-    height: number;
-    depth: number;
-    bottomHeight?: number;
-    middleHeight?: number;
-    backOffset?: number;
+    szerokosc_mm: number;
+    wysokosc_mm: number;
+    glebokosc_mm: number;
+    liczba_stref?: 1 | 2 | 3;
+    wysokosc_strefy_dolnej_mm?: number;
+    wysokosc_strefy_srodkowej_mm?: number;
+    cofniecie_plecow_mm?: number;
+    szerokosc_blendy_mm?: number;
+    strona_blendy?: 'LEFT' | 'RIGHT';
+    glebokosc_boku_lewego_mm?: number;
+    glebokosc_boku_prawego_mm?: number;
+    wysokosc_przod_mm?: number;
+    wysokosc_tyl_mm?: number;
+    wysokosc_lewy_mm?: number;
+    wysokosc_prawy_mm?: number;
     template?: any;
+    typ_korpusu?: 'korpus3' | 'korpus_rogowy1' | 'korpus_rogowy90' | 'korpus_skosny' | 'korpus_skosny_dach' | 'korpus_skosny_lr' | 'korpus_skosny_lr_uc';
 }
 
 export class SmartFrameDragController {
@@ -37,23 +51,23 @@ export class SmartFrameDragController {
         return this._draggedZoneCount;
     }
 
-    startDrag(zoneCount: 1 | 2 | 3, params: DraggedKorpusParams): void {
+    startDrag(liczba_stref: 1 | 2 | 3, params: DraggedKorpusParams): void {
         this._isDragging = true;
-        this._draggedZoneCount = zoneCount;
+        this._draggedZoneCount = liczba_stref;
         this._draggedParams = { ...params };
         this._lastGroundPointMm = null;
     }
 
     startDragTemplate(template: any): void {
         const fp = template?.frameParams || {};
-        const zc = (fp.zoneCount as 1 | 2 | 3) || 1;
+        const zc = (fp.liczba_stref as 1 | 2 | 3) || 1;
         this.startDrag(zc, {
-            width: template.dimensions?.width ?? 600,
-            height: template.dimensions?.height ?? 820,
-            depth: template.dimensions?.depth ?? 560,
-            bottomHeight: fp.bottomHeight,
-            middleHeight: fp.middleHeight,
-            backOffset: fp.backOffset,
+            szerokosc_mm: template.dimensions?.szerokosc_mm ?? 600,
+            wysokosc_mm: template.dimensions?.wysokosc_mm ?? 820,
+            glebokosc_mm: template.dimensions?.glebokosc_mm ?? 560,
+            wysokosc_strefy_dolnej_mm: fp.wysokosc_strefy_dolnej_mm,
+            wysokosc_strefy_srodkowej_mm: fp.wysokosc_strefy_srodkowej_mm,
+            cofniecie_plecow_mm: fp.cofniecie_plecow_mm,
             template
         });
     }
@@ -142,11 +156,11 @@ export class SmartFrameDragController {
         this._lastGroundPointMm = { x: floorCadX, y: floorCadY };
 
         // Aktualizacja pozycji podglądu ghosta
-        const params = this._draggedParams || { width: 1000, height: 2200, depth: 600 };
-        const ghost = this._ensureGhostMesh(scene, params.width, params.height, params.depth);
+        const params = this._draggedParams || { szerokosc_mm: 1000, wysokosc_mm: 2200, glebokosc_mm: 600 };
+        const ghost = this._ensureGhostMesh(scene, params.szerokosc_mm, params.wysokosc_mm, params.glebokosc_mm);
         if (ghost) {
             // Podstawa szafki opiera się na podłodze (Y = 0), więc środek bryły leży na Y = height / 2
-            ghost.position.set(hitPoint.x, params.height / 2, hitPoint.z);
+            ghost.position.set(hitPoint.x, params.wysokosc_mm / 2, hitPoint.z);
             ghost.isVisible = true;
         }
 
@@ -168,28 +182,29 @@ export class SmartFrameDragController {
             return false;
         }
 
-        const params = this._draggedParams || { width: 1000, height: 2200, depth: 600 };
+        const params = this._draggedParams || { szerokosc_mm: 1000, wysokosc_mm: 2200, glebokosc_mm: 600 };
         const zoneCount = this._draggedZoneCount;
         const pos = this._lastGroundPointMm || { x: 0, y: 0 };
+        const wysokoscMm = params.wysokosc_mm;
 
-        let bottomHeight = params.bottomHeight ?? (zoneCount === 2 ? 2000 : 500);
-        let middleHeight = params.middleHeight ?? 1200;
+        let bottomHeight = params.wysokosc_strefy_dolnej_mm ?? (zoneCount === 2 ? 2000 : 500);
+        let middleHeight = params.wysokosc_strefy_srodkowej_mm ?? 1200;
 
         if (zoneCount === 1) {
-            bottomHeight = params.height;
+            bottomHeight = wysokoscMm;
             middleHeight = 0;
         } else if (zoneCount === 2) {
-            if (bottomHeight >= params.height || bottomHeight <= 0 || bottomHeight === 500) {
-                bottomHeight = params.height > 2000 ? 2000 : (params.height >= 400 ? params.height - 200 : Math.round(params.height / 2));
+            if (bottomHeight >= wysokoscMm || bottomHeight <= 0 || bottomHeight === 500) {
+                bottomHeight = wysokoscMm > 2000 ? 2000 : (wysokoscMm >= 400 ? wysokoscMm - 200 : Math.round(wysokoscMm / 2));
             }
             middleHeight = 0;
         } else if (zoneCount === 3) {
-            if (bottomHeight + middleHeight >= params.height || bottomHeight <= 0 || middleHeight <= 0 || bottomHeight >= params.height) {
+            if (bottomHeight + middleHeight >= wysokoscMm || bottomHeight <= 0 || middleHeight <= 0 || bottomHeight >= wysokoscMm) {
                 bottomHeight = 500;
                 middleHeight = 1200;
-                if (bottomHeight + middleHeight >= params.height) {
-                    bottomHeight = Math.round(params.height * 0.25);
-                    middleHeight = Math.round(params.height * 0.55);
+                if (bottomHeight + middleHeight >= wysokoscMm) {
+                    bottomHeight = Math.round(wysokoscMm * 0.25);
+                    middleHeight = Math.round(wysokoscMm * 0.55);
                 }
             }
         }
@@ -198,21 +213,31 @@ export class SmartFrameDragController {
             instantiateCabinetTemplate({
                 template: params.template,
                 position: { x: pos.x, y: pos.y, z: 0 },
-                overrideDims: { width: params.width, height: params.height, depth: params.depth }
+                overrideDims: { szerokosc_mm: params.szerokosc_mm, wysokosc_mm: wysokoscMm, glebokosc_mm: params.glebokosc_mm }
             }, doc);
             this.endDrag();
             return true;
         }
 
         const cmd = new CreateKorpusCommand({
-            width: params.width,
-            height: params.height,
-            depth: params.depth,
-            zoneCount,
-            bottomHeight,
-            middleHeight,
-            backOffset: params.backOffset ?? 3,
-            position: { x: pos.x, y: pos.y, z: 0 }
+            // Wyłącznie kanoniczny słownik DTO.
+            szerokosc_mm: params.szerokosc_mm,
+            wysokosc_mm: wysokoscMm,
+            glebokosc_mm: params.glebokosc_mm,
+            liczba_stref: (params.liczba_stref ?? zoneCount) as 1 | 2 | 3,
+            wysokosc_strefy_dolnej_mm: bottomHeight,
+            wysokosc_strefy_srodkowej_mm: middleHeight,
+            cofniecie_plecow_mm: params.cofniecie_plecow_mm ?? 3,
+            position: { x: pos.x, y: pos.y, z: 0 },
+            typ_korpusu: params.typ_korpusu,
+            szerokosc_blendy_mm: params.szerokosc_blendy_mm,
+            strona_blendy: params.strona_blendy,
+            glebokosc_boku_lewego_mm: params.glebokosc_boku_lewego_mm,
+            glebokosc_boku_prawego_mm: params.glebokosc_boku_prawego_mm,
+            wysokosc_przod_mm: params.wysokosc_przod_mm,
+            wysokosc_tyl_mm: params.wysokosc_tyl_mm,
+            wysokosc_lewy_mm: params.wysokosc_lewy_mm,
+            wysokosc_prawy_mm: params.wysokosc_prawy_mm
         });
 
         const history = ContextManager.instance.commandHistory;
@@ -223,7 +248,7 @@ export class SmartFrameDragController {
         }
 
         if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
             (window as any).__rebuildGeometry?.('Utworzono nowy korpus');
         }
 

@@ -4,7 +4,7 @@
  * Wykrywa i sortuje wszystkie płaszczyzny leżące wzdłuż promienia widoku pod kursorem (od najbliższej do najdalszej).
  */
 
-import { normalizeFaceName } from '../../A4_smartpanel/panel-model.js';
+import { normalizeFaceName } from '../face-name.js';
 import type { QuickPickCandidate } from './quick-pick-types.js';
 
 function isMeshHierarchicallyEnabled(mesh: any): boolean {
@@ -17,11 +17,11 @@ function isMeshHierarchicallyEnabled(mesh: any): boolean {
 }
 
 export function formatFaceLabels(rawFaceName: string): { label: string; badge: string } {
-    let canonical = rawFaceName || '';
+    let canonical = '';
     try {
-        canonical = normalizeFaceName(canonical);
+        canonical = normalizeFaceName(rawFaceName || '');
     } catch {
-        /* zachowaj oryginalną */
+        /* nierozpoznana nazwa → etykieta surowa poniżej */
     }
 
     switch (canonical) {

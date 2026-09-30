@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Snapshot geometrii korpusu dla E3: prawdziwe formatki z pozycją/obrotem
  * względem upuszczonego węzła, już w układzie Babylon (mm, Y-up).
  */
@@ -11,9 +11,9 @@ import { Vec3 } from '../A1_core/cad-math/vec3';
 import { cadToRender, cadMatrixToRenderMatrix } from '../A1_core/cad-math/coord-system';
 import { nmToMm } from '../A1_core/cad-math/units';
 import { ContextManager } from '../A1_core/context-manager';
-import { toMm } from './e3-library-extractor';
+import { modelNmToMm } from './e3-library-extractor';
 
-export const E3_GEOMETRY_STORAGE_KEY = 'smartbox_cad_e3_geometry_v1';
+export const E3_GEOMETRY_STORAGE_KEY = 'bloki_cad_e3_geometry_v1';
 const PROJECT_STORAGE_KEY = 'smartpanel_project_current_v3';
 
 export interface E3PartPose {
@@ -61,10 +61,10 @@ function matrixFromSerializedNode(json: any): Mat4 {
 }
 
 function dimsFromDomain(domain: any, isPanel: boolean): { width: number; height: number; depth: number; thickness: number } {
-    const width = toMm(domain?.width, isPanel ? 600 : 800);
-    const height = toMm(domain?.height, isPanel ? 720 : 720);
-    const depth = toMm(domain?.depth, isPanel ? 18 : 560);
-    const thickness = toMm(domain?.thickness ?? domain?.depth, 18);
+    const width = modelNmToMm(domain?.width, isPanel ? 600 : 800);
+    const height = modelNmToMm(domain?.height, isPanel ? 720 : 720);
+    const depth = modelNmToMm(domain?.depth, isPanel ? 18 : 560);
+    const thickness = modelNmToMm(domain?.thickness ?? domain?.depth, 18);
     return { width, height, depth, thickness };
 }
 

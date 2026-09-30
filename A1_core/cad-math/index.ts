@@ -1,6 +1,6 @@
 /**
  * SmartPanel Web — cad-math barrel export
- * Zero zależności od Babylon.js / OCCT / DOM.
+ * Zero zależności od Babylon.js i DOM.
  */
 
 export { Vec3 } from './vec3.js';
@@ -24,12 +24,12 @@ export {
     MM_TO_NM_FACTOR,
     NM_TO_MM_FACTOR,
     M_TO_MM_FACTOR,
+    M_TO_NM_FACTOR,
     INCH_TO_NM_FACTOR,
     NM_TO_INCH_FACTOR,
     mmToNm,
     nmToMm,
+    rulesMToNm,
     rulesMToMm,
-    inchToNm,
-    nmToInch,
 } from './units.js';
 

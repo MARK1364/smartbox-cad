@@ -1,5 +1,5 @@
 @echo off
-title SmartBox Web Server
+title Bloki Web Server
 cd /d "%~dp0"
 
 echo ====================================================
@@ -18,7 +18,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo Otwieram przegladarke...
-start http://localhost:8080
+start http://localhost:8085
 
 npm run dev
 pause

@@ -125,7 +125,7 @@ describe('projekcja translacji gizma na pozostawione DOF', () => {
 function newCabinet(document: ProjectDocument) {
     for (let attempt = 0; attempt < 8; attempt++) {
         try {
-            const container = document.createContainer({
+            const container = document.createAssembly({
                 width: mmToNm(600),
                 height: mmToNm(720),
                 depth: mmToNm(500),

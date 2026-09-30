@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "module_type": "SMART_WALL_PILLARS",
+    "version": "1.0.0"
+  },
+  "defaults": {
+    "pillar_side_m": 0.2,
+    "pillar_height_m": 2.7
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "exclude_from_production": true,
+      "role_overrides": {
+        "WALL_PILLAR": {
+          "exclude_from_production": true,
+          "edge_banding": {}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "default_front_name": {
+    "pl": "Front",
+    "en": "Front",
+    "de": "Front"
+  },
+  "default_bloki_name": {
+    "pl": "Bloki",
+    "en": "Bloki",
+    "de": "Bloki"
+  },
+  "default_cabinet_name": {
+    "pl": "Szafka",
+    "en": "Cabinet",
+    "de": "Schrank"
+  }
+}

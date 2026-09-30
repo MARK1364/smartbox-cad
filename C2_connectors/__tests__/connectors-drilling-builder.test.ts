@@ -348,4 +348,16 @@ describe('buildConnectorDrillings', () => {
         expect(holesEdge[0].feature.params.faceType).toBe('EDGE');
         expect(holesEdge[0].feature.params.through).toBeUndefined();
     });
+
+    it('rzuca błąd jeśli formatka nie posiada zdefiniowanej grubości (fail-fast, brak cichego 18 mm)', () => {
+        const nodeA = mockPanelNode('panelA', 600, 720, 18);
+        delete (nodeA.domainData as any).thickness;
+        const nodeB = mockPanelNode('panelB', 600, 720, 18);
+        const doc = mockDocument([nodeA, nodeB]);
+        const conn = makeConnectorInstance('kolki_d8x35', 0, [0, 0, 100]);
+        mockGroups.push(makeGroup('G11', 'panelA', 'panelB', [1, 0, 0], [conn]));
+
+        expect(() => buildConnectorDrillings(doc)).toThrow(/Nieprawidłowe wymiary formatki/);
+    });
 });
+

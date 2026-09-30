@@ -7,24 +7,26 @@
 
 export type CabinetCategory = 'dolne' | 'gorne' | 'slupki' | 'inne';
 
+/** Gabaryt korpusu [mm] — klucze kanoniczne (SSOT: CabinetPlanParams). */
 export interface CabinetDimensionsMm {
-    width: number;
-    height: number;
-    depth: number;
+    szerokosc_mm: number;
+    wysokosc_mm: number;
+    glebokosc_mm: number;
     cokolHeight?: number;
 }
 
+/** Parametry podziału korpusu [mm] — klucze kanoniczne. */
 export interface CabinetFrameParamsMm {
-    zoneCount: 1 | 2 | 3;
-    bottomHeight?: number;
-    middleHeight?: number;
-    backOffset?: number;
+    liczba_stref: 1 | 2 | 3;
+    wysokosc_strefy_dolnej_mm?: number;
+    wysokosc_strefy_srodkowej_mm?: number;
+    cofniecie_plecow_mm?: number;
     offsets?: Record<string, number>;
 }
 
 export interface CabinetSubmoduleRecipe {
     id?: string;
-    type: string; // np. 'smartbox_shelves', 'smartbox_doors', 'smartbox_drawers', 'smartbox_flaps', 'smartbox_panels'
+    type: string; // np. 'blok_shelves', 'blok_doors', 'blok_drawers', 'blok_flaps', 'blok_panels'
     boxType: string; // np. 'SHELVES', 'DOORS', 'DRAWERS', 'FLAPS', 'PANELS'
     label?: string;
     zoneIndex?: number; // 0 = dół / główna, 1 = środek, 2 = góra

@@ -1,0 +1,72 @@
+{
+  "missing_params.box": {
+    "pl": "Brak parametrów (silnik nie podstawia): {keys}. Ustaw wartości poniżej albo wstaw drzwi narożne ponownie.",
+    "en": "Missing parameters (engine does not substitute): {keys}. Set the values below or re-insert the corner doors.",
+    "de": "Fehlende Parameter (Engine setzt nicht ein): {keys}. Werte unten setzen oder Ecktüren erneut einfügen."
+  },
+  "otwieranie.label": {
+    "pl": "Otwieranie:",
+    "en": "Opening:",
+    "de": "Öffnung:"
+  },
+  "otwieranie.items.jednostronna": {
+    "pl": "Jednostronna",
+    "en": "One-sided",
+    "de": "Einseitig"
+  },
+  "otwieranie.items.dwustronna_lewy": {
+    "pl": "1. lewy",
+    "en": "1. left",
+    "de": "1. links"
+  },
+  "otwieranie.items.dwustronna_prawy": {
+    "pl": "1. prawy",
+    "en": "1. right",
+    "de": "1. rechts"
+  },
+  "otwieranie.hint.jednostronna": {
+    "pl": "Oba fronty na jedną stronę; w środku łączone zawiasami (fuga).",
+    "en": "Both fronts to one side; joined by hinges in the middle (gap).",
+    "de": "Beide Fronten zu einer Seite; in der Mitte mit Scharnieren verbunden (Fuge)."
+  },
+  "otwieranie.hint.dwustronna_lewy": {
+    "pl": "Osobne otwieranie — pierwszy lewy (geometria w kolejnym kroku).",
+    "en": "Separate opening — left first (geometry in a later step).",
+    "de": "Getrenntes Öffnen — links zuerst (Geometrie im nächsten Schritt)."
+  },
+  "otwieranie.hint.dwustronna_prawy": {
+    "pl": "Osobne otwieranie — pierwszy prawy (geometria w kolejnym kroku).",
+    "en": "Separate opening — right first (geometry in a later step).",
+    "de": "Getrenntes Öffnen — rechts zuerst (Geometrie im nächsten Schritt)."
+  },
+  "szcz_srodkowa.label": {
+    "pl": "Szczelina środkowa:",
+    "en": "Center gap:",
+    "de": "Mittenfuge:"
+  },
+  "overlaps.title": {
+    "pl": "Nałożenia:",
+    "en": "Overlaps:",
+    "de": "Überlappungen:"
+  },
+  "ov_top.label": {
+    "pl": "Góra",
+    "en": "Top",
+    "de": "Oben"
+  },
+  "ov_bottom.label": {
+    "pl": "Dół",
+    "en": "Bottom",
+    "de": "Unten"
+  },
+  "nalozenie_lewe.label": {
+    "pl": "Nakładanie lewe",
+    "en": "Left overlap",
+    "de": "Überlappung links"
+  },
+  "nalozenie_prawe.label": {
+    "pl": "Nakładanie prawe",
+    "en": "Right overlap",
+    "de": "Überlappung rechts"
+  }
+}

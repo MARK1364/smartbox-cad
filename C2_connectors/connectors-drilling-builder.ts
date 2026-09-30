@@ -91,10 +91,26 @@ interface PanelDims {
 }
 
 function getPanelDims(panelData: any): PanelDims {
+    if (!panelData) {
+        throw new Error('[C2_connectors] Brak danych formatki (panelData is null/undefined)');
+    }
+    const width = panelData.width;
+    const height = panelData.height;
+    const thick = panelData.thickness;
+    if (
+        typeof width !== 'number' || !Number.isFinite(width) || width <= 0 ||
+        typeof height !== 'number' || !Number.isFinite(height) || height <= 0 ||
+        typeof thick !== 'number' || !Number.isFinite(thick) || thick <= 0
+    ) {
+        throw new Error(
+            `[C2_connectors] Nieprawidłowe wymiary formatki ${panelData.id || panelData.name || 'nieznana'}: ` +
+            `width=${width}, height=${height}, thickness=${thick}. Wszystkie wymiary muszą być dodatnimi liczbami.`
+        );
+    }
     return {
-        widthMm: nmToMm(panelData.width ?? 600_000_000),
-        heightMm: nmToMm(panelData.height ?? 720_000_000),
-        thickMm: nmToMm(panelData.thickness ?? 18_000_000),
+        widthMm: nmToMm(width),
+        heightMm: nmToMm(height),
+        thickMm: nmToMm(thick),
     };
 }
 
@@ -207,11 +223,7 @@ export function buildConnectorDrillings(document: ProjectDocument): ConnectorDri
     _featureSeq = 0;
 
     for (const group of store.groups) {
-        try {
-            processGroup(document, group, intents);
-        } catch (err) {
-            console.warn(`[connectors-drilling-builder] Błąd przetwarzania grupy ${group.id}:`, err);
-        }
+        processGroup(document, group, intents);
     }
 
     return intents;

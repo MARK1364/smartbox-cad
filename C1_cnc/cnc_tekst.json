@@ -1,0 +1,722 @@
+{
+  "panel.title": {
+    "pl": "Płytowy Moduł CNC (N-Panel)",
+    "en": "Panel CNC Module (N-Panel)",
+    "de": "Platten-CNC-Modul (N-Panel)"
+  },
+  "panel.create_program": {
+    "pl": "Utwórz nowy program",
+    "en": "Create new program",
+    "de": "Neues Programm erstellen"
+  },
+  "panel.no_programs": {
+    "pl": "Brak utworzonych programów",
+    "en": "No programs created",
+    "de": "Keine Programme erstellt"
+  },
+  "panel.frozen_title": {
+    "pl": "Formatka zamrożona:",
+    "en": "Panel frozen:",
+    "de": "Platte eingefroren:"
+  },
+  "panel.frozen_body": {
+    "pl": "wykluczona z obróbki CNC, generowania G-kodu oraz nestingu.",
+    "en": "excluded from CNC machining, G-code generation and nesting.",
+    "de": "von CNC-Bearbeitung, G-Code-Erzeugung und Nesting ausgeschlossen."
+  },
+  "panel.pick_wcs_corner": {
+    "pl": "Kliknij naroże w 3D…",
+    "en": "Click a corner in 3D…",
+    "de": "Ecke in 3D klicken…"
+  },
+  "panel.change_wcs_corner": {
+    "pl": "Zmień naroże WCS",
+    "en": "Change WCS corner",
+    "de": "WCS-Ecke ändern"
+  },
+  "panel.layout_edit": {
+    "pl": "Edycja układu",
+    "en": "Layout edit",
+    "de": "Layout bearbeiten"
+  },
+  "panel.tools_library": {
+    "pl": "Biblioteka Narzędzi",
+    "en": "Tool library",
+    "de": "Werkzeugbibliothek"
+  },
+  "panel.pick_edges": {
+    "pl": "Wybierz Krawędzie 3D ({n})",
+    "en": "Pick 3D Edges ({n})",
+    "de": "3D-Kanten wählen ({n})"
+  },
+  "panel.confirm": {
+    "pl": "Zatwierdź",
+    "en": "Confirm",
+    "de": "Bestätigen"
+  },
+  "panel.cancel": {
+    "pl": "Anuluj",
+    "en": "Cancel",
+    "de": "Abbrechen"
+  },
+  "panel.operations_order": {
+    "pl": "Kolejność Operacji (generowanie kodu):",
+    "en": "Operation order (code generation):",
+    "de": "Operationsreihenfolge (Code-Erzeugung):"
+  },
+  "panel.no_operations": {
+    "pl": "Brak przypisanych operacji.",
+    "en": "No assigned operations.",
+    "de": "Keine Operationen zugewiesen."
+  },
+  "panel.delete": {
+    "pl": "Usuń",
+    "en": "Delete",
+    "de": "Löschen"
+  },
+  "panel.sim_speed": {
+    "pl": "Prędkość symulacji:",
+    "en": "Simulation speed:",
+    "de": "Simulationsgeschwindigkeit:"
+  },
+  "panel.no_program_hint": {
+    "pl": "Wybierz lub utwórz program CNC, aby wygenerować kod.",
+    "en": "Select or create a CNC program to generate code.",
+    "de": "CNC-Programm wählen oder erstellen, um Code zu erzeugen."
+  },
+  "panel.position": {
+    "pl": "Pozycja",
+    "en": "Position",
+    "de": "Position"
+  },
+  "panel.rotation": {
+    "pl": "Rotacja",
+    "en": "Rotation",
+    "de": "Rotation"
+  },
+  "panel.show_only": {
+    "pl": "Pokaż tylko: [Nazwa Formatki]",
+    "en": "Show only: [Panel Name]",
+    "de": "Nur anzeigen: [Plattenname]"
+  },
+  "panel.ortho_view": {
+    "pl": "Widok Prostopadły (View Normal)",
+    "en": "Normal View (View Normal)",
+    "de": "Normalansicht (View Normal)"
+  },
+  "warnings.pick_single_panel": {
+    "pl": "Zaznacz dokładnie jedną formatkę w drzewie projektu CAD!",
+    "en": "Select exactly one panel in the CAD project tree!",
+    "de": "Genau eine Platte im CAD-Projektbaum wählen!"
+  },
+  "warnings.panel_frozen_code": {
+    "pl": "Formatka jest zamrożona (obiekt wykluczony z obróbki CNC). Odmroź formatkę w drzewie obiektów, aby wygenerować kod.",
+    "en": "Panel is frozen (excluded from CNC machining). Unfreeze the panel in the object tree to generate code.",
+    "de": "Platte ist eingefroren (von CNC-Bearbeitung ausgeschlossen). Zum Erzeugen auftauen."
+  },
+  "warnings.panel_frozen_sim": {
+    "pl": "Formatka jest zamrożona (obiekt wykluczony z obróbki CNC). Odmroź formatkę w drzewie obiektów, aby uruchomić symulację.",
+    "en": "Panel is frozen (excluded from CNC machining). Unfreeze the panel in the object tree to run the simulation.",
+    "de": "Platte ist eingefroren (von CNC-Bearbeitung ausgeschlossen). Zum Simulieren auftauen."
+  },
+  "warnings.no_tool_code": {
+    "pl": "Błąd: Brak przypisanego narzędzia dla {n} operacji! Przypisz narzędzia we wszystkich operacjach przed generowaniem kodu.",
+    "en": "Error: Missing tool assignment for {n} operations! Assign tools in all operations before generating code.",
+    "de": "Fehler: Fehlende Werkzeugzuweisung für {n} Operationen! Vorher Werkzeuge zuweisen."
+  },
+  "warnings.no_tool_sim": {
+    "pl": "Błąd: Brak przypisanego narzędzia dla {n} operacji! Przypisz narzędzia przed uruchomieniem symulacji.",
+    "en": "Error: Missing tool assignment for {n} operations! Assign tools before running the simulation.",
+    "de": "Fehler: Fehlende Werkzeugzuweisung für {n} Operationen! Vor dem Simulieren zuweisen."
+  },
+  "tabs.wcs": {
+    "pl": "WCS",
+    "en": "WCS",
+    "de": "WKS"
+  },
+  "tabs.tool": {
+    "pl": "Narzędzie",
+    "en": "Tool",
+    "de": "Werkzeug"
+  },
+  "tabs.operation": {
+    "pl": "Operacja",
+    "en": "Operation",
+    "de": "Operation"
+  },
+  "tabs.simulate": {
+    "pl": "Symulacja",
+    "en": "Simulation",
+    "de": "Simulation"
+  },
+  "tabs.generate": {
+    "pl": "Generuj NC",
+    "en": "Generate NC",
+    "de": "NC erzeugen"
+  },
+  "project.title": {
+    "pl": "Ustawienia Projektu",
+    "en": "Project Settings",
+    "de": "Projekteinstellungen"
+  },
+  "project.program_params": {
+    "pl": "Parametry Programu",
+    "en": "Program Parameters",
+    "de": "Programmparameter"
+  },
+  "project.name": {
+    "pl": "Nazwa:",
+    "en": "Name:",
+    "de": "Name:"
+  },
+  "wcs.title": {
+    "pl": "Konfiguracja WCS",
+    "en": "WCS Configuration",
+    "de": "WKS-Konfiguration"
+  },
+  "wcs.name": {
+    "pl": "Nazwa",
+    "en": "Name",
+    "de": "Name"
+  },
+  "wcs.pick_corner": {
+    "pl": "Kliknij Naroże na obiekcie 3D...",
+    "en": "Click a corner on the 3D object...",
+    "de": "Ecke am 3D-Objekt klicken..."
+  },
+  "wcs.pick_corner_view": {
+    "pl": "Wybierz Naroże w Widoku 3D",
+    "en": "Pick Corner in 3D View",
+    "de": "Ecke in 3D-Ansicht wählen"
+  },
+  "wcs.hide_corrections": {
+    "pl": "Ukryj Korekty",
+    "en": "Hide Corrections",
+    "de": "Korrekturen ausblenden"
+  },
+  "wcs.manual_offset": {
+    "pl": "Ręczna Korekta Offsetu",
+    "en": "Manual Offset Correction",
+    "de": "Manuelle Offset-Korrektur"
+  },
+  "wcs.width_x": {
+    "pl": "Szerokość (X)",
+    "en": "Width (X)",
+    "de": "Breite (X)"
+  },
+  "wcs.height_y": {
+    "pl": "Wysokość (Y)",
+    "en": "Height (Y)",
+    "de": "Höhe (Y)"
+  },
+  "wcs.thickness_z": {
+    "pl": "Grubość (Z)",
+    "en": "Thickness (Z)",
+    "de": "Dicke (Z)"
+  },
+  "wcs.zero_shift": {
+    "pl": "Ręczne przesunięcie punktu zerowego (mm):",
+    "en": "Manual zero point shift (mm):",
+    "de": "Manuelle Nullpunktverschiebung (mm):"
+  },
+  "wcs.rotation_deg": {
+    "pl": "Ręczna rotacja układu (stopnie):",
+    "en": "Manual frame rotation (degrees):",
+    "de": "Manuelle Systemrotation (Grad):"
+  },
+  "wcs.ortho_view": {
+    "pl": "Widok Prostopadły",
+    "en": "Ortho View",
+    "de": "Ortho-Ansicht"
+  },
+  "wcs.isolate_3d": {
+    "pl": "Izolacja 3D",
+    "en": "3D Isolation",
+    "de": "3D-Isolierung"
+  },
+  "wcs.coord_system": {
+    "pl": "Układ Współrzędnych (WCS):",
+    "en": "Coordinate System (WCS):",
+    "de": "Koordinatensystem (WKS):"
+  },
+  "wcs.bases.G54": {
+    "pl": "G54 (Baza Główna 1)",
+    "en": "G54 (Main Base 1)",
+    "de": "G54 (Hauptbasis 1)"
+  },
+  "wcs.bases.G55": {
+    "pl": "G55 (Baza Domyślna 2)",
+    "en": "G55 (Default Base 2)",
+    "de": "G55 (Standardbasis 2)"
+  },
+  "wcs.bases.G56": {
+    "pl": "G56 (Baza 3)",
+    "en": "G56 (Base 3)",
+    "de": "G56 (Basis 3)"
+  },
+  "wcs.bases.G57": {
+    "pl": "G57 (Baza 4)",
+    "en": "G57 (Base 4)",
+    "de": "G57 (Basis 4)"
+  },
+  "wcs.panel_dims": {
+    "pl": "Wymiary Formatki",
+    "en": "Panel Dimensions",
+    "de": "Plattenmaße"
+  },
+  "tools.title": {
+    "pl": "Biblioteka Narzędzi CNC",
+    "en": "CNC Tool Library",
+    "de": "CNC-Werkzeugbibliothek"
+  },
+  "tools.pick_from_store": {
+    "pl": "Wybierz Narzędzie z Magazynu:",
+    "en": "Pick Tool from Store:",
+    "de": "Werkzeug aus Magazin wählen:"
+  },
+  "tools.id": {
+    "pl": "Identyfikator:",
+    "en": "Identifier:",
+    "de": "Kennung:"
+  },
+  "tools.diameter": {
+    "pl": "Średnica (FI):",
+    "en": "Diameter (DIA):",
+    "de": "Durchmesser (D):"
+  },
+  "tools.type": {
+    "pl": "Typ narzędzia:",
+    "en": "Tool type:",
+    "de": "Werkzeugtyp:"
+  },
+  "tools.cut_params": {
+    "pl": "Parametry Skrawania:",
+    "en": "Cutting Parameters:",
+    "de": "Schnittparameter:"
+  },
+  "tools.feed": {
+    "pl": "Posuw (F mm/min):",
+    "en": "Feed (F mm/min):",
+    "de": "Vorschub (F mm/min):"
+  },
+  "tools.rpm": {
+    "pl": "Obroty (S RPM):",
+    "en": "Spindle (S RPM):",
+    "de": "Drehzahl (S RPM):"
+  },
+  "operations.title": {
+    "pl": "Drzewo Cech i Strategie CAM",
+    "en": "Feature Tree and CAM Strategies",
+    "de": "Merkmalbaum und CAM-Strategien"
+  },
+  "operations.no_features": {
+    "pl": "Brak cech na formatce. Dodaj otwory lub zaznacz profil w 3D.",
+    "en": "No features on panel. Add holes or pick a profile in 3D.",
+    "de": "Keine Merkmale auf Platte. Bohrungen hinzufügen oder Profil in 3D wählen."
+  },
+  "operations.pick_profile": {
+    "pl": "Zaznacz Profil Krawędzi w 3D",
+    "en": "Pick Edge Profile in 3D",
+    "de": "Kantenprofil in 3D wählen"
+  },
+  "operations.pick_profile_building": {
+    "pl": "Klikaj Krawędzie w 3D (Budowanie Profilu)...",
+    "en": "Click Edges in 3D (Building Profile)...",
+    "de": "Kanten in 3D klicken (Profilaufbau)..."
+  },
+  "operations.feature_count": {
+    "pl": "Liczba Cech:",
+    "en": "Feature Count:",
+    "de": "Merkmalanzahl:"
+  },
+  "operations.type_drilling": {
+    "pl": "Wiercenie",
+    "en": "Drilling",
+    "de": "Bohren"
+  },
+  "operations.type_drilling_multi": {
+    "pl": "Wiercenie ({n}x)",
+    "en": "Drilling ({n}x)",
+    "de": "Bohren ({n}x)"
+  },
+  "operations.type_groove": {
+    "pl": "Wpust",
+    "en": "Groove",
+    "de": "Nut"
+  },
+  "operations.type_contour": {
+    "pl": "Kontur",
+    "en": "Contour",
+    "de": "Kontur"
+  },
+  "operations.edit": {
+    "pl": "Edytuj",
+    "en": "Edit",
+    "de": "Bearbeiten"
+  },
+  "operations.comp_title": {
+    "pl": "Kompensacja Frezu (G41 / G42):",
+    "en": "Mill Compensation (G41 / G42):",
+    "de": "Fräserkompensation (G41 / G42):"
+  },
+  "operations.comp_left": {
+    "pl": "G41 (Lewa strona konturu)",
+    "en": "G41 (Left of contour)",
+    "de": "G41 (Links der Kontur)"
+  },
+  "operations.comp_right": {
+    "pl": "G42 (Prawa strona konturu)",
+    "en": "G42 (Right of contour)",
+    "de": "G42 (Rechts der Kontur)"
+  },
+  "operations.tool": {
+    "pl": "Narzędzie:",
+    "en": "Tool:",
+    "de": "Werkzeug:"
+  },
+  "operations.pick_tool": {
+    "pl": "-- Wybierz Narzędzie --",
+    "en": "-- Pick Tool --",
+    "de": "-- Werkzeug wählen --"
+  },
+  "operations.strategy_title": {
+    "pl": "Wybór Strategii Skrawania",
+    "en": "Cutting Strategy Selection",
+    "de": "Schnittstrategie wählen"
+  },
+  "operations.recalc": {
+    "pl": "Przelicz Ścieżki CLData dla Strategii",
+    "en": "Recalculate CLData Paths for Strategy",
+    "de": "CLData-Bahnen für Strategie neu berechnen"
+  },
+  "operations.edit_title": {
+    "pl": "Edycja Parametrów Cechy #{n}",
+    "en": "Feature Parameter Edit #{n}",
+    "de": "Merkmalparameter #{n} bearbeiten"
+  },
+  "operations.depth": {
+    "pl": "Głębokość obróbki (Z mm):",
+    "en": "Machining depth (Z mm):",
+    "de": "Bearbeitungstiefe (Z mm):"
+  },
+  "operations.hole_dia": {
+    "pl": "Średnica otworu (FI mm):",
+    "en": "Hole diameter (DIA mm):",
+    "de": "Bohrungsdurchmesser (D mm):"
+  },
+  "operations.reverse_dir": {
+    "pl": "Odwróć kierunek obróbki",
+    "en": "Reverse machining direction",
+    "de": "Bearbeitungsrichtung umkehren"
+  },
+  "operations.comp_none": {
+    "pl": "Brak (Środek frezu)",
+    "en": "None (Mill center)",
+    "de": "Keine (Fräsermitte)"
+  },
+  "operations.comp_none_short": {
+    "pl": "Brak",
+    "en": "None",
+    "de": "Keine"
+  },
+  "operations.comp_inside": {
+    "pl": "Wewnątrz (G41)",
+    "en": "Inside (G41)",
+    "de": "Innen (G41)"
+  },
+  "operations.comp_outside": {
+    "pl": "Na zewnątrz (G42)",
+    "en": "Outside (G42)",
+    "de": "Außen (G42)"
+  },
+  "operations.settings": {
+    "pl": "Ustawienia Operacji",
+    "en": "Operation Settings",
+    "de": "Operationseinstellungen"
+  },
+  "operations.tool_none": {
+    "pl": "Narzędzie...",
+    "en": "Tool...",
+    "de": "Werkzeug..."
+  },
+  "operations.tool_label": {
+    "pl": "Narzędzie",
+    "en": "Tool",
+    "de": "Werkzeug"
+  },
+  "operations.depth_z": {
+    "pl": "Głębokość / Z (mm)",
+    "en": "Depth / Z (mm)",
+    "de": "Tiefe / Z (mm)"
+  },
+  "operations.lead_in": {
+    "pl": "Wydłuż wejście",
+    "en": "Extend entry",
+    "de": "Eintritt verlängern"
+  },
+  "operations.lead_out": {
+    "pl": "Wydłuż wyjście",
+    "en": "Extend exit",
+    "de": "Austritt verlängern"
+  },
+  "operations.reverse_entry": {
+    "pl": "Odwróć kierunek wejścia",
+    "en": "Reverse entry direction",
+    "de": "Eintrittsrichtung umkehren"
+  },
+  "operations.reverse_groove_depth": {
+    "pl": "Odwróć głębokość wpustu",
+    "en": "Reverse groove depth",
+    "de": "Nuttiefe umkehren"
+  },
+  "operations.save": {
+    "pl": "Zapisz",
+    "en": "Save",
+    "de": "Speichern"
+  },
+  "operations.cancel": {
+    "pl": "Anuluj",
+    "en": "Cancel",
+    "de": "Abbrechen"
+  },
+  "operations.ok": {
+    "pl": "OK",
+    "en": "OK",
+    "de": "OK"
+  },
+  "simulation.title": {
+    "pl": "Symulator 3D Ruchu Narzędzia w Babylon.js",
+    "en": "Babylon.js 3D Tool Motion Simulator",
+    "de": "Babylon.js 3D-Werkzeug Simulator"
+  },
+  "simulation.start": {
+    "pl": "Uruchom Symulację 3D",
+    "en": "Run 3D Simulation",
+    "de": "3D-Simulation starten"
+  },
+  "simulation.stop": {
+    "pl": "Zatrzymaj",
+    "en": "Stop",
+    "de": "Stopp"
+  },
+  "simulation.op_status": {
+    "pl": "Status Operacji:",
+    "en": "Operation Status:",
+    "de": "Operationsstatus:"
+  },
+  "simulation.running": {
+    "pl": "TRWA SYMULACJA",
+    "en": "SIMULATING",
+    "de": "SIMULATION LÄUFT"
+  },
+  "simulation.ready": {
+    "pl": "GOTOWY",
+    "en": "READY",
+    "de": "BEREIT"
+  },
+  "simulation.progress": {
+    "pl": "Postęp Symulacji:",
+    "en": "Simulation Progress:",
+    "de": "Simulationsfortschritt:"
+  },
+  "simulation.op_counter": {
+    "pl": "Operacja {c} z {t}",
+    "en": "Operation {c} of {t}",
+    "de": "Operation {c} von {t}"
+  },
+  "simulation.playback_speed": {
+    "pl": "Prędkość Odtwarzania:",
+    "en": "Playback Speed:",
+    "de": "Wiedergabegeschwindigkeit:"
+  },
+  "gcode.title": {
+    "pl": "Generowanie Kodu NC",
+    "en": "NC Code Generation",
+    "de": "NC-Code-Erzeugung"
+  },
+  "gcode.empty_notice": {
+    "pl": "(Brak operacji na liście formatki. Kliknij \"Wykryj cechy\" w zakładce Operacje)",
+    "en": "(No operations in panel list. Click \"Detect features\" in the Operations tab)",
+    "de": "(Keine Operationen in Plattenliste. \"Merkmale erkennen\" im Reiter Operationen klicken)"
+  },
+  "gcode.default_project_name": {
+    "pl": "Program_001",
+    "en": "Program_001",
+    "de": "Programm_001"
+  },
+  "gcode.dir_prompt": {
+    "pl": "Wpisz ścieżkę folderu docelowego:",
+    "en": "Enter target folder path:",
+    "de": "Zielordnerpfad eingeben:"
+  },
+  "gcode.dir_cancelled": {
+    "pl": "Wybór katalogu anulowany lub nieobsługiwany",
+    "en": "Directory pick cancelled or unsupported",
+    "de": "Ordnerwahl abgebrochen oder nicht unterstützt"
+  },
+  "gcode.copy_error": {
+    "pl": "Błąd kopiowania:",
+    "en": "Copy error:",
+    "de": "Kopierfehler:"
+  },
+  "gcode.output_file": {
+    "pl": "Plik wyjściowy:",
+    "en": "Output file:",
+    "de": "Ausgabedatei:"
+  },
+  "gcode.save_folder": {
+    "pl": "Folder / Ścieżka Zapisu:",
+    "en": "Folder / Save Path:",
+    "de": "Ordner / Speicherpfad:"
+  },
+  "gcode.folder_placeholder": {
+    "pl": "Wpisz lub wybierz folder...",
+    "en": "Type or pick a folder...",
+    "de": "Ordner eingeben oder wählen..."
+  },
+  "gcode.pick_folder": {
+    "pl": "Wybierz",
+    "en": "Browse",
+    "de": "Wählen"
+  },
+  "gcode.pick_folder_title": {
+    "pl": "Wybierz folder docelowy",
+    "en": "Pick target folder",
+    "de": "Zielordner wählen"
+  },
+  "gcode.save_file": {
+    "pl": "Zapisz Plik ({ext})",
+    "en": "Save File ({ext})",
+    "de": "Datei speichern ({ext})"
+  },
+  "gcode.copy_code": {
+    "pl": "Kopiuj kod do schowka",
+    "en": "Copy code to clipboard",
+    "de": "Code in Zwischenablage kopieren"
+  },
+  "gcode.saved": {
+    "pl": "Zapisano plik: {name}",
+    "en": "File saved: {name}",
+    "de": "Datei gespeichert: {name}"
+  },
+  "gcode.copied": {
+    "pl": "Skopiowano kod do schowka",
+    "en": "Code copied to clipboard",
+    "de": "Code in Zwischenablage kopiert"
+  },
+  "gcode.preview": {
+    "pl": "Podgląd Kodu ({n} linii):",
+    "en": "Code Preview ({n} lines):",
+    "de": "Code-Vorschau ({n} Zeilen):"
+  },
+  "gcode.hide": {
+    "pl": "Ukryj",
+    "en": "Hide",
+    "de": "Ausblenden"
+  },
+  "gcode.show": {
+    "pl": "Pokaż",
+    "en": "Show",
+    "de": "Anzeigen"
+  },
+  "gcode.postprocessor": {
+    "pl": "Postprocesor (Ustawienia):",
+    "en": "Postprocessor (Settings):",
+    "de": "Postprozessor (Einstellungen):"
+  },
+  "gcode.panel_operations": {
+    "pl": "Operacje formatki:",
+    "en": "Panel operations:",
+    "de": "Plattenoperationen:"
+  },
+  "gcode.machine_file": {
+    "pl": "Plik Maszynowy ({ext})",
+    "en": "Machine File ({ext})",
+    "de": "Maschinendatei ({ext})"
+  },
+  "rules.unknown_feature": {
+    "pl": "Nierozpoznany typ cechy obróbczej",
+    "en": "Unrecognized machining feature type",
+    "de": "Unbekannter Bearbeitungsmerkmaltyp"
+  },
+  "rules.unknown_tool": {
+    "pl": "brak",
+    "en": "none",
+    "de": "kein"
+  },
+  "sync.new_operation": {
+    "pl": "Nowa / nieobsłużona obróbka CAD: {name}",
+    "en": "New / unhandled CAD machining: {name}",
+    "de": "Neue / unbehandelte CAD-Bearbeitung: {name}"
+  },
+  "sync.modified_depth": {
+    "pl": "Zmieniono głębokość: CAD={cad}mm vs CAM={cam}mm",
+    "en": "Depth changed: CAD={cad}mm vs CAM={cam}mm",
+    "de": "Tiefe geändert: CAD={cad}mm vs CAM={cam}mm"
+  },
+  "sync.orphaned": {
+    "pl": "Usunięta cecha CAD (osierocona operacja CNC): {name}",
+    "en": "Removed CAD feature (orphaned CNC operation): {name}",
+    "de": "Gelöschtes CAD-Merkmal (verwaiste CNC-Operation): {name}"
+  },
+  "rules.no_horizontal_drill": {
+    "pl": "Brak dedykowanego wiertła poziomego w bibliotece",
+    "en": "No dedicated horizontal drill in library",
+    "de": "Kein Horizontalbohrer in Bibliothek"
+  },
+  "rules.assigned_mill": {
+    "pl": "Brak wiertła fi {dia} mm — przypisano frez {tool}",
+    "en": "No fi {dia} mm drill — assigned mill {tool}",
+    "de": "Kein {dia} mm Bohrer — Fräser {tool} zugewiesen"
+  },
+  "rules.no_tool": {
+    "pl": "Brak narzędzia dla otworu fi {dia} mm",
+    "en": "No tool for fi {dia} mm hole",
+    "de": "Kein Werkzeug für {dia} mm Bohrung"
+  },
+  "rules.no_optimal_mill": {
+    "pl": "Brak optymalnego frezu dla rowka szerokości {width} mm (przypisano {tool})",
+    "en": "No optimal mill for {width} mm groove (assigned {tool})",
+    "de": "Kein optimaler Fräser für {width} mm Nut (zugewiesen {tool})"
+  },
+  "extractor.panel_default": {
+    "pl": "Płyta",
+    "en": "Panel",
+    "de": "Platte"
+  },
+  "extractor.unknown": {
+    "pl": "Nieznany",
+    "en": "Unknown",
+    "de": "Unbekannt"
+  },
+  "extractor.hole_label": {
+    "pl": "Otwór ⌀{d}x{h}mm",
+    "en": "Hole ⌀{d}x{h}mm",
+    "de": "Bohrung ⌀{d}x{h}mm"
+  },
+  "extractor.groove_label": {
+    "pl": "Wpust_{n}",
+    "en": "Groove_{n}",
+    "de": "Nut_{n}"
+  },
+  "extractor.contour_label": {
+    "pl": "Profil_{n}",
+    "en": "Profile_{n}",
+    "de": "Profil_{n}"
+  },
+  "feature.default_profile": {
+    "pl": "Profil_Krawędzi_{n}",
+    "en": "Edge_Profile_{n}",
+    "de": "Kanten_Profil_{n}"
+  },
+  "feature.fallback_hole": {
+    "pl": "Otwór",
+    "en": "Hole",
+    "de": "Bohrung"
+  },
+  "feature.fallback_profile": {
+    "pl": "Profil",
+    "en": "Profile",
+    "de": "Profil"
+  }
+}

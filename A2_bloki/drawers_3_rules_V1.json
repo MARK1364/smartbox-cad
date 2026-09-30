@@ -1,0 +1,599 @@
+{
+  "metadata": {
+    "module_type": "SMART_BOX_DRAWERS",
+    "version": "3.0.0",
+    "side_references_bloki": "INNER"
+  },
+  "parameters": {
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "FRONT": {
+          "edge_banding": {
+            "+X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        },
+        "SPACER": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        },
+        "DRAWER_BOTTOM": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        },
+        "DRAWER_BACK": {
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        },
+        "DRAWER_INTERNAL_FRONT": {
+          "edge_banding": {
+            "+X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Drawers_SB",
+      "type": "Assembly",
+      "subcomponents": {
+        "SZUFLADA_1": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_1",
+          "subcomponents": {
+            "1_FRONT": {
+              "name": "Front_1",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "1_BOX": {
+              "name": "Skrzynka_1",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "1_PROWADNICA_L": {
+              "name": "Prowadnica_1L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "M94"
+                }
+              ]
+            },
+            "1_PROWADNICA_R": {
+              "name": "Prowadnica_1P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "M94"
+                }
+              ]
+            }
+          }
+        },
+        "SZUFLADA_2": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_2",
+          "subcomponents": {
+            "2_FRONT": {
+              "name": "Front_2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "2_BOX": {
+              "name": "Skrzynka_2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "2_PROWADNICA_L": {
+              "name": "Prowadnica_2L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "D214"
+                }
+              ]
+            },
+            "2_PROWADNICA_R": {
+              "name": "Prowadnica_2P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "D214"
+                }
+              ]
+            }
+          }
+        },
+        "SZUFLADA_3": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_3",
+          "subcomponents": {
+            "3_FRONT": {
+              "name": "Front_3",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "3_BOX": {
+              "name": "Skrzynka_3",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "3_PROWADNICA_L": {
+              "name": "Prowadnica_3L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "D214"
+                }
+              ]
+            },
+            "3_PROWADNICA_R": {
+              "name": "Prowadnica_3P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "D214"
+                }
+              ]
+            }
+          }
+        },
+        "SZUFLADA_4": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_4",
+          "subcomponents": {
+            "4_FRONT": {
+              "name": "Front_4",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "4_BOX": {
+              "name": "Skrzynka_4",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "4_PROWADNICA_L": {
+              "name": "Prowadnica_4L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "D214"
+                }
+              ]
+            },
+            "4_PROWADNICA_R": {
+              "name": "Prowadnica_4P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "D214"
+                }
+              ]
+            }
+          }
+        },
+        "SZUFLADA_5": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "SZUFLADA_5",
+          "subcomponents": {
+            "5_FRONT": {
+              "name": "Front_5",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "FRONT",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                90,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "5_BOX": {
+              "name": "Skrzynka_5",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "BOX",
+              "report_type": "none",
+              "thickness": 0.018,
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "5_PROWADNICA_L": {
+              "name": "Prowadnica_5L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "LEFT",
+                  "library_id": "D214"
+                }
+              ]
+            },
+            "5_PROWADNICA_R": {
+              "name": "Prowadnica_5P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "PROWADNICA",
+              "report_type": "akcesoria",
+              "base_rotation": [
+                0,
+                0,
+                0
+              ],
+              "features": [
+                {
+                  "type": "Hardware_Instance",
+                  "side": "RIGHT",
+                  "library_id": "D214"
+                }
+              ]
+            }
+          }
+        },
+        "DYSTANSE_ASSEMBLY": {
+          "type": "Assembly",
+          "subtype": "Empty",
+          "object": "Arrows",
+          "name": "DYSTANSE_ASSEMBLY",
+          "subcomponents": {
+            "SPACER_L": {
+              "name": "Dystans_L",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "SPACER",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                0,
+                90,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            },
+            "SPACER_R": {
+              "name": "Dystans_P",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "SPACER",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "base_rotation": [
+                0,
+                90,
+                0
+              ],
+              "custom_properties": {
+                "is_bloki_child": true
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

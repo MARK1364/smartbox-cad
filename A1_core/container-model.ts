@@ -20,6 +20,8 @@ export interface GeneratorParams {
     [key: string]: any;
 }
 
+let _containerIdSeq = 0;
+
 export class ContainerModel {
     type: string;
     id: string;
@@ -31,7 +33,7 @@ export class ContainerModel {
 
     constructor({ width = 600_000_000, height = 720_000_000, depth = 500_000_000, name = "Korpus" }: ContainerModelOptions = {}) {
         this.type = 'container';
-        this.id = 'container_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        this.id = 'container_' + Date.now() + '_' + (++_containerIdSeq) + '_' + Math.floor(Math.random() * 1_000_000);
         this.name = name;
         this.width = width;
         this.height = height;

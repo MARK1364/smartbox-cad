@@ -1,0 +1,37 @@
+{
+  "panel.title": {
+    "pl": "Sprzęt AGD",
+    "en": "Appliances",
+    "de": "Elektrogeräte"
+  },
+  "panel.subtitle": {
+    "pl": "Parametryczne modele B-rep (S2 Solver)",
+    "en": "Parametric B-rep models (S2 Solver)",
+    "de": "Parametrische B-Rep-Modelle (S2-Solver)"
+  },
+  "catalog.title": {
+    "pl": "Katalog Urządzeń",
+    "en": "Appliance Catalog",
+    "de": "Gerätekatalog"
+  },
+  "item.microwave": {
+    "pl": "Mikrofala",
+    "en": "Microwave",
+    "de": "Mikrowelle"
+  },
+  "item.oven": {
+    "pl": "Piekarnik",
+    "en": "Oven",
+    "de": "Backofen"
+  },
+  "docking.docked": {
+    "pl": "Zadokowano AGD we wnęce",
+    "en": "Docked appliance in bay",
+    "de": "Gerät in Nische angedockt"
+  },
+  "docking.inserted": {
+    "pl": "Wstawiono AGD",
+    "en": "Appliance inserted",
+    "de": "Gerät eingefügt"
+  }
+}

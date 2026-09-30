@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildBackGrooves, PanelState } from '../back-groove-builder';
-import { Korpus3Engine, applyLcsMapping } from '../smartframe-engine';
+import { planCabinet, applyLcsMapping } from '../smartframe-engine.js';
 import { Mat4 } from '../../A1_core/cad-math/mat4';
 import { Quat } from '../../A1_core/cad-math/quat';
 import { Vec3 } from '../../A1_core/cad-math/vec3';
@@ -8,7 +8,7 @@ import { mmToNm } from '../../A1_core/cad-math/units';
 import { defaultBackOverlapMm, readBackEdgeOffset } from '../back-overlap';
 
 function panelStatesFromPlan(
-    plan: ReturnType<Korpus3Engine['plan']>,
+    plan: ReturnType<typeof planCabinet>,
     offsets?: Record<string, number>
 ): PanelState[] {
     const defaultOverlapMm = defaultBackOverlapMm();
@@ -45,12 +45,11 @@ function panelStatesFromPlan(
 
 describe('buildBackGrooves overlap depth', () => {
     it('sets groove depth on sides and rails from 11 mm back overlay', () => {
-        const engine = new Korpus3Engine();
-        const plan = engine.plan({
-            width: 1000,
-            height: 2000,
-            depth: 600,
-            zoneCount: 1
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1
         });
 
         const intents = buildBackGrooves(panelStatesFromPlan(plan));
@@ -65,12 +64,11 @@ describe('buildBackGrooves overlap depth', () => {
     it('uses left gizmo overlay as Z-depth on the left side', () => {
         const left = 14;
         const right = 11;
-        const engine = new Korpus3Engine();
-        const plan = engine.plan({
-            width: 1000,
-            height: 2000,
-            depth: 600,
-            zoneCount: 1,
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
             offsets: {
                 'Dol_Plecy_-X': left,
                 'Dol_Plecy_+X': right,
@@ -93,14 +91,13 @@ describe('buildBackGrooves overlap depth', () => {
     });
 
     it('verifies exact multi-zone groove lengths matching back panels', () => {
-        const engine = new Korpus3Engine();
-        const plan = engine.plan({
-            width: 1000,
-            height: 2000,
-            depth: 600,
-            zoneCount: 3,
-            bottomHeight: 500,
-            middleHeight: 700
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 3,
+            wysokosc_strefy_dolnej_mm: 500,
+            wysokosc_strefy_srodkowej_mm: 700
         });
 
         const panels = panelStatesFromPlan(plan);
@@ -129,12 +126,11 @@ describe('buildBackGrooves overlap depth', () => {
     });
 
     it('associatively changes groove depth to 17 mm when back offset is changed from 11 to 17 mm', () => {
-        const engine = new Korpus3Engine();
-        const plan = engine.plan({
-            width: 1000,
-            height: 2000,
-            depth: 600,
-            zoneCount: 1,
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
             offsets: {
                 'Plecy_-X': 17,
                 'Plecy_+X': 17
@@ -156,14 +152,13 @@ describe('buildBackGrooves overlap depth', () => {
     });
 
     it('isolates back offsets per zone in multi-zone cabinet (e.g. changing Dol_Plecy does NOT change Srodek_Plecy or Gora_Plecy)', () => {
-        const engine = new Korpus3Engine();
-        const plan = engine.plan({
-            width: 1000,
-            height: 2000,
-            depth: 600,
-            zoneCount: 3,
-            bottomHeight: 500,
-            middleHeight: 700,
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 3,
+            wysokosc_strefy_dolnej_mm: 500,
+            wysokosc_strefy_srodkowej_mm: 700,
             offsets: {
                 'Dol_Plecy_-X': 17,
                 'Dol_Plecy_+X': 17

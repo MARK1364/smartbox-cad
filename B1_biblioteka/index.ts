@@ -37,6 +37,7 @@ export interface HardwareItem {
     price_id?: string;
     machining_template_id?: string;
     usable_in?: string[];
+    mount_type?: 'SIDE' | 'PARALLEL_FACE' | string;
     mount?: Record<string, number>;
     machining?: {
         front_holes?: MachiningHole[];
@@ -77,7 +78,8 @@ const existingGlbIds = new Set<string>(
 const hingeModules = (import.meta as any).glob('./zawiasy/*.json', { eager: true, import: 'default' }) as Record<string, HardwareItem>;
 const HINGE_ITEMS: HardwareItem[] = Object.values(hingeModules).filter((item) => {
     if (!item || !item.id) return false;
-    const hasGlb = existingGlbIds.has(item.id);
+    const glbRef = item.visual?.glb ? item.visual.glb.replace(/^.*[\\/]/, '').replace(/\.glb.*$/i, '') : item.id;
+    const hasGlb = existingGlbIds.has(item.id) || existingGlbIds.has(glbRef);
     if (!hasGlb) {
         console.warn(`[B1_biblioteka] Pomięto zawias "${item.id}" — brak wymaganego pliku ${item.id}.glb (wymóg pary JSON+GLB).`);
         return false;
@@ -175,6 +177,13 @@ export function getHingeOrDefault(id?: string | null): HardwareItem {
 
 export function hingeTemplateId(id?: string | null): string {
     return getHingeOrDefault(id).machining_template_id || 'BLUM_110_STANDARD';
+}
+
+export function isParallelHinge(id?: string | null): boolean {
+    const hw = getHingeOrDefault(id);
+    return hw.mount_type === 'PARALLEL_FACE' ||
+        hw.machining_template_id === 'BLUM_PARALLEL_BLIND' ||
+        (id ? (id.includes('79B') || id.includes('79T')) : false);
 }
 
 export interface HingeFrontHoleNm {

@@ -6,8 +6,10 @@
 
 import { ContextManager } from '../A1_core/context-manager.js';
 import { PerformanceConfigManager } from '../A1_core/performance-config.js';
-import { probeBayFromCADPoint, probeBayFromSceneRay } from '../A2_smartbox/smartbox-bay-detector.js';
-import { highlightBayInScene, clearBayHighlight } from '../A2_smartbox/smartbox-bay-visualizer.js';
+import { probeBayFromCADPoint, probeBayFromSceneRay } from '../A2_bloki/bloki-bay-detector.js';
+import { probeRogowy90BayFromCADPoint } from '../A3_smartframe/rogowy90-bay.js';
+import { highlightBayInScene, clearBayHighlight } from '../A2_bloki/bloki-bay-visualizer.js';
+import { WORLD_Y_UP, type CameraUp } from './named-camera-view.js';
 
 declare const BABYLON: any;
 
@@ -34,6 +36,15 @@ export class Viewport {
 
     private _dirtyFrames: number = 5;
     private _isDirty: boolean = true;
+    private _suppressContextMenuUntil: number = 0;
+
+    /**
+     * Sprawdza, czy otwarcie menu kontekstowego powinno zostać zablokowane
+     * (np. bezpośrednio po operacji przesuwania widoku PPM).
+     */
+    public shouldSuppressContextMenu(): boolean {
+        return Date.now() < this._suppressContextMenuUntil;
+    }
 
     /**
      * Zgłasza potrzebę wyrenderowania klatki (lub określonej liczby klatek) sceny 3D.
@@ -144,9 +155,14 @@ export class Viewport {
         const rotationSensibility = 150; // Szybki obrót
         const panningSensibility = 0.15; // Prędkość przesuwania
         const zoomSensibility = 0.15; // Prędkość zooma
+        const RMB_DRAG_THRESHOLD = 5; // piksele (Deadzone SolidWorks dla PPM)
 
         let isRotating = false;
         let isPanning = false;
+        let isRmbPending = false;
+        let isRmbPanning = false;
+        let rmbStartX = 0;
+        let rmbStartY = 0;
         let lastX = 0;
         let lastY = 0;
         let lastBayProbeTime = 0;
@@ -165,6 +181,11 @@ export class Viewport {
                     lastX = this.scene.pointerX;
                     lastY = this.scene.pointerY;
                     evt.preventDefault();
+                } else if (evt.button === 2) { // Prawy przycisk myszy (PPM)
+                    isRmbPending = true;
+                    isRmbPanning = false;
+                    rmbStartX = this.scene.pointerX;
+                    rmbStartY = this.scene.pointerY;
                 } else if (evt.button === 3 || evt.button === 4) { // Mały przycisk myszy z boku (side button)
                     isPanning = true;
                     lastX = this.scene.pointerX;
@@ -172,9 +193,9 @@ export class Viewport {
                     evt.preventDefault();
                     evt.stopPropagation();
                 } else if (evt.button === 0) { // Lewy przycisk myszy (LMB)
-                    const bayCtrl = ContextManager.instance.smartBoxBayController;
+                    const bayCtrl = ContextManager.instance.blokiBayController;
                     if (bayCtrl?.isPickerActive && !ContextManager.instance.activeReferencePicker) {
-                        const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('smartbox_bay') && !m.name?.includes('smartbox_plane'));
+                        const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_bay') && !m.name?.includes('blok_plane'));
                         if (pick && pick.hit && pick.pickedPoint) {
                             const cadPoint = {
                                 x: pick.pickedPoint.x,
@@ -183,11 +204,14 @@ export class Viewport {
                             };
                             const doc = ContextManager.instance.document;
                             if (doc) {
-                                const bay = probeBayFromSceneRay(this.scene, pick, doc) || probeBayFromCADPoint(doc, cadPoint);
+                                const bay =
+                                    probeRogowy90BayFromCADPoint(doc, cadPoint) ||
+                                    probeBayFromSceneRay(this.scene, pick, doc) ||
+                                    probeBayFromCADPoint(doc, cadPoint);
                                 if (bay) {
                                     highlightBayInScene(this.scene, bay);
                                     bayCtrl.setLastDetectedBay(bay);
-                                    const optType = bayCtrl.pendingSmartBoxType || bayCtrl.draggedSmartBoxType || 'EMPTY';
+                                    const optType = bayCtrl.pendingBlokType || bayCtrl.draggedBlokType || 'EMPTY';
                                     bayCtrl.notifyBayDetected(bay, optType === 'EMPTY');
                                     evt.preventDefault();
                                     evt.stopPropagation();
@@ -212,17 +236,25 @@ export class Viewport {
             } else if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERUP) {
                 if (evt.button === 1 || evt.button === 3 || evt.button === 4) {
                     evt.preventDefault();
+                } else if (evt.button === 2) {
+                    if (isRmbPanning) {
+                        // Zablokuj menu kontekstowe po przeciągnięciu widoku
+                        this._suppressContextMenuUntil = Date.now() + 200;
+                        evt.preventDefault();
+                    }
+                    isRmbPending = false;
+                    isRmbPanning = false;
                 }
                 isRotating = false;
                 isPanning = false;
             } else if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
-                const bayCtrl = ContextManager.instance.smartBoxBayController;
+                const bayCtrl = ContextManager.instance.blokiBayController;
                 if (bayCtrl?.isPickerActive && !ContextManager.instance.activeReferencePicker) {
                     const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
                     const throttleMs = PerformanceConfigManager.instance.getThrottleHoverMs();
                     if (now - lastBayProbeTime >= throttleMs) {
                         lastBayProbeTime = now;
-                        const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('smartbox_bay') && !m.name?.includes('smartbox_plane'));
+                        const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_bay') && !m.name?.includes('blok_plane'));
                         if (pick && pick.hit && pick.pickedPoint) {
                             const cadPoint = {
                                 x: pick.pickedPoint.x,
@@ -231,7 +263,10 @@ export class Viewport {
                             };
                             const doc = ContextManager.instance.document;
                             if (doc) {
-                                const bay = probeBayFromSceneRay(this.scene, pick, doc) || probeBayFromCADPoint(doc, cadPoint);
+                                const bay =
+                                    probeRogowy90BayFromCADPoint(doc, cadPoint) ||
+                                    probeBayFromSceneRay(this.scene, pick, doc) ||
+                                    probeBayFromCADPoint(doc, cadPoint);
                                 if (bay) {
                                     highlightBayInScene(this.scene, bay);
                                     bayCtrl.setLastDetectedBay(bay);
@@ -240,6 +275,40 @@ export class Viewport {
                         }
                     }
                 }
+
+                // Obsługa gestu przeciągnięcia PPM (Pan SolidWorks-style)
+                if (isRmbPending || isRmbPanning) {
+                    const dx = this.scene.pointerX - rmbStartX;
+                    const dy = this.scene.pointerY - rmbStartY;
+                    const dist = Math.hypot(dx, dy);
+
+                    if (!isRmbPanning && dist > RMB_DRAG_THRESHOLD) {
+                        isRmbPanning = true;
+                        isRmbPending = false;
+                        lastX = this.scene.pointerX;
+                        lastY = this.scene.pointerY;
+                    }
+
+                    if (isRmbPanning) {
+                        const deltaX = this.scene.pointerX - lastX;
+                        const deltaY = this.scene.pointerY - lastY;
+
+                        if (deltaX !== 0 || deltaY !== 0) {
+                            const moveSpeed = this.camera.radius * panningSensibility * 0.01;
+                            const transformMatrix = this.camera.getViewMatrix();
+                            if (transformMatrix?.m) {
+                                const right = new BABYLON.Vector3(transformMatrix.m[0], transformMatrix.m[4], transformMatrix.m[8]);
+                                const up = new BABYLON.Vector3(transformMatrix.m[1], transformMatrix.m[5], transformMatrix.m[9]);
+                                const panX = right.scale(-deltaX * moveSpeed);
+                                const panY = up.scale(deltaY * moveSpeed);
+                                this.camera.target.addInPlace(panX).addInPlace(panY);
+                            }
+                            lastX = this.scene.pointerX;
+                            lastY = this.scene.pointerY;
+                        }
+                    }
+                }
+
                 if (isRotating || isPanning) {
                     const deltaX = this.scene.pointerX - lastX;
                     const deltaY = this.scene.pointerY - lastY;
@@ -252,13 +321,13 @@ export class Viewport {
                             const moveSpeed = this.camera.radius * panningSensibility * 0.01;
                             
                             const transformMatrix = this.camera.getViewMatrix();
-                            const right = new BABYLON.Vector3(transformMatrix.m[0], transformMatrix.m[4], transformMatrix.m[8]);
-                            const up = new BABYLON.Vector3(transformMatrix.m[1], transformMatrix.m[5], transformMatrix.m[9]);
-                            
-                            const panX = right.scale(-deltaX * moveSpeed);
-                            const panY = up.scale(deltaY * moveSpeed);
-                            
-                            this.camera.target.addInPlace(panX).addInPlace(panY);
+                            if (transformMatrix?.m) {
+                                const right = new BABYLON.Vector3(transformMatrix.m[0], transformMatrix.m[4], transformMatrix.m[8]);
+                                const up = new BABYLON.Vector3(transformMatrix.m[1], transformMatrix.m[5], transformMatrix.m[9]);
+                                const panX = right.scale(-deltaX * moveSpeed);
+                                const panY = up.scale(deltaY * moveSpeed);
+                                this.camera.target.addInPlace(panX).addInPlace(panY);
+                            }
                         }
 
                         lastX = this.scene.pointerX;
@@ -524,15 +593,24 @@ export class Viewport {
 
         // Płaszczyzny bazowe (Datum Planes) — jak Front / Top / Right w SolidWorks
         const planeSize = 500;
-        const planeMat = new BABYLON.StandardMaterial('datumMat', this.scene);
-        planeMat.diffuseColor = new BABYLON.Color3(0.45, 0.62, 0.95);
-        planeMat.alpha = 0.12;
-        planeMat.backFaceCulling = false;
 
         const markDatum = (mesh: any, label: string) => {
-            mesh.material = planeMat;
-            mesh.isPickable = false;
-            mesh.metadata = { type: 'datum_plane', name: label };
+            // Osobny materiał na każdą płaszczyznę — hover nie podświetla wszystkich naraz
+            const mat = new BABYLON.StandardMaterial(`datumMat_${label}`, this.scene);
+            mat.diffuseColor = new BABYLON.Color3(0.45, 0.62, 0.95);
+            mat.emissiveColor = new BABYLON.Color3(0.08, 0.14, 0.28);
+            mat.alpha = 0.12;
+            mat.backFaceCulling = false;
+            mesh.material = mat;
+            mesh.isPickable = true;
+            mesh.metadata = {
+                type: 'datum_plane',
+                name: label,
+                baseAlpha: 0.12,
+                baseEmissive: new BABYLON.Color3(0.08, 0.14, 0.28),
+                baseDiffuse: new BABYLON.Color3(0.45, 0.62, 0.95),
+                baseEdges: new BABYLON.Color4(0.35, 0.55, 0.95, 0.85),
+            };
             mesh.enableEdgesRendering();
             mesh.edgesWidth = 2.0;
             mesh.edgesColor = new BABYLON.Color4(0.35, 0.55, 0.95, 0.85);
@@ -758,14 +836,16 @@ export class Viewport {
         this.animateCameraTo(this.camera.alpha, this.camera.beta, newRadius, newTarget);
     }
 
-    /**
-     * Animuje kamerę do podanej pozycji.
-     */
-    animateCameraTo(alpha, beta, radius, target) {
+    /** Animuje kamerę do podanej pozycji (ArcRotate zawsze up = +Y). */
+    animateCameraTo(alpha, beta, radius, target, up?: CameraUp) {
+        if (!this.camera) return;
+
+        this._applyCameraUp(up || WORLD_Y_UP);
+
         const fps = 60;
         const frames = 30;
         const ease = new BABYLON.QuadraticEase();
-        const loopMode = 2; // 0 = relative loop, 1 = cycle, 2 = constant (no loop)
+        const loopMode = 2;
 
         BABYLON.Animation.CreateAndStartAnimation('camAlpha', this.camera, 'alpha', fps, frames,
             this.camera.alpha, alpha, loopMode, ease);
@@ -780,7 +860,17 @@ export class Viewport {
             BABYLON.Animation.CreateAndStartAnimation('camTarget', this.camera, 'target', fps, frames,
                 this.camera.target.clone(), target, loopMode, ease);
         }
+
         this.requestRender(frames + 10);
+    }
+
+    _applyCameraUp(up: CameraUp) {
+        if (!this.camera) return;
+        if (this.camera.upVector?.set) {
+            this.camera.upVector.set(up.x, up.y, up.z);
+        } else {
+            this.camera.upVector = new BABYLON.Vector3(up.x, up.y, up.z);
+        }
     }
 
     setPanToolActive(active: boolean) {

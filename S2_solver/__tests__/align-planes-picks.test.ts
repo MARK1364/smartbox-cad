@@ -22,7 +22,7 @@ import { SolveConstraintsCommand } from '../solve-constraints-command.js';
 import { ConstraintDragGroup } from '../constraint-drag-group.js';
 
 function makeCabinet(document: ProjectDocument, xMm: number, yMm: number, zMm: number) {
-    const container = document.createContainer({
+    const container = document.createAssembly({
         width: mmToNm(600),
         height: mmToNm(720),
         depth: mmToNm(500),

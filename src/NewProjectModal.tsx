@@ -1,4 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -12,12 +19,14 @@ interface NewProjectModalProps {
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   isOpen,
   isDirty,
-  projectName = 'Projekt',
+  projectName,
   onSaveAndNew,
   onDiscardAndNew,
   onCancel,
 }) => {
+  useLocale();
   const [isSaving, setIsSaving] = useState(false);
+  const displayName = projectName ?? tx(srcTekst, 'new_project.default_name', TX_NS);
 
   useEffect(() => {
     if (!isOpen) {
@@ -102,7 +111,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
               color: '#f1f5f9',
             }}
           >
-            Nowy projekt
+            {tx(srcTekst, 'new_project.title', TX_NS)}
           </span>
 
           <button
@@ -119,7 +128,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
               borderRadius: '4px',
               lineHeight: 1,
             }}
-            title="Zamknij (Esc)"
+            title={tx(srcTekst, 'new_project.close', TX_NS)}
           >
             ✕
           </button>
@@ -128,8 +137,8 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
         {/* ─── Pytanie ─── */}
         <div style={{ padding: '16px', fontSize: '13px', lineHeight: 1.4, color: '#e2e8f0' }}>
           {isDirty
-            ? `Zapisać zmiany w projekcie „${projectName}”?`
-            : `Zamknąć projekt „${projectName}” i utworzyć nowy?`}
+            ? tx(srcTekst, 'new_project.ask_save', TX_NS, { name: displayName })
+            : tx(srcTekst, 'new_project.ask_discard', TX_NS, { name: displayName })}
         </div>
 
         {/* ─── Przyciski akcji ─── */}
@@ -161,7 +170,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   cursor: isSaving ? 'default' : 'pointer',
                 }}
               >
-                Anuluj
+                {tx(srcTekst, 'new_project.cancel', TX_NS)}
               </button>
 
               <button
@@ -179,7 +188,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   cursor: isSaving ? 'default' : 'pointer',
                 }}
               >
-                Nie zapisuj
+                {tx(srcTekst, 'new_project.discard', TX_NS)}
               </button>
 
               <button
@@ -197,7 +206,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   cursor: isSaving ? 'wait' : 'pointer',
                 }}
               >
-                {isSaving ? 'Zapisywanie...' : 'Zapisz'}
+                {isSaving ? tx(srcTekst, 'new_project.saving', TX_NS) : tx(srcTekst, 'new_project.save', TX_NS)}
               </button>
             </>
           ) : (
@@ -216,7 +225,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   cursor: 'pointer',
                 }}
               >
-                Anuluj
+                {tx(srcTekst, 'new_project.cancel', TX_NS)}
               </button>
 
               <button
@@ -233,7 +242,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   cursor: 'pointer',
                 }}
               >
-                Nowy projekt
+                {tx(srcTekst, 'new_project.create', TX_NS)}
               </button>
             </>
           )}

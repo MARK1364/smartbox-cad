@@ -1,9 +1,9 @@
-import { BootstrapContext } from "../scene-bootstrap";
+import type { CadModuleContext } from "../cad-module-context.js";
 import { BaseState } from "./states/base-state";
 import { Intent } from "./interaction-types";
 
 export class StateMachine {
-    public ctx: BootstrapContext;
+    public ctx: CadModuleContext;
     private currentState: BaseState | null = null;
     private currentStateName = '';
     private states: Map<string, BaseState> = new Map();
@@ -11,7 +11,7 @@ export class StateMachine {
     // Eventy dla warstwy UI (React)
     private stateChangeListeners: ((newStateName: string) => void)[] = [];
 
-    constructor(ctx: BootstrapContext) {
+    constructor(ctx: CadModuleContext) {
         this.ctx = ctx;
     }
 

@@ -6,6 +6,13 @@
 
 import React, { useState } from 'react';
 import { CNCProgramState } from '../../core/cam-state-store.js';
+import { tx } from '../../../T1_tlumaczenia/core.js';
+import { useLocale } from '../../../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../../../T1_tlumaczenia/types.js';
+import cncTekstRaw from '../../cnc_tekst.json';
+
+const cncTekst = cncTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'cnc';
 
 interface SimulationTabProps {
     program: CNCProgramState;
@@ -26,6 +33,7 @@ export const SimulationTab: React.FC<SimulationTabProps> = ({
 }) => {
     const [isPlaying, setIsPlaying] = useState<boolean>(false);
     const [speed, setSpeed] = useState<number>(1.0);
+    useLocale();
 
     const handleTogglePlay = () => {
         if (isPlaying) {
@@ -40,20 +48,20 @@ export const SimulationTab: React.FC<SimulationTabProps> = ({
     return (
         <div className="cnc-subtab-content p-3 space-y-4 text-sm text-gray-200">
             <div className="bg-gray-800 p-3 rounded border border-gray-700 space-y-3">
-                <h4 className="font-semibold text-blue-400">Symulator 3D Ruchu Narzędzia w Babylon.js</h4>
+                <h4 className="font-semibold text-blue-400">{tx(cncTekst, 'simulation.title', TX_NS)}</h4>
 
                 <div className="flex items-center justify-between bg-gray-900 p-3 rounded border border-gray-800">
                     <button
                         onClick={handleTogglePlay}
                         className={`py-2 px-5 rounded font-semibold text-xs transition ${isPlaying ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-green-600 hover:bg-green-500 text-white'}`}
                     >
-                        {isPlaying ? '⏸️ Zatrzymaj' : '▶️ Uruchom Symulację 3D'}
+                        {isPlaying ? tx(cncTekst, 'simulation.stop', TX_NS) : tx(cncTekst, 'simulation.start', TX_NS)}
                     </button>
 
                     <div className="text-right">
-                        <span className="text-xs text-gray-400 block">Status Operacji:</span>
+                        <span className="text-xs text-gray-400 block">{tx(cncTekst, 'simulation.op_status', TX_NS)}</span>
                         <span className={`text-xs font-bold ${isPlaying ? 'text-green-400 animate-pulse' : 'text-gray-400'}`}>
-                            {simStatusText || (isPlaying ? 'TRWA SYMULACJA' : 'GOTOWY')}
+                            {simStatusText || (isPlaying ? tx(cncTekst, 'simulation.running', TX_NS) : tx(cncTekst, 'simulation.ready', TX_NS))}
                         </span>
                     </div>
                 </div>
@@ -61,9 +69,9 @@ export const SimulationTab: React.FC<SimulationTabProps> = ({
                 {/* Pasek Postępu w % */}
                 <div className="space-y-1 bg-gray-900 p-2.5 rounded border border-gray-800 text-xs">
                     <div className="flex justify-between text-gray-400">
-                        <span>Postęp Symulacji:</span>
+                        <span>{tx(cncTekst, 'simulation.progress', TX_NS)}</span>
                         <span className="font-mono text-white">
-                            {simProgress.total > 0 ? `Operacja ${simProgress.current} z ${simProgress.total}` : '0 / 0'} ({simProgressPercent.toFixed(0)}%)
+                            {simProgress.total > 0 ? tx(cncTekst, 'simulation.op_counter', TX_NS, { c: simProgress.current, t: simProgress.total }) : '0 / 0'} ({simProgressPercent.toFixed(0)}%)
                         </span>
                     </div>
 
@@ -78,7 +86,7 @@ export const SimulationTab: React.FC<SimulationTabProps> = ({
                 {/* Suwak Prędkości Symulacji */}
                 <div className="space-y-1">
                     <div className="flex justify-between text-xs text-gray-400">
-                        <span>Prędkość Odtwarzania:</span>
+                        <span>{tx(cncTekst, 'simulation.playback_speed', TX_NS)}</span>
                         <span className="font-mono text-white">{speed.toFixed(1)}x</span>
                     </div>
                     <input

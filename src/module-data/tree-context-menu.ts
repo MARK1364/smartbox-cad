@@ -8,7 +8,14 @@ import { ContextMenu } from '../../A1_core/context-menu.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { UIController } from '../../A1_core/ui-controller.js';
 import { PropertiesManager } from '../../A1_core/properties.js';
-import { openReportFromCad, openNestingFromCad, openCncFromCad, openDrawFromCad } from './open-modules';
+import { openReportFromCad, openNestingFromCad, openCncFromCad, openDrawFromCad, openDagFromCad } from './open-modules';
+import { CncBatchController } from './cnc-batch-controller';
+import { tx } from '../../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
+import srcTekstRaw from '../src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 import { CAD_OPEN_FLOATING_PANEL_EDIT } from '../FloatingOperationDialog';
 import type { ModuleScope, ModuleScopeType } from './types';
 
@@ -37,11 +44,14 @@ const ICONS = {
     nesting: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><rect x="5" y="5" width="6" height="8"/><rect x="13" y="5" width="6" height="5"/><rect x="13" y="12" width="6" height="7"/></svg>',
     cnc: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v5"/><path d="M9 7h6v4a3 3 0 0 1-6 0V7z"/><path d="M12 14v4"/><path d="M10 21l2-3 2 3h-4z"/></svg>',
     draw: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
+    dag: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="6" y1="9" x2="12" y2="15"/><line x1="18" y1="9" x2="12" y2="15"/></svg>',
     rename: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
     properties: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
     freeze: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/></svg>',
     eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+    eyeOff: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
     trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+    aluFrame: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10"/></svg>',
 };
 
 const treeMenu = new ContextMenu();
@@ -50,21 +60,21 @@ function nodeKind(rawType: string): string {
     return String(rawType || '').toLowerCase();
 }
 
-function isSmartBoxContainer(id: string, rawType?: string): boolean {
+function isBlokiContainer(id: string, rawType?: string): boolean {
     const t = nodeKind(rawType || '');
-    if (t === 'smartbox' || t === 'drawers' || t === 'shelves') return true;
+    if (t === 'bloki' || t === 'drawers' || t === 'shelves') return true;
     const doc = getDoc();
     if (!doc) return false;
     const c = findContainer(id) || doc.findNode(id)?.domainData;
     if (c) {
         const pType = (c.generatorParams?.type || '').toLowerCase();
         if (
-            pType.startsWith('smartbox') || 
+            pType.startsWith('bloki') || 
             c.generatorParams?.boxType !== undefined || 
-            c.is_smartbox || 
-            c.type === 'smartbox' || 
+            c.is_blok || 
+            c.type === 'bloki' || 
             c.sb_role !== undefined ||
-            (c.name && String(c.name).toLowerCase().includes('smartbox')) ||
+            (c.name && String(c.name).toLowerCase().includes('bloki')) ||
             (c.name && String(c.name).endsWith('_SB'))
         ) return true;
     }
@@ -72,21 +82,21 @@ function isSmartBoxContainer(id: string, rawType?: string): boolean {
 }
 
 function isKorpusNode(data: TreeContextMenuData): boolean {
-    if (isSmartBoxContainer(data.id, data.type)) return false;
+    if (isBlokiContainer(data.id, data.type)) return false;
     const kind = nodeKind(data.type);
     const doc = getDoc();
     if (!doc) return kind === 'container' || kind === 'korpus';
     const c = findContainer(data.id) || doc.findNode(data.id)?.domainData;
     if (c) {
         const pType = (c.generatorParams?.type || '').toLowerCase();
-        if (pType.includes('korpus') || pType.includes('smartframe') || (!pType.startsWith('smartbox') && c.type === 'container')) return true;
+        if (pType.includes('korpus') || pType.includes('smartframe') || (!pType.startsWith('bloki') && c.type === 'container')) return true;
     }
     if (kind === 'part' || kind === 'panel') {
         const node = doc.findNode(data.id);
         const parent = node?.parent?.domainData;
         if (parent && (parent.type === 'container' || parent.generatorParams)) {
             const pType = (parent.generatorParams?.type || '').toLowerCase();
-            if (pType.includes('korpus') || pType.includes('smartframe') || (!pType.startsWith('smartbox') && parent.type === 'container')) return true;
+            if (pType.includes('korpus') || pType.includes('smartframe') || (!pType.startsWith('bloki') && parent.type === 'container')) return true;
         }
     }
     return kind === 'container' || kind === 'korpus';
@@ -95,7 +105,7 @@ function isKorpusNode(data: TreeContextMenuData): boolean {
 function resolveScopeType(rawType: string, id?: string): ModuleScopeType | null {
     const t = nodeKind(rawType);
     if (t === 'project' || t === 'root') return 'PROJECT';
-    if (t === 'smartbox' || t === 'drawers' || t === 'shelves' || (id && isSmartBoxContainer(id, rawType))) return 'SMARTBOX';
+    if (t === 'bloki' || t === 'drawers' || t === 'shelves' || (id && isBlokiContainer(id, rawType))) return 'BLOKI';
     if (t === 'part' || t === 'panel') return 'PANEL';
     if (t === 'container' || t === 'assembly' || t === 'korpus') return 'CONTAINER';
     return null;
@@ -105,7 +115,7 @@ function scopeFromData(data: TreeContextMenuData): ModuleScope | null {
     const type = resolveScopeType(data.type, data.id || data.uuid);
     if (!type) return null;
     const id = type === 'PROJECT' ? 'ALL' : String(data.id || data.uuid || '');
-    const name = data.name || (type === 'PROJECT' ? 'Cały projekt' : id);
+    const name = data.name || (type === 'PROJECT' ? tx(srcTekst, 'ctxmenu.project_default', TX_NS) : id);
     return { type, id, name };
 }
 
@@ -179,7 +189,7 @@ function openProperties(data: TreeContextMenuData): void {
             true
         );
     } else if (kind === 'project' || kind === 'root') {
-        document.dispatchEvent(new CustomEvent('smartbox-toggle-item-panel'));
+        document.dispatchEvent(new CustomEvent('bloki-toggle-item-panel'));
         return;
     } else {
         inspected = pm.inspectContainer(findContainer(data.id) || findPanel(data.id), true);
@@ -258,6 +268,36 @@ function editPanel(data: TreeContextMenuData): void {
     }
 }
 
+function toggleAluFrame(data: TreeContextMenuData, toAlu: boolean, templateId: string = 'Z1_BLACK'): void {
+    const doc = getDoc();
+    const panelId = String(data.id || data.uuid || '');
+    if (!doc || !panelId) return;
+    const node = doc.findNode(panelId);
+    const panel = node?.domainData || findPanel(panelId);
+    if (panel) {
+        if (toAlu) {
+            if (typeof panel.convertToAluFrame === 'function') {
+                panel.convertToAluFrame(templateId);
+            } else {
+                panel.panelForm = 'ALU_FRAME';
+                panel.frameTemplateId = templateId;
+                panel._emit?.('panelFormChanged', { panelForm: 'ALU_FRAME' });
+            }
+        } else {
+            if (typeof panel.convertToSolid === 'function') {
+                panel.convertToSolid();
+            } else {
+                panel.panelForm = 'SOLID';
+                panel.frameTemplateId = undefined;
+                panel._emit?.('panelFormChanged', { panelForm: 'SOLID' });
+            }
+        }
+        doc.notifyDocumentChanged?.();
+        doc.emitChange?.('all');
+        UIController.instance?.setStatus?.(toAlu ? tx(srcTekst, 'ctxmenu.alu_done', TX_NS) : tx(srcTekst, 'ctxmenu.alu_reverted', TX_NS), true);
+    }
+}
+
 function editOperation(data: TreeContextMenuData): void {
     const doc = getDoc();
     if (doc && data.panelId) {
@@ -281,6 +321,20 @@ function editOperation(data: TreeContextMenuData): void {
     }
 }
 
+function showOnly(data: TreeContextMenuData): void {
+    const kind = nodeKind(data.type);
+    if (kind === 'project' || kind === 'root' || kind === 'feature') return;
+    UIController.instance?.emitTree('show-only', {
+        id: data.id,
+        uuid: data.uuid || data.id,
+        type: data.type,
+    });
+}
+
+function showAll(): void {
+    UIController.instance?.emitTree('show-all', {});
+}
+
 export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     const kind = nodeKind(data.type);
     const scope = scopeFromData(data);
@@ -289,12 +343,11 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     if (kind === 'feature') {
         const isSmart = data.isSmart === true || data.source === 'library' || !!data.libraryId;
         if (isSmart) {
-            items.push({ label: 'Edytuj operację', icon: ICONS.editOperation, action: 'edit-operation' });
-            items.push({ label: 'Usuń', icon: ICONS.trash, action: 'delete' });
+            items.push({ label: tx(srcTekst, 'ctxmenu.edit_op', TX_NS), icon: ICONS.editOperation, action: 'edit-operation' });
         } else {
             const isFrozen = data.frozen === true;
             items.push({
-                label: isFrozen ? 'Odmroź obróbkę' : 'Zamroź obróbkę',
+                label: isFrozen ? tx(srcTekst, 'ctxmenu.unfreeze_op', TX_NS) : tx(srcTekst, 'ctxmenu.freeze_op', TX_NS),
                 icon: ICONS.freeze,
                 action: 'toggle-freeze',
             });
@@ -302,51 +355,71 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     }
 
     if (kind === 'part' || kind === 'panel') {
-        items.push({ label: 'Edytuj formatkę', icon: ICONS.editOperation, action: 'edit-panel' });
+        const doc = getDoc();
+        const panelId = String(data.id || data.uuid || '');
+        const node = doc?.findNode(panelId);
+        const panel = node?.domainData || findPanel(panelId);
+        const isAlu = panel?.panelForm === 'ALU_FRAME' || (typeof panel?.isAluFrame === 'function' && panel.isAluFrame());
+
+        items.push({ label: tx(srcTekst, 'ctxmenu.edit_panel', TX_NS), icon: ICONS.editOperation, action: 'edit-panel' });
+        if (isAlu) {
+            items.push({ label: tx(srcTekst, 'ctxmenu.restore_panel', TX_NS), icon: ICONS.aluFrame, action: 'convert-to-solid' });
+        } else {
+            items.push({ label: tx(srcTekst, 'ctxmenu.to_alu', TX_NS), icon: ICONS.aluFrame, action: 'convert-to-alu-frame' });
+        }
     }
 
     if (isKorpusNode(data)) {
         items.push({ label: 'Edytuj korpus', icon: ICONS.editKorpus, action: 'edit-korpus' });
     }
-    items.push({ label: 'Zmień nazwę', icon: ICONS.rename, action: 'rename' });
-    items.push({ label: 'Właściwości', icon: ICONS.properties, action: 'open-properties' });
+    items.push({ label: tx(srcTekst, 'ctxmenu.rename', TX_NS), icon: ICONS.rename, action: 'rename' });
+    items.push({ label: tx(srcTekst, 'ctxmenu.props', TX_NS), icon: ICONS.properties, action: 'open-properties' });
 
     if (kind === 'part' || kind === 'panel') {
         const isManual = data.isManual === true;
-        items.push({ label: 'Ukryj / Pokaż', icon: ICONS.eye, action: 'toggle-visibility' });
-        if (isManual) {
-            items.push({ label: 'Usuń', icon: ICONS.trash, action: 'delete' });
-        } else {
+        if (!isManual) {
             const isFrozen = data.frozen === true;
             items.push({
-                label: isFrozen ? 'Odmroź formatkę' : 'Zamroź formatkę',
+                label: isFrozen ? tx(srcTekst, 'ctxmenu.unfreeze_panel', TX_NS) : tx(srcTekst, 'ctxmenu.freeze_panel', TX_NS),
                 icon: ICONS.freeze,
                 action: 'toggle-freeze',
             });
         }
-    } else if (kind === 'container') {
-        items.push({ label: 'Ukryj / Pokaż', icon: ICONS.eye, action: 'toggle-visibility' });
-        items.push({ label: 'Usuń', icon: ICONS.trash, action: 'delete' });
+    }
+
+    // Widoczność: „Pokaż tylko” na panelu / korpusie / Bloku; „Pokaż wszystko” tylko na korzeniu projektu
+    if (kind === 'project' || kind === 'root') {
+        items.push({ label: tx(srcTekst, 'ctxmenu.show_all', TX_NS), icon: ICONS.eye, action: 'show-all' });
+    } else if (kind === 'part' || kind === 'panel' || kind === 'container' || kind === 'assembly' || kind === 'korpus' || kind === 'bloki' || kind === 'drawers' || kind === 'shelves') {
+        items.push({ label: tx(srcTekst, 'ctxmenu.show_only', TX_NS), icon: ICONS.eyeOff, action: 'show-only' });
     }
 
     if (scope) {
         items.push({ separator: true });
         if (scope.type === 'PANEL') {
             items.push({ label: 'Raport z formatki', icon: ICONS.report, action: 'open-report' });
-            items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: 'CNC — obróbka formatki', icon: ICONS.cnc, action: 'open-cnc' });
-        } else if (scope.type === 'SMARTBOX') {
-            items.push({ label: 'Raport ze SmartBoxa', icon: ICONS.report, action: 'open-report' });
-            items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: 'CNC — obróbka CNC', icon: ICONS.cnc, action: 'open-cnc' });
+            items.push({ label: tx(srcTekst, 'ctxmenu.nesting', TX_NS), icon: ICONS.nesting, action: 'open-nesting' });
+            items.push({ label: '⚡ Generuj program CNC formatki', icon: ICONS.cnc, action: 'batch-cnc' });
+            items.push({ label: 'CNC — edytor formatki', icon: ICONS.cnc, action: 'open-cnc' });
+            items.push({ label: 'Graf formatki (DAG)', icon: ICONS.dag, action: 'open-dag' });
+        } else if (scope.type === 'BLOKI') {
+            items.push({ label: 'Raport ze Bloku', icon: ICONS.report, action: 'open-report' });
+            items.push({ label: tx(srcTekst, 'ctxmenu.nesting', TX_NS), icon: ICONS.nesting, action: 'open-nesting' });
+            items.push({ label: '⚡ Generuj programy CNC dla Bloku', icon: ICONS.cnc, action: 'batch-cnc' });
+            items.push({ label: 'CNC — edytor formatki', icon: ICONS.cnc, action: 'open-cnc' });
+            items.push({ label: 'Graf Bloku (DAG)', icon: ICONS.dag, action: 'open-dag' });
         } else if (scope.type === 'CONTAINER') {
             items.push({ label: 'Raport z korpusu', icon: ICONS.report, action: 'open-report' });
-            items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: 'CNC — obróbka CNC', icon: ICONS.cnc, action: 'open-cnc' });
+            items.push({ label: tx(srcTekst, 'ctxmenu.nesting', TX_NS), icon: ICONS.nesting, action: 'open-nesting' });
+            items.push({ label: '⚡ Generuj programy CNC dla szafy', icon: ICONS.cnc, action: 'batch-cnc' });
+            items.push({ label: 'CNC — edytor formatki', icon: ICONS.cnc, action: 'open-cnc' });
+            items.push({ label: 'Graf korpusu (DAG)', icon: ICONS.dag, action: 'open-dag' });
         } else {
             items.push({ label: 'Raport z projektu', icon: ICONS.report, action: 'open-report' });
-            items.push({ label: 'Rozkrój (nesting)', icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: 'CNC — obróbka CNC', icon: ICONS.cnc, action: 'open-cnc' });
+            items.push({ label: tx(srcTekst, 'ctxmenu.nesting', TX_NS), icon: ICONS.nesting, action: 'open-nesting' });
+            items.push({ label: tx(srcTekst, 'ctxmenu.batch_cnc', TX_NS), icon: ICONS.cnc, action: 'batch-cnc' });
+            items.push({ label: 'CNC — edytor formatki', icon: ICONS.cnc, action: 'open-cnc' });
+            items.push({ label: 'Graf projektu (DAG)', icon: ICONS.dag, action: 'open-dag' });
         }
     }
 
@@ -357,12 +430,17 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         else if (action === 'rename') startRename(data);
         else if (action === 'open-properties') openProperties(data);
         else if (action === 'toggle-visibility') toggleVisibility(data);
+        else if (action === 'show-only') showOnly(data);
+        else if (action === 'show-all') showAll();
         else if (action === 'toggle-freeze') toggleFreeze(data);
-        else if (action === 'delete') deleteNode(data);
+        else if (action === 'convert-to-alu-frame') toggleAluFrame(data, true);
+        else if (action === 'convert-to-solid') toggleAluFrame(data, false);
         else if (action === 'open-report' && scope) openReportFromCad(scope);
         else if (action === 'open-nesting' && scope) openNestingFromCad(scope);
+        else if (action === 'batch-cnc' && scope) CncBatchController.instance.openModal(scope);
         else if (action === 'open-cnc' && scope) openCncFromCad(scope);
         else if (action === 'open-draw' && scope) openDrawFromCad(scope);
+        else if (action === 'open-dag' && scope) openDagFromCad(scope);
     });
 
     treeMenu.show(data.clientX, data.clientY, items);

@@ -6,13 +6,14 @@
  */
 
 import { E3PaperFormat, E3_PAPER_FORMATS, E3ProjectionAngle, E3LibraryItem, E3TitleBlock } from './e3-library-types';
+import { TOP_BETA } from '../S3_scena/named-camera-view.js';
 
 declare const BABYLON: any;
 
 export interface E3ModelInstance {
     id: string;
     name: string;
-    type: 'CONTAINER' | 'PANEL' | 'SMARTBOX' | 'ASSEMBLY';
+    type: 'CONTAINER' | 'PANEL' | 'BLOKI' | 'ASSEMBLY';
     transformNode: any;
     rootMesh: any;
     width: number;
@@ -36,7 +37,7 @@ export class E3SceneEngine {
     public titleBlock: E3TitleBlock = {
         projectName: 'Projekt Mebla CAD',
         furnitureName: 'Korpus Meblowy',
-        author: 'SmartBox CAD',
+        author: 'Bloki CAD',
         date: new Date().toISOString().split('T')[0],
         scale: '1:10',
         sheetNumber: '1/1',
@@ -84,7 +85,7 @@ export class E3SceneEngine {
         this.camera = new BABYLON.ArcRotateCamera(
             'e3_camera',
             Math.PI / 2,
-            0.001, // Widok z góry na płaszczyznę arkusza
+            TOP_BETA, // Widok z góry na płaszczyznę arkusza
             2500,
             new BABYLON.Vector3(0, 0, 0),
             this.scene
@@ -188,7 +189,7 @@ export class E3SceneEngine {
         const posY = 300 - Math.floor(count / 2) * 600;
         transformNode.position = new BABYLON.Vector3(posX, 0, posY);
 
-        const isContainer = item.type === 'CONTAINER' || item.type === 'SMARTBOX' || (item.children && item.children.length > 0);
+        const isContainer = item.type === 'CONTAINER' || item.type === 'BLOKI' || (item.children && item.children.length > 0);
         const meshes: any[] = [];
         const pmiNodes: any[] = [];
 
@@ -474,7 +475,7 @@ export class E3SceneEngine {
                     <text x="4" y="${(18 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b">Wykonał: <tspan fill="#0f172a" font-weight="600">${this.titleBlock.author}</tspan></text>
                     <text x="${(82 * scale).toFixed(1)}" y="${(18 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b">Data: <tspan fill="#0f172a" font-weight="600">${this.titleBlock.date}</tspan></text>
 
-                    <text x="${(tbW - 3).toFixed(1)}" y="${(tbH - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end">SmartBox CAD E3</text>
+                    <text x="${(tbW - 3).toFixed(1)}" y="${(tbH - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end">Bloki CAD E3</text>
                 </g>
             </svg>
         `;
@@ -535,7 +536,7 @@ export class E3SceneEngine {
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>Drukuj Dokumentację CAD E3 - SmartBox</title>
+                    <title>Drukuj Dokumentację CAD E3 - Bloki</title>
                     <style>
                         @page { size: ${dims.width}mm ${dims.height}mm; margin: 0; }
                         body { margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; background: #ffffff; }

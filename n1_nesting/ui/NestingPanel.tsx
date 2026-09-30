@@ -15,7 +15,7 @@ import {
     ContainerScopeInfo,
     getPartLabelLines,
 } from '../core/nesting-types';
-import { NestingEngine } from '../core/nesting-engine';
+import { getDefaultKerf, getMaterialKey, getMaterialLabel, getMaterialInfo, resolveMaterialName, runNesting } from '../core/nesting-engine';
 import { NestingExporter } from '../export/nesting-exporter';
 import { resolveClampedMovePosition, isPositionColliding, getPartAABB } from '../core/nesting-snap';
 import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer';
@@ -330,10 +330,10 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         }
 
         const events = [
-            'smartbox-project-changed',
+            'bloki-project-changed',
             'smartframe-updated',
             'material-database-updated',
-            'smartbox-properties-update',
+            'bloki-properties-update',
             'cad-document-changed',
             'cad-history-executed'
         ];
@@ -355,7 +355,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     // Przełączanie profilu maszyny (Piła vs CNC)
     const handleSwitchMachineType = (type: MachineType) => {
         setMachineType(type);
-        const newKerf = NestingEngine.getDefaultKerf(type);
+        const newKerf = getDefaultKerf(type);
         const newTrim = type === 'cnc' ? 15 : 10;
         setConfig((prev) => ({
             ...prev,
@@ -372,13 +372,14 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     const availableMaterials = useMemo(() => {
         const map = new Map<string, { key: string; name: string; thickness: number; label: string; count: number }>();
         scopedParts.forEach((p) => {
-            const key = NestingEngine.getMaterialKey(p);
-            const label = NestingEngine.getMaterialLabel(p);
+            const key = getMaterialKey(p);
+            const label = getMaterialLabel(p);
+            const info = getMaterialInfo(p);
             if (!map.has(key)) {
                 map.set(key, {
                     key,
-                    name: p.material || 'Płyta podstawowa',
-                    thickness: p.thickness || 18,
+                    name: p.material || info.name,
+                    thickness: p.thickness ?? info.thickness_mm,
                     label,
                     count: 0
                 });
@@ -388,10 +389,20 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         return Array.from(map.values());
     }, [scopedParts]);
 
+    // Grubość arkusza = grubość aktywnej grupy materiałowej (bez zgadywania 18 mm).
+    useEffect(() => {
+        const activeMat =
+            availableMaterials.find((m) => m.key === selectedMaterialFilter) ??
+            availableMaterials[0];
+        if (activeMat && activeMat.thickness > 0 && config.thickness !== activeMat.thickness) {
+            setConfig((prev) => ({ ...prev, thickness: activeMat.thickness }));
+        }
+    }, [availableMaterials, selectedMaterialFilter]);
+
     // Formatki do edycji w tabeli
     const displayedParts = useMemo(() => {
         if (selectedMaterialFilter === 'ALL') return scopedParts;
-        return scopedParts.filter((p) => NestingEngine.getMaterialKey(p) === selectedMaterialFilter);
+        return scopedParts.filter((p) => getMaterialKey(p) === selectedMaterialFilter);
     }, [scopedParts, selectedMaterialFilter]);
 
     function handleSyncFromScene() {
@@ -424,15 +435,24 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     };
 
     const addPart = () => {
-        const activeMat = availableMaterials.find((m) => m.key === selectedMaterialFilter);
+        const activeMat =
+            availableMaterials.find((m) => m.key === selectedMaterialFilter) ??
+            availableMaterials[0];
+        if (!activeMat || !(activeMat.thickness > 0)) {
+            setStatusMsg({
+                text: 'Nie można dodać formatki: brak grupy materiałowej z poprawną grubością.',
+                type: 'error'
+            });
+            return;
+        }
         const newPart: NestingPart = {
             id: `part_${Date.now()}`,
             name: 'Nowa formatka',
             width: 500,
             height: 500,
             quantity: 1,
-            thickness: activeMat ? activeMat.thickness : 18,
-            material: activeMat ? activeMat.name : 'Biel Alpejska',
+            thickness: activeMat.thickness,
+            material: activeMat.name,
             canRotate: true
         };
         setAllProjectParts([...allProjectParts, newPart]);
@@ -449,7 +469,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         setStatusMsg({ text: `Obliczanie rozkroju (${machineType === 'cnc' ? 'Frezarka CNC' : 'Piła'})...`, type: '' });
 
         try {
-            const nestingResult = await NestingEngine.runNesting(scopedParts, config, {
+            const nestingResult = await runNesting(scopedParts, config, {
                 mode,
                 iterations: mode === 'pro' ? 2000 : 1,
                 selectedMaterial: selectedMaterialFilter,
@@ -500,7 +520,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     const displayedBoards = useMemo(() => {
         if (activeBoards.length === 0) return [];
         if (viewBoardMaterial === 'ALL') return activeBoards;
-        return activeBoards.filter((b) => NestingEngine.getMaterialKey(b) === viewBoardMaterial);
+        return activeBoards.filter((b) => getMaterialKey(b) === viewBoardMaterial);
     }, [activeBoards, viewBoardMaterial]);
 
     return (
@@ -652,7 +672,11 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                                             <input type="text" value={p.material || 'Biel Alpejska'} onChange={(e) => updatePart(idx, 'material', e.target.value)} style={{ fontSize: '0.75rem' }} />
                                         </td>
                                         <td>
-                                            <input type="number" value={p.thickness || 18} onChange={(e) => updatePart(idx, 'thickness', e.target.value)} />
+                                            <input
+                                                type="number"
+                                                value={p.thickness ?? ''}
+                                                onChange={(e) => updatePart(idx, 'thickness', e.target.value)}
+                                            />
                                         </td>
                                         <td>
                                             <input type="number" value={p.width} onChange={(e) => updatePart(idx, 'width', e.target.value)} />
@@ -850,12 +874,12 @@ function extractPartsFrom3DScene(): { parts: NestingPart[]; containers: Containe
                 name: p.role || p.part_id || `part_${idx}`,
                 width: p.length_mm,
                 height: p.width_mm,
-                thickness: p.thickness_mm || 18,
+                thickness: p.thickness_mm,
                 quantity: p.qty || 1,
                 canRotate: true,
-                material: NestingEngine.resolveMaterialName(p.material),
+                material: resolveMaterialName(p.material),
                 containerId: p.container_id,
-                smartboxId: p.smartbox_id,
+                blokId: p.blok_id,
                 furnitureName: p.furniture_name
             }));
             return { parts, containers: data.containers || [] };

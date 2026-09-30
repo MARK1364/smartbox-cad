@@ -23,6 +23,8 @@ export interface SimStatusUpdate {
     totalOps: number;
     progressPercent: number;
     state: SimState;
+    /** Flaga logiczna: symulacja biegnie. Logika czyta TYLKO to, nigdy statusText. */
+    running: boolean;
 }
 
 export class CNCSimulator {
@@ -157,7 +159,8 @@ export class CNCSimulator {
                 opIndex: 0,
                 totalOps: this.operations.length,
                 progressPercent: 0,
-                state: 'MOVE'
+                state: 'MOVE',
+                running: false
             });
         }
     }
@@ -341,7 +344,8 @@ export class CNCSimulator {
                             opIndex: this.operations.length,
                             totalOps: this.operations.length,
                             progressPercent: 100,
-                            state: 'UP'
+                            state: 'UP',
+                            running: false
                         });
                     }
                     return;
@@ -372,7 +376,8 @@ export class CNCSimulator {
                 opIndex: this.currentOpIndex,
                 totalOps: this.operations.length,
                 progressPercent: Math.round((this.currentOpIndex / this.operations.length) * 100),
-                state: this.currentState
+                state: this.currentState,
+                running: true
             });
         }
     }

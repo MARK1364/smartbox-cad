@@ -27,6 +27,10 @@ export {
     collectPanelsWithLibraryOperation,
     bindOperationEdge,
 } from './operacje-apply.js';
-export { pocketFromEdgeDims, edgeShortLabel, edgeKeyToPanelFace, snapDimHandleToEdge, isEdgeDimHandleMesh } from './operacje-placement.js';
 export { attachOperacjeExtension } from './operacje-controller.js';
 export { OperacjeUI } from './operacje-ui.js';
+// SmartParts — LED (re-export dla kompatybilności wstecznej → źródło: A5_smartparts)
+export { LedChannelStore, startGuidedLedPick, stopGuidedLedPick, handleLedChannelDrop } from '../A5_smartparts/led/led-channel-store.js';
+export { LedChannelUI } from '../A5_smartparts/led/led-channel-ui.js';
+export { applyLedChannelToDocument, removeLedChannelFromDocument, computeLedChannelWorldBox, detectCabinetRow } from '../A5_smartparts/led/led-channel-engine.js';
+export type { LedChannelDefinition } from '../A5_smartparts/led/led-channel-types.js';

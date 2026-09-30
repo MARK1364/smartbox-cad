@@ -6,7 +6,17 @@ export { ConnectorsUI, CONNECTORS_PANEL_TITLE } from './connectors-ui';
 export { ConnectorStore } from './connector-store';
 export { CONNECTORS_DOCUMENT_SECTION } from './connectors-types';
 export { ConnectorVisualizer } from './connector-visualizer';
-export { ConnectorsEngine, getConnectorsEngine } from './connectors-engine';
+export {
+    generateConnectors,
+    getConnectorDefinition,
+    getPlacementRuleDefinition,
+    getPlacementRuleKeys,
+    getDefaultPlacementRule,
+    countRulePositions,
+    quatFromTo,
+    orientAlongFormatkaDepth,
+    getFaceParams,
+} from './connectors-engine';
 export { scanEligibleConnectorFaces } from './contact-scanner';
 export { startConnectorPick, stopConnectorPick } from './connector-picker';
 export { attachConnectorsExtension } from './connector-controller';

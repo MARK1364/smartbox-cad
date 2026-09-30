@@ -35,8 +35,62 @@ const PREVIEW_ID = '__pmi_preview__';
 const MEASURE_PREVIEW_ID = '__pmi_measure_preview__';
 
 const MEASURE_COLOR: Rgba = [1.0, 1.0, 0.0, 1.0];
-/** Etykieta miarki zbliżona rozmiarem do tekstu wymiarowego CAD. */
-const MEASURE_LABEL_SCALE = 1.0;
+/** Bazowa wysokość tekstu etykiety miarki w przestrzeni CAD [mm]. */
+export const MEASURE_BASE_TEXT_H = 14;
+
+/**
+ * Oblicza bazowe wymiary plakietki miarki [mm] na podstawie liczby i długości linii.
+ */
+export function computeMeasureLabelDimensions(lines: string[]): {
+    textHWorld: number;
+    planeW: number;
+    planeH: number;
+} {
+    const textHWorld = MEASURE_BASE_TEXT_H;
+    const lineH = textHWorld * 0.85;
+    const textWWorld = Math.max(...lines.map(l => l.length * textHWorld * 0.55), 14);
+    const totalH = lineH * lines.length;
+    const padWorld = textHWorld * 0.15;
+    const planeW = textWWorld + padWorld * 2;
+    const planeH = totalH + padWorld * 2;
+    return { textHWorld, planeW, planeH };
+}
+
+/**
+ * Oblicza współczynnik skali 3D, aby etykieta miarki miała optymalną, stabilną
+ * wysokość na ekranie [px], zapobiegając rozrastaniu się na pół ekranu przy zoomie.
+ */
+export function computeMeasureScreenScale(
+    basePlaneH: number,
+    lineCount: number,
+    cameraMode: number, // 0 = perspective, 1 = ortho
+    renderH: number,
+    orthoH: number,
+    distanceToCamera?: number,
+    cameraFov?: number,
+): number {
+    let pxPerMM = 0;
+    if (cameraMode === 1) { // ortho
+        if (orthoH > 1e-4) {
+            pxPerMM = renderH / orthoH;
+        }
+    } else {
+        if (distanceToCamera && distanceToCamera > 1e-4) {
+            const fov = cameraFov || 0.8;
+            const visibleH = 2 * distanceToCamera * Math.tan(fov / 2);
+            if (visibleH > 1e-4) {
+                pxPerMM = renderH / visibleH;
+            }
+        }
+    }
+    if (pxPerMM <= 1e-5 || basePlaneH <= 0) return 1.0;
+
+    // Stały, czytelny rozmiar plakietki na ekranie: 38px (1 linia) do max 84px (4 linie)
+    const targetScreenH = lineCount <= 1 ? 38 : Math.min(lineCount * 17 + 16, 84);
+    const currentScreenH = basePlaneH * pxPerMM;
+    return targetScreenH / currentScreenH;
+}
+
 /** Kolory delt (linie przerywane XYZ). */
 const MEASURE_DELTA_COLOR: Record<'X' | 'Y' | 'Z', Rgba> = {
     X: [1.0, 0.2, 0.2, 0.6],
@@ -100,6 +154,9 @@ interface MeasureVisual {
     labelPreferredWorld: Vec3 | null;
     labelWidth: number;
     labelHeight: number;
+    basePlaneW?: number;
+    basePlaneH?: number;
+    lineCount?: number;
 }
 
 // ============================================================================
@@ -823,13 +880,14 @@ export class PMIRenderer {
             : formatMeasureText(p1, p2, store.unitMode, store.showUnits));
         const accentColor = selected ? toHexColor(store.selectedColor) : toHexColor(MEASURE_COLOR);
         const lines = label.split('\n');
-        const textHWorld = Math.max(store.textSizeMM, 12) * MEASURE_LABEL_SCALE;
-        const lineH = textHWorld * 0.85;
-        const textWWorld = Math.max(...lines.map(l => l.length * textHWorld * 0.58), 16);
-        const totalH = lineH * lines.length;
-        const padWorld = textHWorld * 0.3;
-        const planeW = textWWorld + padWorld * 2;
-        const planeH = totalH + padWorld * 2;
+
+        const dims = computeMeasureLabelDimensions(lines);
+        const planeW = dims.planeW;
+        const planeH = dims.planeH;
+        vis.basePlaneW = planeW;
+        vis.basePlaneH = planeH;
+        vis.lineCount = lines.length;
+
         const cacheKey = `${label}|${accentColor}|${selected}|${planeW.toFixed(0)}|${planeH.toFixed(0)}`;
 
         if (vis.textCacheKey !== cacheKey) {
@@ -839,14 +897,48 @@ export class PMIRenderer {
             vis.textCacheKey = cacheKey;
         }
 
-        vis.labelWidth = planeW;
-        vis.labelHeight = planeH;
         if (vis.textPlane) {
             const labelPos = isChain && path.length === 3 ? path[1] : v3Scale(v3Add(p1, p2), 0.5);
-            const preferred = v3(labelPos.x, labelPos.y + planeH * 0.55, labelPos.z);
+            const scale = this.calculateMeasureScreenScale(labelPos, planeH, lines.length);
+            vis.textPlane.scaling.set(scale, scale, scale);
+
+            const effectiveH = planeH * scale;
+            const effectiveW = planeW * scale;
+            vis.labelWidth = effectiveW;
+            vis.labelHeight = effectiveH;
+
+            const preferred = v3(labelPos.x, labelPos.y + effectiveH * 0.65, labelPos.z);
             vis.labelPreferredWorld = preferred;
             vis.textPlane.position = new BABYLON.Vector3(preferred.x, preferred.y, preferred.z);
         }
+    }
+
+    private calculateMeasureScreenScale(worldPos: Vec3, basePlaneH: number, lineCount: number): number {
+        const camera = this.scene?.activeCamera;
+        const engine = this.scene?.getEngine?.();
+        if (!camera || !engine || basePlaneH <= 0) return 1.0;
+
+        const isOrtho = camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+        const renderH = engine.getRenderHeight ? engine.getRenderHeight() : 1080;
+        const orthoH = isOrtho ? Math.abs((camera.orthoTop ?? 0) - (camera.orthoBottom ?? 0)) : 0;
+
+        let dist = 0;
+        if (!isOrtho) {
+            const camPos = camera.globalPosition || camera.position;
+            if (camPos) {
+                dist = Math.hypot(camPos.x - worldPos.x, camPos.y - worldPos.y, camPos.z - worldPos.z);
+            }
+        }
+
+        return computeMeasureScreenScale(
+            basePlaneH,
+            lineCount,
+            isOrtho ? 1 : 0,
+            renderH,
+            orthoH > 1e-4 ? orthoH : (camera.radius ? camera.radius * 1.3 : 0),
+            dist,
+            camera.fov,
+        );
     }
 
     /**
@@ -993,9 +1085,7 @@ export class PMIRenderer {
         selected: boolean,
     ): void {
         const texWidth = 1024;
-        const texHeight = Math.max(192, 112 * lines.length);
-        const margin = 20;
-        const padY = 36;
+        const texHeight = Math.max(128, 80 * lines.length);
 
         const dt = new BABYLON.DynamicTexture(
             `pmi_msr_tex_${vis.id}`,
@@ -1008,43 +1098,26 @@ export class PMIRenderer {
         const ctx = dt.getContext() as CanvasRenderingContext2D;
         ctx.clearRect(0, 0, texWidth, texHeight);
 
-        const boxX = margin;
-        const boxY = margin;
-        const boxW = texWidth - margin * 2;
-        const boxH = texHeight - margin * 2;
-
-        drawRoundedRect(ctx, boxX, boxY, boxW, boxH, 32);
-        ctx.fillStyle = 'rgba(8, 12, 18, 0.94)';
-        ctx.fill();
-
-        drawRoundedRect(ctx, boxX + 3, boxY + 3, boxW - 6, boxH - 6, 30);
-        ctx.strokeStyle = accentColor;
-        ctx.lineWidth = 6;
-        ctx.stroke();
-
-        ctx.save();
-        ctx.beginPath();
-        drawRoundedRect(ctx, boxX + 4, boxY + 4, boxW - 8, (boxH - 8) * 0.45, 28);
-        ctx.clip();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-        ctx.fillRect(boxX, boxY, boxW, boxH * 0.5);
-        ctx.restore();
-
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const contentTop = boxY + padY;
-        const contentH = boxH - padY * 2;
-        const slotH = contentH / lines.length;
+        const slotH = texHeight / lines.length;
 
         for (let i = 0; i < lines.length; i++) {
             const isMain = i === 0;
-            ctx.font = isMain ? 'bold 80px Consolas, monospace' : '56px Consolas, monospace';
-            ctx.fillStyle = measureLabelLineColor(lines[i], selected && isMain);
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
-            ctx.shadowBlur = isMain ? 10 : 8;
+            ctx.font = isMain ? 'bold 76px Consolas, monospace' : '56px Consolas, monospace';
+            const color = measureLabelLineColor(lines[i], selected && isMain);
+
+            // Wyraźny ciemny obrys i cień, aby tekst był kontrastowy i czytelny na każdym kolorze mebla
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
+            ctx.strokeText(lines[i], texWidth / 2, slotH * (i + 0.5));
+
+            ctx.fillStyle = color;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+            ctx.shadowBlur = 10;
             ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 1;
-            ctx.fillText(lines[i], texWidth / 2, contentTop + slotH * (i + 0.5));
+            ctx.shadowOffsetY = 2;
+            ctx.fillText(lines[i], texWidth / 2, slotH * (i + 0.5));
         }
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
@@ -1067,6 +1140,20 @@ export class PMIRenderer {
         mat.useAlphaFromDiffuseTexture = true;
         if (mat.disableDepthWrite !== undefined) mat.disableDepthWrite = true;
         plane.material = mat;
+
+        plane.onBeforeRenderObservable.add(() => {
+            if (!plane || plane.isDisposed()) return;
+            const currentH = vis.basePlaneH ?? planeH;
+            const currentW = vis.basePlaneW ?? planeW;
+            const count = vis.lineCount ?? lines.length;
+            const pos = vis.labelPreferredWorld || plane.position;
+            const scale = this.calculateMeasureScreenScale(pos, currentH, count);
+            if (Math.abs(plane.scaling.y - scale) > 1e-4) {
+                plane.scaling.set(scale, scale, scale);
+                vis.labelWidth = currentW * scale;
+                vis.labelHeight = currentH * scale;
+            }
+        });
 
         vis.textPlane = plane;
         vis.textTexture = dt;
@@ -1094,6 +1181,9 @@ export class PMIRenderer {
         vis.labelPreferredWorld = null;
         vis.labelWidth = 0;
         vis.labelHeight = 0;
+        vis.basePlaneW = 0;
+        vis.basePlaneH = 0;
+        vis.lineCount = 0;
     }
 
     // ========================================================================

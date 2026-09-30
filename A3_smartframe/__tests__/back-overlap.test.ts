@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { defaultBackOverlapMm, readOffsetMm, isBackPanelEdgeParam } from '../back-overlap';
+import {
+    defaultBackOverlapMm,
+    defaultBackEdgeOverlapMm,
+    readOffsetMm,
+    isBackPanelEdgeParam
+} from '../back-overlap';
 import korpusRules from '../korpus3_3_rules.json';
 import { rulesMToMm } from '../../A1_core/cad-math/units';
 
@@ -8,6 +13,17 @@ describe('back edge offset defaults', () => {
         const fromJson = rulesMToMm(korpusRules.cabinet_construction_rules.defaults.back_groove_depth);
         expect(defaultBackOverlapMm()).toBe(fromJson);
         expect(defaultBackOverlapMm()).toBe(11);
+    });
+
+    it('Rogowy90: 0 tylko w narożniku styku pleców, 11 przy wieńcach/bokach', () => {
+        expect(defaultBackEdgeOverlapMm('Plecy_Y_-X', 'korpus_rogowy90')).toBe(0);
+        expect(defaultBackEdgeOverlapMm('Plecy_Y_+X', 'korpus_rogowy90')).toBe(11);
+        expect(defaultBackEdgeOverlapMm('Plecy_Y_+Y', 'korpus_rogowy90')).toBe(11);
+        expect(defaultBackEdgeOverlapMm('Plecy_X_+X', 'korpus_rogowy90')).toBe(0);
+        expect(defaultBackEdgeOverlapMm('Plecy_X_-X', 'korpus_rogowy90')).toBe(11);
+        expect(defaultBackEdgeOverlapMm('Plecy_X_-Y', 'korpus_rogowy90')).toBe(11);
+        expect(readOffsetMm(undefined, 'Plecy_Y_-X', 'BACK_PANEL', undefined, 'korpus_rogowy90')).toBe(0);
+        expect(readOffsetMm(undefined, 'Plecy_Y_+Y', 'BACK_PANEL', undefined, 'korpus_rogowy90')).toBe(11);
     });
 
     it('defaults BACK_PANEL edge gizmos to JSON overlap', () => {

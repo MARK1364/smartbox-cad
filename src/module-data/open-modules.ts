@@ -15,8 +15,15 @@ import {
     extractNestingPayload,
     extractCncPayload,
     extractDrawPayload,
+    extractDagPayload,
 } from './cad-extract';
 import type { ModuleId, ModuleScope } from './types';
+import { tx } from '../../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
+import srcTekstRaw from '../src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 function getDoc(): any {
     return ContextManager.instance?.document;
@@ -50,6 +57,8 @@ export function refreshModuleSessionFromCad(module: ModuleId, scope: ModuleScope
                 syncGeometrySnapshots();
             } catch { /* ignore */ }
             writeModuleSession('draw', extractDrawPayload(scope, doc));
+        } else if (module === 'dag') {
+            writeModuleSession('dag', extractDagPayload(scope, doc));
         } else {
             return false;
         }
@@ -112,7 +121,7 @@ export function openCncFromCad(scope: ModuleScope): void {
         writeModuleSession('cnc', payload);
         openModulePage('cnc');
     } catch (e: any) {
-        alert(e?.message || 'Nie udało się otworzyć CNC. Zaznacz formatkę.');
+        alert(e?.message || tx(srcTekst, 'moddata.cnc_no_panel', TX_NS));
     }
 }
 
@@ -129,4 +138,12 @@ export function openDrawFromCad(scope: ModuleScope): void {
     const payload = extractDrawPayload(scope, doc);
     writeModuleSession('draw', payload);
     openModulePage('draw');
+}
+
+export function openDagFromCad(scope: ModuleScope): void {
+    const doc = getDoc();
+    persistProjectSnapshot(doc);
+    const payload = extractDagPayload(scope, doc);
+    writeModuleSession('dag', payload);
+    openModulePage('dag');
 }

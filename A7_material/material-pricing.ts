@@ -12,7 +12,7 @@ export class MaterialPricingCalculator {
         // Wymiary w mm
         const rawW = panel.width || 0;
         const rawH = panel.height || 0;
-        const rawT = panel.thickness || 18_000_000;
+        const rawT = panel.thickness || 0;
 
         const w_mm = nmToMm(rawW);
         const h_mm = nmToMm(rawH);

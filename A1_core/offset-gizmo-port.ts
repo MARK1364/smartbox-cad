@@ -1,5 +1,5 @@
 /**
- * Port gizm offsetu krawędzi — Core nie zna Korpusu ani SmartBoxa.
+ * Port gizm offsetu krawędzi — Core nie zna Korpusu ani Bloku.
  * Moduły A3/A2 rejestrują handlery: mapping ścian, odczyt, podgląd, zapis przez komendę.
  */
 
@@ -13,9 +13,10 @@ export interface OffsetShiftSpec {
 
 export interface OffsetGizmoHandler {
     id: string;
-    getFaceMapping(role: string): Record<string, string> | null;
+    getFaceMapping(role: string, panel?: any): Record<string, string> | null;
     getShift(role: string): OffsetShiftSpec | null;
     resolveContainer(doc: any, panel: any): any | null;
+    resolveFrontParam?(panel: any): { kind: string; paramName: string } | null;
     readOffsetMm(container: any, paramName: string, role?: string): number;
     previewOffset(container: any, paramName: string, value: number): void;
     commitOffset(container: any, paramName: string, oldValue: number, newValue: number): void;

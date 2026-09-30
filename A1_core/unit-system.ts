@@ -6,13 +6,11 @@
  * Dlaczego nm?
  *   - Precyzja submilimetrowa bez zmiennoprzecinkowych błędów zaokrągleń
  *   - 1 mm = 1 000 000 nm  →  typowy wymiar płyty (600 mm) = 600 000 000 nm (mieści się w safe integer JS: 2^53)
- *   - OCCT pracuje wewnętrznie w metrach → konwersja: nm / 1e9
  *   - Babylon.js renderuje w mm (1 jednostka = 1 mm) → konwersja: nm / 1e6
  *
  * Zasada:
  *   Model domenowy (PanelModel, ContainerModel, PartJSON) — wartości w nm (integer)
  *   UI wejście/wyjście — milimetry (number, float)
- *   OCCT API — metry (number, float)
  *   Babylon scena — milimetry (number, float)
  */
 
@@ -27,8 +25,9 @@ export const TO_NM = {
     inch: 25_400_000,       // 1" = 25.4 mm = 25 400 000 nm
 } as const;
 
-/** Aliasy dla wstecznej kompatybilności (TO_MICRONS było złą nazwą, teraz TO_NM) */
-export const TO_MICRONS = TO_NM;
+// `TO_MICRONS` i typ `Microns` zostały usunięte: to aliasy z czasów, gdy jednostka
+// nazywała się „mikrony", a nie nanometry. Zero importów — patrz A1_core/cad-math/units.ts
+// jako jedyne miejsce przeliczania jednostek.
 
 /** Narzędzia do bezpiecznej konwersji jednostek */
 export const unit = {
@@ -49,10 +48,6 @@ export const unit = {
     displayInch:  (nm: Nanometers): string => `${(nm / TO_NM.inch).toFixed(3)}"`,
     displayM:     (nm: Nanometers): string => `${(nm / TO_NM.m).toFixed(4)} m`,
 
-    // ── Dla OCCT (silnik B-Rep pracuje w metrach) ──────────────────────────
-    toOCCT:  (nm: Nanometers): number => nm / TO_NM.m,
-    fromOCCT:(m: number): Nanometers  => Math.round(m * TO_NM.m),
-
     // ── Dla Babylon.js (scena w mm, 1 jednostka = 1 mm) ───────────────────
     toBabylon:  (nm: Nanometers): number => nm / TO_NM.mm,
     fromBabylon:(mm: number): Nanometers => Math.round(mm * TO_NM.mm),
@@ -64,6 +59,3 @@ export const unit = {
     /** Sprawdza czy wartość jest w bezpiecznym zakresie JS integer (do ~9 metrów) */
     isSafe: (nm: Nanometers): boolean => Number.isSafeInteger(nm),
 };
-
-// Alias dla tych którzy importowali stary typ 'Microns'
-export type Microns = Nanometers;

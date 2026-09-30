@@ -18,34 +18,40 @@ import { NodeType } from '../A1_core/cad-node/node-type';
 import { CADNode } from '../A1_core/cad-node/cad-node';
 import { PMIStore } from '../A8_pmi/pmi-data';
 
-export const LIVE_PROJECT_STORAGE_KEY = 'smartbox_cad_live_project_v1';
-export const LIVE_PMI_STORAGE_KEY = 'smartbox_cad_live_pmi_v1';
-export const SYNC_CHANNEL_NAME = 'smartbox_cad_sync';
+export const LIVE_PROJECT_STORAGE_KEY = 'bloki_cad_live_project_v1';
+export const LIVE_PMI_STORAGE_KEY = 'bloki_cad_live_pmi_v1';
+export const SYNC_CHANNEL_NAME = 'bloki_cad_sync';
 
 /**
- * Konwertuje dowolną wartość wymiarową na milimetry (mm).
- * Jeśli wartość w CADNode jest w nanometrach (> 10000), dzieli przez 1 000 000.
+ * Feature params (u/v/diameter/depth) są w mm — zaokrąglenie, bez konwersji.
  */
-function toMm(val: any, defaultVal: number = 0): number {
+function mmVal(val: any, defaultVal: number = 0): number {
     if (val === null || val === undefined) return defaultVal;
     const num = typeof val === 'number' ? val : parseFloat(val);
-    if (isNaN(num)) return defaultVal;
-
-    if (Math.abs(num) > 10000) {
-        return Math.round(num / 1000000);
-    }
+    if (!Number.isFinite(num)) return defaultVal;
     return Math.round(num);
+}
+
+/**
+ * Wymiary modelu CAD (PanelModel/ContainerModel: width/height/depth/thickness)
+ * są w nm — jawne wejście, bez progu heurystyki.
+ */
+function modelNmToMm(val: any, defaultVal: number = 0): number {
+    if (val === null || val === undefined) return defaultVal;
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    if (!Number.isFinite(num)) return defaultVal;
+    return Math.round(num / 1_000_000);
 }
 
 function mapGrooveFeature(f: any, fallbackHeight: number): GrooveFeature2D {
     const library = f?.params?.source === 'library' && !!f?.params?.library_id;
     return {
         id: String(f.id || `g_${Math.random().toString(36).slice(2, 8)}`),
-        x: toMm(f.params?.u ?? f.params?.x ?? f.x, 0),
-        y: toMm(f.params?.v ?? f.params?.y ?? f.y, 0),
-        width: toMm(f.params?.width ?? f.width, 4),
-        height: toMm(f.params?.length ?? f.params?.height ?? f.height, fallbackHeight),
-        depth: toMm(f.params?.depth ?? f.depth, 8),
+        x: mmVal(f.params?.u ?? f.params?.x ?? f.x, 0),
+        y: mmVal(f.params?.v ?? f.params?.y ?? f.y, 0),
+        width: mmVal(f.params?.width ?? f.width, 4),
+        height: mmVal(f.params?.length ?? f.params?.height ?? f.height, fallbackHeight),
+        depth: mmVal(f.params?.depth ?? f.depth, 8),
         name: library ? (f.name || f.params.library_id || 'Operacja') : (f.name || 'Wpust'),
         source: library ? 'library' : 'engine',
         libraryId: library ? String(f.params.library_id) : undefined,
@@ -274,10 +280,10 @@ export class DrawingProjectExtractor {
         const grooves: GrooveFeature2D[] = [];
 
         if (domainData) {
-            width = toMm(domainData.width ?? domainData.dimX, 0);
-            height = toMm(domainData.height ?? domainData.dimY, 0);
-            depth = toMm(domainData.depth ?? domainData.dimZ, 0);
-            thickness = toMm(domainData.thickness ?? domainData.dimZ, 18);
+            width = modelNmToMm(domainData.width ?? domainData.dimX, 0);
+            height = modelNmToMm(domainData.height ?? domainData.dimY, 0);
+            depth = modelNmToMm(domainData.depth ?? domainData.dimZ, 0);
+            thickness = modelNmToMm(domainData.thickness ?? domainData.dimZ, 18);
             if (domainData.material) material = domainData.material;
             if (domainData.role) role = domainData.role;
 
@@ -287,10 +293,10 @@ export class DrawingProjectExtractor {
                 if (isHole) {
                     holes.push({
                         id: f.id || `h_${Math.random()}`,
-                        x: toMm(f.params?.x ?? f.x, 0),
-                        y: toMm(f.params?.y ?? f.y, 0),
-                        diameter: toMm(f.params?.diameter ?? f.diameter, 5),
-                        depth: toMm(f.params?.depth ?? f.depth, 12),
+                        x: mmVal(f.params?.x ?? f.x, 0),
+                        y: mmVal(f.params?.y ?? f.y, 0),
+                        diameter: mmVal(f.params?.diameter ?? f.diameter, 5),
+                        depth: mmVal(f.params?.depth ?? f.depth, 12),
                         face: f.params?.face || 'FRONT',
                         frozen: !!(f.frozen || f.params?.frozen),
                     });
@@ -304,10 +310,10 @@ export class DrawingProjectExtractor {
                     if (!holes.some((ex) => ex.id === h.id)) {
                         holes.push({
                             id: h.id || `h_${Math.random()}`,
-                            x: toMm(h.x, 0),
-                            y: toMm(h.y, 0),
-                            diameter: toMm(h.diameter, 5),
-                            depth: toMm(h.depth, 12),
+                            x: mmVal(h.x, 0),
+                            y: mmVal(h.y, 0),
+                            diameter: mmVal(h.diameter, 5),
+                            depth: mmVal(h.depth, 12),
                             face: h.face || 'FRONT',
                             frozen: !!(h.frozen || h.params?.frozen),
                         });
@@ -336,13 +342,21 @@ export class DrawingProjectExtractor {
             icon = '🔩';
             type = 'HARDWARE';
         } else if (isPart) {
-            icon = '🪵';
+            const isAlu = domainData?.panelForm === 'ALU_FRAME' || (typeof domainData?.isAluFrame === 'function' && domainData.isAluFrame());
+            icon = isAlu ? '🔲' : '🪵';
             type = 'PART';
             if (depth === 0) depth = thickness;
         } else if (
+            domainData?.role === 'SMARTPART_HANDLE' ||
+            domainData?.generatorParams?.type === 'smartpart_handle' ||
+            domainData?.generatorParams?.partType === 'HANDLE'
+        ) {
+            icon = '🪝';
+            type = 'CONTAINER';
+        } else if (
             isGroup ||
             domainData?.generatorParams?.boxType === 'DRAWERS' ||
-            domainData?.generatorParams?.type === 'smartbox_drawers' ||
+            domainData?.generatorParams?.type === 'blok_drawers' ||
             rawName.toLowerCase().includes('szuflad') ||
             rawName.toLowerCase().includes('drawer')
         ) {
@@ -350,7 +364,7 @@ export class DrawingProjectExtractor {
             type = 'DRAWERS';
         } else if (
             domainData?.generatorParams?.boxType === 'SHELVES' ||
-            domainData?.generatorParams?.type === 'smartbox_shelves' ||
+            domainData?.generatorParams?.type === 'blok_shelves' ||
             rawName.toLowerCase().includes('półk') ||
             rawName.toLowerCase().includes('polk') ||
             rawName.toLowerCase().includes('shelf')
@@ -397,7 +411,7 @@ export class DrawingProjectExtractor {
             depth,
             thickness: isPart ? thickness : undefined,
             material: isPart ? material : undefined,
-            role: isPart ? role : undefined,
+            role: domainData?.role || (isPart ? role : undefined),
             partCount: totalPartCount,
             children: children.length > 0 ? children : undefined,
             holes: holes.length > 0 ? holes : undefined,
@@ -406,6 +420,10 @@ export class DrawingProjectExtractor {
             frozen: !!domainData?.frozen,
             isManual: domainData?.engineManaged === false,
             engineManaged: domainData?.engineManaged !== false,
+            panelForm: domainData?.panelForm,
+            frameTemplateId: domainData?.frameTemplateId,
+            frameComponents: typeof domainData?.getFrameComponents === 'function' ? domainData.getFrameComponents() : undefined,
+            generatorParams: domainData?.generatorParams ? { ...domainData.generatorParams } : undefined,
         };
     }
 
@@ -416,9 +434,9 @@ export class DrawingProjectExtractor {
         if (cm.containerViews && cm.containerViews.size > 0) {
             cm.containerViews.forEach((cView: any, cModel: any) => {
                 const cName = cModel?.name || 'Szafka Korpusowa';
-                const cWidth = toMm(cModel?.width, 600);
-                const cHeight = toMm(cModel?.height, 720);
-                const cDepth = toMm(cModel?.depth, 560);
+                const cWidth = modelNmToMm(cModel?.width, 600);
+                const cHeight = modelNmToMm(cModel?.height, 720);
+                const cDepth = modelNmToMm(cModel?.depth, 560);
                 const cId = cModel?.id || `cont_${Math.random()}`;
 
                 const partsForContainer: CADTreeNode[] = [];
@@ -472,9 +490,9 @@ export class DrawingProjectExtractor {
     }
 
     private _mapPanelModelToTreeNode(pModel: any): CADTreeNode {
-        const width = toMm(pModel.width ?? pModel.dimX, 560);
-        const height = toMm(pModel.height ?? pModel.dimY, 720);
-        const thickness = toMm(pModel.thickness ?? pModel.dimZ, 18);
+        const width = modelNmToMm(pModel.width ?? pModel.dimX, 560);
+        const height = modelNmToMm(pModel.height ?? pModel.dimY, 720);
+        const thickness = modelNmToMm(pModel.thickness ?? pModel.dimZ, 18);
         const name = pModel.name || 'Formatka';
         const material = pModel.material || 'Płyta Laminowana 18mm';
         const role = pModel.role || '';
@@ -487,10 +505,10 @@ export class DrawingProjectExtractor {
             if (isHole) {
                 holes.push({
                     id: f.id || `h_${Math.random()}`,
-                    x: toMm(f.params?.x ?? f.x, 0),
-                    y: toMm(f.params?.y ?? f.y, 0),
-                    diameter: toMm(f.params?.diameter ?? f.diameter, 5),
-                    depth: toMm(f.params?.depth ?? f.depth, 12),
+                    x: mmVal(f.params?.x ?? f.x, 0),
+                    y: mmVal(f.params?.y ?? f.y, 0),
+                    diameter: mmVal(f.params?.diameter ?? f.diameter, 5),
+                    depth: mmVal(f.params?.depth ?? f.depth, 12),
                     face: f.params?.face || 'FRONT',
                     frozen: !!(f.frozen || f.params?.frozen),
                 });
@@ -503,10 +521,10 @@ export class DrawingProjectExtractor {
                 if (!holes.some((ex) => ex.id === h.id)) {
                     holes.push({
                         id: h.id || `h_${Math.random()}`,
-                        x: toMm(h.x, 0),
-                        y: toMm(h.y, 0),
-                        diameter: toMm(h.diameter, 5),
-                        depth: toMm(h.depth, 12),
+                        x: mmVal(h.x, 0),
+                        y: mmVal(h.y, 0),
+                        diameter: mmVal(h.diameter, 5),
+                        depth: mmVal(h.depth, 12),
                         face: h.face || 'FRONT',
                         frozen: !!(h.frozen || h.params?.frozen),
                     });
@@ -521,11 +539,12 @@ export class DrawingProjectExtractor {
             }
         }
 
+        const isAlu = pModel.panelForm === 'ALU_FRAME' || (typeof pModel.isAluFrame === 'function' && pModel.isAluFrame());
         return {
             id: pModel.id || `part_${Date.now()}_${Math.random()}`,
             name,
             type: 'PART',
-            icon: '🪵',
+            icon: isAlu ? '🔲' : '🪵',
             width,
             height,
             depth: thickness,
@@ -539,6 +558,9 @@ export class DrawingProjectExtractor {
             frozen: !!pModel.frozen,
             isManual: pModel.engineManaged === false,
             engineManaged: pModel.engineManaged !== false,
+            panelForm: pModel.panelForm,
+            frameTemplateId: pModel.frameTemplateId,
+            frameComponents: typeof pModel.getFrameComponents === 'function' ? pModel.getFrameComponents() : undefined,
         };
     }
 

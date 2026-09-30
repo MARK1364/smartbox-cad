@@ -9,7 +9,7 @@
 declare const BABYLON: any;
 
 import { BaseState } from '../A1_core/interaction/states/base-state';
-import { BootstrapContext } from '../A1_core/scene-bootstrap';
+import type { CadModuleContext } from '../A1_core/cad-module-context.js';
 import { StateMachine } from '../A1_core/interaction/state-machine';
 import { PMIAnnotation, PMIStore } from './pmi-data';
 import { PMIRenderer } from './pmi-renderer';
@@ -37,7 +37,7 @@ export class PMITextShiftTool extends BaseState {
     private keyboardObserver: any = null;
 
     constructor(
-        ctx: BootstrapContext,
+        ctx: CadModuleContext,
         stateMachine: StateMachine,
         renderer: PMIRenderer,
         store: PMIStore = PMIStore.instance,

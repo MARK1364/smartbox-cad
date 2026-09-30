@@ -1,217 +1,351 @@
+/**
+ * Wpusty pod plecy — geometria w CAD (Z-up): X=szerokość, Y=głębokość, Z=wysokość.
+ *
+ * PanelModel trzyma LCS (width×height×thickness), ale rotacje LCS w JSON są pod Y-up /
+ * Babylon i nie dają poprawnego OBB w przestrzeni CAD. Dlatego bryły liczymy z
+ * translacji + zmapowanych wymiarów i osi grubości (z pozycji / roli), a UV rowka
+ * jak w Korpus3 (web-84): na FACE_Z_PLUS hosta.
+ */
+
 import { Mat4 } from '../A1_core/cad-math/mat4.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
-import { GrooveIntent, GrooveFeatureLCS } from './groove-intent.js';
+import { GrooveIntent } from './groove-intent.js';
+import { defaultBackOverlapNm } from './back-overlap.js';
 
 export interface PanelState {
     id: string;
     role: string;
+    /** LCS po mapowaniu: x=width, y=height, z=thickness */
     dim_nm: { x: number; y: number; z: number };
-    localMatrix: Mat4; // Matrix from Panel LCS to Container Space
+    localMatrix: Mat4;
     zonePrefix?: string;
     backMarginsNm?: { left?: number; right?: number; top?: number; bottom?: number };
 }
 
-interface AABB {
-    min: Vec3;
-    max: Vec3;
+const EPS = 50_000; // 0.05 mm
+
+type Axis = 'X' | 'Y' | 'Z';
+
+interface WorldBox {
+    x0: number; x1: number;
+    y0: number; y1: number;
+    z0: number; z1: number;
 }
 
-const EPS = 50000; // 0.05 mm in nm
-
-function getLocalAABB(dim_nm: {x: number, y: number, z: number}): AABB {
-    return {
-        min: new Vec3(-dim_nm.x / 2, -dim_nm.y / 2, -dim_nm.z / 2),
-        max: new Vec3(dim_nm.x / 2, dim_nm.y / 2, dim_nm.z / 2)
-    };
+function translationOf(panel: PanelState): Vec3 {
+    return panel.localMatrix.decompose().translation;
 }
 
-function getCorners(aabb: AABB): Vec3[] {
-    return [
-        new Vec3(aabb.min.x, aabb.min.y, aabb.min.z),
-        new Vec3(aabb.max.x, aabb.min.y, aabb.min.z),
-        new Vec3(aabb.min.x, aabb.max.y, aabb.min.z),
-        new Vec3(aabb.max.x, aabb.max.y, aabb.min.z),
-        new Vec3(aabb.min.x, aabb.min.y, aabb.max.z),
-        new Vec3(aabb.max.x, aabb.min.y, aabb.max.z),
-        new Vec3(aabb.min.x, aabb.max.y, aabb.max.z),
-        new Vec3(aabb.max.x, aabb.max.y, aabb.max.z),
-    ];
+function roleUpper(panel: PanelState): string {
+    return String(panel.role || '').toUpperCase();
 }
 
-function computeAABB(points: Vec3[]): AABB {
-    let minX = Infinity, minY = Infinity, minZ = Infinity;
-    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-    
-    for (const p of points) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.z < minZ) minZ = p.z;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
-        if (p.z > maxZ) maxZ = p.z;
-    }
-    
-    return {
-        min: new Vec3(minX, minY, minZ),
-        max: new Vec3(maxX, maxY, maxZ)
-    };
-}
-
-function intersectAABB(a: AABB, b: AABB): AABB | null {
-    const minX = Math.max(a.min.x, b.min.x);
-    const minY = Math.max(a.min.y, b.min.y);
-    const minZ = Math.max(a.min.z, b.min.z);
-    
-    const maxX = Math.min(a.max.x, b.max.x);
-    const maxY = Math.min(a.max.y, b.max.y);
-    const maxZ = Math.min(a.max.z, b.max.z);
-    
-    if (maxX - minX < EPS || maxY - minY < EPS || maxZ - minZ < EPS) {
-        return null; // Brak realnego przecięcia
-    }
-    
-    return { min: new Vec3(minX, minY, minZ), max: new Vec3(maxX, maxY, maxZ) };
+/** Oś grubości pleców w CAD: ściana ±Y → Y, ściana ±X → X. */
+function backThicknessAxis(back: PanelState): Axis {
+    const t = translationOf(back);
+    return Math.abs(t.x) >= Math.abs(t.y) ? 'X' : 'Y';
 }
 
 /**
- * Główny czysty builder intencji wpustów pod plecy.
- * Opiera się w 100% na matematyce macierzowej i LCS, ignorując całkowicie role formatek
- * przy liczeniu samej geometrii (role służą tu tylko do odnalezienia pleców).
+ * OBB pleców w CAD: LCS [W,H,T] — dla ściany Y: W∥X, H∥Z, T∥Y;
+ * dla ściany X: W∥Y, H∥Z, T∥X.
  */
+function backWorldBox(back: PanelState): WorldBox {
+    const t = translationOf(back);
+    const w = back.dim_nm.x;
+    const h = back.dim_nm.y;
+    const th = back.dim_nm.z;
+    const axis = backThicknessAxis(back);
+    if (axis === 'X') {
+        return {
+            x0: t.x - th / 2, x1: t.x + th / 2,
+            y0: t.y - w / 2, y1: t.y + w / 2,
+            z0: t.z - h / 2, z1: t.z + h / 2
+        };
+    }
+    return {
+        x0: t.x - w / 2, x1: t.x + w / 2,
+        y0: t.y - th / 2, y1: t.y + th / 2,
+        z0: t.z - h / 2, z1: t.z + h / 2
+    };
+}
+
+function isHorizontalHost(role: string): boolean {
+    return (
+        role.includes('TOP') ||
+        role.includes('BOTTOM') ||
+        role.includes('SHELF') ||
+        role.includes('WIENIEC') ||
+        role.includes('HORIZONTAL')
+    );
+}
+
+function isVerticalHost(role: string): boolean {
+    return (
+        role.includes('SIDE') ||
+        role.includes('BOK') ||
+        role.includes('DIVIDER') ||
+        role.includes('PARTITION') ||
+        role.includes('PRZEGRODA') ||
+        role.includes('FRONT') ||
+        role === 'MANUAL_PANEL'
+    );
+}
+
+function isGrooveHost(role: string): boolean {
+    if (role === 'BACK_PANEL' || role === 'BLIND_PANEL') return false;
+    return isHorizontalHost(role) || isVerticalHost(role);
+}
+
+/** Host pionowy: cienki w X lub Y; LCS [D,H,T] z D wzdłuż drugiej osi poziomej. */
+function verticalHostBox(panel: PanelState): WorldBox {
+    const t = translationOf(panel);
+    const depthOrSpan = panel.dim_nm.x;
+    const h = panel.dim_nm.y;
+    const th = panel.dim_nm.z;
+    const thinX = Math.abs(t.x) >= Math.abs(t.y);
+    if (thinX) {
+        return {
+            x0: t.x - th / 2, x1: t.x + th / 2,
+            y0: t.y - depthOrSpan / 2, y1: t.y + depthOrSpan / 2,
+            z0: t.z - h / 2, z1: t.z + h / 2
+        };
+    }
+    return {
+        x0: t.x - depthOrSpan / 2, x1: t.x + depthOrSpan / 2,
+        y0: t.y - th / 2, y1: t.y + th / 2,
+        z0: t.z - h / 2, z1: t.z + h / 2
+    };
+}
+
+/** Wieniec / półka: LCS [W,D,T], cienki w Z. */
+function horizontalHostBox(panel: PanelState): WorldBox {
+    const t = translationOf(panel);
+    const w = panel.dim_nm.x;
+    const d = panel.dim_nm.y;
+    const th = panel.dim_nm.z;
+    return {
+        x0: t.x - w / 2, x1: t.x + w / 2,
+        y0: t.y - d / 2, y1: t.y + d / 2,
+        z0: t.z - th / 2, z1: t.z + th / 2
+    };
+}
+
+function hostWorldBox(panel: PanelState): WorldBox {
+    return isHorizontalHost(roleUpper(panel))
+        ? horizontalHostBox(panel)
+        : verticalHostBox(panel);
+}
+
+function boxesOverlap(a: WorldBox, b: WorldBox): boolean {
+    return (
+        Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > EPS &&
+        Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > EPS &&
+        Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0) > EPS
+    );
+}
+
+function pickMarginNm(back: PanelState, target: PanelState): number {
+    const fallback = defaultBackOverlapNm();
+    const m = back.backMarginsNm;
+    if (!m) return fallback;
+    const bt = translationOf(back);
+    const tt = translationOf(target);
+    const role = roleUpper(target);
+
+    if (isHorizontalHost(role)) {
+        return tt.z < bt.z ? (m.bottom ?? fallback) : (m.top ?? fallback);
+    }
+
+    const axis = backThicknessAxis(back);
+    if (axis === 'Y') {
+        // Lewy/prawy bok względem pleców na ścianie Y
+        return tt.x < bt.x ? (m.left ?? fallback) : (m.right ?? fallback);
+    }
+    // Plecy na ścianie X: „lewo/prawo” = −Y / +Y wzdłuż głębokości
+    return tt.y < bt.y ? (m.left ?? fallback) : (m.right ?? fallback);
+}
+
+function clipGroove(
+    u_nm: number,
+    v_nm: number,
+    width_nm: number,
+    length_nm: number,
+    faceW: number,
+    faceH: number
+): { u_nm: number; v_nm: number; width_nm: number; length_nm: number } | null {
+    const u0 = Math.max(0, u_nm);
+    const u1 = Math.min(faceW, u_nm + width_nm);
+    const v0 = Math.max(0, v_nm);
+    const v1 = Math.min(faceH, v_nm + length_nm);
+    if (u1 - u0 <= EPS || v1 - v0 <= EPS) return null;
+    return { u_nm: u0, v_nm: v0, width_nm: u1 - u0, length_nm: v1 - v0 };
+}
+
+/**
+ * Wpust na pionowym hoście (bok / listwa / front):
+ * LCS U = rozpiętość pozioma (dim.x), V = wysokość (dim.y); szczelina ≈ grubość pleców.
+ */
+function grooveOnVertical(
+    back: PanelState,
+    target: PanelState,
+    backBox: WorldBox,
+    depth_nm: number
+): GrooveIntent | null {
+    const t = translationOf(target);
+    const faceW = target.dim_nm.x;
+    const faceH = target.dim_nm.y;
+    const backTh = back.dim_nm.z;
+    const backAxis = backThicknessAxis(back);
+    const hostThinX = Math.abs(t.x) >= Math.abs(t.y);
+
+    let u_nm: number;
+    let width_nm: number;
+
+    if (hostThinX) {
+        // U wzdłuż Y (głębokość). Lewy: u=0 od +Y; prawy: u=0 od −Y.
+        if (backAxis === 'Y') {
+            // Korpus3 / PLECY_Y: cienki pasek w Y
+            width_nm = backTh;
+            if (t.x < 0) {
+                u_nm = (t.y + faceW / 2) - backBox.y1;
+            } else {
+                u_nm = backBox.y0 - (t.y - faceW / 2);
+            }
+        } else {
+            // Host∩PLECY_X (np. listwa): styk wzdłuż Y
+            const y0 = Math.max(t.y - faceW / 2, backBox.y0);
+            const y1 = Math.min(t.y + faceW / 2, backBox.y1);
+            if (t.x < 0) {
+                u_nm = (t.y + faceW / 2) - y1;
+            } else {
+                u_nm = y0 - (t.y - faceW / 2);
+            }
+            width_nm = y1 - y0;
+        }
+    } else {
+        // Host cienki w Y (BOK_Y): U wzdłuż X
+        const hostX0 = t.x - faceW / 2;
+        if (backAxis === 'X') {
+            const midX = (backBox.x0 + backBox.x1) / 2;
+            u_nm = midX - backTh / 2 - hostX0;
+            width_nm = backTh;
+        } else {
+            const x0 = Math.max(hostX0, backBox.x0);
+            const x1 = Math.min(t.x + faceW / 2, backBox.x1);
+            u_nm = x0 - hostX0;
+            width_nm = x1 - x0;
+        }
+    }
+
+    const v_nm = backBox.z0 - (t.z - faceH / 2);
+    const length_nm = backBox.z1 - backBox.z0;
+
+    const clipped = clipGroove(u_nm, v_nm, width_nm, length_nm, faceW, faceH);
+    if (!clipped) return null;
+
+    return {
+        targetNodeId: target.id,
+        feature: {
+            type: 'groove',
+            face: '+Z',
+            params: { ...clipped, depth_nm: Math.min(depth_nm, target.dim_nm.z) }
+        }
+    };
+}
+
+/**
+ * Wpust na wieńcu / półce: LCS U=szerokość (X), V=głębokość (Y); jeden wymiar ≈ T pleców.
+ *
+ * V na FACE_Z_PLUS rośnie z mesh +Y (= CAD +Z po mapowaniu). Po BOTTOM [90,180,0]
+ * CAD +Z → świat +Y (tył), więc v=0 = przód — jak na górze [−90,0,0].
+ * Stary BOTTOM [90,0,0] miał CAD +Z → −Y (przód), stąd osobna gałąź isBottom.
+ */
+function horizontalMeshVPointsToWorldBack(target: PanelState): boolean {
+    const { rotation } = target.localMatrix.decompose();
+    // CAD +Z (głębokość panelu w LCS [W,D,T]→mesh) w świecie
+    const cadZ = rotation.rotateVec3(new Vec3(0, 0, 1));
+    return cadZ.y > 0.5;
+}
+
+function grooveOnHorizontal(
+    back: PanelState,
+    target: PanelState,
+    backBox: WorldBox,
+    depth_nm: number
+): GrooveIntent | null {
+    const t = translationOf(target);
+    const faceW = target.dim_nm.x;
+    const faceD = target.dim_nm.y;
+    const backTh = back.dim_nm.z;
+    const axis = backThicknessAxis(back);
+    // v=0 przy tyle tylko gdy CAD +Z idzie w przód (−Y) — stary LCS dołu
+    const vZeroAtBack = !horizontalMeshVPointsToWorldBack(target);
+
+    let u_nm: number;
+    let width_nm: number;
+    let v_nm: number;
+    let length_nm: number;
+
+    if (axis === 'Y') {
+        // PLECY_Y: pasek równoległy do X, przy +Y
+        u_nm = backBox.x0 - (t.x - faceW / 2);
+        width_nm = backBox.x1 - backBox.x0;
+        length_nm = backTh;
+        if (vZeroAtBack) {
+            v_nm = (t.y + faceD / 2) - backBox.y1;
+        } else {
+            v_nm = backBox.y0 - (t.y - faceD / 2);
+        }
+    } else {
+        // PLECY_X: pasek równoległy do Y, przy −X
+        const midX = (backBox.x0 + backBox.x1) / 2;
+        u_nm = midX - backTh / 2 - (t.x - faceW / 2);
+        width_nm = backTh;
+        const y0 = Math.max(t.y - faceD / 2, backBox.y0);
+        const y1 = Math.min(t.y + faceD / 2, backBox.y1);
+        length_nm = y1 - y0;
+        v_nm = vZeroAtBack
+            ? (t.y + faceD / 2) - y1
+            : y0 - (t.y - faceD / 2);
+    }
+
+    const clipped = clipGroove(u_nm, v_nm, width_nm, length_nm, faceW, faceD);
+    if (!clipped) return null;
+
+    return {
+        targetNodeId: target.id,
+        feature: {
+            type: 'groove',
+            face: '+Z',
+            params: { ...clipped, depth_nm: Math.min(depth_nm, target.dim_nm.z) }
+        }
+    };
+}
+
 export function buildBackGrooves(panels: PanelState[]): GrooveIntent[] {
     const intents: GrooveIntent[] = [];
-    const backPanels = panels.filter(p => p.role === 'BACK_PANEL');
+    const backs = panels.filter((p) => p.role === 'BACK_PANEL');
+    if (backs.length === 0) return intents;
 
-    if (backPanels.length === 0) return intents;
+    const hosts = panels.filter((p) => isGrooveHost(roleUpper(p)));
 
-    const allowedRoles = [
-        'LEFT_SIDE_PANEL', 'RIGHT_SIDE_PANEL', 'SIDE_LEFT', 'SIDE_RIGHT',
-        'TOP_PANEL', 'BOTTOM_PANEL', 'SHELF_PANEL', 'HORIZONTAL_DIVIDER', 'VERTICAL_DIVIDER', 'DIVIDER', 'SIDE_PANEL',
-        'PARTITION', 'PRZEGRODA', 'MANUAL_PANEL', 'BOK_L', 'BOK_P', 'WIENIEC_D', 'WIENIEC_G'
-    ];
+    for (const back of backs) {
+        const backZone = back.zonePrefix || '';
+        const backBox = backWorldBox(back);
 
-    for (const backPanel of backPanels) {
-        const backPos = backPanel.localMatrix.decompose().translation;
-        const backDim = backPanel.dim_nm; // { x: Width, y: Height, z: Thickness }
-        for (const target of panels) {
-            if (target.role === 'BACK_PANEL') continue;
-            if (!allowedRoles.includes(target.role)) continue;
-
+        for (const target of hosts) {
             const targetZone = target.zonePrefix || '';
-            const backZone = backPanel.zonePrefix || '';
-            if (targetZone !== '' && targetZone !== backZone) continue;
+            if (targetZone !== '' && backZone !== '' && targetZone !== backZone) continue;
 
-            const targetPos = target.localMatrix.decompose().translation;
-            const isSideOrDivider = target.role.includes('SIDE') || target.role.includes('BOK') || target.role.includes('DIVIDER') && !target.role.includes('HORIZONTAL');
+            const hostBox = hostWorldBox(target);
+            if (!boxesOverlap(backBox, hostBox)) continue;
 
-            let u_nm = 0;
-            let v_nm = 0;
-            let width_nm = 0;
-            let length_nm = 0;
-            let penetrationDepth_nm = 11_000_000;
-            let face: '+Z' | '-Z' = '+Z'; // Domyślnie rowek od wewnętrznej strony (Zależy od tego, który to bok, ale z reguły to '+Z' bo środek korpusu)
-
-            if (isSideOrDivider) {
-                // target.dim_nm = { x: Depth, y: Height, z: Thickness }
-                width_nm = backDim.z;  // Szerokość wpustu = Grubość pleców (3mm)
-                length_nm = backDim.y; // Długość wpustu = Wysokość pleców (np. 2200mm)
-                
-                // V: Pozycja startowa od dolnej krawędzi boczka (wzdłuż osi Y boczka)
-                const targetBottom = targetPos.z - target.dim_nm.y / 2;
-                const backBottom = backPos.z - backDim.y / 2;
-                v_nm = backBottom - targetBottom;
-
-                // U: Pozycja od krawędzi (zależnie czy to lewy czy prawy bok, u=0 jest z tyłu lub z przodu)
-                const isLeft = target.role.includes('LEFT') || targetPos.x < backPos.x;
-                penetrationDepth_nm = isLeft
-                    ? (backPanel.backMarginsNm?.left ?? 11_000_000)
-                    : (backPanel.backMarginsNm?.right ?? 11_000_000);
-                
-                if (isLeft) {
-                    // Dla lewego boczka (+Z do wewnątrz), u=0 jest Z TYŁU szafki.
-                    // Obliczamy odległość od tyłu boczka do tyłu pleców.
-                    const targetBack = targetPos.y + target.dim_nm.x / 2;
-                    const backBack = backPos.y + backDim.z / 2;
-                    u_nm = targetBack - backBack;
-                } else {
-                    // Dla prawego boczka (+Z do wewnątrz), u=0 jest Z PRZODU szafki.
-                    // Obliczamy odległość od przodu boczka do przodu pleców.
-                    const targetFront = targetPos.y - target.dim_nm.x / 2;
-                    const backFront = backPos.y - backDim.z / 2;
-                    u_nm = backFront - targetFront;
-                }
-
-                // Oba boczki mają teraz Z skierowane do wewnątrz (będąc swoim lustrzanym odbiciem).
-                // Dlatego zawsze frezujemy na wewnętrznej ścianie +Z.
-                face = '+Z';
-                
-            } else {
-                // Dla wieńców/półek:
-                // target.dim_nm = { x: Width, y: Depth, z: Thickness }
-                width_nm = backDim.x;  // Długość wpustu = Szerokość pleców (np. 1000mm)
-                length_nm = backDim.z; // Szerokość wpustu = Grubość pleców (3mm)
-
-                const isBottom = target.role.includes('BOTTOM') || targetPos.z < backPos.z;
-                penetrationDepth_nm = isBottom
-                    ? (backPanel.backMarginsNm?.bottom ?? 11_000_000)
-                    : (backPanel.backMarginsNm?.top ?? 11_000_000);
-
-                // U: Pozycja od lewej krawędzi wieńca (wzdłuż osi X wieńca)
-                // Obie formatki mają oś X skierowaną tak samo (RotX zachowuje kierunek X), więc u=0 zawsze leży po LEWEJ
-                const targetLeft = targetPos.x - target.dim_nm.x / 2;
-                const backLeft = backPos.x - backDim.x / 2;
-                u_nm = backLeft - targetLeft;
-
-                // V: Pozycja wgłębna (od tyłu dla dolnego, od przodu dla górnego)
-                if (isBottom) {
-                    // Dla wieńca dolnego, v=0 znajduje się Z TYŁU szafki
-                    const targetBack = targetPos.y + target.dim_nm.y / 2;
-                    const backBack = backPos.y + backDim.z / 2;
-                    v_nm = targetBack - backBack;
-                } else {
-                    // Dla wieńca górnego (obróconego o 180 st. wokół X), v=0 znajduje się Z PRZODU szafki
-                    const targetFront = targetPos.y - target.dim_nm.y / 2;
-                    const backFront = backPos.y - backDim.z / 2;
-                    v_nm = backFront - targetFront;
-                }
-                
-                // Oba wieńce (lustrzane odbicia wokół X) mają teraz Z skierowane do wewnątrz korpusu.
-                // Dlatego zawsze frezujemy na wewnętrznej ścianie +Z.
-                face = '+Z';
-            }
-
-            // Twarde zabezpieczenie matematyczne: Przecięcie 2D (Subtractive Domain Clipping)
-            // Wycięcie ujemne na ścianie nie może wychodzić poza obszar [0, targetFaceWidth] x [0, targetFaceHeight]
-            const targetFaceWidth = target.dim_nm.x;
-            const targetFaceHeight = target.dim_nm.y;
-
-            const uStart = Math.max(0, u_nm);
-            const uEnd = Math.min(targetFaceWidth, u_nm + width_nm);
-            const vStart = Math.max(0, v_nm);
-            const vEnd = Math.min(targetFaceHeight, v_nm + length_nm);
-
-            // Jeśli po obcięciu wpust nie trafia w formatkę (brak części wspólnej)
-            if (uEnd - uStart <= 0 || vEnd - vStart <= 0) continue;
-
-            u_nm = uStart;
-            width_nm = uEnd - uStart;
-            v_nm = vStart;
-            length_nm = vEnd - vStart;
-
-            intents.push({
-                targetNodeId: target.id,
-                feature: {
-                    type: 'groove',
-                    face,
-                    params: {
-                        u_nm,
-                        v_nm,
-                        width_nm,
-                        length_nm,
-                        depth_nm: penetrationDepth_nm
-                    }
-                }
-            });
+            const depth_nm = pickMarginNm(back, target);
+            const intent = isHorizontalHost(roleUpper(target))
+                ? grooveOnHorizontal(back, target, backBox, depth_nm)
+                : grooveOnVertical(back, target, backBox, depth_nm);
+            if (intent) intents.push(intent);
         }
     }
 

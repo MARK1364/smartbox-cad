@@ -1,0 +1,117 @@
+{
+  "units": "mm",
+  "version": "1.0.0",
+  "default_template": "Z1_BLACK",
+  "templates": {
+    "Z1_BLACK": {
+      "id": "Z1_BLACK",
+      "name": "Profil Z-1 Wąski (20 mm) — Czarny Mat",
+      "description": "Profil aluminiowy 20x20 mm pod zawiasy ramkowe ze szkłem grafitowym",
+      "profile": {
+        "width_mm": 20,
+        "depth_mm": 20,
+        "lip_depth_mm": 8,
+        "lip_thickness_mm": 4.5,
+        "corner_joint": "miter_45",
+        "finish": "anodized_black",
+        "color": { "r": 0.12, "g": 0.12, "b": 0.12 }
+      },
+      "glass": {
+        "thickness_mm": 4,
+        "type": "GRAPHITE_ANTISOL",
+        "name": "Szkło Antisol Grafit",
+        "color": { "r": 0.15, "g": 0.18, "b": 0.18 },
+        "alpha": 0.35,
+        "clearance_mm": 1.5
+      }
+    },
+    "Z1_NATURAL": {
+      "id": "Z1_NATURAL",
+      "name": "Profil Z-1 Wąski (20 mm) — Srebrny / Anoda Naturalna",
+      "description": "Profil aluminiowy 20x20 mm ze szkłem transparentnym",
+      "profile": {
+        "width_mm": 20,
+        "depth_mm": 20,
+        "lip_depth_mm": 8,
+        "lip_thickness_mm": 4.5,
+        "corner_joint": "miter_45",
+        "finish": "anodized_natural",
+        "color": { "r": 0.82, "g": 0.82, "b": 0.84 }
+      },
+      "glass": {
+        "thickness_mm": 4,
+        "type": "TRANSPARENT",
+        "name": "Szkło Bezbarwne (Float)",
+        "color": { "r": 0.85, "g": 0.92, "b": 0.95 },
+        "alpha": 0.25,
+        "clearance_mm": 1.5
+      }
+    },
+    "Z1_GOLD": {
+      "id": "Z1_GOLD",
+      "name": "Profil Z-1 Wąski (20 mm) — Złoty Szczotkowany",
+      "description": "Profil aluminiowy 20x20 mm w odcieniu szczotkowanego złota",
+      "profile": {
+        "width_mm": 20,
+        "depth_mm": 20,
+        "lip_depth_mm": 8,
+        "lip_thickness_mm": 4.5,
+        "corner_joint": "miter_45",
+        "finish": "brushed_gold",
+        "color": { "r": 0.78, "g": 0.65, "b": 0.35 }
+      },
+      "glass": {
+        "thickness_mm": 4,
+        "type": "GRAPHITE_ANTISOL",
+        "name": "Szkło Antisol Brąz / Grafit",
+        "color": { "r": 0.20, "g": 0.17, "b": 0.14 },
+        "alpha": 0.35,
+        "clearance_mm": 1.5
+      }
+    },
+    "Z9_WIDE_BLACK": {
+      "id": "Z9_WIDE_BLACK",
+      "name": "Profil Z-9 Szeroki (45 mm) — Czarny Mat (puszka fi 35)",
+      "description": "Profil aluminiowy 45x20 mm pod tradycyjną puszkę zawiasu fi 35 mm",
+      "profile": {
+        "width_mm": 45,
+        "depth_mm": 20,
+        "lip_depth_mm": 10,
+        "lip_thickness_mm": 4.5,
+        "corner_joint": "miter_45",
+        "finish": "anodized_black",
+        "color": { "r": 0.12, "g": 0.12, "b": 0.12 }
+      },
+      "glass": {
+        "thickness_mm": 4,
+        "type": "GRAPHITE_ANTISOL",
+        "name": "Szkło Antisol Grafit",
+        "color": { "r": 0.15, "g": 0.18, "b": 0.18 },
+        "alpha": 0.35,
+        "clearance_mm": 1.5
+      }
+    },
+    "Z11_FLUTED_BLACK": {
+      "id": "Z11_FLUTED_BLACK",
+      "name": "Profil Z-1 (20 mm) — Czarny Mat + Szkło Ryflowane (Flutes)",
+      "description": "Modne szkło ryflowane w cienkiej czarnej ramie",
+      "profile": {
+        "width_mm": 20,
+        "depth_mm": 20,
+        "lip_depth_mm": 8,
+        "lip_thickness_mm": 4.5,
+        "corner_joint": "miter_45",
+        "finish": "anodized_black",
+        "color": { "r": 0.12, "g": 0.12, "b": 0.12 }
+      },
+      "glass": {
+        "thickness_mm": 4,
+        "type": "FLUTED",
+        "name": "Szkło Ryflowane (Flutes)",
+        "color": { "r": 0.75, "g": 0.80, "b": 0.82 },
+        "alpha": 0.50,
+        "clearance_mm": 1.5
+      }
+    }
+  }
+}

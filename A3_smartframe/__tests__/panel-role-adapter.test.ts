@@ -3,6 +3,7 @@ import { ProjectDocument } from '../../A1_core/project-document.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { runEngineAndApply } from '../smartframe-adapter.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
+import { ContainerModel } from '../../A1_core/container-model.js';
 
 describe('Panel Role and Zone Metadata in SmartFrame Container', () => {
     let doc: ProjectDocument;
@@ -13,17 +14,17 @@ describe('Panel Role and Zone Metadata in SmartFrame Container', () => {
     });
 
     it('assigns strict roles, zoneId, and zonePrefix on all generated panels for 3-zone cabinet', () => {
-        const cabinet = doc.createContainer({ name: 'Szafa 3-strefowa' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 3 };
+        const cabinet = doc.createAssembly({ name: 'Szafa 3-strefowa' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 3 };
 
         runEngineAndApply(
             cabinet,
-            mmToNm(1000),
-            mmToNm(2400),
-            mmToNm(600),
+            1000,
+            2400,
+            600,
             3,
-            mmToNm(500),
-            mmToNm(1100)
+            500,
+            1100
         );
 
         const cntNode = doc.findNode(cabinet.id);
@@ -56,15 +57,15 @@ describe('Panel Role and Zone Metadata in SmartFrame Container', () => {
             expect(panel.lcs?.rotation).toBeDefined();
         }
 
-        // Test aktualizacji (drugie wywołanie runEngineAndApply)
+        // Test aktualizacji (drugie wywoĹ‚anie runEngineAndApply)
         runEngineAndApply(
             cabinet,
-            mmToNm(1200),
-            mmToNm(2500),
-            mmToNm(600),
+            1200,
+            2500,
+            600,
             3,
-            mmToNm(600),
-            mmToNm(1200)
+            600,
+            1200
         );
 
         for (const childNode of cntNode!.children) {
@@ -80,14 +81,14 @@ describe('Panel Role and Zone Metadata in SmartFrame Container', () => {
     });
 
     it('assigns single zone SEKCJA_B with prefix B_ for 1-zone cabinet and stores LCS', () => {
-        const cabinet = doc.createContainer({ name: 'Szafa 1-strefowa' });
-        cabinet.generatorParams = { type: 'korpus3_2', zoneCount: 1 };
+        const cabinet = doc.createAssembly({ name: 'Szafa 1-strefowa' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
 
         runEngineAndApply(
             cabinet,
-            mmToNm(800),
-            mmToNm(2000),
-            mmToNm(500),
+            800,
+            2000,
+            500,
             1
         );
 

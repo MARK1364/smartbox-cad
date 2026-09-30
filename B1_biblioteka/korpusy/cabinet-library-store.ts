@@ -6,7 +6,7 @@
 
 import type { CabinetTemplate } from './types.js';
 
-const STORAGE_KEY = 'smartbox_cabinet_library_v1';
+const STORAGE_KEY = 'blok_cabinet_library_v1';
 
 /** Szablony startowe — pusta tablica, użytkownik sam tworzy własne szafki */
 export const DEFAULT_TEMPLATES: CabinetTemplate[] = [];
@@ -171,9 +171,9 @@ class CabinetLibraryStore {
             typeof item === 'object' &&
             typeof item.name === 'string' &&
             item.dimensions &&
-            typeof item.dimensions.width === 'number' &&
-            typeof item.dimensions.height === 'number' &&
-            typeof item.dimensions.depth === 'number'
+            typeof item.dimensions.szerokosc_mm === 'number' &&
+            typeof item.dimensions.wysokosc_mm === 'number' &&
+            typeof item.dimensions.glebokosc_mm === 'number'
         );
     }
 

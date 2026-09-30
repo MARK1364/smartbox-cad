@@ -27,7 +27,7 @@ declare const BABYLON: any;
 
 import { BaseState } from '../A1_core/interaction/states/base-state';
 import { Intent } from '../A1_core/interaction/interaction-types';
-import { BootstrapContext } from '../A1_core/scene-bootstrap';
+import type { CadModuleContext } from '../A1_core/cad-module-context.js';
 import { StateMachine } from '../A1_core/interaction/state-machine';
 import { Vec3, v3, v3Copy, v3Sub, v3Normalize, v3Len } from './dimension-solver';
 import { getRenderData, resolveMeasureAxis } from './pmi-bridge';
@@ -117,7 +117,7 @@ export class DimensionTool extends BaseState {
     private liveGuideLine: any = null;
     private axisGuides: PMIAxisGuides | null = null;
 
-    constructor(ctx: BootstrapContext, stateMachine: StateMachine, renderer: PMIRenderer) {
+    constructor(ctx: CadModuleContext, stateMachine: StateMachine, renderer: PMIRenderer) {
         super(ctx, stateMachine);
         this.renderer = renderer;
     }
@@ -236,6 +236,7 @@ export class DimensionTool extends BaseState {
     }
 
     private resetPicks(): void {
+        this.geometryHighlighter?.clearHighlight();
         this.phase = 'PICK_P1';
         this.pick1 = null;
         this.pick2 = null;
@@ -398,7 +399,7 @@ export class DimensionTool extends BaseState {
             }
 
             if (this.isCtrlPressed) {
-                this.setUIStatus('Ctrl: wskaż narożnik, krawędź OCCT lub ścianę formatki');
+                this.setUIStatus('Ctrl: wskaż narożnik, krawędź lub ścianę formatki');
             } else {
                 this.setUIStatus('Wymiarowanie: wskaż punkt 1 (potem możesz wcisnąć Ctrl do multiwyboru)');
             }
@@ -430,6 +431,7 @@ export class DimensionTool extends BaseState {
     }
 
     private beginOffsetDrag(): void {
+        this.geometryHighlighter?.clearHighlight();
         this.autoDetectAxis();
         this.phase = 'DRAG_OFFSET';
         this.syncToolLiveState();
@@ -454,7 +456,9 @@ export class DimensionTool extends BaseState {
 
     private onPointerMove(): void {
         const scene = this.ctx.viewport.scene;
-        if (scene && this.geometryHighlighter) {
+        // Geometry highlight tylko podczas wyboru punktów (PICK_P1, PICK_P2).
+        // W fazie DRAG_OFFSET punkty są już ustalone — pomijamy zbędne skanowanie i podświetlanie korpusu.
+        if (scene && this.geometryHighlighter && this.phase !== 'DRAG_OFFSET') {
             const detection = this.geometryHighlighter.update(scene.pointerX, scene.pointerY);
             this.updateHoverStatus(detection);
         }
@@ -825,7 +829,7 @@ export class DimensionTool extends BaseState {
     // ========================================================================
 
     /**
-     * Tryb Ctrl: tylko narożniki, krawędzie OCCT i ściany (z przyciąganiem do rogu/krawędzi).
+     * Tryb Ctrl: tylko narożniki, krawędzie i ściany (z przyciąganiem do rogu/krawędzi).
      * Bez dowolnego punktu w pustce ani swobodnego kliku w ścianę.
      */
     private findStructuredSnapPoint(): PickPoint | null {

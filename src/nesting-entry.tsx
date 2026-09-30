@@ -5,6 +5,12 @@ import { ModuleSourceBar } from './module-data/ModuleSourceBar';
 import { readModuleSession, installModulePageLifecycle } from './module-data/session';
 import { parseNestingCsv } from './module-data/csv-nesting';
 import type { NestingModulePayload } from './module-data/types';
+import { tx } from '../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 installModulePageLifecycle('nesting');
 
@@ -48,7 +54,7 @@ function NestingStandaloneApp() {
         try {
             const data = JSON.parse(text);
             const parts = data.parts || data;
-            if (!Array.isArray(parts)) throw new Error('JSON nestingu musi mieć tablicę parts');
+            if (!Array.isArray(parts)) throw new Error(tx(srcTekst, 'entry.nesting_parts', TX_NS));
             applyPayload({
                 meta: {
                     module: 'nesting',
@@ -70,7 +76,7 @@ function NestingStandaloneApp() {
     const handleCsv = (text: string, fileName: string) => {
         const parts = parseNestingCsv(text);
         if (parts.length === 0) {
-            alert('CSV nie zawiera formatek (wymagane: nazwa, długość, szerokość).');
+            alert(tx(srcTekst, 'entry.csv_empty', TX_NS));
             return;
         }
         applyPayload({

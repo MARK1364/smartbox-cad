@@ -1,17 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { Korpus3Engine } from '../smartframe-engine';
+import { planCabinet } from '../smartframe-engine.js';
 import { Quat } from '../../A1_core/cad-math/quat';
 import { Vec3 } from '../../A1_core/cad-math/vec3';
 
-describe('Korpus3Engine SmartFrame generation', () => {
+describe('planCabinet SmartFrame generation', () => {
     it('should generate 1-zone cabinet geometry with fallback rules', () => {
-        const engine = new Korpus3Engine();
-        const plan = engine.plan({
-            width: 1000,
-            height: 2000,
-            depth: 600,
-            zoneCount: 1,
-            backOffsetMm: 10
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            cofniecie_plecow_mm: 10
         });
 
         expect(plan.zones).toHaveLength(1);
@@ -29,14 +28,13 @@ describe('Korpus3Engine SmartFrame generation', () => {
     });
 
     it('should calculate 3-zone cabinet layout correctly', () => {
-        const engine = new Korpus3Engine();
-        const plan = engine.plan({
-            width: 1000,
-            height: 2500,
-            depth: 600,
-            zoneCount: 3,
-            bottomHeight: 500,
-            middleHeight: 1200
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2500,
+            glebokosc_mm: 600,
+            liczba_stref: 3,
+            wysokosc_strefy_dolnej_mm: 500,
+            wysokosc_strefy_srodkowej_mm: 1200
         });
 
         expect(plan.zones).toHaveLength(3);

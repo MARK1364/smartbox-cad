@@ -1,0 +1,83 @@
+{
+  "panel.label": {
+    "pl": "Ustawienia Przegród V2",
+    "en": "Dividers V2",
+    "de": "Trennwände V2"
+  },
+  "count.label": {
+    "pl": "Ilość przegród:",
+    "en": "Divider count:",
+    "de": "Trennwandanzahl:"
+  },
+  "count.tooltip": {
+    "pl": "Liczba pionowych przegród wewnętrznych",
+    "en": "Number of vertical internal dividers"
+  },
+  "spacing_mode.label": {
+    "pl": "Rozstaw:",
+    "en": "Spacing mode:",
+    "de": "Abstandsmodus:"
+  },
+  "spacing_mode.items.EQUAL": {
+    "pl": "Równy",
+    "en": "Equal",
+    "de": "Gleich"
+  },
+  "spacing_mode.items.CUSTOM": {
+    "pl": "Własny",
+    "en": "Custom",
+    "de": "Benutzerdefiniert"
+  },
+  "sections.title": {
+    "pl": "Szerokości wnęk (przed przegrodą)",
+    "en": "Bay widths (before divider)",
+    "de": "Fachbreiten (vor Trennwand)"
+  },
+  "section.label_template": {
+    "pl": "Wnęka {n}:",
+    "en": "Bay {n}:",
+    "de": "Fach {n}:"
+  },
+  "last_bay.tooltip": {
+    "pl": "Ostatnia wnęka wynika z szerokości bloku — bez edycji.",
+    "en": "Last bay follows Bloki width — read-only.",
+    "de": "Letztes Fach folgt der Bloki-Breite — schreibgeschützt."
+  },
+  "last_bay.tooltip_error": {
+    "pl": "Ostatnia wnęka wynika z szerokości bloku — bez edycji. Wartość ujemna / zbyt mała: wnęki nie mieszczą się w korpusie.",
+    "en": "Last bay follows Bloki width — read-only. Negative / too small value: bays don't fit in the cabinet.",
+    "de": "Letztes Fach folgt der Bloki-Breite — schreibgeschützt. Negativer / zu kleiner Wert: Fächer passen nicht in den Korpus."
+  },
+  "hints.STEP_1_SELECT_BASE": {
+    "pl": "Krok 1: Zaznacz szafkę, w której chcesz wstawić przegrody.",
+    "en": "Step 1: Select the cabinet where you want to insert dividers."
+  },
+  "hints.STEP_2_ADJUST_COUNT": {
+    "pl": "Krok 2: Określ ilość i rozmieszczenie przegród pionowych.",
+    "en": "Step 2: Specify the number and arrangement of vertical dividers."
+  },
+  "hints.STEP_3_APPLY": {
+    "pl": "Krok 3: Kliknij 'Generuj Przegrody'.",
+    "en": "Step 3: Click 'Generate Dividers'."
+  },
+  "errors.MISSING_BASE_OBJECT": {
+    "pl": "Brak wybranego korpusu dla przegród.",
+    "en": "Missing selected cabinet body for dividers."
+  },
+  "warnings.SPACE_TOO_NARROW": {
+    "pl": "Uzyskane komory mogą być zbyt wąskie do wygodnego użytkowania.",
+    "en": "Resulting bays may be too narrow for practical use."
+  },
+  "tooltips.divider_count": {
+    "pl": "Liczba przegród pionowych we wnęce.",
+    "en": "Number of vertical dividers in the bay."
+  },
+  "tooltips.spacing_mode": {
+    "pl": "Rozmieszczenie: RÓWNOMIERNE lub WŁASNE szerokości komór.",
+    "en": "Spacing: EQUAL or CUSTOM bay widths."
+  },
+  "tooltips.setback_front": {
+    "pl": "Cofnięcie przegrody od przedniej krawędzi korpusu.",
+    "en": "Divider setback from front edge of the cabinet."
+  }
+}

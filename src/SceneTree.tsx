@@ -27,9 +27,37 @@ import { ConstraintTreeRow } from '../S2_solver/constraint-tree-row';
 import { DRZEWO_TAB_EVENT } from '../S2_solver/constraint-pick-flow';
 import { ConnectorStore } from '../C2_connectors/connector-store';
 import { ConnectorTreeRow } from '../C2_connectors/connector-tree-row';
-import { canReparentManualPanel, reparentManualPanel } from '../A1_core/app-commands';
+import { canReparentManualPanel, reparentManualPanel } from './application/cad-app-commands';
 import { CAD_EDIT_LIBRARY_OPERATION } from '../o1_operacji';
 import { CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
+import { LedChannelStore, type LedChannelDefinition } from '../A5_smartparts';
+import { tx } from '../T1_tlumaczenia/core.js';
+import { useLocale } from '../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import srcTekstRaw from './src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
+
+/** Mapowanie kodów ścian na klucze tekstów (kody stabilne, display tłumaczony). */
+const FACE_KEY_BY_CODE: Record<string, string> = {
+    FACE_Z_MINUS: 'float.face_outer',
+    FRONT: 'float.face_outer',
+    OUTER: 'float.face_outer',
+    ZEWN: 'float.face_outer',
+    FACE_Z_PLUS: 'float.face_inner',
+    BACK: 'float.face_inner',
+    INNER: 'float.face_inner',
+    WEWN: 'float.face_inner',
+    FACE_X_MINUS: 'float.face_side_l',
+    LEFT: 'float.face_side_l',
+    FACE_X_PLUS: 'float.face_side_r',
+    RIGHT: 'float.face_side_r',
+    FACE_Y_MINUS: 'float.face_bottom',
+    BOTTOM: 'float.face_bottom',
+    FACE_Y_PLUS: 'float.face_top',
+    TOP: 'float.face_top',
+};
 
 export const TREE_ICONS = {
   project: (
@@ -102,6 +130,13 @@ export const TREE_ICONS = {
       <circle cx="16" cy="14" r="1" fill="currentColor"></circle>
     </svg>
   ),
+  handle: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="2" y="8" width="20" height="4" rx="2"></rect>
+      <line x1="6" y1="12" x2="6" y2="16"></line>
+      <line x1="18" y1="12" x2="18" y2="16"></line>
+    </svg>
+  ),
 };
 
 export type SceneTreeMode = 'full' | 'draw';
@@ -111,22 +146,40 @@ export const isContainerNode = (node: CADTreeNode): boolean => {
   return node.type === 'CONTAINER' || node.type === 'ASSEMBLY' || node.type === 'SUBASSEMBLY' || node.type === 'DRAWERS' || node.type === 'SHELVES';
 };
 
+export const isHandleTreeItem = (node: CADTreeNode): boolean => {
+  // Wyłącznie klasyfikacja domenowa — NIE po `name` (Uchwyt_Lewy to rozeta TUBE/HOLDER).
+  return (
+    (node as any).role === 'SMARTPART_HANDLE' ||
+    (node as any).type === 'smartpart_handle' ||
+    (node as any).generatorParams?.type === 'smartpart_handle' ||
+    (node as any).generatorParams?.partType === 'HANDLE'
+  );
+};
+
 export const isHardwareNode = (node: CADTreeNode): boolean => {
   return node.type === 'HARDWARE' || (node as any).hardwareType !== undefined || /zawias|okucie|hinge|prowadnica|rail|boczek/i.test(node.name || '');
 };
 
-export const isSmartBoxTreeItem = (container: CADTreeNode): boolean => {
+export const isBlokiTreeItem = (container: CADTreeNode): boolean => {
   return (
     container.type === 'DRAWERS' ||
     container.type === 'SHELVES' ||
-    (container as any).is_smartbox ||
-    (container as any).type === 'smartbox' ||
-    /smartbox/i.test(container.name || '') ||
+    (container as any).is_blok ||
+    (container as any).type === 'bloki' ||
+    /bloki/i.test(container.name || '') ||
     container.name?.endsWith('_SB') ||
-    (container as any).generatorParams?.type?.startsWith('smartbox') ||
+    (container as any).generatorParams?.type?.startsWith('bloki') ||
     (container as any).generatorParams?.boxType !== undefined ||
     (container as any).sb_role !== undefined ||
-    (container as any).role === 'SMARTBOX'
+    (container as any).role === 'BLOKI'
+  );
+};
+
+export const isSmartWallTreeItem = (container: CADTreeNode): boolean => {
+  return (
+    (container as any).generatorParams?.type === 'smartwall' ||
+    /^smartwall/i.test(container.name || '') ||
+    /^pokój/i.test(container.name || '')
   );
 };
 
@@ -143,6 +196,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   onSelectNode,
 }) => {
   const isDrawMode = mode === 'draw';
+  useLocale();
   const [treeRoot, setTreeRoot] = useState<CADTreeNode | null>(() => {
     try {
       const tree = DrawingProjectExtractor.instance.extractProjectTree();
@@ -194,7 +248,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     let channel: BroadcastChannel | null = null;
     if (typeof BroadcastChannel !== 'undefined') {
-      channel = new BroadcastChannel('smartbox_cad_sync');
+      channel = new BroadcastChannel('bloki_cad_sync');
       channel.onmessage = () => {
         syncTreeAndSelection();
       };
@@ -202,9 +256,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
     const handleStorage = (e: StorageEvent) => {
       if (
-        e.key === 'smartbox_cad_live_project_v1' ||
+        e.key === 'bloki_cad_live_project_v1' ||
         e.key === 'smartpanel_project_current_v3' ||
-        e.key === 'smartbox_cad_e3_library_v1'
+        e.key === 'bloki_cad_e3_library_v1'
       ) {
         syncTreeAndSelection();
       }
@@ -215,7 +269,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     };
 
     window.addEventListener('storage', handleStorage);
-    window.document.addEventListener('smartbox-project-changed', handleCustomChange);
+    window.document.addEventListener('bloki-project-changed', handleCustomChange);
     window.document.addEventListener('smartpanel-project-changed', handleCustomChange);
 
     const handlePropsUpdate = (e: any) => {
@@ -226,7 +280,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         setSelectedNodeId(e.detail.panelId || e.detail.containerId || null);
       }
     };
-    document.addEventListener('smartbox-properties-update', handlePropsUpdate);
+    document.addEventListener('bloki-properties-update', handlePropsUpdate);
 
     const handleStartRename = (e: Event) => {
       if (isDrawMode) return;
@@ -243,9 +297,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
       if (unsubDoc) unsubDoc();
       if (channel) channel.close();
       window.removeEventListener('storage', handleStorage);
-      window.document.removeEventListener('smartbox-project-changed', handleCustomChange);
+      window.document.removeEventListener('bloki-project-changed', handleCustomChange);
       window.document.removeEventListener('smartpanel-project-changed', handleCustomChange);
-      document.removeEventListener('smartbox-properties-update', handlePropsUpdate);
+      document.removeEventListener('bloki-properties-update', handlePropsUpdate);
       window.removeEventListener(CAD_TREE_START_RENAME, handleStartRename);
     };
   }, [propModel, refreshTree, isDrawMode]);
@@ -257,6 +311,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const offPmiDerived = PMIStore.instance.onDerivedChange(bump);
     const offCst = ConstraintStore.instance.onChange(bump);
     const offConn = ConnectorStore.instance.onChange(bump);
+    const offLed = LedChannelStore.instance.subscribe(bump);
     const onTab = (e: Event) => {
       const tab = (e as CustomEvent).detail?.tab as TreeTab | undefined;
       if (tab === 'relacje' || tab === 'wymiary' || tab === 'obiekty' || tab === 'zlacza') {
@@ -269,6 +324,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
       offPmiDerived();
       offCst();
       offConn();
+      offLed();
       window.removeEventListener(DRZEWO_TAB_EVENT, onTab);
     };
   }, [isDrawMode]);
@@ -332,7 +388,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const dragged = readDraggedCadNode();
     if (!dragged?.id || !cadDocument) return;
     if (reparentManualPanel(cadDocument, dragged.id, targetId)) {
-      window.document.dispatchEvent(new CustomEvent('smartbox-project-changed'));
+      window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
     }
   };
   const pmiStore = PMIStore.instance;
@@ -357,14 +413,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
   const formatFaceLabel = (rawFace?: string) => {
     if (!rawFace) return '';
-    const f = String(rawFace).toUpperCase();
-    if (f === 'FACE_Z_MINUS' || f === 'FRONT' || f === 'OUTER' || f === 'ZEWN') return 'Zewnętrzna';
-    if (f === 'FACE_Z_PLUS' || f === 'BACK' || f === 'INNER' || f === 'WEWN') return 'Wewnętrzna';
-    if (f === 'FACE_X_MINUS' || f === 'LEFT') return 'Bok L';
-    if (f === 'FACE_X_PLUS' || f === 'RIGHT') return 'Bok P';
-    if (f === 'FACE_Y_MINUS' || f === 'BOTTOM') return 'Dół';
-    if (f === 'FACE_Y_PLUS' || f === 'TOP') return 'Góra';
-    return rawFace;
+    const key = FACE_KEY_BY_CODE[String(rawFace).toUpperCase()];
+    return key ? tx(srcTekst, key, TX_NS) : rawFace;
   };
 
   const selectGrooveInTree = (panel: CADTreeNode, g: GrooveFeature2D) => {
@@ -409,7 +459,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 UIController.instance?.emitTree('contextmenu-tree-node', {
                   type: 'feature',
                   id: h.id || `hole_${idx}`,
-                  name: `Otwór ⌀${h.diameter}x${h.depth}`,
+                  name: tx(srcTekst, 'tree.hole_label', TX_NS, { d: h.diameter, h: h.depth }),
                   panelId: panel.id,
                   face: h.face,
                   isSmart: false,
@@ -436,7 +486,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               >
                 <span style={{ width: '10px', display: 'inline-block', flexShrink: 0 }} />
                 {TREE_ICONS.tool}
-                <span className="node-name-text">Otwór ⌀{h.diameter}x{h.depth}</span>
+                <span className="node-name-text">{tx(srcTekst, 'tree.hole_label', TX_NS, { d: h.diameter, h: h.depth })}</span>
                 <span style={{ opacity: 0.55, fontSize: '10px', marginLeft: '4px' }}>[{faceText || 'FRONT'}]</span>
               </div>
               {!isDrawMode && (
@@ -444,7 +494,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                   <button
                     type="button"
                     className="tree-action-btn btn-freeze"
-                    title={isFrozen ? 'Odmroź obróbkę (silnik)' : 'Zamroź obróbkę (silnik)'}
+                    title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
                     style={{ color: isFrozen ? '#38bdf8' : undefined }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -482,7 +532,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               key={g.id || `grv_${idx}`}
               className={`tree-node ${isSelected} ${isSmart ? 'is-smart-op' : 'is-engine-op'}`}
               style={{ opacity: isFrozen ? 0.45 : undefined }}
-              title={isSmart ? 'Operacja Smart — kliknij PPM, aby edytować operację' : 'Wpust silnika — sterowany parametrami korpusu'}
+              title={isSmart ? tx(srcTekst, 'tree.smart_op', TX_NS) : tx(srcTekst, 'tree.engine_groove', TX_NS)}
               onContextMenu={(e) => {
                 if (isDrawMode) return;
                 e.preventDefault();
@@ -517,7 +567,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     <button
                       type="button"
                       className="tree-action-btn btn-delete"
-                      title="Usuń operację"
+                      title={tx(srcTekst, 'tree.delete_op', TX_NS)}
                       onClick={(e) => {
                         e.stopPropagation();
                         UIController.instance?.emitTree('delete-feature', { id: g.id, panelId: panel.id });
@@ -529,7 +579,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     <button
                       type="button"
                       className="tree-action-btn btn-freeze"
-                      title={isFrozen ? 'Odmroź wpust (silnik)' : 'Zamroź wpust (silnik)'}
+                      title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
                       style={{ color: isFrozen ? '#38bdf8' : undefined }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -624,7 +674,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             <span className="tree-chevron" onClick={(e) => toggleCollapse(panel.id, e)}>
               {isPanelCollapsed ? TREE_ICONS.chevronRight : TREE_ICONS.chevronDown}
             </span>
-            {TREE_ICONS.part}
+            {panel.panelForm === 'ALU_FRAME' ? <span style={{ fontSize: '13px', marginRight: '4px' }}>🔲</span> : TREE_ICONS.part}
             {isEditing ? (
               <input
                 type="text"
@@ -640,7 +690,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 autoFocus
               />
             ) : (
-              <span className="node-name-text">{panel.name || 'Formatka'}</span>
+              <span className="node-name-text">
+                {panel.name || 'Formatka'}
+              </span>
             )}
             <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>
               ({panel.width}x{panel.height}x{panel.thickness || panel.depth || 18})
@@ -650,7 +702,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             <div className="tree-node-actions">
               <button
                 className="tree-action-btn btn-toggle-part-vis"
-                title="Ukryj/Pokaż"
+                title={tx(srcTekst, 'tree.toggle', TX_NS)}
                 onClick={(e) => {
                   e.stopPropagation();
                   UIController.instance?.emitTree('toggle-part-visibility', { id: panel.id, uuid: panel.id });
@@ -661,7 +713,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               {isManual ? (
                 <button
                   className="tree-action-btn btn-delete"
-                  title="Usuń formatkę"
+                  title={tx(srcTekst, 'tree.delete_panel', TX_NS)}
                   onClick={(e) => {
                     e.stopPropagation();
                     UIController.instance?.emitTree('delete-part', { id: panel.id, uuid: panel.id });
@@ -672,7 +724,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               ) : (
                 <button
                   className="tree-action-btn btn-freeze-part"
-                  title={isFrozen ? 'Odmroź formatkę (silnik)' : 'Zamroź formatkę (silnik)'}
+                  title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
                   style={{ color: isFrozen ? '#38bdf8' : undefined }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -688,6 +740,41 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
         {!isPanelCollapsed && (
           <div className="tree-children">
+            {/* Bezpośrednia lista komponentów ramki alu (płaska struktura) */}
+            {panel.panelForm === 'ALU_FRAME' && panel.frameComponents && panel.frameComponents.length > 0 && (
+              <div className="tree-frame-components" style={{ marginLeft: '12px', borderLeft: '1px solid rgba(56, 189, 248, 0.25)', paddingLeft: '6px', marginBottom: '4px' }}>
+                {panel.frameComponents.map((comp: any) => (
+                  <div key={comp.id} className="tree-node" style={{ opacity: 0.9, fontSize: '11px', margin: '2px 0' }}>
+                    <div className="tree-node-content" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px' }}>{comp.type === 'glass' ? '🪟' : '📏'}</span>
+                      <span style={{ color: comp.type === 'glass' ? '#67e8f9' : '#e2e8f0', fontWeight: 500 }}>
+                        {comp.name}
+                      </span>
+                      <span style={{ opacity: 0.55, fontSize: '10px' }}>
+                        {comp.type === 'glass'
+                          ? `(${comp.widthMm} × ${comp.lengthMm} × ${comp.thicknessMm} mm)`
+                          : `(L = ${comp.lengthMm} mm${comp.cutAngle ? `, ${comp.cutAngle}` : ''})`
+                        }
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Elementy potomne formatki (np. SmartPart Uchwyt, okucia podpięte pod formatkę) */}
+            {panel.children && panel.children.length > 0 && (
+              panel.children.map((child: CADTreeNode) => {
+                if (isHardwareNode(child)) {
+                  return renderHardwareNode(child);
+                }
+                if (isContainerNode(child)) {
+                  return renderContainerNode(child);
+                }
+                return renderPanelNode(child);
+              })
+            )}
+
             {/* Folder: Operacje */}
             <div className="tree-node">
               <div className="tree-node-content">
@@ -754,7 +841,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             <div className="tree-node-actions">
               <button
                 className="tree-action-btn btn-toggle-hw-vis"
-                title={isVisible ? 'Ukryj okucie' : 'Pokaż okucie'}
+                title={isVisible ? tx(srcTekst, 'tree.toggle_hw', TX_NS) : tx(srcTekst, 'tree.show_hw', TX_NS)}
                 onClick={(e) => {
                   e.stopPropagation();
                   UIController.instance?.emitTree('toggle-hardware-visibility', { id: hwNode.id });
@@ -764,7 +851,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               </button>
               <button
                 className="tree-action-btn btn-freeze-hw"
-                title={isFrozen ? 'Odmroź okucie' : 'Zamroź okucie'}
+                title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
                 style={{ color: isFrozen ? '#38bdf8' : undefined }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -780,8 +867,88 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     );
   };
 
+  const renderLedChannelNode = (ch: LedChannelDefinition) => {
+    const isSelected = selectedNodeId === ch.id ? 'selected' : '';
+    const isFrozen = ch.frozen === true;
+    const isVisible = ch.visible !== false && ch.enabled !== false;
+    const widthInfo = ch.detectedWidthMm ? ` (${Math.round(ch.detectedWidthMm)} mm)` : '';
+
+    return (
+      <div key={ch.id} className="tree-children" style={{ marginLeft: '12px' }}>
+        <div
+          className={`tree-node ${isSelected}`}
+          style={{
+            cursor: 'pointer',
+            opacity: !isVisible || isFrozen ? 0.45 : 1,
+          }}
+        >
+          <div
+            className="tree-node-content"
+            onClick={() => {
+              setSelectedNodeId(ch.id);
+              LedChannelStore.instance.setActiveChannelId(ch.id);
+              const smartpartsBtn = document.getElementById('tab-btn-smartparts');
+              smartpartsBtn?.click();
+            }}
+          >
+            <span style={{ width: '8px', display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ fontSize: '13px', marginRight: '4px' }}>💡</span>
+            <span className="node-name-text" style={{ color: isFrozen ? '#94a3b8' : '#38bdf8', fontWeight: 600 }}>
+              {ch.name || tx(srcTekst, 'tree.led_default', TX_NS)}
+            </span>
+            <span style={{ opacity: 0.55, fontSize: '11px', marginLeft: '4px' }}>
+              {widthInfo}
+            </span>
+          </div>
+
+          {!isDrawMode && (
+            <div className="tree-node-actions">
+              <button
+                type="button"
+                className="tree-action-btn btn-toggle-led-vis"
+                title={isVisible ? tx(srcTekst, 'tree.toggle_led', TX_NS) : tx(srcTekst, 'tree.show_led', TX_NS)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  LedChannelStore.instance.toggleVisibility(ch.id);
+                }}
+              >
+                {!isVisible ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
+              </button>
+              <button
+                type="button"
+                className="tree-action-btn btn-freeze-led"
+                title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
+                style={{ color: isFrozen ? '#38bdf8' : undefined }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  LedChannelStore.instance.toggleFreeze(ch.id);
+                }}
+              >
+                {TREE_ICONS.freeze}
+              </button>
+              <button
+                type="button"
+                className="tree-action-btn btn-delete-led"
+                title={tx(srcTekst, 'tree.delete_led', TX_NS)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  LedChannelStore.instance.deleteChannel(ch.id);
+                }}
+              >
+                {TREE_ICONS.trash}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderContainerNode = (container: CADTreeNode) => {
-    const isContainerCollapsed = isNodeCollapsed(container.id, true);
+    const isHandle = isHandleTreeItem(container);
+    // SmartWall domyślnie rozwinięty — widać ściany-dzieci; uchwyt domyślnie zwinięty
+    const defaultCollapsed = isHandle ? true : !isSmartWallTreeItem(container);
+    const isContainerCollapsed = isNodeCollapsed(container.id, defaultCollapsed);
     const isSelected = selectedNodeId === container.id ? 'selected' : '';
     const isEditing = editingNode?.type === 'container' && editingNode?.id === container.id;
 
@@ -797,11 +964,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
           draggable={!editingNode}
           onDragStart={(e) => {
             e.stopPropagation();
-            const isSmartBox = isSmartBoxTreeItem(container);
+            const isBlok = isBlokiTreeItem(container);
             const payload = {
-              type: isSmartBox ? 'SMARTBOX' : 'CONTAINER',
+              type: isHandle ? 'HANDLE' : (isBlok ? 'BLOKI' : 'CONTAINER'),
               id: container.id,
-              name: container.name || (isSmartBox ? 'SmartBox' : 'Korpus'),
+              name: container.name || (isHandle ? 'Uchwyt' : (isBlok ? 'Bloki' : 'Korpus')),
               raw: container,
             };
             (window as any).__draggedCadNode = payload;
@@ -829,6 +996,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               onSelectNode?.(container);
               if (!isDrawMode) {
                 UIController.instance?.emitTree('select-container', { id: container.id });
+                if (isHandle) {
+                  const smartpartsBtn = document.getElementById('tab-btn-smartparts');
+                  smartpartsBtn?.click();
+                }
               }
             }}
             onContextMenu={(e) => {
@@ -836,11 +1007,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.preventDefault();
               e.stopPropagation();
               UIController.instance?.emitTree('select-container', { id: container.id });
-              const isSmartBox = isSmartBoxTreeItem(container);
+              const isBlok = isBlokiTreeItem(container);
               UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: isSmartBox ? 'smartbox' : 'container',
+                type: isHandle ? 'handle' : (isBlok ? 'bloki' : 'container'),
                 id: container.id,
-                name: container.name || (isSmartBox ? 'SmartBox' : 'Korpus'),
+                name: container.name || (isHandle ? 'Uchwyt' : (isBlok ? 'Bloki' : 'Korpus')),
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
@@ -848,13 +1019,19 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             onDoubleClick={() => {
               if (isDrawMode) return;
               setEditingNode({ type: 'container', id: container.id });
-              setEditValue(container.name || 'Korpus');
+              setEditValue(container.name || (isHandle ? 'Uchwyt' : 'Korpus'));
             }}
           >
-            <span className="tree-chevron" onClick={(e) => toggleCollapse(container.id, e, true)}>
+            <span className="tree-chevron" onClick={(e) => toggleCollapse(container.id, e, defaultCollapsed)}>
               {isContainerCollapsed ? TREE_ICONS.chevronRight : TREE_ICONS.chevronDown}
             </span>
-            {TREE_ICONS.project}
+            {isHandle ? (
+              <span style={{ color: '#38bdf8', display: 'inline-flex', alignItems: 'center', marginRight: '4px' }}>
+                {TREE_ICONS.handle}
+              </span>
+            ) : (
+              TREE_ICONS.project
+            )}
             {isEditing ? (
               <input
                 type="text"
@@ -870,7 +1047,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 autoFocus
               />
             ) : (
-              <strong className="node-name-text">{container.name || 'Kontener'}</strong>
+              <strong className="node-name-text" style={{ color: isHandle ? '#38bdf8' : undefined }}>
+                {container.name || (isHandle ? 'Uchwyt' : 'Kontener')}
+              </strong>
             )}
             <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>
               ({container.width}x{container.height}x{container.depth})
@@ -880,7 +1059,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             <div className="tree-node-actions">
               <button
                 className="tree-action-btn btn-toggle-part-vis"
-                title="Ukryj/Pokaż"
+                title={tx(srcTekst, 'tree.toggle', TX_NS)}
                 onClick={(e) => {
                   e.stopPropagation();
                   UIController.instance?.emitTree('toggle-container-visibility', { id: container.id });
@@ -890,7 +1069,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               </button>
               <button
                 className="tree-action-btn btn-delete"
-                title="Usuń kontener"
+                title={isHandle ? 'Usuń uchwyt' : tx(srcTekst, 'tree.delete_box', TX_NS)}
                 onClick={(e) => {
                   e.stopPropagation();
                   UIController.instance?.emitTree('delete-container', { id: container.id });
@@ -942,7 +1121,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
   const renderWymiaryList = () => {
     if (dimensionCount === 0) {
-      return <div className="drzewo-list-empty">Brak wymiarów</div>;
+      return <div className="drzewo-list-empty">{tx(srcTekst, 'tree.no_dims', TX_NS)}</div>;
     }
     return (
       <div className="tree-root">
@@ -1011,7 +1190,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               <button
                 type="button"
                 className="tree-action-btn"
-                title="Ukryj/Pokaż"
+                title={tx(srcTekst, 'tree.toggle', TX_NS)}
                 onClick={(e) => {
                   e.stopPropagation();
                   executePMICommand(new SetDimensionVisibilityCommand(pmiStore, ann.id, !ann.visible));
@@ -1022,7 +1201,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               <button
                 type="button"
                 className="tree-action-btn btn-delete"
-                title="Usuń wymiar"
+                title={tx(srcTekst, 'tree.delete_dim', TX_NS)}
                 onClick={(e) => {
                   e.stopPropagation();
                   executePMICommand(new RemoveDimensionCommand(pmiStore, ann.id));
@@ -1050,7 +1229,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               <button
                 type="button"
                 className="tree-action-btn"
-                title="Ukryj/Pokaż"
+                title={tx(srcTekst, 'tree.toggle', TX_NS)}
                 onClick={(e) => {
                   e.stopPropagation();
                   executePMICommand(new SetMeasurementVisibilityCommand(pmiStore, item.id, !item.visible));
@@ -1061,7 +1240,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               <button
                 type="button"
                 className="tree-action-btn btn-delete"
-                title="Usuń pomiar"
+                title={tx(srcTekst, 'tree.delete_measure', TX_NS)}
                 onClick={(e) => {
                   e.stopPropagation();
                   executePMICommand(new RemoveMeasurementCommand(pmiStore, item.id));
@@ -1078,7 +1257,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
   const renderZlaczaList = () => {
     if (connectorCount === 0) {
-      return <div className="drzewo-list-empty">Brak złączy</div>;
+      return <div className="drzewo-list-empty">{tx(srcTekst, 'tree.no_joints', TX_NS)}</div>;
     }
     return (
       <div className="tree-root drzewo-zlacza">
@@ -1129,7 +1308,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             className={`drzewo-tab${activeTab === 'zlacza' ? ' active' : ''}`}
             onClick={() => setTreeTab('zlacza')}
           >
-            Złącza
+            {tx(srcTekst, 'tree.joints', TX_NS)}
             <span className="drzewo-tab-count">{connectorCount}</span>
           </button>
         </div>
@@ -1139,7 +1318,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
       {activeTab === 'wymiary' && renderWymiaryList()}
       {activeTab === 'zlacza' && renderZlaczaList()}
       {activeTab === 'obiekty' && !treeRoot && (
-        <div className="drzewo-list-empty">Ładowanie drzewa obiektów...</div>
+        <div className="drzewo-list-empty">{tx(srcTekst, 'tree.loading', TX_NS)}</div>
       )}
       {activeTab === 'obiekty' && treeRoot && (
       <div className="tree-root">
@@ -1156,7 +1335,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             const payload = {
               type: 'PROJECT',
               id: 'ALL',
-              name: treeRoot.name || 'Cały Projekt',
+              name: treeRoot.name || tx(srcTekst, 'tree.project_default', TX_NS),
             };
             (window as any).__draggedCadNode = payload;
             try {
@@ -1188,7 +1367,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               UIController.instance?.emitTree('contextmenu-tree-node', {
                 type: 'project',
                 id: 'root',
-                name: treeRoot.name || 'Cały projekt',
+                name: treeRoot.name || tx(srcTekst, 'tree.project_default', TX_NS),
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
@@ -1234,6 +1413,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             }
             return renderPanelNode(child);
           })}
+
+        {!isProjectCollapsed &&
+          LedChannelStore.instance.channels
+            .filter((ch) => Boolean(ch.refBottom || ch.detectedWidthMm))
+            .map((ch) => renderLedChannelNode(ch))}
       </div>
       )}
     </div>

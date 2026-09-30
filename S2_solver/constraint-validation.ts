@@ -9,6 +9,7 @@ import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { resolveAnchor } from './constraint-geometry.js';
 import type { ConstraintAnchor, SolverConstraint } from './constraint-types.js';
 import { constraintNodeIds } from './constraint-types.js';
+import { isDatumAnchor } from './datum-planes.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 
@@ -112,6 +113,9 @@ function anchorResolves(
     if (!anchor) {
         return false;
     }
+    if (isDatumAnchor(anchor)) {
+        return Boolean(anchor.localNormalMm || anchor.faceName);
+    }
     if (!document) {
         return true;
     }
@@ -178,7 +182,9 @@ export function validateConstraints(
             continue;
         }
         if (document) {
-            if (!document.findNode(c.anchorA.nodeId) || !document.findNode(c.anchorB.nodeId)) {
+            const missingA = !isDatumAnchor(c.anchorA) && !document.findNode(c.anchorA.nodeId);
+            const missingB = !isDatumAnchor(c.anchorB) && !document.findNode(c.anchorB.nodeId);
+            if (missingA || missingB) {
                 issues.push({
                     constraintId: c.id,
                     severity: 'error',

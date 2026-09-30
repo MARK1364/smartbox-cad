@@ -5,10 +5,18 @@
 
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer.js';
-import { NestingEngine } from '../../n1_nesting/core/nesting-engine.js';
+import { resolveMaterialName } from '../../n1_nesting/core/nesting-engine.js';
 import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
-import { persistProjectSnapshot } from './session';
+import { persistProjectSnapshot, readProjectSnapshot } from './session';
 import { filterPanelsByScope, filterAccessoriesByScope, filterNestingPartsByScope } from './scope-filter';
+import { nmToMm } from '../../A1_core/cad-math/units.js';
+import { ConstraintStore } from '../../S2_solver/constraint-store.js';
+import { tx } from '../../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
+import srcTekstRaw from '../src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 import type {
     ModuleScope,
     ReportModulePayload,
@@ -16,6 +24,9 @@ import type {
     CncModulePayload,
     CncWorkpiece,
     DrawModulePayload,
+    DagModulePayload,
+    DagNode,
+    DagEdge,
 } from './types';
 
 function nowIso(): string {
@@ -23,7 +34,7 @@ function nowIso(): string {
 }
 
 function getDocument(explicit?: any): any {
-    return explicit || ContextManager.instance?.document;
+    return explicit || ContextManager.instance?.document || readProjectSnapshot();
 }
 
 function findPanelInDocument(doc: any, panelId: string): any | null {
@@ -144,9 +155,9 @@ export function extractNestingPayload(scope: ModuleScope, document?: any): Nesti
             thickness: p.thickness_mm || 18,
             quantity: p.qty || 1,
             canRotate: true,
-            material: NestingEngine.resolveMaterialName(p.material),
+            material: resolveMaterialName(p.material),
             containerId: p.container_id,
-            smartboxId: p.smartbox_id,
+            blokId: p.blok_id,
             furnitureName: p.furniture_name,
             sourceNodeId: p.node_id,
         })),
@@ -175,7 +186,7 @@ export function extractNestingPayload(scope: ModuleScope, document?: any): Nesti
 export function extractCncPayload(scope: ModuleScope, document?: any): CncModulePayload {
     const doc = getDocument(document);
     let panel = findPanelInDocument(doc, scope.id);
-    if (!panel && (scope.type === 'CONTAINER' || scope.type === 'SMARTBOX' || scope.type === 'PROJECT')) {
+    if (!panel && (scope.type === 'CONTAINER' || scope.type === 'BLOKI' || scope.type === 'PROJECT')) {
         const raw = ReportDataNormalizer.extractProjectData(doc);
         const scopedPanels = filterPanelsByScope(raw.panels, scope);
         if (scopedPanels.length > 0) {
@@ -221,5 +232,200 @@ export function extractDrawPayload(scope: ModuleScope, document?: any): DrawModu
         },
         scope,
         treeRoot,
+    };
+}
+
+export function extractDagPayload(scope: ModuleScope, document?: any): DagModulePayload {
+    const doc = getDocument(document);
+    persistProjectSnapshot(doc);
+
+    const nodes: DagNode[] = [];
+    const edges: DagEdge[] = [];
+    const visitedNodeIds = new Set<string>();
+
+    let containerCount = 0;
+    let panelCount = 0;
+    let featureCount = 0;
+    let hardwareCount = 0;
+    let constraintCount = 0;
+    let conflictCount = 0;
+
+    const traverse = (node: any, parentId?: string) => {
+        if (!node || !node.id) return;
+        visitedNodeIds.add(node.id);
+
+        const nodeType = node.nodeType || 'PART';
+        let dagType: DagNode['type'] = 'PANEL';
+        if (nodeType === 'ROOM') dagType = 'ROOM';
+        else if (nodeType === 'ASSEMBLY') { dagType = 'CONTAINER'; containerCount++; }
+        else if (nodeType === 'PART') { dagType = 'PANEL'; panelCount++; }
+        else if (nodeType === 'FEATURE') { dagType = 'FEATURE'; featureCount++; }
+        else if (nodeType === 'HARDWARE') { dagType = 'HARDWARE'; hardwareCount++; }
+        else { dagType = 'PANEL'; panelCount++; }
+
+        const domain = node.domainData;
+        let dimensions: { widthMm: number; heightMm: number; thicknessMm: number } | undefined;
+
+        if (domain) {
+            const wNm = typeof domain.width === 'number' ? domain.width : 0;
+            const hNm = typeof domain.height === 'number' ? domain.height : 0;
+            const tNm = typeof domain.thickness === 'number' ? domain.thickness : (typeof domain.depth === 'number' ? domain.depth : 0);
+            if (wNm || hNm || tNm) {
+                dimensions = {
+                    widthMm: Math.round(nmToMm(wNm) * 10) / 10,
+                    heightMm: Math.round(nmToMm(hNm) * 10) / 10,
+                    thicknessMm: Math.round(nmToMm(tNm) * 10) / 10,
+                };
+            }
+        }
+
+        const isFrozen = !!node.frozen || !!domain?.frozen;
+        const isVisible = node.visible !== false;
+
+        nodes.push({
+            id: node.id,
+            label: node.name || (domain?.name) || node.id,
+            type: dagType,
+            role: node.role || domain?.role || undefined,
+            parentId,
+            dimensions,
+            status: {
+                frozen: isFrozen,
+                visible: isVisible,
+            },
+            meta: {
+                nodeType: node.nodeType,
+                hasDomain: !!domain,
+                materialId: domain?.materialId || undefined,
+            },
+        });
+
+        if (parentId) {
+            edges.push({
+                id: `edge_${parentId}_${node.id}`,
+                source: parentId,
+                target: node.id,
+                kind: 'HIERARCHY',
+                label: 'zawiera',
+            });
+        }
+
+        // Sprawdź czy formatka posiada cechy (nawierty/otwory/rowki) w domainData
+        if (domain && Array.isArray(domain.features)) {
+            domain.features.forEach((feat: any, idx: number) => {
+                const featId = feat.id || `${node.id}_feat_${idx}`;
+                featureCount++;
+                nodes.push({
+                    id: featId,
+                    label: feat.name || (feat.type ? tx(srcTekst, 'moddata.extract_feat', TX_NS, { type: feat.type }) : tx(srcTekst, 'moddata.hole_idx', TX_NS, { i: idx + 1 })),
+                    type: 'FEATURE',
+                    parentId: node.id,
+                    dimensions: feat.diameter ? {
+                        widthMm: Math.round(nmToMm(feat.diameter) * 10) / 10,
+                        heightMm: Math.round(nmToMm(feat.depth || 0) * 10) / 10,
+                        thicknessMm: 0,
+                    } : undefined,
+                    meta: {
+                        purpose: feat.purpose,
+                        kind: feat.type || feat.kind,
+                    },
+                });
+                edges.push({
+                    id: `edge_feat_${node.id}_${featId}`,
+                    source: node.id,
+                    target: featId,
+                    kind: 'FEATURE_PARENT',
+                    label: tx(srcTekst, 'moddata.machining', TX_NS),
+                });
+            });
+        }
+
+        if (Array.isArray(node.children)) {
+            for (const child of node.children) {
+                traverse(child, node.id);
+            }
+        }
+    };
+
+    const root = doc?.rootNode || doc?.root;
+    if (root) {
+        traverse(root);
+    } else if (doc && typeof doc.getContainers === 'function') {
+        const containers = doc.getContainers() || [];
+        for (const c of containers) traverse(c);
+        const panels = doc.getPanels?.() || [];
+        for (const p of panels) {
+            if (!visitedNodeIds.has(p.id)) traverse(p);
+        }
+    }
+
+    // Pobierz więzy z ConstraintStore
+    try {
+        const constraints = ConstraintStore.instance.constraints || [];
+        constraints.forEach((c) => {
+            constraintCount++;
+            const cNodeId = `constraint_${c.id}`;
+            const hasConflict = !!c.conflict;
+            if (hasConflict) conflictCount++;
+
+                nodes.push({
+                    id: cNodeId,
+                    label: tx(srcTekst, 'moddata.joint', TX_NS, { type: c.bindType }),
+                type: 'CONSTRAINT',
+                status: {
+                    conflict: hasConflict,
+                    residual: c.residual?.linearMm,
+                },
+                meta: {
+                    bindType: c.bindType,
+                    offsetMm: c.offsetMm,
+                    enabled: c.enabled,
+                },
+            });
+
+            if (c.anchorA?.nodeId && visitedNodeIds.has(c.anchorA.nodeId)) {
+                edges.push({
+                    id: `edge_${cNodeId}_${c.anchorA.nodeId}`,
+                    source: cNodeId,
+                    target: c.anchorA.nodeId,
+                    kind: 'CONSTRAINT',
+                    label: c.anchorA.faceName ? tx(srcTekst, 'moddata.wall_anchor', TX_NS, { face: c.anchorA.faceName }) : tx(srcTekst, 'moddata.anchor_a', TX_NS),
+                    conflict: hasConflict,
+                });
+            }
+
+            if (c.anchorB?.nodeId && visitedNodeIds.has(c.anchorB.nodeId)) {
+                edges.push({
+                    id: `edge_${cNodeId}_${c.anchorB.nodeId}`,
+                    source: cNodeId,
+                    target: c.anchorB.nodeId,
+                    kind: 'CONSTRAINT',
+                    label: c.anchorB.faceName ? tx(srcTekst, 'moddata.wall_anchor', TX_NS, { face: c.anchorB.faceName }) : tx(srcTekst, 'moddata.anchor_b', TX_NS),
+                    conflict: hasConflict,
+                });
+            }
+        });
+    } catch (e) {
+        console.warn('extractDagPayload: błąd pobierania więzów:', e);
+    }
+
+    return {
+        meta: {
+            module: 'dag',
+            sourceId: 'cad',
+            loadedAt: nowIso(),
+            originLabel: `CAD · ${scope.name}`,
+        },
+        scope,
+        nodes,
+        edges,
+        stats: {
+            containerCount,
+            panelCount,
+            featureCount,
+            hardwareCount,
+            constraintCount,
+            conflictCount,
+        },
     };
 }

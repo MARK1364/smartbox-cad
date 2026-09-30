@@ -73,6 +73,16 @@ export function isThroughFaceType(type: string): boolean {
     return type.startsWith('konfirmat');
 }
 
+function validateFaceThicknessMm(faceThicknessMm: number, context: string): number {
+    if (typeof faceThicknessMm !== 'number' || !Number.isFinite(faceThicknessMm) || faceThicknessMm <= 0) {
+        throw new Error(
+            `[C2_connectors] Nieprawidłowa grubość formatki lica (${faceThicknessMm} mm) w ${context}. ` +
+            `Grubość płyty musi być dodatnią liczbą (brak domyślnego 18 mm).`
+        );
+    }
+    return faceThicknessMm;
+}
+
 /**
  * Długości dwóch symboli.
  * Kołek: 12 mm w boczku (nieprzelot) + 23 mm w wieńcu (= 35 mm okucia).
@@ -86,7 +96,7 @@ export function getSymbolSegments(
     const faceSpec = faceSpecOf(type);
     const edgeSpec = edgeSpecOf(type);
     const throughFace = isThroughFaceType(type);
-    const thick = faceThicknessMm > 0 ? faceThicknessMm : 18;
+    const thick = validateFaceThicknessMm(faceThicknessMm, 'getSymbolSegments');
     const hw = hardwareLengthMm > 0 ? hardwareLengthMm : 35;
 
     let faceMm = faceSpec?.depth_mm ?? 12;
@@ -110,7 +120,7 @@ export function getSymbolSegments(
 /** Głębokość otworu FACE na formatce (CNC) — konfirmat = grubość płyty. */
 export function getFaceHoleDepthMm(type: string, faceThicknessMm: number): number {
     const spec = faceSpecOf(type);
-    const thick = faceThicknessMm > 0 ? faceThicknessMm : 18;
+    const thick = validateFaceThicknessMm(faceThicknessMm, 'getFaceHoleDepthMm');
     if (isThroughFaceType(type)) return thick;
     const depth = spec?.depth_mm ?? 12;
     return Math.min(depth, Math.max(1, thick - 1));

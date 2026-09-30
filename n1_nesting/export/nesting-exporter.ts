@@ -19,7 +19,7 @@ export class NestingExporter {
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>Plan Rozkroju Płyt (${result.machineType.toUpperCase()}) - SmartBox CAD</title>
+    <title>Plan Rozkroju Płyt (${result.machineType.toUpperCase()}) - Bloki CAD</title>
     <style>
         @page {
             size: A4 landscape;

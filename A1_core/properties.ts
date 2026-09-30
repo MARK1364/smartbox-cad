@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SmartPanel Web — Properties Manager
  * 
  * Centralny moduł inspekcji obiektów 3D wzorowany na:
@@ -17,15 +17,25 @@
 import { ContextManager } from './context-manager.js';
 import { nmToMm } from './cad-math/units.js';
 
-/** Bezpieczna konwersja jednostek (nanometry -> milimetry jeśli wartość > 10000) */
+/**
+ * Parsuje wartość, która JUŻ jest w milimetrach (feature.params, insets, u/v otworów).
+ *
+ * Bez zgadywania jednostki po wartości — jeśli ktoś tu wpisze nm, wynik będzie
+ * niepoprawny (a nie „po cichu naprawiony"). Używaj `nmToMm()` jawnie dla modelu CAD.
+ */
 export function safeMm(val: any, defaultVal = 0): number {
     if (val === null || val === undefined) return defaultVal;
     const num = typeof val === 'number' ? val : parseFloat(val);
-    if (isNaN(num)) return defaultVal;
-    if (Math.abs(num) > 10000) {
-        return Math.round(nmToMm(num));
-    }
+    if (!Number.isFinite(num)) return defaultVal;
     return Math.round(num);
+}
+
+/** PanelModel / ContainerModel trzymają nm — jawne wejście, bez progu heurystyki. */
+function modelNmToMm(val: any, defaultVal = 0): number {
+    if (val === null || val === undefined) return defaultVal;
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    if (!Number.isFinite(num)) return defaultVal;
+    return Math.round(nmToMm(num));
 }
 
 /** Współrzędne 3D */
@@ -84,7 +94,7 @@ export interface PanelProperties {
     thickness: number;
 }
 
-/** Parametry specyficzne dla kontenera (SmartBox) */
+/** Parametry specyficzne dla kontenera (Bloki) */
 export interface ContainerProperties {
     width: number;
     height: number;
@@ -135,7 +145,7 @@ export interface PropertiesData {
  * Użycie:
  *   const pm = PropertiesManager.instance;
  *   const data = pm.inspectMesh(pickedMesh, projectModel, panelViews);
- *   // → emituje 'smartbox-properties-update' event z PropertiesData
+ *   // → emituje 'bloki-properties-update' event z PropertiesData
  */
 export class PropertiesManager {
     private static _instance: PropertiesManager | null = null;
@@ -165,8 +175,8 @@ export class PropertiesManager {
      */
     showProperties(data: PropertiesData): void {
         this._current = data;
-        document.dispatchEvent(new CustomEvent('smartbox-open-properties', { detail: data }));
-        document.dispatchEvent(new CustomEvent('smartbox-properties-update', { detail: data }));
+        document.dispatchEvent(new CustomEvent('bloki-open-properties', { detail: data }));
+        document.dispatchEvent(new CustomEvent('bloki-properties-update', { detail: data }));
     }
 
     // ─── Inspekcja z Babylon.js Pick (prawy klik na scenie) ────────
@@ -256,9 +266,9 @@ export class PropertiesManager {
         let featureMesh: any = null;
 
         if (pv) {
-            // Szukaj walca w _featureMarkers
+            // Szukaj walca w _featureMarkers po ID w metadata
             if (pv._featureMarkers) {
-                featureMesh = pv._featureMarkers.find((m: any) => m.name.includes(foundFeature.id));
+                featureMesh = pv._featureMarkers.find((m: any) => m.metadata?.featureId === foundFeature.id || m.metadata?.id === foundFeature.id);
             }
             // Fallback: szukaj w faceMeshes
             if (!featureMesh && pv.faceMeshes) {
@@ -272,11 +282,8 @@ export class PropertiesManager {
         if (featureMesh && facePicker) {
             facePicker._selectFeature(featureMesh, featureMesh.metadata?.smartId || null, null, false);
         } else if (pv && pv.faceMeshes && facePicker && foundFeature.face) {
-            const rawFace = String(foundFeature.face);
-            const normFace = rawFace === 'FACE_Z_MINUS' || rawFace === 'front' || rawFace === 'outer'
-                ? 'FACE_Z_MINUS'
-                : (rawFace === 'FACE_Z_PLUS' || rawFace === 'back' || rawFace === 'inner' ? 'FACE_Z_PLUS' : rawFace);
-            const faceMesh = pv.faceMeshes[normFace] || pv.faceMeshes[rawFace];
+            const normFace = String(foundFeature.face);
+            const faceMesh = pv.faceMeshes[normFace];
             if (faceMesh) {
                 facePicker._selectFace(faceMesh, null, null, parentPanel, false);
             }
@@ -284,7 +291,7 @@ export class PropertiesManager {
 
         const dia = safeMm(foundFeature.params?.diameter || foundFeature.dim?.x, 5);
         const dep = safeMm(foundFeature.params?.depth || foundFeature.dim?.z, 12);
-        const faceStr = foundFeature.face || 'left';
+        const faceStr = foundFeature.face || 'FACE_X_MINUS';
         const uVal = safeMm(foundFeature.params?.u !== undefined ? foundFeature.params.u : (foundFeature.loc?.x || 0), 0);
         const vVal = safeMm(foundFeature.params?.v !== undefined ? foundFeature.params.v : (foundFeature.loc?.y || 0), 0);
         const worldPos = featureMesh
@@ -421,9 +428,9 @@ export class PropertiesManager {
                 rot
             },
             panelProps: {
-                width: safeMm(panelModel.width, 600),
-                height: safeMm(panelModel.height, 720),
-                thickness: safeMm(panelModel.thickness, 18)
+                width: modelNmToMm(panelModel.width, 600),
+                height: modelNmToMm(panelModel.height, 720),
+                thickness: modelNmToMm(panelModel.thickness, 18)
             },
             customProperties: this._getCustomProps(panelModel.id || panelModel.name)
         };
@@ -436,10 +443,10 @@ export class PropertiesManager {
         return data;
     }
 
-    // ─── Inspekcja kontenera (SmartBox) ────────────────────────────
+    // ─── Inspekcja kontenera (Bloki) ────────────────────────────
 
     /**
-     * Inspekcja kontenera SmartBox.
+     * Inspekcja kontenera Bloki.
      */
     inspectContainer(container: any, emitEvent: boolean = true): PropertiesData | null {
         if (!container) return null;
@@ -466,7 +473,7 @@ export class PropertiesManager {
 
         const data: PropertiesData = {
             name: container.name || 'Kontener',
-            objectType: 'SmartBox (Kontener)',
+            objectType: 'Bloki (Kontener)',
             kind: 'container',
             containerId: container.id,
             transform: {
@@ -482,9 +489,9 @@ export class PropertiesManager {
                 }
             },
             containerProps: {
-                width: safeMm(container.width, 800),
-                height: safeMm(container.height, 720),
-                depth: safeMm(container.depth, 560),
+                width: modelNmToMm(container.width, 800),
+                height: modelNmToMm(container.height, 720),
+                depth: modelNmToMm(container.depth, 560),
                 panelCount: cadNode ? cadNode.children.length : 0
             },
             customProperties: this._getCustomProps(container.id || container.name)
@@ -619,7 +626,7 @@ export class PropertiesManager {
 
         const dia = safeMm(foundFeature.params?.diameter || foundFeature.dim?.x, 5);
         const dep = safeMm(foundFeature.params?.depth || foundFeature.dim?.z, 12);
-        const faceStr = foundFeature.face || 'left';
+        const faceStr = foundFeature.face || 'FACE_X_MINUS';
         const uVal = safeMm(foundFeature.params?.u !== undefined ? foundFeature.params.u : (foundFeature.loc?.x || 0), 0);
         const vVal = safeMm(foundFeature.params?.v !== undefined ? foundFeature.params.v : (foundFeature.loc?.y || 0), 0);
         const absPos = pickedMesh.absolutePosition;
@@ -665,16 +672,16 @@ export class PropertiesManager {
 
     private _setCurrent(data: PropertiesData): void {
         this._current = data;
-        document.dispatchEvent(new CustomEvent('smartbox-properties-update', { detail: data }));
+        document.dispatchEvent(new CustomEvent('bloki-properties-update', { detail: data }));
     }
 
     private _emitCustomPropsChanged(objectId: string): void {
         // Odśwież current jeśli dotyczy tego samego obiektu
         if (this._current && (this._current.featureId === objectId || this._current.name === objectId)) {
             this._current.customProperties = this._getCustomProps(objectId);
-            document.dispatchEvent(new CustomEvent('smartbox-properties-update', { detail: this._current }));
+            document.dispatchEvent(new CustomEvent('bloki-properties-update', { detail: this._current }));
         }
-        document.dispatchEvent(new CustomEvent('smartbox-custom-props-changed', {
+        document.dispatchEvent(new CustomEvent('bloki-custom-props-changed', {
             detail: { objectId, properties: this.getCustomProperties(objectId) }
         }));
     }

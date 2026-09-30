@@ -7,6 +7,8 @@
 
 declare const BABYLON: any;
 
+import { namedCameraView } from '../S3_scena/named-camera-view.js';
+
 export class SketchPlane {
     scene: any;
     panelModel: any;
@@ -301,19 +303,8 @@ export class SketchPlane {
         const maxDim = Math.max(faceData.width, faceData.height);
         const distance = maxDim * 1.5;
 
-        // Kamera — kąty zależne od ściany
-        const cameraAngles = {
-            front:  { alpha: Math.PI / 2,     beta: Math.PI / 2 },
-            back:   { alpha: -Math.PI / 2,    beta: Math.PI / 2 },
-            left:   { alpha: Math.PI,         beta: Math.PI / 2 },
-            right:  { alpha: 0,               beta: Math.PI / 2 },
-            top:    { alpha: Math.PI / 2,     beta: 0.01 },
-            bottom: { alpha: Math.PI / 2,     beta: Math.PI - 0.01 }
-        };
-
-        const angles = cameraAngles[faceName] || { alpha: Math.PI / 4, beta: Math.PI / 3 };
-
-        this.viewport.animateCameraTo(angles.alpha, angles.beta, distance, center);
+        const nv = namedCameraView(faceName);
+        this.viewport.animateCameraTo(nv.alpha, nv.beta, distance, center, nv.up);
     }
 
     // ─── Events ──────────────────────────────────────

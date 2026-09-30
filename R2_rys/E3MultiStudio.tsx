@@ -1,4 +1,4 @@
-/**
+﻿/**
  * E3_export - E3MultiStudio.tsx
  * Kompletne Studio Multi-Kamera 3D (Eksport 3)
  * Architektura Jednego Wspólnego Płótna (Single Unified Canvas)
@@ -12,7 +12,7 @@ import { E3LibraryItem, E3PaperFormat, E3_PAPER_FORMATS } from './e3-library-typ
 import { SceneTree } from '../src/SceneTree';
 import { ContextManager } from '../A1_core/context-manager';
 import { NodeType } from '../A1_core/cad-node/node-type';
-import { toMm } from './e3-library-extractor';
+import { modelNmToMm } from './e3-library-extractor';
 import { resolveGeometrySnapshot } from './e3-geometry-snapshot';
 
 export const E3MultiStudio: React.FC = () => {
@@ -170,7 +170,7 @@ export const E3MultiStudio: React.FC = () => {
                     node?.nodeType === NodeType.ASSEMBLY ||
                     domainData?.type === 'container' ||
                     dragged.type === 'CONTAINER' ||
-                    dragged.type === 'SMARTBOX' ||
+                    dragged.type === 'BLOKI' ||
                     dragged.type === 'ASSEMBLY';
 
                 const snap = resolveGeometrySnapshot(id);
@@ -195,9 +195,9 @@ export const E3MultiStudio: React.FC = () => {
                             children.push({
                                 id: ch.id,
                                 name: cd.name || ch.name,
-                                width: toMm(cd.width, 600),
-                                height: toMm(cd.height, 720),
-                                depth: toMm(cd.thickness || cd.depth, 18),
+                                width: modelNmToMm(cd.width, 600),
+                                height: modelNmToMm(cd.height, 720),
+                                depth: modelNmToMm(cd.thickness || cd.depth, 18),
                                 role: cd.role || cd.name,
                                 raw: cd,
                             });
@@ -211,10 +211,10 @@ export const E3MultiStudio: React.FC = () => {
                             children.push({
                                 id: ch.id,
                                 name: ch.name,
-                                width: toMm(ch.width, 600),
-                                height: toMm(ch.height, 720),
-                                depth: toMm(ch.thickness || ch.depth, 18),
-                                thickness: toMm(ch.thickness || ch.depth, 18),
+                                width: modelNmToMm(ch.width, 600),
+                                height: modelNmToMm(ch.height, 720),
+                                depth: modelNmToMm(ch.thickness || ch.depth, 18),
+                                thickness: modelNmToMm(ch.thickness || ch.depth, 18),
                                 role: ch.role || ch.name,
                                 holes: ch.holes || [],
                                 grooves: ch.grooves || [],
@@ -229,9 +229,9 @@ export const E3MultiStudio: React.FC = () => {
                     uid: id,
                     name: snap?.name || domainData?.name || node?.name || dragged.name || (isContainer ? 'Szafa / Korpus' : 'Formatka'),
                     type: (snap?.type === 'PANEL' || (!snap && !isContainer)) ? 'PANEL' : 'CONTAINER',
-                    width: snap?.width || toMm(domainData?.width || dragged.width, 800),
-                    height: snap?.height || toMm(domainData?.height || dragged.height, 720),
-                    depth: snap?.depth || toMm(domainData?.depth || domainData?.thickness || dragged.depth || dragged.thickness, 560),
+                    width: snap?.width || modelNmToMm(domainData?.width || dragged.width, 800),
+                    height: snap?.height || modelNmToMm(domainData?.height || dragged.height, 720),
+                    depth: snap?.depth || modelNmToMm(domainData?.depth || domainData?.thickness || dragged.depth || dragged.thickness, 560),
                     childCount: children.length,
                     children,
                     raw: domainData,

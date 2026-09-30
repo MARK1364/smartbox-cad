@@ -10,7 +10,7 @@ import { renderToCAD } from '../A1_core/cad-math/coord-system.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { TooltipManager } from '../A1_core/tooltip-manager.js';
 import { localMmToWorldMm, worldMmToLocalMm } from '../S2_solver/constraint-geometry.js';
-import { ConnectorsEngine, countRulePositions } from './connectors-engine.js';
+import { countRulePositions, generateConnectors, getPlacementRuleDefinition } from './connectors-engine.js';
 import {
     AddConnectorGroupCommand,
     executeConnectorCommand,
@@ -40,10 +40,6 @@ let _observer: any = null;
 let _keyHandler: ((e: KeyboardEvent) => void) | null = null;
 let _lastClick = 0;
 
-function engine(): ConnectorsEngine {
-    return new ConnectorsEngine();
-}
-
 function cameraRayCad(): { origin: Vec3; dir: Vec3 } | null {
     const scene = ContextManager.instance.viewport?.scene;
     const camera = ContextManager.instance.viewport?.camera;
@@ -71,7 +67,7 @@ export function buildGroupFromContact(
     if (!parent) return null;
 
     const store = ConnectorStore.instance;
-    const rule = engine().getPlacementRuleDefinition(placementRule);
+    const rule = getPlacementRuleDefinition(placementRule);
     const total = countRulePositions(rule);
     const active = positionsActive
         ? [...positionsActive]
@@ -83,7 +79,7 @@ export function buildGroupFromContact(
     const { rotation } = parent.getWorldMatrix().decompose();
     const alongWorld = rotation.rotateVec3(Vec3.UNIT_Y);
     const resolvedFirstOffset = firstOffsetMm ?? existing?.firstOffsetMm ?? store.firstOffsetMm;
-    const placements = engine().generateConnectors(
+    const placements = generateConnectors(
         face.clippedVertsWorldMm,
         face.normalWorldMm,
         placementRule,

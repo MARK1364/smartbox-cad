@@ -5,17 +5,16 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { ContextManager } from '../A1_core/context-manager.js';
-import { isPanelModel } from '../A1_core/domain-data.js';
+import { isPanelModel } from '../A4_smartpanel/panel-model.js';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
-import { listOperations } from './operacje-catalog.js';
+import { listOperations, getOperation } from './operacje-catalog.js';
 import {
     collectPanelsWithLibraryOperation,
     isLibraryOperation,
     updateLibraryOperationParams,
 } from './operacje-apply.js';
-import { OPERACJE_DRAG_MIME, CAD_EDIT_LIBRARY_OPERATION } from './operacje-types.js';
 import { edgeShortLabel } from './operacje-placement.js';
-import type { OperationRecipe } from './operacje-types.js';
+import { OPERACJE_DRAG_MIME, CAD_EDIT_LIBRARY_OPERATION, type OperationRecipe } from './operacje-types.js';
 import './operacje-ui.css';
 
 function resolveActivePanel() {
@@ -180,11 +179,26 @@ export function OperacjeUI() {
     };
 
     const onDragStart = (e: React.DragEvent, item: OperationRecipe) => {
-        const dragOverrides = item.id === selectedId
-            ? getOverrides(item)
-            : item.placement === 'edge_dims'
-                ? { widthMm: item.sizeMm.w, heightMm: item.sizeMm.h, uMm: item.edge.uMm, vMm: item.edge.vMm, depthMm: item.depthMm, through: true, fill: 'none' }
-                : { insetLMm: item.insets.l, insetRMm: item.insets.r, insetTMm: item.insets.t, insetBMm: item.insets.b, depthMm: item.depthMm, through: item.through, fill: item.fill };
+        const defaultRecipe = getOperation(item.id) || item;
+        const dragOverrides = defaultRecipe.placement === 'edge_dims'
+            ? {
+                widthMm: defaultRecipe.sizeMm.w,
+                heightMm: defaultRecipe.sizeMm.h,
+                uMm: defaultRecipe.edge.uMm,
+                vMm: defaultRecipe.edge.vMm,
+                depthMm: defaultRecipe.depthMm,
+                through: defaultRecipe.through,
+                fill: defaultRecipe.fill,
+            }
+            : {
+                insetLMm: defaultRecipe.insets.l,
+                insetRMm: defaultRecipe.insets.r,
+                insetTMm: defaultRecipe.insets.t,
+                insetBMm: defaultRecipe.insets.b,
+                depthMm: defaultRecipe.depthMm,
+                through: defaultRecipe.through,
+                fill: defaultRecipe.fill,
+            };
         const payload = JSON.stringify({ library_id: item.id, ...dragOverrides });
         e.dataTransfer.setData(OPERACJE_DRAG_MIME, payload);
         e.dataTransfer.effectAllowed = 'copy';
@@ -209,6 +223,7 @@ export function OperacjeUI() {
             </p>
 
             <div className="o1-accordion">
+
                 {recipes.map((item) => {
                     const isExpanded = expandedId === item.id;
                     const isItemEdgeDims = item.placement === 'edge_dims';

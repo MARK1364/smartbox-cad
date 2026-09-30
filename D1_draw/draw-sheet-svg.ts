@@ -98,9 +98,9 @@ export class DrawSheetSVGGenerator {
         this.frameH = this.paperH - MARGIN_TOP - MARGIN_BOTTOM;
 
         this.titleBlock = {
-            projectName: 'Dokumentacja SmartBox',
+            projectName: 'Dokumentacja Bloki',
             furnitureName: 'Korpus SmartFrame',
-            author: 'SmartBox CAD',
+            author: 'Bloki CAD',
             date: new Date().toISOString().split('T')[0],
             scale: '1:10',
             sheetNumber: '1/1',
@@ -393,7 +393,7 @@ export class DrawSheetSVGGenerator {
         lines.push(svgText(tbX + 2, curY + 2.5, 'Wykonał', 1.2, 'start', 'normal', undefined, '#666666'));
         lines.push(svgText(tbX + colSplit + 2, curY + 2.5, 'Data', 1.2, 'start', 'normal', undefined, '#666666'));
 
-        lines.push(svgText(tbX + 2, curY + 6.5, this.titleBlock.author || 'SmartBox CAD', 2.5));
+        lines.push(svgText(tbX + 2, curY + 6.5, this.titleBlock.author || 'Bloki CAD', 2.5));
         lines.push(svgText(tbX + colSplit + 2, curY + 6.5, this.titleBlock.date || '', 2.5));
 
         curY += r1H;
@@ -414,7 +414,7 @@ export class DrawSheetSVGGenerator {
         lines.push(svgText(tbX + col2Split + 2, curY + 6.5, formatLabel, 2.5, 'start', 'bold'));
 
         // Branding
-        lines.push(svgText(tbX + tbW - 2, tbY + tbH - 1.2, 'SmartBox Draw Module', 1.4, 'end', 'normal', undefined, '#999999'));
+        lines.push(svgText(tbX + tbW - 2, tbY + tbH - 1.2, 'Bloki Draw Module', 1.4, 'end', 'normal', undefined, '#999999'));
 
         return lines.join('\n');
     }

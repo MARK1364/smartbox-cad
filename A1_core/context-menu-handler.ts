@@ -5,7 +5,8 @@
  */
 
 import { ContextManager } from './context-manager.js';
-import { openCncFromCad, openReportFromCad, openNestingFromCad } from '../src/module-data/open-modules.js';
+import { UIController } from './ui-controller.js';
+import { getModuleOpenHandler } from './module-open-port.js';
 import { findFacesAlongRay } from './quick-pick/quick-pick-detector.js';
 import { openQuickPick } from './quick-pick/quick-pick-events.js';
 
@@ -19,24 +20,34 @@ export class ContextMenuHandler {
         undo: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>',
         redo: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"></path></svg>',
         eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+        freeze: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/></svg>',
         trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
         deselect: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
         cnc: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v5"/><path d="M9 7h6v4a3 3 0 0 1-6 0V7z"/><path d="M12 14v4"/><path d="M10 21l2-3 2 3h-4z"/></svg>',
     };
 
     private lastInspectedData: any = null;
+    private _lastPickedMesh: any = null;
     private _lastClientX: number = 0;
     private _lastClientY: number = 0;
 
-    public init(canvas: HTMLCanvasElement, contextMenu: any, propertiesManager: any, getAllPanels: () => any[], applyUndo: () => void, applyRedo: () => void, history: any): void {
+    public init(canvas: HTMLCanvasElement, contextMenu: any, propertiesManager: any, getAllPanels: () => any[], applyUndo: () => void, applyRedo: () => void): void {
         const viewport = ContextManager.instance.viewport;
         const doc = ContextManager.instance.document;
         const facePicker = ContextManager.instance.facePicker;
+        const canUndo = () => !!ContextManager.instance.commandHistory?.canUndo;
+        const canRedo = () => !!ContextManager.instance.commandHistory?.canRedo;
 
         if (!canvas || !viewport || !doc || !facePicker) return;
 
         canvas.addEventListener('contextmenu', (e: MouseEvent) => {
             e.preventDefault();
+
+            // Jeśli użytkownik właśnie zakończył przesuwanie kamery PPM (SolidWorks pan gesture) - zablokuj otwarcie menu
+            if (viewport.shouldSuppressContextMenu && viewport.shouldSuppressContextMenu()) {
+                return;
+            }
+
             this._lastClientX = e.clientX;
             this._lastClientY = e.clientY;
 
@@ -83,6 +94,7 @@ export class ContextMenuHandler {
                 viewport.scene.pointerY
             );
             const pickedMesh = (generalPick && generalPick.hit) ? generalPick.pickedMesh : null;
+            this._lastPickedMesh = pickedMesh;
 
             if (pickedMesh) {
                 this.lastInspectedData = propertiesManager.inspectMesh(pickedMesh, doc, ContextManager.instance.panelViews, getAllPanels, false);
@@ -121,11 +133,59 @@ export class ContextMenuHandler {
                 items.push({ separator: true });
             }
 
-            items.push({ label: 'Cofnij', icon: this.svgIcons.undo, action: 'undo', shortcut: 'Ctrl+Z', disabled: !history.canUndo() });
-            items.push({ label: 'Ponów', icon: this.svgIcons.redo, action: 'redo', shortcut: 'Ctrl+Y', disabled: !history.canRedo() });
-            items.push({ separator: true });
-            items.push({ label: 'Zoom Fit', icon: this.svgIcons.zoomFit, action: 'zoom-fit' });
-            items.push({ label: 'Odznacz', icon: this.svgIcons.deselect, action: 'deselect', disabled: !hasFace && !hasEdge });
+            const isComponent = !!(
+                this.lastInspectedData?.panelId ||
+                this.lastInspectedData?.containerId ||
+                this.lastInspectedData?.kind === 'feature' ||
+                this.lastInspectedData?.holeProps ||
+                this.lastInspectedData?.grooveProps ||
+                pickedMesh?.metadata?.type === 'hardware' ||
+                this.lastInspectedData?.hardwareId
+            );
+
+            if (isComponent) {
+                let isFrozen = false;
+                if (this.lastInspectedData?.panelId) {
+                    const p = getAllPanels().find((x: any) => x.id === this.lastInspectedData.panelId);
+                    isFrozen = !!p?.frozen;
+                } else if (this.lastInspectedData?.holeProps || this.lastInspectedData?.grooveProps || this.lastInspectedData?.kind === 'feature') {
+                    isFrozen = !!(this.lastInspectedData.frozen || this.lastInspectedData.params?.frozen);
+                } else if (pickedMesh?.metadata?.type === 'hardware') {
+                    isFrozen = !!pickedMesh.metadata.frozen;
+                }
+
+                items.push({
+                    label: 'Ukryj',
+                    icon: this.svgIcons.eye,
+                    action: 'toggle-visibility'
+                });
+                items.push({
+                    label: isFrozen ? 'Odmroź' : 'Zamroź',
+                    icon: this.svgIcons.freeze,
+                    action: 'toggle-freeze'
+                });
+            } else {
+                items.push({ label: 'Cofnij', icon: this.svgIcons.undo, action: 'undo', shortcut: 'Ctrl+Z', disabled: !canUndo() });
+                items.push({ label: 'Ponów', icon: this.svgIcons.redo, action: 'redo', shortcut: 'Ctrl+Y', disabled: !canRedo() });
+            }
+
+            if (this.lastInspectedData?.panelId) {
+                const panel = getAllPanels().find((p: any) => p.id === this.lastInspectedData.panelId);
+                const isAlu = panel?.isAluFrame ? panel.isAluFrame() : panel?.panelForm === 'ALU_FRAME';
+                if (isAlu) {
+                    items.push({
+                        label: '↩️ Przywróć pełną formatkę',
+                        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10"/></svg>',
+                        action: 'convert-to-solid'
+                    });
+                } else {
+                    items.push({
+                        label: '🔲 Konwertuj na ramkę aluminiową',
+                        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10"/></svg>',
+                        action: 'convert-to-alu-frame'
+                    });
+                }
+            }
 
             // Moduły produkcyjne na samym dole menu, rozdzielone separatorem
             if (this.lastInspectedData?.panelId || this.lastInspectedData?.containerId) {
@@ -162,15 +222,51 @@ export class ContextMenuHandler {
                     } else if (propertiesManager.current) {
                         propertiesManager.showProperties(propertiesManager.current);
                     } else {
-                        document.dispatchEvent(new CustomEvent('smartbox-toggle-item-panel'));
+                        document.dispatchEvent(new CustomEvent('bloki-toggle-item-panel'));
                     }
                     break;
+                case 'convert-to-alu-frame': {
+                    if (this.lastInspectedData?.panelId) {
+                        const panel = getAllPanels().find((p: any) => p.id === this.lastInspectedData.panelId);
+                        if (panel) {
+                            if (typeof panel.convertToAluFrame === 'function') {
+                                panel.convertToAluFrame('Z1_BLACK');
+                            } else {
+                                panel.panelForm = 'ALU_FRAME';
+                                panel.frameTemplateId = 'Z1_BLACK';
+                                panel._emit?.('panelFormChanged', { panelForm: 'ALU_FRAME' });
+                            }
+                            doc.notifyDocumentChanged?.();
+                            doc.emitChange?.('all');
+                            UIController.instance?.setStatus?.('Formatka skonwertowana na ramkę aluminiową ze szkłem', true);
+                        }
+                    }
+                    break;
+                }
+                case 'convert-to-solid': {
+                    if (this.lastInspectedData?.panelId) {
+                        const panel = getAllPanels().find((p: any) => p.id === this.lastInspectedData.panelId);
+                        if (panel) {
+                            if (typeof panel.convertToSolid === 'function') {
+                                panel.convertToSolid();
+                            } else {
+                                panel.panelForm = 'SOLID';
+                                panel.frameTemplateId = undefined;
+                                panel._emit?.('panelFormChanged', { panelForm: 'SOLID' });
+                            }
+                            doc.notifyDocumentChanged?.();
+                            doc.emitChange?.('all');
+                            UIController.instance?.setStatus?.('Przywrócono pełną formatkę', true);
+                        }
+                    }
+                    break;
+                }
                 case 'open-report': {
                     const isContainer = !this.lastInspectedData?.panelId && !!this.lastInspectedData?.containerId;
                     const targetId = this.lastInspectedData?.panelId || this.lastInspectedData?.containerId;
                     const targetName = this.lastInspectedData?.name || (isContainer ? 'Korpus' : 'Formatka');
                     if (targetId) {
-                        openReportFromCad({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
+                        getModuleOpenHandler()?.openReport({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
                     }
                     break;
                 }
@@ -179,7 +275,7 @@ export class ContextMenuHandler {
                     const targetId = this.lastInspectedData?.panelId || this.lastInspectedData?.containerId;
                     const targetName = this.lastInspectedData?.name || (isContainer ? 'Korpus' : 'Formatka');
                     if (targetId) {
-                        openNestingFromCad({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
+                        getModuleOpenHandler()?.openNesting({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
                     }
                     break;
                 }
@@ -188,7 +284,7 @@ export class ContextMenuHandler {
                     const targetId = this.lastInspectedData?.panelId || this.lastInspectedData?.containerId;
                     const targetName = this.lastInspectedData?.name || (isContainer ? 'Korpus' : 'Formatka');
                     if (targetId) {
-                        openCncFromCad({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
+                        getModuleOpenHandler()?.openCnc({ type: isContainer ? 'CONTAINER' : 'PANEL', id: targetId, name: targetName });
                     }
                     break;
                 }
@@ -203,6 +299,45 @@ export class ContextMenuHandler {
                                 facePicker.selectFaceExplicit(c.mesh, c.worldPoint, c.smartId, c.panelModel, c.worldNormal);
                             }
                         });
+                    }
+                    break;
+                }
+                case 'toggle-visibility': {
+                    if (this.lastInspectedData?.panelId) {
+                        UIController.instance?.emitTree('toggle-part-visibility', {
+                            id: this.lastInspectedData.panelId,
+                            uuid: this.lastInspectedData.panelId,
+                            panelRef: this._lastPickedMesh?.metadata?.panelModel
+                        });
+                    } else if (this.lastInspectedData?.containerId) {
+                        UIController.instance?.emitTree('toggle-container-visibility', {
+                            id: this.lastInspectedData.containerId
+                        });
+                    } else if (this.lastInspectedData?.holeProps || this.lastInspectedData?.grooveProps || this.lastInspectedData?.kind === 'feature') {
+                        UIController.instance?.emitTree('toggle-visibility', {
+                            id: this.lastInspectedData.id,
+                            panelId: this.lastInspectedData.parentPanelId || this.lastInspectedData.panelId
+                        });
+                    } else if (this._lastPickedMesh?.metadata?.type === 'hardware' || this.lastInspectedData?.hardwareId) {
+                        const hwId = this._lastPickedMesh?.metadata?.id || this.lastInspectedData?.id || this.lastInspectedData?.hardwareId;
+                        UIController.instance?.emitTree('toggle-hardware-visibility', { id: hwId });
+                    }
+                    break;
+                }
+                case 'toggle-freeze': {
+                    if (this.lastInspectedData?.panelId) {
+                        UIController.instance?.emitTree('toggle-freeze-part', {
+                            id: this.lastInspectedData.panelId,
+                            uuid: this.lastInspectedData.panelId
+                        });
+                    } else if (this.lastInspectedData?.holeProps || this.lastInspectedData?.grooveProps || this.lastInspectedData?.kind === 'feature') {
+                        UIController.instance?.emitTree('toggle-freeze-feature', {
+                            id: this.lastInspectedData.id,
+                            panelId: this.lastInspectedData.parentPanelId || this.lastInspectedData.panelId
+                        });
+                    } else if (this._lastPickedMesh?.metadata?.type === 'hardware' || this.lastInspectedData?.hardwareId) {
+                        const hwId = this._lastPickedMesh?.metadata?.id || this.lastInspectedData?.id || this.lastInspectedData?.hardwareId;
+                        UIController.instance?.emitTree('toggle-freeze-hardware', { id: hwId });
                     }
                     break;
                 }

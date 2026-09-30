@@ -16,7 +16,7 @@
 6. [6. Moduł S3 — Scena / Viewport 3D](#6-moduł-s3--scena--viewport-3d)
 7. [7. Moduł A1 — Jądro / Projekt (Core)](#7-moduł-a1--jądro--projekt-core)
 8. [8. Moduł A3 — SmartFrame (Korpus)](#8-moduł-a3--smartframe-korpus)
-9. [9. Moduł A2 — SmartBox (Wyposażenie wnętrza)](#9-moduł-a2--smartbox-wyposażenie-wnętrza)
+9. [9. Moduł A2 — Bloki (Wyposażenie wnętrza)](#9-moduł-a2--bloki-wyposażenie-wnętrza)
 10. [10. Moduł A4 — SmartPanel (Formatka / Płyta)](#10-moduł-a4--smartpanel-formatka--płyta)
 11. [11. Moduł A7 — Materiały i Obrzeża](#11-moduł-a7--materiały-i-obrzeża)
 12. [12. Moduł C2 — Złącza (Kołki, Konfirmaty, Mimośrody)](#12-moduł-c2--złącza-kołki-konfirmaty-mimośrody)
@@ -80,7 +80,7 @@ Dla osoby, która umie obsługiwać komputer i przeglądarkę, ale **nie musi zn
 | **Projekt** | Cały mebel lub zestaw mebli. Jeden plik `.spp.json`. |
 | **Korpus (SmartFrame)** | „Skrzynia” mebla — boki, wieniec, dno, plecy. Rodzic całej konstrukcji. |
 | **Strefa / Wnęka (Bay)** | Pusta przestrzeń wewnątrz korpusu, w którą wkładasz półki, szuflady itd. |
-| **SmartBox** | Gotowy moduł wyposażenia: półki, szuflady, drzwi, drążek, przegrody. |
+| **Bloki** | Gotowy moduł wyposażenia: półki, szuflady, drzwi, drążek, przegrody. |
 | **Formatka (Panel)** | Pojedyncza płyta: bok, półka, front, plecy. Ma szerokość (W), wysokość (H), grubość (T). |
 | **Drzewo obiektów** | Lista po lewej stronie: Projekt → Korpus → Formatka → Operacje. Wszystko, co narysowałeś. |
 | **Viewport** | Okno 3D na środku — tu oglądasz i klikasz mebel. |
@@ -152,7 +152,7 @@ Ekran główny składa się z następujących dedykowanych paneli:
 | **Pasek menu** | `#pasek-menu` | Góra okna | Zarządzanie projektem (Nowy, Otwórz, Zapisz `.spp.json`), cofanie i ponawianie operacji (Undo/Redo), przełączanie modułów specjalistycznych (CNC, Nesting, Rysunek 2D, E3, Raport), ustawienia. |
 | **Drzewo obiektów** | `#drzewo-obiektow` | Lewa strona | Prezentacja hierarchii projektu (Projekt → Korpus → Formatki → Wnęki → Obróbki/Złącza), szybkie wyszukiwanie, zmiana nazwy elementu (podwójny klik), sterowanie widocznością (ikona oka 👁️), mrożenie automatycznych obróbek (❄️) oraz duplikowanie (📋). |
 | **Belka widokowa** | `#belka-widokowa` | Góra sceny 3D | Sterowanie trybami wyświetlania sceny (Shaded / Edges / Wireframe / Xray), przełączanie rzutowania kamery (Perspektywa / Aksonometria Ortho), szybkie widoki standardowe (Przód, Góra, Prawy bok, Izometria), włączanie/wyłączanie siatki roboczej i osi układu współrzędnych. |
-| **Panel edycji** | `#panel-edycji` | Prawa strona | Kontekstowy panel parametrów aktualnie zaznaczonego obiektu. Umożliwia edycję gabarytów korpusu, podziałów wnęk SmartBox, wymiarów formatek, odsunięć krawędzi, przypisywanie płyt meblowych i obrzeży oraz zarządzanie obróbkami CNC. *(Uwaga: Panel właściwości - PropertiesPanel stanowi odrębny komponent).* |
+| **Panel edycji** | `#panel-edycji` | Prawa strona | Kontekstowy panel parametrów aktualnie zaznaczonego obiektu. Umożliwia edycję gabarytów korpusu, podziałów wnęk Bloki, wymiarów formatek, odsunięć krawędzi, przypisywanie płyt meblowych i obrzeży oraz zarządzanie obróbkami CNC. *(Uwaga: Panel właściwości - PropertiesPanel stanowi odrębny komponent).* |
 | **Status-bar** | `#status-bar` | Dół okna | Informacje o bieżących jednostkach (mm), komunikaty podpowiedzi dla aktywnego narzędzia, współrzędne kursora oraz statusy transformacji CAD. |
 
 ### 4.2. Gizma interaktywne w 3D (Manipulatory)
@@ -184,7 +184,7 @@ Po kliknięciu i przeciągnięciu dowolnej kuleczki pojawia się pływający dym
 Wykonaj po kolei. Szczegóły każdego kroku są w dalszych rozdziałach.
 
 1. **Utwórz korpus** (rozdz. 8): kliknij `SmartFrame → Utwórz Korpus`, wpisz 600 × 720 × 560 mm, 1 strefa.
-2. **Wstaw półki** (rozdz. 9): kliknij wnękę → `SmartBox → Półki`, dodaj 2 półki.
+2. **Wstaw półki** (rozdz. 9): kliknij wnękę → `Bloki → Półki`, dodaj 2 półki.
 3. **Nadaj materiał** (rozdz. 11): przeciągnij materiał (np. Egger Biały 18 mm) z listy na korpus.
 4. **Dodaj złącza** (rozdz. 12): pipetą kliknij styk boku z dnem → wybierz Konfirmat → Zatwierdź.
 5. **Zwymiaruj** (rozdz. 16): narzędzie `Wymiaruj`, kliknij krawędź korpusu.
@@ -322,7 +322,7 @@ Panel / pasek narzędzi → `SmartFrame → Utwórz Korpus` lub przycisk `+ Korp
 
 ---
 
-## 9. Moduł A2 — SmartBox (Wyposażenie wnętrza)
+## 9. Moduł A2 — Bloki (Wyposażenie wnętrza)
 
 ### 9.1. Do czego służy?
 
@@ -347,13 +347,13 @@ Dodatkowo: automatyczne **nawierty systemowe co 32 mm** (pod półki / prowadnic
 
 1. Kliknij wnękę korpusu w 3D (podświetli się).
 2. Wybierz typ, np. `Półki`.
-3. W panelu `smartbox-ui` ustaw liczbę półek, grubość, odsunięcia.
+3. W panelu `bloki-ui` ustaw liczbę półek, grubość, odsunięcia.
 4. Zatwierdź — półki pojawią się w drzewie pod korpusem.
 5. Kliknij półkę w drzewie, aby zmienić jej parametry.
 
 > ┌─────────────────────────────────────────────────────────┐
 > │ 🖼️ RAMKA NA ZRZUT 9a — Wykryta wnęka (podświetlenie)   │
-> │ + menu wyboru typu SmartBox.                           │
+> │ + menu wyboru typu Bloki.                           │
 > └─────────────────────────────────────────────────────────┘
 >
 > ┌─────────────────────────────────────────────────────────┐
@@ -411,7 +411,7 @@ Nadaje płytom wygląd, grubość i cenę (np. Egger Biały 18 mm) oraz okleja w
 | Lista materiałów | Przeglądaj, filtruj (kategoria, grubość), szukaj po nazwie | Znajdujesz płytę |
 | Podgląd / sortowanie | Miniaturki tekstur Egger, ceny zł/m² | Wybierasz dekor |
 | Przeciągnij i upuść (drag&drop) | Przeciągnij materiał na formatkę | Nadanie materiału |
-| Zakres nadania | Wybierz: SINGLE (jedna płyta) / CONTAINER (cały korpus) / SMARTBOX (moduł) / PROJECT (wszystko) | Decydujesz, ile płyt zmienić |
+| Zakres nadania | Wybierz: SINGLE (jedna płyta) / CONTAINER (cały korpus) / BLOKI (moduł) / PROJECT (wszystko) | Decydujesz, ile płyt zmienić |
 | Obrzeże ABS | Wybierz: 0.8×22, 1×22, 2×22, 0.8×43 → kliknij krawędź +X / -X / +Y / -Y | Oklejona krawędź |
 
 ### 11.3. Krok po kroku — materiał
@@ -435,7 +435,7 @@ Nadaje płytom wygląd, grubość i cenę (np. Egger Biały 18 mm) oraz okleja w
 >
 > ┌─────────────────────────────────────────────────────────┐
 > │ 🖼️ RAMKA NA ZRZUT 11b — Okno wyboru zakresu            │
-> │ SINGLE/CONTAINER/SMARTBOX/PROJECT.                     │
+> │ SINGLE/CONTAINER/BLOKI/PROJECT.                     │
 > └─────────────────────────────────────────────────────────┘
 >
 > ┌─────────────────────────────────────────────────────────┐
@@ -799,7 +799,7 @@ Liczy, ile mebel kosztuje i ile materiału potrzebujesz: m² płyt, metry obrze�
 
 Fabryczne dane okuć (Blum Antaro M, Tandem, Sevroll SlimBox, Merivo) — warianty wysokości i długości 300–500 mm z gotowymi pozycjami otworów boku i frontu. Używane **pośrednio**: silniki szuflad (rozdz. 9) same biorą stąd wiercenia.
 
-Nie musisz nic klikać — wystarczy, że wybierzesz system szuflady w SmartBox, a otwory ustawią się same wg biblioteki.
+Nie musisz nic klikać — wystarczy, że wybierzesz system szuflady w Bloki, a otwory ustawią się same wg biblioteki.
 
 > ┌─────────────────────────────────────────────────────────┐
 > │ 🖼️ RAMKA NA ZRZUT 23 — Lista systemów szuflad          │
@@ -812,7 +812,7 @@ Nie musisz nic klikać — wystarczy, że wybierzesz system szuflady w SmartBox,
 
 ### Wariant A — Szafka kuchenna (pełny cykl)
 
-1. SmartFrame: korpus 600×720×560, 1 strefa → 2. SmartBox: 2 półki → 3. A7: Egger + obrzeża 2 mm z przodu → 4. C2: konfirmaty na stykach → 5. A8: zwymiaruj → 6. N1: rozkrój → 7. C1: programy `.mpr` → 8. D1/E3: rysunek → 9. R1: wycena.
+1. SmartFrame: korpus 600×720×560, 1 strefa → 2. Bloki: 2 półki → 3. A7: Egger + obrzeża 2 mm z przodu → 4. C2: konfirmaty na stykach → 5. A8: zwymiaruj → 6. N1: rozkrój → 7. C1: programy `.mpr` → 8. D1/E3: rysunek → 9. R1: wycena.
 
 ### Wariant B — Szafa z szufladami i drzwiami
 
@@ -824,7 +824,7 @@ Nie musisz nic klikać — wystarczy, że wybierzesz system szuflady w SmartBox,
 
 > ┌─────────────────────────────────────────────────────────┐
 > │ 🖼️ RAMKA NA ZRZUT 24 — Schemat przepływu (diagram):    │
-> │ Korpus → SmartBox → Materiał → Złącza → PMI → Nesting  │
+> │ Korpus → Bloki → Materiał → Złącza → PMI → Nesting  │
 > │ → CNC → Draw/E3 → Raport.                              │
 > │ Możesz narysować odręcznie i sfotografować.            │
 > └─────────────────────────────────────────────────────────┘

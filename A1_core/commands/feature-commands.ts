@@ -6,7 +6,7 @@
 
 import { ProjectDocument } from '../project-document.js';
 import { Command } from './command.js';
-import { PanelModel } from '../../A4_smartpanel/panel-model.js';
+import type { PanelLike } from '../panel-like.js';
 
 export class AddFeatureCommand implements Command {
     readonly id: string;
@@ -31,7 +31,7 @@ export class AddFeatureCommand implements Command {
     execute(document: ProjectDocument): void {
         const node = document.findNode(this.panelId);
         if (!node || !node.domainData) return;
-        const panel = node.domainData as PanelModel;
+        const panel = node.domainData as PanelLike;
         if (!panel.features) panel.features = [];
 
         if (this.index !== undefined && this.index >= 0 && this.index < panel.features.length) {
@@ -46,7 +46,7 @@ export class AddFeatureCommand implements Command {
     undo(document: ProjectDocument): void {
         const node = document.findNode(this.panelId);
         if (!node || !node.domainData) return;
-        const panel = node.domainData as PanelModel;
+        const panel = node.domainData as PanelLike;
         if (!panel.features) return;
 
         const idx = this.index ?? panel.features.findIndex((f: any) => f.id === this.featureData.id);
@@ -75,7 +75,7 @@ export class RemoveFeatureCommand implements Command {
         if (!node || !node.domainData) {
             throw new Error(`RemoveFeatureCommand: panel "${panelId}" not found.`);
         }
-        const panel = node.domainData as PanelModel;
+        const panel = node.domainData as PanelLike;
         const idx = (panel.features || []).findIndex((f: any) => f.id === featureId);
         if (idx === -1) {
             throw new Error(`RemoveFeatureCommand: feature "${featureId}" not found on panel.`);
@@ -90,7 +90,7 @@ export class RemoveFeatureCommand implements Command {
     execute(document: ProjectDocument): void {
         const node = document.findNode(this.panelId);
         if (!node || !node.domainData) return;
-        const panel = node.domainData as PanelModel;
+        const panel = node.domainData as PanelLike;
         if (panel.features && this.index < panel.features.length) {
             panel.features.splice(this.index, 1);
         }
@@ -100,7 +100,7 @@ export class RemoveFeatureCommand implements Command {
     undo(document: ProjectDocument): void {
         const node = document.findNode(this.panelId);
         if (!node || !node.domainData) return;
-        const panel = node.domainData as PanelModel;
+        const panel = node.domainData as PanelLike;
         if (!panel.features) panel.features = [];
         panel.features.splice(this.index, 0, JSON.parse(JSON.stringify(this.featureData)));
         document.emitChange('features', [this.panelId]);
@@ -146,7 +146,7 @@ export class UpdateFeatureCommand implements Command {
     private _update(document: ProjectDocument, params: any): void {
         const node = document.findNode(this.panelId);
         if (!node || !node.domainData) return;
-        const panel = node.domainData as PanelModel;
+        const panel = node.domainData as PanelLike;
         const feat = (panel.features || []).find((f: any) => f.id === this.featureId);
         if (feat) {
             Object.assign(feat, JSON.parse(JSON.stringify(params)));

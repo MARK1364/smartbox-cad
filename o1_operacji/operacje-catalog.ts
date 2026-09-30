@@ -95,11 +95,22 @@ for (const [id, raw] of Object.entries(rawItems)) {
     BY_ID.set(recipe.id, recipe);
 }
 
+function cloneRecipe(r: OperationRecipe): OperationRecipe {
+    return {
+        ...r,
+        insets: { ...r.insets },
+        sizeMm: { ...r.sizeMm },
+        edge: { ...r.edge },
+    };
+}
+
 export function listOperations(): OperationRecipe[] {
-    return ITEMS.slice();
+    return ITEMS.map(cloneRecipe);
 }
 
 export function getOperation(id: string | null | undefined): OperationRecipe | null {
     if (!id) return null;
-    return BY_ID.get(id) || null;
+    const r = BY_ID.get(id);
+    if (!r) return null;
+    return cloneRecipe(r);
 }

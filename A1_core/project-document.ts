@@ -11,27 +11,40 @@
  * 5. Emituje opisowe zdarzenia domenowe (`documentChanged`).
  * 6. Zero zależności od Babylon.js, DOM czy warstwy widoku.
  * 7. Dane spoza drzewa (PMI, więzy, kamera) żyją w `extensions`, nie w korzeniu JSON.
+ * 8. Błędy serializacji / hydracji / load rozszerzeń przerywają operację — bez cichego gubienia danych.
  */
 
 import { CADNode } from './cad-node/cad-node.js';
 import { NodeType } from './cad-node/node-type.js';
 import { Vec3 } from './cad-math/vec3.js';
 import { Quat } from './cad-math/quat.js';
-import { ContainerModel, ContainerModelOptions } from './container-model.js';
+import { mmToNm } from './cad-math/units.js';
 import type { DomainData } from './domain-data.js';
+import { isContainerModel } from './domain-data.js';
 import {
     applyDefaultDomainHandlers,
     type DomainFactory,
     type DomainHydrator,
 } from './domain-registry.js';
 import appPackage from '../package.json';
+import {
+    PROJECT_FORMAT,
+    PROJECT_FORMAT_VERSION,
+    PROJECT_DOMAIN_UNIT,
+    migrateProjectToCurrent,
+    type ProjectDocumentJSON,
+    type ProjectMetadataJSON,
+} from './project-file-format.js';
 
-export const PROJECT_FORMAT = 'smartpanel-project';
-export const PROJECT_FORMAT_VERSION = 3;
+export {
+    PROJECT_FORMAT,
+    PROJECT_FORMAT_VERSION,
+    PROJECT_DOMAIN_UNIT,
+    migrateProjectToCurrent,
+};
+export type { ProjectDocumentJSON, ProjectMetadataJSON };
+
 export const PROJECT_APP_VERSION = String((appPackage as { version?: string }).version || '0.0.0');
-
-/** Klucze, które w formacie v2 leżały w korzeniu pliku zamiast w `extensions`. */
-const V2_ROOT_EXTENSION_KEYS = ['pmi', 'constraints'] as const;
 
 export type DocumentChangeType = 'structure' | 'transform' | 'dimensions' | 'features' | 'loaded' | 'all';
 
@@ -47,76 +60,6 @@ export interface ProjectDocumentOptions {
     id?: string;
     name?: string;
     domainUnit?: string;
-}
-
-export interface ProjectMetadataJSON {
-    savedAt?: string;
-    appVersion?: string;
-    [key: string]: unknown;
-}
-
-export interface ProjectDocumentJSON {
-    format: string;
-    version: number;
-    domainUnit: string;
-    id: string;
-    name: string;
-    metadata?: ProjectMetadataJSON;
-    rootNode: Record<string, any>;
-    extensions?: Record<string, any>;
-}
-
-/**
- * Podnosi plik v2 (rozszerzenia i kamera w korzeniu) do v3 (`extensions`).
- * Czysty v3 przechodzi bez zmian struktury drzewa. Nieznane klucze w
- * `extensions` są zachowywane, żeby moduł nieobecny przy load nie gubił danych.
- */
-export function migrateProjectToCurrent(data: any): ProjectDocumentJSON {
-    if (!data || data.format !== PROJECT_FORMAT) {
-        throw new Error(
-            `ProjectDocument.load: Unsupported project format. Expected "${PROJECT_FORMAT}" version >= 2.`
-        );
-    }
-    const version = Number(data.version);
-    if (!Number.isFinite(version) || version < 2) {
-        throw new Error(
-            `ProjectDocument.load: Unsupported project version ${data.version}. Expected format "${PROJECT_FORMAT}" version >= 2.`
-        );
-    }
-    if (version > PROJECT_FORMAT_VERSION) {
-        console.warn(
-            `ProjectDocument: plik w wersji ${version} jest nowszy niż obsługiwana ${PROJECT_FORMAT_VERSION}. Wczytuję z semantyką v${PROJECT_FORMAT_VERSION}.`
-        );
-    }
-    if (!data.rootNode) {
-        throw new Error('ProjectDocument.load: missing rootNode.');
-    }
-
-    const extensions: Record<string, any> = {};
-    if (data.extensions && typeof data.extensions === 'object') {
-        Object.assign(extensions, data.extensions);
-    }
-
-    for (const key of V2_ROOT_EXTENSION_KEYS) {
-        if (data[key] !== undefined && extensions[key] === undefined) {
-            extensions[key] = data[key];
-        }
-    }
-
-    if (data.camera !== undefined && extensions.viewport === undefined) {
-        extensions.viewport = { version: 1, camera: data.camera };
-    }
-
-    return {
-        format: PROJECT_FORMAT,
-        version: PROJECT_FORMAT_VERSION,
-        domainUnit: data.domainUnit || 'nm',
-        id: data.id,
-        name: data.name,
-        metadata: data.metadata && typeof data.metadata === 'object' ? { ...data.metadata } : {},
-        rootNode: data.rootNode,
-        extensions,
-    };
 }
 
 /**
@@ -142,7 +85,7 @@ export interface LoadOptions {
 export class ProjectDocument {
     id: string;
     name: string;
-    readonly domainUnit: string = 'nm';
+    readonly domainUnit: string = PROJECT_DOMAIN_UNIT;
     readonly formatVersion: number = PROJECT_FORMAT_VERSION;
     metadata: ProjectMetadataJSON = {};
 
@@ -161,12 +104,12 @@ export class ProjectDocument {
     private _subscribers: Set<DocumentChangeSubscriber> = new Set();
 
     constructor(options: ProjectDocumentOptions = {}) {
-        if (options.domainUnit && options.domainUnit !== 'nm') {
-            throw new Error(`ProjectDocument: unsupported domainUnit "${options.domainUnit}". Only "nm" is allowed.`);
+        if (options.domainUnit && options.domainUnit !== PROJECT_DOMAIN_UNIT) {
+            throw new Error(`ProjectDocument: unsupported domainUnit "${options.domainUnit}". Only "${PROJECT_DOMAIN_UNIT}" is allowed.`);
         }
         this.id = options.id ?? `doc_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
         this.name = options.name ?? 'Projekt WebCAD';
-        this.domainUnit = 'nm';
+        this.domainUnit = PROJECT_DOMAIN_UNIT;
 
         // Utwórz główny korzeń typu ROOM
         this._rootNode = new CADNode('root_room', 'Pokój', NodeType.ROOM);
@@ -214,8 +157,8 @@ export class ProjectDocument {
             if ((entity as any).engineManaged === false) {
                 return { target: entity, isChildPanel: false };
             }
-            const parentDomain = node.parent.domainData as ContainerModel;
-            if (parentDomain) {
+            const parentDomain = node.parent.domainData;
+            if (parentDomain && isContainerModel(parentDomain)) {
                 return { target: parentDomain, isChildPanel: true };
             }
         }
@@ -378,9 +321,17 @@ export class ProjectDocument {
 
     /**
      * Tworzy nowy kontener (ASSEMBLY) i przypina go do dokumentu.
+     * Używa rejestru fabryk domenowych — analogicznie do createPanel.
+     * Fabrykę ASSEMBLY rejestruje project-domain.ts lub registerFactory().
      */
-    createContainer(options: ContainerModelOptions = {}, parentId?: string): ContainerModel {
-        const container = new ContainerModel(options);
+    createAssembly(options: Record<string, unknown> = {}, parentId?: string): DomainData {
+        const factory = this._factories.get(NodeType.ASSEMBLY);
+        if (!factory) {
+            throw new Error(
+                'ProjectDocument.createAssembly: no ASSEMBLY factory registered. Import src/application/project-domain or call registerFactory().'
+            );
+        }
+        const container = factory(options);
         const node = new CADNode(container.id, container.name, NodeType.ASSEMBLY);
         node.domainData = container;
         const targetParentId = parentId ?? this._rootNode.id;
@@ -390,13 +341,18 @@ export class ProjectDocument {
 
     /**
      * Tworzy nowy panel (PART) i przypina go do dokumentu.
+     * Wymiary (width/height/thickness w nm) są wymagane — alias `depth` → `thickness`.
      */
     createPanel(options: any = {}, parentId?: string): DomainData {
         const factory = this._factories.get(NodeType.PART);
         if (!factory) {
-            throw new Error('ProjectDocument.createPanel: no PART factory registered. Import project-domain.ts or call registerFactory().');
+            throw new Error('ProjectDocument.createPanel: no PART factory registered. Import src/application/project-domain or call registerFactory().');
         }
-        const panel = factory(options);
+        const normalized = {
+            ...options,
+            thickness: options.thickness ?? options.depth,
+        };
+        const panel = factory(normalized);
         const node = new CADNode(panel.id, panel.name, NodeType.PART);
         node.domainData = panel;
         const targetParentId = parentId ?? this._rootNode.id;
@@ -434,9 +390,9 @@ export class ProjectDocument {
         const { translation, rotation, scale } = sourceNode.localMatrix.decompose();
         clonedNode.setLocalTransform(
             new Vec3(
-                translation.x + (offsetMm.x * 1000000),
-                translation.y + (offsetMm.y * 1000000),
-                translation.z + (offsetMm.z * 1000000)
+                translation.x + mmToNm(offsetMm.x),
+                translation.y + mmToNm(offsetMm.y),
+                translation.z + mmToNm(offsetMm.z)
             ),
             rotation,
             scale
@@ -527,7 +483,9 @@ export class ProjectDocument {
                 try {
                     extension.load(value ?? null);
                 } catch (err) {
-                    console.error(`ProjectDocument: błąd wczytywania rozszerzenia "${key}":`, err);
+                    throw new Error(
+                        `ProjectDocument.load: błąd wczytywania rozszerzenia "${key}": ${err instanceof Error ? err.message : String(err)}`
+                    );
                 }
             } else {
                 this._orphanExtensions[key] = value;
@@ -540,7 +498,9 @@ export class ProjectDocument {
             try {
                 extension.load(null);
             } catch (err) {
-                console.error(`ProjectDocument: błąd wczytywania rozszerzenia "${key}":`, err);
+                throw new Error(
+                    `ProjectDocument.load: błąd resetu rozszerzenia "${key}": ${err instanceof Error ? err.message : String(err)}`
+                );
             }
         }
     }
@@ -555,7 +515,9 @@ export class ProjectDocument {
             try {
                 extensions[key] = extension.serialize();
             } catch (err) {
-                console.error(`ProjectDocument: błąd serializacji rozszerzenia "${key}":`, err);
+                throw new Error(
+                    `ProjectDocument.serialize: błąd serializacji rozszerzenia "${key}": ${err instanceof Error ? err.message : String(err)}`
+                );
             }
         }
 
@@ -588,9 +550,12 @@ export class ProjectDocument {
 
         if (node.domainData) {
             const data = node.domainData as any;
-            if (typeof data.toJSON === 'function') {
-                json.domainData = data.toJSON();
+            if (typeof data.toJSON !== 'function') {
+                throw new Error(
+                    `ProjectDocument.serialize: węzeł "${node.id}" (${node.nodeType}) ma domainData bez toJSON() — dane zostałyby pominięte.`
+                );
             }
+            json.domainData = data.toJSON();
         }
 
         return json;
@@ -641,14 +606,17 @@ export class ProjectDocument {
 
         const hydrator = this._hydrators.get(node.nodeType);
         if (!hydrator) {
-            console.warn(`ProjectDocument: brak hydratora dla nodeType "${node.nodeType}" — domainData pominięte.`);
-            return;
+            throw new Error(
+                `ProjectDocument.load: brak hydratora dla nodeType "${node.nodeType}" (węzeł "${nodeJson.id}") — domainData nie zostałoby wczytane.`
+            );
         }
 
         try {
             node.domainData = hydrator(raw, nodeJson);
         } catch (err) {
-            console.error(`ProjectDocument: błąd hydratacji "${node.nodeType}" (${nodeJson.id}):`, err);
+            throw new Error(
+                `ProjectDocument.load: błąd hydratacji "${node.nodeType}" (${nodeJson.id}): ${err instanceof Error ? err.message : String(err)}`
+            );
         }
     }
 

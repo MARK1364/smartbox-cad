@@ -1,51 +1,263 @@
 /**
  * smartframe-engine.ts
+ *
  * Silnik geometrii korpusu SmartFrame (1 / 2 / 3 strefy).
+ * Czysty Functional Core:
+ *  - normalizeCabinetParams (normalizacja parametrów z jawnymi jednostkami _mm)
+ *  - calculateCabinetPlan (czysty bezstanowy dispatcher)
+ *  - calculateStandardCabinetPlan, calculateRogowy1CabinetPlan, calculateRogowy90CabinetPlan, calculateSkosnyCabinetPlan
+ *  - planCabinet (wejście raw → plan; bez klas)
+ *  - collectCabinetGeometry (zgeometryzowane formatki korpusu)
  */
 
 import korpusRulesData from './korpus3_3_rules.json';
+import korpusRogowy1RulesData from './korpus_rogowy1_rules.json';
+import korpusRogowy90RulesData from './korpus_rogowy90_rules.json';
+import korpusSkosnyRulesData from './korpus_skosny_rules.json';
 
-export interface CabinetGeometryPart {
-    key: string;
-    name: string;
-    role: string;
-    material: string;
-    thickness: number;
-    dim: { x: number; y: number; z: number };
-    loc: { x: number; y: number; z: number };
-    zonePrefix: string;
-    zoneId: string;
-    customProperties: Record<string, any>;
-    lcs?: {
-        mapping?: { X: string; Y: string; Z: string };
-        rotation?: number[];
-        faces?: { INNER: string; OUTER: string };
+export type {
+    CabinetType,
+    CabinetDimensions_mm,
+    CabinetGeometryPart,
+    CabinetEdgeBandingRule,
+    CabinetLcsDefinition,
+    ZoneLayout,
+    CabinetPlanParams,
+    CabinetPlanResult,
+    NormalizedCabinetParams
+} from './smartframe-types.js';
+export {
+    assertCanonicalCabinetParams,
+    LEGACY_CABINET_PARAM_ALIASES,
+    CANONICAL_CABINET_PARAM_KEYS
+} from './smartframe-types.js';
+import {
+    CabinetType,
+    CabinetDimensions_mm,
+    CabinetGeometryPart,
+    ZoneLayout,
+    CabinetPlanParams,
+    CabinetPlanResult,
+    NormalizedCabinetParams,
+    assertCanonicalCabinetParams
+} from './smartframe-types.js';
+
+import { rulesMToMm } from '../A1_core/cad-math/units.js';
+import { collectCabinetGeometry } from './geometry/subcomponents-builder.js';
+import { getRootSubcomponents } from './geometry/cabinet-thickness.js';
+
+export { collectCabinetGeometry } from './geometry/subcomponents-builder.js';
+
+/** Defaulty gabarytu [mm] — jawne, nie zgadywane z braku danych. */
+const DEFAULT_SZEROKOSC_MM = 600;
+const DEFAULT_WYSOKOSC_MM = 720;
+const DEFAULT_GLEBOKOSC_MM = 560;
+const DEFAULT_SZEROKOSC_TRAWERSU_MM = 80;
+const DEFAULT_COFNIECIE_PLECOW_MM = 3;
+const DEFAULT_GRUBOSC_PLECOW_MM = 3;
+const DEFAULT_WPUSZCZENIE_PLECOW_MM = 10;
+
+/**
+ * Czysta funkcja normalizująca parametry wejściowe korpusu do DTO z jawnymi jednostkami.
+ *
+ * Wejście jest KANONICZNE — `assertCanonicalCabinetParams` odrzuca wycofane nazwy
+ * (`width`, `bottomHeight`, `blindWidth`, `bokLewy`, `armDepth`, …) czytelnym błędem.
+ * Brak łańcuchów `??` między dialektami i brak zgadywania jednoski po wartości.
+ */
+export function normalizeCabinetParams(
+    raw: CabinetPlanParams = {}
+): NormalizedCabinetParams {
+    assertCanonicalCabinetParams(raw);
+
+    const szerokosc_mm = Number(raw.szerokosc_mm ?? DEFAULT_SZEROKOSC_MM);
+    const wysokosc_mm = Number(raw.wysokosc_mm ?? DEFAULT_WYSOKOSC_MM);
+    const glebokosc_mm = Number(raw.glebokosc_mm ?? DEFAULT_GLEBOKOSC_MM);
+    const liczba_stref = Math.max(1, Math.min(3, Number(raw.liczba_stref ?? 1))) as 1 | 2 | 3;
+
+    const typ_korpusu = raw.typ_korpusu ?? 'korpus3';
+    const strona_blendy: 'LEFT' | 'RIGHT' = raw.strona_blendy === 'RIGHT' ? 'RIGHT' : 'LEFT';
+    const tryb_wienca_gornego = raw.tryb_wienca_gornego ?? 'FULL';
+
+    return {
+        typ_korpusu,
+        szerokosc_mm,
+        wysokosc_mm,
+        glebokosc_mm,
+        liczba_stref,
+        wysokosc_strefy_dolnej_mm: raw.wysokosc_strefy_dolnej_mm !== undefined
+            ? Number(raw.wysokosc_strefy_dolnej_mm)
+            : (liczba_stref > 1 ? 300 : undefined),
+        wysokosc_strefy_srodkowej_mm: raw.wysokosc_strefy_srodkowej_mm !== undefined
+            ? Number(raw.wysokosc_strefy_srodkowej_mm)
+            : (liczba_stref === 3 ? 300 : undefined),
+        cofniecie_plecow_mm: raw.cofniecie_plecow_mm !== undefined
+            ? Number(raw.cofniecie_plecow_mm)
+            : DEFAULT_COFNIECIE_PLECOW_MM,
+        grubosc_plecow_mm: raw.grubosc_plecow_mm !== undefined
+            ? Number(raw.grubosc_plecow_mm)
+            : DEFAULT_GRUBOSC_PLECOW_MM,
+        wpuszczenie_plecow_mm: raw.wpuszczenie_plecow_mm !== undefined
+            ? Number(raw.wpuszczenie_plecow_mm)
+            : DEFAULT_WPUSZCZENIE_PLECOW_MM,
+        tryb_wienca_gornego,
+        szerokosc_trawersu_mm: raw.szerokosc_trawersu_mm !== undefined
+            ? Number(raw.szerokosc_trawersu_mm)
+            : DEFAULT_SZEROKOSC_TRAWERSU_MM,
+        szerokosc_blendy_mm: raw.szerokosc_blendy_mm !== undefined
+            ? Number(raw.szerokosc_blendy_mm)
+            : undefined,
+        strona_blendy,
+        glebokosc_boku_lewego_mm: raw.glebokosc_boku_lewego_mm !== undefined
+            ? Number(raw.glebokosc_boku_lewego_mm)
+            : undefined,
+        glebokosc_boku_prawego_mm: raw.glebokosc_boku_prawego_mm !== undefined
+            ? Number(raw.glebokosc_boku_prawego_mm)
+            : undefined,
+        wysokosc_przod_mm: raw.wysokosc_przod_mm !== undefined ? Number(raw.wysokosc_przod_mm) : undefined,
+        wysokosc_tyl_mm: raw.wysokosc_tyl_mm !== undefined ? Number(raw.wysokosc_tyl_mm) : undefined,
+        wysokosc_lewy_mm: raw.wysokosc_lewy_mm !== undefined ? Number(raw.wysokosc_lewy_mm) : undefined,
+        wysokosc_prawy_mm: raw.wysokosc_prawy_mm !== undefined ? Number(raw.wysokosc_prawy_mm) : undefined,
+        offsets: raw.offsets,
+        container: raw.container
     };
 }
 
-export interface ZoneLayout {
-    zoneKey: string;
-    size: number;
-    baseOffset: number;
+/**
+ * Czysta funkcja wyliczająca plan dla standardowego korpusu szafki (1, 2 lub 3 strefy).
+ */
+export function calculateStandardCabinetPlan(
+    dims: CabinetDimensions_mm,
+    params: NormalizedCabinetParams,
+    customRules?: any
+): CabinetPlanResult {
+    const baseRules = customRules || korpusRulesData;
+    const numZones = Math.max(1, Math.min(3, params.liczba_stref || 3)) as 1 | 2 | 3;
+    const activeRules = filterRulesForZoneCount(baseRules, numZones);
+    const defaults = baseRules.parameters?.defaults || {};
+    const defB = rulesMToMm(defaults.bottom_height ?? 0.5);
+    const defM = rulesMToMm(defaults.middle_height ?? 1.2);
+    const bottomH = params.wysokosc_strefy_dolnej_mm ?? defB;
+    const middleH = params.wysokosc_strefy_srodkowej_mm ?? defM;
+    const zones = computeCabinetZoneLayout(numZones, dims.wysokosc_mm, bottomH, middleH, baseRules);
+
+    const effectiveParams: CabinetPlanParams = {
+        ...params,
+        szerokosc_mm: dims.szerokosc_mm,
+        wysokosc_mm: dims.wysokosc_mm,
+        glebokosc_mm: dims.glebokosc_mm,
+        liczba_stref: numZones,
+        wysokosc_strefy_dolnej_mm: bottomH,
+        wysokosc_strefy_srodkowej_mm: middleH,
+        typ_korpusu: 'korpus3'
+    };
+
+    const parts = collectCabinetGeometry(effectiveParams, activeRules, baseRules, zones, params.offsets || {});
+    return { parts, zones };
 }
 
-export interface CabinetPlanParams {
-    width: number;
-    height: number;
-    depth: number;
-    zoneCount: number;
-    bottomHeight?: number;
-    middleHeight?: number;
-    backOffsetMm?: number;
-    offsets?: Record<string, number>;
-    container?: any;
-    topPanelMode?: 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V';
-    traverseWidth?: number;
+/**
+ * Czysta funkcja wyliczająca plan dla szafki narożnej prostej z blendą (korpus_rogowy1).
+ */
+export function calculateRogowy1CabinetPlan(
+    dims: CabinetDimensions_mm,
+    params: NormalizedCabinetParams,
+    customRules?: any
+): CabinetPlanResult {
+    const baseRules = customRules || korpusRogowy1RulesData;
+    const activeRules = filterRulesForZoneCount(baseRules, 1);
+    const zones: ZoneLayout[] = [{ zoneKey: "SEKCJA_B", size: dims.wysokosc_mm, baseOffset: 0 }];
+
+    const effectiveParams: CabinetPlanParams = {
+        ...params,
+        szerokosc_mm: dims.szerokosc_mm,
+        wysokosc_mm: dims.wysokosc_mm,
+        glebokosc_mm: dims.glebokosc_mm,
+        szerokosc_blendy_mm: params.szerokosc_blendy_mm,
+        strona_blendy: params.strona_blendy,
+        liczba_stref: 1,
+        typ_korpusu: 'korpus_rogowy1'
+    };
+
+    const parts = collectCabinetGeometry(effectiveParams, activeRules, baseRules, zones, params.offsets || {});
+    return { parts, zones };
 }
 
-export interface CabinetPlanResult {
-    parts: CabinetGeometryPart[];
-    zones: ZoneLayout[];
+/**
+ * Czysta funkcja wyliczająca plan dla szafki narożnej L 90° (korpus_rogowy90).
+ */
+export function calculateRogowy90CabinetPlan(
+    dims: CabinetDimensions_mm,
+    params: NormalizedCabinetParams,
+    customRules?: any
+): CabinetPlanResult {
+    const baseRules = customRules || korpusRogowy90RulesData;
+    const activeRules = filterRulesForZoneCount(baseRules, 1);
+    const zones: ZoneLayout[] = [{ zoneKey: "SEKCJA_B", size: dims.wysokosc_mm, baseOffset: 0 }];
+
+    const effectiveParams: CabinetPlanParams = {
+        ...params,
+        szerokosc_mm: dims.szerokosc_mm,
+        wysokosc_mm: dims.wysokosc_mm,
+        glebokosc_mm: dims.glebokosc_mm,
+        glebokosc_boku_lewego_mm: params.glebokosc_boku_lewego_mm,
+        glebokosc_boku_prawego_mm: params.glebokosc_boku_prawego_mm,
+        liczba_stref: 1,
+        typ_korpusu: 'korpus_rogowy90'
+    };
+
+    const parts = collectCabinetGeometry(effectiveParams, activeRules, baseRules, zones, params.offsets || {});
+    return { parts, zones };
+}
+
+/**
+ * Czysta funkcja wyliczająca plan dla szafek skośnych (korpus_skosny*).
+ */
+export function calculateSkosnyCabinetPlan(
+    dims: CabinetDimensions_mm,
+    params: NormalizedCabinetParams,
+    customRules?: any
+): CabinetPlanResult {
+    const baseRules = customRules || korpusSkosnyRulesData;
+    const activeRules = filterRulesForZoneCount(baseRules, 1);
+    const zones: ZoneLayout[] = [{ zoneKey: "SEKCJA_B", size: dims.wysokosc_mm, baseOffset: 0 }];
+
+    const effectiveParams: CabinetPlanParams = {
+        ...params,
+        szerokosc_mm: dims.szerokosc_mm,
+        wysokosc_mm: dims.wysokosc_mm,
+        glebokosc_mm: dims.glebokosc_mm,
+        wysokosc_przod_mm: params.wysokosc_przod_mm,
+        wysokosc_tyl_mm: params.wysokosc_tyl_mm,
+        wysokosc_lewy_mm: params.wysokosc_lewy_mm,
+        wysokosc_prawy_mm: params.wysokosc_prawy_mm,
+        liczba_stref: 1,
+        typ_korpusu: params.typ_korpusu
+    };
+
+    const parts = collectCabinetGeometry(effectiveParams, activeRules, baseRules, zones, params.offsets || {});
+    return { parts, zones };
+}
+
+/**
+ * Główny czysty dispatcher kalkulacji geometrii korpusu na podstawie wymiarów i znormalizowanych parametrów.
+ * Nie tworzy instancji klas, działa bezstanowo.
+ */
+export function calculateCabinetPlan(
+    dims: CabinetDimensions_mm,
+    params: NormalizedCabinetParams,
+    rulesMap?: Record<string, any>
+): CabinetPlanResult {
+    const t = String(params.typ_korpusu || 'korpus3').toLowerCase();
+    if (t.includes('skosny')) {
+        return calculateSkosnyCabinetPlan(dims, params, rulesMap?.[params.typ_korpusu] ?? rulesMap?.korpus_skosny);
+    }
+    if (t.includes('rogowy90') || t.includes('rogowy_90')) {
+        return calculateRogowy90CabinetPlan(dims, params, rulesMap?.[params.typ_korpusu] ?? rulesMap?.korpus_rogowy90);
+    }
+    if (t.includes('rogowy')) {
+        return calculateRogowy1CabinetPlan(dims, params, rulesMap?.[params.typ_korpusu] ?? rulesMap?.korpus_rogowy1);
+    }
+    return calculateStandardCabinetPlan(dims, params, rulesMap?.[params.typ_korpusu] ?? rulesMap?.korpus3);
 }
 
 const ZONE_KEYS_3 = ["SEKCJA_B", "SEKCJA_M", "SEKCJA_T"];
@@ -54,10 +266,6 @@ const ACTIVE_ZONES: Record<number, string[]> = {
     2: ["SEKCJA_B", "SEKCJA_T"],
     3: ZONE_KEYS_3
 };
-
-import { ContextManager } from '../A1_core/context-manager.js';
-import { nmToMm, rulesMToMm } from '../A1_core/cad-math/units.js';
-import { readBackEdgeOffset } from './back-overlap.js';
 
 export function applyLcsMapping(dim: { x: number; y: number; z: number }, lcs?: any): { x: number; y: number; z: number } {
     if (!lcs || !lcs.mapping) return { x: dim.x, y: dim.y, z: dim.z };
@@ -76,395 +284,93 @@ export function applyLcsMapping(dim: { x: number; y: number; z: number }, lcs?: 
     };
 }
 
-function getRootSubcomponents(rules: any): Record<string, any> {
-    if (!rules || !rules.model_tree) return {};
-    const firstKey = Object.keys(rules.model_tree)[0];
-    if (!firstKey) return {};
-    return rules.model_tree[firstKey]?.subcomponents || {};
+/**
+ * Czysta funkcja wyliczająca rozkład stref pionowych korpusu na podstawie reguł JSON.
+ */
+export function computeCabinetZoneLayout(
+    liczba_stref: number,
+    height: number,
+    wysokosc_strefy_dolnej_mm: number,
+    wysokosc_strefy_srodkowej_mm: number,
+    baseRules: any
+): ZoneLayout[] {
+    const numZones = Math.max(1, Math.min(3, liczba_stref));
+    if (numZones === 1) {
+        return [{ zoneKey: "SEKCJA_B", size: height, baseOffset: 0 }];
+    }
+    const activeKeys = ACTIVE_ZONES[numZones] || ZONE_KEYS_3;
+    const rootComps = getRootSubcomponents(baseRules);
+
+    const sizes: Record<string, number | null> = {};
+    const fillZones: string[] = [];
+    let totalFixed = 0;
+
+    for (const key of activeKeys) {
+        const zoneDef = rootComps[key]?.zone || {};
+        const mode = zoneDef.size_mode || "FIXED";
+        if (numZones === 2 && key === "SEKCJA_T") {
+            fillZones.push(key);
+            sizes[key] = null;
+            continue;
+        }
+        if (mode === "FILL") {
+            fillZones.push(key);
+            sizes[key] = null;
+        } else {
+            let sz: number;
+            if (key === "SEKCJA_B") sz = wysokosc_strefy_dolnej_mm;
+            else if (key === "SEKCJA_M") sz = wysokosc_strefy_srodkowej_mm;
+            else {
+                const parsed = parseFloat(zoneDef.size || "0");
+                sz = rulesMToMm(parsed);
+            }
+            sizes[key] = sz;
+            totalFixed += sz;
+        }
+    }
+
+    if (fillZones.length > 0) {
+        const fillSize = Math.max(height - totalFixed, 0) / fillZones.length;
+        for (const fillKey of fillZones) {
+            sizes[fillKey] = fillSize;
+        }
+    }
+
+    const layout: ZoneLayout[] = [];
+    let currentOffset = 0;
+    for (const key of activeKeys) {
+        const sz = sizes[key] ?? 0;
+        layout.push({ zoneKey: key, size: sz, baseOffset: currentOffset });
+        currentOffset += sz;
+    }
+    return layout;
 }
 
-export class BaseCabinetEngine {
-    rules: any = null;
-    baseRules: any = null;
-    offsets: Record<string, number> = {};
-    protected _targetContainer: any = null;
-
-    protected _computeZoneLayout(
-        zoneCount: number,
-        height: number,
-        bottomHeight: number,
-        middleHeight: number
-    ): ZoneLayout[] {
-        const numZones = Math.max(1, Math.min(3, zoneCount));
-        if (numZones === 1) {
-            return [{ zoneKey: "SEKCJA_B", size: height, baseOffset: 0 }];
-        }
-
-        const activeKeys = ACTIVE_ZONES[numZones] || ZONE_KEYS_3;
-        const rootComps = getRootSubcomponents(this.baseRules);
-        const sizes: Record<string, number | null> = {};
-        const fillZones: string[] = [];
-        let totalFixed = 0;
-
-        for (const key of activeKeys) {
-            const zoneDef = rootComps[key]?.zone || {};
-            const mode = zoneDef.size_mode || "FIXED";
-            if (numZones === 2 && key === "SEKCJA_T") {
-                fillZones.push(key);
-                sizes[key] = null;
-                continue;
-            }
-            if (mode === "FILL") {
-                fillZones.push(key);
-                sizes[key] = null;
-            } else {
-                let sz: number;
-                if (key === "SEKCJA_B") sz = bottomHeight;
-                else if (key === "SEKCJA_M") sz = middleHeight;
-                else {
-                    const parsed = parseFloat(zoneDef.size || "0");
-                    sz = rulesMToMm(parsed);
-                }
-                sizes[key] = sz;
-                totalFixed += sz;
-            }
-        }
-
-        if (fillZones.length > 0) {
-            const fillSize = Math.max(height - totalFixed, 0) / fillZones.length;
-            for (const fillKey of fillZones) {
-                sizes[fillKey] = fillSize;
-            }
-        }
-
-        const layout: ZoneLayout[] = [];
-        let currentOffset = 0;
-        for (const key of activeKeys) {
-            const sz = sizes[key] ?? 0;
-            layout.push({ zoneKey: key, size: sz, baseOffset: currentOffset });
-            currentOffset += sz;
-        }
-        return layout;
+export function selectCabinetBaseRules(cabinetType?: CabinetType | string): any {
+    const t = String(cabinetType || 'korpus3').toLowerCase();
+    if (t === 'korpus_skosny_lr_uc' || t.includes('skosny_lr_uc') || t.includes('skosny-lr-uc')) {
+        return korpusSkosnyRulesData;
     }
-
-    protected _buildSubcomponents(
-        subcomponents: Record<string, any>,
-        resultList: CabinetGeometryPart[],
-        context: {
-            sb_width: number;
-            sb_height: number;
-            sb_depth: number;
-            back_offset_mm: number;
-            back_groove_depth: number;
-            top_panel_mode?: 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V';
-            traverse_width?: number;
-        },
-        zoneLayout: ZoneLayout[],
-        prefix: string,
-        zoneId: string
-    ) {
-        for (const [key, comp] of Object.entries(subcomponents)) {
-            const compType = (comp.type || "Part").toLowerCase();
-            if (compType === "assembly") {
-                const layout = zoneLayout.find(z => z.zoneKey === key);
-                if (!layout) continue;
-                const pfx = comp.zone?.prefix || "";
-                const isTopZone = key === zoneLayout[zoneLayout.length - 1]?.zoneKey;
-                const ctx = {
-                    ...context,
-                    sb_height: layout.size,
-                    top_panel_mode: isTopZone ? context.top_panel_mode : 'FULL'
-                };
-                this._buildSubcomponents(
-                    comp.subcomponents || {},
-                    resultList,
-                    ctx,
-                    zoneLayout,
-                    pfx,
-                    key
-                );
-            } else {
-                const isT2 = key.endsWith("_T2");
-                const isTopT2 = isT2 && (key.includes("WIENIEC_G") || comp.role === "TOP_PANEL");
-                if (isT2 && !isTopT2) continue;
-                if (isTopT2) {
-                    const mode = context.top_panel_mode || 'FULL';
-                    if (mode === 'FULL') continue;
-                }
-                const cleanKey = prefix && key.startsWith(prefix) ? key.slice(prefix.length) : key;
-                const geom = this._resolveGeometry(cleanKey, comp, {
-                    ...context,
-                    zonePrefix: prefix,
-                    zoneId
-                });
-                if (!geom) continue;
-                const zoneOffset = zoneLayout.find(z => z.zoneKey === zoneId)?.baseOffset || 0;
-                resultList.push({
-                    key,
-                    name: comp.name || key,
-                    role: comp.role || "PART",
-                    material: comp.custom_properties?.material || "",
-                    thickness: geom.thickness,
-                    dim: geom.dim,
-                    loc: { ...geom.loc, z: geom.loc.z + zoneOffset },
-                    zonePrefix: prefix,
-                    zoneId,
-                    customProperties: comp.custom_properties || {},
-                    lcs: (geom as any).lcs || comp.lcs || null
-                });
-            }
-        }
+    if (t === 'korpus_skosny_lr' || t === 'korpus-skosny-lr' || t.includes('skosny_lr') || t.includes('skosny-lr')) {
+        return korpusSkosnyRulesData;
     }
-
-    protected _resolveGeometry(
-        key: string,
-        comp: any,
-        ctx: {
-            sb_width: number;
-            sb_height: number;
-            sb_depth: number;
-            back_offset_mm: number;
-            back_groove_depth: number;
-            zonePrefix?: string;
-            zoneId?: string;
-            top_panel_mode?: 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V';
-            traverse_width?: number;
-        }
-    ) {
-        const W = ctx.sb_width;
-        const H = ctx.sb_height;
-        const D = ctx.sb_depth;
-        const backOffset = ctx.back_offset_mm ?? 0;
-
-        const name = comp.name || key;
-        const role = comp.role || "";
-        const pYPlus  = this.offsets[`${name}_+Y`] || 0;
-        const pYMinus = this.offsets[`${name}_-Y`] || 0;
-        const pXMinus = this.offsets[`${name}_-X`] || 0;
-        const pXPlus  = this.offsets[`${name}_+X`] || 0;
-
-        const shiftX = this.offsets[`${name}_shiftX`] || 0;
-        const shiftY = this.offsets[`${name}_shiftY`] || 0;
-        const shiftZ = this.offsets[`${name}_shiftZ`] || 0;
-
-        const rawThickness = parseFloat(comp.thickness ?? "0.018");
-        const cleanKey = key.replace(/^(B_|M_|T_)/i, '');
-        const matchedKey = cleanKey.toUpperCase();
-        const pfx = ctx.zonePrefix || '';
-
-        const customTh = this._getNodeThickness(key, pfx) || this._getNodeThickness(cleanKey, pfx) || this._getNodeThickness(name, pfx) || this._getNodeThickness(role, pfx);
-        let defaultTh = rulesMToMm(rawThickness);
-        if (matchedKey === "PLECY" || matchedKey === "BACK" || role === "BACK_PANEL") {
-            if (!rawThickness || rawThickness > 0.010) defaultTh = 3.0;
-        }
-        const thickness = customTh || defaultTh;
-
-        const leftThick  = this._getNodeThickness("BOK_L", pfx) || this._getNodeThickness("SIDE_LEFT", pfx) || this._getNodeThickness("LEFT_SIDE_PANEL", pfx) || 18;
-        const rightThick = this._getNodeThickness("BOK_P", pfx) || this._getNodeThickness("SIDE_RIGHT", pfx) || this._getNodeThickness("RIGHT_SIDE_PANEL", pfx) || 18;
-        const innerWidth = W - leftThick - rightThick;
-        const midShift   = (leftThick - rightThick) / 2;
-
-        if (matchedKey === "BOK_L" || matchedKey === "SIDE_LEFT" || role === "LEFT_SIDE_PANEL") {
-            return {
-                thickness,
-                dim: { x: H + pYPlus + pYMinus, y: D + pXMinus + pXPlus, z: thickness },
-                loc: { x: -W / 2 + thickness / 2 - shiftX, y: (pXPlus - pXMinus) / 2, z: H / 2 + (pYPlus - pYMinus) / 2 }
-            };
-        }
-        if (matchedKey === "BOK_P" || matchedKey === "SIDE_RIGHT" || role === "RIGHT_SIDE_PANEL") {
-            return {
-                thickness,
-                dim: { x: H + pYPlus + pYMinus, y: D + pXMinus + pXPlus, z: thickness },
-                loc: { x: W / 2 - thickness / 2 + shiftX, y: (pXPlus - pXMinus) / 2, z: H / 2 + (pYPlus - pYMinus) / 2 }
-            };
-        }
-        if (matchedKey === "WIENIEC_D" || matchedKey === "BOTTOM" || role === "BOTTOM_PANEL") {
-            return {
-                thickness,
-                dim: { x: innerWidth + pYMinus + pYPlus, y: D + pXMinus + pXPlus, z: thickness },
-                loc: { x: midShift + (pYPlus - pYMinus) / 2, y: (pXPlus - pXMinus) / 2, z: thickness / 2 - shiftZ }
-            };
-        }
-        const isWieniecG = matchedKey === "WIENIEC_G" || matchedKey === "TOP" || (role === "TOP_PANEL" && !key.endsWith("_T2"));
-        const isWieniecGT2 = matchedKey === "WIENIEC_G_T2" || (role === "TOP_PANEL" && key.endsWith("_T2"));
-
-        if (isWieniecG || isWieniecGT2) {
-            const mode = ctx.top_panel_mode || 'FULL';
-            const trWidth = ctx.traverse_width || 80;
-
-            if (mode === 'TRAVERSE_H') {
-                const isFront = !isWieniecGT2;
-                const baseY = isFront ? (-D / 2 + trWidth / 2) : (D / 2 - trWidth / 2);
-                return {
-                    thickness,
-                    dim: { x: innerWidth + pYMinus + pYPlus, y: trWidth + pXMinus + pXPlus, z: thickness },
-                    loc: {
-                        x: midShift + (pYPlus - pYMinus) / 2,
-                        y: baseY + (pXPlus - pXMinus) / 2,
-                        z: H - thickness / 2 + shiftZ
-                    }
-                };
-            } else if (mode === 'TRAVERSE_V') {
-                const isFront = !isWieniecGT2;
-                const baseY = isFront ? (-D / 2 + thickness / 2) : (D / 2 - thickness / 2);
-                return {
-                    thickness,
-                    dim: { x: innerWidth + pYMinus + pYPlus, y: thickness + pXMinus + pXPlus, z: trWidth },
-                    loc: {
-                        x: midShift + (pYPlus - pYMinus) / 2,
-                        y: baseY + (pXPlus - pXMinus) / 2,
-                        z: H - trWidth / 2 + shiftZ
-                    },
-                    lcs: {
-                        mapping: { X: 'x', Y: 'z', Z: 'y' },
-                        rotation: [180, 0, 0],
-                        faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
-                    }
-                };
-            } else {
-                if (isWieniecGT2) return null;
-                return {
-                    thickness,
-                    dim: { x: innerWidth + pYMinus + pYPlus, y: D + pXMinus + pXPlus, z: thickness },
-                    loc: { x: midShift + (pYPlus - pYMinus) / 2, y: (pXPlus - pXMinus) / 2, z: H - thickness / 2 + shiftZ }
-                };
-            }
-        }
-        if (matchedKey === "PLECY" || matchedKey === "BACK" || role === "BACK_PANEL") {
-            const defaultGroove = ctx.back_groove_depth || 11;
-            const overlapLeft   = readBackEdgeOffset(this.offsets, name, '-X', defaultGroove, pfx);
-            const overlapRight  = readBackEdgeOffset(this.offsets, name, '+X', defaultGroove, pfx);
-            const overlapBottom = readBackEdgeOffset(this.offsets, name, '-Y', defaultGroove, pfx);
-            const overlapTop    = readBackEdgeOffset(this.offsets, name, '+Y', defaultGroove, pfx);
-
-            const bottomThick = this._getNodeThickness("WIENIEC_D", pfx) || this._getNodeThickness("BOTTOM", pfx) || 18;
-            const topThick    = this._getNodeThickness("WIENIEC_G", pfx) || this._getNodeThickness("TOP", pfx) || 18;
-            const innerH      = H - bottomThick - topThick;
-
-            const backW       = innerWidth + overlapLeft + overlapRight;
-            const backH       = innerH + overlapBottom + overlapTop;
-            const backY       = D / 2 + thickness / 2 - backOffset + shiftY;
-            return {
-                thickness,
-                dim: { x: backW, y: thickness, z: backH },
-                loc: {
-                    x: midShift + (overlapRight - overlapLeft) / 2,
-                    y: backY,
-                    z: bottomThick - overlapBottom + backH / 2
-                }
-            };
-        }
-
-        console.warn(`[BaseCabinetEngine] Nieznany węzeł geometrii: "${key}" (role: "${role}")`);
-        return null;
+    if (t === 'korpus_skosny_dach' || t.includes('skosny_dach') || t.includes('skosny-dach')) {
+        return korpusSkosnyRulesData;
     }
-
-    protected _getNodeThickness(partKey: string, zonePrefix: string = ""): number {
-        const doc = ContextManager.instance.document;
-        let cntNode: any = null;
-
-        if (this._targetContainer) {
-            const cId = this._targetContainer.id;
-            cntNode = doc ? doc.findNode(cId) : null;
-            if (!cntNode && this._targetContainer.children) {
-                cntNode = this._targetContainer;
-            }
-        }
-
-        if (!cntNode && doc) {
-            const cnt = doc.activeEntity;
-            cntNode = cnt ? (cnt.type === 'container' ? doc.findNode(cnt.id) : doc.findNode(cnt.id)?.parent) : null;
-        }
-
-        if (cntNode && cntNode.children) {
-            const targetUpper = partKey.toUpperCase();
-            const prefixedTarget = (zonePrefix && !targetUpper.startsWith(zonePrefix.toUpperCase()))
-                ? (zonePrefix + partKey).toUpperCase()
-                : targetUpper;
-            const cleanTarget = partKey.replace(/^(B_|M_|T_)/i, '').toUpperCase();
-
-            const child = cntNode.children.find((c: any) => {
-                const p = c.domainData || c;
-                if (!p) return false;
-                const pName = (p.name || '').toUpperCase();
-                const pRole = (p.role || '').toUpperCase();
-                const pKey = ((p as any).key || '').toUpperCase();
-                const pZone = p.zonePrefix || '';
-
-                if (zonePrefix && pZone && pZone !== zonePrefix) {
-                    return false;
-                }
-
-                return pKey === prefixedTarget || pName === prefixedTarget || pKey === targetUpper || pName === targetUpper ||
-                       (pZone === zonePrefix && (pRole === targetUpper || pRole === cleanTarget));
-            });
-
-            if (child) {
-                const p = child.domainData || child;
-                if (p.custom_properties && p.custom_properties.thickness_mm !== undefined) {
-                    return p.custom_properties.thickness_mm;
-                }
-                if (p.custom_properties && p.custom_properties.thickness !== undefined) {
-                    const ct = p.custom_properties.thickness;
-                    return nmToMm(ct);
-                }
-                if (p.thickness) {
-                    const th = p.thickness;
-                    return nmToMm(th);
-                }
-            }
-        }
-
-        const rules = this.rules || this.baseRules;
-        if (!rules) return 18;
-        const comps = getRootSubcomponents(rules);
-        for (const sub of Object.values(comps) as any[]) {
-            const innerComps = sub.subcomponents || {};
-            for (const [key, comp] of Object.entries(innerComps) as [string, any][]) {
-                const cleanKey = key.includes("_") ? key.slice(key.indexOf("_") + 1) : key;
-                if (cleanKey === partKey || comp.role === partKey) {
-                    const rawThick = parseFloat(comp.thickness ?? "0.018");
-                    return rulesMToMm(rawThick);
-                }
-            }
-        }
-        return 0;
+    if (t === 'korpus_skosny' || t === 'korpus-skosny' || t.includes('skosny')) {
+        return korpusSkosnyRulesData;
     }
-
-    protected _collectCabinetGeometry(params: CabinetPlanParams, zoneLayout: ZoneLayout[]): CabinetGeometryPart[] {
-        if (!this.rules) return [];
-        const defaults = this.rules.cabinet_construction_rules?.defaults || {};
-        const rawGroove = defaults.back_groove_depth ?? 0.011;
-        const grooveDepth = rulesMToMm(rawGroove);
-
-        const rawInset = defaults.back_inset !== undefined ? rulesMToMm(defaults.back_inset) : 3;
-        const topPanelMode = params.topPanelMode || params.container?.generatorParams?.topPanelMode || 'FULL';
-        const traverseWidth = params.traverseWidth || params.container?.generatorParams?.traverseWidth || 80;
-
-        const ctx = {
-            sb_width: params.width,
-            sb_height: params.height,
-            sb_depth: params.depth,
-            back_offset_mm: params.backOffsetMm ?? rawInset,
-            back_groove_depth: grooveDepth,
-            top_panel_mode: topPanelMode,
-            traverse_width: traverseWidth
-        };
-
-        const tree = this.rules.model_tree || {};
-        const rootKey = Object.keys(tree)[0];
-        const subcomps = tree[rootKey]?.subcomponents || {};
-        const parts: CabinetGeometryPart[] = [];
-        const isSingleZone = zoneLayout.length === 1 && zoneLayout[0].zoneKey === "SEKCJA_B";
-        const initialPrefix = isSingleZone ? "B_" : "";
-        const initialZoneId = isSingleZone ? "SEKCJA_B" : "";
-        this._buildSubcomponents(subcomps, parts, ctx, zoneLayout, initialPrefix, initialZoneId);
-        return parts;
+    if (t === 'korpus_rogowy90' || t === 'korpus-rogowy90' || t === 'korpusrogowy90' || t.includes('rogowy90')) {
+        return korpusRogowy90RulesData;
     }
+    if (t === 'korpus_rogowy1' || t === 'korpus-rogowy1' || t === 'korpusrogowy1' || (t.includes('rogowy') && !t.includes('90'))) {
+        return korpusRogowy1RulesData;
+    }
+    return korpusRulesData;
 }
 
-function filterRulesForZoneCount(baseRules: any, zoneCount: number): any {
-    const numZones = Math.max(1, Math.min(3, zoneCount));
+function filterRulesForZoneCount(baseRules: any, liczba_stref: number): any {
+    const numZones = Math.max(1, Math.min(3, liczba_stref));
     const rules = JSON.parse(JSON.stringify(baseRules));
     const modelTree = rules.model_tree || {};
     if (!Object.keys(modelTree).length) return rules;
@@ -514,180 +420,32 @@ function flattenSingleZone(zoneNode: any): Record<string, any> {
     return parts;
 }
 
-export class Korpus3Engine extends BaseCabinetEngine {
-    constructor() {
-        super();
-        this.baseRules = korpusRulesData;
-        this.rules = this.baseRules;
-        if (typeof window !== "undefined") {
-            (window as any).korpusRules = this.baseRules;
-        }
-    }
+function resolveCabinetTypeFromRaw(rawType: unknown): CabinetType {
+    const t = String(rawType || 'korpus3').toLowerCase();
+    if (t.includes('skosny_lr_uc') || t.includes('skosny-lr-uc')) return 'korpus_skosny_lr_uc';
+    if (t.includes('skosny_lr') || t.includes('skosny-lr')) return 'korpus_skosny_lr';
+    if (t.includes('skosny_dach') || t.includes('skosny-dach')) return 'korpus_skosny_dach';
+    if (t.includes('skosny')) return 'korpus_skosny';
+    if (t.includes('rogowy90') || t.includes('rogowy_90')) return 'korpus_rogowy90';
+    if (t.includes('rogowy')) return 'korpus_rogowy1';
+    return 'korpus3';
+}
 
-    async loadRules(rulesPath: string = "/A3_smartframe/korpus3_3_rules.json"): Promise<void> {
-        this.baseRules = korpusRulesData;
-        this.rules = this.baseRules;
-        if (typeof window !== "undefined") {
-            (window as any).korpusRules = this.baseRules;
-        }
-    }
-
-    private _loadFallbackRules(): void {
-        this.baseRules = {
-            metadata: {
-                module_type: "SMARTFRAME_KORPUS3",
-                version: "3.0.0"
-            },
-            parameters: {
-                defaults: {
-                    bottom_height: 0.5,
-                    middle_height: 1.2
-                }
-            },
-            model_tree: {
-                root_assembly: {
-                    name: "Korpus3_Global",
-                    type: "Assembly",
-                    subcomponents: {
-                        SEKCJA_B: {
-                            name: "Sekcja_Dolna",
-                            type: "Assembly",
-                            role: "ZONE",
-                            zone: {
-                                stack_axis: "Z",
-                                size_mode: "FIXED",
-                                size: 0.5,
-                                prefix: "B_"
-                            },
-                            subcomponents: {
-                                B_SIDE_LEFT: {
-                                    name: "Dol_Bok_L",
-                                    type: "Part",
-                                    role: "LEFT_SIDE_PANEL",
-                                    thickness: 0.018,
-                                    custom_properties: { material: "MDF_SUROWY_18" }
-                                },
-                                B_SIDE_RIGHT: {
-                                    name: "Dol_Bok_P",
-                                    type: "Part",
-                                    role: "RIGHT_SIDE_PANEL",
-                                    thickness: 0.018,
-                                    custom_properties: { material: "MDF_SUROWY_18" }
-                                },
-                                B_BOTTOM: {
-                                    name: "Dol_Wieniec_D",
-                                    type: "Part",
-                                    role: "BOTTOM_PANEL",
-                                    thickness: 0.018,
-                                    custom_properties: { material: "MDF_SUROWY_18" }
-                                },
-                                B_TOP: {
-                                    name: "Dol_Wieniec_G",
-                                    type: "Part",
-                                    role: "TOP_PANEL",
-                                    thickness: 0.018,
-                                    custom_properties: { material: "MDF_SUROWY_18" }
-                                },
-                                B_BACK: {
-                                    name: "Dol_Plecy",
-                                    type: "Part",
-                                    role: "BACK_PANEL",
-                                    thickness: 0.003,
-                                    custom_properties: { material: "HDF_3" }
-                                }
-                            }
-                        },
-                        SEKCJA_M: {
-                            name: "Sekcja_Srodkowa",
-                            type: "Assembly",
-                            role: "ZONE",
-                            zone: {
-                                stack_axis: "Z",
-                                size_mode: "FIXED",
-                                size: 1.2,
-                                prefix: "M_"
-                            },
-                            subcomponents: {
-                                M_SIDE_LEFT: {
-                                    name: "Srodek_Bok_L",
-                                    type: "Part",
-                                    role: "LEFT_SIDE_PANEL",
-                                    thickness: 0.018,
-                                    custom_properties: { material: "MDF_SUROWY_18" }
-                                },
-                                M_SIDE_RIGHT: {
-                                    name: "Srodek_Bok_P",
-                                    type: "Part",
-                                    role: "RIGHT_SIDE_PANEL",
-                                    thickness: 0.018,
-                                    custom_properties: { material: "MDF_SUROWY_18" }
-                                }
-                            }
-                        },
-                        SEKCJA_T: {
-                            name: "Sekcja_Gorna",
-                            type: "Assembly",
-                            role: "ZONE",
-                            zone: {
-                                stack_axis: "Z",
-                                size_mode: "FILL",
-                                size: 0.5,
-                                prefix: "T_"
-                            },
-                            subcomponents: {
-                                T_SIDE_LEFT: {
-                                    name: "Gora_Bok_L",
-                                    type: "Part",
-                                    role: "LEFT_SIDE_PANEL",
-                                    thickness: 0.018,
-                                    custom_properties: { material: "MDF_SUROWY_18" }
-                                },
-                                T_SIDE_RIGHT: {
-                                    name: "Gora_Bok_P",
-                                    type: "Part",
-                                    role: "RIGHT_SIDE_PANEL",
-                                    thickness: 0.018,
-                                    custom_properties: { material: "MDF_SUROWY_18" }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            cabinet_construction_rules: {
-                defaults: {
-                    back_inset: 0.01,
-                    back_groove_depth: 0.011
-                }
-            }
-        };
-        this.rules = this.baseRules;
-        if (typeof window !== "undefined") {
-            (window as any).korpusRules = this.baseRules;
-        }
-    }
-
-    plan(params: CabinetPlanParams): CabinetPlanResult {
-        if (!this.baseRules) {
-            this._loadFallbackRules();
-        }
-        this._targetContainer = params.container || null;
-        const zoneCount = Math.max(1, Math.min(3, params.zoneCount));
-        this.rules = filterRulesForZoneCount(this.baseRules, zoneCount);
-
-        const defaults = this.baseRules.parameters?.defaults || {};
-        const defB = rulesMToMm(defaults.bottom_height ?? 0.5);
-        const defM = rulesMToMm(defaults.middle_height ?? 1.2);
-
-        const bottomH = params.bottomHeight ?? defB;
-        const middleH = params.middleHeight ?? defM;
-
-        const zones = this._computeZoneLayout(zoneCount, params.height, bottomH, middleH);
-        this.offsets = params.offsets || {};
-
-        return {
-            parts: this._collectCabinetGeometry(params, zones),
-            zones
-        };
-    }
+/**
+ * Jedno wejście planowania korpusu: kanoniczne DTO → CabinetPlanResult.
+ * Bez klas, bez trwałego stanu — odpowiednik dawnego Korpus3Engine.plan().
+ */
+export function planCabinet(rawParams: CabinetPlanParams = {}): CabinetPlanResult {
+    const norm = normalizeCabinetParams(rawParams);
+    const containerParams = rawParams.container?.generatorParams;
+    // `container` to węzeł CAD, nie część DTO — strażnik musi zajrzeć głębiej,
+    // bo tam realnie leżą zapisane parametry (górny poziom jest zawsze kanoniczny).
+    assertCanonicalCabinetParams(containerParams);
+    norm.typ_korpusu = resolveCabinetTypeFromRaw(rawParams.typ_korpusu ?? containerParams?.type);
+    const dims: CabinetDimensions_mm = {
+        szerokosc_mm: norm.szerokosc_mm,
+        wysokosc_mm: norm.wysokosc_mm,
+        glebokosc_mm: norm.glebokosc_mm
+    };
+    return calculateCabinetPlan(dims, norm);
 }

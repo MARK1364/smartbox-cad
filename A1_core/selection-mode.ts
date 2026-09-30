@@ -17,7 +17,7 @@ export const MODULE_SELECTION_MODES: Record<string, SelectionMode> = {
     'tab-c1-cnc': 'subgeometry',
     'tab-n1-nesting': 'object',
     'tab-a4-smartpanel': 'subgeometry',
-    'tab-a2-smartbox': 'subgeometry',
+    'tab-a2-bloki': 'subgeometry',
     'tab-a3-smartframe': 'object',
     'tab-a7-material': 'object',
     'tab-a8-pmi': 'subgeometry',

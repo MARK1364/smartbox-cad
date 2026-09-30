@@ -345,7 +345,7 @@ export function freeAnchorRef(worldPoint: Vec3): PMIAnchorRef {
 
 /**
  * Przy tworzeniu wymiaru: przyciąga kliknięcie na ścianie do najbliższego narożnika
- * lub końca krawędzi OCCT, żeby kotwica przeżyła przebudowę geometrii.
+ * lub końca krawędzi formatki, żeby kotwica przeżyła przebudowę geometrii.
  */
 export function snapWorldPointToPanelGeometry(
     scene: any,
@@ -464,7 +464,7 @@ export interface EdgeAnchorPair {
 }
 
 /**
- * Dla krawędzi wykrytej na ścianie: jeśli istnieje odpowiadająca krawędź OCCT,
+ * Dla krawędzi wykrytej na ścianie: jeśli istnieje odpowiadająca krawędź B-rep,
  * zwraca kotwice EDGE zamiast FACE.
  */
 export function tryBuildEdgeAnchorsFromRootPoints(

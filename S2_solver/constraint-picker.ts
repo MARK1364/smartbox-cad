@@ -25,6 +25,7 @@ import {
 } from './constraint-geometry.js';
 import { makeAnchor, type AnchorKind, type ConstraintAnchor } from './constraint-types.js';
 import type { Vec3 as SolverVec3 } from './core/math3d.js';
+import { makeDatumAnchor, parseDatumPlaneName } from './datum-planes.js';
 
 export interface ActiveConstraintPicker {
     label: string;
@@ -190,13 +191,13 @@ function buildFaceAnchor(targetNode: CADNode, data: any): ConstraintAnchor | nul
         wn ? { x: wn.x, y: wn.y, z: wn.z } : null,
     );
 
-    let faceName = '';
+    // Bez aliasów: nierozpoznana nazwa → brak anchoru (null), nie cichy fallback.
+    let faceName: string | null = null;
     if (data.face) {
-        faceName = String(data.face);
         try {
-            faceName = normalizeFaceName(faceName);
+            faceName = normalizeFaceName(String(data.face));
         } catch {
-            /* zostaw alias (front/left/…) */
+            faceName = null;
         }
     }
 
@@ -410,16 +411,28 @@ export function handleConstraintPickEvent(type: string, data: any): boolean {
     }
 
     if (picker.expectedKind === 'FACE') {
+        const isDatum = type === 'select' && data?.datumPlane;
         const isFace = type === 'select' && (data?.face || data?.worldPoint);
         const isEdge = type === 'select-edge' && data?.worldPoint;
-        if (!isFace && !isEdge) {
+        if (!isDatum && !isFace && !isEdge) {
             return false;
         }
+
+        if (isDatum) {
+            const name = parseDatumPlaneName(data.datumPlane);
+            if (!name) {
+                ContextManager.instance.appAPI?.setStatus?.('Nieznana płaszczyzna datum.', true);
+                return true;
+            }
+            finish(makeDatumAnchor(name));
+            return true;
+        }
+
         const node = nodeFromPickData(data);
         const target = resolveBindingTarget(node);
         if (!target) {
             ContextManager.instance.appAPI?.setStatus?.(
-                'Wskaż ścianę formatki albo krawędź korpusu.',
+                'Wskaż ścianę formatki, krawędź korpusu albo płaszczyznę datum (Top/Front/Right).',
                 true,
             );
             return true;

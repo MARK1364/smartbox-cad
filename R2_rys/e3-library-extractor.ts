@@ -11,17 +11,15 @@ import { CADNode } from '../A1_core/cad-node/cad-node';
 import { DrawingProjectExtractor, LIVE_PROJECT_STORAGE_KEY } from './drawing-project-extractor';
 import { syncGeometrySnapshots } from './e3-geometry-snapshot';
 
-export const E3_LIBRARY_STORAGE_KEY = 'smartbox_cad_e3_library_v1';
-export const E3_SYNC_CHANNEL_NAME = 'smartbox_cad_e3_sync';
+export const E3_LIBRARY_STORAGE_KEY = 'bloki_cad_e3_library_v1';
+export const E3_SYNC_CHANNEL_NAME = 'bloki_cad_e3_sync';
 
-export function toMm(val: any, defaultVal: number = 0): number {
+/** Wymiary modelu CAD są w nm — jawne wejście, bez progu heurystyki. */
+export function modelNmToMm(val: any, defaultVal: number = 0): number {
     if (val === null || val === undefined) return defaultVal;
     const num = typeof val === 'number' ? val : parseFloat(val);
-    if (isNaN(num)) return defaultVal;
-    if (Math.abs(num) > 10000) {
-        return Math.round(num / 1000000);
-    }
-    return Math.round(num);
+    if (!Number.isFinite(num)) return defaultVal;
+    return Math.round(num / 1_000_000);
 }
 
 export class E3LibraryExtractor {
@@ -130,9 +128,9 @@ export class E3LibraryExtractor {
         const isPanel = nodeType === NodeType.PART || domainData?.type === 'panel' || (node as any).type === 'panel';
 
         if (isContainer) {
-            const width = toMm(domainData?.width ?? (node as any).width, 800);
-            const height = toMm(domainData?.height ?? (node as any).height, 720);
-            const depth = toMm(domainData?.depth ?? (node as any).depth, 560);
+            const width = modelNmToMm(domainData?.width ?? (node as any).width, 800);
+            const height = modelNmToMm(domainData?.height ?? (node as any).height, 720);
+            const depth = modelNmToMm(domainData?.depth ?? (node as any).depth, 560);
 
             const children: E3LibraryItem[] = [];
             if (node.children && node.children.length > 0) {
@@ -168,9 +166,9 @@ export class E3LibraryExtractor {
                 },
             });
         } else if (isPanel) {
-            const width = toMm(domainData?.width ?? (node as any).width, 600);
-            const height = toMm(domainData?.height ?? (node as any).height, 720);
-            const depth = toMm(domainData?.thickness ?? (node as any).thickness, 18);
+            const width = modelNmToMm(domainData?.width ?? (node as any).width, 600);
+            const height = modelNmToMm(domainData?.height ?? (node as any).height, 720);
+            const depth = modelNmToMm(domainData?.thickness ?? (node as any).thickness, 18);
 
             const cncPrograms = domainData?.cncPrograms || [];
 

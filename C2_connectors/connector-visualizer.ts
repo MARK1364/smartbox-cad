@@ -104,7 +104,11 @@ export class ConnectorVisualizer {
             const other = group.otherObjectId ? doc.findNode?.(group.otherObjectId) : null;
             const parentIsFace = isParentFaceContact(group.faceNormalLocalMm, group.faceName);
             const faceNode = parentIsFace ? parent : other;
-            const faceThick = nmToMm((faceNode?.domainData as any)?.thickness ?? 18_000_000);
+            const rawFaceThick = (faceNode?.domainData as any)?.thickness;
+            const faceThick = typeof rawFaceThick === 'number' && Number.isFinite(rawFaceThick) && rawFaceThick > 0
+                ? nmToMm(rawFaceThick)
+                : 0;
+            if (faceThick <= 0) continue;
 
             for (const conn of group.connectors) {
                 const segs = getSymbolSegments(conn.type, conn.lengthMm, faceThick);

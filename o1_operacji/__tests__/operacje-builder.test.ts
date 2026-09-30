@@ -19,7 +19,7 @@ import {
 } from '../operacje-apply.js';
 import { pocketFromEdgeDims, snapDimHandleToEdge, dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound } from '../operacje-placement.js';
 import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
-import '../../A1_core/project-domain.js';
+import '../../src/application/project-domain.js';
 
 function makePanel(w = 600, h = 720, t = 18) {
     return new PanelModel({
@@ -41,6 +41,26 @@ describe('o1_operacji katalog', () => {
         expect(getOperation('rewizja')?.sizeMm).toEqual({ w: 120, h: 80 });
         expect(getOperation('rewizja')?.edge.uMm).toBe(100);
         expect(getOperation('rewizja')?.edge.vMm).toBe(80);
+    });
+
+    it('zwraca niezależne kopie obiektów, chroniąc katalog przed mutacją w pamięci', () => {
+        const op1 = getOperation('przetloczenie')!;
+        op1.insets.l = 999;
+        const op2 = getOperation('przetloczenie')!;
+        expect(op2.insets.l).toBe(60);
+    });
+
+    it('zmiana parametrów na jednym panelu nie wpływa na domyślne parametry kolejnego panelu', () => {
+        const panel1 = makePanel();
+        const panel2 = makePanel();
+        // Nałożenie z nadpisaniem na panel 1 (np. zmiana na 70)
+        const feat1 = applyLibraryOperation(panel1, 'przetloczenie', 'FACE_Z_MINUS', { insetLMm: 70 });
+        expect(feat1?.params.insets.l).toBe(70);
+
+        // Nałożenie domyślne na panel 2 (wstrzyknięcie czystego narzędzia z katalogu)
+        const feat2 = applyLibraryOperation(panel2, 'przetloczenie', 'FACE_Z_MINUS');
+        expect(feat2?.params.insets.l).toBe(60);
+        expect(feat2?.params.u).toBe(60);
     });
 });
 
@@ -151,7 +171,7 @@ describe('applyPlanToContainer zachowuje operację z biblioteki', () => {
     it('nie kasuje przetłoczenia przy przebudowie silnika', () => {
         const doc = new ProjectDocument({ name: 'O1' });
         ContextManager.instance.document = doc;
-        const cabinet = doc.createContainer({
+        const cabinet = doc.createAssembly({
             name: 'Szafa',
             width: mmToNm(600),
             height: mmToNm(720),
@@ -207,7 +227,7 @@ describe('wpust silnika vs operacja Smart', () => {
     it('w drzewie drzwi przetłoczenie jest library, wpust engine', () => {
         const doc = new ProjectDocument({ name: 'Drzwi tree' });
         ContextManager.instance.document = doc;
-        const cabinet = doc.createContainer({
+        const cabinet = doc.createAssembly({
             name: 'Szafa',
             width: mmToNm(600),
             height: mmToNm(720),

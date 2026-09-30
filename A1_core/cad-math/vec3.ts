@@ -2,7 +2,7 @@
  * SmartPanel Web — CAD Math: Vec3
  *
  * Ujednolicony wektor 3D dla domeny CAD.
- * Zero zależności od Babylon.js, OCCT, DOM.
+ * Zero zależności od Babylon.js i DOM.
  *
  * Jednostki: zgodne z kontekstem wywołania (zwykle mm w domenie CAD).
  * Kompatybilny z istniejącym Vector3D z cnc-geometry-utils.ts — Vec3

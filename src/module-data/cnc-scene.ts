@@ -4,7 +4,7 @@
  */
 
 import { ProjectDocument } from '../../A1_core/project-document.js';
-import { registerProjectDomain } from '../../A1_core/project-domain.js';
+import { registerProjectDomain } from '../application/project-domain.js';
 import { CommandHistory } from '../../A1_core/commands/command-history.js';
 import { Viewport } from '../../S3_scena/viewport.js';
 import { PanelView } from '../../A4_smartpanel/panel-view.js';
@@ -12,7 +12,6 @@ import { FacePicker } from '../../A1_core/face-picker.js';
 import { SketchPlane } from '../../S1_sketcher/sketch-plane.js';
 import { UIController } from '../../A1_core/ui-controller.js';
 import { NativePanelBuilder } from '../../A4_smartpanel/native-panel-builder.js';
-import { HistoryManager } from '../../A1_core/history-manager.js';
 import { ContextMenu } from '../../A1_core/context-menu.js';
 import { PropertiesManager } from '../../A1_core/properties.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
@@ -21,16 +20,23 @@ import { InteractionManager } from '../../A1_core/interaction/interaction-manage
 import { IntentType } from '../../A1_core/interaction/interaction-types.js';
 import { SelectionTool } from '../../A1_core/interaction/states/selection-tool.js';
 import { SelectProfileTool } from '../../C1_cnc/interaction/select-profile-tool.js';
+import { tx } from '../../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
+import srcTekstRaw from '../src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 import { CNCEngine } from '../../C1_cnc/core/cnc-engine.js';
-import type { BootstrapContext } from '../../A1_core/scene-bootstrap.js';
+import type { CadModuleContext } from '../../A1_core/cad-module-context.js';
 import type { CncWorkpiece } from './types';
 import { hydrateCncWorkpiece } from './cad-extract';
+import { namedCameraView } from '../../S3_scena/named-camera-view.js';
 
 declare const BABYLON: any;
 
-export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<BootstrapContext> {
+export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<CadModuleContext> {
     if (typeof BABYLON === 'undefined') {
-        throw new Error('Brak Babylon.js — odśwież stronę CNC.');
+        throw new Error(tx(srcTekst, 'entry.no_babylon', TX_NS));
     }
 
     const document = new ProjectDocument();
@@ -64,10 +70,9 @@ export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<Boots
     cm.commandHistory = commandHistory;
 
     const panelBuilder = new NativePanelBuilder();
-    const history = new HistoryManager(50);
     const contextMenu = new ContextMenu();
 
-    const ctx: BootstrapContext = {
+    const ctx: CadModuleContext = {
         canvas,
         document,
         viewport,
@@ -77,7 +82,6 @@ export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<Boots
         sketchPlane,
         ui,
         panelBuilder,
-        history,
         contextMenu,
         propertiesManager,
     };
@@ -138,12 +142,12 @@ export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<Boots
     });
 
     CNCEngine.getInstance().initializeIfNeeded(viewport.scene);
-    ui.setStatus('CNC — formatka na scenie. Utwórz program, potem wskaż cechy.', false);
+    ui.setStatus(tx(srcTekst, 'moddata.cnc_scene', TX_NS), false);
 
     return ctx;
 }
 
-export function mountCncWorkpiece(ctx: BootstrapContext, workpiece: CncWorkpiece): any {
+export function mountCncWorkpiece(ctx: CadModuleContext, workpiece: CncWorkpiece): any {
     clearMountedPanels(ctx);
 
     const panel = hydrateCncWorkpiece(ctx.document, workpiece);
@@ -152,6 +156,9 @@ export function mountCncWorkpiece(ctx: BootstrapContext, workpiece: CncWorkpiece
 
     const meshData = ctx.panelBuilder.build(panel);
     view.updateMesh(meshData);
+    if (typeof (view as any)._updateMaterialAppearance === 'function') {
+        (view as any)._updateMaterialAppearance();
+    }
     view.lastWidth = panel.width;
     view.lastHeight = panel.height;
     view.lastThickness = panel.thickness;
@@ -178,7 +185,7 @@ export function mountCncWorkpiece(ctx: BootstrapContext, workpiece: CncWorkpiece
     return panel;
 }
 
-function clearMountedPanels(ctx: BootstrapContext): void {
+export function clearMountedPanels(ctx: CadModuleContext): void {
     for (const [panel, view] of [...ctx.panelViews.entries()]) {
         try {
             view.dispose();
@@ -190,7 +197,7 @@ function clearMountedPanels(ctx: BootstrapContext): void {
     }
 }
 
-export function frameCameraOnPanel(ctx: BootstrapContext, panel: any): void {
+export function frameCameraOnPanel(ctx: CadModuleContext, panel: any): void {
     const view = ctx.panelViews.get(panel);
     const camera = ctx.viewport?.camera;
     if (!view?.root || !camera) return;
@@ -212,37 +219,36 @@ function applyNamedView(viewport: Viewport, viewName: string): void {
     const camera = viewport.camera;
     if (!camera) return;
     const key = String(viewName || '').toUpperCase();
+    let named: ReturnType<typeof namedCameraView> | null = null;
     if (key.includes('Z_PLUS') || key === 'FRONT' || key === 'TOP_FACE') {
-        camera.alpha = Math.PI / 2;
-        camera.beta = Math.PI / 2;
+        named = namedCameraView('front');
     } else if (key.includes('Z_MINUS') || key === 'BACK') {
-        camera.alpha = -Math.PI / 2;
-        camera.beta = Math.PI / 2;
+        named = namedCameraView('back');
     } else if (key.includes('Y_PLUS') || key === 'TOP') {
-        camera.alpha = -Math.PI / 2;
-        camera.beta = 0.001;
+        named = namedCameraView('top');
     } else if (key.includes('Y_MINUS') || key === 'BOTTOM') {
-        camera.alpha = -Math.PI / 2;
-        camera.beta = Math.PI - 0.001;
+        named = namedCameraView('bottom');
     } else if (key.includes('X_MINUS') || key === 'LEFT') {
-        camera.alpha = Math.PI;
-        camera.beta = Math.PI / 2;
+        named = namedCameraView('left');
     } else if (key.includes('X_PLUS') || key === 'RIGHT') {
-        camera.alpha = 0;
-        camera.beta = Math.PI / 2;
+        named = namedCameraView('right');
     }
+    if (!named) return;
+    camera.alpha = named.alpha;
+    camera.beta = named.beta;
+    if (camera.upVector?.set) camera.upVector.set(named.up.x, named.up.y, named.up.z);
 }
 
-function lookAtSelectedFace(ctx: BootstrapContext): void {
+function lookAtSelectedFace(ctx: CadModuleContext): void {
     const faceMesh = ctx.facePicker.selectedFace;
     const camera = ctx.viewport.camera;
     if (!faceMesh || faceMesh.isDisposed?.() || !camera) {
-        ctx.ui.setStatus('Najpierw kliknij ścianę formatki', true);
+        ctx.ui.setStatus(tx(srcTekst, 'moddata.click_wall', TX_NS), true);
         return;
     }
     const faceName = faceMesh.metadata?.faceName;
     const panel = faceMesh.metadata?.panelModel || ctx.document.activeEntity;
     if (panel) frameCameraOnPanel(ctx, panel);
     if (faceName) applyNamedView(ctx.viewport, faceName);
-    ctx.ui.setStatus(`Widok normalny: ${faceName || 'ściana'}`, true);
+    ctx.ui.setStatus(tx(srcTekst, 'moddata.view_normal', TX_NS, { face: faceName || tx(srcTekst, 'moddata.wall_default', TX_NS) }), true);
 }

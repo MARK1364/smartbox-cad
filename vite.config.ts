@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const ASSET_MATERIALS_DIRS = [
+  path.resolve('C:\\Users\\ADM\\Desktop\\render_konfigurator\\asety_eger'),
   path.resolve('..', '..', 'asset_materials', 'Eger asset drewno', 'eger_drewno'),
   path.resolve('..', '..', 'asset_materials', 'Eger asset  kolor', 'eger_kolor'),
   path.resolve('..', '..', 'asset_materials', 'Eger asset mineral', 'eger_mineral'),
@@ -34,17 +35,19 @@ function serveEggerTexturesPlugin() {
       server.middlewares.use((req: any, res: any, next: any) => {
         if (req.url && req.url.startsWith('/textures/egger/')) {
           const filename = decodeURIComponent(req.url.replace('/textures/egger/', '').split('?')[0]);
-          const baseName = filename.replace(/_Albedo\.png$/i, '').toLowerCase();
+          const baseName = filename.replace(/(_Albedo)?\.(png|jpg|jpeg|webp)$/i, '').toLowerCase();
 
           for (const dir of ASSET_MATERIALS_DIRS) {
             const found = findFileRecursive(dir, (f) => {
               const fLow = f.toLowerCase();
               return f === filename ||
                      fLow === filename.toLowerCase() ||
-                     (fLow.includes(baseName) && fLow.includes('albedo'));
+                     (fLow.includes(baseName) && (fLow.includes('albedo') || fLow.endsWith('.png') || fLow.endsWith('.webp') || fLow.endsWith('.jpg')));
             });
             if (found) {
-              res.setHeader('Content-Type', 'image/png');
+              const ext = path.extname(found).toLowerCase();
+              const mime = ext === '.webp' ? 'image/webp' : (ext === '.jpg' || ext === '.jpeg') ? 'image/jpeg' : 'image/png';
+              res.setHeader('Content-Type', mime);
               res.setHeader('Cache-Control', 'public, max-age=86400');
               return fs.createReadStream(found).pipe(res);
             }
@@ -64,23 +67,25 @@ export default defineConfig({
   assetsInclude: ['**/*.glb'],
   plugins: [react(), serveEggerTexturesPlugin()],
   server: {
-    port: 8080
+    port: 8085
   },
   build: {
     target: 'esnext',
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('index.html', import.meta.url)),
+        landing: fileURLToPath(new URL('landing.html', import.meta.url)),
         nesting: fileURLToPath(new URL('nesting.html', import.meta.url)),
         e3_drawing: fileURLToPath(new URL('e3_drawing.html', import.meta.url)),
         draw: fileURLToPath(new URL('draw.html', import.meta.url)),
         report: fileURLToPath(new URL('report.html', import.meta.url)),
-        cnc: fileURLToPath(new URL('cnc.html', import.meta.url))
+        cnc: fileURLToPath(new URL('cnc.html', import.meta.url)),
+        dag: fileURLToPath(new URL('dag.html', import.meta.url))
       }
     }
   },
   test: {
-    setupFiles: ['./A1_core/project-domain.ts'],
+    setupFiles: ['./test/setup-storage.ts', './src/application/project-domain.ts'],
   }
 })
 

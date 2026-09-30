@@ -1,0 +1,89 @@
+{
+  "handles": {
+    "title": {
+      "pl": "Uchwyty Meblowe (SmartPart)",
+      "en": "Furniture Handles (SmartPart)",
+      "de": "Möbelgriffe (SmartPart)"
+    },
+    "catalog_subtitle": {
+      "pl": "Przeciągnij uchwyt na formatkę (front / drzwi)",
+      "en": "Drag handle onto a panel (front / door)",
+      "de": "Griff auf Frontplatte / Tür ziehen"
+    },
+    "edit_title": {
+      "pl": "Pozycja & Wymiary Uchwytu",
+      "en": "Handle Position & Dimensions",
+      "de": "Griffposition & Maße"
+    },
+    "total_length": {
+      "pl": "Szerokość całkowita:",
+      "en": "Total width / length:",
+      "de": "Gesamtbreite / Länge:"
+    },
+    "hole_distance": {
+      "pl": "Rozstaw otworów C-C:",
+      "en": "Hole distance C-C:",
+      "de": "Bohrabstand C-C:"
+    },
+    "overhang_label": {
+      "pl": "Wystawanie poza otwory:",
+      "en": "Overhang beyond holes:",
+      "de": "Überstand über Bohrungen:"
+    },
+    "orientation": {
+      "pl": "Orientacja:",
+      "en": "Orientation:",
+      "de": "Ausrichtung:"
+    },
+    "horizontal": {
+      "pl": "Poziomo",
+      "en": "Horizontal",
+      "de": "Horizontal"
+    },
+    "vertical": {
+      "pl": "Pionowo",
+      "en": "Vertical",
+      "de": "Vertikal"
+    },
+    "preset": {
+      "pl": "Szybka pozycja (Preset):",
+      "en": "Quick position (Preset):",
+      "de": "Schnellposition (Preset):"
+    },
+    "presets": {
+      "top_center": { "pl": "Góra-Środek", "en": "Top-Center", "de": "Oben-Mitte" },
+      "center": { "pl": "Środek", "en": "Center", "de": "Mitte" },
+      "bottom_center": { "pl": "Dół-Środek", "en": "Bottom-Center", "de": "Unten-Mitte" },
+      "top_left": { "pl": "Góra-Lewa", "en": "Top-Left", "de": "Oben-Links" },
+      "top_right": { "pl": "Góra-Prawa", "en": "Top-Right", "de": "Oben-Rechts" },
+      "bottom_left": { "pl": "Dół-Lewa", "en": "Bottom-Left", "de": "Unten-Links" },
+      "bottom_right": { "pl": "Dół-Prawa", "en": "Bottom-Right", "de": "Unten-Rechts" },
+      "custom": { "pl": "Własna", "en": "Custom", "de": "Benutzerdefiniert" }
+    },
+    "offset_y": {
+      "pl": "Odsunięcie od góry/dołu:",
+      "en": "Offset from top/bottom:",
+      "de": "Abstand oben/unten:"
+    },
+    "offset_x": {
+      "pl": "Odsunięcie od boku:",
+      "en": "Offset from side:",
+      "de": "Abstand von Seite:"
+    },
+    "depth": {
+      "pl": "Wysunięcie od frontu:",
+      "en": "Projection / depth:",
+      "de": "Vorstand / Tiefe:"
+    },
+    "thickness": {
+      "pl": "Grubość uchwytu:",
+      "en": "Handle thickness:",
+      "de": "Griffstärke:"
+    },
+    "drilling": {
+      "pl": "Generuj nawierty pod śruby (fi 4mm)",
+      "en": "Generate screw drillings (dia 4mm)",
+      "de": "Schraubenbohrungen erzeugen (D 4mm)"
+    }
+  }
+}

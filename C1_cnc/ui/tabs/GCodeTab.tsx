@@ -7,6 +7,15 @@ import { BiessePostprocessor } from '../../postprocessors/biesse-postprocessor.j
 import { WoodWOPPostprocessor } from '../../postprocessors/woodwop-postprocessor.js';
 import { SCMPostprocessor } from '../../postprocessors/scm-postprocessor.js';
 
+import { MachiningRuleEngine } from '../../rules/machining-rule-engine.js';
+import { tx } from '../../../T1_tlumaczenia/core.js';
+import { useLocale } from '../../../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../../../T1_tlumaczenia/types.js';
+import cncTekstRaw from '../../cnc_tekst.json';
+
+const cncTekst = cncTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'cnc';
+
 interface GCodeTabProps {
     program: CNCProgramState;
     onUpdateProgram: (updater: (p: CNCProgramState) => CNCProgramState) => void;
@@ -16,6 +25,7 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
     const [gcodeText, setGcodeText] = useState<string>('');
     const [statusMsg, setStatusMsg] = useState<string>('');
     const [showPreview, setShowPreview] = useState<boolean>(true);
+    useLocale();
 
     const getExtension = () => {
         if (program.postprocessor === 'WoodWOP') return '.mpr';
@@ -26,7 +36,7 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
 
     const getFilename = () => {
         const ext = getExtension();
-        const base = program.targetPanelName || program.name || 'program';
+        const base = program.targetPanelLabel || program.id || 'program';
         return `${base}_${program.postprocessor || 'Mach3'}${ext}`;
     };
 
@@ -35,18 +45,18 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
         const features = program.features || [];
 
         if (features.length === 0) {
-            const msg = '(Brak operacji na liście formatki. Kliknij "Wykryj cechy" w zakładce Operacje)';
+            const msg = tx(cncTekst, 'gcode.empty_notice', TX_NS);
             setGcodeText(msg);
             return '';
         }
 
-        // Automatyczne dopasowanie narzędzia domyślnego jeśli jeszcze nie wybrano
-        const allTools = engine.toolLibrary.getAllTools();
-        const defaultTool = allTools[0] || { id: 'tool_1', name: 'Wiertło 5mm', diameter: 5 };
-        
+        // Automatyczne dopasowanie narzędzia za pomocą inteligentnych reguł technologicznych AFR
+        const ruleEngine = MachiningRuleEngine.getInstance();
         const preparedFeatures = features.map(f => {
             if (!f.toolId) {
-                return { ...f, toolId: defaultTool.id };
+                const resolution = ruleEngine.resolveFeatureMachining(f, engine.toolLibrary);
+                const assignedId = resolution.tool?.id || engine.toolLibrary.getAllTools()[0]?.id || 'tool_1';
+                return { ...f, toolId: assignedId };
             }
             return f;
         });
@@ -54,13 +64,14 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
         const dims = engine.getDimensionsMM(program.targetPanel);
         engine.wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
 
-        const project = engine.camProcessor.processProject({
-            projectName: program.name || 'Program_001',
+        const clProgram = engine.camProcessor.buildCLProgram({
+            projectName: program.name || tx(cncTekst, 'gcode.default_project_name', TX_NS),
             wcsOrigin: engine.wcsManager.getOrigin(),
             wcsName: program.wcsName || 'G55',
             features: preparedFeatures,
             toolAssignments: program.toolAssignments || {},
-            postprocessor: program.postprocessor || 'Mach3'
+            postprocessor: program.postprocessor || 'Mach3',
+            workpieceDimensions: dims
         });
 
         let post: any;
@@ -71,7 +82,7 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
         else if (postName === 'Fanuc') post = new FanucPostprocessor();
         else post = new Mach3Postprocessor();
 
-        const nc = post.generateNcCode(project);
+        const nc = post.generateNcCode(clProgram);
         setGcodeText(nc);
         return nc;
     };
@@ -91,24 +102,26 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
                     setTimeout(() => setStatusMsg(''), 3000);
                 }
             } else {
-                const manualPath = prompt('Wpisz ścieżkę folderu docelowego:', program.projectPath || 'C:\\CNC_OUTPUT\\');
+                const manualPath = prompt(tx(cncTekst, 'gcode.dir_prompt', TX_NS), program.projectPath || 'C:\\CNC_OUTPUT\\');
                 if (manualPath !== null) {
                     onUpdateProgram(p => ({ ...p, projectPath: manualPath }));
                 }
             }
         } catch (err: any) {
             if (err.name !== 'AbortError') {
-                console.warn('Wybór katalogu anulowany lub nieobsługiwany', err);
+                console.warn(tx(cncTekst, 'gcode.dir_cancelled', TX_NS), err);
             }
         }
     };
 
     const handleSaveFile = async () => {
-        let content = gcodeText;
-        if (!content || content.startsWith('(Brak operacji')) {
-            content = generateCode();
+        // Strict: pustkę wykrywamy po danych (lista cech), nie po tekście komunikatu.
+        if ((program.features || []).length === 0) {
+            generateCode();
+            return;
         }
-        if (!content || content.startsWith('(Brak operacji')) return;
+        const content = gcodeText || generateCode();
+        if (!content) return;
 
         const filename = getFilename();
 
@@ -117,18 +130,18 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
                 const handle = await (window as any).showSaveFilePicker({
                     suggestedName: filename,
                     types: [{
-                        description: `Plik Maszynowy (${getExtension()})`,
+                        description: tx(cncTekst, 'gcode.machine_file', TX_NS, { ext: getExtension() }),
                         accept: { 'text/plain': [getExtension(), '.nc', '.tap', '.txt'] }
                     }]
                 });
                 const writable = await handle.createWritable();
                 await writable.write(content);
                 await writable.close();
-                setStatusMsg(`✓ Zapisano plik: ${handle.name}`);
+                setStatusMsg(tx(cncTekst, 'gcode.saved', TX_NS, { name: handle.name }));
                 setTimeout(() => setStatusMsg(''), 3500);
                 return;
             } catch (err: any) {
-                if (err.name === 'AbortError') return;
+                if (err?.name === 'AbortError') return;
             }
         }
 
@@ -140,47 +153,48 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
-        setStatusMsg(`✓ Zapisano plik: ${filename}`);
+        setStatusMsg(tx(cncTekst, 'gcode.saved', TX_NS, { name: filename }));
         setTimeout(() => setStatusMsg(''), 3500);
     };
 
     const handleCopyCode = async () => {
-        if (!gcodeText || gcodeText.startsWith('(Brak operacji')) return;
+        // Strict: jak wyżej — decyzja po danych, nie po tekście.
+        if ((program.features || []).length === 0 || !gcodeText) return;
         try {
             await navigator.clipboard.writeText(gcodeText);
-            setStatusMsg('✓ Skopiowano kod do schowka');
+            setStatusMsg(tx(cncTekst, 'gcode.copied', TX_NS));
             setTimeout(() => setStatusMsg(''), 2500);
         } catch (err) {
-            console.error('Błąd kopiowania:', err);
+            console.error(tx(cncTekst, 'gcode.copy_error', TX_NS), err);
         }
     };
 
     return (
         <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ fontSize: '11px', color: '#eeeeee', borderBottom: '1px solid #444', paddingBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>💾 Generowanie Kodu NC</span>
+                <span>{tx(cncTekst, 'gcode.title', TX_NS)}</span>
                 <span style={{ fontSize: '10px', color: '#4f80bd', fontWeight: 600 }}>{program.postprocessor || 'Mach3'}</span>
             </div>
 
             {/* Informacja o parametrach generowania */}
             <div style={{ background: '#2d2d2d', border: '1px solid #111', borderRadius: '3px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#aaa' }}>Postprocesor (Ustawienia):</span>
+                    <span style={{ color: '#aaa' }}>{tx(cncTekst, 'gcode.postprocessor', TX_NS)}</span>
                     <span style={{ color: '#60a5fa', fontWeight: 600 }}>{program.postprocessor || 'Mach3'} ({getExtension()})</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#aaa' }}>Plik wyjściowy:</span>
+                    <span style={{ color: '#aaa' }}>{tx(cncTekst, 'gcode.output_file', TX_NS)}</span>
                     <span style={{ color: '#4ade80', fontFamily: 'monospace', fontSize: '10px' }}>{getFilename()}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#aaa' }}>Operacje formatki:</span>
-                    <span style={{ color: '#eee' }}>{program.features?.length || 0} szt.</span>
+                    <span style={{ color: '#aaa' }}>{tx(cncTekst, 'gcode.panel_operations', TX_NS)}</span>
+                    <span style={{ color: '#eee' }}>{program.features?.length || 0}</span>
                 </div>
             </div>
 
             {/* Folder / Ścieżka Zapisu */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <label style={{ fontSize: '11px', color: '#cccccc' }}>Folder / Ścieżka Zapisu:</label>
+                <label style={{ fontSize: '11px', color: '#cccccc' }}>{tx(cncTekst, 'gcode.save_folder', TX_NS)}</label>
                 <div style={{ display: 'flex', gap: '4px' }}>
                     <input
                         type="text"
@@ -195,7 +209,7 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
                             outline: 'none',
                             fontFamily: 'monospace'
                         }}
-                        placeholder="Wpisz lub wybierz folder..."
+                        placeholder={tx(cncTekst, 'gcode.folder_placeholder', TX_NS)}
                         value={program.projectPath || ''}
                         onChange={(e) => onUpdateProgram(p => ({ ...p, projectPath: e.target.value }))}
                     />
@@ -214,9 +228,9 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
                             gap: '4px',
                             whiteSpace: 'nowrap'
                         }}
-                        title="Wybierz folder docelowy"
+                        title={tx(cncTekst, 'gcode.pick_folder_title', TX_NS)}
                     >
-                        📁 Wybierz
+                        {tx(cncTekst, 'gcode.pick_folder', TX_NS)}
                     </button>
                 </div>
             </div>
@@ -241,7 +255,7 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
                         gap: '6px'
                     }}
                 >
-                    💾 Zapisz Plik ({getExtension()})
+                    {tx(cncTekst, 'gcode.save_file', TX_NS, { ext: getExtension() })}
                 </button>
                 <button
                     onClick={handleCopyCode}
@@ -257,7 +271,7 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
                         alignItems: 'center',
                         gap: '4px'
                     }}
-                    title="Kopiuj kod do schowka"
+                    title={tx(cncTekst, 'gcode.copy_code', TX_NS)}
                 >
                     📋 Kopiuj
                 </button>
@@ -285,8 +299,8 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
                     onClick={() => setShowPreview(!showPreview)} 
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontSize: '10px', color: '#aaa' }}
                 >
-                    <span>📄 Podgląd Kodu ({gcodeText.split('\n').filter(Boolean).length} linii):</span>
-                    <span>{showPreview ? '▲ Ukryj' : '▼ Pokaż'}</span>
+<span>{tx(cncTekst, 'gcode.preview', TX_NS, { n: gcodeText.split('\n').filter(Boolean).length })}</span>
+                <span>{showPreview ? `▲ ${tx(cncTekst, 'gcode.hide', TX_NS)}` : `▼ ${tx(cncTekst, 'gcode.show', TX_NS)}`}</span>
                 </div>
                 {showPreview && (
                     <textarea

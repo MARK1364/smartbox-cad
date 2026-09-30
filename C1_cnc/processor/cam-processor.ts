@@ -11,10 +11,10 @@ import {
     GrooveFeature,
     ContourFeature,
     CNCOperation,
-    ProcessedCAMProject,
     Tool,
     Vector3D
 } from '../dto/cam-dto.js';
+import { CLCommand, CLDataProgram } from '../core/cl-data.js';
 import { ToolLibrary } from './tool-library.js';
 import { createVector3D, vecDistance, vecSub, vecNormalize, vecScale, calculateRadiusOffsetPath, generateEffectiveContourPath } from '../geometry/cnc-geometry-utils.js';
 
@@ -43,21 +43,99 @@ export class CAMProcessor {
     }
 
     /**
-     * Główny punkt wejścia procesora CAM: przygotowuje projekt do generowania G-kodu.
+     * Operacje CNC dla symulatora 3D (CNCOperation[]).
+     * Postprocessory NIE korzystają z tej ścieżki — patrz `buildCLProgram()`.
      */
-    public processProject(project: CAMProject): ProcessedCAMProject {
+    public processProject(project: CAMProject): CNCOperation[] {
         const featuresWithTools = this.assignToolsToFeatures(project.features);
         this.collectAssignmentIssues(featuresWithTools);
-
         const optimizedFeatures = this.optimizeFeatureOrder(featuresWithTools);
-        const operations = this.createCncOperations(optimizedFeatures, project.wcsOrigin);
+        return this.createCncOperations(optimizedFeatures, project.wcsOrigin);
+    }
+
+    /**
+     * Jedyne wejście dla postprocesorów: CLDataProgram (ISO 4343 / APT).
+     *
+     * Budowa idzie tą samą ścieżką co `processProject` (ta sama optymalizacja
+     * kolejności i ta sama geometria), tyle że wynik jest neutralną listą
+     * komend CL zamiast strukturą specyficzną dla symulatora.
+     */
+    public buildCLProgram(project: CAMProject): CLDataProgram {
+        const operations = this.processProject(project);
+        const commands: CLCommand[] = [];
+        const toolIdsUsed: string[] = [];
+        let totalLengthMm = 0;
+        let estimatedTimeSec = 0;
+        let cursor: Vector3D = createVector3D();
+
+        for (const op of operations) {
+            const tool = this.toolLibrary.getTool(op.toolId);
+            const p = op.parameters;
+
+            if (!toolIdsUsed.includes(op.toolId)) toolIdsUsed.push(op.toolId);
+            commands.push({
+                type: 'TOOL_SELECT',
+                toolId: op.toolId,
+                toolDiameter: tool?.diameter,
+                toolName: tool?.name,
+            });
+            commands.push({
+                type: 'SPINDL',
+                spindleRpm: p.spindleRpm,
+                spindleDirection: 'CW',
+            });
+            commands.push({ type: 'FEDRAT', feedRate: p.feedRate });
+
+            if (op.type === 'drill') {
+                const retractR = p.retractR ?? 5.0;
+                // Bezpieczna Z nad materiałem, potem sam cykl G81/G83.
+                const safeZ = op.position.z + retractR;
+                commands.push({ type: 'GOTO', point: { x: op.position.x, y: op.position.y, z: safeZ } });
+                commands.push({
+                    type: 'CYCLE_DRILL',
+                    point: { x: op.position.x, y: op.position.y, z: op.position.z },
+                    drillParams: {
+                        depth: p.depth,
+                        retractR,
+                        type: 'STANDARD',
+                    },
+                    toolDiameter: p.diameter,
+                });
+                totalLengthMm += Math.abs(safeZ - op.position.z);
+                estimatedTimeSec += Math.abs(p.depth) / Math.max(1, p.feedRate) * 60;
+                cursor = { x: op.position.x, y: op.position.y, z: op.position.z };
+                continue;
+            }
+
+            // contour / groove: seria GOTO po moves.
+            const targetZ = op.position.z;
+            const safeZ = Math.max(cursor.z, targetZ) + 5;
+            commands.push({ type: 'GOTO', point: { x: op.position.x, y: op.position.y, z: safeZ } });
+            commands.push({ type: 'GOTO', point: { x: op.position.x, y: op.position.y, z: targetZ } });
+            cursor = { x: op.position.x, y: op.position.y, z: targetZ };
+
+            for (const move of p.moves || []) {
+                if (move.type !== 'line' || !move.endPoint) continue;
+                const e = move.endPoint;
+                const step = vecDistance(cursor, e);
+                commands.push({ type: 'GOTO', point: { x: e.x, y: e.y, z: e.z } });
+                totalLengthMm += step;
+                estimatedTimeSec += step / Math.max(1, p.feedRate) * 60;
+                cursor = { x: e.x, y: e.y, z: e.z };
+            }
+        }
+
+        commands.push({ type: 'STOP' });
 
         return {
             projectName: project.projectName,
+            wcsName: project.wcsName || 'G55',
             wcsOrigin: project.wcsOrigin,
-            wcsName: project.wcsName || "G55",
-            operations,
-            postprocessor: project.postprocessor || "Mach3"
+            commands,
+            totalLengthMm: Math.round(totalLengthMm * 1000) / 1000,
+            estimatedTimeSec: Math.round(estimatedTimeSec * 100) / 100,
+            toolIdsUsed,
+            workpieceDimensions: project.workpieceDimensions,
         };
     }
 

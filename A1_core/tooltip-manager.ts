@@ -12,7 +12,7 @@ export interface ToolHint {
     shortcut?: string;
     confirmKey?: string;
     cancelKey?: string;
-    category?: 'cnc' | 'smartframe' | 'smartbox' | 'smartpanel' | 'general';
+    category?: 'cnc' | 'smartframe' | 'bloki' | 'smartpanel' | 'general';
 }
 
 export class TooltipManager {

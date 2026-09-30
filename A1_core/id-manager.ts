@@ -1,5 +1,5 @@
 /**
- * GLOBAL ID MANAGER — Centralny system identyfikatorów SmartBox (Wersja Web)
+ * GLOBAL ID MANAGER — Centralny system identyfikatorów Bloki (Wersja Web)
  * 
  * Odpowiednik pythonowego skryptu z Blendera.
  * Każda encja na scenie otrzymuje unikalny, hierarchiczny identyfikator SmartID.
@@ -11,7 +11,7 @@
 
 export const EntityType = {
     SMARTFRAME:  "sf",
-    SMARTBOX:    "sb",
+    BLOKI:    "sb",
     PART:        "part",
     EDGE:        "edge",
     FACE:        "face",

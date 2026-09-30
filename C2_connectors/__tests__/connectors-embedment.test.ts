@@ -79,4 +79,11 @@ describe('otwory CNC', () => {
         expect(getFaceHoleDiameterMm('konfirmat_5x50')).toBe(7);
         expect(getEdgeHoleDiameterMm('konfirmat_5x50')).toBe(5);
     });
+
+    it('rzuca błąd przy nieprawidłowej lub zerowej grubości formatki (fail-fast, brak domyślnego 18mm)', () => {
+        expect(() => getSymbolSegments('konfirmat_5x50', 50, 0)).toThrow(/Nieprawidłowa grubość/);
+        expect(() => getSymbolSegments('konfirmat_5x50', 50, -5)).toThrow(/Nieprawidłowa grubość/);
+        expect(() => getFaceHoleDepthMm('kolki_d8x35', 0)).toThrow(/Nieprawidłowa grubość/);
+    });
 });
+
