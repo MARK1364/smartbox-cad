@@ -7,6 +7,7 @@
 import { HoleFeature, GrooveFeature, ContourFeature, CAMFeature, CAMData, Vector3D } from '../dto/cam-dto.js';
 import { createVector3D, vecAdd, vecScale } from './cnc-geometry-utils.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
+import { getGrooveParamsMm } from '../../A1_core/groove-params.js';
 import { WcsRulesMapper } from '../wcs/wcs-rules-mapper.js';
 import { nearestEndFace } from '../../C2_connectors/connectors-embedment.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
@@ -47,7 +48,7 @@ export class GeometryDataExtractor {
         if (typeof panel.width !== 'number' || panel.width <= 0 ||
             typeof panel.height !== 'number' || panel.height <= 0 ||
             typeof panel.thickness !== 'number' || panel.thickness <= 0) {
-            throw new Error(`[C1_cnc/geometry-extractor] Panel "${panel?.name || 'unknown'}" nie posiada poprawnych wymiarów fizycznych (W=${panel?.width}, H=${panel?.height}, T=${panel?.thickness}). Wymiary w nanometrach są wymagane do wygenerowania cech CAM.`);
+            throw new Error(`[C1_cnc/geometry-extractor] Panel "${panel?.id}" nie posiada poprawnych wymiarów fizycznych (W=${panel?.width}, H=${panel?.height}, T=${panel?.thickness}). Wymiary w nanometrach są wymagane do wygenerowania cech CAM.`);
         }
 
         const pW = nmToMm(panel.width);
@@ -80,6 +81,14 @@ export class GeometryDataExtractor {
             }
 
             let faceName = feat.face;
+            if (faceName === '+Z' || faceName === 'front' || faceName === 'FRONT') faceName = 'FACE_Z_PLUS';
+            else if (faceName === '-Z' || faceName === 'back' || faceName === 'BACK') faceName = 'FACE_Z_MINUS';
+            else if (faceName === '+X' || faceName === 'right' || faceName === 'RIGHT') faceName = 'FACE_X_PLUS';
+            else if (faceName === '-X' || faceName === 'left' || faceName === 'LEFT') faceName = 'FACE_X_MINUS';
+            else if (faceName === '+Y' || faceName === 'top' || faceName === 'TOP') faceName = 'FACE_Y_PLUS';
+            else if (faceName === '-Y' || faceName === 'bottom' || faceName === 'BOTTOM') faceName = 'FACE_Y_MINUS';
+            else if (!faceName) faceName = 'FACE_Z_PLUS';
+
             const params = feat.params || {};
             const depthHint = Number(params.depth || 12);
 
@@ -192,8 +201,9 @@ export class GeometryDataExtractor {
                 }
 
             } else if (feat.type === 'groove' || feat.type === 'GROOVE' || feat.type === 'nut') {
-                let width = Number(params.width || 4);
-                const depth = Number(params.depth || 8);
+                const gp = getGrooveParamsMm(params);
+                let width = gp.width || Number(params.width || 4);
+                const depth = gp.depth || Number(params.depth || 8);
 
                 let startPoint: Vector3D;
                 let endPoint: Vector3D;
@@ -207,11 +217,12 @@ export class GeometryDataExtractor {
                     let u2 = Number(params.x2 || faceData.width);
                     let v2 = Number(params.y2 || 0);
 
-                    if (params.u !== undefined && params.v !== undefined && params.length !== undefined) {
-                        const u = Number(params.u);
-                        const v = Number(params.v);
-                        const gW = Number(params.width);
-                        const gL = Number(params.length);
+                    const gW = gp.width || Number(params.width || 0);
+                    const gL = gp.length || Number(params.length || 0);
+
+                    if (gW > 0 && gL > 0) {
+                        const u = gp.u;
+                        const v = gp.v;
 
                         if (gW < gL) {
                             width = gW;
@@ -255,10 +266,13 @@ export class GeometryDataExtractor {
                         ? 'LED_CHANNEL'
                         : undefined,
                     objectName: panelName,
+                    face: faceName || 'FACE_Z_PLUS',
                     width,
                     depth,
                     startPoint,
                     endPoint,
+                    panelStartPoint: { ...startPoint },
+                    panelEndPoint: { ...endPoint },
                     toolId: feat.toolId || null,
                     leadIn: 0,
                     leadOut: 0,
@@ -301,6 +315,9 @@ export class GeometryDataExtractor {
                     }
                 }
                 if ('startPoint' in f && 'endPoint' in f) {
+                    const gf = f as GrooveFeature;
+                    if (!gf.panelStartPoint) gf.panelStartPoint = { ...gf.startPoint };
+                    if (!gf.panelEndPoint) gf.panelEndPoint = { ...gf.endPoint };
                     f.startPoint = wcsManager.toWcsCoordinates(f.startPoint);
                     f.endPoint = wcsManager.toWcsCoordinates(f.endPoint);
                 }

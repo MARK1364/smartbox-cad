@@ -41,17 +41,20 @@ export function serializeViewport(viewport: Viewport): ViewportExtensionJSON {
 
 export function applyViewport(viewport: Viewport, data: ViewportExtensionJSON | null | undefined): void {
     const camera = data?.camera;
-    const cam = viewport.camera;
-    if (!camera || !cam) return;
+    if (!camera || !viewport.camera) return;
 
+    if (typeof camera.alpha === 'number' && typeof viewport.applyCameraPose === 'function') {
+        viewport.applyCameraPose(camera.alpha, camera.beta, camera.radius, camera.target);
+        return;
+    }
+
+    const cam = viewport.camera;
+    if (Array.isArray(camera.target) && camera.target.length >= 3 && typeof cam.target?.set === 'function') {
+        cam.target.set(camera.target[0], camera.target[1], camera.target[2]);
+    }
     if (typeof camera.alpha === 'number') cam.alpha = camera.alpha;
     if (typeof camera.beta === 'number') cam.beta = camera.beta;
     if (typeof camera.radius === 'number') cam.radius = camera.radius;
-    if (Array.isArray(camera.target) && camera.target.length >= 3) {
-        if (typeof cam.target?.set === 'function') {
-            cam.target.set(camera.target[0], camera.target[1], camera.target[2]);
-        }
-    }
 }
 
 export function attachViewportExtension(document: ProjectDocument, viewport: Viewport): () => void {

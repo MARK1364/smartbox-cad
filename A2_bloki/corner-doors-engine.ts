@@ -11,7 +11,7 @@
  *   ścianka pozioma wcięcia  → y = +depth/2
  *   front wnęki              → y = −depth/2
  */
-import { DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
+import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 import type { CornerDoorsPlanParams } from './bloki-module-types.js';
 
 const EDGE_BANDING = {
@@ -367,7 +367,7 @@ export function calculateCornerDoorsPlan(
     for (const hinge of params.zawiasy) {
         const hingeId = resolveHingeId(hinge.index);
         const vCenter = hinge.localZ + nalozenie_dol_mm;
-        const cupEdgeDist = hingeFrontHolesMm(hingeId).find(h => h.isCup)?.edgeDist ?? 21.5;
+        const cupEdgeDist = hingeFrontHolesMm(hingeId).find(h => h.isCup)?.edgeDist ?? DEFAULT_HINGE_CUP_EDGE_DIST_MM;
 
         hardware.push({
             id: `hinge_gap_prawe_${hinge.index}`,

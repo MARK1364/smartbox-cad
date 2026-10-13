@@ -10,6 +10,11 @@ import reportsTekstRaw from './reports_tekst.json';
 const reportsTekst = reportsTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'reports';
 
+/** Domyślna nazwa projektu (tylko display / klucz grupowania raportu) — z tłumaczeń. */
+function defaultProjectName(): string {
+    return tx(reportsTekst, 'default_project_name', TX_NS);
+}
+
 export interface EdgeBandInfo {
     active: boolean;
     type_id: string;
@@ -114,7 +119,7 @@ export class ReportDataNormalizer {
      */
     static buildContractFromPanel(
         panel: any,
-        furnitureName: string = 'Projekt',
+        furnitureName: string = defaultProjectName(),
         containerId?: string,
         blokId?: string,
         nodeId?: string
@@ -176,7 +181,7 @@ export class ReportDataNormalizer {
             width_mm: Math.round(width_mm * 10) / 10,
             edge_config,
             is_x_longer,
-            furniture_name: furnitureName || 'Projekt',
+            furniture_name: furnitureName || defaultProjectName(),
             qty: 1
         };
     }
@@ -253,7 +258,7 @@ export class ReportDataNormalizer {
                         role: 'RAMKA_ALU',
                         library_id: libId,
                         qty: 1,
-                        furniture_name: furnName || 'Projekt',
+                        furniture_name: furnName || defaultProjectName(),
                         container_id: containerId,
                         blok_id: blokId,
                         custom_unit_price: customUnitPrice,
@@ -384,7 +389,10 @@ export class ReportDataNormalizer {
                             if (existingKit) {
                                 existingKit.qty += 1;
                             } else {
-                                const railLabel = node.name?.match(/\[(.*?)\]/)?.[1] || domain?.params?.railId || 'Antaro';
+                                const railSystemId = domain?.params?.railId;
+                                const railLabel = library_id.startsWith('BLUM_ANTARO_M_')
+                                    ? (railSystemId ? `Antaro ${railSystemId}` : 'Antaro')
+                                    : (railSystemId || 'Antaro');
                                 const kitName = `Szuflada [${railLabel}] (kpl)`;
 
                                 const kitItem: AccessoryItem = {
@@ -419,7 +427,7 @@ export class ReportDataNormalizer {
                     } else {
                         accessories.push({
                             id: node.id || domain?.id || String(Math.random()),
-                            name: node.name || domain?.name || roleUpper,
+                            name: node.name ?? domain?.name ?? roleUpper,
                             role: roleUpper || 'AKCESORIUM',
                             library_id,
                             qty: 1,
@@ -440,7 +448,7 @@ export class ReportDataNormalizer {
         };
 
         if (doc.rootNode) {
-            scanNode(doc.rootNode, 'Projekt');
+            scanNode(doc.rootNode, defaultProjectName());
         }
 
         // Zapasowe pobranie bezpośrednio z getPanels jeśli rekurencja czegoś nie objęła
@@ -448,7 +456,7 @@ export class ReportDataNormalizer {
             const rawPanels = doc.getPanels();
             for (const p of rawPanels) {
                 if (p.frozen === true || p.domainData?.frozen === true || p.params?.frozen === true) continue;
-                const parentFurn = p.parent?.name || p.parent?.domainData?.name || 'Projekt';
+                const parentFurn = p.parent?.name ?? p.parent?.domainData?.name ?? defaultProjectName();
                 if (p.parent) furnitureSet.add(parentFurn);
                 processPanel(p.domainData || p, parentFurn, p.parent?.id, undefined, p.id);
             }
@@ -479,7 +487,7 @@ export class ReportDataNormalizer {
         }
 
         if (furnitureSet.size === 0 && panels.length > 0) {
-            furnitureSet.add('Projekt');
+            furnitureSet.add(defaultProjectName());
         }
 
         return {

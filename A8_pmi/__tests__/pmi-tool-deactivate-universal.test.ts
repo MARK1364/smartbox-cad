@@ -1,6 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ContextManager } from '../../A1_core/context-manager.js';
-import { isPmiToolActive, deactivateAllPmiTools } from '../pmi-tool-activate.js';
+import {
+    isPmiToolActive,
+    deactivateAllPmiTools,
+    isDimensionToolActive,
+    isMeasureToolActive,
+    DIMENSION_TOOL_STATE,
+    MEASURE_TOOL_STATE,
+    DIMENSION_EDIT_TOOL_STATE,
+    DIMENSION_TEXT_SHIFT_TOOL_STATE,
+} from '../pmi-tool-activate.js';
+import { PMIStore } from '../pmi-data.js';
 
 class MockStateMachine {
     private _currentStateName = 'SELECTION_TOOL';
@@ -26,19 +36,16 @@ describe('Uniwersalna reguła: Automatyczne wyjście z narzędzi PMI', () => {
     });
 
     it('poprawnie rozpoznaje czy stan jest narzędziem PMI (isPmiToolActive)', () => {
-        mockSm.changeState('DIMENSION_TOOL');
+        mockSm.changeState(DIMENSION_TOOL_STATE);
         expect(isPmiToolActive(mockSm as any)).toBe(true);
 
-        mockSm.changeState('DimensionTool');
+        mockSm.changeState(MEASURE_TOOL_STATE);
         expect(isPmiToolActive(mockSm as any)).toBe(true);
 
-        mockSm.changeState('MEASURE_TOOL');
+        mockSm.changeState(DIMENSION_EDIT_TOOL_STATE);
         expect(isPmiToolActive(mockSm as any)).toBe(true);
 
-        mockSm.changeState('MeasureTool');
-        expect(isPmiToolActive(mockSm as any)).toBe(true);
-
-        mockSm.changeState('PMI_EDIT_TOOL');
+        mockSm.changeState(DIMENSION_TEXT_SHIFT_TOOL_STATE);
         expect(isPmiToolActive(mockSm as any)).toBe(true);
 
         mockSm.changeState('SELECTION_TOOL');
@@ -46,6 +53,22 @@ describe('Uniwersalna reguła: Automatyczne wyjście z narzędzi PMI', () => {
 
         mockSm.changeState('DRAW_LINE_TOOL');
         expect(isPmiToolActive(mockSm as any)).toBe(false);
+    });
+
+    it('weryfikuje wyłącznie kanoniczne nazwy DIMENSION_TOOL i MEASURE_TOOL bez aliasów', () => {
+        mockSm.changeState(DIMENSION_TOOL_STATE);
+        expect(isDimensionToolActive(mockSm as any)).toBe(true);
+        expect(isMeasureToolActive(mockSm as any)).toBe(false);
+
+        mockSm.changeState('DimensionTool');
+        expect(isDimensionToolActive(mockSm as any)).toBe(false);
+
+        mockSm.changeState(MEASURE_TOOL_STATE);
+        expect(isMeasureToolActive(mockSm as any)).toBe(true);
+        expect(isDimensionToolActive(mockSm as any)).toBe(false);
+
+        mockSm.changeState('MeasureTool');
+        expect(isMeasureToolActive(mockSm as any)).toBe(false);
     });
 
     it('deactivateAllPmiTools przełącza aktywny stan PMI do SELECTION_TOOL', () => {
@@ -93,12 +116,41 @@ describe('Uniwersalna reguła: Automatyczne wyjście z narzędzi PMI', () => {
         }
     });
 
-    it('pozostanie na zakładce tab-a8-pmi NIE deaktywuje narzędzia wymiarowania', () => {
-        mockSm.changeState('DIMENSION_TOOL');
-        mockSm.stateTransitions = [];
+    it('deactivateAllPmiTools czyści pomiary ze store (ephemeral measurements)', () => {
+        PMIStore.instance.addMeasurement({
+            id: 'msr_test_1',
+            anchor1: {} as any,
+            anchor2: {} as any,
+            distanceMM: 100,
+            text: '100 mm',
+        });
+        expect(PMIStore.instance.measurements.length).toBe(1);
 
-        ContextManager.instance.activeTab = 'tab-a8-pmi';
+        mockSm.changeState('MEASURE_TOOL');
+        deactivateAllPmiTools(mockSm as any);
+
+        expect(mockSm.getCurrentStateName()).toBe('SELECTION_TOOL');
+        expect(PMIStore.instance.measurements.length).toBe(0);
+    });
+
+    it('rozpoznaje stany edycji i przesunięcia tekstu (PMI_EDIT_TOOL, PMI_TEXT_SHIFT_TOOL)', () => {
+        mockSm.changeState('PMI_EDIT_TOOL');
+        expect(isPmiToolActive(mockSm as any)).toBe(true);
+
+        mockSm.changeState('PMI_TEXT_SHIFT_TOOL');
+        expect(isPmiToolActive(mockSm as any)).toBe(true);
+    });
+
+    it('ModalTransformManager nie rozpoczyna transformacji (G / R) gdy aktywne jest narzędzie PMI', () => {
+        const modalTransform = ContextManager.instance.modalTransformManager;
+        modalTransform.activeMode = 'none';
+
+        mockSm.changeState('DIMENSION_TOOL');
+        modalTransform.startTransform('translate');
+
+        // Tryb transformacji nie może zostać włączony w trakcie wymiarowania!
+        expect(modalTransform.activeMode).toBe('none');
         expect(mockSm.getCurrentStateName()).toBe('DIMENSION_TOOL');
-        expect(mockSm.stateTransitions.length).toBe(0);
     });
 });
+

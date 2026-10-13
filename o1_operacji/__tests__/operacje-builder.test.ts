@@ -211,7 +211,7 @@ describe('wpust silnika vs operacja Smart', () => {
         const przetloczenie = applyLibraryOperation(makePanel(), 'przetloczenie', 'FACE_Z_MINUS');
         expect(isLibraryOperation(przetloczenie)).toBe(true);
         expect(isEngineGroove(przetloczenie)).toBe(false);
-        expect(featureOperationLabel(przetloczenie)).toBe('Przetłoczenie / Wycięcie');
+        expect(featureOperationLabel(przetloczenie)).toBe('Przetłoczenie');
 
         const wpust = {
             id: 'g1',
@@ -263,7 +263,7 @@ describe('wpust silnika vs operacja Smart', () => {
         const grooves = door.grooves || [];
         const smart = grooves.find((g: any) => g.source === 'library');
         const engine = grooves.find((g: any) => g.source === 'engine');
-        expect(smart?.name).toBe('Przetłoczenie / Wycięcie');
+        expect(smart?.name).toBe('Przetłoczenie');
         expect(smart?.editable).toBe(true);
         expect(engine?.name).toBe('Wpust');
         expect(engine?.editable).toBe(false);

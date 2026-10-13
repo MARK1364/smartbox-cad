@@ -7,24 +7,30 @@ import type { StateMachine } from '../A1_core/interaction/state-machine.js';
 import { PMIStore } from './pmi-data.js';
 import type { DimensionTool } from './pmi-tool.js';
 
-const DIMENSION_STATE_NAMES = ['DIMENSION_TOOL', 'DimensionTool'] as const;
+export const DIMENSION_TOOL_STATE = 'DIMENSION_TOOL';
+export const MEASURE_TOOL_STATE = 'MEASURE_TOOL';
+export const DIMENSION_EDIT_TOOL_STATE = 'DIMENSION_EDIT_TOOL';
+export const DIMENSION_TEXT_SHIFT_TOOL_STATE = 'DIMENSION_TEXT_SHIFT_TOOL';
+
+const PMI_CANONICAL_STATES = new Set<string>([
+    DIMENSION_TOOL_STATE,
+    MEASURE_TOOL_STATE,
+    DIMENSION_EDIT_TOOL_STATE,
+    DIMENSION_TEXT_SHIFT_TOOL_STATE,
+    'PMI_EDIT_TOOL',
+    'PMI_TEXT_SHIFT_TOOL',
+]);
 
 export function getDimensionTool(sm: StateMachine): DimensionTool | null {
-    for (const name of DIMENSION_STATE_NAMES) {
-        const tool = sm.getState(name);
-        if (tool) return tool as DimensionTool;
-    }
-    return null;
+    return (sm.getState(DIMENSION_TOOL_STATE) as DimensionTool) ?? null;
 }
 
 export function isDimensionToolActive(sm: StateMachine): boolean {
-    const name = sm.getCurrentStateName();
-    return name === 'DIMENSION_TOOL' || name === 'DimensionTool';
+    return sm.getCurrentStateName() === DIMENSION_TOOL_STATE;
 }
 
 export function isMeasureToolActive(sm: StateMachine): boolean {
-    const name = sm.getCurrentStateName();
-    return name === 'MEASURE_TOOL' || name === 'MeasureTool';
+    return sm.getCurrentStateName() === MEASURE_TOOL_STATE;
 }
 
 /** Włącza narzędzie z ustawieniami z PMIStore (axisSpace, measureAxis). */
@@ -33,26 +39,28 @@ export function activateDimensionTool(sm: StateMachine): void {
     const tool = getDimensionTool(sm);
     tool?.setAxisSpace(store.toolAxisSpace);
     tool?.setMeasureAxis(store.toolMeasureAxis);
-    sm.changeState('DIMENSION_TOOL');
+    sm.changeState(DIMENSION_TOOL_STATE);
 }
 
 export function activateMeasureTool(sm: StateMachine): void {
-    sm.changeState('MEASURE_TOOL');
+    sm.changeState(MEASURE_TOOL_STATE);
 }
 
 export function isPmiToolActive(sm?: StateMachine | null): boolean {
     if (!sm) return false;
-    const name = (sm.getCurrentStateName() || '').toUpperCase();
-    return name.includes('DIMENSION') || name.includes('MEASURE') || name.startsWith('PMI');
+    const name = sm.getCurrentStateName?.() || '';
+    return PMI_CANONICAL_STATES.has(name);
 }
 
 /** Wyłącza narzędzie tworzenia wymiaru / pomiaru. */
 export function deactivateDimensionTool(sm: StateMachine): void {
+    PMIStore.instance.clearAllMeasurements();
     sm.changeState('SELECTION_TOOL');
 }
 
 /** Uniwersalne wyłączenie wszelkich aktywnych narzędzi PMI i powrót do SELECTION_TOOL. */
 export function deactivateAllPmiTools(sm?: StateMachine | null): void {
+    PMIStore.instance.clearAllMeasurements();
     if (!sm) return;
     if (isPmiToolActive(sm)) {
         sm.changeState('SELECTION_TOOL');

@@ -9,7 +9,7 @@
  */
 import flapsRules from './flaps_3_rules_V1.json';
 import { resolveRuleThicknessMm } from './bloki-rules-helper.js';
-import { DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
+import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 import type {
     BlokiDimensions_mm,
     BlokiPart,
@@ -150,7 +150,10 @@ export function calculateFlapsPlan(
                     isFlapCup: isCup,
                     isFlapScrew: !isCup,
                     hingeKey: hingeKey,
+                    // hingeSide = pozycja L/P/C; nie mylić z orientation drzwi (left/right = oś zawiasu)
+                    hingeSide: side,
                     side: side,
+                    orientation: isTop ? 'top' : 'bottom',
                     hardwareId: `hinge_${hingeKey.toLowerCase()}`
                 }
             });
@@ -200,7 +203,7 @@ export function calculateFlapsPlan(
         const uCenter = hingeUCenter(h.side);
         const frontHoles = hingeFrontHolesMm(hingeId);
         const cupHole = frontHoles.find(hole => hole.isCup);
-        const cupEdgeDist = cupHole?.edgeDist ?? 21.5;
+        const cupEdgeDist = cupHole?.edgeDist ?? DEFAULT_HINGE_CUP_EDGE_DIST_MM;
         const vCenter = isTop ? (flapHeight_mm - cupEdgeDist) : cupEdgeDist;
 
         const hwX = posX_mm - flapWidth_mm / 2 + uCenter;

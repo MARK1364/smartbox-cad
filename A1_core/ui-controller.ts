@@ -142,8 +142,9 @@ export class UIController {
             } else {
                 const wMm = Math.min(PANEL_DIM_MAX_MM, Math.max(PANEL_DIM_MIN_MM, width));
                 const hMm = Math.min(PANEL_DIM_MAX_MM, Math.max(PANEL_DIM_MIN_MM, height));
-                const thicknessNm = activeEntity.thickness;
-                activeEntity.setDimensions(unit.fromMM(wMm), unit.fromMM(hMm), thicknessNm);
+                // Grubość edytowalna ręcznie (nie tylko przez drop materiału).
+                const tMm = Math.min(100, Math.max(1, thickness));
+                activeEntity.setDimensions(unit.fromMM(wMm), unit.fromMM(hMm), unit.fromMM(tMm));
                 this.document.emitChange('dimensions');
                 console.log('[UIController] Dispatched bloki-panel-changed');
                 document.dispatchEvent(new CustomEvent('bloki-panel-changed', { detail: { panelModel: activeEntity } }));

@@ -326,30 +326,7 @@ export class FacePicker {
             }
         });
 
-        window.addEventListener('keydown', (e: KeyboardEvent) => {
-            if ((e.key === 'q' || e.key === 'Q') && (ContextManager.instance.activeConstraintPicker || ContextManager.instance.activeReferencePicker)) {
-                const tag = (document.activeElement?.tagName || '').toUpperCase();
-                if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-                const candidates = findFacesAlongRay(this.scene, this.scene.pointerX, this.scene.pointerY);
-                if (candidates.length > 0) {
-                    e.preventDefault();
-                    openQuickPick({
-                        screenX: this.scene.pointerX,
-                        screenY: this.scene.pointerY,
-                        candidates,
-                        onSelect: (candidate) => {
-                            this.selectFaceExplicit(
-                                candidate.mesh,
-                                candidate.worldPoint,
-                                candidate.smartId,
-                                candidate.panelModel,
-                                candidate.worldNormal
-                            );
-                        }
-                    });
-                }
-            }
-        });
+        // Skrót Q usunięty — Wybierz zakrytą tylko przez PPM.
     }
 
     public selectFaceExplicit(
@@ -386,6 +363,27 @@ export class FacePicker {
         }
 
         const isMulti = Boolean(evt && (evt.ctrlKey || evt.metaKey));
+
+        // Uchwyty SmartPart: mesh parametryczny (type=smartpart_handle) nie ma faceName —
+        // face multiPick go pomija, więc w trybie object wybieramy go z directPick.
+        if (
+            this.selectionMode === 'object' &&
+            !isPickingReference() &&
+            !ContextManager.instance.activeConstraintPicker &&
+            directPick?.hit &&
+            directPick.pickedMesh?.metadata?.type === 'smartpart_handle'
+        ) {
+            const nodeId = directPick.pickedMesh.metadata.nodeId as string | undefined;
+            const node = nodeId ? this.document?.findNode?.(nodeId) : null;
+            const handleModel = node?.domainData ?? directPick.pickedMesh.metadata.model;
+            if (handleModel && shouldPromotePickToActiveEntity()) {
+                this._clearSelectionExcept(null);
+                this.selectedFace = null;
+                this.selectedFaces.clear();
+                this.document.setActiveEntity(handleModel);
+            }
+            return;
+        }
 
         // Priorytet 1: Narożniki, krawędzie, cechy CAM (z tolerancją próbkowania ekranowego 18px)
         let pickResult = (this.targetSubgeometryType === 'face' || isPickingReference())

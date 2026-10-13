@@ -70,6 +70,7 @@ export class CreateKorpusCommand implements Command {
         // Kanoniczny generatorParams — bez aliasów. Osobny obiekt offsets (bez współdzielenia referencji).
         nc.generatorParams = {
             type: typeStr,
+            typ_korpusu: ctype,
             szerokosc_mm: wMm,
             wysokosc_mm: isSkosny ? skosH : hMm,
             glebokosc_mm: dMm,

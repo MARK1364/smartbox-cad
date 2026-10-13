@@ -1,0 +1,73 @@
+{
+  "id": "sp:k500",
+  "name": "k500",
+  "units": "mm",
+  "version": "1.0",
+  "type": "CUSTOM",
+  "mainContainer": {
+    "widthMm": 564,
+    "heightMm": 600,
+    "depthMm": 330
+  },
+  "parts": [
+    {
+      "id": "sp:SmartPart_Kontener_1/part:part_1",
+      "name": "Part 1",
+      "widthMm": 18,
+      "heightMm": 38,
+      "depthMm": 68,
+      "xMm": -272,
+      "yMm": 135,
+      "zMm": 270,
+      "refX": "LEFT",
+      "offsetX_mm": 10,
+      "refY": "FRONT",
+      "offsetY_mm": 30,
+      "refZ": "TOP",
+      "offsetZ_mm": 30,
+      "colorHex": "#38bdf8"
+    }
+  ],
+  "cuts": [
+    {
+      "id": "sp:SmartPart_Kontener_1/cut:walec_1",
+      "name": "Walec 1",
+      "type": "HOLE",
+      "diameterMm": 8,
+      "lengthMm": 24,
+      "xMm": -9,
+      "yMm": 0,
+      "zMm": 0,
+      "refX": "LEFT",
+      "offsetX_mm": 0,
+      "refY": "CENTER",
+      "offsetY_mm": 0,
+      "refZ": "CENTER",
+      "offsetZ_mm": 0,
+      "axis": "X",
+      "direction": -1,
+      "partId": "sp:SmartPart_Kontener_1/part:part_1"
+    }
+  ],
+  "iconDataUrl": "data:image/jpeg;base64,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",
+  "updatedAt": 1791401030472,
+  "partBody": {
+    "id": "sp:SmartPart_Kontener_1/part:part_1",
+    "name": "Part 1",
+    "widthMm": 18,
+    "heightMm": 38,
+    "depthMm": 68,
+    "xMm": -272,
+    "yMm": 135,
+    "zMm": 270,
+    "refX": "LEFT",
+    "offsetX_mm": 10,
+    "refY": "FRONT",
+    "offsetY_mm": 30,
+    "refZ": "TOP",
+    "offsetZ_mm": 30,
+    "colorHex": "#38bdf8"
+  },
+  "coordSystem": "CAD",
+  "cutsFrame": "PART"
+}

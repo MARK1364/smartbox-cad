@@ -1,0 +1,192 @@
+{
+  "panel.label": {
+    "pl": "Ustawienia Drzwi Skośnych",
+    "en": "Slanted Doors Settings",
+    "de": "Schrägtür-Einstellungen"
+  },
+  "door_type.label": {
+    "pl": "Strona zawiasu:",
+    "en": "Hinge side:",
+    "de": "Scharnierseite:"
+  },
+  "door_type.items.LEFT": {
+    "pl": "Lewe",
+    "en": "Left",
+    "de": "Links"
+  },
+  "door_type.items.RIGHT": {
+    "pl": "Prawe",
+    "en": "Right",
+    "de": "Rechts"
+  },
+  "skos.title": {
+    "pl": "Skos korpusu:",
+    "en": "Carcass slope:",
+    "de": "Korpusneigung:"
+  },
+  "skos.height_left": {
+    "pl": "Bok lewy:",
+    "en": "Left side:",
+    "de": "Seitenwand links:"
+  },
+  "skos.height_right": {
+    "pl": "Bok prawy:",
+    "en": "Right side:",
+    "de": "Seitenwand rechts:"
+  },
+  "skos.drop": {
+    "pl": "Spadek:",
+    "en": "Drop:",
+    "de": "Gefälle:"
+  },
+  "skos.angle": {
+    "pl": "Kąt skosu:",
+    "en": "Slope angle:",
+    "de": "Neigungswinkel:"
+  },
+  "skos.vertical_edge": {
+    "pl": "Krawędź pionowa:",
+    "en": "Vertical edge:",
+    "de": "Vertikale Kante:"
+  },
+  "skos.rail_bottom": {
+    "pl": "Wieniec dolny:",
+    "en": "Bottom rail:",
+    "de": "Unterer Rahmen:"
+  },
+  "skos.rail_top": {
+    "pl": "Wieniec górny:",
+    "en": "Top rail:",
+    "de": "Oberer Rahmen:"
+  },
+  "skos.opening_left": {
+    "pl": "Światło wnęki (lewa):",
+    "en": "Clear opening (left):",
+    "de": "Öffnungsweite (links):"
+  },
+  "skos.opening_right": {
+    "pl": "Światło wnęki (prawa):",
+    "en": "Clear opening (right):",
+    "de": "Öffnungsweite (rechts):"
+  },
+  "skos.error.height_left_required": {
+    "pl": "Podaj wymiar zewnętrzny lewego boku — bez niego nie da się policzyć skrzydła.",
+    "en": "Provide the left side panel's outer size — the leaf cannot be computed without it.",
+    "de": "Außenmaß der linken Seitenwand angeben — ohne sie ist das Blatt nicht berechenbar."
+  },
+  "skos.error.height_right_required": {
+    "pl": "Podaj wymiar zewnętrzny prawego boku — bez niego nie da się policzyć skrzydła.",
+    "en": "Provide the right side panel's outer size — the leaf cannot be computed without it.",
+    "de": "Außenmaß der rechten Seitenwand angeben — ohne sie ist das Blatt nicht berechenbar."
+  },
+  "skos.error.rails_required": {
+    "pl": "Brak grubości wieńców korpusu — korpus musi posiadać wieniec dolny i górny.",
+    "en": "Missing carcass rail thicknesses — carcass must have bottom and top rails.",
+    "de": "Rahmenstärken des Korpus fehlen — Korpus muss unteren und oberen Rahmen besitzen."
+  },
+  "skos.error.top_rail_missing": {
+    "pl": "Brak wieńca górnego w korpusie — nie można wyliczyć skosu skrzydła.",
+    "en": "Missing top rail in carcass — cannot calculate leaf slope.",
+    "de": "Oberer Rahmen im Korpus fehlt — Schräge des Türblatts kann nicht berechnet werden."
+  },
+  "skos.error.bottom_rail_missing": {
+    "pl": "Brak wieńca dolnego w korpusie — nie można wyznaczyć dołu wnęki.",
+    "en": "Missing bottom rail in carcass — cannot determine opening bottom.",
+    "de": "Unterer Rahmen im Korpus fehlt — Öffnungsboden kann nicht bestimmt werden."
+  },
+  "skos.error.hinge_on_slanted_edge": {
+    "pl": "Zawias musi być na krawędzi pionowej. Przesuń wyższą stronę na stronę wybranego zawiasu.",
+    "en": "The hinge must sit on the vertical edge. Move the taller side to the chosen hinge side.",
+    "de": "Das Scharnier muss an der vertikalen Kante sitzen. Die höhere Seite zur gewählten Scharnierseite legen."
+  },
+  "skos.warning.flat": {
+    "pl": "Obie wysokości są równe — skrzydło wychodzi prostokątne (jak zwykłe DRZWI).",
+    "en": "Both heights are equal — the leaf comes out rectangular (same as plain DOORS).",
+    "de": "Beide Höhen sind gleich — das Blatt wird rechteckig (wie normale TÜREN)."
+  },
+  "overlaps.title": {
+    "pl": "Nałożenia frontu:",
+    "en": "Front overlaps:",
+    "de": "Frontüberlappungen:"
+  },
+  "overlaps.top_along_slope": {
+    "pl": "Góra mierzona wzdłuż skosu (pokrywa wieniec o nalozenie·cos β). Dół jest prosty — mierzony pionowo.",
+    "en": "Top is measured along the slope (covers the rail by overlap·cos β). The bottom is flat — measured vertically.",
+    "de": "Oben wird entlang der Neigung gemessen (deckt den Rahmen mit Überlappung·cos β ab). Unten ist gerade — vertikal gemessen."
+  },
+  "ov_top.label": {
+    "pl": "Góra (po skosie):",
+    "en": "Top (along slope):",
+    "de": "Oben (entlang der Neigung):"
+  },
+  "ov_left.label": {
+    "pl": "Lewo:",
+    "en": "Left:",
+    "de": "Links:"
+  },
+  "ov_bottom.label": {
+    "pl": "Dół:",
+    "en": "Bottom:",
+    "de": "Unten:"
+  },
+  "ov_right.label": {
+    "pl": "Prawo:",
+    "en": "Right:",
+    "de": "Rechts:"
+  },
+  "hinges.title": {
+    "pl": "Okucia (Zawiasy):",
+    "en": "Hardware (Hinges):",
+    "de": "Beschläge (Scharniere):"
+  },
+  "weight_info.front_weight": {
+    "pl": "Waga skrzydła:",
+    "en": "Leaf weight:",
+    "de": "Flügelgewicht:"
+  },
+  "weight_info.suggested_hinges": {
+    "pl": "Sugerowana ilość zawiasów:",
+    "en": "Suggested hinge count:",
+    "de": "Empfohlene Scharnieranzahl:"
+  },
+  "weight_info.active_hinges": {
+    "pl": "Wybrane zawiasy:",
+    "en": "Selected hinges:",
+    "de": "Gewählte Scharniere:"
+  },
+  "weight_info.unit_pcs": {
+    "pl": "szt.",
+    "en": "pcs",
+    "de": "Stk."
+  },
+  "hinge_brand.label": {
+    "pl": "Producent:",
+    "en": "Manufacturer:",
+    "de": "Hersteller:"
+  },
+  "hinge_template.label": {
+    "pl": "Szablon...",
+    "en": "Template...",
+    "de": "Vorlage..."
+  },
+  "hinge_row.bottom_label": {
+    "pl": "Dół {n}",
+    "en": "Bottom {n}",
+    "de": "Unten {n}"
+  },
+  "hinge_row.middle_label": {
+    "pl": "Poz. {n}",
+    "en": "Pos. {n}",
+    "de": "Pos. {n}"
+  },
+  "hinge_row.top_label": {
+    "pl": "Góra {n}",
+    "en": "Top {n}",
+    "de": "Oben {n}"
+  },
+  "hinge_out_of_panel.warning": {
+    "pl": "Ostrzeżenie: otwór zawiasu wychodzi poza skrzydło",
+    "en": "Warning: hinge hole goes beyond the leaf",
+    "de": "Warnung: Scharnierbohrung ragt über das Blatt hinaus"
+  }
+}

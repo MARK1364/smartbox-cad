@@ -8,8 +8,9 @@ import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { ConstraintStore } from './constraint-store.js';
 import { ConstraintHighlightOverlay } from './constraint-highlight.js';
 import { beginConstraintSlotPick, expectedKindForBind, getActiveConstraintPick, SOLVER_PICK_EVENT } from './constraint-pick-flow.js';
-import { anchorShortLabel } from './constraint-ui-labels.js';
+import { anchorPartLabel, anchorFullLabel } from './constraint-ui-labels.js';
 import { ADD_BUTTONS, BIND_TYPE_ICON, GROUND_MODE_OPTIONS } from './solver-ui-config.js';
+import { RemoveConstraintCommand } from './constraint-commands.js';
 import type { AnchorKind, ConstraintAnchor, SolverConstraint } from './constraint-types.js';
 import type { BindType, ConstraintResidual } from './core/contract.js';
 import { residualExceedsTolerance, RESIDUAL_TOLERANCE } from './core/solver-core.js';
@@ -76,7 +77,8 @@ export function ConstraintTreeRow({ constraint: c, document, highlighted, issues
         return () => window.removeEventListener(SOLVER_PICK_EVENT, bump);
     }, []);
     void pickTick;
-    const isPicking = getActiveConstraintPick()?.constraintId === c.id;
+    const activePick = getActiveConstraintPick();
+    const isPicking = activePick?.constraintId === c.id;
 
     const showConflict = c.conflict;
     const showUnsatisfied =
@@ -91,6 +93,7 @@ export function ConstraintTreeRow({ constraint: c, document, highlighted, issues
             constraintId: c.id,
             slot,
             expectedKind: expectedKindForBind(c.bindType, groundMode),
+            thenPickB: slot === 'A' && !c.anchorB,
         });
     };
 
@@ -105,7 +108,12 @@ export function ConstraintTreeRow({ constraint: c, document, highlighted, issues
         .join(' ');
 
     const removeConstraint = () => {
-        ConstraintStore.instance.remove(c.id);
+        const hist = ContextManager.instance.commandHistory;
+        if (hist) {
+            hist.execute(new RemoveConstraintCommand(c));
+        } else {
+            ConstraintStore.instance.remove(c.id);
+        }
         ConstraintHighlightOverlay.instance.setHighlighted([]);
     };
 
@@ -171,6 +179,7 @@ export function ConstraintTreeRow({ constraint: c, document, highlighted, issues
                             anchor={c.anchorA}
                             document={document}
                             groundMode={groundMode}
+                            isPicking={isPicking && activePick?.slot === 'A'}
                             onPick={() => pick('A')}
                             onGroundModeChange={setGroundMode}
                         />
@@ -180,12 +189,14 @@ export function ConstraintTreeRow({ constraint: c, document, highlighted, issues
                                 label="A"
                                 anchor={c.anchorA}
                                 document={document}
+                                isPicking={isPicking && activePick?.slot === 'A'}
                                 onPick={() => pick('A')}
                             />
                             <ElementSlot
                                 label="B"
                                 anchor={c.anchorB}
                                 document={document}
+                                isPicking={isPicking && activePick?.slot === 'B'}
                                 onPick={() => pick('B')}
                             />
                         </>
@@ -238,33 +249,41 @@ function ElementSlot({
     label,
     anchor,
     document,
+    isPicking,
     onPick,
 }: {
     label: string;
     anchor: ConstraintAnchor | null;
     document: any;
+    isPicking?: boolean;
     onPick: () => void;
 }) {
     if (anchor) {
+        const fullDesc = anchorFullLabel(anchor, document);
         return (
             <button
                 type="button"
-                className="solver-constraint__slot solver-constraint__slot--filled"
-                title="Kliknij, aby wskazać inną ścianę"
+                className={`solver-constraint__slot solver-constraint__slot--filled${isPicking ? ' solver-constraint__pick-btn--active' : ''}`}
+                title={isPicking ? 'Wskaż ścianę w 3D… (Esc anuluje)' : fullDesc}
                 onClick={onPick}
             >
                 <span className="solver-constraint__slot-label">{label}</span>
-                <span className="solver-constraint__slot-value" title={anchorShortLabel(anchor, document)}>
-                    {anchorShortLabel(anchor, document)}
+                <span className="solver-constraint__slot-value" title={fullDesc}>
+                    {isPicking ? '🎯 Wskaż w 3D…' : anchorPartLabel(anchor, document)}
                 </span>
             </button>
         );
     }
 
     return (
-        <button type="button" className="solver-constraint__pick-btn" onClick={onPick}>
+        <button
+            type="button"
+            className={`solver-constraint__pick-btn${isPicking ? ' solver-constraint__pick-btn--active' : ''}`}
+            onClick={onPick}
+            title={isPicking ? 'Wskaż ścianę w 3D… (Esc anuluje)' : `Element ${label} — kliknij, aby wskazać`}
+        >
             <span>🎯</span>
-            <span>Element {label}</span>
+            <span>{isPicking ? 'Wskaż w 3D…' : `Element ${label}`}</span>
         </button>
     );
 }
@@ -273,26 +292,29 @@ function GroundSlot({
     anchor,
     document,
     groundMode,
+    isPicking,
     onPick,
     onGroundModeChange,
 }: {
     anchor: ConstraintAnchor | null;
     document: any;
     groundMode: AnchorKind;
+    isPicking?: boolean;
     onPick: () => void;
     onGroundModeChange: (kind: AnchorKind) => void;
 }) {
     if (anchor) {
+        const fullDesc = anchorFullLabel(anchor, document);
         return (
             <div className="solver-constraint__ground-row">
                 <button
                     type="button"
-                    className="solver-constraint__slot solver-constraint__slot--filled"
-                    title="Kliknij, aby wskazać inny element"
+                    className={`solver-constraint__slot solver-constraint__slot--filled${isPicking ? ' solver-constraint__pick-btn--active' : ''}`}
+                    title={isPicking ? 'Wskaż element w 3D… (Esc anuluje)' : fullDesc}
                     onClick={onPick}
                 >
-                    <span className="solver-constraint__slot-value" title={anchorShortLabel(anchor, document)}>
-                        {anchorShortLabel(anchor, document)}
+                    <span className="solver-constraint__slot-value" title={fullDesc}>
+                        {isPicking ? '🎯 Wskaż w 3D…' : anchorPartLabel(anchor, document)}
                     </span>
                 </button>
             </div>
@@ -313,8 +335,14 @@ function GroundSlot({
                     </option>
                 ))}
             </select>
-            <button type="button" className="solver-constraint__pick-btn" onClick={onPick}>
+            <button
+                type="button"
+                className={`solver-constraint__pick-btn${isPicking ? ' solver-constraint__pick-btn--active' : ''}`}
+                onClick={onPick}
+                title={isPicking ? 'Wskaż element w 3D… (Esc anuluje)' : 'Wskaż w 3D'}
+            >
                 <span>🎯</span>
+                {isPicking && <span style={{ marginLeft: 3 }}>Wskaż w 3D…</span>}
             </button>
         </div>
     );

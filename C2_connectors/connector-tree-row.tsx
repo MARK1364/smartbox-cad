@@ -4,19 +4,14 @@
 
 import React from 'react';
 import {
-    getConnectorDefinition,
     getPlacementRuleDefinition,
     getPlacementRuleKeys,
 } from './connectors-engine.js';
 import { executeConnectorCommand, RemoveConnectorGroupCommand } from './connector-commands.js';
 import { applyRuleToGroup } from './connector-picker.js';
+import { ConnectorPositionsEditor } from './connector-positions-editor.js';
 import { ConnectorStore } from './connector-store.js';
-import {
-    applyFirstHoleOffset,
-    isConnectorFromFront,
-    ruleEdgeOffsetMm,
-    type ConnectorGroup,
-} from './connectors-types.js';
+import type { ConnectorGroup } from './connectors-types.js';
 import './connectors-ui.css';
 
 interface Props {
@@ -31,9 +26,18 @@ export function ConnectorTreeRow({ group: g, document }: Props) {
 
     const onPaste = () => {
         if (!store.clipboardRule) return;
-        store.placementRule = store.clipboardRule;
+        store.setPlacementRule(store.clipboardRule);
         store.firstOffsetMm = store.clipboardFirstOffsetMm;
-        applyRuleToGroup(document, g.id, store.clipboardRule, undefined, store.clipboardFirstOffsetMm);
+        store.setPositionsActive(store.clipboardPositionsActive);
+        store.setPositionTypes(store.clipboardPositionTypes);
+        applyRuleToGroup(
+            document,
+            g.id,
+            store.clipboardRule,
+            store.clipboardPositionsActive,
+            store.clipboardFirstOffsetMm,
+            store.clipboardPositionTypes,
+        );
     };
 
     const onTogglePosition = (index: number) => {
@@ -42,6 +46,16 @@ export function ConnectorTreeRow({ group: g, document }: Props) {
         const next = [...live.positionsActive];
         if (index < next.length) next[index] = !next[index];
         store.updateGroup(g.id, { positionsActive: next });
+        store.setPositionsActive(next);
+    };
+
+    const onChangeType = (index: number, type: string) => {
+        const live = store.get(g.id);
+        if (!live) return;
+        const next = [...(live.positionTypes?.length ? live.positionTypes : store.positionTypes)];
+        if (index < next.length) next[index] = type;
+        store.updateGroup(g.id, { positionTypes: next });
+        store.setPositionTypes(next);
     };
 
     const onRegenerate = () => {
@@ -49,8 +63,9 @@ export function ConnectorTreeRow({ group: g, document }: Props) {
             document,
             g.id,
             store.placementRule,
-            store.get(g.id)?.positionsActive,
+            store.positionsActive,
             store.firstOffsetMm,
+            store.positionTypes,
         );
     };
 
@@ -117,8 +132,7 @@ export function ConnectorTreeRow({ group: g, document }: Props) {
                         <select
                             value={store.placementRule}
                             onChange={(e) => {
-                                store.placementRule = e.target.value;
-                                store.notifyChanged();
+                                store.setPlacementRule(e.target.value);
                             }}
                         >
                             {ruleKeys.map((key) => (
@@ -146,9 +160,13 @@ export function ConnectorTreeRow({ group: g, document }: Props) {
                             <span className="c2-field__unit">mm</span>
                         </span>
                     </label>
-                    <ConnectorPositions
-                        group={store.get(g.id) ?? g}
+                    <ConnectorPositionsEditor
+                        placementRule={store.placementRule}
+                        firstOffsetMm={store.firstOffsetMm}
+                        positionsActive={store.positionsActive}
+                        positionTypes={store.positionTypes}
                         onToggle={onTogglePosition}
+                        onChangeType={onChangeType}
                     />
                     <button type="button" className="c2-btn c2-btn--primary" onClick={onRegenerate}>
                         Regeneruj
@@ -156,54 +174,5 @@ export function ConnectorTreeRow({ group: g, document }: Props) {
                 </div>
             )}
         </div>
-    );
-}
-
-function ConnectorPositions({
-    group,
-    onToggle,
-}: {
-    group: ConnectorGroup;
-    onToggle: (index: number) => void;
-}) {
-    const store = ConnectorStore.instance;
-    const ruleDef = getPlacementRuleDefinition(store.placementRule);
-    const edgeBase = ruleEdgeOffsetMm(ruleDef);
-    const sides = ruleDef?.sides ?? [];
-    let globalIndex = 0;
-    return (
-        <>
-            {sides.map((side, si) => (
-                <div key={si} className="c2-side">
-                    {sides.length > 1 && (
-                        <div className="c2-side__label">
-                            {isConnectorFromFront(side.direction) ? 'PRZÓD' : 'TYŁ'}
-                        </div>
-                    )}
-                    {side.positions.map((pos) => {
-                        const idx = globalIndex++;
-                        const on = group.positionsActive[idx] !== false;
-                        const def = getConnectorDefinition(pos.type);
-                        const name = (def?.name || pos.type)
-                            .replace('Kołek ', 'Kolek ')
-                            .replace('Konfirmat ', 'Konf ');
-                        return (
-                            <button
-                                key={idx}
-                                type="button"
-                                className={`c2-pos ${on ? 'is-on' : 'is-off'}`}
-                                onClick={() => onToggle(idx)}
-                            >
-                                <span className="c2-pos__check">{on ? '☑' : '☐'}</span>
-                                <span className="c2-pos__off">
-                                    {String(applyFirstHoleOffset(pos.offset_mm, store.firstOffsetMm, edgeBase)).padStart(3, ' ')}mm
-                                </span>
-                                <span>{name}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            ))}
-        </>
     );
 }

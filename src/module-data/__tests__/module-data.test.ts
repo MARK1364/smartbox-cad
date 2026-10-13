@@ -98,6 +98,19 @@ describe('CNC workpiece', () => {
 });
 
 describe('tree-context-menu', () => {
+    const labelsOf = (items: any[]): string[] => {
+        const out: string[] = [];
+        for (const i of items || []) {
+            if (i?.label) out.push(i.label);
+            if (Array.isArray(i?.toolbar)) {
+                for (const t of i.toolbar) {
+                    if (t?.label) out.push(t.label);
+                }
+            }
+        }
+        return out;
+    };
+
     it('shows "Edytuj korpus" in context menu for container / korpus nodes', async () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
         const doc = new ProjectDocument();
@@ -122,14 +135,115 @@ describe('tree-context-menu', () => {
                 clientY: 100
             });
 
-            const labels = shownItems.map(i => i.label);
+            const labels = labelsOf(shownItems);
             expect(labels).toContain('Edytuj korpus');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
     });
 
-    it('shows "Edytuj operację" for smart library operations and excludes "Usuń" and "Ukryj / Pokaż" in tree context menu', async () => {
+    it('shows "Edytuj AGD" for appliance containers in tree context menu', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        const agd = doc.createAssembly({ name: 'Mikrofalówka' }) as any;
+        agd.role = 'APPLIANCE';
+        agd.generatorParams = { type: 'smart_appliance', kind: 'MICROWAVE' };
+        ContextManager.instance.document = doc;
+
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'agd',
+                id: agd.id,
+                name: agd.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            let labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj AGD');
+            expect(labels).not.toContain('Edytuj korpus');
+            expect(labels).not.toContain('Edytuj blok');
+
+            showCadTreeContextMenu({
+                type: 'container',
+                id: agd.id,
+                name: agd.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj AGD');
+            expect(labels).not.toContain('Edytuj korpus');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('shows "Edytuj" for SmartPart and "Edytuj formatkę" for panel in tree context menu', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        const handle = doc.createAssembly({ name: 'Uchwyt 1' }) as any;
+        handle.role = 'SMARTPART_HANDLE';
+        handle.generatorParams = { type: 'smartpart_handle', partType: 'HANDLE' };
+        ContextManager.instance.document = doc;
+
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'handle',
+                id: handle.id,
+                name: handle.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            let labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj');
+            expect(labels).not.toContain('Edytuj korpus');
+            expect(labels).not.toContain('Edytuj blok');
+
+            // SmartPart jako container (bez type=handle z drzewa) — nadal Edytuj
+            showCadTreeContextMenu({
+                type: 'container',
+                id: handle.id,
+                name: handle.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj');
+            expect(labels).not.toContain('Edytuj korpus');
+
+            showCadTreeContextMenu({
+                type: 'part',
+                id: 'panel_fmt_1',
+                name: 'Bok',
+                isManual: true,
+                clientX: 10,
+                clientY: 10,
+            });
+            labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj formatkę');
+            expect(labels).not.toContain('Edytuj korpus');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('shows "Edytuj" for smart library operations and excludes "Usuń" and "Ukryj / Pokaż" in tree context menu', async () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
         const { ContextMenu } = await import('../../../A1_core/context-menu.js');
         let shownItems: any[] = [];
@@ -153,8 +267,8 @@ describe('tree-context-menu', () => {
                 clientY: 100
             });
 
-            let labels = shownItems.map(i => i.label);
-            expect(labels).toContain('Edytuj operację');
+            let labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj');
             expect(labels).toContain('Właściwości');
             expect(labels).not.toContain('Usuń');
             expect(labels).not.toContain('Ukryj / Pokaż');
@@ -174,8 +288,8 @@ describe('tree-context-menu', () => {
                 clientY: 100
             });
 
-            labels = shownItems.map(i => i.label);
-            expect(labels).not.toContain('Edytuj operację');
+            labels = labelsOf(shownItems);
+            expect(labels).not.toContain('Edytuj');
             expect(labels).not.toContain('Usuń');
             expect(labels).not.toContain('Ukryj / Pokaż');
             expect(labels).toContain('Zamroź obróbkę');
@@ -191,8 +305,8 @@ describe('tree-context-menu', () => {
                 clientY: 100
             });
 
-            labels = shownItems.map(i => i.label);
-            expect(labels).toContain('Edytuj formatkę');
+            labels = labelsOf(shownItems);
+            expect(labels).not.toContain('Edytuj formatkę');
             expect(labels).not.toContain('Usuń');
             expect(labels).not.toContain('Ukryj / Pokaż');
             expect(labels).toContain('Zamroź formatkę');
@@ -208,7 +322,7 @@ describe('tree-context-menu', () => {
                 clientY: 100
             });
 
-            labels = shownItems.map(i => i.label);
+            labels = labelsOf(shownItems);
             expect(labels).toContain('Edytuj formatkę');
             expect(labels).not.toContain('Usuń');
             expect(labels).not.toContain('Ukryj / Pokaż');
@@ -230,17 +344,70 @@ describe('tree-context-menu', () => {
                 clientY: 100
             });
 
-            labels = shownItems.map(i => i.label);
+            labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj blok');
             expect(labels).toContain('Raport ze Bloku');
             expect(labels).not.toContain('Edytuj korpus');
             expect(labels).not.toContain('Usuń');
             expect(labels).not.toContain('Ukryj / Pokaż');
+
+            // type z drzewa / belki: 'bloki' (nie 'container')
+            showCadTreeContextMenu({
+                type: 'bloki',
+                id: sbContainer.id,
+                name: sbContainer.name,
+                clientX: 100,
+                clientY: 100
+            });
+            labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj blok');
+            expect(labels).not.toContain('Edytuj korpus');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
     });
 
-    it('shows "Pokaż tylko" for panel/container and "Pokaż wszystko" only for project root', async () => {
+    it('shows "Edytuj formatkę" only for SmartPanel manual panels (engineManaged === false)', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        const manual = doc.createPanel({ name: 'Manualna', width: 600_000_000, height: 720_000_000, thickness: 18_000_000, engineManaged: false });
+        const engine = doc.createPanel({ name: 'Bok silnikowy', width: 600_000_000, height: 720_000_000, thickness: 18_000_000 });
+        ContextManager.instance.document = doc;
+
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            // Manualna: model engineManaged === false → edycja widoczna (nawet bez flagi isManual)
+            showCadTreeContextMenu({
+                type: 'part',
+                id: (manual as any).id,
+                name: (manual as any).name,
+                clientX: 10,
+                clientY: 10,
+            });
+            expect(labelsOf(shownItems)).toContain('Edytuj formatkę');
+
+            // Silnikowa (korpus/blok): brak edycji formatki
+            showCadTreeContextMenu({
+                type: 'part',
+                id: (engine as any).id,
+                name: (engine as any).name,
+                clientX: 10,
+                clientY: 10,
+            });
+            expect(labelsOf(shownItems)).not.toContain('Edytuj formatkę');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('shows "Pokaż tylko" + scoped "Pokaż wszystko" on container/panel; project has only "Pokaż wszystko"', async () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
         const doc = new ProjectDocument();
         registerProjectDomain(doc);
@@ -263,9 +430,9 @@ describe('tree-context-menu', () => {
                 clientX: 10,
                 clientY: 10,
             });
-            let labels = shownItems.map(i => i.label);
+            let labels = labelsOf(shownItems);
             expect(labels).toContain('Pokaż tylko');
-            expect(labels).not.toContain('Pokaż wszystko');
+            expect(labels).toContain('Pokaż wszystko');
 
             showCadTreeContextMenu({
                 type: 'part',
@@ -274,9 +441,9 @@ describe('tree-context-menu', () => {
                 clientX: 10,
                 clientY: 10,
             });
-            labels = shownItems.map(i => i.label);
+            labels = labelsOf(shownItems);
             expect(labels).toContain('Pokaż tylko');
-            expect(labels).not.toContain('Pokaż wszystko');
+            expect(labels).toContain('Pokaż wszystko');
 
             showCadTreeContextMenu({
                 type: 'project',
@@ -285,7 +452,7 @@ describe('tree-context-menu', () => {
                 clientX: 10,
                 clientY: 10,
             });
-            labels = shownItems.map(i => i.label);
+            labels = labelsOf(shownItems);
             expect(labels).toContain('Pokaż wszystko');
             expect(labels).not.toContain('Pokaż tylko');
         } finally {

@@ -348,3 +348,107 @@ export function chainEdgeSegments(edgeSegments: { points: Vector3D[] }[]): Vecto
     return currentChain;
 }
 
+/**
+ * Oblicza sumaryczną długość ścieżki otwartej (od startPoint przez wszystkie punkty).
+ */
+export function calculateOpenPathLength(
+    points: Vector3D[],
+    startPoint: Vector3D = { x: 0, y: 0, z: 0 }
+): number {
+    if (points.length === 0) return 0;
+    let total = vecDistance(startPoint, points[0]);
+    for (let i = 0; i < points.length - 1; i++) {
+        total += vecDistance(points[i], points[i + 1]);
+    }
+    return total;
+}
+
+/**
+ * Optymalizacja komiwojażera (TSP) dla ścieżki otwartej (Nearest Neighbor + 2-Opt).
+ * 
+ * Znacząco skraca przejazdy jałowe (G0) maszyny CNC:
+ * 1. Konstrukcja trasy początkowej algorytmem zachłannym (Nearest Neighbor) od startPoint.
+ * 2. Iteracyjne odplątywanie skrzyżowań (2-Opt local search) poprzez odwracanie podścieżek.
+ * 
+ * Działa dla dowolnych obiektów posiadających funkcję pobierania współrzędnych 3D.
+ */
+export function optimizePath2Opt<T>(
+    items: T[],
+    getPoint: (item: T) => Vector3D,
+    startPoint: Vector3D = { x: 0, y: 0, z: 0 },
+    maxIterations = 100
+): T[] {
+    if (!items || items.length <= 2) {
+        return items ? [...items] : [];
+    }
+
+    // 1. Inicjalizacja: Nearest Neighbor od punktu startowego
+    const unvisited = items.map(item => ({ item, pt: getPoint(item) }));
+    const route: Array<{ item: T; pt: Vector3D }> = [];
+    let currentPt = startPoint;
+
+    while (unvisited.length > 0) {
+        let bestIdx = 0;
+        let bestDist = vecDistance(currentPt, unvisited[0].pt);
+
+        for (let i = 1; i < unvisited.length; i++) {
+            const d = vecDistance(currentPt, unvisited[i].pt);
+            if (d < bestDist) {
+                bestDist = d;
+                bestIdx = i;
+            }
+        }
+
+        const next = unvisited.splice(bestIdx, 1)[0];
+        route.push(next);
+        currentPt = next.pt;
+    }
+
+    // 2. Lokalna optymalizacja 2-Opt (odwracanie segmentów [i..j], które skracają sumę krawędzi)
+    const n = route.length;
+    let improved = true;
+    let iteration = 0;
+
+    while (improved && iteration < maxIterations) {
+        improved = false;
+        iteration++;
+
+        for (let i = 0; i < n - 1; i++) {
+            for (let j = i + 1; j < n; j++) {
+                // Punkt przed podścieżką [i..j]
+                const pPrev = i === 0 ? startPoint : route[i - 1].pt;
+                // Punkt po podścieżce [i..j] (jeśli j to ostatni punkt, po nim nie ma krawędzi)
+                const pNext = j === n - 1 ? null : route[j + 1].pt;
+
+                // Odległości aktualne krawędzi wejściowej i wyjściowej
+                const d1Old = vecDistance(pPrev, route[i].pt);
+                const d2Old = pNext ? vecDistance(route[j].pt, pNext) : 0;
+                const oldDist = d1Old + d2Old;
+
+                // Odległości po odwróceniu podścieżki [i..j]:
+                // Krawędź wejściowa łączy teraz pPrev z route[j]
+                // Krawędź wyjściowa łączy route[i] z pNext
+                const d1New = vecDistance(pPrev, route[j].pt);
+                const d2New = pNext ? vecDistance(route[i].pt, pNext) : 0;
+                const newDist = d1New + d2New;
+
+                if (newDist < oldDist - 1e-4) {
+                    // Odwróć podścieżkę od i do j włącznie
+                    let left = i;
+                    let right = j;
+                    while (left < right) {
+                        const temp = route[left];
+                        route[left] = route[right];
+                        route[right] = temp;
+                        left++;
+                        right--;
+                    }
+                    improved = true;
+                }
+            }
+        }
+    }
+
+    return route.map(r => r.item);
+}
+

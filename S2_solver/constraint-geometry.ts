@@ -679,14 +679,23 @@ export function resolveAnchor(
             const mapped = mapLocalMmToNode(source, node, local);
             return { localPointMm: mapped.localPointMm, localNormal: null };
         }
+        if (declaresSource) {
+            // Formatka źródłowa zniknęła — tylko snapshot awaryjnie.
+            return anchor.localPointMm
+                ? { localPointMm: [...anchor.localPointMm], localNormal: null }
+                : null;
+        }
+        // Żywy narożnik wygrywa ze snapshotem (jak FACE): po setDimensions /
+        // offsetcie assoc. wysokość zmienia AABB, a zapisany localPointMm
+        // z picka byłby martwy → residual 0 i oderwanie od korpusu.
+        const live = resolveCornerLocalMm(node, anchor.cornerIndex);
+        if (live) {
+            return { localPointMm: live, localNormal: null };
+        }
         if (anchor.localPointMm) {
             return { localPointMm: [...anchor.localPointMm], localNormal: null };
         }
-        if (declaresSource) {
-            return null;
-        }
-        const point = resolveCornerLocalMm(node, anchor.cornerIndex);
-        return point ? { localPointMm: point, localNormal: null } : null;
+        return null;
     }
 
     const snapshot: ResolvedAnchor | null =

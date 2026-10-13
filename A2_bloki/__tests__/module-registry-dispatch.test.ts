@@ -26,11 +26,15 @@ describe('A2_bloki — resolveModulePlugin (fail-fast)', () => {
         expect(resolveModulePlugin('SHELVES')?.id).toBe('SHELVES');
     });
 
-    it('rejestr z bootstrapu ma 11 unikalnych id i nie zawiera sentinela EMPTY', () => {
+    it('rejestr z bootstrapu ma 14 unikalnych id i nie zawiera sentinela EMPTY', () => {
         registerAllBlokiModules();
         const ids = SmartModuleRegistry.getActiveModules().map(p => p.id);
         expect(new Set(ids).size).toBe(ids.length);
-        expect(ids).toHaveLength(11);
+        expect(ids).toHaveLength(14);
+        expect(ids).toContain('HANDLES');
+        expect(ids).toContain('HANGERS');
+        expect(ids).toContain('DOORS');
+        expect(ids).toContain('SKOSNE_DOORS');
         expect(ids).not.toContain('EMPTY' as never);
     });
 });

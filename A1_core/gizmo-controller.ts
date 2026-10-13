@@ -16,6 +16,7 @@ import { findOffsetGizmoHandler } from './offset-gizmo-port.js';
 import { getCabinetModule, TopPanelMode } from './cabinet-port.js';
 import { CadTranslateGizmo } from './cad-translate-gizmo.js';
 import { getConstraintDragPort } from './constraint-drag-port.js';
+import { NodeType } from './cad-node/node-type.js';
 
 declare const BABYLON: any;
 
@@ -48,14 +49,14 @@ export class GizmoController {
      */
     private pushPullMapping: Record<string, Record<string, string>> = {
         'LEFT_SIDE_PANEL': {
-            'FACE_Y_PLUS': '-Y',    // Krawędź górna korpusu (-Y / top offset)
-            'FACE_Y_MINUS': '+Y',  // Krawędź dolna korpusu (+Y / bottom offset)
+            'FACE_Y_PLUS': '+Y',    // Krawędź górna korpusu (+Y / top offset)
+            'FACE_Y_MINUS': '-Y',  // Krawędź dolna korpusu (-Y / bottom offset)
             'FACE_X_MINUS': '+X',  // Ścianka left z tyłu korpusu -> (+X / pXPlus offset)
             'FACE_X_PLUS': '-X'    // Ścianka right z przodu korpusu -> (-X / pXMinus offset)
         },
         'SIDE_LEFT': {
-            'FACE_Y_PLUS': '-Y',
-            'FACE_Y_MINUS': '+Y',
+            'FACE_Y_PLUS': '+Y',
+            'FACE_Y_MINUS': '-Y',
             'FACE_X_MINUS': '+X',
             'FACE_X_PLUS': '-X'
         },
@@ -130,7 +131,48 @@ export class GizmoController {
         }
     }
 
+    public isEntityVisible(entity: any): boolean {
+        if (!entity) return false;
+        if (entity.visible === false) return false;
+        if (entity.params?.visible === false) return false;
+        if (entity.generatorParams?.visible === false) return false;
+        if (entity.frozen === true || entity.params?.frozen === true) return false;
+
+        const doc = ContextManager.instance.document;
+        if (doc) {
+            const cadNode = doc.findNode(entity.id);
+            if (cadNode?.parent && cadNode.parent.nodeType === NodeType.ASSEMBLY) {
+                const parentDomain = cadNode.parent.domainData as any;
+                if (parentDomain && (parentDomain.visible === false || parentDomain.generatorParams?.visible === false || parentDomain.frozen === true)) {
+                    return false;
+                }
+            }
+        }
+
+        const panelViews = ContextManager.instance.panelViews;
+        const containerViews = ContextManager.instance.containerViews;
+        const view = panelViews?.get(entity) || containerViews?.get(entity);
+        const root = (view as any)?.rootNode || (view as any)?.root;
+        if (root && (root.isEnabled() === false || root.isVisible === false)) {
+            return false;
+        }
+
+        return true;
+    }
+
     public init(): void {
+        ContextManager.instance.hidePositionGizmo = () => {
+            this.clearFaceGizmos();
+        };
+
+        ContextManager.instance.hideGizmos = () => {
+            this.clearFaceGizmos();
+        };
+
+        ContextManager.instance.showGizmos = () => {
+            this.updateFaceGizmo();
+        };
+
         const viewport = ContextManager.instance.viewport;
         if (!viewport || !viewport.scene) return;
 
@@ -138,7 +180,21 @@ export class GizmoController {
         this.createTopPanelWidget();
 
         viewport.scene.onBeforeRenderObservable.add(() => {
-            if ((this.isDraggingFaceGizmo || this.isEditingFaceGizmo) && this.activeGizmoSphere && this.activeGizmoContainer && this.activeGizmoParamName) {
+            const activeEntity = ContextManager.instance.document?.activeEntity;
+            const isEntityVis = this.isEntityVisible(activeEntity);
+
+            if (!isEntityVis || !this.activeGizmoSphere || !this.activeGizmoContainer || !this.isEntityVisible(this.activeGizmoContainer) || (this.activeGizmoSphere.isDisposed && this.activeGizmoSphere.isDisposed())) {
+                const badge = document.getElementById('gizmo-floating-input');
+                if (badge && badge.style.display !== 'none' && !this.isEditingFaceGizmo) {
+                    badge.style.display = 'none';
+                    this.badgeFixedPos = null;
+                }
+                if (!isEntityVis && badge && badge.style.display !== 'none') {
+                    badge.style.display = 'none';
+                    this.badgeFixedPos = null;
+                    this.isEditingFaceGizmo = false;
+                }
+            } else if ((this.isDraggingFaceGizmo || this.isEditingFaceGizmo) && this.activeGizmoSphere && this.activeGizmoContainer && this.activeGizmoParamName) {
                 const badge = document.getElementById('gizmo-floating-input');
                 const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
                 const canvas = viewport.canvas;
@@ -174,10 +230,9 @@ export class GizmoController {
 
                     if (document.activeElement !== input) {
                         let currentVal: number;
-                        if (this.activeGizmoParamName === 'backOffset') {
-                            currentVal = this.activeGizmoContainer.generatorParams.backOffset !== undefined
-                                ? this.activeGizmoContainer.generatorParams.backOffset
-                                : 3;
+                        if (this.activeGizmoParamName === 'backOffset' || this.activeGizmoParamName === 'cofniecie_plecow_mm') {
+                            const gp = this.activeGizmoContainer.generatorParams;
+                            currentVal = gp?.cofniecie_plecow_mm ?? gp?.backOffset ?? gp?.offsets?.backOffset ?? 3;
                         } else {
                             const activeEntity = ContextManager.instance.document?.activeEntity;
                             const role = (activeEntity as any)?.role;
@@ -199,30 +254,37 @@ export class GizmoController {
             }
 
             if (this.activeTopPanelEntity && this.activeTopPanelContainer && this.isTopPanelWidgetOpen) {
-                const topWidget = document.getElementById('gizmo-top-panel-widget');
-                const view = ContextManager.instance.panelViews.get(this.activeTopPanelEntity);
-                const canvas = viewport.canvas;
-                if (topWidget && view?.root && canvas) {
-                    topWidget.style.display = 'flex';
-                    if (this.topPanelWidgetManualPos) {
-                        topWidget.style.left = `${this.topPanelWidgetManualPos.left}px`;
-                        topWidget.style.top = `${this.topPanelWidgetManualPos.top}px`;
-                    } else {
-                        const worldPos = view.root.getAbsolutePosition ? view.root.getAbsolutePosition().clone() : view.root.position.clone();
-                        const screenPos = BABYLON.Vector3.Project(
-                            worldPos,
-                            BABYLON.Matrix.Identity(),
-                            viewport.scene.getTransformMatrix(),
-                            viewport.scene.activeCamera.viewport.toGlobal(
-                                viewport.engine.getRenderWidth(),
-                                viewport.engine.getRenderHeight()
-                            )
-                        );
-                        const canvasRect = canvas.getBoundingClientRect();
-                        const curLeft = canvasRect.left + screenPos.x + 30;
-                        const curTop = canvasRect.top + screenPos.y - 120;
-                        topWidget.style.left = `${Math.max(10, curLeft)}px`;
-                        topWidget.style.top = `${Math.max(10, curTop)}px`;
+                if (!this.isEntityVisible(this.activeTopPanelEntity) || !this.isEntityVisible(this.activeTopPanelContainer)) {
+                    const topWidget = document.getElementById('gizmo-top-panel-widget');
+                    if (topWidget && topWidget.style.display !== 'none') {
+                        topWidget.style.display = 'none';
+                    }
+                } else {
+                    const topWidget = document.getElementById('gizmo-top-panel-widget');
+                    const view = ContextManager.instance.panelViews.get(this.activeTopPanelEntity);
+                    const canvas = viewport.canvas;
+                    if (topWidget && view?.root && canvas) {
+                        topWidget.style.display = 'flex';
+                        if (this.topPanelWidgetManualPos) {
+                            topWidget.style.left = `${this.topPanelWidgetManualPos.left}px`;
+                            topWidget.style.top = `${this.topPanelWidgetManualPos.top}px`;
+                        } else {
+                            const worldPos = view.root.getAbsolutePosition ? view.root.getAbsolutePosition().clone() : view.root.position.clone();
+                            const screenPos = BABYLON.Vector3.Project(
+                                worldPos,
+                                BABYLON.Matrix.Identity(),
+                                viewport.scene.getTransformMatrix(),
+                                viewport.scene.activeCamera.viewport.toGlobal(
+                                    viewport.engine.getRenderWidth(),
+                                    viewport.engine.getRenderHeight()
+                                )
+                            );
+                            const canvasRect = canvas.getBoundingClientRect();
+                            const curLeft = canvasRect.left + screenPos.x + 30;
+                            const curTop = canvasRect.top + screenPos.y - 120;
+                            topWidget.style.left = `${Math.max(10, curLeft)}px`;
+                            topWidget.style.top = `${Math.max(10, curTop)}px`;
+                        }
                     }
                 }
             } else {
@@ -232,14 +294,6 @@ export class GizmoController {
                 }
             }
         });
-
-        ContextManager.instance.hidePositionGizmo = () => {
-            this.clearFaceGizmos();
-        };
-
-        ContextManager.instance.showGizmos = () => {
-            this.updateFaceGizmo();
-        };
     }
 
     public createFloatingInput(): void {
@@ -321,9 +375,10 @@ export class GizmoController {
         this.isEditingFaceGizmo = true;
         this.badgeFixedPos = null;
 
-        const isBackOffset = paramName === 'backOffset';
+        const isBackOffset = paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm';
+        const gp = container?.generatorParams;
         this.originalValueBeforeEdit = isBackOffset
-            ? (container.generatorParams?.backOffset !== undefined ? container.generatorParams.backOffset : 3)
+            ? (gp?.cofniecie_plecow_mm ?? gp?.backOffset ?? gp?.offsets?.backOffset ?? 3)
             : this._readOffsetMm(container, paramName, role);
 
         const badge = document.getElementById('gizmo-floating-input');
@@ -341,8 +396,9 @@ export class GizmoController {
 
     private _readOffsetMm(container: any, paramName: string, role?: string): number {
         if (!container) return 0;
-        if (paramName === 'backOffset') {
-            return container.generatorParams?.backOffset !== undefined ? container.generatorParams.backOffset : 3;
+        if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
+            const gp = container.generatorParams;
+            return gp?.cofniecie_plecow_mm ?? gp?.backOffset ?? gp?.offsets?.backOffset ?? 3;
         }
         const handler = role ? findOffsetGizmoHandler(role) : null;
         if (handler) {
@@ -366,7 +422,8 @@ export class GizmoController {
         }
 
         const cabMod = getCabinetModule();
-        if (paramName === 'backOffset') {
+        if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
+            container.generatorParams.cofniecie_plecow_mm = value;
             container.generatorParams.backOffset = value;
             cabMod?.rebuild(container);
             return;
@@ -716,11 +773,23 @@ export class GizmoController {
         }
         this.activeFaceGizmoSpheres = [];
 
+        this.activeGizmoSphere = null;
+        this.activeGizmoParamName = '';
+        this.activeGizmoContainer = null;
+        this.isDraggingFaceGizmo = false;
+        this.isEditingFaceGizmo = false;
+        this.badgeFixedPos = null;
+
+        const badge = typeof document !== 'undefined' ? document.getElementById('gizmo-floating-input') : null;
+        if (badge) {
+            badge.style.display = 'none';
+        }
+
         this.activeTopPanelEntity = null;
         this.activeTopPanelContainer = null;
         this.isTopPanelWidgetOpen = false;
         this.topPanelWidgetManualPos = null;
-        const topWidget = document.getElementById('gizmo-top-panel-widget');
+        const topWidget = typeof document !== 'undefined' ? document.getElementById('gizmo-top-panel-widget') : null;
         if (topWidget) {
             topWidget.style.display = 'none';
         }
@@ -745,10 +814,22 @@ export class GizmoController {
         if (!doc || !viewport) return;
 
         const rawEntity = entity || doc.activeEntity;
-        if (!rawEntity) return;
+        if (!rawEntity || !this.isEntityVisible(rawEntity)) {
+            if (this.positionGizmo) this.positionGizmo.attachedNode = null;
+            if (this.freeDragSphere && !this.freeDragSphere.isDisposed()) {
+                this.freeDragSphere.setEnabled(false);
+            }
+            return;
+        }
 
         const { target: activeEntity } = doc.getTransformableTarget(rawEntity);
-        if (!activeEntity) return;
+        if (!activeEntity || !this.isEntityVisible(activeEntity)) {
+            if (this.positionGizmo) this.positionGizmo.attachedNode = null;
+            if (this.freeDragSphere && !this.freeDragSphere.isDisposed()) {
+                this.freeDragSphere.setEnabled(false);
+            }
+            return;
+        }
 
         const targetNode = panelViews.get(activeEntity)?.root ||
                            containerViews.get(activeEntity)?.rootNode ||
@@ -811,10 +892,16 @@ export class GizmoController {
         if (!doc || !viewport) return;
 
         const rawEntity = entity || doc.activeEntity;
-        if (!rawEntity) return;
+        if (!rawEntity || !this.isEntityVisible(rawEntity)) {
+            if (this.rotationGizmo) this.rotationGizmo.attachedNode = null;
+            return;
+        }
 
         const { target: activeEntity } = doc.getTransformableTarget(rawEntity);
-        if (!activeEntity) return;
+        if (!activeEntity || !this.isEntityVisible(activeEntity)) {
+            if (this.rotationGizmo) this.rotationGizmo.attachedNode = null;
+            return;
+        }
 
         const targetNode = panelViews.get(activeEntity)?.root ||
                            containerViews.get(activeEntity)?.rootNode ||
@@ -855,10 +942,14 @@ export class GizmoController {
 
                 const onRotDragEnd = () => {
                     if (viewport.camera) viewport.camera.attachControl(viewport.canvas, true);
-                    if (activeEntity && targetNode) {
-                        ContextManager.instance.sceneSyncAdapter.syncFromMesh(targetNode);
-                        const label = `Obrót ${activeEntity.name || 'obiektu'}`;
-                        this._commitConstraintDrag(activeEntity, label);
+                    const ctx = this._resolveTransformTarget();
+                    if (ctx) {
+                        const liveTarget = this._resolveTargetMesh(ctx.entity);
+                        if (liveTarget) {
+                            ContextManager.instance.sceneSyncAdapter.syncFromMesh(liveTarget);
+                        }
+                        const label = `Obrót ${ctx.entity.name || 'obiektu'}`;
+                        this._commitConstraintDrag(ctx.entity, label);
                     }
                 };
 
@@ -882,18 +973,25 @@ export class GizmoController {
         this.createFloatingInput();
 
         if (this.isDraggingFaceGizmo || this.isEditingFaceGizmo) {
+            const activeEntity = ContextManager.instance.document?.activeEntity;
+            if (!this.isEntityVisible(activeEntity)) {
+                this.clearFaceGizmos();
+                return;
+            }
             return;
         }
 
         const modalMgr = ContextManager.instance.modalTransformManager;
         if (modalMgr && modalMgr.activeMode !== 'none') {
             const activeEntity = ContextManager.instance.document?.activeEntity;
-            if (activeEntity) {
-                if (modalMgr.activeMode === 'translate') {
-                    this.showTranslateGizmo(activeEntity);
-                } else if (modalMgr.activeMode === 'rotate') {
-                    this.showRotateGizmo(activeEntity);
-                }
+            if (!activeEntity || !this.isEntityVisible(activeEntity)) {
+                this.clearFaceGizmos();
+                return;
+            }
+            if (modalMgr.activeMode === 'translate') {
+                this.showTranslateGizmo(activeEntity);
+            } else if (modalMgr.activeMode === 'rotate') {
+                this.showRotateGizmo(activeEntity);
             }
             return;
         }
@@ -908,7 +1006,7 @@ export class GizmoController {
         if (!doc || !viewport) return;
 
         const activeEntity = doc.activeEntity;
-        if (!activeEntity) return;
+        if (!activeEntity || !this.isEntityVisible(activeEntity)) return;
 
         // Gizma push/pull (pomarańczowe kulki) są zarezerwowane WYŁĄCZNIE dla zakładki Korpus (A3_smartframe / selectionMode === 'object')
         if (facePicker && facePicker.selectionMode !== 'object') {
@@ -922,6 +1020,9 @@ export class GizmoController {
         const targetEntity = activeEntity;
         const view = panelViews.get(targetEntity);
         if (!view || !view.faceMeshes) return;
+        if (view.root && (view.root.isEnabled() === false || view.root.isVisible === false)) {
+            return;
+        }
 
         const role = (targetEntity as any).role;
         const handler = role ? findOffsetGizmoHandler(role) : null;
@@ -930,7 +1031,7 @@ export class GizmoController {
 
         // Zawsze korpus właściciel płyty — NIE getContainers()[0]
         const container: any = handler?.resolveContainer(doc, targetEntity) || (doc ? doc.findNode(targetEntity.id)?.parent?.domainData : null);
-        if (!container || !container.generatorParams) return;
+        if (!container || !container.generatorParams || !this.isEntityVisible(container)) return;
 
         const panelName = targetEntity.name;
 
@@ -1009,6 +1110,10 @@ export class GizmoController {
                 mat.emissiveColor = emissiveColor;
                 sphere.material = mat;
                 sphere.setParent(view.root);
+                if (isCenterPlane) {
+                    // Odsunięcie niebieskiego gizma offsetu w bok (+X w LCS formatki) poza pionową oś zielonych kul (Y+/Y-)
+                    sphere.position.x += 60;
+                }
 
                 const dragBehavior = new BABYLON.PointerDragBehavior({
                     dragAxis: normal
@@ -1024,8 +1129,9 @@ export class GizmoController {
                     this.activeGizmoParamName = paramName;
                     this.activeGizmoContainer = container;
                     const c = container as any;
-                    if (paramName === 'backOffset') {
-                        this.originalValueBeforeEdit = c.generatorParams.backOffset !== undefined ? c.generatorParams.backOffset : 3;
+                    if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
+                        const gp = c.generatorParams;
+                        this.originalValueBeforeEdit = gp?.cofniecie_plecow_mm ?? gp?.backOffset ?? gp?.offsets?.backOffset ?? 3;
                     } else {
                         this.originalValueBeforeEdit = this._readOffsetMm(c, paramName, role);
                     }
@@ -1051,9 +1157,10 @@ export class GizmoController {
                     // Precyzyjnie przypnij pozycję kulki do poruszającej się krawędzi formatki
                     sphere.position.copyFrom(startPos.add(normal.scale(delta)));
 
-                    if (paramName === 'backOffset') {
+                    if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
                         const newValue = Math.max(0, originalValue + delta);
-                        if (c.generatorParams.backOffset === newValue) return;
+                        const curVal = c.generatorParams.cofniecie_plecow_mm ?? c.generatorParams.backOffset;
+                        if (curVal === newValue) return;
                         this.previewOffsetOnContainer(c, paramName, newValue, role);
                         return;
                     }
@@ -1108,12 +1215,24 @@ export class GizmoController {
                 this.activeFaceGizmoSpheres.push(sphere);
             }
 
-            // --- DODANIE 5-TEJ ZIELONEJ KULI DO PRZESUWANIA (SHIFT) ---
+            // --- DODANIE ŚRODKOWEJ KULI DO PRZESUWANIA (SHIFT) ---
             if (view && view.root && role) {
                 let shiftParam = '';
                 let shiftAxis = new BABYLON.Vector3(1, 0, 0); // Domyślnie X
                 
-                if (role.includes('LEFT') || role === 'LEFT_SIDE_PANEL' || role === 'SIDE_LEFT') {
+                const shiftSpec = handler?.getShift ? handler.getShift(role, targetEntity) : null;
+                if (shiftSpec) {
+                    shiftParam = shiftSpec.paramSuffix;
+                    if (shiftSpec.cadAxis === 'X') {
+                        shiftAxis = new BABYLON.Vector3(shiftSpec.sign, 0, 0);
+                    } else if (shiftSpec.cadAxis === 'Y') {
+                        // CAD Y = Babylon Z (głębokość szafki = oś Z formatki TRAVERSE_V)
+                        shiftAxis = new BABYLON.Vector3(0, 0, shiftSpec.sign);
+                    } else if (shiftSpec.cadAxis === 'Z') {
+                        // CAD Z = Babylon Y (wysokość szafki)
+                        shiftAxis = new BABYLON.Vector3(0, shiftSpec.sign, 0);
+                    }
+                } else if (role.includes('LEFT') || role === 'LEFT_SIDE_PANEL' || role === 'SIDE_LEFT') {
                     shiftParam = 'shiftX';
                     shiftAxis = new BABYLON.Vector3(-1, 0, 0); // Dla lewego boku (-X na zewnątrz korpusu)
                 } else if (role.includes('SIDE') || role.includes('DIVIDER')) {
@@ -1153,6 +1272,7 @@ export class GizmoController {
                     const centerDrag = new BABYLON.PointerDragBehavior({
                         dragAxis: shiftAxis
                     });
+                    centerDrag.useObjectOrientationForDragging = false;
                     centerDrag.dragDeltaRatio = GIZMO_DRAG_MULTIPLIER;
                     
                     let originalValue = 0;
@@ -1237,16 +1357,20 @@ export class GizmoController {
 
                     // --- GIZMO W KSZTAŁCIE KOSTKI (CUBE) DO KONFIGURACJI WIEŃCA GÓRNEGO ---
                     if (role === 'TOP_PANEL' || role.includes('TOP')) {
+                        // Na środku formatki; rozmiar = grubość + 10% (lekko wystaje poza płytę)
+                        const thicknessMm = Math.max(1, nmToMm((targetEntity as any).thickness) || 18);
+                        const cubeSize = thicknessMm * 1.1;
                         const topCube = BABYLON.MeshBuilder.CreateBox(
                             'faceGizmo_topPanelConfigCube',
-                            { size: 18 },
+                            { size: cubeSize },
                             viewport.scene
                         );
                         topCube.metadata = { isTopConfigCube: true };
-                        topCube.position.copyFrom(worldPos);
                         topCube.setParent(view.root);
-                        // Odsunięcie w osi lokalnej X (wzdłuż usłojenia formatki) obok niebieskiej kuli move (+34 mm)
-                        topCube.position = new BABYLON.Vector3(34, 0, 0);
+                        topCube.position.set(0, 0, 0);
+
+                        // Niebieska kula move obok — nie zasłania pomarańczowej kostki w środku
+                        centerSphere.position = new BABYLON.Vector3(thicknessMm * 2, 0, 0);
 
                         const cubeMat = new BABYLON.StandardMaterial('topConfigCubeMat', viewport.scene);
                         cubeMat.diffuseColor = new BABYLON.Color3(1.0, 0.45, 0.05); // Pomarańczowy
@@ -1391,8 +1515,12 @@ export class GizmoController {
         if (!ctx) {
             return;
         }
-        getConstraintDragPort()?.propagateTransform(ctx.doc, ctx.cadNodeId);
-        ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(ctx.cadNodeId);
+        const port = getConstraintDragPort();
+        port?.propagateTransform(ctx.doc, ctx.cadNodeId);
+        const affected = port?.getAffectedNodeIds?.() ?? [ctx.cadNodeId];
+        for (const id of affected) {
+            ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(id);
+        }
     }
 
     private _commitConstraintDrag(activeEntity: any, label: string): void {

@@ -2,7 +2,7 @@
   "metadata": {
     "module_type": "SMARTFRAME_KORPUS_SKOSNY",
     "version": "0.1.0",
-    "description": "Prototyp: korpus 1-strefowy ze skosem w głąb (przód niski, tył wysoki) — meble pod schody. Boki-trapezoidy przez outline2d (osobne obrysy L/P przez lustro osi u), wieniec górny pochylony, plecy pełne. V1 bez wpustów (doczołowo)."
+    "description": "Korpus skośny 1-strefowy: HDF 3 mm, plecy dopasowane do profilu korpusu, regulowane marginesami. Warianty pod skos w głąb i w poprzek."
   },
   "parameters": {
     "defaults": {
@@ -11,8 +11,8 @@
       "depth": 0.7,
       "bottom_height": 2.2,
       "middle_height": 0,
-      "height_front": 1.0,
-      "height_back": 2.2,
+      "height_front": 2.2,
+      "height_back": 1.0,
       "height_left": 1.0,
       "height_right": 2.2
     },
@@ -181,9 +181,9 @@
               "object": "Cube",
               "role": "BACK_PANEL",
               "report_type": "plyty",
-              "thickness": 0.018,
+              "thickness": 0.003,
               "custom_properties": {
-                "material": "MDF_SUROWY_18",
+                "material": "HDF_3",
                 "is_bloki_child": true
               },
               "lcs": {

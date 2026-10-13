@@ -10,6 +10,7 @@
  */
 
 import { Command } from '../A1_core/commands/command';
+import { ProjectDocument } from '../A1_core/project-document';
 import { ContextManager } from '../A1_core/context-manager';
 import { Vec3 } from './dimension-solver';
 import { AxisSpace, OffsetSpace, PMIAnnotation, PMIAnnotationInit, PMIMeasurement, PMIMeasurementInit, PMIStore } from './pmi-data';
@@ -28,7 +29,12 @@ export function executePMICommand(command: Command): void {
         return;
     }
     console.warn('[PMI] Brak CommandHistory — zmiana wykonana poza historią.');
-    command.execute(null as any);
+    command.execute(ContextManager.instance.document as any);
+}
+
+function notifyDocumentChanged(document?: ProjectDocument, affectedNodeIds?: string[]): void {
+    const doc = document ?? ContextManager.instance.document;
+    doc?.emitChange?.('all', affectedNodeIds);
 }
 
 /** Usuwa aktualnie zaznaczony wymiar lub pomiar. */
@@ -77,23 +83,26 @@ export class AddDimensionCommand implements Command {
         this.affectedNodeIds = affectedNodesOf(init);
     }
 
-    execute(): void {
+    execute(document?: ProjectDocument): void {
         // Przy redo odtwarzamy dokładnie ten sam obiekt, żeby zachować ID i SmartID.
         if (this.created) {
             this.store.insertAnnotation(this.created, this.store.annotations.length);
             registerDimensionSmartId(this.created.id, this.created.anchor1);
+            notifyDocumentChanged(document, this.affectedNodeIds);
             return;
         }
 
         const ann = this.store.addAnnotation(this.init);
         ann.smartIdPath = registerDimensionSmartId(ann.id, ann.anchor1);
         this.created = ann;
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 
-    undo(): void {
+    undo(document?: ProjectDocument): void {
         if (!this.created) return;
         this.store.removeAnnotation(this.created.id);
         unregisterDimensionSmartId(this.created.smartIdPath);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 
     get annotation(): PMIAnnotation | null {
@@ -127,18 +136,20 @@ export class RemoveDimensionCommand implements Command {
         this.affectedNodeIds = affectedNodesOf(existing);
     }
 
-    execute(): void {
+    execute(document?: ProjectDocument): void {
         const result = this.store.removeAnnotation(this.annotationId);
         if (!result) return;
         this.removed = result.annotation;
         this.removedIndex = result.index;
         unregisterDimensionSmartId(result.annotation.smartIdPath);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 
-    undo(): void {
+    undo(document?: ProjectDocument): void {
         if (!this.removed) return;
         this.store.insertAnnotation(this.removed, this.removedIndex);
         this.removed.smartIdPath = registerDimensionSmartId(this.removed.id, this.removed.anchor1);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 }
 
@@ -160,16 +171,18 @@ export class ClearDimensionsCommand implements Command {
         this.label = label;
     }
 
-    execute(): void {
+    execute(document?: ProjectDocument): void {
         this.removed = this.store.clearAll();
         for (const ann of this.removed) unregisterDimensionSmartId(ann.smartIdPath);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 
-    undo(): void {
+    undo(document?: ProjectDocument): void {
         this.store.replaceAll(this.removed);
         for (const ann of this.removed) {
             ann.smartIdPath = registerDimensionSmartId(ann.id, ann.anchor1);
         }
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 }
 
@@ -220,22 +233,24 @@ export class SetDimensionOffsetCommand implements Command {
         this.affectedNodeIds = affectedNodesOf(existing);
     }
 
-    execute(): void {
+    execute(document?: ProjectDocument): void {
         this.store.setPlacement(this.annotationId, {
             offset: this.nextOffset,
             offsetSpace: this.nextSpace,
             axisSpace: this.nextAxisSpace,
             offsetAxisKey: this.nextOffsetAxisKey,
         });
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 
-    undo(): void {
+    undo(document?: ProjectDocument): void {
         this.store.setPlacement(this.annotationId, {
             offset: this.prevOffset,
             offsetSpace: this.prevSpace,
             axisSpace: this.prevAxisSpace,
             offsetAxisKey: this.prevOffsetAxisKey,
         });
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 }
 
@@ -272,12 +287,14 @@ export class SetDimensionTextShiftCommand implements Command {
         this.affectedNodeIds = affectedNodesOf(existing);
     }
 
-    execute(): void {
+    execute(document?: ProjectDocument): void {
         this.store.setTextShift(this.annotationId, this.nextShiftMM);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 
-    undo(): void {
+    undo(document?: ProjectDocument): void {
         this.store.setTextShift(this.annotationId, this.prevShiftMM);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 }
 
@@ -319,12 +336,14 @@ export class SetDimensionAffixesCommand implements Command {
         this.affectedNodeIds = affectedNodesOf(existing);
     }
 
-    execute(): void {
+    execute(document?: ProjectDocument): void {
         this.store.setAffixes(this.annotationId, this.nextPrefix, this.nextSuffix);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 
-    undo(): void {
+    undo(document?: ProjectDocument): void {
         this.store.setAffixes(this.annotationId, this.prevPrefix, this.prevSuffix);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 }
 
@@ -356,12 +375,14 @@ export class SetDimensionVisibilityCommand implements Command {
         this.affectedNodeIds = affectedNodesOf(existing);
     }
 
-    execute(): void {
+    execute(document?: ProjectDocument): void {
         this.store.setVisibility(this.annotationId, this.nextVisible);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 
-    undo(): void {
+    undo(document?: ProjectDocument): void {
         this.store.setVisibility(this.annotationId, this.prevVisible);
+        notifyDocumentChanged(document, this.affectedNodeIds);
     }
 }
 

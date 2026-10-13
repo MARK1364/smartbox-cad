@@ -517,4 +517,136 @@ describe('odejmowanie DOF podczas dragu (dokument CAD)', () => {
         expect(wb.t.y).toBeCloseTo(40, 0);
         expect(wb.t.z).toBeCloseTo(0, 0);
     });
+
+    it('obrót powiązanej pary z odebranymi DOF: B orbituje z A jak jeden obiekt (SolidWorks)', () => {
+        const document = new ProjectDocument();
+        const a = newCabinet(document);
+        const b = newCabinet(document);
+        b.setLocalTransform(new Vec3(mmToNm(800), 0, 0), Quat.IDENTITY);
+        const constraints = [
+            frontMate(a.id, b.id, 'front'),
+            makeSolverConstraint({
+                id: 'bottom',
+                bindType: 'COPLANAR',
+                anchorA: makeAnchor({ nodeId: a.id, kind: 'FACE', faceName: 'FACE_Z_MINUS' }),
+                anchorB: makeAnchor({ nodeId: b.id, kind: 'FACE', faceName: 'FACE_Z_MINUS' }),
+            }),
+        ];
+
+        const drag = ConstraintDragGroup.instance;
+        drag.begin(document, a.id, constraints);
+
+        const rot90Z = Quat.fromAxisAngle(Vec3.UNIT_Z, Math.PI / 2);
+        a.setLocalTransform(Vec3.ZERO, rot90Z);
+        drag.propagateTransform(document, a.id);
+
+        const wa = worldMm(a);
+        const wb = worldMm(b);
+
+        expect(wa.t.x).toBeCloseTo(0, 0);
+        expect(wa.t.y).toBeCloseTo(0, 0);
+
+        // B początkowo było w (800, 0, 0). Po obrocie wokół (0, 0, 0) o 90 st. powinno orbitować do (0, 800, 0)!
+        expect(wb.t.x).toBeCloseTo(0, 0);
+        expect(wb.t.y).toBeCloseTo(800, 0);
+        expect(wb.t.z).toBeCloseTo(0, 0);
+        expect(wb.r.equals(rot90Z, 1e-4)).toBe(true);
+
+        drag.end();
+    });
+
+    it('próba obrotu obiektu powiązanego z GROUND (2 więzy): obrót jest natychmiast zablokowany (0 DOF)', () => {
+        const document = new ProjectDocument();
+        const a = newCabinet(document);
+        const b = newCabinet(document);
+        b.setLocalTransform(new Vec3(mmToNm(800), 0, 0), Quat.IDENTITY);
+        const constraints = [
+            makeSolverConstraint({
+                id: 'g',
+                bindType: 'GROUND',
+                anchorA: makeAnchor({ nodeId: b.id, kind: 'OBJECT' }),
+            }),
+            frontMate(a.id, b.id, 'front'),
+            makeSolverConstraint({
+                id: 'bottom',
+                bindType: 'COPLANAR',
+                anchorA: makeAnchor({ nodeId: a.id, kind: 'FACE', faceName: 'FACE_Z_MINUS' }),
+                anchorB: makeAnchor({ nodeId: b.id, kind: 'FACE', faceName: 'FACE_Z_MINUS' }),
+            }),
+        ];
+
+        const drag = ConstraintDragGroup.instance;
+        drag.begin(document, a.id, constraints);
+
+        const rot45 = Quat.fromAxisAngle(Vec3.UNIT_Z, Math.PI / 4);
+        a.setLocalTransform(Vec3.ZERO, rot45);
+        drag.propagateTransform(document, a.id);
+
+        const wa = worldMm(a);
+        const wb = worldMm(b);
+
+        expect(wb.t.x).toBeCloseTo(800, 0);
+        expect(wb.r.equals(Quat.IDENTITY, 1e-4)).toBe(true);
+
+        // A miało odebrane stopnie swobody obrotu przez relacje z uziemionym B -> obrót został sklamrowany do IDENTITY!
+        expect(wa.r.equals(Quat.IDENTITY, 1e-4)).toBe(true);
+
+        drag.end();
+    });
+
+    it('obrót pary z POJEDYNCZYM więzem FLUSH (1 płaszczyzna): B orbituje z A bez rozrywania relacji (SolidWorks)', () => {
+        const document = new ProjectDocument();
+        const a = newCabinet(document);
+        const b = newCabinet(document);
+        b.setLocalTransform(new Vec3(mmToNm(800), 0, 0), Quat.IDENTITY);
+        const constraints = [
+            frontMate(a.id, b.id, 'front'),
+        ];
+
+        const drag = ConstraintDragGroup.instance;
+        drag.begin(document, a.id, constraints);
+
+        const rot90Z = Quat.fromAxisAngle(Vec3.UNIT_Z, Math.PI / 2);
+        a.setLocalTransform(Vec3.ZERO, rot90Z);
+        drag.propagateTransform(document, a.id);
+
+        const wa = worldMm(a);
+        const wb = worldMm(b);
+
+        expect(wa.t.x).toBeCloseTo(0, 0);
+        expect(wa.t.y).toBeCloseTo(0, 0);
+        expect(wb.t.x).toBeCloseTo(0, 0);
+        expect(wb.t.y).toBeCloseTo(800, 0);
+        expect(wb.r.equals(rot90Z, 1e-4)).toBe(true);
+
+        drag.end();
+    });
+
+    it('obrót pary z więzem VERTEX (narożnik): B orbituje z A, naroża pozostają w 100% zbieżne', () => {
+        const document = new ProjectDocument();
+        const a = newCabinet(document);
+        const b = newCabinet(document);
+        b.setLocalTransform(new Vec3(mmToNm(800), 0, 0), Quat.IDENTITY);
+        const constraints = [
+            makeSolverConstraint({
+                id: 'v1',
+                bindType: 'VERTEX',
+                anchorA: makeAnchor({ nodeId: a.id, kind: 'VERTEX', cornerIndex: 0 }),
+                anchorB: makeAnchor({ nodeId: b.id, kind: 'VERTEX', cornerIndex: 0 }),
+            }),
+        ];
+
+        const drag = ConstraintDragGroup.instance;
+        drag.begin(document, a.id, constraints);
+
+        const rot45 = Quat.fromAxisAngle(Vec3.UNIT_Z, Math.PI / 4);
+        a.setLocalTransform(Vec3.ZERO, rot45);
+        drag.propagateTransform(document, a.id);
+
+        const wb = worldMm(b);
+        expect(wb.r.equals(rot45, 1e-4)).toBe(true);
+
+        drag.end();
+    });
 });
+

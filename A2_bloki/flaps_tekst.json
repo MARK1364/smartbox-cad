@@ -15,9 +15,14 @@
     "de": "Oben"
   },
   "flap_type.items.BOTTOM": {
-    "pl": "Dół (Barek)",
-    "en": "Bottom (Bar)",
-    "de": "Unten (Bar)"
+    "pl": "Dół",
+    "en": "Bottom",
+    "de": "Unten"
+  },
+  "hinge_brand.label": {
+    "pl": "Producent:",
+    "en": "Manufacturer:",
+    "de": "Hersteller:"
   },
   "ov_top.label": {
     "pl": "Nałożenie góra",

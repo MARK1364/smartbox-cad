@@ -125,16 +125,18 @@ export function collectCabinetGeometry(
         ?? defaultBokMm;
     const cabinetType = (params.typ_korpusu || 'korpus3') as CabinetType;
     const wysokosc_przod_mm = params.wysokosc_przod_mm
+        ?? params.wysokosc_mm
         ?? (rulesDefaults.height_front != null ? rulesMToMm(rulesDefaults.height_front) : undefined)
-        ?? 1000;
+        ?? 2200;
     const wysokosc_tyl_mm = params.wysokosc_tyl_mm
         ?? (rulesDefaults.height_back != null ? rulesMToMm(rulesDefaults.height_back) : undefined)
-        ?? 2200;
+        ?? 1000;
     const wysokosc_lewy_mm = params.wysokosc_lewy_mm
         ?? (rulesDefaults.height_left != null ? rulesMToMm(rulesDefaults.height_left) : undefined)
         ?? 1000;
     const wysokosc_prawy_mm = params.wysokosc_prawy_mm
         ?? (rulesDefaults.height_right != null ? rulesMToMm(rulesDefaults.height_right) : undefined)
+        ?? params.wysokosc_mm
         ?? 2200;
 
     const thicknessLookup: CabinetThicknessLookupContext = {

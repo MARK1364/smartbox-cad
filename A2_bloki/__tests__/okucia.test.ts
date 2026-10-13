@@ -42,7 +42,7 @@ describe('Biblioteka okuć', () => {
         const front = hingeFrontHolesMm(DEFAULT_HINGE_ID);
         const cup = front.find((h) => h.isCup);
         expect(cup?.dia).toBe(35);
-        expect(cup?.edgeDist).toBe(21.5);
+        expect(cup?.edgeDist).toBe(22.5);
         const corpus = hingeCorpusHolesMm(DEFAULT_HINGE_ID);
         expect(corpus).toHaveLength(2);
         expect(corpus[0].frontDist).toBe(37);
@@ -50,7 +50,7 @@ describe('Biblioteka okuć', () => {
 
         const cupNm = hingeFrontHolesNm(DEFAULT_HINGE_ID).find((h) => h.isCup);
         expect(cupNm?.dia).toBe(35_000_000);
-        expect(cupNm?.edgeDist).toBe(21_500_000);
+        expect(cupNm?.edgeDist).toBe(22_500_000);
     });
 
     it('lists rails from shared szuflady.json (mm konfig → meters)', () => {
@@ -74,7 +74,7 @@ describe('Biblioteka okuć', () => {
 });
 
 describe('buildDoorsPlan reads hinge catalog', () => {
-    it('uses cup Ø35 / 21.5 mm from zawiasy.json', () => {
+    it('uses cup Ø35 / 22.5 mm from zawiasy.json', () => {
         const plan = buildDoorsPlan({ rodzaj_drzwi: 'LEFT',
             uzyj_zawias_2: false,
             uzyj_zawias_3: false,
@@ -83,7 +83,7 @@ describe('buildDoorsPlan reads hinge catalog', () => {
         const cups = plan.parts[0].features.filter((f: any) => f.params?.isDoorCup);
         expect(cups.length).toBeGreaterThan(0);
         expect(cups[0].params.diameter).toBe(35);
-        expect(cups[0].params.u).toBe(21.5);
+        expect(cups[0].params.u).toBe(22.5);
         expect(cups[0].params.template_id).toBe('BLUM_110_STANDARD');
     });
 

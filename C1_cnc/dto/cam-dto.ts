@@ -67,6 +67,12 @@ export interface GrooveFeature {
     startPoint: Vector3D;
     /** Punkt końcowy wpustu (mm) */
     endPoint: Vector3D;
+    /** Punkt początkowy wpustu w układzie lokalnym formatki (przed WCS) */
+    panelStartPoint?: Vector3D;
+    /** Punkt końcowy wpustu w układzie lokalnym formatki (przed WCS) */
+    panelEndPoint?: Vector3D;
+    /** Ściana formatki (np. FACE_Z_PLUS, FACE_Z_MINUS) */
+    face?: string;
     /** Szerokość wpustu (mm) */
     width: number;
     /** Głębokość wpustu (mm) */

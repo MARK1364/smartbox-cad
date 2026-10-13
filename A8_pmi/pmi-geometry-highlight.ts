@@ -6,12 +6,19 @@
 declare const BABYLON: any;
 
 import { DetectionResult, GeometryDetector, GeometryType } from '../A1_core/geometry-detector.js';
+import { ContextManager } from '../A1_core/context-manager.js';
 import {
     EdgeSegmentCandidate,
     findEdgeSegmentsNearPointer,
     findVerticesNearPointer,
 } from './pmi-edge-pick.js';
 import { PMIStore } from './pmi-data.js';
+import {
+    HIGHLIGHT_DIAMETER_PX,
+    VERTEX_DIAMETER_PX,
+    attachScreenConstantScale,
+    worldDiameterForPxAt,
+} from './pmi-screen-scale.js';
 
 /** Identyfikuje odcinek po położeniu, więc pokrywające się krawędzie dają ten sam klucz. */
 function segmentKeyOf(segment: EdgeSegmentCandidate): string {
@@ -30,6 +37,7 @@ const TYPE_LABEL: Record<GeometryType, string> = {
 
 interface SavedMeshState {
     kind: GeometryType;
+    visibility?: number;
     alpha?: number;
     diffuse?: any;
     emissive?: any;
@@ -45,10 +53,11 @@ export class PMIGeometryHighlighter {
     private saved: SavedMeshState | null = null;
     public lastDetection: DetectionResult | null = null;
 
-    /** Nakładka rysowana na wierzchu — krawędź w styku dwóch formatek bywa zasłonięta. */
-    private edgeOverlay: any = null;
+    /** Nakładki rysowane na wierzchu — krawędzie w styku dwóch formatek. */
+    private edgeOverlays: any[] = [];
     private edgeOverlayKey = '';
     private hoveredSegment: EdgeSegmentCandidate | null = null;
+    private vertexOverlay: any = null;
 
     constructor(scene: any) {
         this.scene = scene;
@@ -87,21 +96,34 @@ export class PMIGeometryHighlighter {
     }
 
     /**
-     * Detekcja bazowa uzupełniona o krawędzie łapane w pikselach ekranu — bez tego
-     * cienkie i pokrywające się krawędzie wymagają trafienia co do piksela.
+     * Detekcja bazowa z absolutnym priorytetem narożników ekranowych (wierzchołków),
+     * a następnie krawędzi i płaszczyzn.
      */
     private resolveDetection(pointerX: number, pointerY: number): DetectionResult {
         const store = PMIStore.instance;
-        const result = this.detector.selectGeometry(pointerX, pointerY, 'AUTO');
+        const vertexSnap = Math.max(store.vertexSnapPx, 10);
+        const vertices = findVerticesNearPointer(this.scene, pointerX, pointerY, vertexSnap);
+        const edges = findEdgeSegmentsNearPointer(this.scene, pointerX, pointerY, store.edgeSnapPx);
 
-        const vertexNear = store.vertexSnapPx > 0
-            && findVerticesNearPointer(this.scene, pointerX, pointerY, store.vertexSnapPx).length > 0;
-        if (result.hit && result.geometryType === GeometryType.VERTEX && vertexNear) {
+        if (vertices.length > 0) {
+            const bestV = vertices[0];
             this.hoveredSegment = null;
-            return result;
+            return {
+                hit: true,
+                geometryType: GeometryType.VERTEX,
+                pickedPoint: { ...bestV.world },
+                normal: { x: 0, y: 1, z: 0 },
+                faceName: null,
+                cornerIndex: bestV.mesh?.metadata?.cornerIndex ?? -1,
+                edgeKey: null,
+                smartId: bestV.mesh?.metadata?.smartId ?? null,
+                panelModel: bestV.mesh?.metadata?.panelModel ?? null,
+                mesh: bestV.mesh,
+            };
         }
 
-        const edges = findEdgeSegmentsNearPointer(this.scene, pointerX, pointerY, store.edgeSnapPx);
+        const result = this.detector.selectGeometry(pointerX, pointerY, 'AUTO');
+
         if (edges.length === 0) {
             this.hoveredSegment = null;
             return result;
@@ -110,7 +132,7 @@ export class PMIGeometryHighlighter {
         const best = edges[0];
         const planeInterior = result.hit
             && result.geometryType === GeometryType.PLANE
-            && best.distPx > Math.min(8, store.edgeSnapPx * 0.45);
+            && best.distPx > Math.min(18, store.edgeSnapPx * 0.8);
         if (planeInterior) {
             this.hoveredSegment = null;
             return result;
@@ -131,53 +153,138 @@ export class PMIGeometryHighlighter {
         };
     }
 
+    private showVertexOverlay(pos: { x: number; y: number; z: number }): void {
+        this.disposeVertexOverlay();
+        // Stały rozmiar ekranowy (~10px) zamiast stałych 6mm w świecie.
+        const baked = worldDiameterForPxAt(this.scene, pos, VERTEX_DIAMETER_PX, 3.0);
+        const sphere = BABYLON.MeshBuilder.CreateSphere(
+            'pmi_vertex_highlight',
+            { diameter: baked, segments: 10 },
+            this.scene,
+        );
+        sphere.position = new BABYLON.Vector3(pos.x, pos.y, pos.z);
+        sphere.renderingGroupId = 2;
+        sphere.isPickable = false;
+        sphere.metadata = { ...(sphere.metadata || {}), isPmiOverlay: true };
+        const mat = new BABYLON.StandardMaterial('pmi_vertex_hl_mat', this.scene);
+        mat.emissiveColor = new BABYLON.Color3(1.0, 0.55, 0.0);
+        mat.diffuseColor = new BABYLON.Color3(1.0, 0.55, 0.0);
+        mat.disableLighting = true;
+        mat.disableDepthWrite = true;
+        sphere.material = mat;
+        sphere.alwaysSelectAsActiveMesh = true;
+        attachScreenConstantScale(sphere, baked, () => worldDiameterForPxAt(this.scene, pos, VERTEX_DIAMETER_PX, baked), false);
+        this.vertexOverlay = sphere;
+        try {
+            ContextManager.instance?.viewport?.requestRender?.(2);
+        } catch { /* ignore */ }
+    }
+
+    private disposeVertexOverlay(): void {
+        if (this.vertexOverlay) {
+            this.vertexOverlay.material?.dispose?.();
+            this.vertexOverlay.dispose();
+            this.vertexOverlay = null;
+        }
+    }
+
     /** Rysuje krawędź jako linię nad geometrią, więc widać ją także w styku formatek. */
     private showEdgeOverlay(segment: EdgeSegmentCandidate): void {
         this.showEdgeOverlays([segment]);
     }
 
-    /** Podświetla wiele krawędzi naraz (np. połączony łańcuch Ctrl). */
+    /** Podświetla krawędzie naraz — wyrazista linia CAD + nakładka tubowa na renderingGroupId 2. */
     public showEdgeOverlays(segments: EdgeSegmentCandidate[]): void {
         this.disposeEdgeOverlay();
         if (!segments.length) return;
 
-        const lines: any[] = [];
-        for (const segment of segments) {
-            lines.push(
-                new BABYLON.Vector3(segment.p1World.x, segment.p1World.y, segment.p1World.z),
-                new BABYLON.Vector3(segment.p2World.x, segment.p2World.y, segment.p2World.z),
-            );
-        }
+        for (let i = 0; i < segments.length; i++) {
+            const segment = segments[i];
+            const p1 = new BABYLON.Vector3(segment.p1World.x, segment.p1World.y, segment.p1World.z);
+            const p2 = new BABYLON.Vector3(segment.p2World.x, segment.p2World.y, segment.p2World.z);
+            if (BABYLON.Vector3.Distance(p1, p2) < 0.1) continue;
 
-        this.edgeOverlay = BABYLON.MeshBuilder.CreateLines(
-            'pmi_edge_highlight',
-            { points: lines },
-            this.scene,
-        );
-        this.edgeOverlay.color = new BABYLON.Color3(1.0, 0.55, 0.05);
-        this.edgeOverlay.isPickable = false;
-        this.edgeOverlay.renderingGroupId = 3;
-        if (this.edgeOverlay.material) {
-            this.edgeOverlay.material.disableDepthWrite = true;
-            this.edgeOverlay.material.depthFunction = BABYLON.Engine.ALWAYS;
+            // 1. Wyrazista linia overlay (CreateLines) — widoczna bezpośrednio na obrysie formatki
+            const line = BABYLON.MeshBuilder.CreateLines(
+                `pmi_edge_hl_line_${i}`,
+                { points: [p1, p2] },
+                this.scene,
+            );
+            line.color = new BABYLON.Color3(1.0, 0.55, 0.0);
+            line.renderingGroupId = 2;
+            line.isPickable = false;
+            line.metadata = { ...(line.metadata || {}), isPmiOverlay: true };
+            this.edgeOverlays.push(line);
+
+            // 2. Gruby cylinder overlay — stała średnica na ekranie (HIGHLIGHT_DIAMETER_PX)
+            const mid = BABYLON.Vector3.Lerp(p1, p2, 0.5);
+            const midPos = { x: mid.x, y: mid.y, z: mid.z };
+            const baked = worldDiameterForPxAt(this.scene, midPos, HIGHLIGHT_DIAMETER_PX, 1.2);
+            const len = BABYLON.Vector3.Distance(p1, p2);
+            const tube = BABYLON.MeshBuilder.CreateCylinder(
+                `pmi_edge_hl_tube_${i}`,
+                { height: len, diameter: baked, tessellation: 8 },
+                this.scene,
+            );
+            tube.position = mid.clone();
+            const diff = p2.subtract(p1);
+            const dir = diff.normalize();
+            const yAxis = new BABYLON.Vector3(0, 1, 0);
+            const dot = BABYLON.Vector3.Dot(yAxis, dir);
+            if (Math.abs(dot) > 0.999) {
+                if (dot < 0) {
+                    tube.rotation.x = Math.PI;
+                }
+            } else {
+                const axis = BABYLON.Vector3.Cross(yAxis, dir).normalize();
+                const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+                tube.rotationQuaternion = BABYLON.Quaternion.RotationAxis(axis, angle);
+            }
+            tube.renderingGroupId = 2;
+            tube.isPickable = false;
+            tube.metadata = { ...(tube.metadata || {}), isPmiOverlay: true };
+
+            const mat = new BABYLON.StandardMaterial(`pmi_edge_hl_mat_${i}`, this.scene);
+            mat.emissiveColor = new BABYLON.Color3(1.0, 0.55, 0.0);
+            mat.diffuseColor = new BABYLON.Color3(1.0, 0.55, 0.0);
+            mat.disableLighting = true;
+            mat.alpha = 0.85;
+            tube.material = mat;
+
+            attachScreenConstantScale(
+                tube,
+                baked,
+                () => worldDiameterForPxAt(this.scene, midPos, HIGHLIGHT_DIAMETER_PX, baked),
+                true,
+            );
+
+            this.edgeOverlays.push(tube);
         }
         this.edgeOverlayKey = segments.map(segmentKeyOf).join('|');
+        try {
+            ContextManager.instance?.viewport?.requestRender?.(2);
+        } catch { /* ignore */ }
     }
 
     private disposeEdgeOverlay(): void {
-        if (this.edgeOverlay) {
-            this.edgeOverlay.dispose();
-            this.edgeOverlay = null;
+        for (const overlay of this.edgeOverlays) {
+            overlay.material?.dispose?.();
+            overlay.dispose?.();
         }
+        this.edgeOverlays = [];
         this.edgeOverlayKey = '';
     }
 
     public clearHighlight(): void {
         this.disposeEdgeOverlay();
+        this.disposeVertexOverlay();
 
         if (!this.hoveredMesh || this.hoveredMesh.isDisposed?.()) {
             this.hoveredMesh = null;
             this.saved = null;
+            try {
+                ContextManager.instance?.viewport?.requestRender?.(2);
+            } catch { /* ignore */ }
             return;
         }
 
@@ -185,13 +292,19 @@ export class PMIGeometryHighlighter {
         const saved = this.saved;
         if (!saved) {
             this.hoveredMesh = null;
+            try {
+                ContextManager.instance?.viewport?.requestRender?.(2);
+            } catch { /* ignore */ }
             return;
         }
 
-        if (saved.kind === GeometryType.VERTEX && mesh.material) {
-            mesh.material.alpha = saved.alpha ?? 0;
-            if (saved.diffuse) mesh.material.diffuseColor = saved.diffuse;
-            if (saved.emissive) mesh.material.emissiveColor = saved.emissive;
+        if (saved.kind === GeometryType.VERTEX) {
+            if (saved.visibility !== undefined) mesh.visibility = saved.visibility;
+            if (mesh.material) {
+                if (saved.alpha !== undefined) mesh.material.alpha = saved.alpha;
+                if (saved.diffuse) mesh.material.diffuseColor = saved.diffuse;
+                if (saved.emissive) mesh.material.emissiveColor = saved.emissive;
+            }
         } else if (saved.kind === GeometryType.EDGE) {
             if (mesh.color !== undefined && saved.lineColor) {
                 mesh.color = saved.lineColor;
@@ -210,6 +323,9 @@ export class PMIGeometryHighlighter {
         this.saved = null;
         this.hoveredSegment = null;
         this.lastDetection = null;
+        try {
+            ContextManager.instance?.viewport?.requestRender?.(2);
+        } catch { /* ignore */ }
     }
 
     public dispose(): void {
@@ -220,31 +336,30 @@ export class PMIGeometryHighlighter {
         const mesh = result.mesh;
         if (!mesh || mesh.isDisposed?.()) return;
 
-        if (result.geometryType === GeometryType.VERTEX && mesh.material) {
-            this.saved = {
-                kind: GeometryType.VERTEX,
-                alpha: mesh.material.alpha,
-                diffuse: mesh.material.diffuseColor?.clone?.() ?? mesh.material.diffuseColor,
-                emissive: mesh.material.emissiveColor?.clone?.() ?? mesh.material.emissiveColor,
-            };
-            mesh.material.alpha = 1.0;
-            mesh.material.diffuseColor = new BABYLON.Color3(1.0, 0.55, 0.05);
-            mesh.material.emissiveColor = new BABYLON.Color3(0.85, 0.35, 0.0);
+        if (result.geometryType === GeometryType.VERTEX) {
+            this.saved = { kind: GeometryType.VERTEX };
+            if (result.pickedPoint) {
+                this.showVertexOverlay(result.pickedPoint);
+            }
             return;
         }
 
         if (result.geometryType === GeometryType.EDGE) {
-            this.saved = { kind: GeometryType.EDGE };
-            if (this.hoveredSegment) this.showEdgeOverlay(this.hoveredSegment);
+            this.saved = {
+                kind: GeometryType.EDGE,
+                lineColor: mesh.color ? mesh.color.clone() : undefined,
+                emissive: mesh.material?.emissiveColor ? mesh.material.emissiveColor.clone() : undefined,
+                diffuse: mesh.material?.diffuseColor ? mesh.material.diffuseColor.clone() : undefined,
+            };
             if (mesh.color !== undefined) {
-                this.saved.lineColor = mesh.color?.clone?.() ?? mesh.color;
-                mesh.color = new BABYLON.Color3(1.0, 0.65, 0.1);
-            } else if (mesh.material) {
-                this.saved.emissive = mesh.material.emissiveColor?.clone?.() ?? mesh.material.emissiveColor;
-                this.saved.diffuse = mesh.material.diffuseColor?.clone?.() ?? mesh.material.diffuseColor;
-                mesh.material.emissiveColor = new BABYLON.Color3(0.9, 0.45, 0.05);
-                mesh.material.diffuseColor = new BABYLON.Color3(1.0, 0.7, 0.15);
+                mesh.color = new BABYLON.Color3(1.0, 0.55, 0.0);
             }
+            if (this.hoveredSegment) {
+                this.showEdgeOverlay(this.hoveredSegment);
+            }
+            try {
+                ContextManager.instance?.viewport?.requestRender?.(2);
+            } catch { /* ignore */ }
             return;
         }
 
@@ -258,8 +373,10 @@ export class PMIGeometryHighlighter {
             };
             mesh.material.emissiveColor = new BABYLON.Color3(0.25, 0.45, 0.95);
             mesh.material.diffuseColor = new BABYLON.Color3(0.35, 0.55, 1.0);
-            if (typeof mesh.edgesWidth === 'number') mesh.edgesWidth = 4.0;
             if (mesh.edgesColor) mesh.edgesColor = new BABYLON.Color4(1.0, 0.75, 0.1, 1.0);
+            try {
+                ContextManager.instance?.viewport?.requestRender?.(2);
+            } catch { /* ignore */ }
         }
     }
 }

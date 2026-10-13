@@ -248,10 +248,27 @@ describe('Shelves Drilling Builder (buildShelvesDrillings)', () => {
         expect(leftCenterFront.feature.params.diameter).toBe(5);
         expect(leftCenterFront.feature.params.depth).toBe(12);
 
-        // SprawdĹş otwory na samej pĂłĹ‚ce
+        // Otwory na półce: TRIPLE przód/tył w pionie (V), nie w poziomie (U)
         const shelfFrontCenter = shelfIntents.find(i => i.feature.id === 'shelf_1_front_center')!;
+        const shelfFrontTop = shelfIntents.find(i => i.feature.id === 'shelf_1_front_center_top')!;
+        const shelfFrontBottom = shelfIntents.find(i => i.feature.id === 'shelf_1_front_center_bottom')!;
         expect(shelfFrontCenter).toBeDefined();
+        expect(shelfFrontTop).toBeDefined();
+        expect(shelfFrontBottom).toBeDefined();
         expect(shelfFrontCenter.feature.face).toBe('FACE_Y_PLUS');
+        expect(shelfFrontTop.feature.params.u).toBe(shelfFrontCenter.feature.params.u);
+        expect(shelfFrontBottom.feature.params.u).toBe(shelfFrontCenter.feature.params.u);
+        expect(shelfFrontTop.feature.params.v).toBe(shelfFrontCenter.feature.params.v - 32);
+        expect(shelfFrontBottom.feature.params.v).toBe(shelfFrontCenter.feature.params.v + 32);
+
+        const shelfBackCenter = shelfIntents.find(i => i.feature.id === 'shelf_1_back_center')!;
+        const shelfBackTop = shelfIntents.find(i => i.feature.id === 'shelf_1_back_center_top')!;
+        const shelfBackBottom = shelfIntents.find(i => i.feature.id === 'shelf_1_back_center_bottom')!;
+        expect(shelfBackCenter).toBeDefined();
+        expect(shelfBackTop.feature.params.u).toBe(shelfBackCenter.feature.params.u);
+        expect(shelfBackBottom.feature.params.u).toBe(shelfBackCenter.feature.params.u);
+        expect(shelfBackTop.feature.params.v).toBe(shelfBackCenter.feature.params.v + 32);
+        expect(shelfBackBottom.feature.params.v).toBe(shelfBackCenter.feature.params.v - 32);
     });
 
     it('regression: matches exact geometry and feature structure for SYSTEM_32 pattern', () => {

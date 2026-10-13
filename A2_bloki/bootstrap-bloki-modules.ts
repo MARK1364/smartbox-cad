@@ -9,6 +9,7 @@ import { SmartModuleRegistry } from './core/smart-module-registry.js';
 import { shelvesPlugin } from './plugins/shelves-plugin.js';
 import { shelfPlugin } from './plugins/shelf-plugin.js';
 import { doorsPlugin } from './plugins/doors-plugin.js';
+import { skosneDoorsPlugin } from './plugins/skosne-doors-plugin.js';
 import { cornerDoorsPlugin } from './plugins/corner-doors-plugin.js';
 import { tubesPlugin } from './plugins/tubes-plugin.js';
 import { drawersPlugin } from './plugins/drawers-plugin.js';
@@ -17,11 +18,14 @@ import { panelsPlugin } from './plugins/panels-plugin.js';
 import { flapsPlugin } from './plugins/flaps-plugin.js';
 import { ledInternalPlugin } from './plugins/led-internal-plugin.js';
 import { ledExternalPlugin } from './plugins/led-external-plugin.js';
+import { handlePlugin } from './plugins/handle-plugin.js';
+import { hangersPlugin } from './plugins/hangers-plugin.js';
 
 export function registerAllBlokiModules(): void {
     SmartModuleRegistry.register(shelvesPlugin);
     SmartModuleRegistry.register(shelfPlugin);
     SmartModuleRegistry.register(doorsPlugin);
+    SmartModuleRegistry.register(skosneDoorsPlugin);
     SmartModuleRegistry.register(cornerDoorsPlugin);
     SmartModuleRegistry.register(tubesPlugin);
     SmartModuleRegistry.register(drawersPlugin);
@@ -30,4 +34,7 @@ export function registerAllBlokiModules(): void {
     SmartModuleRegistry.register(flapsPlugin);
     SmartModuleRegistry.register(ledInternalPlugin);
     SmartModuleRegistry.register(ledExternalPlugin);
+    SmartModuleRegistry.register(handlePlugin);
+    SmartModuleRegistry.register(hangersPlugin);
 }
+

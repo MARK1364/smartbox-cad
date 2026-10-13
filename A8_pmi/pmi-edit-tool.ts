@@ -54,6 +54,7 @@ export class PMIEditOffsetTool extends BaseState {
 
     private pointerObserver: any = null;
     private keyboardObserver: any = null;
+    private isCommitted = false;
 
     constructor(
         ctx: CadModuleContext,
@@ -112,6 +113,7 @@ export class PMIEditOffsetTool extends BaseState {
             }
         });
 
+        this.isCommitted = false;
         setSelectionHighlightSuppressed(true, this.ctx);
 
         if (this.ctx.canvas) this.ctx.canvas.style.cursor = 'move';
@@ -127,6 +129,10 @@ export class PMIEditOffsetTool extends BaseState {
         if (this.keyboardObserver) {
             scene.onKeyboardObservable.remove(this.keyboardObserver);
             this.keyboardObserver = null;
+        }
+
+        if (!this.isCommitted) {
+            this.restoreOriginal();
         }
 
         this.renderer.clearPreview();
@@ -364,6 +370,7 @@ export class PMIEditOffsetTool extends BaseState {
             { axisSpace: nextAxisSpace, offsetAxisKey: nextOffsetAxisKey },
         ));
 
+        this.isCommitted = true;
         this.stateMachine.changeState('SELECTION_TOOL');
     }
 

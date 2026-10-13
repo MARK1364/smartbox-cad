@@ -1,0 +1,121 @@
+{
+  "id": "sp:TT2",
+  "name": "TT2",
+  "units": "mm",
+  "version": "1.0",
+  "type": "CUSTOM",
+  "coordSystem": "CAD",
+  "mainContainer": {
+    "widthMm": 564,
+    "heightMm": 600,
+    "depthMm": 330
+  },
+  "parts": [
+    {
+      "id": "sp:SmartPart_Kontener_1/part:part_1",
+      "name": "Part 1",
+      "widthMm": 20,
+      "heightMm": 40,
+      "depthMm": 70,
+      "xMm": -272,
+      "yMm": 130,
+      "zMm": 280,
+      "refX": "LEFT",
+      "offsetX_mm": 10,
+      "refY": "BACK",
+      "offsetY_mm": 35,
+      "refZ": "TOP",
+      "offsetZ_mm": 20,
+      "colorHex": "#38bdf8"
+    }
+  ],
+  "cuts": [
+    {
+      "id": "sp:SmartPart_Kontener_1/cut:walec_1",
+      "name": "Otwór okrągły 1",
+      "type": "HOLE",
+      "diameterMm": 8,
+      "lengthMm": 24,
+      "xMm": -10,
+      "yMm": 0,
+      "zMm": 0,
+      "refX": "LEFT",
+      "offsetX_mm": 0,
+      "refY": "CENTER",
+      "offsetY_mm": 0,
+      "refZ": "CENTER",
+      "offsetZ_mm": 0,
+      "axis": "X",
+      "direction": -1,
+      "partId": "sp:SmartPart_Kontener_1/part:part_1"
+    },
+    {
+      "id": "sp:SmartPart_Kontener_1/cut:szescian_1",
+      "name": "Wcięcie prostokątne 1",
+      "type": "POCKET",
+      "widthMm": 16,
+      "heightMm": 32,
+      "depthMm": 15,
+      "xMm": 0,
+      "yMm": 35,
+      "zMm": 0,
+      "refX": "CENTER",
+      "offsetX_mm": 0,
+      "refY": "BACK",
+      "offsetY_mm": 0,
+      "refZ": "CENTER",
+      "offsetZ_mm": 0,
+      "axis": "Y",
+      "direction": 1,
+      "partId": "sp:SmartPart_Kontener_1/part:part_1"
+    }
+  ],
+  "parameters": [
+    {
+      "key": "zamroz_1",
+      "type": "check",
+      "label": "Zamroź wcięcie prostokątne",
+      "default": false
+    },
+    {
+      "key": "zamroz_2",
+      "type": "check",
+      "label": "Zamroź otwór okrągły",
+      "default": false
+    }
+  ],
+  "bindings": [
+    {
+      "paramKey": "zamroz_1",
+      "targetType": "CUT",
+      "targetId": "sp:SmartPart_Kontener_1/cut:szescian_1",
+      "field": "frozen"
+    },
+    {
+      "paramKey": "zamroz_2",
+      "targetType": "CUT",
+      "targetId": "sp:SmartPart_Kontener_1/cut:walec_1",
+      "field": "frozen"
+    }
+  ],
+  "updatedAt": 1791485454227,
+  "cutsFrame": "PART",
+  "partBody": {
+    "id": "sp:SmartPart_Kontener_1/part:part_1",
+    "name": "Part 1",
+    "widthMm": 20,
+    "heightMm": 40,
+    "depthMm": 70,
+    "xMm": -272,
+    "yMm": 130,
+    "zMm": 280,
+    "refX": "LEFT",
+    "offsetX_mm": 10,
+    "refY": "BACK",
+    "offsetY_mm": 35,
+    "refZ": "TOP",
+    "offsetZ_mm": 20,
+    "colorHex": "#38bdf8"
+  },
+  "iconDataUrl": "data:image/jpeg;base64,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"
+}

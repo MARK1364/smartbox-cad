@@ -24,7 +24,7 @@ export interface SmartModuleMeta {
     label: string;                             // Czytelna etykieta wyświetlana w UI
     labelKey: string;                          // Klucz z *_tekst.json
     description: string;                       // Opis modułu w palecie UI
-    category: 'internal' | 'external';         // SSOT kategorii Bloki
+    category: 'internal' | 'external' | 'panel';         // SSOT kategorii Bloki
     subCategory?: 'FRONT' | 'LIGHTING' | 'ACCESSORY';
     order: number;                             // Kolejność w menu wyboru UI
     renderIcon?: (color?: string) => ReactNode;

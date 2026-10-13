@@ -165,11 +165,17 @@ export class SceneSyncAdapter {
     }
 
     unbind(node: CADNode): void {
-        const binding = this.nodeBindings.get(node.id);
+        this.unbindById(node.id);
+    }
+
+    /** Odpina binding po id — działa też gdy CADNode już usunięty z drzewa (dispose widoku po remove). */
+    unbindById(nodeId: string): void {
+        if (!nodeId) return;
+        const binding = this.nodeBindings.get(nodeId);
         if (!binding) return;
         binding.unsubscribe();
         this.meshToNode.delete(binding.mesh);
-        this.nodeBindings.delete(node.id);
+        this.nodeBindings.delete(nodeId);
     }
 
     unbindAll(): void {

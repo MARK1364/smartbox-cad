@@ -65,8 +65,8 @@ function CncStandaloneApp() {
     const [scene, setScene] = useState<any>(null);
     const [sceneError, setSceneError] = useState<string | null>(null);
     const [renderMode, setRenderMode] = useState<'shaded' | 'edges' | 'wireframe' | 'xray'>('edges');
-    const [gridVisible, setGridVisible] = useState(true);
-    const [lcsVisible, setLcsVisible] = useState(false);
+    const [gridVisible, setGridVisible] = useState(false);
+    const [lcsVisible, setLcsVisible] = useState(true);
     const [viewMenuOpen, setViewMenuOpen] = useState(false);
     const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
     const [projMenuOpen, setProjMenuOpen] = useState(false);
@@ -187,6 +187,8 @@ function CncStandaloneApp() {
                 ctxRef.current = ctx;
                 setScene(ctx.viewport.scene);
                 setStatusText(ctx.ui.state.statusText || 'CNC — gotowy');
+                ctx.viewport.toggleGrid(false);
+                callAPI('setLcsVisible', true);
                 if (workpiece) {
                     const panel = mountCncWorkpiece(ctx, workpiece);
                     setLivePanel(panel);
@@ -349,22 +351,29 @@ function CncStandaloneApp() {
                     >
                         {tx(srcTekst, 'entry.clear_btn', TX_NS)}
                     </button>
-                    <div className="menu-brand" style={{ marginLeft: 14 }}>SmartPanel CNC</div>
-                    {originLabel && (
-                        <span
+                    <div className="menu-brand" style={{ marginLeft: 14 }}>CNC</div>
+                    {(livePanel?.name || workpiece?.name || originLabel) && (
+                        <div
                             style={{
-                                marginLeft: 12,
-                                color: '#94a3b8',
-                                fontSize: '0.85rem',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                maxWidth: 420,
+                                marginLeft: 14,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(30, 58, 138, 0.45))',
+                                border: '1px solid #3b82f6',
+                                borderRadius: 5,
+                                padding: '4px 10px',
+                                color: '#ffffff',
+                                fontSize: '0.88rem',
+                                fontWeight: 600,
                             }}
-                            title={originLabel}
+                            title={originLabel || livePanel?.name}
                         >
-                            {originLabel}
-                        </span>
+                            <span style={{ color: '#93c5fd', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nazwa:</span>
+                            <span style={{ color: '#60a5fa', fontWeight: 700 }}>
+                                {livePanel?.name || workpiece?.name || originLabel}
+                            </span>
+                        </div>
                     )}
                     <input
                         ref={fileDxfRef}

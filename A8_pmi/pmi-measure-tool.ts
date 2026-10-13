@@ -1,9 +1,10 @@
 /**
  * PMI Measure Tool — lekka miarka.
  *
- * Bez Ctrl + krawędź     → od razu długość krawędzi (1 klik)
- * Bez Ctrl + punkt       → dwa kliknięcia, dystans
- * Ctrl + krawędź × 2   → połączone: suma długości; oddzielone: dystans
+ * Bez Ctrl + krawędź     → od razu długość krawędzi (1 klik, single)
+ * Multi (2 elementy)     → ZAWSZE z Ctrl przy drugim kliku:
+ *   klik P1, potem Ctrl+P2  — albo Ctrl+P1 i Ctrl+P2
+ * Ctrl + krawędź × 2     → połączone: suma; oddzielone: dystans
  * Ctrl + inne elementy   → najkrótsza droga (narożnik / płaszczyzna / krawędź)
  */
 
@@ -14,6 +15,9 @@ import { Intent } from '../A1_core/interaction/interaction-types';
 import type { CadModuleContext } from '../A1_core/cad-module-context.js';
 import { StateMachine } from '../A1_core/interaction/state-machine';
 import { UIController } from '../A1_core/ui-controller';
+import { TooltipManager } from '../A1_core/tooltip-manager.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import pmiTekst from './pmi_tekst.json';
 import { Vec3, v3Len, v3Sub } from './dimension-solver';
 import { PMIStore, PMIMeasurementInit } from './pmi-data';
 import { PMIRenderer } from './pmi-renderer';
@@ -52,14 +56,22 @@ export class MeasureTool extends BaseState {
         this.renderer = renderer;
     }
 
+    private static isMultiKey(e: { ctrlKey?: boolean; metaKey?: boolean; key?: string }): boolean {
+        return !!(e.ctrlKey || e.metaKey || e.key === 'Control' || e.key === 'Meta');
+    }
+
     private handleWindowKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Control' || e.ctrlKey) {
+        if (MeasureTool.isMultiKey(e)) {
             this.isCtrlPressed = true;
+            this.onMove();
         }
     };
 
     private handleWindowKeyUp = (e: KeyboardEvent) => {
-        if (!e.ctrlKey) this.isCtrlPressed = false;
+        if (!e.ctrlKey && !e.metaKey) {
+            this.isCtrlPressed = false;
+            this.onMove();
+        }
     };
 
     private handleWindowBlur = () => {
@@ -68,7 +80,7 @@ export class MeasureTool extends BaseState {
 
     public onEnter(): void {
         this.resetPicks();
-        this.setUIStatus('Pomiar: kliknij krawędź lub punkt. Ctrl = narożnik / płaszczyzna.');
+        this.setUIStatus(tx(pmiTekst, 'hints.measure_step1_desc', 'pmi'));
 
         const scene = this.ctx.viewport.scene;
         this.geometryHighlighter = new PMIGeometryHighlighter(scene);
@@ -84,13 +96,15 @@ export class MeasureTool extends BaseState {
             // Śledź Ctrl tylko przy MOVE — przy POINTERDOWN isCtrlPressed
             // jest już ustawiony przez onSelect() z intent.pointerInfo.event.ctrlKey.
             if (info.type === BABYLON.PointerEventTypes.POINTERMOVE) {
-                if (info.event) this.isCtrlPressed = !!info.event.ctrlKey;
+                if (info.event) {
+                    this.isCtrlPressed = !!(info.event.ctrlKey || info.event.metaKey);
+                }
                 this.onMove();
             }
         });
         this.keyboardObserver = scene.onKeyboardObservable.add((info: any) => {
             const event = info.event as KeyboardEvent;
-            this.isCtrlPressed = !!event.ctrlKey;
+            this.isCtrlPressed = !!(event.ctrlKey || event.metaKey);
         });
 
         if (typeof window !== 'undefined') {
@@ -111,6 +125,8 @@ export class MeasureTool extends BaseState {
         }
 
         this.renderer.clearMeasurePreview();
+        PMIStore.instance.clearAllMeasurements();
+        TooltipManager.instance?.clearActiveHint();
         this.geometryHighlighter?.dispose();
         this.geometryHighlighter = null;
         setSelectionHighlightSuppressed(false, this.ctx);
@@ -128,7 +144,10 @@ export class MeasureTool extends BaseState {
     }
 
     public onSelect(intent: Intent): void {
-        if (intent.pointerInfo?.event) this.isCtrlPressed = !!intent.pointerInfo.event.ctrlKey;
+        if (intent.pointerInfo?.event) {
+            const ev = intent.pointerInfo.event;
+            this.isCtrlPressed = !!(ev.ctrlKey || ev.metaKey);
+        }
         this.onLeftClick();
     }
 
@@ -140,8 +159,9 @@ export class MeasureTool extends BaseState {
         this.renderer.clearMeasurePreview();
         if (this.phase === 'PICK_P2') {
             this.resetPicks();
-            this.setUIStatus('Pomiar: kliknij krawędź lub punkt. Ctrl = punkt / krawędź / płaszczyzna.');
+            this.setUIStatus('Szybki pomiar: kliknij krawędź formatki (długość) lub wskaż punkty/elementy.');
         } else {
+            TooltipManager.instance?.clearActiveHint();
             this.exitTool();
         }
     }
@@ -159,6 +179,30 @@ export class MeasureTool extends BaseState {
         this.phase = 'PICK_P1';
         this.pick1 = null;
         this.renderer.clearMeasurePreview();
+        this.updateHint();
+    }
+
+    private updateHint(): void {
+        const tm = TooltipManager.instance;
+        if (!tm) return;
+
+        if (this.phase === 'PICK_P1') {
+            tm.setActiveHint({
+                id: 'pmi_measure_step1',
+                title: tx(pmiTekst, 'hints.measure_step1_title', 'pmi'),
+                description: tx(pmiTekst, 'hints.measure_step1_desc', 'pmi'),
+                confirmKey: 'LPM',
+                cancelKey: 'Esc',
+            });
+        } else {
+            tm.setActiveHint({
+                id: 'pmi_measure_step2',
+                title: tx(pmiTekst, 'hints.measure_step2_title', 'pmi'),
+                description: tx(pmiTekst, 'hints.measure_step2_desc', 'pmi'),
+                confirmKey: 'LPM',
+                cancelKey: 'Esc',
+            });
+        }
     }
 
     private onMove(): void {
@@ -172,16 +216,23 @@ export class MeasureTool extends BaseState {
         const snap = this.findElementPick();
 
         if (this.phase === 'PICK_P1') {
-            if (!this.isCtrlPressed && snap?.edge) {
+            if (!this.isCtrlPressed && snap?.kind === 'edge' && snap.edge) {
                 this.geometryHighlighter?.showEdgeOverlays([snap.edge]);
                 this.renderer.renderMeasurePreview([snap.edge.p1World, snap.edge.p2World]);
+                this.ctx.viewport?.requestRender?.(2);
                 return;
             }
             this.renderer.clearMeasurePreview();
+            this.ctx.viewport?.requestRender?.(2);
             return;
         }
 
-        if (!this.pick1 || !snap) return;
+        // PICK_P2: podgląd dystansu tylko przy Ctrl (multi zawsze z Ctrl)
+        if (!this.isCtrlPressed || !this.pick1 || !snap) {
+            this.renderer.clearMeasurePreview();
+            this.ctx.viewport?.requestRender?.(2);
+            return;
+        }
 
         if (this.pick1.kind === 'edge' && snap.kind === 'edge' && this.pick1.edge && snap.edge) {
             const result = measureTwoEdges(
@@ -192,11 +243,13 @@ export class MeasureTool extends BaseState {
             );
             this.geometryHighlighter?.showEdgeOverlays([this.pick1.edge, snap.edge]);
             this.renderer.renderMeasurePreview(result.path);
+            this.ctx.viewport?.requestRender?.(2);
             return;
         }
 
         const projected = projectMeasureElements(toElement(this.pick1), toElement(snap));
         this.renderer.renderMeasurePreview([projected.p1, projected.p2]);
+        this.ctx.viewport?.requestRender?.(2);
     }
 
     private onLeftClick(): void {
@@ -211,26 +264,59 @@ export class MeasureTool extends BaseState {
         const snap = this.findElementPick();
         if (!snap) return;
 
-        // Bez Ctrl + krawędź → od razu długość (1 klik)
-        if (!this.isCtrlPressed && snap.edge && this.phase === 'PICK_P1') {
+        // Bez Ctrl + krawędź w fazie PICK_P1 → od razu zmierz krawędź, ale zapamiętaj jako pick1 dla opcjonalnego Ctrl+P2
+        if (this.phase === 'PICK_P1' && !this.isCtrlPressed && snap.kind === 'edge' && snap.edge) {
             this.commitEdge(snap.edge);
+            this.pick1 = snap;
+            this.phase = 'PICK_P2';
+            this.updateHint();
+            this.setUIStatus('Długość krawędzi zmierzona. Wskaż kolejny element lub wciśnij Esc.');
             return;
         }
 
         if (this.phase === 'PICK_P1') {
             this.pick1 = snap;
             this.phase = 'PICK_P2';
+            this.updateHint();
             this.setUIStatus(this.statusForSecondPick(snap));
+            this.onMove();
             return;
         }
 
-        // PICK_P2
-        if (this.pick1?.kind === 'edge' && snap.kind === 'edge' && this.pick1.edge && snap.edge) {
-            this.commitTwoEdges(this.pick1.edge, snap.edge);
+        // Faza PICK_P2:
+        // Przy wciśniętym Ctrl: domykamy multi-pomiar (Element 1 -> Element 2)
+        if (this.isCtrlPressed) {
+            if (this.pick1?.kind === 'edge' && snap.kind === 'edge' && this.pick1.edge && snap.edge) {
+                this.commitTwoEdges(this.pick1.edge, snap.edge);
+                return;
+            }
+            this.commitElements(this.pick1!, snap);
             return;
         }
 
-        this.commitElements(this.pick1!, snap);
+        // Bez Ctrl w fazie PICK_P2:
+        // Jeśli kliknięto nową krawędź bez Ctrl → zmierz tę nową krawędź i ustaw jako pick1
+        if (snap.kind === 'edge' && snap.edge) {
+            this.commitEdge(snap.edge);
+            this.pick1 = snap;
+            this.phase = 'PICK_P2';
+            this.updateHint();
+            this.setUIStatus('Długość krawędzi zmierzona. Wskaż kolejny element lub wciśnij Esc.');
+            return;
+        }
+
+        // Dwa wierzchołki bez Ctrl również domykają odcinek punkt-punkt
+        if (this.pick1?.kind === 'vertex' && snap.kind === 'vertex') {
+            this.commitElements(this.pick1, snap);
+            return;
+        }
+
+        // W przeciwnym razie zmiana pierwszego elementu
+        this.pick1 = snap;
+        this.phase = 'PICK_P2';
+        this.updateHint();
+        this.renderer.clearMeasurePreview();
+        this.setUIStatus(this.statusForSecondPick(snap));
     }
 
     private findElementPick(): MeasureElementPick | null {
@@ -260,17 +346,16 @@ export class MeasureTool extends BaseState {
             edge: 'krawędź',
             plane: 'płaszczyzna',
         };
-        return `Ctrl: drugi element (${names[first.kind]} → punkt / krawędź / płaszczyzna).`;
+        return `Wskaż drugi element (${names[first.kind]} → …). Kliknij LPM lub przytrzymaj Ctrl.`;
     }
 
     private commitEdge(edge: NonNullable<MeasureElementPick['edge']>): void {
+        PMIStore.instance.clearAllMeasurements();
         executePMICommand(new AddMeasurementCommand(PMIStore.instance, {
             anchor1: buildAnchorRef(edge.mesh, edge.p1World, edge.p1Local, edge.index1),
             anchor2: buildAnchorRef(edge.mesh, edge.p2World, edge.p2Local, edge.index2),
         }));
         this.renderer.clearMeasurePreview();
-        this.resetPicks();
-        this.setUIStatus('Długość krawędzi zapisana. Kliknij kolejną krawędź lub punkt.');
     }
 
     private commitTwoEdges(
@@ -291,13 +376,14 @@ export class MeasureTool extends BaseState {
             init.viaAnchor = freeAnchorRef(result.junction);
         }
 
+        PMIStore.instance.clearAllMeasurements();
         executePMICommand(new AddMeasurementCommand(PMIStore.instance, init));
         this.renderer.clearMeasurePreview();
         this.resetPicks();
         this.setUIStatus(
             result.mode === 'chain'
-                ? 'Suma połączonych krawędzi zapisana.'
-                : 'Dystans między krawędziami zapisany.',
+                ? 'Suma połączonych krawędzi (szybki podgląd).'
+                : 'Dystans między krawędziami (szybki podgląd).',
         );
     }
 
@@ -311,6 +397,7 @@ export class MeasureTool extends BaseState {
             return;
         }
 
+        PMIStore.instance.clearAllMeasurements();
         executePMICommand(new AddMeasurementCommand(PMIStore.instance, {
             anchor1: a.anchor,
             anchor2: b.anchor,
@@ -318,7 +405,7 @@ export class MeasureTool extends BaseState {
 
         this.renderer.clearMeasurePreview();
         this.resetPicks();
-        this.setUIStatus('Pomiar dodany.');
+        this.setUIStatus('Pomiar (szybki podgląd).');
     }
 
     private setUIStatus(text: string): void {

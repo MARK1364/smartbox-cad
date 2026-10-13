@@ -84,8 +84,8 @@ export function normalizeShelvesParams(
     const luz_boczny_mm = readOptionalNumber(input, 'luz_boczny_mm') ?? 0.5;
 
     const wzor_nawiercen = String(input.wzor_nawiercen || 'SINGLE').toUpperCase() as HolePatternType;
-    const odstep_otworow_przod_mm = readOptionalNumber(input, 'odstep_otworow_przod_mm') ?? 37;
-    const odstep_otworow_tyl_mm = readOptionalNumber(input, 'odstep_otworow_tyl_mm') ?? 37;
+    const odstep_otworow_przod_mm = readOptionalNumber(input, 'odstep_otworow_przod_mm') ?? 40;
+    const odstep_otworow_tyl_mm = readOptionalNumber(input, 'odstep_otworow_tyl_mm') ?? 40;
 
     const otwory_przod_aktywne = input.otwory_przod_aktywne === true;
     const przesuniecie_otworow_przod_x_mm = readOptionalNumber(input, 'przesuniecie_otworow_przod_x_mm') ?? 0;
@@ -147,10 +147,7 @@ export function calculateShelvesPlan(
         przesuniecie_otworow_przod_x_mm,
         otwory_tyl_aktywne,
         przesuniecie_otworow_tyl_x_mm,
-        rozstaw_potrojny_z_mm,
-        rozstaw_system32_mm,
-        start_system32_z_mm,
-        liczba_otworow_system32
+        rozstaw_potrojny_z_mm
     } = params;
 
     const efektywna_szerokosc_mm = szerokosc_strefy_mm - 2 * luz_boczny_mm;
@@ -220,10 +217,11 @@ export function calculateShelvesPlan(
         if (otwory_przod_aktywne) {
             const uCenterFront = (efektywna_szerokosc_mm / 2) + przesuniecie_otworow_przod_x_mm;
             const vUnderFront = grubosc_polki_mm + promien_otworu_mm;
+            // FACE_Y: U = szerokość (poziom), V = grubość/pion — TRIPLE tylko po V
             addHole(`hole_shelf_${indeks_polki}_center_front`, 'Środek przód', 'FACE_Y_PLUS', uCenterFront, vUnderFront, odsuniecie_przod_mm);
             if (wzor_nawiercen === 'TRIPLE') {
-                addHole(`hole_shelf_${indeks_polki}_center_front_top`, 'Środek przód góra', 'FACE_Y_PLUS', uCenterFront + rozstaw_potrojny_z_mm, vUnderFront, odsuniecie_przod_mm);
-                addHole(`hole_shelf_${indeks_polki}_center_front_bottom`, 'Środek przód dół', 'FACE_Y_PLUS', uCenterFront - rozstaw_potrojny_z_mm, vUnderFront, odsuniecie_przod_mm);
+                addHole(`hole_shelf_${indeks_polki}_center_front_top`, 'Środek przód góra', 'FACE_Y_PLUS', uCenterFront, vUnderFront - rozstaw_potrojny_z_mm, odsuniecie_przod_mm);
+                addHole(`hole_shelf_${indeks_polki}_center_front_bottom`, 'Środek przód dół', 'FACE_Y_PLUS', uCenterFront, vUnderFront + rozstaw_potrojny_z_mm, odsuniecie_przod_mm);
             }
         }
 
@@ -232,8 +230,8 @@ export function calculateShelvesPlan(
             const vUnderBack = -promien_otworu_mm;
             addHole(`hole_shelf_${indeks_polki}_center_back`, 'Środek tył', 'FACE_Y_MINUS', uCenterBack, vUnderBack, 0);
             if (wzor_nawiercen === 'TRIPLE') {
-                addHole(`hole_shelf_${indeks_polki}_center_back_top`, 'Środek tył góra', 'FACE_Y_MINUS', uCenterBack + rozstaw_potrojny_z_mm, vUnderBack, 0);
-                addHole(`hole_shelf_${indeks_polki}_center_back_bottom`, 'Środek tył dół', 'FACE_Y_MINUS', uCenterBack - rozstaw_potrojny_z_mm, vUnderBack, 0);
+                addHole(`hole_shelf_${indeks_polki}_center_back_top`, 'Środek tył góra', 'FACE_Y_MINUS', uCenterBack, vUnderBack + rozstaw_potrojny_z_mm, 0);
+                addHole(`hole_shelf_${indeks_polki}_center_back_bottom`, 'Środek tył dół', 'FACE_Y_MINUS', uCenterBack, vUnderBack - rozstaw_potrojny_z_mm, 0);
             }
         }
 
@@ -276,75 +274,9 @@ export function calculateShelvesPlan(
             }
         }
 
-        // Siatka otworów System 32 / ROW wzdłuż wysokości korpusu
-        if (wzor_nawiercen === 'ROW' || wzor_nawiercen === 'SYSTEM_32') {
-            const sys32Features: any[] = [];
-            const calkowita_liczba_otworow = liczba_otworow_system32 > 0 ? liczba_otworow_system32 : 10;
-
-            const addSys32Hole = (id: string, name: string, face: string, u: number, zPos: number, clearance = 0) => {
-                sys32Features.push({
-                    id,
-                    name,
-                    type: 'hole',
-                    face,
-                    side: face,
-                    is_assembly_drilling: true,
-                    visible: false,
-                    params: {
-                        template_id: 'SINGLE',
-                        u_mm: u,
-                        v_mm: zPos,
-                        diameter_mm: srednica_otworu_mm,
-                        depth_mm: glebokosc_otworu_mm,
-                        u,
-                        v: zPos,
-                        diameter: srednica_otworu_mm,
-                        depth: glebokosc_otworu_mm,
-                        clearance,
-                        holeZ: zPos,
-                        is_assembly_drilling: true
-                    }
-                });
-            };
-
-            for (let k = 0; k < calkowita_liczba_otworow; k++) {
-                const zPos_mm = start_system32_z_mm + k * rozstaw_system32_mm;
-                if (zPos_mm > wysokosc_strefy_mm - 10) break;
-
-                addSys32Hole(`sys32_left_front_${k}`, `Sys32 LF ${k + 1}`, 'FACE_X_MINUS', odstep_otworow_przod_mm, zPos_mm, luz_boczny_mm);
-                addSys32Hole(`sys32_left_back_${k}`, `Sys32 LB ${k + 1}`, 'FACE_X_MINUS', Math.max(odstep_otworow_przod_mm, efektywna_glebokosc_mm - odstep_otworow_tyl_mm), zPos_mm, luz_boczny_mm);
-                addSys32Hole(`sys32_right_front_${k}`, `Sys32 RF ${k + 1}`, 'FACE_X_PLUS', Math.max(0, efektywna_glebokosc_mm - odstep_otworow_przod_mm), zPos_mm, luz_boczny_mm);
-                addSys32Hole(`sys32_right_back_${k}`, `Sys32 RB ${k + 1}`, 'FACE_X_PLUS', odstep_otworow_tyl_mm, zPos_mm, luz_boczny_mm);
-
-                if (otwory_przod_aktywne) {
-                    addSys32Hole(`sys32_front_${k}`, `Sys32 Front ${k + 1}`, 'FACE_Z_PLUS', (efektywna_szerokosc_mm / 2) + przesuniecie_otworow_przod_x_mm, zPos_mm, odsuniecie_przod_mm);
-                }
-                if (otwory_tyl_aktywne) {
-                    addSys32Hole(`sys32_back_${k}`, `Sys32 Back ${k + 1}`, 'FACE_Z_MINUS', (efektywna_szerokosc_mm / 2) - przesuniecie_otworow_tyl_x_mm, zPos_mm, 0);
-                }
-            }
-
-            parts.push({
-                name: 'System_32',
-                role: 'OTHER',
-                nodeType: 'PART',
-                dim: { x: efektywna_szerokosc_mm, y: wysokosc_strefy_mm, z: efektywna_glebokosc_mm },
-                loc: {
-                    x: 0,
-                    y: odsuniecie_przod_mm / 2,
-                    z: wysokosc_strefy_mm / 2
-                },
-                lcs: {
-                    mapping: { X: 'x', Y: 'y', Z: 'z' },
-                    rotation: [0, 0, 0],
-                    faces: {
-                        INNER: 'FACE_Z_PLUS',
-                        OUTER: 'FACE_Z_MINUS'
-                    }
-                },
-                features: sys32Features
-            });
-        }
+        // SYSTEM_32 / ROW: nie twórz części „System_32” o wymiarach wnęki —
+        // to była fałszywa formatka wypełniająca całą szafę. Siatkę otworów
+        // rzutuje shelves-drilling-builder na prawdziwe boki korpusu.
     }
 
     return { parts };

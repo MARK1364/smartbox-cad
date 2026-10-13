@@ -19,6 +19,7 @@ import { SetBlokiParamsCommand } from '../commands/set-blok-params-command.js';
 import { ShelvesSubModule } from '../shelves-adapter.js';
 import { ShelfSubModule } from '../shelf-adapter.js';
 import { DoorsSubModule } from '../doors-adapter.js';
+import { SkosneDoorsSubModule } from '../skosne-doors-adapter.js';
 import { CornerDoorsSubModule } from '../corner-doors-adapter.js';
 import { TubesSubModule } from '../tubes-adapter.js';
 import { DrawersSubModule } from '../drawers-adapter.js';
@@ -34,11 +35,13 @@ import {
     clearBlokiRefPlaneHint,
     type BlokiRefSideKey,
 } from '../bloki-ref-plane-hint.js';
+import { HEIGHT_H_LOCKED_HINT, isBlokiHeightHLocked } from '../bloki-height-h.js';
 
-export const MODULE_TYPES: Record<string, { type: string; label: string; category?: 'internal' | 'external' }> = {
+export const MODULE_TYPES: Record<string, { type: string; label: string; category?: 'internal' | 'external' | 'panel' }> = {
     'EMPTY': { type: 'blok_empty', label: 'Wybierz moduł...' },
     'SHELVES': { type: 'blok_shelves', label: 'Półki', category: 'internal' },
     'DOORS': { type: 'blok_doors', label: 'Drzwi', category: 'internal' },
+    'SKOSNE_DOORS': { type: 'blok_skosne_drzwi', label: 'Drzwi skośne', category: 'internal' },
     'CORNER_DOORS': { type: 'blok_corner_doors', label: 'Drzwi narożne', category: 'internal' },
     'DRAWERS': { type: 'blok_drawers', label: 'Szuflady', category: 'internal' },
     'FLAPS': { type: 'blok_flaps', label: 'Klapy', category: 'internal' },
@@ -47,11 +50,14 @@ export const MODULE_TYPES: Record<string, { type: string; label: string; categor
     'DIVIDERS': { type: 'blok_dividers', label: 'Przegrody', category: 'internal' },
     'LED_INTERNAL': { type: 'blok_led_internal', label: 'Kanał LED', category: 'internal' },
     'PANELS': { type: 'blok_panels', label: 'Blendy', category: 'external' },
-    'LED_EXTERNAL': { type: 'blok_led_external', label: 'Kanał LED', category: 'external' }
+    'LED_EXTERNAL': { type: 'blok_led_external', label: 'Kanał LED', category: 'external' },
+    'HANDLES': { type: 'blok_handle', label: 'Uchwyty', category: 'panel' },
+    'HANGERS': { type: 'smartpart_hangers', label: 'Zawieszki', category: 'panel' }
 };
 
 export const INTERNAL_MODULE_TYPES = Object.entries(MODULE_TYPES).filter(([_, v]) => v.category === 'internal');
 export const EXTERNAL_MODULE_TYPES = Object.entries(MODULE_TYPES).filter(([_, v]) => v.category === 'external');
+export const PANEL_MODULE_TYPES = Object.entries(MODULE_TYPES).filter(([_, v]) => v.category === 'panel');
 
 interface Props {
     container: any;
@@ -266,7 +272,7 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                 yMin: 'Przód', yMax: 'Tył',
                 zMin: 'Dół', zMax: 'Góra'
             };
-            appApi.setStatus(`Referencja [${sideLabels[sideKey] || sideKey}] jest przypisana. Aby wybrać inną, najpierw kliknij [✕] aby ją skasować.`, true);
+            appApi.setStatus(`Odniesienie [${sideLabels[sideKey] || sideKey}] jest przypisane. Aby wybrać inne, najpierw kliknij [✕] aby je skasować.`, true);
             return;
         }
 
@@ -354,7 +360,7 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                 }, true);
 
                 if (appApi?.setStatus) {
-                    appApi.setStatus(`Przypisano referencję → ${targetPartKey}`, false);
+                    appApi.setStatus(`Przypisano odniesienie → ${targetPartKey}`, false);
                 }
             },
             onCancel: () => cancelPicking()
@@ -417,11 +423,10 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
         const isCustom = !!customRefs[sideKey];
         const isDisabled = !!disabledRefsState[sideKey];
         const isPicking = pickingField === sideKey;
-        const isCornerDoors = boxType === 'CORNER_DOORS';
+        const isEmpty = isDisabled || !isCustom;
 
-        let labelText = isCustom ? customRefs[sideKey].partKey : (isCornerDoors ? 'Wybierz sciane 3d' : '');
-        if (isPicking) labelText = 'Wskaż w 3D...';
-        else if (isDisabled || (!isCustom && isCornerDoors)) labelText = 'Wybierz sciane 3d';
+        let labelText = isCustom && !isDisabled ? customRefs[sideKey].partKey : '';
+        if (isPicking) labelText = '🎯 Wskaż ścianę…';
 
         return (
             <div
@@ -432,7 +437,9 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                     background: '#16191f',
                     padding: '8px 10px',
                     borderRadius: '6px',
-                    border: isPicking ? '1px solid #eab308' : ((isDisabled || (!isCustom && isCornerDoors)) ? '1px dashed #ca8a04' : '1px solid #272a30')
+                    border: isPicking ? '1px solid #eab308' : (isEmpty ? '1px dashed #3b4252' : '1px solid #272a30'),
+                    minWidth: 0,
+                    overflow: 'hidden',
                 }}
                 onMouseEnter={() => {
                     if (!isPicking) showRefSideHint(sideKey);
@@ -443,21 +450,27 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase' }}>
                         {defaultName}
                     </span>
-                    {isCustom && <span style={{ fontSize: '9px', color: '#60a5fa', fontStyle: 'italic' }}>custom</span>}
                 </div>
 
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', minWidth: 0, width: '100%' }}>
                     <button
                         onClick={() => startPicking(sideKey)}
+                        title={isPicking
+                            ? 'Wskaż ścianę w oknie 3D (kliknij, aby anulować)'
+                            : isEmpty
+                                ? `Kliknij, aby wskazać ścianę w 3D: ${defaultName}`
+                                : `Odniesienie ${defaultName}: ${labelText}`}
                         style={{
-                            flex: 1,
+                            flex: '1 1 0',
+                            minWidth: 0,
+                            width: 0,
                             padding: '4px 8px',
-                            background: isPicking ? '#eab308' : ((isDisabled || (!isCustom && isCornerDoors)) ? '#1f242d' : '#222730'),
+                            background: isPicking ? '#eab308' : (isEmpty ? '#1f242d' : '#222730'),
                             border: '1px solid #3b4252',
-                            color: isPicking ? '#000' : ((isDisabled || (!isCustom && isCornerDoors)) ? '#facc15' : '#fff'),
+                            color: isPicking ? '#000' : (isEmpty ? '#71717a' : '#fff'),
                             borderRadius: '4px',
                             fontSize: '11px',
-                            fontWeight: isPicking || (isCornerDoors && !isCustom) ? 700 : 500,
+                            fontWeight: isPicking || (isCustom && !isDisabled) ? 700 : 500,
                             cursor: 'pointer',
                             textAlign: 'left',
                             whiteSpace: 'nowrap',
@@ -465,13 +478,15 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                             textOverflow: 'ellipsis'
                         }}
                     >
-                        {labelText}
+                        {labelText || '\u00A0'}
                     </button>
                     <button
                         onClick={() => handleClearOrRestoreRef(sideKey)}
-                        title={isDisabled ? 'Przywróć domyślną referencję' : 'Wyłącz referencję'}
+                        title={isDisabled ? 'Przywróć domyślne odniesienie' : 'Wyłącz odniesienie'}
                         style={{
-                            padding: '4px 8px',
+                            flex: '0 0 auto',
+                            width: '28px',
+                            padding: '4px 0',
                             background: '#222730',
                             border: '1px solid #3b4252',
                             color: isDisabled ? '#4ade80' : '#ef4444',
@@ -670,7 +685,7 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                                 justifyContent: 'center'
                             }}
                         >
-                            Referencje
+                            Odniesienia
                         </button>
                     </div>
 
@@ -745,6 +760,7 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                                 )}
                                 {boxType === 'SHELVES' && <ShelvesSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'DOORS' && <DoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
+                                {boxType === 'SKOSNE_DOORS' && <SkosneDoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'CORNER_DOORS' && <CornerDoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'DRAWERS' && <DrawersSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'FLAPS' && <FlapsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
@@ -785,53 +801,77 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                                 {renderRefSlot('zMax', 'Góra')}
                             </div>
 
-                            {/* Ograniczenie wysokości H */}
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '8px 10px',
-                                background: (disabledRefsState.zMin || disabledRefsState.zMax) ? '#382510' : '#14161a',
-                                border: '1px solid ' + ((disabledRefsState.zMin || disabledRefsState.zMax) ? '#f59e0b' : '#282c35'),
-                                borderRadius: '6px'
-                            }}>
-                                <span style={{
-                                    color: (disabledRefsState.zMin || disabledRefsState.zMax) ? '#fbbf24' : '#cbd5e1',
-                                    fontSize: '12px',
-                                    fontWeight: (disabledRefsState.zMin || disabledRefsState.zMax) ? 700 : 400
-                                }}>
-                                    {disabledRefsState.zMin && !disabledRefsState.zMax ? 'Wysokość H (od góry):' : (!disabledRefsState.zMin && disabledRefsState.zMax ? 'Wysokość H (od dołu):' : 'Wysokość H:')}
-                                </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <input
-                                        type="number"
-                                        value={maxHeight}
-                                        onChange={(e) => {
-                                            const raw = e.target.value;
-                                            setMaxHeight(raw);
-                                            if (raw !== '-' && raw !== '' && !isNaN(Number(raw))) {
-                                                triggerUpdateEx({ maxHeight: parseFloat(raw) });
-                                            }
-                                        }}
-                                        onBlur={() => {
-                                            const val = parseFloat(String(maxHeight)) || 0;
-                                            setMaxHeight(val);
-                                            triggerUpdateEx({ maxHeight: val });
-                                        }}
+                            {/* Ograniczenie wysokości H — nieaktywne gdy góra+dół mają referencje */}
+                            {(() => {
+                                const hLocked = isBlokiHeightHLocked(customRefs, disabledRefsState);
+                                const hNeedsInput = !hLocked && (!!disabledRefsState.zMin || !!disabledRefsState.zMax);
+                                const showHLockedHint = () => {
+                                    if (!hLocked) return;
+                                    const appApi = ContextManager.instance.appAPI;
+                                    if (appApi?.setStatus) appApi.setStatus(HEIGHT_H_LOCKED_HINT, true);
+                                };
+                                return (
+                                    <div
+                                        title={hLocked ? HEIGHT_H_LOCKED_HINT : undefined}
+                                        onClick={showHLockedHint}
+                                        onFocusCapture={showHLockedHint}
                                         style={{
-                                            width: '80px',
-                                            padding: '4px 6px',
-                                            background: '#121418',
-                                            border: '1px solid #3b82f6',
-                                            color: '#fff',
-                                            borderRadius: '4px',
-                                            textAlign: 'right',
-                                            fontSize: '12px'
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            padding: '8px 10px',
+                                            background: hLocked ? '#101218' : (hNeedsInput ? '#382510' : '#14161a'),
+                                            border: '1px solid ' + (hLocked ? '#282c35' : (hNeedsInput ? '#f59e0b' : '#282c35')),
+                                            borderRadius: '6px',
+                                            opacity: hLocked ? 0.55 : 1,
+                                            cursor: hLocked ? 'not-allowed' : undefined
                                         }}
-                                    />
-                                    <span style={{ color: '#8c93a0', fontSize: '11px' }}>mm</span>
-                                </div>
-                            </div>
+                                    >
+                                        <span style={{
+                                            color: hLocked ? '#64748b' : (hNeedsInput ? '#fbbf24' : '#cbd5e1'),
+                                            fontSize: '12px',
+                                            fontWeight: hNeedsInput ? 700 : 400
+                                        }}>
+                                            {disabledRefsState.zMin && !disabledRefsState.zMax ? 'Wysokość H (od góry):' : (!disabledRefsState.zMin && disabledRefsState.zMax ? 'Wysokość H (od dołu):' : 'Wysokość H:')}
+                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <input
+                                                type="number"
+                                                value={maxHeight}
+                                                readOnly={hLocked}
+                                                tabIndex={hLocked ? -1 : undefined}
+                                                onChange={(e) => {
+                                                    if (hLocked) return;
+                                                    const raw = e.target.value;
+                                                    setMaxHeight(raw);
+                                                    if (raw !== '-' && raw !== '' && !isNaN(Number(raw))) {
+                                                        triggerUpdateEx({ maxHeight: parseFloat(raw) });
+                                                    }
+                                                }}
+                                                onBlur={() => {
+                                                    if (hLocked) return;
+                                                    const val = parseFloat(String(maxHeight)) || 0;
+                                                    setMaxHeight(val);
+                                                    triggerUpdateEx({ maxHeight: val });
+                                                }}
+                                                onFocus={showHLockedHint}
+                                                style={{
+                                                    width: '80px',
+                                                    padding: '4px 6px',
+                                                    background: hLocked ? '#0d0f12' : '#121418',
+                                                    border: '1px solid ' + (hLocked ? '#3f3f46' : (hNeedsInput ? '#f59e0b' : '#3b82f6')),
+                                                    color: hLocked ? '#64748b' : '#fff',
+                                                    borderRadius: '4px',
+                                                    textAlign: 'right',
+                                                    fontSize: '12px',
+                                                    cursor: hLocked ? 'not-allowed' : undefined
+                                                }}
+                                            />
+                                            <span style={{ color: '#8c93a0', fontSize: '11px' }}>mm</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     )}
 

@@ -25,10 +25,9 @@ import { PMIStore } from '../A8_pmi/pmi-data';
 import { resolveAnchorWorld } from '../A8_pmi/pmi-id-bridge';
 import { TOP_BETA, BOTTOM_BETA } from '../S3_scena/named-camera-view.js';
 import { NodeType } from '../A1_core/cad-node/node-type.js';
+import { clearLegacyExportStorage } from '../A1_core/export-session-storage.js';
 
 declare const BABYLON: any;
-
-const SAVED_VIEWS_STORAGE_KEY = 'bloki_cad_manual_sheets_v3_e3';
 
 export interface SheetScreenLayout {
     sheetPixelX: number;
@@ -91,7 +90,8 @@ export class ExportEngineV3 {
     }
 
     constructor() {
-        this.loadSavedViews();
+        this.savedViews = [];
+        clearLegacyExportStorage();
 
         if (typeof window !== 'undefined') {
             window.addEventListener('resize', () => {
@@ -598,8 +598,7 @@ export class ExportEngineV3 {
             if (!store) return;
 
             const annotations = (store.annotations || []).filter((a) => a.visible !== false);
-            const measurements = (store.measurements || []).filter((m) => m.visible !== false);
-            if (annotations.length === 0 && measurements.length === 0) return;
+            if (annotations.length === 0) return;
 
             const area = sheet.getAvailableDrawingArea();
             const viewport = ContextManager.instance?.viewport;
@@ -680,13 +679,7 @@ export class ExportEngineV3 {
                 processPoints(w1, w2, label);
             });
 
-            measurements.forEach((msr) => {
-                const w1 = resolveAnchorWorld(scene, msr.anchor1);
-                const w2 = resolveAnchorWorld(scene, msr.anchor2);
-                if (!w1 || !w2) return;
-                const label = msr.text || (msr.distanceMM ? `${msr.distanceMM.toFixed(1)} mm` : '');
-                processPoints(w1, w2, label);
-            });
+
 
             if (svgElements.length > 0) {
                 sheet.addSvgOverlay(svgElements.join('\n'));
@@ -861,15 +854,19 @@ export class ExportEngineV3 {
         }
 
         const viewport = ContextManager.instance?.viewport;
-        if (viewport?.camera) {
+        if (viewport && typeof viewport.applyCameraPose === 'function') {
+            viewport.applyCameraPose(view.cameraAlpha, view.cameraBeta, view.cameraRadius, view.cameraTarget);
+            this.setProjectionType(view.projectionType);
+        } else if (viewport?.camera) {
             const cam = viewport.camera;
+            if (typeof cam.target?.set === 'function' && view.cameraTarget) {
+                cam.target.set(view.cameraTarget[0], view.cameraTarget[1], view.cameraTarget[2]);
+            }
             cam.alpha = view.cameraAlpha;
             cam.beta = view.cameraBeta;
             cam.radius = view.cameraRadius;
-            if (view.cameraTarget) {
-                cam.target = new BABYLON.Vector3(view.cameraTarget[0], view.cameraTarget[1], view.cameraTarget[2]);
-            }
             this.setProjectionType(view.projectionType);
+            viewport.requestRender?.(5);
         }
 
         this.updatePassepartout();
@@ -941,25 +938,7 @@ export class ExportEngineV3 {
         return count;
     }
 
-    private loadSavedViews(): void {
-        try {
-            const raw = localStorage.getItem(SAVED_VIEWS_STORAGE_KEY);
-            if (raw) {
-                this.savedViews = JSON.parse(raw);
-            } else {
-                this.savedViews = [];
-            }
-        } catch (e) {
-            console.warn('Nie udało się wczytać zapisanych arkuszy E3:', e);
-            this.savedViews = [];
-        }
-    }
-
     private saveSavedViews(): void {
-        try {
-            localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(this.savedViews));
-        } catch (e) {
-            console.warn('Nie udało się zapisać arkuszy E3:', e);
-        }
+        clearLegacyExportStorage();
     }
 }

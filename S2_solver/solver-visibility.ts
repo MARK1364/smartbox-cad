@@ -32,7 +32,9 @@ export function isSolverSmartFrameIsolationActive(): boolean {
 }
 
 export function notifySolverVisibilityChanged(): void {
-    window.dispatchEvent(new CustomEvent('solver-visibility-changed', { detail: { value: getSolverShowOnlySmartFrame() } }));
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('solver-visibility-changed', { detail: { value: getSolverShowOnlySmartFrame() } }));
+    }
     const fn = (ContextManager.instance as any).notifyIsolationUpdate;
     if (typeof fn === 'function') {
         fn();

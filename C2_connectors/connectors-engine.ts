@@ -83,6 +83,30 @@ export function getDefaultPlacementRule(rules?: ConnectorsRules): string {
     return r.default_settings?.placement_rule || getPlacementRuleKeys(r)[0] || 'standard_od_lewej';
 }
 
+export function getConnectorTypeKeys(rules?: ConnectorsRules): string[] {
+    return Object.keys(resolveRules(rules).connector_types ?? {});
+}
+
+/** Domyślne typy pozycji z reguły (siatka 32 mm). */
+export function getRulePositionTypes(placementRule: string, rules?: ConnectorsRules): string[] {
+    const rule = getPlacementRuleDefinition(placementRule, rules);
+    const types: string[] = [];
+    for (const side of rule?.sides ?? []) {
+        for (const pos of side.positions ?? []) {
+            types.push(pos.type);
+        }
+    }
+    return types;
+}
+
+export function shortConnectorTypeLabel(type: string, rules?: ConnectorsRules): string {
+    if (type.startsWith('kolki')) return 'Kołek';
+    if (type.startsWith('konfirmat')) return 'Konfirmat';
+    if (type === 'minifix') return 'Mimośród';
+    const name = getConnectorDefinition(type, rules)?.name;
+    return name || type;
+}
+
 /**
  * Najdłuższa krawędź styku dostaje stały zwrot: +Y formatki (głębokość / tył).
  * Bez tego uzwojenie wielokąta na wieńcu górnym vs dolnym odwraca „od lewej”.
@@ -130,6 +154,7 @@ function calculatePositionsByRule(
     positionsActive?: boolean[] | null,
     along?: Vec3 | null,
     firstOffsetMm?: number | null,
+    positionTypes?: string[] | null,
 ) {
     const { center, direction, length } = getFaceParams(faceVerts, along);
     const sides = ruleDef.sides || [];
@@ -168,9 +193,12 @@ function calculatePositionsByRule(
             const pos = fromFront
                 ? startPos.add(direction.scale(offsetMm))
                 : startPos.sub(direction.scale(offsetMm));
+            const overrideType = positionTypes?.[globalIndex];
             connectors.push({
                 position: pos,
-                type: posDef.type,
+                type: (overrideType && typeof overrideType === 'string' && overrideType)
+                    ? overrideType
+                    : posDef.type,
                 index: globalIndex,
                 offsetMm,
                 side: fromFront ? 'front' : 'back',
@@ -190,6 +218,7 @@ export function generateConnectors(
     alongMm?: Vec3Tuple | Vec3 | null,
     firstOffsetMm?: number | null,
     rules?: ConnectorsRules,
+    positionTypes?: string[] | null,
 ): ConnectorPlacement[] {
     const ruleDef = getPlacementRuleDefinition(placementRule, rules);
     if (!ruleDef) {
@@ -203,6 +232,7 @@ export function generateConnectors(
         positionsActive,
         along,
         firstOffsetMm,
+        positionTypes,
     );
     const normal = vec(normalMm).normalize();
     const rot = quatFromTo(Vec3.UNIT_Z, normal);

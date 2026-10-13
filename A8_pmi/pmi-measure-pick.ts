@@ -10,7 +10,9 @@ import { Vec3, v3 } from './dimension-solver';
 import {
     PMIAnchorRef,
     buildAnchorRef,
+    isPmiOverlayMesh,
     snapWorldPointToPanelGeometry,
+    SNAP_RADIUS_MM,
 } from './pmi-id-bridge';
 import {
     EdgeSegmentCandidate,
@@ -54,7 +56,30 @@ export function findMeasureElementPick(ctx: MeasurePickContext): MeasureElementP
     const { scene, pointerX, pointerY, ctrl, vertexSnapPx, edgeSnapPx, lastDetection } = ctx;
     if (!scene) return null;
 
-    const vertices = findVerticesNearPointer(scene, pointerX, pointerY, vertexSnapPx);
+    const snapRadius = Math.max(vertexSnapPx, 14);
+    const vertices = findVerticesNearPointer(scene, pointerX, pointerY, snapRadius);
+
+    // Narożnik ma ZAWSZE bezwzględne pierwszeństwo przed krawędzią i płaszczyzną
+    // (zarówno z Ctrl, jak i bez Ctrl).
+    if (vertices.length > 0) return vertexPickToMeasure(vertices[0]);
+
+    if (lastDetection?.hit && lastDetection.geometryType === GeometryType.VERTEX
+        && lastDetection.pickedPoint && lastDetection.mesh) {
+        const worldPos = v3(
+            lastDetection.pickedPoint.x,
+            lastDetection.pickedPoint.y,
+            lastDetection.pickedPoint.z,
+        );
+        return {
+            worldPos,
+            anchor: buildAnchorRef(lastDetection.mesh, worldPos),
+            mesh: lastDetection.mesh,
+            kind: 'vertex',
+            edge: null,
+            planeNormal: null,
+        };
+    }
+
     const edges = findEdgeSegmentsNearPointer(
         scene,
         pointerX,
@@ -64,34 +89,16 @@ export function findMeasureElementPick(ctx: MeasurePickContext): MeasureElementP
     const planeHit = findPlaneHit(scene, pointerX, pointerY, lastDetection);
 
     if (ctrl) {
-        if (vertices.length > 0) return vertexPickToMeasure(vertices[0]);
-
         const onFaceInterior = !!planeHit && (!edges.length || edges[0].distPx > Math.min(8, edgeSnapPx * 0.45));
         if (onFaceInterior && planeHit) return planeHit;
 
         if (edges.length > 0) return edgePickToMeasure(edges[0]);
         if (planeHit) return planeHit;
-        if (lastDetection?.hit && lastDetection.geometryType === GeometryType.VERTEX
-            && lastDetection.pickedPoint && lastDetection.mesh) {
-            const worldPos = v3(
-                lastDetection.pickedPoint.x,
-                lastDetection.pickedPoint.y,
-                lastDetection.pickedPoint.z,
-            );
-            return {
-                worldPos,
-                anchor: buildAnchorRef(lastDetection.mesh, worldPos),
-                mesh: lastDetection.mesh,
-                kind: 'vertex',
-                edge: null,
-                planeNormal: null,
-            };
-        }
         return fallbackPointPick(scene, pointerX, pointerY);
     }
 
     if (edges.length > 0) return edgePickToMeasure(edges[0]);
-    if (vertices.length > 0) return vertexPickToMeasure(vertices[0]);
+    if (planeHit) return planeHit;
     return fallbackPointPick(scene, pointerX, pointerY);
 }
 
@@ -110,7 +117,7 @@ export function findPlaneHit(
             lastDetection.pickedPoint.y,
             lastDetection.pickedPoint.z,
         );
-        const snapped = snapWorldPointToPanelGeometry(scene, lastDetection.mesh, worldPos, 1e6);
+        const snapped = snapWorldPointToPanelGeometry(scene, lastDetection.mesh, worldPos, SNAP_RADIUS_MM);
         const pos = snapped?.worldPos ?? worldPos;
         return {
             worldPos: pos,
@@ -133,7 +140,7 @@ export function findPlaneHit(
     valid.sort((a: any, b: any) => a.distance - b.distance);
     const hit = valid[0];
     const worldPos = v3(hit.pickedPoint.x, hit.pickedPoint.y, hit.pickedPoint.z);
-    const snapped = snapWorldPointToPanelGeometry(scene, hit.pickedMesh, worldPos, 1e6);
+    const snapped = snapWorldPointToPanelGeometry(scene, hit.pickedMesh, worldPos, SNAP_RADIUS_MM);
     const pos = snapped?.worldPos ?? worldPos;
     const norm = hit.getNormal ? hit.getNormal(true) : null;
     if (!norm) return null;
@@ -148,7 +155,7 @@ export function findPlaneHit(
 }
 
 function fallbackPointPick(scene: any, pointerX: number, pointerY: number): MeasureElementPick | null {
-    const hit = scene.pick(pointerX, pointerY, (m: any) => m && m.isPickable && !m.name?.startsWith('pmi_'));
+    const hit = scene.pick(pointerX, pointerY, (m: any) => m && m.isPickable && !isPmiOverlayMesh(m));
     if (hit?.hit && hit.pickedMesh && hit.pickedPoint) {
         const worldPos = v3(hit.pickedPoint.x, hit.pickedPoint.y, hit.pickedPoint.z);
         return {

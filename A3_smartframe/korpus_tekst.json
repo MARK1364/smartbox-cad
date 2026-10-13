@@ -60,9 +60,9 @@
     "de": "Auf die 3D-Szene ziehen — Eckkorpus mit Blende"
   },
   "cards.rogowy1.label": {
-    "pl": "Rogowy 1",
-    "en": "Corner 1",
-    "de": "Ecke 1"
+    "pl": "Rogowa prosta",
+    "en": "Straight corner",
+    "de": "Gerade Ecke"
   },
   "cards.rogowy90.title": {
     "pl": "Przeciągnij na scenę 3D — korpus narożny kątownik 90°",
@@ -75,19 +75,19 @@
     "de": "Ecke 90"
   },
   "cards.skosny_dach.title": {
-    "pl": "Przeciągnij na scenę 3D — korpus pod skośny dach (przód niski, tył wysoki)",
-    "en": "Drag onto the 3D scene — cabinet for sloped roof (low front, high back)",
-    "de": "Auf die 3D-Szene ziehen — Korpus unter Schrägdach (vorne niedrig, hinten hoch)"
+    "pl": "Przeciągnij na scenę 3D — korpus skośny przód (przód niski, tył wysoki)",
+    "en": "Drag onto the 3D scene — slanted front cabinet (low front, high back)",
+    "de": "Auf die 3D-Szene ziehen — Korpus schräge Front (vorne niedrig, hinten hoch)"
   },
   "cards.skosny_dach.label": {
-    "pl": "Skośny dach",
-    "en": "Sloped roof",
-    "de": "Schrägdach"
+    "pl": "Skośny przód",
+    "en": "Slanted front",
+    "de": "Schräge Front"
   },
   "skosny_dach.title": {
-    "pl": "Skos do tyłu (pod dach)",
-    "en": "Slope to back (under roof)",
-    "de": "Schräge nach hinten (unter Dach)"
+    "pl": "Skos do tyłu (skośny przód)",
+    "en": "Slope to back (slanted front)",
+    "de": "Schräge nach hinten (schräge Front)"
   },
   "skosny_dach.height_front": {
     "pl": "Wys. przód",
@@ -100,19 +100,19 @@
     "de": "Höhe hinten"
   },
   "cards.skosny_lr_uc.title": {
-    "pl": "Przeciągnij na scenę 3D — skośny L/P z uciosem (wieniec w świetle)",
-    "en": "Drag onto the 3D scene — slanted L/R with miter (top in clear width)",
-    "de": "Auf die 3D-Szene ziehen — schräg L/R mit Gehrung (Deckplatte im Lichtmaß)"
+    "pl": "Przeciągnij na scenę 3D — skośna lewa (wieniec w świetle)",
+    "en": "Drag onto the 3D scene — slanted left (top in clear width)",
+    "de": "Auf die 3D-Szene ziehen — schräg links (Deckplatte im Lichtmaß)"
   },
   "cards.skosny_lr_uc.label": {
-    "pl": "Skośny L/P ucięty",
-    "en": "Slanted L/R miter",
-    "de": "Schräg L/R Gehrung"
+    "pl": "Skośna lewa",
+    "en": "Slanted left",
+    "de": "Schräg links"
   },
   "skosny_lr_uc.title": {
-    "pl": "Skos w poprzek — ucięcie na stykach (wieniec w świetle)",
-    "en": "Sideways slant — mitered joints (top in clear width)",
-    "de": "Seitenschräge — Gehrungen (Deckplatte im Lichtmaß)"
+    "pl": "Skośna lewa — ucięcie na stykach (wieniec w świetle)",
+    "en": "Slanted left — mitered joints (top in clear width)",
+    "de": "Schräg links — Gehrungen (Deckplatte im Lichtmaß)"
   },
   "skosny_lr.height_left": {
     "pl": "Wys. lewa",

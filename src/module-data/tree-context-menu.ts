@@ -16,7 +16,7 @@ import srcTekstRaw from '../src_tekst.json';
 
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
-import { CAD_OPEN_FLOATING_PANEL_EDIT } from '../FloatingOperationDialog';
+import { openCadEditEntity } from '../floating-edit/cad-edit-entity.js';
 import type { ModuleScope, ModuleScopeType } from './types';
 
 export const CAD_TREE_START_RENAME = 'cad-tree-start-rename';
@@ -60,44 +60,119 @@ function nodeKind(rawType: string): string {
     return String(rawType || '').toLowerCase();
 }
 
+function domainOf(id: string): any | null {
+    const doc = getDoc();
+    if (!doc || !id) return null;
+    return findContainer(id) || findPanel(id) || doc.findNode(id)?.domainData || null;
+}
+
+function isSmartPartModel(m: any): boolean {
+    if (!m) return false;
+    const role = String(m.role || '');
+    const genType = String(m.generatorParams?.type || '').toLowerCase();
+    if (role.startsWith('SMARTPART')) return true;
+    if (genType.startsWith('smartpart')) return true;
+    if (m.generatorParams?.partType === 'HANDLE') return true;
+    if (m.generatorParams?.isSmartPart) return true;
+    return false;
+}
+
+function isApplianceModel(m: any): boolean {
+    if (!m) return false;
+    if (m.role === 'APPLIANCE' || m.domainData?.role === 'APPLIANCE') return true;
+    return String(m.generatorParams?.type || '') === 'smart_appliance';
+}
+
+function isAppliancePartModel(m: any): boolean {
+    if (!m) return false;
+    const role = String(m.role || '').toUpperCase();
+    return role === 'APPLIANCE_FRONT' || role === 'APPLIANCE_CORPUS' || m.custom_properties?.domain === 'appliance_part';
+}
+
+function resolveApplianceContainer(id: string): any | null {
+    const doc = getDoc();
+    if (!doc || !id) return null;
+    const m = domainOf(id);
+    if (isApplianceModel(m)) return m;
+    if (isAppliancePartModel(m)) {
+        const node = doc.findNode(id);
+        const parent = node?.parent?.domainData;
+        if (isApplianceModel(parent)) return parent;
+    }
+    return null;
+}
+
+function isSmartPartNode(data: TreeContextMenuData): boolean {
+    const kind = nodeKind(data.type);
+    if (kind === 'handle' || kind === 'smartpart') return true;
+    return isSmartPartModel(domainOf(String(data.id || data.uuid || '')));
+}
+
+function isApplianceNode(data: TreeContextMenuData): boolean {
+    const kind = nodeKind(data.type);
+    if (kind === 'agd' || kind === 'appliance') return true;
+    return !!resolveApplianceContainer(String(data.id || data.uuid || ''));
+}
+
+function isPanelNode(data: TreeContextMenuData): boolean {
+    const kind = nodeKind(data.type);
+    if (kind !== 'part' && kind !== 'panel') return false;
+    const m = domainOf(String(data.id || data.uuid || ''));
+    // SmartPart / część AGD → nie „Edytuj formatkę”
+    return !isSmartPartModel(m) && !isAppliancePartModel(m) && !isApplianceModel(m);
+}
+
+/**
+ * Formatka edytowalna TYLKO gdy powstała w SmartPanel (ręczna).
+ * Silnikowe (z korpusów / bloków, engineManaged !== false) edytuje się
+ * przez „Edytuj korpus” / „Edytuj blok” — nigdy bezpośrednio.
+ */
+function isManualEditablePanel(data: TreeContextMenuData): boolean {
+    if (!isPanelNode(data)) return false;
+    // Flaga z drzewa (drawing-project-extractor: engineManaged === false)
+    if (data.isManual === true) return true;
+    const m = domainOf(String(data.id || data.uuid || ''));
+    if (m && (m as any).engineManaged === false) return true;
+    return false;
+}
+
 function isBlokiContainer(id: string, rawType?: string): boolean {
     const t = nodeKind(rawType || '');
+    if (t === 'handle' || t === 'smartpart' || t === 'agd' || t === 'appliance' || t === 'part' || t === 'panel' || t === 'feature') return false;
     if (t === 'bloki' || t === 'drawers' || t === 'shelves') return true;
     const doc = getDoc();
     if (!doc) return false;
     const c = findContainer(id) || doc.findNode(id)?.domainData;
     if (c) {
+        if (isSmartPartModel(c) || isApplianceModel(c)) return false;
         const pType = (c.generatorParams?.type || '').toLowerCase();
+        if (pType.startsWith('smartpart') || pType === 'smart_appliance') return false;
         if (
-            pType.startsWith('bloki') || 
-            c.generatorParams?.boxType !== undefined || 
-            c.is_blok || 
-            c.type === 'bloki' || 
-            c.sb_role !== undefined ||
-            (c.name && String(c.name).toLowerCase().includes('bloki')) ||
-            (c.name && String(c.name).endsWith('_SB'))
+            pType.startsWith('blok_') ||
+            pType.startsWith('bloki') ||
+            c.generatorParams?.boxType !== undefined ||
+            c.is_blok ||
+            c.type === 'bloki'
         ) return true;
     }
     return false;
 }
 
 function isKorpusNode(data: TreeContextMenuData): boolean {
+    if (isSmartPartNode(data) || isApplianceNode(data)) return false;
     if (isBlokiContainer(data.id, data.type)) return false;
     const kind = nodeKind(data.type);
+    // Formatka / AGD mają własne „Edytuj…” — nie dokładaj „Edytuj korpus”
+    if (kind === 'part' || kind === 'panel' || kind === 'feature' || kind === 'handle' || kind === 'agd' || kind === 'appliance') return false;
     const doc = getDoc();
     if (!doc) return kind === 'container' || kind === 'korpus';
     const c = findContainer(data.id) || doc.findNode(data.id)?.domainData;
     if (c) {
+        if (isSmartPartModel(c) || isApplianceModel(c)) return false;
         const pType = (c.generatorParams?.type || '').toLowerCase();
-        if (pType.includes('korpus') || pType.includes('smartframe') || (!pType.startsWith('bloki') && c.type === 'container')) return true;
-    }
-    if (kind === 'part' || kind === 'panel') {
-        const node = doc.findNode(data.id);
-        const parent = node?.parent?.domainData;
-        if (parent && (parent.type === 'container' || parent.generatorParams)) {
-            const pType = (parent.generatorParams?.type || '').toLowerCase();
-            if (pType.includes('korpus') || pType.includes('smartframe') || (!pType.startsWith('bloki') && parent.type === 'container')) return true;
-        }
+        if (pType.startsWith('smartpart') || pType === 'smart_appliance' || pType.startsWith('blok_') || pType.startsWith('bloki')) return false;
+        if (pType.includes('korpus') || pType.includes('smartframe')) return true;
+        if (c.type === 'container' && c.generatorParams?.boxType === undefined && !c.is_blok) return true;
     }
     return kind === 'container' || kind === 'korpus';
 }
@@ -229,6 +304,18 @@ function toggleFreeze(data: TreeContextMenuData): void {
     }
 }
 
+function editSmartPart(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    if (!doc) return;
+    const node = doc.findNode(data.id);
+    const model = node?.domainData;
+    if (model) {
+        doc.setActiveEntity(model);
+        UIController.instance?.emitTree('select-container', { id: data.id });
+    }
+    openCadEditEntity({ entityId: data.id, kind: 'smartpart' });
+}
+
 function editKorpus(data: TreeContextMenuData): void {
     const doc = getDoc();
     if (!doc) return;
@@ -241,14 +328,46 @@ function editKorpus(data: TreeContextMenuData): void {
     if (targetContainer) {
         doc.setActiveEntity(targetContainer);
         UIController.instance?.emitTree('select-container', { id: targetContainer.id });
+        openCadEditEntity({ entityId: targetContainer.id, kind: 'korpus' });
     }
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-        window.dispatchEvent(new CustomEvent('cad-switch-tab', { detail: { tabId: 'tab-a3-smartframe' } }));
-        window.dispatchEvent(new CustomEvent('cad-edit-smartframe-korpus', { detail: { containerId: targetContainer?.id } }));
+}
+
+function editBloki(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    if (!doc) return;
+    let targetContainer = findContainer(data.id);
+    if (!targetContainer) {
+        const node = doc.findNode(data.id);
+        if (node?.domainData?.type === 'container') targetContainer = node.domainData;
+        else if (node?.parent?.domainData && isBlokiContainer(node.parent.id, 'container')) {
+            targetContainer = node.parent.domainData;
+        }
+    }
+    if (targetContainer) {
+        doc.setActiveEntity(targetContainer);
+        UIController.instance?.emitTree('select-container', { id: targetContainer.id });
+        openCadEditEntity({ entityId: targetContainer.id, kind: 'blok' });
+    }
+}
+
+function editAgd(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    if (!doc) return;
+    const target = resolveApplianceContainer(String(data.id || data.uuid || ''))
+        || findContainer(data.id);
+    if (target) {
+        doc.setActiveEntity(target);
+        UIController.instance?.emitTree('select-container', { id: target.id });
+        openCadEditEntity({ entityId: target.id, kind: 'agd' });
     }
 }
 
 function editPanel(data: TreeContextMenuData): void {
+    // Obrona w głąb: formatki silnikowe (korpus/blok) nie mają bezpośredniej edycji.
+    if (!isManualEditablePanel(data)) {
+        UIController.instance?.setStatus?.('Formatki z korpusu / bloku edytuje się przez „Edytuj korpus” / „Edytuj blok”', true);
+        return;
+    }
     const doc = getDoc();
     const panelId = String(data.id || data.uuid || '');
     if (doc && panelId) {
@@ -259,12 +378,8 @@ function editPanel(data: TreeContextMenuData): void {
             UIController.instance?.emitTree('select-part', { id: panelId, uuid: panelId });
         }
     }
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && panelId) {
-        window.dispatchEvent(new CustomEvent(CAD_OPEN_FLOATING_PANEL_EDIT, {
-            detail: {
-                panelId,
-            },
-        }));
+    if (panelId) {
+        openCadEditEntity({ entityId: panelId, kind: 'panel' });
     }
 }
 
@@ -309,15 +424,15 @@ function editOperation(data: TreeContextMenuData): void {
         }
     }
     UIController.instance?.emitTree('select-feature', { id: data.id, panelId: data.panelId, face: data.face, openProperties: false });
-    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && data.panelId) {
-        window.dispatchEvent(new CustomEvent('cad-open-floating-operation', {
-            detail: {
-                library_id: data.libraryId || 'przetloczenie',
-                featureId: data.id,
-                panelId: data.panelId,
-                face: data.face,
-            },
-        }));
+    if (data.panelId) {
+        openCadEditEntity({
+            entityId: data.panelId,
+            kind: 'operation',
+            featureId: data.id,
+            panelId: data.panelId,
+            libraryId: data.libraryId || 'przetloczenie',
+            face: data.face,
+        });
     }
 }
 
@@ -331,8 +446,13 @@ function showOnly(data: TreeContextMenuData): void {
     });
 }
 
-function showAll(): void {
-    UIController.instance?.emitTree('show-all', {});
+/** Przywraca widoczność całego projektu (zdejmuje izolację). */
+function showAll(_data?: TreeContextMenuData): void {
+    UIController.instance?.emitTree('show-all', {
+        id: 'root',
+        uuid: 'root',
+        type: 'project',
+    });
 }
 
 export function showCadTreeContextMenu(data: TreeContextMenuData): void {
@@ -340,10 +460,16 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     const scope = scopeFromData(data);
     const items: any[] = [];
 
-    if (kind === 'feature') {
+    // Edycja na samej górze — SmartPart / AGD / formatka / blok / korpus / operacja
+    if (isSmartPartNode(data)) {
+        items.push({ label: 'Edytuj', icon: ICONS.editOperation, action: 'edit-smartpart' });
+        items.push({ separator: true });
+    } else if (isApplianceNode(data)) {
+        items.push({ label: 'Edytuj AGD', icon: ICONS.editKorpus, action: 'edit-agd' });
+    } else if (kind === 'feature') {
         const isSmart = data.isSmart === true || data.source === 'library' || !!data.libraryId;
         if (isSmart) {
-            items.push({ label: tx(srcTekst, 'ctxmenu.edit_op', TX_NS), icon: ICONS.editOperation, action: 'edit-operation' });
+            items.push({ label: 'Edytuj', icon: ICONS.editOperation, action: 'edit-operation' });
         } else {
             const isFrozen = data.frozen === true;
             items.push({
@@ -352,16 +478,89 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
                 action: 'toggle-freeze',
             });
         }
+    } else if (isManualEditablePanel(data)) {
+        items.push({ label: tx(srcTekst, 'ctxmenu.edit_panel', TX_NS), icon: ICONS.editOperation, action: 'edit-panel' });
+    } else if (isBlokiContainer(data.id, data.type) || kind === 'bloki' || kind === 'drawers' || kind === 'shelves') {
+        items.push({ label: 'Edytuj blok', icon: ICONS.editKorpus, action: 'edit-bloki' });
+    } else if (isKorpusNode(data)) {
+        items.push({ label: 'Edytuj korpus', icon: ICONS.editKorpus, action: 'edit-korpus' });
     }
 
+    // Obiekt: zębatka Właściwości + Zmień nazwę (małe przyciski z podpisem)
+    const objectTools: any[] = [
+        {
+            label: tx(srcTekst, 'ctxmenu.props', TX_NS),
+            caption: 'Właściwości',
+            icon: ICONS.properties,
+            action: 'open-properties',
+        },
+        {
+            label: tx(srcTekst, 'ctxmenu.rename', TX_NS),
+            caption: 'Nazwa',
+            icon: ICONS.rename,
+            action: 'rename',
+        },
+    ];
+    if (kind !== 'project' && kind !== 'root') {
+        objectTools.push({
+            label: tx(srcTekst, 'tree.delete_panel', TX_NS),
+            caption: 'Usuń',
+            icon: ICONS.trash,
+            action: 'delete',
+        });
+    }
+    if (kind === 'part' || kind === 'panel') {
+        const isManual = data.isManual === true;
+        if (!isManual) {
+            const isFrozen = data.frozen === true;
+            objectTools.push({
+                label: isFrozen ? tx(srcTekst, 'ctxmenu.unfreeze_panel', TX_NS) : tx(srcTekst, 'ctxmenu.freeze_panel', TX_NS),
+                caption: isFrozen ? 'Odmroź' : 'Zamroź',
+                icon: ICONS.freeze,
+                action: 'toggle-freeze',
+            });
+        }
+    }
+    items.push({ section: 'Obiekt', toolbar: objectTools });
+
+    // Widoczność — pasek z podpisami
+    const canIsolate =
+        kind === 'part' || kind === 'panel' || kind === 'container' || kind === 'assembly'
+        || kind === 'korpus' || kind === 'bloki' || kind === 'drawers' || kind === 'shelves'
+        || kind === 'handle' || kind === 'agd' || kind === 'appliance';
+    const canRevealScope =
+        canIsolate || kind === 'project' || kind === 'root' || kind === 'hardware';
+
+    const viewTools: any[] = [];
+    if (canIsolate) {
+        viewTools.push({
+            label: tx(srcTekst, 'ctxmenu.show_only', TX_NS),
+            caption: 'Tylko',
+            icon: ICONS.eyeOff,
+            action: 'show-only',
+        });
+    }
+    if (canRevealScope) {
+        viewTools.push({
+            label: tx(srcTekst, 'ctxmenu.show_all', TX_NS),
+            caption: 'Wszystko',
+            icon: ICONS.eye,
+            action: 'show-all',
+        });
+    }
+    if (viewTools.length) {
+        items.push({ section: 'Widok', toolbar: viewTools });
+    }
+
+    // Osobna sekcja: ramka ALU (nie mieszać z widokiem / produkcją)
     if (kind === 'part' || kind === 'panel') {
         const doc = getDoc();
         const panelId = String(data.id || data.uuid || '');
         const node = doc?.findNode(panelId);
         const panel = node?.domainData || findPanel(panelId);
         const isAlu = panel?.panelForm === 'ALU_FRAME' || (typeof panel?.isAluFrame === 'function' && panel.isAluFrame());
-
-        items.push({ label: tx(srcTekst, 'ctxmenu.edit_panel', TX_NS), icon: ICONS.editOperation, action: 'edit-panel' });
+        items.push({ separator: true });
+        items.push({ section: 'Ramka ALU' });
         if (isAlu) {
             items.push({ label: tx(srcTekst, 'ctxmenu.restore_panel', TX_NS), icon: ICONS.aluFrame, action: 'convert-to-solid' });
         } else {
@@ -369,69 +568,65 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         }
     }
 
-    if (isKorpusNode(data)) {
-        items.push({ label: 'Edytuj korpus', icon: ICONS.editKorpus, action: 'edit-korpus' });
-    }
-    items.push({ label: tx(srcTekst, 'ctxmenu.rename', TX_NS), icon: ICONS.rename, action: 'rename' });
-    items.push({ label: tx(srcTekst, 'ctxmenu.props', TX_NS), icon: ICONS.properties, action: 'open-properties' });
-
-    if (kind === 'part' || kind === 'panel') {
-        const isManual = data.isManual === true;
-        if (!isManual) {
-            const isFrozen = data.frozen === true;
-            items.push({
-                label: isFrozen ? tx(srcTekst, 'ctxmenu.unfreeze_panel', TX_NS) : tx(srcTekst, 'ctxmenu.freeze_panel', TX_NS),
-                icon: ICONS.freeze,
-                action: 'toggle-freeze',
-            });
-        }
-    }
-
-    // Widoczność: „Pokaż tylko” na panelu / korpusie / Bloku; „Pokaż wszystko” tylko na korzeniu projektu
-    if (kind === 'project' || kind === 'root') {
-        items.push({ label: tx(srcTekst, 'ctxmenu.show_all', TX_NS), icon: ICONS.eye, action: 'show-all' });
-    } else if (kind === 'part' || kind === 'panel' || kind === 'container' || kind === 'assembly' || kind === 'korpus' || kind === 'bloki' || kind === 'drawers' || kind === 'shelves') {
-        items.push({ label: tx(srcTekst, 'ctxmenu.show_only', TX_NS), icon: ICONS.eyeOff, action: 'show-only' });
-    }
-
     if (scope) {
         items.push({ separator: true });
-        if (scope.type === 'PANEL') {
-            items.push({ label: 'Raport z formatki', icon: ICONS.report, action: 'open-report' });
-            items.push({ label: tx(srcTekst, 'ctxmenu.nesting', TX_NS), icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: '⚡ Generuj program CNC formatki', icon: ICONS.cnc, action: 'batch-cnc' });
-            items.push({ label: 'CNC — edytor formatki', icon: ICONS.cnc, action: 'open-cnc' });
-            items.push({ label: 'Graf formatki (DAG)', icon: ICONS.dag, action: 'open-dag' });
-        } else if (scope.type === 'BLOKI') {
-            items.push({ label: 'Raport ze Bloku', icon: ICONS.report, action: 'open-report' });
-            items.push({ label: tx(srcTekst, 'ctxmenu.nesting', TX_NS), icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: '⚡ Generuj programy CNC dla Bloku', icon: ICONS.cnc, action: 'batch-cnc' });
-            items.push({ label: 'CNC — edytor formatki', icon: ICONS.cnc, action: 'open-cnc' });
-            items.push({ label: 'Graf Bloku (DAG)', icon: ICONS.dag, action: 'open-dag' });
-        } else if (scope.type === 'CONTAINER') {
-            items.push({ label: 'Raport z korpusu', icon: ICONS.report, action: 'open-report' });
-            items.push({ label: tx(srcTekst, 'ctxmenu.nesting', TX_NS), icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: '⚡ Generuj programy CNC dla szafy', icon: ICONS.cnc, action: 'batch-cnc' });
-            items.push({ label: 'CNC — edytor formatki', icon: ICONS.cnc, action: 'open-cnc' });
-            items.push({ label: 'Graf korpusu (DAG)', icon: ICONS.dag, action: 'open-dag' });
-        } else {
-            items.push({ label: 'Raport z projektu', icon: ICONS.report, action: 'open-report' });
-            items.push({ label: tx(srcTekst, 'ctxmenu.nesting', TX_NS), icon: ICONS.nesting, action: 'open-nesting' });
-            items.push({ label: tx(srcTekst, 'ctxmenu.batch_cnc', TX_NS), icon: ICONS.cnc, action: 'batch-cnc' });
-            items.push({ label: 'CNC — edytor formatki', icon: ICONS.cnc, action: 'open-cnc' });
-            items.push({ label: 'Graf projektu (DAG)', icon: ICONS.dag, action: 'open-dag' });
-        }
+        const prodTools: any[] = [
+            {
+                label: scope.type === 'PANEL' ? 'Raport z formatki'
+                    : scope.type === 'BLOKI' ? 'Raport ze Bloku'
+                        : scope.type === 'CONTAINER' ? 'Raport z korpusu'
+                            : 'Raport z projektu',
+                caption: 'Raport',
+                icon: ICONS.report,
+                action: 'open-report',
+            },
+            {
+                label: tx(srcTekst, 'ctxmenu.nesting', TX_NS),
+                caption: 'Rozkrój',
+                icon: ICONS.nesting,
+                action: 'open-nesting',
+            },
+            {
+                label: scope.type === 'PANEL' ? 'Generuj program CNC formatki'
+                    : scope.type === 'BLOKI' ? 'Generuj programy CNC dla Bloku'
+                        : scope.type === 'CONTAINER' ? 'Generuj programy CNC dla szafy'
+                            : tx(srcTekst, 'ctxmenu.batch_cnc', TX_NS),
+                caption: 'Batch',
+                icon: ICONS.cnc,
+                action: 'batch-cnc',
+            },
+            {
+                label: 'CNC — edytor formatki',
+                caption: 'CNC',
+                icon: ICONS.cnc,
+                action: 'open-cnc',
+            },
+            {
+                label: scope.type === 'PANEL' ? 'Graf formatki (DAG)'
+                    : scope.type === 'BLOKI' ? 'Graf Bloku (DAG)'
+                        : scope.type === 'CONTAINER' ? 'Graf korpusu (DAG)'
+                            : 'Graf projektu (DAG)',
+                caption: 'DAG',
+                icon: ICONS.dag,
+                action: 'open-dag',
+            },
+        ];
+        items.push({ section: 'Produkcja', toolbar: prodTools });
     }
 
     treeMenu.onAction((action: string) => {
-        if (action === 'edit-panel') editPanel(data);
+        if (action === 'edit-smartpart') editSmartPart(data);
+        else if (action === 'edit-agd') editAgd(data);
+        else if (action === 'edit-panel') editPanel(data);
         else if (action === 'edit-operation') editOperation(data);
+        else if (action === 'edit-bloki') editBloki(data);
         else if (action === 'edit-korpus') editKorpus(data);
         else if (action === 'rename') startRename(data);
+        else if (action === 'delete') deleteNode(data);
         else if (action === 'open-properties') openProperties(data);
         else if (action === 'toggle-visibility') toggleVisibility(data);
         else if (action === 'show-only') showOnly(data);
-        else if (action === 'show-all') showAll();
+        else if (action === 'show-all') showAll(data);
         else if (action === 'toggle-freeze') toggleFreeze(data);
         else if (action === 'convert-to-alu-frame') toggleAluFrame(data, true);
         else if (action === 'convert-to-solid') toggleAluFrame(data, false);

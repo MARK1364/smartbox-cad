@@ -209,4 +209,20 @@ describe('Komendy PMI w historii Undo/Redo', () => {
         history.undo();
         expect(store.measurements[0].visible).toBe(true);
     });
+
+    it('zwiększa revision dokumentu i aktualizuje stan isDirty() dla komend wymiaru', () => {
+        const doc = ContextManager.instance.document!;
+        expect(doc.isDirty()).toBe(false);
+        const rev0 = doc.revision;
+
+        history.execute(new AddDimensionCommand(store, sampleInit()));
+        expect(doc.revision).toBeGreaterThan(rev0);
+        expect(doc.isDirty()).toBe(true);
+
+        doc.markSaved();
+        expect(doc.isDirty()).toBe(false);
+
+        history.undo();
+        expect(doc.isDirty()).toBe(true);
+    });
 });

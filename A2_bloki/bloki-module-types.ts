@@ -1,5 +1,8 @@
 import type { DetectedBay } from './bloki-bay-detector.js';
 import type { FaceName } from '../A4_smartpanel/panel-model.js';
+import type { HandleParamsMm } from './handles/handle-types.js';
+
+export type HandlePlanParams = Partial<HandleParamsMm>;
 
 export type HingeIndex = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -12,6 +15,46 @@ export interface DoorsPlanParams {
     nalozenie_lewe_mm?: number;
     nalozenie_prawe_mm?: number;
     domyslny_zawias_id?: string;
+    producent_zawiasow?: string;
+    uzyj_zawias_1?: boolean;
+    uzyj_zawias_2?: boolean;
+    uzyj_zawias_3?: boolean;
+    uzyj_zawias_4?: boolean;
+    uzyj_zawias_5?: boolean;
+    uzyj_zawias_6?: boolean;
+    pozycja_zawias_1_mm?: number;
+    pozycja_zawias_2_mm?: number;
+    pozycja_zawias_3_mm?: number;
+    pozycja_zawias_4_mm?: number;
+    pozycja_zawias_5_mm?: number;
+    pozycja_zawias_6_mm?: number;
+    zawias_1_szablon?: string;
+    zawias_2_szablon?: string;
+    zawias_3_szablon?: string;
+    zawias_4_szablon?: string;
+    zawias_5_szablon?: string;
+    zawias_6_szablon?: string;
+}
+
+export type SkosneDoorType = 'LEFT' | 'RIGHT';
+
+/**
+ * DRZWI SKOŚNE — front trapezowy (dół prosty, góra pochylona), jak korpus_skosny_lr.
+ * Wysokości skośne są jawne: detektor wnęki zwraca jedną wartość, a dla
+ * korpusu skośnego jest to średnia pochylonego wieńca — nie da się z niej
+ * odtworzyć obu stron. `rodzaj_drzwi` = strona zawiasu = strona krawędzi pionowej.
+ */
+export interface SkosneDoorsPlanParams {
+    rodzaj_drzwi?: SkosneDoorType;
+    grubosc_frontu_mm?: number;
+    /** Kąt nachylenia wieńca górnego (dachu) względem poziomu w stopniach [deg]. Odczytywany bezpośrednio z TOP_PANEL korpusu. */
+    dach_kat_deg?: number;
+    nalozenie_gora_mm?: number;
+    nalozenie_dol_mm?: number;
+    nalozenie_lewe_mm?: number;
+    nalozenie_prawe_mm?: number;
+    domyslny_zawias_id?: string;
+    producent_zawiasow?: string;
     uzyj_zawias_1?: boolean;
     uzyj_zawias_2?: boolean;
     uzyj_zawias_3?: boolean;
@@ -65,6 +108,7 @@ export interface FlapsPlanParams {
     odsuniecie_zawiasu_lewe_mm?: number;
     odsuniecie_zawiasu_prawe_mm?: number;
     zawias_srodkowy?: boolean;
+    producent_zawiasow?: string;
     szablon_zawiasu_domyslny?: string;
     szablon_zawiasu_lewy?: string;
     szablon_zawiasu_prawy?: string;
@@ -217,6 +261,7 @@ export type LedPlanParams =
 export type BlokiModuleId =
     | 'SHELVES'
     | 'DOORS'
+    | 'SKOSNE_DOORS'
     | 'CORNER_DOORS'
     | 'DRAWERS'
     | 'FLAPS'
@@ -225,11 +270,14 @@ export type BlokiModuleId =
     | 'SHELF'
     | 'LED_INTERNAL'
     | 'PANELS'
-    | 'LED_EXTERNAL';
+    | 'LED_EXTERNAL'
+    | 'HANDLES'
+    | 'HANGERS';
 
 export interface BlokiModuleTypeById {
     SHELVES: 'blok_shelves';
     DOORS: 'blok_doors';
+    SKOSNE_DOORS: 'blok_skosne_drzwi';
     CORNER_DOORS: 'blok_corner_doors';
     DRAWERS: 'blok_drawers';
     FLAPS: 'blok_flaps';
@@ -239,6 +287,8 @@ export interface BlokiModuleTypeById {
     LED_INTERNAL: 'blok_led_internal';
     PANELS: 'blok_panels';
     LED_EXTERNAL: 'blok_led_external';
+    HANDLES: 'blok_handle';
+    HANGERS: 'smartpart_hangers';
 }
 
 export interface BlokiPanelReference {
@@ -271,6 +321,7 @@ export interface BlokiGeneratorMetadata {
 export interface BlokiModuleParamsById {
     SHELVES: ShelvesPlanParams;
     DOORS: DoorsPlanParams;
+    SKOSNE_DOORS: SkosneDoorsPlanParams;
     CORNER_DOORS: CornerDoorsPlanParams;
     DRAWERS: DrawersPlanParams;
     FLAPS: FlapsPlanParams;
@@ -280,6 +331,8 @@ export interface BlokiModuleParamsById {
     LED_INTERNAL: LedInternalPlanParams;
     PANELS: PanelsPlanParams;
     LED_EXTERNAL: LedExternalPlanParams;
+    HANDLES: HandlePlanParams;
+    HANGERS: Record<string, unknown>;
 }
 
 export type BlokiGeneratorParams = BlokiGeneratorMetadata &
@@ -304,6 +357,7 @@ export type BlokiGeneratorParamsPatch = Partial<BlokiGeneratorMetadata> & (
 const BLOKI_TYPE_BY_ID: BlokiModuleTypeById = {
     SHELVES: 'blok_shelves',
     DOORS: 'blok_doors',
+    SKOSNE_DOORS: 'blok_skosne_drzwi',
     CORNER_DOORS: 'blok_corner_doors',
     DRAWERS: 'blok_drawers',
     FLAPS: 'blok_flaps',
@@ -312,7 +366,9 @@ const BLOKI_TYPE_BY_ID: BlokiModuleTypeById = {
     SHELF: 'blok_shelf',
     LED_INTERNAL: 'blok_led_internal',
     PANELS: 'blok_panels',
-    LED_EXTERNAL: 'blok_led_external'
+    LED_EXTERNAL: 'blok_led_external',
+    HANDLES: 'blok_handle',
+    HANGERS: 'smartpart_hangers'
 };
 
 export function isBlokiGeneratorParams(raw: unknown): raw is BlokiGeneratorParams {

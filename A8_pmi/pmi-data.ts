@@ -14,7 +14,8 @@
 
 import { Vec3, v3 } from './dimension-solver';
 // Import wyłącznie typu — model danych nie może zależeć od warstwy Babylona.
-import type { PMIAnchorRef } from './pmi-id-bridge';
+import type { PMIAnchorRef, PMIAnchorKind } from './pmi-id-bridge';
+import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import {
     cadDeltasFromRender,
     significantDeltaAxes,
@@ -150,10 +151,59 @@ export type PMIMeasurementInit =
     Pick<PMIMeasurement, 'anchor1' | 'anchor2'>
     & Partial<PMIMeasurement>;
 
-export interface PMISettingsJSON {
+/**
+ * Trwały format zapisu kotwicy w pliku projektu (wartości geometryczne w [nm]).
+ */
+export interface PMIAnchorRefDiskJSON {
+    nodeId: string;
+    smartIdPath: string;
+    kind: PMIAnchorKind;
+    subKey: string;
+    subIndex: number;
+    /** Punkt w układzie lokalnym korzenia węzła [nm]. */
+    pointLocal: Vec3;
+    /** Ostatnia znana pozycja światowa [nm]. */
+    pointWorldFallback: Vec3;
+}
+
+/**
+ * Trwały format zapisu adnotacji wymiarowej w pliku projektu (`extensions.pmi`).
+ * SSOT (AGENTS.md): Zapis projektu jest zawsze w nanometrach (`nm`).
+ * Pomiary w locie (LIVE / session) operują w milimetrach (`mm`).
+ */
+export interface PMIAnnotationDiskJSON {
+    id: string;
+    smartIdPath: string;
+    anchor1: PMIAnchorRefDiskJSON;
+    anchor2: PMIAnchorRefDiskJSON;
+    /** Wektor odsunięcia [nm]. */
+    offset: Vec3;
+    offsetSpace: OffsetSpace;
+    edgeDir1Local: Vec3 | null;
+    edgeDir2Local: Vec3 | null;
+    faceNormal1Local: Vec3 | null;
+    faceNormal2Local: Vec3 | null;
+    /** Zmierzona odległość nominalna [nm]. */
+    distanceMM: number;
+    resolvedAxis: string;
+    axisSpace: AxisSpace;
+    measureAxisKey: MeasureAxisKey;
+    offsetAxisKey: string;
+    text: string;
+    textPrefix: string;
+    textSuffix: string;
+    visible: boolean;
+    selected: boolean;
+    /** Przesunięcie tekstu wzdłuż linii [nm]. */
+    textShiftMM?: number;
+}
+
+export interface PMISettingsDiskJSON {
     unitMode: UnitMode;
     showUnits: boolean;
+    /** Rozmiar tekstu [nm]. */
     textSizeMM: number;
+    /** Grubość linii [nm]. */
     lineWidthMM: number;
     alignTextToLine?: boolean;
     dimColor: [number, number, number, number];
@@ -164,9 +214,9 @@ export interface PMISettingsJSON {
 
 export interface PMIStoreJSON {
     version: number;
-    settings: PMISettingsJSON;
-    annotations: PMIAnnotation[];
-    measurements?: PMIMeasurement[];
+    unit: 'nm';
+    settings: PMISettingsDiskJSON;
+    annotations: PMIAnnotationDiskJSON[];
 }
 
 /** Faza narzędzia tworzenia wymiaru — do podpowiedzi w panelu. */
@@ -203,9 +253,9 @@ export class PMIStore {
     public alignTextToLine = false; // czy tekst ma leżeć równolegle do linii wymiarowej
 
     /** Promień chwytania krawędzi w pikselach ekranu. */
-    public edgeSnapPx = 14;
+    public edgeSnapPx = 22;
     /** Promień chwytania narożnika — mniejszy niż krawędzi, żeby rogi nie kradły kliknięć. */
-    public vertexSnapPx = 6;
+    public vertexSnapPx = 12;
 
     /** Wspólne ustawienia narzędzia tworzenia (panel + pasek narzędzi). */
     public toolAxisSpace: AxisSpace = 'GLOBAL';
@@ -540,28 +590,46 @@ export class PMIStore {
     }
 
     // --- Serialization (sekcja `pmi` w pliku projektu) ---
+    // SSOT (AGENTS.md): zapis projektu zawsze w nanometrach (`nm`). Wewnątrz silnika
+    // i widoku 3D wartości żyją w milimetrach (`mm`), konwersja zachodzi wyłącznie na brzegu.
 
     public toJSON(): PMIStoreJSON {
         return {
             version: PMI_FORMAT_VERSION,
+            unit: 'nm',
             settings: {
                 unitMode: this.unitMode,
                 showUnits: this.showUnits,
-                textSizeMM: this.textSizeMM,
-                lineWidthMM: this.lineWidthMM,
+                textSizeMM: mmToNm(this.textSizeMM),
+                lineWidthMM: mmToNm(this.lineWidthMM),
                 alignTextToLine: this.alignTextToLine,
                 dimColor: [...this.dimColor],
                 selectedColor: [...this.selectedColor],
                 edgeSnapPx: this.edgeSnapPx,
                 vertexSnapPx: this.vertexSnapPx,
             },
-            annotations: this.annotations.map(a => JSON.parse(JSON.stringify(a))),
-            measurements: this.measurements.map(m => JSON.parse(JSON.stringify(m))),
+            annotations: this.annotations.map(a => serializeAnnotationToNm(a)),
         };
     }
 
     public fromJSON(data: PMIStoreJSON | null | undefined): void {
-        if (!data || !Array.isArray(data.annotations)) {
+        if (!data) {
+            this.annotations = [];
+            this.measurements = [];
+            this.activeIndex = -1;
+            this.activeMeasurementIndex = -1;
+            this._nextId = 1;
+            this._nextMeasureId = 1;
+            this._notify();
+            return;
+        }
+
+        // Twarda reguła SSOT (AGENTS.md): zapis projektu musi deklarować unit === 'nm'.
+        if (data.unit !== 'nm') {
+            throw new Error(`PMIStore.fromJSON: nieobsługiwana jednostka "${(data as any).unit}". Wymagane "nm" (SSOT: zapis projektu).`);
+        }
+
+        if (!Array.isArray(data.annotations)) {
             this.annotations = [];
             this.measurements = [];
             this.activeIndex = -1;
@@ -576,8 +644,8 @@ export class PMIStore {
         if (settings) {
             this.unitMode = settings.unitMode ?? this.unitMode;
             this.showUnits = settings.showUnits ?? this.showUnits;
-            this.textSizeMM = settings.textSizeMM ?? this.textSizeMM;
-            this.lineWidthMM = settings.lineWidthMM ?? this.lineWidthMM;
+            this.textSizeMM = typeof settings.textSizeMM === 'number' ? nmToMm(settings.textSizeMM) : this.textSizeMM;
+            this.lineWidthMM = typeof settings.lineWidthMM === 'number' ? nmToMm(settings.lineWidthMM) : this.lineWidthMM;
             this.alignTextToLine = settings.alignTextToLine ?? this.alignTextToLine;
             if (settings.dimColor) this.dimColor = [...settings.dimColor];
             if (settings.selectedColor) this.selectedColor = [...settings.selectedColor];
@@ -589,12 +657,7 @@ export class PMIStore {
         this._nextMeasureId = 1;
         this.annotations = data.annotations.map(raw => normalizeAnnotation(raw));
         for (const ann of this.annotations) this._syncNextIdWith(ann.id);
-
-        this.measurements = Array.isArray(data.measurements)
-            ? data.measurements.map(raw => normalizeMeasurement(raw))
-            : [];
-        for (const item of this.measurements) this._syncMeasureIdWith(item.id);
-
+        this.measurements = [];
         this.activeIndex = -1;
         this.activeMeasurementIndex = -1;
         this._notify();
@@ -621,8 +684,50 @@ export class PMIStore {
 }
 
 // ============================================================================
-// NORMALIZATION
+// NORMALIZATION & BOUNDARY CONVERSION (mm <-> nm)
 // ============================================================================
+
+function serializeAnchorToNm(anchor: PMIAnchorRef): PMIAnchorRefDiskJSON {
+    return {
+        nodeId: anchor.nodeId,
+        smartIdPath: anchor.smartIdPath,
+        kind: anchor.kind,
+        subKey: anchor.subKey,
+        subIndex: anchor.subIndex,
+        pointLocal: v3(mmToNm(anchor.pointLocal.x), mmToNm(anchor.pointLocal.y), mmToNm(anchor.pointLocal.z)),
+        pointWorldFallback: v3(
+            mmToNm(anchor.pointWorldFallback.x),
+            mmToNm(anchor.pointWorldFallback.y),
+            mmToNm(anchor.pointWorldFallback.z),
+        ),
+    };
+}
+
+function serializeAnnotationToNm(a: PMIAnnotation): PMIAnnotationDiskJSON {
+    return {
+        id: a.id,
+        smartIdPath: a.smartIdPath,
+        anchor1: serializeAnchorToNm(a.anchor1),
+        anchor2: serializeAnchorToNm(a.anchor2),
+        offset: v3(mmToNm(a.offset.x), mmToNm(a.offset.y), mmToNm(a.offset.z)),
+        offsetSpace: a.offsetSpace,
+        edgeDir1Local: a.edgeDir1Local ? v3(a.edgeDir1Local.x, a.edgeDir1Local.y, a.edgeDir1Local.z) : null,
+        edgeDir2Local: a.edgeDir2Local ? v3(a.edgeDir2Local.x, a.edgeDir2Local.y, a.edgeDir2Local.z) : null,
+        faceNormal1Local: a.faceNormal1Local ? v3(a.faceNormal1Local.x, a.faceNormal1Local.y, a.faceNormal1Local.z) : null,
+        faceNormal2Local: a.faceNormal2Local ? v3(a.faceNormal2Local.x, a.faceNormal2Local.y, a.faceNormal2Local.z) : null,
+        distanceMM: mmToNm(a.distanceMM),
+        resolvedAxis: a.resolvedAxis,
+        axisSpace: a.axisSpace,
+        measureAxisKey: a.measureAxisKey,
+        offsetAxisKey: a.offsetAxisKey,
+        text: a.text,
+        textPrefix: a.textPrefix,
+        textSuffix: a.textSuffix,
+        visible: a.visible,
+        selected: a.selected,
+        textShiftMM: typeof a.textShiftMM === 'number' ? mmToNm(a.textShiftMM) : 0,
+    };
+}
 
 function readVec(raw: any, fallback: Vec3 | null): Vec3 | null {
     if (!raw || typeof raw !== 'object') return fallback;
@@ -631,8 +736,17 @@ function readVec(raw: any, fallback: Vec3 | null): Vec3 | null {
     return fallback;
 }
 
+function deserializeVecToMm(raw: any, fallback: Vec3 | null): Vec3 | null {
+    if (!raw || typeof raw !== 'object') return fallback;
+    const { x, y, z } = raw;
+    if ([x, y, z].every(n => typeof n === 'number' && Number.isFinite(n))) {
+        return v3(nmToMm(x), nmToMm(y), nmToMm(z));
+    }
+    return fallback;
+}
+
 function normalizeAnchor(raw: any): PMIAnchorRef {
-    const pointLocal = readVec(raw?.pointLocal, v3(0, 0, 0))!;
+    const pointLocal = deserializeVecToMm(raw?.pointLocal, v3(0, 0, 0))!;
     return {
         nodeId: typeof raw?.nodeId === 'string' ? raw.nodeId : '',
         smartIdPath: typeof raw?.smartIdPath === 'string' ? raw.smartIdPath : '',
@@ -640,13 +754,12 @@ function normalizeAnchor(raw: any): PMIAnchorRef {
         subKey: typeof raw?.subKey === 'string' ? raw.subKey : '',
         subIndex: typeof raw?.subIndex === 'number' ? raw.subIndex : -1,
         pointLocal,
-        pointWorldFallback: readVec(raw?.pointWorldFallback, pointLocal)!,
+        pointWorldFallback: deserializeVecToMm(raw?.pointWorldFallback, pointLocal)!,
     };
 }
 
 /**
- * Domyka wczytaną adnotację do pełnego kształtu — plik projektu mógł powstać
- * we wcześniejszej wersji schematu.
+ * Domyka wczytaną adnotację do pełnego kształtu i przelicza nm na mm (SSOT).
  */
 function normalizeAnnotation(raw: any): PMIAnnotation {
     return {
@@ -654,13 +767,13 @@ function normalizeAnnotation(raw: any): PMIAnnotation {
         smartIdPath: typeof raw?.smartIdPath === 'string' ? raw.smartIdPath : '',
         anchor1: normalizeAnchor(raw?.anchor1),
         anchor2: normalizeAnchor(raw?.anchor2),
-        offset: readVec(raw?.offset, v3(0, 0, 30))!,
+        offset: deserializeVecToMm(raw?.offset, v3(0, 0, 30))!,
         offsetSpace: raw?.offsetSpace === 'WORLD' ? 'WORLD' : 'LOCAL',
         edgeDir1Local: readVec(raw?.edgeDir1Local, null),
         edgeDir2Local: readVec(raw?.edgeDir2Local, null),
         faceNormal1Local: readVec(raw?.faceNormal1Local, null),
         faceNormal2Local: readVec(raw?.faceNormal2Local, null),
-        distanceMM: typeof raw?.distanceMM === 'number' ? raw.distanceMM : 0,
+        distanceMM: typeof raw?.distanceMM === 'number' ? nmToMm(raw.distanceMM) : 0,
         resolvedAxis: typeof raw?.resolvedAxis === 'string' ? raw.resolvedAxis : 'AUTO',
         axisSpace: raw?.axisSpace === 'LOCAL' || raw?.axisSpace === 'ALIGNED' ? raw.axisSpace : 'GLOBAL',
         measureAxisKey: ['AUTO', 'X', 'Y', 'Z'].includes(raw?.measureAxisKey) ? raw.measureAxisKey : 'AUTO',
@@ -670,19 +783,8 @@ function normalizeAnnotation(raw: any): PMIAnnotation {
         textSuffix: typeof raw?.textSuffix === 'string' ? raw.textSuffix : '',
         visible: raw?.visible !== false,
         selected: false,
-        textShiftMM: typeof raw?.textShiftMM === 'number' ? raw.textShiftMM : 0,
+        textShiftMM: typeof raw?.textShiftMM === 'number' ? nmToMm(raw.textShiftMM) : 0,
     };
 }
 
-function normalizeMeasurement(raw: any): PMIMeasurement {
-    return {
-        id: typeof raw?.id === 'string' ? raw.id : `msr_${Date.now()}`,
-        anchor1: normalizeAnchor(raw?.anchor1),
-        anchor2: normalizeAnchor(raw?.anchor2),
-        viaAnchor: raw?.viaAnchor ? normalizeAnchor(raw.viaAnchor) : null,
-        distanceMM: typeof raw?.distanceMM === 'number' ? raw.distanceMM : 0,
-        text: typeof raw?.text === 'string' ? raw.text : '',
-        visible: raw?.visible !== false,
-        selected: false,
-    };
-}
+

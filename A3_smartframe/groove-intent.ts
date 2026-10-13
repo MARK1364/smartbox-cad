@@ -34,6 +34,9 @@ export interface GrooveFeatureLCS {
         
         /** Głębokość wpustu wgłąb materiału, mierzona wzdłuż normalnej do ściany (nm) */
         depth_nm: number;
+
+        /** true = szczelina do krawędzi lica (1 ścianka + dno) → wcięcie, nie rowek */
+        isEdgeNotch?: boolean;
     };
 }
 

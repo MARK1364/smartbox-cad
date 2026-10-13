@@ -17,11 +17,11 @@ describe('cabinet-thickness (SSOT & Fail-Fast)', () => {
         expect(plecyTh).toBe(3);
     });
 
-    it('poprawnie pobiera grubość pleców 18 mm dla korpusu skośnego z reguł (brak sztywnego 3 mm)', () => {
+    it('poprawnie pobiera grubość pleców HDF 3 mm dla korpusu skośnego z reguł', () => {
         const ctx = { rules: korpusSkosnyRules };
         const plecyTh = requireCabinetPartThickness('PLECY', 'B_', ctx);
 
-        expect(plecyTh).toBe(18);
+        expect(plecyTh).toBe(3);
     });
 
     it('priorytetyzuje jawne nadpisania (thicknessOverrides)', () => {

@@ -11,13 +11,16 @@
 
 export const EntityType = {
     SMARTFRAME:  "sf",
-    BLOKI:    "sb",
+    BLOKI:       "sb",
     PART:        "part",
     EDGE:        "edge",
     FACE:        "face",
     VERTEX:      "vert",
     FEATURE:     "feat",
     DIMENSION:   "dim",
+    SMARTPART:   "sp",
+    CUT:         "cut",
+    SET:         "set",
 };
 
 export class SmartID {

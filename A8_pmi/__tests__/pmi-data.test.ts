@@ -91,7 +91,7 @@ describe('PMIStore', () => {
         expect(store.applyMeasuredValue(ann, 600, 'X')).toBe(false);
     });
 
-    it('przechodzi pełen cykl zapisu i odczytu bez utraty kotwic', () => {
+    it('przechodzi pełen cykl zapisu i odczytu bez utraty kotwic (konwersja mm <-> nm)', () => {
         const ann = store.addAnnotation(sampleInit('panel_left'));
         store.setAffixes(ann.id, 'L=', '');
         store.applyMeasuredValue(ann, 600, 'X');
@@ -99,6 +99,13 @@ describe('PMIStore', () => {
         store.lineWidthMM = 1.5;
 
         const json = JSON.parse(JSON.stringify(store.toJSON()));
+        expect(json.unit).toBe('nm');
+        // W pliku projektu wartości są w nanometrach (SSOT: 1 mm = 1_000_000 nm)
+        expect(json.settings.textSizeMM).toBe(20_000_000);
+        expect(json.settings.lineWidthMM).toBe(1_500_000);
+        expect(json.annotations[0].anchor2.pointLocal.x).toBe(600_000_000);
+        expect(json.annotations[0].distanceMM).toBe(600_000_000);
+
         store.clearAll();
         store.textSizeMM = 14;
         expect(store.annotations).toHaveLength(0);
@@ -109,6 +116,7 @@ describe('PMIStore', () => {
         const restored = store.annotations[0];
         expect(restored.id).toBe(ann.id);
         expect(restored.anchor1.nodeId).toBe('panel_left');
+        // W pamięci podręcznej / silniku wartości wracają do milimetrów
         expect(restored.anchor2.pointLocal.x).toBeCloseTo(600, 6);
         expect(restored.offsetSpace).toBe('LOCAL');
         expect(restored.textPrefix).toBe('L=');
@@ -129,9 +137,23 @@ describe('PMIStore', () => {
         expect(ids.filter(id => id === added.id)).toHaveLength(1);
     });
 
-    it('uzupełnia braki w danych zapisanych starszym schematem', () => {
+    it('odrzuca dane z brakującą lub nieprawidłową jednostką (SSOT nm w zapisie projektu)', () => {
+        expect(() => store.fromJSON({
+            version: 1,
+            annotations: [],
+        } as any)).toThrowError(/SSOT/);
+
+        expect(() => store.fromJSON({
+            version: 1,
+            unit: 'mm',
+            annotations: [],
+        } as any)).toThrowError(/SSOT/);
+    });
+
+    it('uzupełnia braki w danych zapisanych w formacie nm', () => {
         store.fromJSON({
             version: 1,
+            unit: 'nm',
             settings: undefined as any,
             annotations: [{ id: 'dim_7' }] as any,
         });

@@ -24,6 +24,16 @@ import { IDManager, EntityType } from '../A1_core/id-manager';
 export type PMIAnchorKind = 'VERTEX' | 'EDGE' | 'FACE' | 'FEATURE' | 'FREE';
 
 /**
+ * Sprawdza, czy siatka należy do warstwy nakładki PMI (linie, etykiety, groty, podglądy).
+ * Zgodnie z zasadami SSOT filtrowanie opiera się na metadanych, nigdy na nazwie (`name`).
+ */
+export function isPmiOverlayMesh(mesh: any): boolean {
+    if (!mesh) return false;
+    const meta = mesh.metadata;
+    return Boolean(meta?.isPmiOverlay || meta?.pmiAnnotationId != null || meta?.pmiTarget != null);
+}
+
+/**
  * Trwałe odniesienie do punktu zaczepienia wymiaru.
  */
 export interface PMIAnchorRef {
@@ -343,6 +353,8 @@ export function freeAnchorRef(worldPoint: Vec3): PMIAnchorRef {
     };
 }
 
+export const SNAP_RADIUS_MM = 30;
+
 /**
  * Przy tworzeniu wymiaru: przyciąga kliknięcie na ścianie do najbliższego narożnika
  * lub końca krawędzi formatki, żeby kotwica przeżyła przebudowę geometrii.
@@ -351,7 +363,7 @@ export function snapWorldPointToPanelGeometry(
     scene: any,
     mesh: any,
     worldPoint: Vec3,
-    snapRadiusMM = 30,
+    snapRadiusMM: number = SNAP_RADIUS_MM,
 ): { anchor: PMIAnchorRef; worldPos: Vec3 } | null {
     const nodeId = readNodeId(mesh);
     if (!nodeId) return null;

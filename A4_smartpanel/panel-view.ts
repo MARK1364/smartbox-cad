@@ -28,12 +28,17 @@ import { ContextManager } from '../A1_core/context-manager.js';
 import { materialDatabase } from '../A7_material/material-database.js';
 import { NativePanelBuilder } from './native-panel-builder.js';
 import { AluFrameManager } from './alu-frame-manager.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import smartpanelTekstRaw from './smartpanel_tekst.json';
+
+const smartpanelTekst = smartpanelTekstRaw as unknown as ModuleTexts;
+import { hasFeatureParamsUV, readFeatureUV } from './native_core/feature-uv.js';
 import { bindOperationEdge } from '../o1_operacji/operacje-apply.js';
 import { validatePanelDimensionsNm } from './native_core/panel-dimensions.js';
 import { dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound } from '../o1_operacji/operacje-placement.js';
 import { HardwareLoader } from '../B1_biblioteka/hardware-loader.js';
 import { parseFeatureFaceKey, featureIdFromBrepEdgeKey } from './native_core/cap-machining.js';
-import { PropertiesManager } from '../A1_core/properties.js';
 
 // Centralny cache tekstur dla sceny Babylon (zapobiega duplikowaniu tekstur 4K w pamięci VRAM)
 const panelTextureCache = new Map<string, any>();
@@ -105,7 +110,7 @@ export class PanelView {
         this.faceMaterials = {};
         this._syncAdapter = ContextManager.instance.sceneSyncAdapter;
 
-        this.root = new BABYLON.TransformNode(model.name || 'Panel', scene);
+        this.root = new BABYLON.TransformNode(model.name || tx(smartpanelTekst, 'default_panel_name', 'smartpanel'), scene);
 
         this._rebuildMeshes();
         this._buildLCSNode();
@@ -350,6 +355,18 @@ export class PanelView {
             }
             
             this.faceMeshes[faceName] = mesh;
+
+            if (data.edgeKey) {
+                const mappedFace = data.edgeKey === '+X' ? 'FACE_X_PLUS'
+                    : data.edgeKey === '-X' ? 'FACE_X_MINUS'
+                    : data.edgeKey === '+Y' ? 'FACE_Y_PLUS'
+                    : data.edgeKey === '-Y' ? 'FACE_Y_MINUS'
+                    : null;
+                if (mappedFace && !this.faceMeshes[mappedFace]) {
+                    this.faceMeshes[mappedFace] = mesh;
+                    this.faceMaterials[mappedFace] = mat;
+                }
+            }
         }
 
         if (this._edgeMeshes && this._edgeMeshes.length > 0) {
@@ -459,7 +476,7 @@ export class PanelView {
     }
 
     _disposeCurrentMeshes() {
-        for (const mesh of Object.values(this.faceMeshes)) {
+        for (const mesh of new Set(Object.values(this.faceMeshes))) {
             mesh.dispose();
         }
         this.faceMeshes = {};
@@ -804,7 +821,7 @@ export class PanelView {
      * Zwraca listę meshów ścian (do ray castingu).
      */
     getPickableMeshes() {
-        return Object.values(this.faceMeshes);
+        return Array.from(new Set(Object.values(this.faceMeshes)));
     }
 
     /**
@@ -1019,8 +1036,7 @@ export class PanelView {
         }
 
         const params = feature.params || {};
-        const u = params.u !== undefined ? params.u : (params.x !== undefined ? params.x : (feature.loc?.x || 0));
-        const v = params.v !== undefined ? params.v : (params.y !== undefined ? params.y : (feature.loc?.y || 0));
+        const { u, v } = readFeatureUV(params, feature.loc);
         const holeDia = params.diameter || feature.dim?.x || 5;
         const holeDepth = params.depth || feature.dim?.z || 12;
         const radius = holeDia / 2;
@@ -1028,18 +1044,32 @@ export class PanelView {
         const clearance = params.clearance || 0;
 
         // ─── Wizualizacja 3D okuć (zawias puszkowy) ───
-        const isCup = Boolean(params.isDoorCup || params.isFlapCup || params.isHingeCup || (feature.id && String(feature.id).includes('_cup_')));
-        const isScrew = Boolean(params.isDoorScrew || params.isFlapScrew || params.isHingeScrew || (feature.id && String(feature.id).includes('_screw_')));
+        // Tożsamość tylko z flag params (silniki A2 ustawiają is*Cup / is*Screw / side / orientation).
+        const isCup = Boolean(params.isDoorCup || params.isFlapCup || params.isHingeCup);
+        const isScrew = Boolean(params.isDoorScrew || params.isFlapScrew || params.isHingeScrew);
 
         if (isCup) {
             const hingeId = params.hinge_id || 'BLUM_71B3550';
+            // Flaps ustawiają orientation top/bottom; params.side to pozycja L/P/C wzdłuż szerokości
+            // (kolizja nazw z orientacją drzwi) — orientation ma pierwszeństwo.
             let orientation: 'left' | 'right' | 'top' | 'bottom' = 'left';
-            if (params.isFlapCup || String(feature.id || '').includes('flap_cup_')) {
-                const isTop = String(feature.id || '').includes('_T') || (v > (faceData.height / 2));
-                orientation = isTop ? 'top' : 'bottom';
+            const isFlapHinge = Boolean(
+                params.isFlapCup ||
+                params.isFlapScrew ||
+                params.orientation === 'top' ||
+                params.orientation === 'bottom' ||
+                /^HINGE_[TB]/i.test(String(params.hingeKey || ''))
+            );
+            if (isFlapHinge) {
+                if (params.orientation === 'top' || params.orientation === 'bottom') {
+                    orientation = params.orientation;
+                } else {
+                    orientation = (v > (faceData.height / 2)) ? 'top' : 'bottom';
+                }
+            } else if (params.side === 'left' || params.side === 'right') {
+                orientation = params.side;
             } else {
-                const isLeft = String(feature.id || '').toLowerCase().includes('left') || (u < (faceData.width / 2));
-                orientation = isLeft ? 'left' : 'right';
+                orientation = (u < (faceData.width / 2)) ? 'left' : 'right';
             }
 
             const hwLoader = HardwareLoader.instance;
@@ -1091,7 +1121,7 @@ export class PanelView {
 
         // Pozycja 3D na ścianie lub z położenia lokalnego
         let pos;
-        if (feature.params && (feature.params.u !== undefined || feature.params.x !== undefined)) {
+        if (hasFeatureParamsUV(feature.params)) {
             pos = this._facePoint(faceData, u, v, 0.5 + clearance);
         } else if (feature.loc) {
             pos = new BABYLON.Vector3(feature.loc.x, feature.loc.y, feature.loc.z);
@@ -1137,7 +1167,7 @@ export class PanelView {
             tessellation: 32
         }, this.scene);
         
-        if (feature.params && (feature.params.u !== undefined || feature.params.x !== undefined)) {
+        if (hasFeatureParamsUV(feature.params)) {
             // W głąb płyty (−normal), jak mesh_builder.localTo3D. +normal wystawiał walec
             // na zewnątrz (np. z boczka w stronę wieńca).
             cyl.position = this._facePoint(faceData, u, v, -(holeDepth / 2) + clearance);
@@ -1182,20 +1212,8 @@ export class PanelView {
         this._featureMarkers.push(cross);
     }
 
-    _renderPocket(feature) {
-        const params = feature.params || {};
-        if (params.source === 'library' || params.library_id) {
-            const faceData = this.model.getFace(feature.face || 'FACE_Z_PLUS');
-            const u = params.u || 0;
-            const v = params.v || 0;
-            const w = params.width || 3;
-            const len = params.length || params.height || 600;
-            const midU = u + w / 2;
-            const midV = v + len / 2;
-            const offset = 0.6;
-            const centerPos = this._facePoint(faceData, midU, midV, offset);
-            this._createOperationCenterGizmo(feature, faceData, centerPos);
-        }
+    _renderPocket(_feature) {
+        // Pocket biblioteczny — edycja przez PPM (scena / drzewo / belka hierarchii), bez gizmo 3D.
     }
 
     _renderEdgeDimLines(feature, faceData, u, v, w, len, grooveMesh) {
@@ -1223,110 +1241,6 @@ export class PanelView {
         const handleV = this._createDimSnapHandle(feature, faceData, 'v', vEndPos);
         this._wireDimSnapHandle(handleU, feature, faceData, 'u', rect, lines, live, offset, grooveMesh);
         this._wireDimSnapHandle(handleV, feature, faceData, 'v', rect, lines, live, offset, grooveMesh);
-
-        // Brązowe gizmo w środku wycięcia rewizji do bezpośredniej edycji parametrów
-        this._createOperationCenterGizmo(feature, faceData, centerPos);
-    }
-
-    _createOperationCenterGizmo(feature: any, faceData: any, centerPos: any) {
-        // Brązowe gizmo w środku rewizji (średnica 16 mm z subtelnym złotawym blaskiem)
-        const gizmo = BABYLON.MeshBuilder.CreateSphere(`op_center_gizmo_${feature.id}`, {
-            diameter: 16,
-            segments: 16,
-        }, this.scene);
-        gizmo.parent = this.root;
-        gizmo.position.copyFrom(centerPos);
-        gizmo.renderingGroupId = 1;
-
-        const mat = new BABYLON.StandardMaterial(`op_center_mat_${feature.id}`, this.scene);
-        mat.diffuseColor = new BABYLON.Color3(0.58, 0.32, 0.12);
-        mat.emissiveColor = new BABYLON.Color3(0.28, 0.14, 0.05);
-        mat.specularColor = new BABYLON.Color3(0.8, 0.6, 0.3);
-        mat.specularPower = 32;
-        mat.disableLighting = false;
-        mat.backFaceCulling = false;
-        gizmo.material = mat;
-        gizmo.isPickable = true;
-
-        const defaultLibId = feature.params?.placement === 'edge_dims' ? 'rewizja' : 'przetloczenie';
-        const libId = feature.params?.library_id || defaultLibId;
-
-        gizmo.metadata = {
-            type: 'operation-center-gizmo',
-            featureId: feature.id,
-            libraryId: libId,
-            face: feature.face,
-            panelModel: this.model,
-        };
-
-        gizmo.actionManager = new BABYLON.ActionManager(this.scene);
-        gizmo.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
-            BABYLON.ActionManager.OnPointerOverTrigger,
-            () => {
-                gizmo.scaling.setAll(1.25);
-                mat.emissiveColor = new BABYLON.Color3(0.52, 0.28, 0.1);
-                if (this.scene.getEngine()?.getRenderingCanvas()) {
-                    this.scene.getEngine().getRenderingCanvas().style.cursor = 'pointer';
-                }
-            },
-        ));
-        gizmo.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
-            BABYLON.ActionManager.OnPointerOutTrigger,
-            () => {
-                gizmo.scaling.setAll(1.0);
-                mat.emissiveColor = new BABYLON.Color3(0.28, 0.14, 0.05);
-                if (this.scene.getEngine()?.getRenderingCanvas()) {
-                    this.scene.getEngine().getRenderingCanvas().style.cursor = '';
-                }
-            },
-        ));
-        const triggerOpen = (evt: any) => {
-            ContextManager.instance?.document?.setActiveEntity?.(this.model);
-            const pointerX = evt?.pointerX ?? (typeof window !== 'undefined' ? window.innerWidth / 2 : 300);
-            const pointerY = evt?.pointerY ?? 100;
-            // Hierarchia / właściwości — ta sama operacja co w dialogu
-            const doc = ContextManager.instance?.document;
-            if (doc && PropertiesManager.instance) {
-                PropertiesManager.instance.inspectFeature(
-                    feature.id,
-                    doc,
-                    ContextManager.instance.panelViews || new Map(),
-                    () => (typeof doc.getPanels === 'function' ? doc.getPanels().map((item: any) => item.domainData || item) : []),
-                    undefined,
-                    undefined,
-                    true
-                );
-            } else {
-                document.dispatchEvent(new CustomEvent('bloki-properties-update', {
-                    detail: {
-                        kind: 'groove',
-                        featureId: feature.id,
-                        panelId: this.model.id,
-                        name: feature.name || libId,
-                        parentName: this.model.name,
-                        customProperties: [],
-                    },
-                }));
-            }
-            window.dispatchEvent(new CustomEvent('cad-open-floating-operation', {
-                detail: {
-                    library_id: libId,
-                    libraryId: libId,
-                    featureId: feature.id,
-                    panelId: this.model.id,
-                    face: feature.face,
-                    screenX: pointerX,
-                    screenY: pointerY,
-                },
-            }));
-        };
-        gizmo.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
-            BABYLON.ActionManager.OnPickTrigger,
-            triggerOpen,
-        ));
-
-        this._featureMarkers.push(gizmo);
-        return gizmo;
     }
 
     _createDimLine(name, p0, p1) {
@@ -1555,16 +1469,9 @@ export class PanelView {
         const len = params.length || params.height || 600;
 
         // Fizyczny wpust i jego krawędzie są w 100% wycinane w siatce 3D formatki przez mesh_builder.ts.
+        // Edycja operacji bibliotecznych: PPM (scena / drzewo obiektów / belka hierarchii).
         if (params.placement === 'edge_dims') {
-            // Rewizja (wymiary od krawędzi)
             this._renderEdgeDimLines(feature, faceData, u, v, w, len, null);
-        } else if (params.source === 'library' || params.library_id) {
-            // Ramka / przetłoczenie biblioteczne — brązowe gizmo w środku wycięcia
-            const midU = u + w / 2;
-            const midV = v + len / 2;
-            const offset = 0.6;
-            const centerPos = this._facePoint(faceData, midU, midV, offset);
-            this._createOperationCenterGizmo(feature, faceData, centerPos);
         }
     }
 
@@ -1765,7 +1672,7 @@ export class PanelView {
                 if (!m) continue;
                 // Jeśli to okucie (np. zawias), nie chowamy go razem z płytą!
                 // Zawiasy to niezależne byty, a nie dzieci formatki.
-                const isHw = m.metadata?.type === 'hardware' || m.name?.startsWith('hw_');
+                const isHw = m.metadata?.type === 'hardware';
                 if (!isHw) {
                     m.setEnabled(visible);
                 }

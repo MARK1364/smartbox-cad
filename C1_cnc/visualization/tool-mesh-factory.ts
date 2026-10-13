@@ -51,7 +51,7 @@ export class CNCToolMeshFactory {
                 tessellation: 48
             }, scene);
             blade.material = sawMat;
-            blade.rotation.z = Math.PI / 2;
+            blade.rotation.x = Math.PI / 2;
             blade.position.y = diameter / 2;
             blade.parent = toolNode;
 
@@ -65,7 +65,7 @@ export class CNCToolMeshFactory {
                 tessellation: 24
             }, scene);
             flange.material = flangeMat;
-            flange.rotation.z = Math.PI / 2;
+            flange.rotation.x = Math.PI / 2;
             flange.position.y = diameter / 2;
             flange.parent = toolNode;
 
@@ -76,9 +76,9 @@ export class CNCToolMeshFactory {
                 tessellation: 16
             }, scene);
             arbor.material = flangeMat;
-            arbor.rotation.z = Math.PI / 2;
+            arbor.rotation.x = Math.PI / 2;
             arbor.position.y = diameter / 2;
-            arbor.position.x = 25;
+            arbor.position.z = 25;
             arbor.parent = toolNode;
 
         } else if (tool.type === 'mill') {

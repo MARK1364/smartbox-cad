@@ -24,8 +24,8 @@ export const AXIS_COLORS: Record<CadAxisKey, [number, number, number]> = {
 /** Osie pokrywają się, gdy kąt między nimi jest mniejszy niż 1°. */
 export const GUIDE_OVERLAP_DOT = Math.cos((1 * Math.PI) / 180);
 
-/** Oś równoległa do odcinka pomiaru nie nadaje się do odsunięcia. */
-export const GUIDE_PARALLEL_DOT = 0.98;
+/** Oś niemal współliniowa z odcinkiem pomiaru (< 3.6°) nie nadaje się do odsunięcia. */
+export const GUIDE_PARALLEL_DOT = 0.998;
 
 export interface OffsetGuideCandidate {
     id: string;
@@ -263,22 +263,22 @@ export class PMIAxisGuides {
             line = dashed
                 ? BABYLON.MeshBuilder.CreateDashedLines(
                     `pmi_axis_guide_${cand.id}`,
-                    { points: [p0, p1], dashSize, gapSize },
+                    { points: [p0, p1], dashSize, gapSize, updatable: true },
                     this.scene,
                 )
                 : BABYLON.MeshBuilder.CreateLines(
                     `pmi_axis_guide_${cand.id}`,
-                    { points: [p0, p1] },
+                    { points: [p0, p1], updatable: true },
                     this.scene,
                 );
             line.isPickable = false;
             line.renderingGroupId = 2;
-            line.metadata = { pmiDashed: dashed };
+            line.metadata = { isPmiOverlay: true, pmiDashed: dashed };
             this.lines.set(cand.id, line);
         } else if (dashed) {
             BABYLON.MeshBuilder.CreateDashedLines(
                 null,
-                { points: [p0, p1], dashSize, gapSize, instance: line },
+                { points: [p0, p1], instance: line },
             );
         } else {
             BABYLON.MeshBuilder.CreateLines(
@@ -374,6 +374,7 @@ export class PMIAxisGuides {
         plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
         plane.renderingGroupId = 2;
         plane.isPickable = false;
+        plane.metadata = { ...(plane.metadata || {}), isPmiOverlay: true };
 
         const material = new BABYLON.StandardMaterial(`pmi_axis_lbl_mat_${key}`, this.scene);
         material.diffuseTexture = texture;

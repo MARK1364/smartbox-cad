@@ -290,6 +290,28 @@ describe('resolveAnchor', () => {
         expect(refreshed?.localNormal).toEqual([0, 1, 0]);
     });
 
+    it('kotwica VERTEX podąża za zmianą wysokości mimo starego localPointMm (offset assoc.)', () => {
+        const { node } = docWithPanel();
+        const panel = node.domainData as any;
+        // Pick przy h=400 → narożnik 7 = [300, 9, 200]
+        const stalePick: [number, number, number] = [300, 9, 200];
+        const anchor = makeAnchor({
+            nodeId: node.id,
+            kind: 'VERTEX',
+            cornerIndex: 7,
+            localPointMm: stalePick,
+        });
+
+        expect(resolveAnchor(node, anchor)?.localPointMm).toEqual(stalePick);
+
+        // +18 mm wysokości jak offset assoc. — AABB się zmienia, snapshot nie.
+        panel.setDimensions(panel.width, mmToNm(418), panel.thickness);
+
+        const refreshed = resolveAnchor(node, anchor);
+        expect(refreshed?.localPointMm).toEqual([300, 9, 209]);
+        expect(refreshed?.localPointMm).not.toEqual(stalePick);
+    });
+
     it('prostokąt zapisany w kotwicy jest używany bez odtwarzania z AABB', () => {
         const { node } = docWithContainer();
         const quad = resolveAnchorQuadMm(

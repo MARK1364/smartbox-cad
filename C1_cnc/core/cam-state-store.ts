@@ -44,6 +44,7 @@ export interface CAMStoreState {
     simStatusText: string;
     simProgressPercent: number;
     warningMessage: string | null;
+    showToolpaths: boolean;
 }
 
 type Listener = (state: CAMStoreState) => void;
@@ -59,7 +60,8 @@ export class CAMStateStore {
         simulationSpeed: 1.0,
         simStatusText: 'Gotowy',
         simProgressPercent: 0,
-        warningMessage: null
+        warningMessage: null,
+        showToolpaths: true
     };
 
     private listeners: Set<Listener> = new Set();
@@ -135,6 +137,11 @@ export class CAMStateStore {
 
     public setWarningMessage(msg: string | null): void {
         this.state.warningMessage = msg;
+        this.notify();
+    }
+
+    public setShowToolpaths(show: boolean): void {
+        this.state.showToolpaths = show;
         this.notify();
     }
 }

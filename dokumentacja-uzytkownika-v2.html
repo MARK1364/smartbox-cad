@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SmartPanel Web — Pomoc</title>
+<title>Bloki CAD — Pomoc</title>
 <style>
   :root{
     --bg:#e8e8e8;
@@ -166,6 +166,18 @@
     font-size:13px;
   }
   .note strong{display:inline}
+  .note.warn{border-left-color:#c06a00;background:#fdf3e7}
+  .note.good{border-left-color:#2e7d32;background:#f0f7f0}
+  /* ===== Q&A — pytanie zawsze jasno oznaczone ===== */
+  .qa{margin:14px 0;border:2px solid var(--cat-korpus);border-radius:4px;overflow:hidden}
+  .qa + .qa{margin-top:14px}
+  .qa-q{margin:0;padding:10px 12px;background:var(--cat-korpus);color:#fff;font-size:16px;font-weight:700;line-height:1.4}
+  .qa-q .n{display:inline-block;min-width:26px;text-align:center;background:rgba(255,255,255,.2);
+    border:1px solid #fff;color:#fff;border-radius:2px;font-size:13px;padding:1px 6px;margin-right:8px;vertical-align:2px}
+  .qa-a{padding:10px 12px 12px}
+  .qa-a::before{content:"ODPOWIEDŹ";display:block;font-size:10px;font-weight:800;
+    letter-spacing:.08em;color:var(--cat-korpus);margin:0 0 8px}
+  .qa-a p:last-child,.qa-a ol:last-child,.qa-a ul:last-child{margin-bottom:2px}
   table{
     border-collapse:collapse;width:100%;
     margin:10px 0 14px;font-size:13px;
@@ -218,10 +230,13 @@
   <div class="toc-cat" style="--cat:var(--cat-korpus)">
     <div class="grp">Korpus</div>
     <a href="#korpus">Przegląd</a>
-    <a href="#korpus-dostep">Dostęp</a>
-    <a href="#korpus-utworz">Tworzenie korpusu</a>
-    <a href="#korpus-szablony">Szablony</a>
-    <a href="#korpus-edycja">Edycja parametrów</a>
+    <a href="#korpus-co-to">Co to jest korpus?</a>
+    <a href="#korpus-jak-dodac">Jak dodać korpus?</a>
+    <a href="#korpus-typy">Jakie są typy korpusu?</a>
+    <a href="#korpus-edycja">Jak edytować korpus?</a>
+    <a href="#korpus-wieniec-plecy">Wieniec i plecy</a>
+    <a href="#korpus-ukryj">Jak ukryć formatkę?</a>
+    <a href="#korpus-zamroz">Jak pozbyć się formatki?</a>
   </div>
   <div class="toc-cat" style="--cat:var(--cat-bloki)">
     <div class="grp">Bloki</div>
@@ -264,7 +279,7 @@
 
 <p>Typowa kolejność pracy:</p>
 <ol>
-  <li>Utwórz <strong>korpus</strong> (SmartFrame) — konstrukcję nośną ze strefami (wnękami).</li>
+  <li>Utwórz <strong>korpus</strong> (moduł Korpus) — konstrukcję nośną ze strefami (wnękami).</li>
   <li>Wypełnij wnęki modułami <strong>Bloki</strong> (półki, drzwi, szuflady itd.) albo dodaj elementy zewnętrzne (blendy, LED).</li>
   <li>W razie potrzeby edytuj pojedyncze formatki w <strong>SmartPanel</strong>.</li>
   <li>Dodaj <strong>złącza</strong> na styku płyt.</li>
@@ -339,67 +354,136 @@
 
 <!-- ========== KATEGORIA: KORPUS ========== -->
 <section class="cat" data-cat="korpus">
-<span class="cat-chip">Korpus · SmartFrame</span>
-<h2 id="korpus">Korpus (SmartFrame)</h2>
+<span class="cat-chip">Korpus</span>
+<h2 id="korpus">Korpus — pytania i odpowiedzi</h2>
 
-<p>Korpus jest konstrukcją nośną mebla. Generuje formatki (boki, dno, wieniec, plecy oraz w razie potrzeby elementy dzielące strefy) i łączy je w jeden obiekt w drzewie. Jednocześnie powstają <strong>strefy (wnęki)</strong> — puste przestrzenie, w które później wchodzi Bloki.</p>
+<p>Ten dział odpowiada na konkretne pytania: czym jest korpus, jak go dodać, edytować, ukryć lub zamrozić pojedynczą formatkę. Czytaj od góry — każde pytanie zakłada, że poprzednie już znasz. Nazwa modułu w aplikacji to <strong>Korpus</strong>.</p>
 
-<p>Korpus jest <strong>parametryczny</strong>. Po utworzeniu w każdej chwili możesz zmienić szerokość, wysokość, głębokość i pozostałe pola panelu; silnik przebudowuje geometrię. Nie trzeba zakładać korpusu od nowa.</p>
-
-<p>Zwykły korpus prosty zawiera: bok lewy, bok prawy, dno (wieniec dolny), wieniec górny, plecy oraz — przy dwóch lub trzech strefach — elementy dzielące wysokość na osobne wnęki.</p>
-
-<h3 id="korpus-dostep">Dostęp</h3>
-<p>Otwórz moduł <strong>SmartFrame</strong> z paska menu lub z listy modułów. Po prawej pojawia się panel z kartami szablonów i — po zaznaczeniu istniejącego korpusu — parametrami.</p>
-
-<h3 id="korpus-utworz">Aby utworzyć korpus</h3>
-<div class="procedure">
-<ol>
-  <li>Otwórz SmartFrame.</li>
-  <li>Wybierz szablon (kartę) odpowiadający typowi mebla — patrz poniższa lista.</li>
-  <li>Przeciągnij kartę na scenę 3D albo kliknij kartę, aby wstawić korpus w domyślnym miejscu.</li>
-  <li>W panelu edycji ustaw szerokość, wysokość i głębokość (oraz pola typowe dla szablonu).</li>
-  <li>Zatwierdź. Korpus pojawia się w scenie i w drzewie obiektów.</li>
-</ol>
+<div class="qa">
+<h3 class="qa-q" id="korpus-co-to"><span class="n">1</span>Co to jest korpus?</h3>
+<div class="qa-a">
+<p><strong>Korpus to „skrzynia” mebla — obiekt-rodzic całej konstrukcji.</strong> Zawsze pierwszy krok: bez korpusu nie wstawisz półek, szuflad ani drzwi.</p>
+<p>Po utworzeniu program generuje z automatu formatki:</p>
+<ul>
+<li><strong>bok lewy + bok prawy</strong>,</li>
+<li><strong>dno</strong> (wieniec dolny),</li>
+<li><strong>wieniec górny</strong> lub trawersy (listwy zamiast pełnej płyty),</li>
+<li><strong>plecy</strong> (zwykle cienka płyta HDF 3 mm),</li>
+<li>przy 2–3 strefach: <strong>wieńce dzielące</strong> wysokości na osobne wnęki.</li>
+</ul>
+<p>Jednocześnie powstają <strong>strefy (wnęki, Bay)</strong> — puste przestrzenie, w które później wchodzi Bloki. W drzewie po lewej widzisz to jako: <kbd>Projekt → Korpus → Formatka → Operacje CNC / Obrzeża</kbd>.</p>
+<p class="note"><strong>Parametryczny:</strong> korpus przebudowuje się po każdej zmianie wymiaru. Nie zakładasz go od nowa — zmieniasz liczby w panelu, a Bloki dopasowuje się do nowego światła.</p>
+</div>
 </div>
 
-<h3 id="korpus-szablony">Szablony</h3>
-<p>Każda karta to gotowy typ konstrukcji. Opis w kolejności kart w panelu:</p>
-
-<dl class="options">
-  <dt>1 strefa / 2 strefy / 3 strefy</dt>
-  <dd>Korpus prostopadłościenny. Liczba stref to liczba wnęk w pionie. Przy dwóch lub trzech strefach ustawiasz wysokości dołu (i środka); góra wynika z reszty wysokości całkowitej.</dd>
-  <dt>Rogowy 1</dt>
-  <dd>Korpus narożny z panelem zaślepiającym. Dodatkowo ustawiasz szerokość panelu oraz stronę (lewa / prawa).</dd>
-  <dt>Rogowy 90</dt>
-  <dd>Kątownik 90°. Osobno podajesz głębokość boku lewego i boku prawego.</dd>
-  <dt>Skośny dach</dt>
-  <dd>Korpus pod skos dachu (przód niższy, tył wyższy). Osobno: wysokość przodu i wysokość tyłu.</dd>
-  <dt>Skośny L/P ucięty</dt>
-  <dd>Skos w poprzek z uciosem na stykach. Osobno: wysokość lewa i wysokość prawa.</dd>
-</dl>
-
-<h3 id="korpus-edycja">Aby edytować istniejący korpus</h3>
+<div class="qa">
+<h3 class="qa-q" id="korpus-jak-dodac"><span class="n">2</span>Jak dodać korpus?</h3>
+<div class="qa-a">
 <div class="procedure">
 <ol>
-  <li>Zaznacz korpus w drzewie obiektów albo w scenie 3D.</li>
-  <li>W panelu edycji po prawej zmień wartości od góry do dołu — najpierw gabaryty, potem strefy i pola typowe dla szablonu, na końcu plecy.</li>
-  <li>Po każdej zmianie model przebudowuje się automatycznie. Cofnięcie: <kbd>Ctrl</kbd>+<kbd>Z</kbd>.</li>
+<li>Otwórz moduł <strong>Korpus</strong> (pasek modułów). Po prawej widzisz <strong>karty szablonów</strong> i formularz wymiarów.</li>
+<li>Wybierz kartę: <strong>Szafka 1 / Szafka 2 / Szafka 3</strong> albo korpus narożny / skośny (opis kart — następne pytania).</li>
+<li><strong>Przeciągnij kartę na scenę 3D</strong> (podgląd „ducha” pokazuje miejsce) <strong>albo kliknij kartę</strong> — korpus wstawi się w domyślnym miejscu z wymiarami domyślnymi (np. 600 × 720 × 560 mm).</li>
+<li>W panelu edycji wpisz od góry: <strong>szerokość → wysokość → głębokość</strong>, potem strefy i plecy. Model przebudowuje się na żywo.</li>
+<li>Sprawdź drzewo: pojawił się nowy <strong>Korpus</strong> z formatkami w środku.</li>
 </ol>
 </div>
+<p class="note warn"><strong>Pułapka:</strong> jeśli masz już zaznaczony korpus, kliknięcie karty <strong>nie doda nowego</strong> — tylko przełączy formularz. Najpierw kliknij w puste miejsce sceny (odznacz), potem kliknij kartę.</p>
+</div>
+</div>
 
-<p>Kolejność pól w panelu (ogólna):</p>
-<dl class="options">
-  <dt>Szerokość, wysokość, głębokość</dt>
-  <dd>Gabaryt zewnętrzny w mm.</dd>
-  <dt>Wysokości stref</dt>
-  <dd>Tylko przy 2–3 strefach: dół, ewent. środek; góra liczona automatycznie.</dd>
-  <dt>Pola typu (rogi, skosy)</dt>
-  <dd>Pojawiają się tylko dla danego szablonu (zaślepka, boki L/P, wysokości skosu).</dd>
-  <dt>Plecy</dt>
-  <dd>Odsunięcie od tylnej krawędzi oraz opcja wpustu.</dd>
-</dl>
+<div class="qa">
+<h3 class="qa-q" id="korpus-typy"><span class="n">3</span>Jakie są typy korpusu?</h3>
+<div class="qa-a">
+<ul>
+<li><strong>1 Strefa</strong> — najprostszy korpus: boczki, dno, wieniec i plecy, jedna wnęka na całą wysokość.</li>
+<li><strong>2 Strefy</strong> — dwie wnęki: dół i góra, jeden wieniec dzielący. Podajesz wysokość dołu, góra liczy się sama.</li>
+<li><strong>3 Strefy</strong> — trzy wnęki: dół, środek i góra, dwa wieńce dzielące. Podajesz wysokość dołu i środka, góra liczy się sama.</li>
+<li><strong>Rogowa prosta</strong> — szafka narożna z blendą. Podajesz szerokość blendy i stronę: lewa albo prawa.</li>
+<li><strong>Rogowy 90</strong> — szafka narożna w literę L. Podajesz głębokość boku lewego i prawego.</li>
+<li><strong>Skośny przód</strong> — szafka pod skos dachu. Podajesz wysokość przodu i tyłu.</li>
+<li><strong>Skośna lewa</strong> — szafka ze skosem w poprzek. Podajesz wysokość lewą i prawą.</li>
+</ul>
+</div>
+</div>
 
-<p class="note"><strong>Uwaga:</strong> Po zmianie gabarytu wyposażenie Bloki pozostaje w wnękach i dopasowuje się do nowego światła. Najpierw ustaw korpus, potem dokładaj Bloki — ale możesz wracać do wymiarów korpusu w dowolnym momencie.</p>
+<div class="qa">
+<h3 class="qa-q" id="korpus-edycja"><span class="n">4</span>Jak edytować korpus?</h3>
+<div class="qa-a">
+<div class="procedure">
+<ol>
+<li><strong>Zaznacz korpus</strong> — kliknij go w drzewie obiektów albo kliknij dowolną jego formatkę w scenie 3D.</li>
+<li>W panelu po prawej (moduł <strong>Korpus</strong>) zmień wartości <strong>od góry do dołu</strong>: najpierw gabaryt, potem strefy / pola szablonu, na końcu plecy.</li>
+<li>Każda zmiana przebudowuje model <strong>natychmiast</strong>. Cofnięcie: <kbd>Ctrl</kbd>+<kbd>Z</kbd>.</li>
+</ol>
+</div>
+<table>
+<tr><th>Pole w panelu</th><th>Co robi</th><th>Przykład</th></tr>
+<tr><td>Szerokość / wysokość / głębokość</td><td>Gabaryt zewnętrzny w mm (oś X / Z / Y)</td><td>600 × 720 × 560</td></tr>
+<tr><td>Liczba stref (1/2/3)</td><td>Ile wnęk w pionie (tylko prosty korpus)</td><td>2</td></tr>
+<tr><td>Wys. strefy dolnej / środkowej</td><td>Światło dołu i środka; góra = reszta</td><td>360 / 360</td></tr>
+<tr><td>Pola szablonu</td><td>Tylko dla rogu i skosu: blenda, boki L/P, wysokości skosu</td><td>blenda 100, lewa</td></tr>
+<tr><td>Plecy: cofnięcie / grubość / wpust</td><td>Odsunięcie pleców od tyłu, grubość HDF, głębokość rowka</td><td>20 / 3 / 10 mm</td></tr>
+</table>
+<p class="note"><strong>Kolejność ma znaczenie:</strong> najpierw gabaryt, potem Bloki. Wyposażenie zostaje w wnękach i rozciąga się do nowego światła — nic nie musisz wstawiać od nowa.</p>
+</div>
+</div>
+
+<div class="qa">
+<h3 class="qa-q" id="korpus-wieniec-plecy"><span class="n">5</span>Jak ustawić wieniec górny i plecy?</h3>
+<div class="qa-a">
+<p><strong>Wieniec górny</strong> — do wyboru w panelu:</p>
+<ul>
+<li><strong>Pełny</strong> — pełna płyta zamykająca od góry (szafka wolnostojąca, widok z góry).</li>
+<li><strong>Trawers poziomy</strong> — zamiast płyty dwie poziome listwy (domyślnie 80 mm szerokości).</li>
+<li><strong>Trawers pionowy</strong> — zamiast płyty dwie pionowe listwy (domyślnie 80 mm szerokości).</li>
+</ul>
+<p>Trawersy wybierasz do zabudowy pod blat, gdzie pełny wieniec przeszkadza.</p>
+<p><strong>Plecy</strong> — trzy liczby:</p>
+<ul>
+<li><strong>cofnięcie</strong> (domyślnie ok. 20 mm) — ile plecy są schowane od tylnej krawędzi boków (miejsce na ścianę / instalacje);</li>
+<li><strong>grubość</strong> (zwykle 3 mm HDF);</li>
+<li><strong>wpust</strong> (ok. 10 mm) — jak głęboko plecy wchodzą w rowek boków i wieńców.</li>
+</ul>
+<p class="note warn"><strong>Korpus o grubości 0?</strong> To nie błąd korpusu — sprawdź materiał: formatka bierze grubość z dekoru (zwykle 18 mm). Bez przypisanego materiału CNC i nesting policzą zero.</p>
+</div>
+</div>
+
+<div class="qa">
+<h3 class="qa-q" id="korpus-ukryj"><span class="n">6</span>Jak ukryć pojedynczą formatkę?</h3>
+<div class="qa-a">
+<div class="procedure">
+<ol>
+<li>W <strong>drzewie po lewej</strong> rozwiń korpus i znajdź formatkę (np. plecy albo bok lewy).</li>
+<li>Najedź na wiersz formatki i kliknij <strong>ikonę oka 👁</strong> po prawej stronie wiersza.</li>
+<li>Formatka znika ze sceny 3D (wpis w drzewie robi się przygaszony). Kliknij oko jeszcze raz, żeby pokazać z powrotem.</li>
+</ol>
+</div>
+<p class="note"><strong>Co daje ukrycie?</strong> Tylko podgląd — np. schowaj plecy albo wieniec, żeby zajrzeć do środka i wstawić Bloki. <strong>Ukryta formatka nadal idzie do CNC, nestingu i raportu.</strong> Jeśli ma nie iść na maszynę — zamróź ją (następne pytanie), nie ukrywaj.</p>
+</div>
+</div>
+
+<div class="qa">
+<h3 class="qa-q" id="korpus-zamroz"><span class="n">7</span>Jak pozbyć się formatki z produkcji bez jej usuwania?</h3>
+<div class="qa-a">
+<p><strong>Zamrożenie wyłącza formatkę z produkcji.</strong> Zamrożona płyta zostaje w projekcie jako podgląd, ale <strong>nie idzie do CNC, nie idzie do nestingu (rozkroju) i nie liczy się w wycenie</strong>. Po to jest zamrażanie: chwilowo wycofujesz płytę z produkcji bez jej usuwania.</p>
+<div class="procedure">
+<ol>
+<li>W drzewie najedź na wiersz formatki i kliknij <strong>ikonę zamrożenia ❄</strong> (obok oka). Albo: prawy przycisk → <strong>Zamroź panel / Odmroź panel</strong>.</li>
+<li>Wiersz robi się przygaszony, a formatka w 3D dostaje <strong>niebieską obwódkę</strong> — to obiekt referencyjny.</li>
+<li>Kliknij ❄ jeszcze raz, żeby odmrozić — formatka <strong>wraca</strong> do CNC, nestingu i wyceny.</li>
+</ol>
+</div>
+<p><strong>Co dokładnie robi zamrożenie?</strong></p>
+<ul>
+<li><strong>CNC:</strong> program pomija zamrożoną formatkę — brak podglądu obróbki i symulacji;</li>
+<li><strong>Nesting (rozkrój):</strong> zamrożona płyta nie zajmuje miejsca na arkuszu;</li>
+<li><strong>Wycena / raport:</strong> zamrożona płyta nie liczy się do m² płyt, metrów obrzeży ani kosztów;</li>
+<li>synchronizacja złączy i wycięć ją <strong>pomija</strong> — istniejące otwory nie są przeliczane przy przebudowie korpusu.</li>
+</ul>
+<p class="note"><strong>Ukrycie a zamrożenie:</strong> ukrycie (👁) to tylko podgląd w 3D — płyta nadal idzie do CNC i wyceny. Zamrożenie (❄) to wycofanie z produkcji. Chcesz zajrzeć do środka → ukryj. Chcesz, żeby płyty nie było na maszynie i na fakturze → zamróź.</p>
+<p class="note good"><strong>Kiedy mrozić?</strong> Np. plecy HDF robisz we własnym zakresie, klient rezygnuje z jednej półki, wariant mebla bez wieńca dzielącego — mrozisz zamiast usuwać, bo jednym klikiem możesz przywrócić.</p>
+</div>
 </section>
 
 <!-- ========== KATEGORIA: BLOKI ========== -->

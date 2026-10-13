@@ -31,6 +31,7 @@ import type { CadModuleContext } from '../../A1_core/cad-module-context.js';
 import type { CncWorkpiece } from './types';
 import { hydrateCncWorkpiece } from './cad-extract';
 import { namedCameraView } from '../../S3_scena/named-camera-view.js';
+import { createArcballCameraFactory } from '../../C1_cnc/interaction/arcball-camera-session.js';
 
 declare const BABYLON: any;
 
@@ -43,6 +44,17 @@ export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<CadMo
     registerProjectDomain(document);
     const propertiesManager = PropertiesManager.instance;
     const viewport = await Viewport.create(canvas);
+    viewport.toggleGrid(false);
+    // Test CNC: arcball obraca FORMATKĘ (jak workbench), nie kamerę. ŚPM / Alt+LPM.
+    viewport.rotationFactory = createArcballCameraFactory(() => {
+        const panel = ContextManager.instance.activePanel
+            || ContextManager.instance.document?.activeEntity;
+        if (!panel) return null;
+        return ContextManager.instance.panelViews?.get(panel) ?? null;
+    });
+    if (viewport.camera?.upVector?.set) {
+        viewport.camera.upVector.set(0, 1, 0);
+    }
 
     const panelViews = new Map<any, PanelView>();
     const containerViews = new Map<any, any>();
@@ -54,6 +66,7 @@ export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<CadMo
     cm.viewport = viewport;
     cm.babylonScene = viewport.scene;
     cm.activeTab = 'tab-c1-cnc';
+    cm.lcsVisible = true;
     cm.activePanel = null;
     cm.hideGizmos = () => {};
     cm.showGizmos = () => {};
@@ -100,7 +113,7 @@ export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<CadMo
             const panel = document.activeEntity;
             if (panel) frameCameraOnPanel(ctx, panel);
         },
-        setView: (viewName: string) => applyNamedView(viewport, viewName),
+        setView: (viewName: string) => applyNamedView(ctx, viewName),
         setRenderMode: (mode: string) => {
             if (mode === 'shaded' || mode === 'edges' || mode === 'wireframe' || mode === 'xray') {
                 viewport.setRenderMode(mode);
@@ -125,8 +138,12 @@ export async function bootstrapCncPage(canvas: HTMLCanvasElement): Promise<CadMo
                     (panel as any).setLcsVisible(visible);
                 }
             }
+            for (const view of ctx.panelViews.values()) {
+                if (typeof (view as any).setLcsVisible === 'function') {
+                    (view as any).setLcsVisible(visible);
+                }
+            }
         },
-        viewNormalToFace: () => lookAtSelectedFace(ctx),
         setSelectionMode: (mode: 'object' | 'subgeometry') => {
             facePicker.selectionMode = mode;
         },
@@ -169,6 +186,14 @@ export function mountCncWorkpiece(ctx: CadModuleContext, workpiece: CncWorkpiece
         view._updateTransform();
     }
     if (view.root) view.root.setEnabled(true);
+
+    const lcsOn = ContextManager.instance.lcsVisible ?? true;
+    if (typeof (panel as any).setLcsVisible === 'function') {
+        (panel as any).setLcsVisible(lcsOn);
+    }
+    if (typeof (view as any).setLcsVisible === 'function') {
+        (view as any).setLcsVisible(lcsOn);
+    }
 
     ContextManager.instance.activePanel = panel;
     ContextManager.instance.selectedPanel = panel;
@@ -215,40 +240,33 @@ export function frameCameraOnPanel(ctx: CadModuleContext, panel: any): void {
     if (camera.beta == null || camera.beta === 0) camera.beta = Math.PI / 3;
 }
 
-function applyNamedView(viewport: Viewport, viewName: string): void {
-    const camera = viewport.camera;
+function applyNamedView(ctx: CadModuleContext, viewName: string): void {
+    const viewport = ctx.viewport;
+    const camera = viewport?.camera;
     if (!camera) return;
-    const key = String(viewName || '').toUpperCase();
-    let named: ReturnType<typeof namedCameraView> | null = null;
-    if (key.includes('Z_PLUS') || key === 'FRONT' || key === 'TOP_FACE') {
-        named = namedCameraView('front');
-    } else if (key.includes('Z_MINUS') || key === 'BACK') {
-        named = namedCameraView('back');
-    } else if (key.includes('Y_PLUS') || key === 'TOP') {
-        named = namedCameraView('top');
-    } else if (key.includes('Y_MINUS') || key === 'BOTTOM') {
-        named = namedCameraView('bottom');
-    } else if (key.includes('X_MINUS') || key === 'LEFT') {
-        named = namedCameraView('left');
-    } else if (key.includes('X_PLUS') || key === 'RIGHT') {
-        named = namedCameraView('right');
-    }
-    if (!named) return;
-    camera.alpha = named.alpha;
-    camera.beta = named.beta;
-    if (camera.upVector?.set) camera.upVector.set(named.up.x, named.up.y, named.up.z);
-}
 
-function lookAtSelectedFace(ctx: CadModuleContext): void {
-    const faceMesh = ctx.facePicker.selectedFace;
-    const camera = ctx.viewport.camera;
-    if (!faceMesh || faceMesh.isDisposed?.() || !camera) {
-        ctx.ui.setStatus(tx(srcTekst, 'moddata.click_wall', TX_NS), true);
-        return;
+    const key = String(viewName || '').toLowerCase();
+    let namedKey: 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' = 'front';
+    if (key.includes('z_plus') || key === 'front' || key === 'top_face') namedKey = 'front';
+    else if (key.includes('z_minus') || key === 'back') namedKey = 'back';
+    else if (key.includes('y_plus') || key === 'top') namedKey = 'top';
+    else if (key.includes('y_minus') || key === 'bottom') namedKey = 'bottom';
+    else if (key.includes('x_minus') || key === 'left') namedKey = 'left';
+    else if (key.includes('x_plus') || key === 'right') namedKey = 'right';
+
+    const panel = ContextManager.instance.activePanel || ctx.document?.activeEntity;
+    const pView = panel ? ctx.panelViews.get(panel) : null;
+    let target = camera.target;
+    if (pView?.root) {
+        try {
+            pView.root.computeWorldMatrix(true);
+            const bbox = pView.root.getHierarchyBoundingVectors(true);
+            target = bbox.max.add(bbox.min).scale(0.5);
+        } catch { /* ignore */ }
     }
-    const faceName = faceMesh.metadata?.faceName;
-    const panel = faceMesh.metadata?.panelModel || ctx.document.activeEntity;
-    if (panel) frameCameraOnPanel(ctx, panel);
-    if (faceName) applyNamedView(ctx.viewport, faceName);
-    ctx.ui.setStatus(tx(srcTekst, 'moddata.view_normal', TX_NS, { face: faceName || tx(srcTekst, 'moddata.wall_default', TX_NS) }), true);
+
+    const named = namedCameraView(namedKey);
+    viewport.clearViewCubeOverride?.();
+    (viewport as any).__cncCubeQuat = null;
+    viewport.animateCameraTo(named.alpha, named.beta, camera.radius, target, named.up);
 }

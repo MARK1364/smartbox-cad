@@ -19,6 +19,11 @@ import { CADNode } from '../A1_core/cad-node/cad-node';
 import { PMIStore } from '../A8_pmi/pmi-data';
 
 export const LIVE_PROJECT_STORAGE_KEY = 'bloki_cad_live_project_v1';
+/**
+ * Klucz pamięci podręcznej dla podglądu rysunku 2D (R2_rys).
+ * UWAGA DOT. JEDNOSTEK: Pamięć podręczna LIVE operuje na bieżących wartościach UI/viewportu w [mm],
+ * podczas gdy trwały zapis projektu (SSOT: extensions.pmi w pliku projektu) jest w [nm] (unit: 'nm').
+ */
 export const LIVE_PMI_STORAGE_KEY = 'bloki_cad_live_pmi_v1';
 export const SYNC_CHANNEL_NAME = 'bloki_cad_sync';
 
@@ -123,30 +128,6 @@ export class DrawingProjectExtractor {
                         lz2: ann.anchor2?.pointLocal?.z ?? 0,
                         nodeId: ann.anchor1?.nodeId || ann.anchor2?.nodeId || '',
                         dimType: 'LINEAR',
-                    });
-                }
-
-                const measurements = (store.measurements || []).filter((m) => m.visible !== false);
-                for (const msr of measurements) {
-                    const text = msr.text || (msr.distanceMM ? `${msr.distanceMM.toFixed(1)} mm` : '');
-                    pmiList.push({
-                        id: msr.id,
-                        text,
-                        distanceMM: msr.distanceMM || 0,
-                        x1: msr.anchor1?.pointWorldFallback?.x ?? msr.anchor1?.pointLocal?.x ?? 0,
-                        y1: msr.anchor1?.pointWorldFallback?.y ?? msr.anchor1?.pointLocal?.y ?? 0,
-                        z1: msr.anchor1?.pointWorldFallback?.z ?? msr.anchor1?.pointLocal?.z ?? 0,
-                        x2: msr.anchor2?.pointWorldFallback?.x ?? msr.anchor2?.pointLocal?.x ?? 0,
-                        y2: msr.anchor2?.pointWorldFallback?.y ?? msr.anchor2?.pointLocal?.y ?? 0,
-                        z2: msr.anchor2?.pointWorldFallback?.z ?? msr.anchor2?.pointLocal?.z ?? 0,
-                        lx1: msr.anchor1?.pointLocal?.x ?? 0,
-                        ly1: msr.anchor1?.pointLocal?.y ?? 0,
-                        lz1: msr.anchor1?.pointLocal?.z ?? 0,
-                        lx2: msr.anchor2?.pointLocal?.x ?? 0,
-                        ly2: msr.anchor2?.pointLocal?.y ?? 0,
-                        lz2: msr.anchor2?.pointLocal?.z ?? 0,
-                        nodeId: msr.anchor1?.nodeId || msr.anchor2?.nodeId || '',
-                        dimType: 'ALIGNED',
                     });
                 }
             }
@@ -332,13 +313,20 @@ export class DrawingProjectExtractor {
 
         const isPart = cadNode.nodeType === NodeType.PART || domainData?.type === 'panel';
         const isHardware = cadNode.nodeType === NodeType.HARDWARE || domainData?.type === 'hardware';
+        const isSmartPartCut =
+            cadNode.nodeType === NodeType.FEATURE ||
+            domainData?.role === 'SMARTPART_CUT' ||
+            domainData?.type === 'smartpart_cut';
         const isAssembly = cadNode.nodeType === NodeType.ASSEMBLY || domainData?.type === 'container';
         const isGroup = (cadNode as any).nodeType === 'GROUP' || domainData?.type === 'group';
 
         let icon = '📦';
         let type: CADTreeNode['type'] = 'CONTAINER';
 
-        if (isHardware) {
+        if (isSmartPartCut) {
+            icon = domainData?.cutType === 'HOLE' ? '⚪' : '⬛';
+            type = 'FEATURE';
+        } else if (isHardware) {
             icon = '🔩';
             type = 'HARDWARE';
         } else if (isPart) {
@@ -391,10 +379,15 @@ export class DrawingProjectExtractor {
             }
         }
 
-        if (isHardware) {
-            width = 0;
-            height = 0;
-            depth = 0;
+        if (isHardware || isSmartPartCut) {
+            width = modelNmToMm(domainData?.width, width);
+            height = modelNmToMm(domainData?.height, height);
+            depth = modelNmToMm(domainData?.depth, depth);
+            if (isHardware && !isSmartPartCut) {
+                width = 0;
+                height = 0;
+                depth = 0;
+            }
         } else {
             if (width === 0) width = 600;
             if (height === 0) height = 720;
@@ -411,7 +404,7 @@ export class DrawingProjectExtractor {
             depth,
             thickness: isPart ? thickness : undefined,
             material: isPart ? material : undefined,
-            role: domainData?.role || (isPart ? role : undefined),
+            role: domainData?.role || (isPart ? role : undefined) || role || undefined,
             partCount: totalPartCount,
             children: children.length > 0 ? children : undefined,
             holes: holes.length > 0 ? holes : undefined,
@@ -424,7 +417,8 @@ export class DrawingProjectExtractor {
             frameTemplateId: domainData?.frameTemplateId,
             frameComponents: typeof domainData?.getFrameComponents === 'function' ? domainData.getFrameComponents() : undefined,
             generatorParams: domainData?.generatorParams ? { ...domainData.generatorParams } : undefined,
-        };
+            ...(isSmartPartCut ? { cutType: domainData?.cutType || domainData?.generatorParams?.cut?.type } : {}),
+        } as CADTreeNode;
     }
 
     private _extractFromViews(cm: ContextManager): CADTreeNode {

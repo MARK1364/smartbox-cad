@@ -6,14 +6,21 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { isPanelModel } from '../A4_smartpanel/panel-model.js';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
+import { SetDimensionsCommand } from '../A1_core/commands/set-dimensions-command.js';
 import { updateLibraryOperationParams, isLibraryOperation } from '../o1_operacji/operacje-apply.js';
 import { edgeShortLabel } from '../o1_operacji/operacje-placement.js';
 import { AssociativeDimInputs } from '../A4_smartpanel/associative-dim-ui.js';
+import { PanelRelationsEdit } from '../S2_solver/panel-relations-edit.js';
+import { ConstraintHighlightOverlay } from '../S2_solver/constraint-highlight.js';
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import srcTekstRaw from './src_tekst.json';
+import { CAD_CLOSE_FLOATING_EDIT } from './floating-edit/cad-edit-entity.js';
+import { computeFloatBesideEditPanel } from './floating-edit/float-position.js';
+
+const PANEL_EDIT_WIDTH = 320;
 
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
@@ -100,13 +107,11 @@ export const FloatingOperationDialog: React.FC = () => {
     const [uEdgeLabel, setUEdgeLabel] = useState<string>('L');
     const [vEdgeLabel, setVEdgeLabel] = useState<string>(tx(srcTekst, 'float.face_bottom', TX_NS));
 
-    // Pozycja okna (domyślnie pod belką główną / widokową)
-    const [pos, setPos] = useState<{ x: number; y: number }>(() => {
-        const defaultX = typeof window !== 'undefined' ? Math.max(280, Math.round(window.innerWidth / 2 - 140)) : 300;
-        return { x: defaultX, y: 96 };
-    });
+    // Pozycja: obok panelu edycji, środek sceny w pionie
+    const [pos, setPos] = useState<{ x: number; y: number }>(() => computeFloatBesideEditPanel(PANEL_EDIT_WIDTH, 360));
     const isDraggingRef = useRef(false);
     const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+    const rootRef = useRef<HTMLDivElement | null>(null);
 
     const loadFeatureData = useCallback((data: FloatingOperationData) => {
         const doc = ContextManager.instance.document;
@@ -173,15 +178,12 @@ export const FloatingOperationDialog: React.FC = () => {
                 setDialogMode('operation');
                 setOpData(d);
                 loadFeatureData(d);
-                if (typeof d.screenX === 'number' && typeof d.screenY === 'number') {
-                    const maxX = typeof window !== 'undefined' ? Math.max(100, window.innerWidth - 300) : 600;
-                    const maxY = typeof window !== 'undefined' ? Math.max(100, window.innerHeight - 320) : 600;
-                    setPos({
-                        x: Math.max(20, Math.min(maxX, d.screenX + 24)),
-                        y: Math.max(60, Math.min(maxY, d.screenY - 40)),
-                    });
-                }
+                setPos(computeFloatBesideEditPanel(PANEL_EDIT_WIDTH, 280));
                 setVisible(true);
+                requestAnimationFrame(() => {
+                    const h = rootRef.current?.getBoundingClientRect().height || 280;
+                    setPos(computeFloatBesideEditPanel(PANEL_EDIT_WIDTH, h));
+                });
             }
         };
 
@@ -190,29 +192,43 @@ export const FloatingOperationDialog: React.FC = () => {
             if (d && d.panelId) {
                 setDialogMode('panel');
                 loadPanelData(d.panelId);
+                setPos(computeFloatBesideEditPanel(PANEL_EDIT_WIDTH, 360));
                 setVisible(true);
+                requestAnimationFrame(() => {
+                    const h = rootRef.current?.getBoundingClientRect().height || 360;
+                    setPos(computeFloatBesideEditPanel(PANEL_EDIT_WIDTH, h));
+                });
             }
         };
 
         const handleClose = () => {
             setVisible(false);
+            ConstraintHighlightOverlay.instance.clear();
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape' && visible) {
+                if (ContextManager.instance.activeConstraintPicker || ContextManager.instance.activeReferencePicker) {
+                    return;
+                }
                 setVisible(false);
+                ConstraintHighlightOverlay.instance.clear();
             }
         };
 
         window.addEventListener(CAD_OPEN_FLOATING_OPERATION, handleOpenOp as EventListener);
         window.addEventListener(CAD_OPEN_FLOATING_PANEL_EDIT, handleOpenPanel as EventListener);
         window.addEventListener(CAD_CLOSE_FLOATING_OPERATION, handleClose);
+        window.addEventListener(CAD_CLOSE_FLOATING_EDIT, handleClose);
+        window.addEventListener('cad-tab-switched', handleClose);
         window.addEventListener('keydown', handleKeyDown);
 
         return () => {
             window.removeEventListener(CAD_OPEN_FLOATING_OPERATION, handleOpenOp as EventListener);
             window.removeEventListener(CAD_OPEN_FLOATING_PANEL_EDIT, handleOpenPanel as EventListener);
             window.removeEventListener(CAD_CLOSE_FLOATING_OPERATION, handleClose);
+            window.removeEventListener(CAD_CLOSE_FLOATING_EDIT, handleClose);
+            window.removeEventListener('cad-tab-switched', handleClose);
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [visible, loadFeatureData, loadPanelData]);
@@ -251,12 +267,27 @@ export const FloatingOperationDialog: React.FC = () => {
         setPanelHeightMm(hMm);
         setPanelThicknessMm(tMm);
         if (!panelModel) return;
-        panelModel.setDimensions(mmToNm(wMm), mmToNm(hMm), mmToNm(tMm));
-        const doc = ContextManager.instance.document;
-        doc?.emitChange?.('dimensions');
+
+        const newW = mmToNm(wMm);
+        const newH = mmToNm(hMm);
+        const newT = mmToNm(tMm);
+        const history = ContextManager.instance.commandHistory;
+        if (history) {
+            history.execute(new SetDimensionsCommand(
+                panelModel.id,
+                { width: panelModel.width, height: panelModel.height, thickness: panelModel.thickness },
+                { width: newW, height: newH, thickness: newT },
+                { label: 'Wymiary formatki' },
+            ));
+        } else {
+            panelModel.setDimensions(newW, newH, newT);
+            ContextManager.instance.document?.emitChange('dimensions', [panelModel.id]);
+        }
+
         window.document.dispatchEvent(new CustomEvent('bloki-panel-changed', { detail: { panelModel } }));
         window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
         (window as any).__rebuildGeometry?.();
+        (ContextManager.instance as any).solverController?.requestSolve?.();
     };
 
     // Dragging logic
@@ -269,7 +300,7 @@ export const FloatingOperationDialog: React.FC = () => {
         };
         const handleMouseMove = (ev: MouseEvent) => {
             if (!isDraggingRef.current) return;
-            const newX = Math.max(10, Math.min(window.innerWidth - 280, ev.clientX - dragOffsetRef.current.x));
+            const newX = Math.max(10, Math.min(window.innerWidth - PANEL_EDIT_WIDTH, ev.clientX - dragOffsetRef.current.x));
             const newY = Math.max(10, Math.min(window.innerHeight - 260, ev.clientY - dragOffsetRef.current.y));
             setPos({ x: newX, y: newY });
         };
@@ -288,11 +319,13 @@ export const FloatingOperationDialog: React.FC = () => {
 
     return (
         <div
+            ref={rootRef}
             style={{
                 position: 'fixed',
                 left: `${pos.x}px`,
                 top: `${pos.y}px`,
-                width: '280px',
+                width: `${PANEL_EDIT_WIDTH}px`,
+                maxHeight: 'min(85vh, 720px)',
                 backgroundColor: 'rgba(24, 24, 27, 0.95)',
                 backdropFilter: 'blur(10px)',
                 border: '1px solid rgba(255, 255, 255, 0.18)',
@@ -303,6 +336,8 @@ export const FloatingOperationDialog: React.FC = () => {
                 fontSize: '12px',
                 userSelect: 'none',
                 overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
             }}
         >
             {/* Header (uchwyt do przeciągania) */}
@@ -325,7 +360,10 @@ export const FloatingOperationDialog: React.FC = () => {
                 </div>
                 <button
                     type="button"
-                    onClick={() => setVisible(false)}
+                    onClick={() => {
+                        setVisible(false);
+                        ConstraintHighlightOverlay.instance.clear();
+                    }}
                     style={{
                         background: 'none',
                         border: 'none',
@@ -342,62 +380,67 @@ export const FloatingOperationDialog: React.FC = () => {
                 </button>
             </div>
 
-            {/* Context Subtitle */}
-            <div style={{ padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '11px', color: '#94a3b8' }}>
-                {dialogMode === 'panel' ? (
-                    <>Formatka: <span style={{ color: '#60a5fa' }}>{panelName}</span> · {tx(srcTekst, 'float.subtitle_dims', TX_NS)}</>
-                ) : (
-                    <>Formatka: <span style={{ color: '#60a5fa' }}>{panelName}</span> · {tx(srcTekst, 'float.subtitle_side', TX_NS)} <span style={{ color: '#38bdf8' }}>{formatFaceName(opData?.face)}</span></>
-                )}
-            </div>
+            {/* Context Subtitle (tylko dla pojedynczych operacji na ścianie) */}
+            {dialogMode === 'operation' && (
+                <div style={{ padding: '5px 12px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '11px', color: '#94a3b8' }}>
+                    <span style={{ color: '#60a5fa' }}>{panelName}</span> · {tx(srcTekst, 'float.subtitle_side', TX_NS)} <span style={{ color: '#38bdf8' }}>{formatFaceName(opData?.face)}</span>
+                </div>
+            )}
 
             {/* Content Fields */}
-            <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
                 {dialogMode === 'panel' ? (
                     <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_w', TX_NS)}</span>
-                            <SmartNumericInput
-                                value={panelWidthMm}
-                                min={10}
-                                max={3000}
-                                step={1}
-                                unit="mm"
-                                style={inputStyle}
-                                onChange={(val) => handlePanelDimChange(val, panelHeightMm, panelThicknessMm)}
-                            />
-                        </div>
-                        {panelModel && (
-                            <AssociativeDimInputs panel={panelModel} axis="width" />
-                        )}
+                        {panelModel?.id && <PanelRelationsEdit panelId={panelModel.id} />}
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_h', TX_NS)}</span>
-                            <SmartNumericInput
-                                value={panelHeightMm}
-                                min={10}
-                                max={3000}
-                                step={1}
-                                unit="mm"
-                                style={inputStyle}
-                                onChange={(val) => handlePanelDimChange(panelWidthMm, val, panelThicknessMm)}
-                            />
+                        <div
+                            style={{
+                                marginTop: '2px',
+                                paddingTop: '4px',
+                                borderTop: '1px solid rgba(255,255,255,0.08)',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#a1a1aa',
+                                letterSpacing: '0.02em',
+                            }}
+                        >
+                            {tx(srcTekst, 'float.section_dims', TX_NS)}
                         </div>
-                        {panelModel && (
-                            <AssociativeDimInputs panel={panelModel} axis="height" />
-                        )}
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_t', TX_NS)}</span>
-                            <SmartNumericInput
-                                value={panelThicknessMm}
-                                min={1}
-                                max={100}
-                                step={0.5}
-                                unit="mm"
-                                style={inputStyle}
-                                onChange={(val) => handlePanelDimChange(panelWidthMm, panelHeightMm, val)}
-                            />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_w', TX_NS)}</span>
+                                <SmartNumericInput
+                                    value={panelWidthMm}
+                                    min={10}
+                                    max={3000}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => handlePanelDimChange(val, panelHeightMm, panelThicknessMm)}
+                                />
+                            </div>
+                            {panelModel && (
+                                <AssociativeDimInputs panel={panelModel} axis="width" />
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.dim_h', TX_NS)}</span>
+                                <SmartNumericInput
+                                    value={panelHeightMm}
+                                    min={10}
+                                    max={3000}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => handlePanelDimChange(panelWidthMm, val, panelThicknessMm)}
+                                />
+                            </div>
+                            {panelModel && (
+                                <AssociativeDimInputs panel={panelModel} axis="height" />
+                            )}
                         </div>
                     </>
                 ) : isEdgeDims ? (

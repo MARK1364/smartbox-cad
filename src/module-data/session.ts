@@ -7,6 +7,7 @@ export const MODULE_SESSION_KEYS: Record<ModuleId, string> = {
     cnc: 'CAD_MODULE_CNC',
     draw: 'CAD_MODULE_DRAW',
     dag: 'CAD_MODULE_DAG',
+    smartparts: 'CAD_MODULE_SMARTPARTS',
 };
 
 export const MODULE_PAGES: Record<ModuleId, string> = {
@@ -15,6 +16,7 @@ export const MODULE_PAGES: Record<ModuleId, string> = {
     cnc: './cnc.html',
     draw: './draw.html',
     dag: './dag.html',
+    smartparts: './smartparts.html',
 };
 
 /** Nazwa okna CAD — powrót z CAM/modułów fokusuje tę kartę, bez nowego pustego projektu. */
@@ -26,6 +28,7 @@ export const MODULE_WINDOW_NAMES: Record<ModuleId, string> = {
     cnc: 'SmartPanelCNC',
     draw: 'SmartPanelDraw',
     dag: 'SmartPanelDAG',
+    smartparts: 'SmartPanelSmartParts',
 };
 
 export const PROJECT_SNAPSHOT_KEY = 'smartpanel_project_current_v3';
@@ -42,7 +45,7 @@ export const MODULE_SESSION_UPDATED_MSG = 'smartpanel:module-session-updated';
 /** CAD się odświeża / zamyka — wszystkie podstrony mają się zamknąć. */
 export const CAD_SHUTDOWN_MSG = 'smartpanel:cad-shutdown';
 
-const ALL_MODULES: ModuleId[] = ['report', 'nesting', 'cnc', 'draw', 'dag'];
+const ALL_MODULES: ModuleId[] = ['report', 'nesting', 'cnc', 'draw', 'dag', 'smartparts'];
 
 const LEGACY_NESTING_KEY = 'NESTING_SESSION_DATA';
 
@@ -299,7 +302,7 @@ export function returnToCad(module: ModuleId = 'cnc'): void {
         if (window.closed) return;
         // Przeglądarka nie pozwoliła zamknąć — wyczyść zakładkę, żeby nie zostać w CNC
         try {
-            document.title = 'Zamknięto — SmartPanel CNC';
+            document.title = 'Zamknięto — CNC';
             document.body.innerHTML =
                 '<div style="font:600 14px Segoe UI,sans-serif;color:#94a3b8;display:flex;height:100vh;align-items:center;justify-content:center;background:#212121;margin:0">'
                 + 'Wrócono do CAD. Możesz zamknąć tę kartę.'

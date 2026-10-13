@@ -52,6 +52,54 @@ Pliki: [doors-engine.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundati
 
 ---
 
+## 1a. Moduł: DRZWI SKOŚNE (`blok_skosne_drzwi`)
+
+Pliki: [skosne-doors-engine.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/skosne-doors-engine.ts), [skosne-doors-adapter.tsx](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/skosne-doors-adapter.tsx), [skosne-doors-drilling-builder.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/skosne-doors-drilling-builder.ts)
+
+Front **trapezowy**: spód prosty, góra pochylona — geometria tego samego typu co `korpus_skosny_lr`. Skrzydło jest jedno i jednokierunkowe.
+
+**Różnica względem `DOORS`:** zawias może być tylko na **krawędzi pionowej** trapezu. Druga krawędź jest pochylona, więc zawias po tamtej stronie jest fizycznie niemożliwy. `rodzaj_drzwi` nie jest więc dowolnym wyborem — niespójność z kątem dachu to błąd fail-fast.
+
+**Kąt dachu odczytywany bezpośrednio z korpusu:** nachylenie wieńca górnego (`dach_kat_deg`) odczytywane jest prosto z `TOP_PANEL` (`-lcs.rotation[2]`), a bazowa wysokość wnęki to światło na środku korpusu (`dims.height_mm`). Zero zgadywania i zero wpisywania wymiarów boków korpusu. Brak wieńca górnego w korpusie to błąd (fail-fast).
+
+| Parametr (nowy, czysty) | Aliasy wejściowe | Typ | Domyślnie | Jednostka / Format | Krótki opis |
+|---|---|---|---|---|---|
+| `rodzaj_drzwi` | `door_type`, `doorType` | `'LEFT' \| 'RIGHT'` | `'LEFT'` | enum | Strona zawiasu = strona krawędzi pionowej. `RIGHT` dla `dach_kat_deg >= 0`, `LEFT` dla `dach_kat_deg < 0` |
+| `grubosc_frontu_mm` | `thickness`, `front_thickness` | `number` | `18` (z reguł) | `mm` | Grubość płyty frontowej |
+| `dach_kat_deg` | `heightLeft`, `heightRight`, `wysokosc_lewy_mm`, `wysokosc_prawy_mm` | `number` | z `TOP_PANEL` | `deg` | Kąt nachylenia wieńca górnego korpusu względem poziomu |
+| `nalozenie_gora_mm` | `ov_top` | `number` | `14` | `mm` | Nałożenie mierzone **prostopadle do skosu**: podniesienie pionowe `·cos β`. Przy `0` góra frontu idealnie licuje się ze spodem wieńca |
+| `nalozenie_dol_mm` | `ov_bottom` | `number` | `15` | `mm` | Nałożenie **zawsze pionowe** — dół skrzydła jest prosty |
+| `nalozenie_lewe_mm` | `ov_left` | `number` | `16` | `mm` | Nałożenie na lewy bok korpusu |
+| `nalozenie_prawe_mm` | `ov_right` | `number` | `16` | `mm` | Nałożenie na prawy bok korpusu |
+| `domyslny_zawias_id` | `hinge_template`, `hingeTemplate` | `string` | `'BLUM_71B3550'` | catalog ID | Domyślne okucie (parowanie 71B/71T wspólne z `DOORS`) |
+| `uzyj_zawias_1` | `use_hinge_1` | `boolean` | `true` | bool | Zawias dolny |
+| `pozycja_zawias_1_mm` | `hinge_1_pos` | `number` | `120` | `mm` | Pozycja Z od spodu wnęki |
+| `uzyj_zawias_6` | `use_hinge_6` | `boolean` | `true` | bool | Zawias górny |
+| `pozycja_zawias_6_mm` | `hinge_6_pos` | `number` | `120` | `mm` | Pozycja Z **od góry** wnęki (od krawędzi pionowej) |
+
+Zawiasy 2–5 mają te same klucze co w module `DOORS` (`uzyj_zawias_2..5`, `pozycja_zawias_2..5_mm`), domyślnie wyłączone.
+
+## Wzór na wysokość skrzydła
+
+Wysokość wnęki w środku korpusu to `H_wnęki = dims.height_mm` (od góry wieńca dolnego do dołu wieńca górnego).
+Kąt nachylenia wieńca to `β = dach_kat_deg`.
+
+Krawędzie skrzydła w układzie środka wnęki:
+- `x_L = -W_wnęki / 2 - nalozenie_lewe_mm`
+- `x_P = +W_wnęki / 2 + nalozenie_prawe_mm`
+
+Wysokość skrzydła w punkcie `x`:
+```
+H_skrzydła(x) = H_wnęki + x · tan(β) + nalozenie_dol_mm + nalozenie_gora_mm · cos(β)
+```
+
+Gdy `nalozenie_gora_mm = 0`:
+Górna krawędź skrzydła dokładnie licuje się ze spodem wieńca górnego na całej szerokości (odchylenie 0.00 mm), niezależnie od wartości nałożeń bocznych.
+
+**Obrzeża:** okleinowane `-X`, `+X`, `-Y` (trzy proste krawędzie). Krawędź pochylona klasyfikuje się jako `+Y` w `classifyOutlineSegmentEdge` i **nie dostaje automatycznej okleiny** — obrzeże na krawędzi skośnej wymaga świadomego włączenia.
+
+---
+
 ## 2. Moduł: PÓŁKI (`blok_shelves`)
 
 Pliki: [shelves-engine.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/shelves-engine.ts), [shelves-adapter.tsx](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/shelves-adapter.tsx), [shelves-drilling-builder.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/shelves-drilling-builder.ts)
@@ -63,8 +111,8 @@ Pliki: [shelves-engine.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Founda
 | `odsuniecie_przod_mm` | `shelfOffsetFront`, `offset_front` | `number` | `10` | `mm` | Cofnięcie przedniej krawędzi półki od lica korpusu |
 | `luz_boczny_mm` | `shelfOffsetSide`, `offset_side` | `number` | `0.5` | `mm` | Luz montażowy z każdej strony (szerokość = W − 2×luz) |
 | `wzor_nawiercen` | `holePattern` | `'NONE' \| 'SINGLE' \| 'TRIPLE' \| 'ROW' \| 'SYSTEM_32'` | `'SINGLE'` | enum | Wzór otworów pod podpórki półki |
-| `odstep_otworow_przod_mm` | `frontInset`, `hole_offset_front` | `number` | `37` | `mm` | Odsunięcie przedniego rzędu otworów od frontu (standard 37 mm) |
-| `odstep_otworow_tyl_mm` | `backInset`, `hole_offset_back` | `number` | `37` | `mm` | Odsunięcie tylnego rzędu otworów od tyłu |
+| `odstep_otworow_przod_mm` | `frontInset`, `hole_offset_front` | `number` | `40` | `mm` | Odsunięcie przedniego rzędu otworów od frontu (domyślnie 40 mm) |
+| `odstep_otworow_tyl_mm` | `backInset`, `hole_offset_back` | `number` | `40` | `mm` | Odsunięcie tylnego rzędu otworów od tyłu (domyślnie 40 mm) |
 | `rozstaw_potrojny_z_mm` | `tripleZOffset`, `triple_z_offset` | `number` | `32` | `mm` | Rozstaw otworów regulacyjnych w pionie (dla `TRIPLE`) |
 | `otwory_przod_aktywne` | `frontHoles`, `front_holes_enabled` | `boolean` | `false` | bool | Dodatkowe podparcie na środku od przodu |
 | `przesuniecie_otworow_przod_x_mm` | `frontOffsetX`, `front_holes_offset_x` | `number` | `0` | `mm` | Przesunięcie X przedniego środkowego podparcia |

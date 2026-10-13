@@ -18,6 +18,12 @@ import { RemoveNodeCommand } from '../A1_core/commands/remove-node-command.js';
 import { TooltipManager } from '../A1_core/tooltip-manager.js';
 import { SmartModuleRegistry } from './core/smart-module-registry.js';
 import { ContainerModel } from '../A1_core/container-model.js';
+import { SMARTPART_HANGERS_GROUP_TYPE } from '../A5_smartparts/hangers/hanger-types.js';
+import { SMARTPART_HANDLE_TYPE } from './handles/handle-types.js';
+import { HandleCatalogBrowser } from './handles/handle-catalog-browser.js';
+import { updateSmartPartHangersGroup } from '../A5_smartparts/hangers/hanger-apply.js';
+import { customReferencesFromDetectedBay } from '../A5_smartparts/hangers/smartpart-bay-placement.js';
+import '../A5_smartparts/smartparts-ui.css';
 
 interface Props {
     projectModel: any;
@@ -27,6 +33,7 @@ function boxTypeFromParams(p: any): string {
     if (p?.boxType) return p.boxType;
     const typeToBox: Record<string, string> = {
         blok_doors: 'DOORS',
+        blok_skosne_drzwi: 'SKOSNE_DOORS',
         blok_corner_doors: 'CORNER_DOORS',
         blok_shelf: 'SHELF',
         blok_tubes: 'TUBES',
@@ -37,9 +44,45 @@ function boxTypeFromParams(p: any): string {
         blok_empty: 'EMPTY',
         blok_shelves: 'SHELVES',
         blok_led_external: 'LED_EXTERNAL',
-        blok_led_internal: 'LED_INTERNAL'
+        blok_led_internal: 'LED_INTERNAL',
+        blok_handle: 'HANDLES',
+        smartpart_handle: 'HANDLES'
     };
     return typeToBox[p?.type] || 'SHELVES';
+}
+
+/** AGD ma własną zakładkę — nie wciągaj do BlokiUI przez boxType: APPLIANCE. */
+function isApplianceContainer(model: any): boolean {
+    if (!model) return false;
+    const gp = model.generatorParams || {};
+    const role = String(model.role || '');
+    return role === 'APPLIANCE' || gp.type === 'smart_appliance' || gp.boxType === 'APPLIANCE';
+}
+
+/** Kontener Bloku LUB grupy zawieszek/uchwytów — spójna obsługa w BlokiUI. */
+function isBlokiOrHangersContainer(model: any): boolean {
+    if (!model || model.type !== 'container') return false;
+    if (isApplianceContainer(model)) return false;
+    const gp = model.generatorParams || {};
+    const role = String(model.role || '');
+    if (gp.type?.startsWith('blok_') || gp.boxType) return true;
+    if (gp.type === SMARTPART_HANGERS_GROUP_TYPE || role === 'SMARTPART_HANGERS') return true;
+    if (gp.type === SMARTPART_HANDLE_TYPE || role === 'SMARTPART_HANDLE') return true;
+    return false;
+}
+
+function isHangersGroupContainer(model: any): boolean {
+    if (!model) return false;
+    const gp = model.generatorParams || {};
+    const role = String(model.role || '');
+    return gp.type === SMARTPART_HANGERS_GROUP_TYPE || role === 'SMARTPART_HANGERS';
+}
+
+function isHandleContainer(model: any): boolean {
+    if (!model) return false;
+    const gp = model.generatorParams || {};
+    const role = String(model.role || '');
+    return gp.type === SMARTPART_HANDLE_TYPE || gp.type === 'blok_handle' || role === 'SMARTPART_HANDLE' || gp.boxType === 'HANDLES';
 }
 
 // ─── GŁÓWNY KOMPONENT: BlokiUI ────────────────────────────────────────────
@@ -54,9 +97,11 @@ export function BlokiUI({ projectModel }: Props) {
     const [disabledRefsState, setDisabledRefsState] = useState<any>({});
     const [isRefsOpen, setIsRefsOpen] = useState<boolean>(false);
     const [isPickerActive, setIsPickerActive] = useState<boolean>(false);
-    const [pickerMode, setPickerMode] = useState<'internal' | 'external'>('internal');
+    const [pickerMode, setPickerMode] = useState<'internal' | 'external' | 'panel'>('internal');
     const [pendingPickType, setPendingPickType] = useState<string | null>(null);
-    const [uiMode, setUiMode] = useState<'internal' | 'external'>('internal');
+    /** Katalog SmartParts (uchwyty/zawieszki) w panelu Bloki — niezależny od stanu pickera 3D. */
+    const [panelTool, setPanelTool] = useState<'HANDLES' | 'HANGERS' | null>(null);
+    const [uiMode, setUiMode] = useState<'internal' | 'external' | 'panel'>('internal');
 
     useEffect(() => {
         const ctrl = ContextManager.instance.blokiBayController;
@@ -64,10 +109,10 @@ export function BlokiUI({ projectModel }: Props) {
             const isAct = active !== undefined ? active : !!ctrl?.isPickerActive;
             setIsPickerActive(isAct);
             setPickerMode(mode !== undefined ? mode : (ctrl?.pickerMode || 'internal'));
-            if (!isAct) {
-                setPendingPickType(null);
-            } else if (ctrl?.pendingBlokType) {
+            if (isAct && ctrl?.pendingBlokType) {
                 setPendingPickType(ctrl.pendingBlokType);
+            } else if (!isAct) {
+                setPendingPickType(null);
             }
         };
         let unsub: (() => void) | undefined;
@@ -93,6 +138,7 @@ export function BlokiUI({ projectModel }: Props) {
         const hintsByBoxType: Record<string, { title: string; desc: string }> = {
             SHELVES: { title: 'Półki', desc: 'Przeciągnij na wnękę w korpusie.' },
             DOORS: { title: 'Drzwi', desc: 'Przeciągnij na wnękę w korpusie.' },
+            SKOSNE_DOORS: { title: 'Drzwi skośne', desc: 'Wpisz wysokości skośne wnęki (lewa/prawa).' },
             CORNER_DOORS: { title: 'Drzwi narożne', desc: 'L 90° — szer.×głęb. = dwa otwory.' },
             DRAWERS: { title: 'Szuflady', desc: 'Przeciągnij na wnękę w korpusie.' },
             DIVIDERS: { title: 'Przegrody', desc: 'Przeciągnij na wnękę w korpusie.' },
@@ -137,37 +183,59 @@ export function BlokiUI({ projectModel }: Props) {
             let active = doc.activeEntity;
 
             if (active && active.type !== 'container') {
-                const node = doc.findNode(active.id);
-                if (node && node.parent && node.parent.domainData?.type === 'container') {
+                let node = doc.findNode(active.id);
+                // Wspinaczka do kontenera Bloku / zawieszek (Part lub FEATURE → grupa)
+                while (node?.parent) {
                     const parentBox = node.parent.domainData;
-                    if (parentBox && (parentBox.generatorParams?.type?.startsWith('blok_') || parentBox.generatorParams?.boxType)) {
+                    if (parentBox && isBlokiOrHangersContainer(parentBox)) {
                         active = parentBox;
+                        break;
                     }
+                    node = node.parent;
+                }
+            } else if (active && active.type === 'container' && !isBlokiOrHangersContainer(active)) {
+                // Part zawieszki (SMARTPART_HANGER) → grupa nadrzędna
+                const node = doc.findNode(active.id);
+                const parentBox = node?.parent?.domainData;
+                if (parentBox && isBlokiOrHangersContainer(parentBox)) {
+                    active = parentBox;
                 }
             }
 
-            if (active && active.type === 'container' && (active.generatorParams?.type?.startsWith('blok_') || active.generatorParams?.boxType)) {
+            if (active && isBlokiOrHangersContainer(active)) {
                 setContainer(active);
-                const p = active.generatorParams;
-                const bType = boxTypeFromParams(p);
+                const p = active.generatorParams || {};
+                const hangers = isHangersGroupContainer(active);
+                const handle = isHandleContainer(active);
+                // Migracja starych zawieszek bez customReferences (schemat Bloku)
+                if (hangers && !p.customReferences && p.detectedBay) {
+                    p.customReferences = customReferencesFromDetectedBay(p.detectedBay);
+                    p.disabledReferences = p.disabledReferences || {};
+                    p.offsets = p.offsets || { xMin: 0, xMax: 0, yMin: 0, yMax: 0, zMin: 0, zMax: 0 };
+                    p.side_references_bloki = p.side_references_bloki || 'INNER';
+                    active.generatorParams = { ...p };
+                }
+                const bType = hangers ? 'HANGERS' : handle ? 'HANDLES' : boxTypeFromParams(p);
                 setBoxType(bType);
                 setCustomRefs(p.customReferences || {});
                 setDisabledRefsState(p.disabledReferences || {});
                 setOffsets(p.offsets || {});
                 setMaxHeight(p.maxHeight || 0);
 
-                if (bType === 'CORNER_DOORS') {
+                if (hangers || bType === 'CORNER_DOORS') {
                     setIsRefsOpen(true);
                 }
 
                 if (p.side_references_bloki === 'OUTER' || bType === 'PANELS') {
                     setUiMode('external');
-                } else if (bType !== 'EMPTY') {
+                } else if (handle) {
+                    setUiMode('panel');
+                } else if (bType !== 'EMPTY' || hangers) {
                     setUiMode('internal');
                 }
 
                 const scene = ContextManager.instance.viewport?.scene;
-                if (bType === 'EMPTY' && p.detectedBay && scene) {
+                if (!hangers && bType === 'EMPTY' && p.detectedBay && scene) {
                     highlightBayInScene(scene, p.detectedBay);
                 } else if (bType !== 'EMPTY') {
                     clearBayHighlight(scene);
@@ -180,11 +248,14 @@ export function BlokiUI({ projectModel }: Props) {
 
         ContextManager.instance.document = doc;
         const unsub = doc?.onDocumentChanged ? doc.onDocumentChanged(sync) : (doc?.onChange ? doc.onChange(sync) : null);
+        const onProps = () => sync();
+        window.document.addEventListener('bloki-properties-update', onProps);
         sync();
 
         return () => {
             if (typeof unsub === 'function') unsub();
             else if (doc?.offChange) doc.offChange(sync);
+            window.document.removeEventListener('bloki-properties-update', onProps);
             if (rafIdRef.current !== null) {
                 cancelAnimationFrame(rafIdRef.current);
                 rafIdRef.current = null;
@@ -212,7 +283,18 @@ export function BlokiUI({ projectModel }: Props) {
             ...updates
         };
 
-        update_bloki_core(container, projectModel);
+        const doc = projectModel?.document || projectModel || ContextManager.instance.document;
+        if (isHangersGroupContainer(container)) {
+            const node = doc?.findNode?.(container.id);
+            if (node) updateSmartPartHangersGroup(node, doc);
+            // Offset ściany musi przebudować Part + otwory (sam CAD bez rebuild = Part „stoi”, kontener się kurczy)
+            if (typeof doc?.notifyDocumentChanged === 'function') doc.notifyDocumentChanged();
+            if (typeof window !== 'undefined' && typeof (window as any).__rebuildGeometry === 'function') {
+                (window as any).__rebuildGeometry('SmartPart offset');
+            }
+        } else {
+            update_bloki_core(container, projectModel);
+        }
         
         if (typeof projectModel._notify === 'function') {
             projectModel._notify();
@@ -264,6 +346,7 @@ export function BlokiUI({ projectModel }: Props) {
             'EMPTY': 'blok_empty',
             'SHELVES': 'blok_shelves',
             'DOORS': 'blok_doors',
+            'SKOSNE_DOORS': 'blok_skosne_drzwi',
             'CORNER_DOORS': 'blok_corner_doors',
             'SHELF': 'blok_shelf',
             'DRAWERS': 'blok_drawers',
@@ -272,14 +355,17 @@ export function BlokiUI({ projectModel }: Props) {
             'TUBES': 'blok_tubes',
             'PANELS': 'blok_panels',
             'LED_EXTERNAL': 'blok_led_external',
-            'LED_INTERNAL': 'blok_led_internal'
+            'LED_INTERNAL': 'blok_led_internal',
+            'HANDLES': 'blok_handle',
+            'HANGERS': 'smartpart_hangers'
         };
         const selected = val in typeMap ? val as keyof typeof typeMap : 'EMPTY';
         triggerUpdateEx({ 
             boxType: selected,
             type: typeMap[selected],
             ...(selected === 'PANELS' ? { targetZone: 'FULL' } : {}),
-            ...(selected === 'DOORS' ? { rodzaj_drzwi: 'LEFT' } : {})
+            ...(selected === 'DOORS' ? { rodzaj_drzwi: 'LEFT' } : {}),
+            ...(selected === 'SKOSNE_DOORS' ? { rodzaj_drzwi: 'LEFT' } : {})
         } as BlokiGeneratorParamsPatch, true);
     }, [container, triggerUpdateEx]);
 
@@ -335,7 +421,7 @@ export function BlokiUI({ projectModel }: Props) {
         if (isCustom && !isDisabled) {
             showRefSideHint(sideKey as BlokiRefSideKey);
             if (appApi?.setStatus) {
-                appApi.setStatus(`Referencja [${sideLabels[sideKey] || sideKey}] jest przypisana. Aby wybrać inną, najpierw skasuj ją przyciskiem [✕].`, true);
+                appApi.setStatus(`Odniesienie [${sideLabels[sideKey] || sideKey}] jest przypisane. Aby wybrać inne, najpierw skasuj je przyciskiem [✕].`, true);
             }
             return;
         }
@@ -353,7 +439,7 @@ export function BlokiUI({ projectModel }: Props) {
         }
 
         if (appApi?.setStatus) {
-            appApi.setStatus(`Wskaż ścianę w oknie 3D dla referencji: ${sideLabels[sideKey]}...`, true);
+            appApi.setStatus(`Wskaż ścianę w oknie 3D dla odniesienia: ${sideLabels[sideKey]}...`, true);
         }
 
         ContextManager.instance.activeReferencePicker = {
@@ -459,7 +545,7 @@ export function BlokiUI({ projectModel }: Props) {
                 if (appApi?.setSelectionMode) appApi.setSelectionMode('object');
                 if (appApi?.setStatus) {
                     const mappedHint = resolvedFace.mapped ? ' (lico wewn.)' : '';
-                    appApi.setStatus(`Przypisano referencję ${sideLabels[sideKey]} -> ${partKey}${mappedHint}`, false);
+                    appApi.setStatus(`Przypisano odniesienie ${sideLabels[sideKey]} -> ${partKey}${mappedHint}`, false);
                 }
             }
         };
@@ -505,9 +591,9 @@ export function BlokiUI({ projectModel }: Props) {
                 zMin: 'Dół', zMax: 'Góra'
             };
             if (willBeDisabled) {
-                appApi.setStatus(`Skasowano referencję [${sideLabels[sideKey]}]. Kliknij w pusty przycisk, aby wskazać nową ścianę w 3D.`, true);
+                appApi.setStatus(`Skasowano odniesienie [${sideLabels[sideKey]}]. Kliknij w pusty przycisk, aby wskazać nową ścianę w 3D.`, true);
             } else {
-                appApi.setStatus(`Przywrócono domyślną referencję [${sideLabels[sideKey]}].`, false);
+                appApi.setStatus(`Przywrócono domyślne odniesienie [${sideLabels[sideKey]}].`, false);
             }
         }
     };
@@ -545,28 +631,28 @@ export function BlokiUI({ projectModel }: Props) {
         const isCustom = !!customRefs[sideKey];
         const isDisabled = !!disabledRefsState[sideKey];
         const isPicking = pickingField === sideKey;
-        const isCornerDoors = boxType === 'CORNER_DOORS';
 
         let bg = '#27272a';
         let border = '1px solid #3f3f46';
         let color = '#ffffff';
-        let labelText = isCustom ? customRefs[sideKey].partKey : (isCornerDoors ? 'Wybierz sciane 3d' : '');
+        // Pusty slot po skasowaniu — bez żółtego „Wybierz ścianę”.
+        let labelText = isCustom && !isDisabled ? customRefs[sideKey].partKey : '';
 
         if (isPicking) {
             bg = '#eab308';
             border = '1px solid #ca8a04';
             color = '#000000';
-            labelText = '🎯 Wskaż w 3D...';
-        } else if (isDisabled || (!isCustom && isCornerDoors)) {
+            labelText = '🎯 Wskaż ścianę…';
+        } else if (isDisabled || !isCustom) {
             bg = '#18181b';
-            border = '1px dashed #ca8a04';
-            color = '#facc15';
-            labelText = 'Wybierz sciane 3d';
+            border = '1px dashed #3f3f46';
+            color = '#71717a';
+            labelText = '';
         }
 
         return (
             <div
-                style={{ display: 'flex', flexDirection: 'column', gap: '3px', background: '#1c1c1f', padding: '4px 6px', borderRadius: '4px', border: '1px solid #27272a' }}
+                style={{ display: 'flex', flexDirection: 'column', gap: '3px', background: '#1c1c1f', padding: '4px 6px', borderRadius: '4px', border: '1px solid #27272a', minWidth: 0, overflow: 'hidden' }}
                 onMouseEnter={() => {
                     if (!isPicking) showRefSideHint(sideKey);
                 }}
@@ -576,15 +662,16 @@ export function BlokiUI({ projectModel }: Props) {
                     <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         {defaultName}
                     </span>
-                    {isCustom && <span style={{ fontSize: '9px', color: '#60a5fa', fontStyle: 'italic' }}>custom</span>}
                 </div>
-                <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '2px', alignItems: 'center', minWidth: 0, width: '100%' }}>
                     <button 
                         id={`sb-ref-slot-${sideKey.toLowerCase()}`}
                         onClick={() => startPicking(sideKey)}
-                        title={isPicking ? 'Wskaż ścianę w oknie 3D (kliknij, aby anulować)' : (isDisabled || (!isCustom && isCornerDoors)) ? `Kliknij, aby wybrać ścianę w oknie 3D dla: ${defaultName}` : `Referencja ${defaultName}: ${labelText}. (Aby wybrać inną, najpierw skasuj referencję przyciskiem [✕])`}
+                        title={isPicking ? 'Wskaż ścianę w oknie 3D (kliknij, aby anulować)' : (isDisabled || !isCustom) ? `Kliknij, aby wskazać ścianę w 3D: ${defaultName}` : `Odniesienie ${defaultName}: ${labelText}. (Aby wybrać inne, najpierw skasuj odniesienie przyciskiem [✕])`}
                         style={{ 
-                            flex: 1, 
+                            flex: '1 1 0',
+                            minWidth: 0,
+                            width: 0,
                             height: '22px',
                             padding: '1px 5px', 
                             background: bg, 
@@ -592,25 +679,25 @@ export function BlokiUI({ projectModel }: Props) {
                             color: color, 
                             borderRadius: '3px', 
                             fontSize: '11px', 
-                            cursor: 'pointer', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: '3px', 
+                            cursor: 'pointer',
                             overflow: 'hidden', 
                             textOverflow: 'ellipsis', 
                             whiteSpace: 'nowrap',
-                            fontWeight: isPicking || isCustom || isDisabled || (isCornerDoors && !isCustom) ? 'bold' : '500'
+                            textAlign: 'left',
+                            fontWeight: isPicking || (isCustom && !isDisabled) ? 'bold' : '500'
                         }}
                     >
-                        {labelText}
+                        {labelText || '\u00A0'}
                     </button>
                     <button 
                         id={`sb-ref-clear-${sideKey.toLowerCase()}`}
                         onClick={() => clearReference(sideKey)} 
-                        title={isDisabled ? `Przywróć domyślną referencję ${defaultName}` : `Skasuj referencję ${defaultName}`}
+                        title={isDisabled ? `Przywróć domyślne odniesienie ${defaultName}` : `Skasuj odniesienie ${defaultName}`}
                         style={{ 
+                            flex: '0 0 auto',
+                            width: '24px',
                             height: '22px',
-                            padding: '0 6px', 
+                            padding: 0, 
                             background: isDisabled ? '#27272a' : '#ef4444', 
                             border: '1px solid ' + (isDisabled ? '#3f3f46' : '#dc2626'), 
                             color: isDisabled ? '#a1a1aa' : '#ffffff', 
@@ -662,14 +749,15 @@ export function BlokiUI({ projectModel }: Props) {
 
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
-                {/* Dwa główne przyciski wyboru trybu Bloki */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                {/* Trzy główne przyciski wyboru trybu Bloki */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px' }}>
                     <button
                         type="button"
                         id="btnBlokiWewnatrz"
                         onClick={() => {
                             setUiMode('internal');
-                            if (isPickerActive && pickerMode === 'external') {
+                            setPanelTool(null);
+                            if (isPickerActive && pickerMode !== 'internal') {
                                 ContextManager.instance.blokiBayController?.stopPicker();
                             }
                         }}
@@ -683,25 +771,29 @@ export function BlokiUI({ projectModel }: Props) {
                         }}
                         onMouseLeave={() => TooltipManager.instance.clearActiveHint()}
                         style={{
-                            padding: '5px 6px',
+                            padding: '5px 4px',
                             background: uiMode === 'internal' ? '#1e40af' : '#27272a',
                             border: uiMode === 'internal' ? '2px solid #3b82f6' : '1px solid #3f3f46',
                             color: '#fff',
                             borderRadius: '6px',
-                            fontSize: '11px',
+                            fontSize: '10px',
                             fontWeight: 'bold',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '5px',
+                            gap: '4px',
                             boxShadow: uiMode === 'internal' ? '0 0 10px rgba(59, 130, 246, 0.35)' : 'none',
                             transition: 'all 0.15s ease'
                         }}
                         title="Przełącz na moduły wewnętrzne: półki, drzwi, szuflady, drążki, wieńce, przegrody, klapy"
                     >
-                        <span style={{ fontSize: '13px' }}>📥</span>
-                        <span>BLOKI WEWNĄTRZ</span>
+                        {/* Prostokąt + przerywany w środku */}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <rect x="3" y="3" width="18" height="18" rx="1" />
+                            <rect x="7.5" y="7.5" width="9" height="9" rx="0.5" strokeDasharray="2.2 1.8" />
+                        </svg>
+                        <span>WEWNĄTRZ</span>
                     </button>
 
                     <button
@@ -709,7 +801,8 @@ export function BlokiUI({ projectModel }: Props) {
                         id="btnBlokiNaZewnatrz"
                         onClick={() => {
                             setUiMode('external');
-                            if (isPickerActive && pickerMode === 'internal') {
+                            setPanelTool(null);
+                            if (isPickerActive && pickerMode !== 'external') {
                                 ContextManager.instance.blokiBayController?.stopPicker();
                             }
                         }}
@@ -723,32 +816,81 @@ export function BlokiUI({ projectModel }: Props) {
                         }}
                         onMouseLeave={() => TooltipManager.instance.clearActiveHint()}
                         style={{
-                            padding: '5px 6px',
+                            padding: '5px 4px',
                             background: uiMode === 'external' ? '#b45309' : '#27272a',
                             border: uiMode === 'external' ? '2px solid #f59e0b' : '1px solid #3f3f46',
                             color: '#fff',
                             borderRadius: '6px',
-                            fontSize: '11px',
+                            fontSize: '10px',
                             fontWeight: 'bold',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '5px',
+                            gap: '4px',
                             boxShadow: uiMode === 'external' ? '0 0 10px rgba(245, 158, 11, 0.35)' : 'none',
                             transition: 'all 0.15s ease'
                         }}
                         title="Przełącz na moduły zewnętrzne: blendy i obudowy korpusu"
                     >
-                        <span style={{ fontSize: '13px' }}>📦</span>
-                        <span>BLOKI NA ZEWNĄTRZ</span>
+                        {/* Prostokąt + przerywany na zewnątrz */}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <rect x="7.5" y="7.5" width="9" height="9" rx="0.5" />
+                            <rect x="3" y="3" width="18" height="18" rx="1" strokeDasharray="2.2 1.8" />
+                        </svg>
+                        <span>ZEWNĄTRZ</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        id="btnBlokiNaFormatce"
+                        onClick={() => {
+                            setUiMode('panel');
+                            if (isPickerActive && pickerMode !== 'panel') {
+                                ContextManager.instance.blokiBayController?.stopPicker();
+                            }
+                            // Wejdź w FORMATKA bez zamykania już otwartego katalogu uchwytów
+                        }}
+                        onMouseEnter={() => {
+                            TooltipManager.instance.setActiveHint({
+                                id: 'blok_mode_panel',
+                                title: 'BLOKI NA FORMATCE',
+                                description: 'Przełącz na moduły powierzchniowe (uchwyty na płytach frontów…).',
+                                category: 'bloki'
+                            });
+                        }}
+                        onMouseLeave={() => TooltipManager.instance.clearActiveHint()}
+                        style={{
+                            padding: '5px 4px',
+                            background: uiMode === 'panel' ? '#1e40af' : '#27272a',
+                            border: uiMode === 'panel' ? '2px solid #3b82f6' : '1px solid #3f3f46',
+                            color: '#fff',
+                            borderRadius: '6px',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px',
+                            boxShadow: uiMode === 'panel' ? '0 0 10px rgba(59, 130, 246, 0.35)' : 'none',
+                            transition: 'all 0.15s ease'
+                        }}
+                        title="Przełącz na moduły montowane na płycie/froncie: uchwyty"
+                    >
+                        {/* Sam prostokąt = formatka */}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                            <rect x="4" y="4" width="16" height="16" rx="1" />
+                        </svg>
+                        <span>FORMATKA</span>
                     </button>
                 </div>
 
-                {/* Paleta małych przycisków Drag & Drop poszczególnych modułów */}
+                {/* Paleta małych przycisków Drag & Drop — flex, wewn. / zewn. / formatka */}
                 <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: uiMode === 'internal' ? 'repeat(4, 1fr)' : '1fr',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignContent: 'flex-start',
                     gap: '4px',
                     background: '#18181b',
                     padding: '4px',
@@ -757,25 +899,34 @@ export function BlokiUI({ projectModel }: Props) {
                 }}>
                     {modules.map((mod) => {
                         const isCurrentActive = container && boxType === mod.id;
-                        const isCurrentPicking = isPickerActive && pendingPickType === mod.id;
+                        const isPanelSmartTool = mod.id === 'HANDLES' || mod.id === 'HANGERS';
+                        const isToolOpen = isPanelSmartTool && panelTool === mod.id;
+                        const isCurrentPicking = isPickerActive && (pendingPickType === mod.id || panelTool === mod.id);
 
                         let cardBg = '#222226';
                         let cardBorder = '#333338';
-                        if (isCurrentActive) {
-                            cardBg = uiMode === 'internal' ? '#1e3a8a' : '#78350f';
-                            cardBorder = uiMode === 'internal' ? '#60a5fa' : '#fbbf24';
-                        } else if (isCurrentPicking) {
-                            cardBg = '#14532d';
-                            cardBorder = '#4ade80';
+                        if (isToolOpen || isCurrentPicking) {
+                            cardBg = isPanelSmartTool ? '#1e3a8a' : '#14532d';
+                            cardBorder = isPanelSmartTool ? '#60a5fa' : '#4ade80';
+                        } else if (isCurrentActive && !isPanelSmartTool) {
+                            cardBg = uiMode === 'external' ? '#78350f' : '#1e3a8a';
+                            cardBorder = uiMode === 'external' ? '#fbbf24' : '#60a5fa';
                         }
+
+                        const isDirectDrag = !isPanelSmartTool;
 
                         return (
                             <div
                                 key={mod.id}
                                 id={`cardBlokiMod_${mod.id}`}
                                 data-id={`bloki-card-${mod.id.toLowerCase()}`}
-                                draggable={true}
+                                data-rec={`bloki-card-${mod.id.toLowerCase()}`}
+                                draggable={isDirectDrag}
                                 onDragStart={(e) => {
+                                    if (!isDirectDrag) {
+                                        e.preventDefault();
+                                        return;
+                                    }
                                     e.dataTransfer.setData('application/bloki-template', JSON.stringify({ boxType: mod.id, category: uiMode }));
                                     const ctrl = ContextManager.instance.blokiBayController;
                                     if (ctrl) {
@@ -784,24 +935,51 @@ export function BlokiUI({ projectModel }: Props) {
                                     }
                                 }}
                                 onDragEnd={() => {
-                                    ContextManager.instance.blokiBayController?.endDrag();
+                                    if (isDirectDrag) {
+                                        ContextManager.instance.blokiBayController?.endDrag();
+                                    }
                                 }}
                                 onClick={() => {
+                                    // Uchwyty / zawieszki = katalog SmartParts w panelu edycji (nie przełączaj typu Bloku)
+                                    if (mod.id === 'HANDLES' || mod.id === 'HANGERS') {
+                                        setUiMode('panel');
+                                        const ctrl = ContextManager.instance.blokiBayController;
+                                        if (panelTool === mod.id) {
+                                            ctrl?.stopPicker();
+                                            setPanelTool(null);
+                                            setPendingPickType(null);
+                                            return;
+                                        }
+                                        setPanelTool(mod.id);
+                                        setPendingPickType(mod.id);
+                                        ctrl?.startPicker(mod.id, 'panel');
+                                        return;
+                                    }
+                                    setPanelTool(null);
                                     if (container) {
                                         handleSelectModule(mod.id);
                                     } else {
                                         const ctrl = ContextManager.instance.blokiBayController;
                                         if (ctrl) {
-                                            ctrl.togglePicker(mod.id, uiMode);
-                                            setPendingPickType(ctrl.isPickerActive ? mod.id : null);
+                                            if (isPickerActive && pendingPickType === mod.id) {
+                                                ctrl.stopPicker();
+                                                setPendingPickType(null);
+                                            } else {
+                                                ctrl.startPicker(mod.id, uiMode);
+                                                setPendingPickType(mod.id);
+                                            }
                                         }
                                     }
                                 }}
                                 onMouseEnter={() => {
-                                    const isExternal = uiMode === 'external' || mod.id === 'PANELS';
-                                    const text = isExternal 
-                                        ? 'Przeciągnij i upuść na zewnątrz korpusu.' 
-                                        : 'Przeciągnij na wnękę w korpusie.';
+                                    let text = 'Przeciągnij na wnękę w korpusie.';
+                                    if (uiMode === 'external' || mod.id === 'PANELS') {
+                                        text = 'Przeciągnij i upuść na zewnątrz korpusu.';
+                                    } else if (uiMode === 'panel') {
+                                        text = mod.id === 'HANDLES'
+                                            ? 'Kliknij, aby otworzyć katalog uchwytów i wskazać formatkę w 3D.'
+                                            : 'Kliknij, aby otworzyć zawieszki i wskazać pozycję w 3D.';
+                                    }
                                     TooltipManager.instance.setActiveHint({
                                         id: `blok_mod_${mod.id}`,
                                         title: mod.label,
@@ -817,31 +995,39 @@ export function BlokiUI({ projectModel }: Props) {
                                     flexDirection: 'column',
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    flex: '1 1 calc(50% - 2px)',
+                                    minWidth: '120px',
+                                    maxWidth: '100%',
+                                    boxSizing: 'border-box',
                                     padding: '4px 2px 3px 2px',
                                     background: cardBg,
                                     border: `1px solid ${cardBorder}`,
                                     borderRadius: '5px',
-                                    cursor: 'grab',
+                                    cursor: isDirectDrag ? 'grab' : 'pointer',
                                     userSelect: 'none',
                                     position: 'relative',
                                     transition: 'all 0.15s ease',
-                                    boxShadow: isCurrentActive ? '0 0 8px rgba(59, 130, 246, 0.4)' : (isCurrentPicking ? '0 0 8px rgba(74, 222, 128, 0.4)' : 'none'),
+                                    boxShadow: (isToolOpen || isCurrentPicking)
+                                        ? (isPanelSmartTool ? '0 0 8px rgba(59, 130, 246, 0.45)' : '0 0 8px rgba(74, 222, 128, 0.4)')
+                                        : (isCurrentActive ? '0 0 8px rgba(59, 130, 246, 0.4)' : 'none'),
                                     minHeight: '42px'
                                 }}
-                                title={`${mod.label}: ${mod.desc}\n• Przeciągnij i upuść na wnękę w 3D\n• Lub kliknij, aby ${container ? 'przełączyć ten Blok na ' + mod.label : 'wskazać wnękę w 3D'}`}
+                                title={`${mod.label}: ${mod.desc}\n• ${isDirectDrag ? 'Przeciągnij i upuść na wnękę w 3D' : 'Kliknij, aby otworzyć listę elementów'}`}
                             >
-                                <div style={{ color: isCurrentActive ? '#fff' : (isCurrentPicking ? '#4ade80' : '#93c5fd'), marginBottom: '0px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    {mod.icon(isCurrentActive ? '#fff' : (isCurrentPicking ? '#4ade80' : '#93c5fd'))}
+                                <div style={{ color: (isToolOpen || isCurrentPicking) ? (isPanelSmartTool ? '#93c5fd' : '#4ade80') : (isCurrentActive ? '#fff' : '#93c5fd'), marginBottom: '0px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {mod.icon((isToolOpen || isCurrentPicking) ? (isPanelSmartTool ? '#93c5fd' : '#4ade80') : (isCurrentActive ? '#fff' : '#93c5fd'))}
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', marginTop: '2px' }}>
-                                    <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
-                                            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
-                                            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
-                                            <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
-                                        </svg>
-                                    </span>
+                                    {mod.id !== 'HANDLES' && mod.id !== 'HANGERS' && (
+                                        <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                                <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                            </svg>
+                                        </span>
+                                    )}
                                     <span style={{ fontSize: '10.5px', fontWeight: isCurrentActive ? 'bold' : 500, color: isCurrentActive ? '#fff' : 'var(--text-secondary, #aaa)', textAlign: 'center', lineHeight: 1.1 }}>
                                         {mod.label}
                                     </span>
@@ -851,38 +1037,68 @@ export function BlokiUI({ projectModel }: Props) {
                                         ✓ Aktywny
                                     </span>
                                 )}
-                                {isCurrentPicking && !isCurrentActive && (
-                                    <span style={{ fontSize: '8px', color: '#4ade80', marginTop: '1px', fontWeight: 'bold' }}>
-                                        Wskaż 3D
+                                {(isToolOpen || isCurrentPicking) && (
+                                    <span style={{ fontSize: '8px', color: isPanelSmartTool ? '#93c5fd' : '#4ade80', marginTop: '1px', fontWeight: 'bold' }}>
+                                        {isPanelSmartTool ? 'Katalog' : 'Wskaż 3D'}
                                     </span>
                                 )}
                             </div>
                         );
                     })}
                 </div>
+
+                {/* Katalog SmartParts: filtry + wybór uchwytów (panel edycji Bloki) */}
+                {panelTool === 'HANDLES' && (
+                    <div style={{ marginTop: '4px', width: '100%' }}>
+                        <HandleCatalogBrowser
+                            onSelectHandle={() => {
+                                setUiMode('panel');
+                                setPanelTool('HANDLES');
+                                setPendingPickType('HANDLES');
+                                ContextManager.instance.blokiBayController?.startPicker('HANDLES', 'panel');
+                            }}
+                        />
+                    </div>
+                )}
+
+                {/* Podpowiedź / widok dla modułu ZAWIESZKI */}
+                {panelTool === 'HANGERS' && (
+                    <div style={{
+                        marginTop: '4px',
+                        padding: '10px',
+                        background: '#18181b',
+                        border: '1px solid #27272a',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        color: '#d4d4d8'
+                    }}>
+                        <div style={{ fontWeight: 'bold', color: '#38bdf8', marginBottom: '4px' }}>
+                            Zawieszki meblowe (SmartPart)
+                        </div>
+                        <div style={{ opacity: 0.8, fontSize: '11px', lineHeight: 1.4 }}>
+                            Przeciągnij zawieszki na szafkę lub wskaż pozycję montażową, aby dodać okucia i nawierty.
+                        </div>
+                    </div>
+                )}
+
+                {/* Podpowiedź domyślna dla trybu FORMATKA gdy żaden katalog nie jest otwarty */}
+                {uiMode === 'panel' && !panelTool && (
+                    <div style={{
+                        marginTop: '4px',
+                        padding: '10px',
+                        background: '#18181b',
+                        border: '1px dashed #3f3f46',
+                        borderRadius: '6px',
+                        textAlign: 'center',
+                        color: '#71717a',
+                        fontSize: '11px'
+                    }}>
+                        Kliknij <strong>Uchwyty</strong>, aby otworzyć filtry i katalog w panelu edycji, potem wskaż formatkę w 3D.
+                    </div>
+                )}
             </div>
         );
     };
-
-    if (!container) {
-        return (
-            <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                background: '#121214',
-                color: '#fff',
-                fontSize: '13px',
-                width: '100%',
-                padding: '6px 8px 32px 8px',
-                boxSizing: 'border-box'
-            }}>
-                {renderModulePalette()}
-            </div>
-        );
-    }
-
-    const isExternalContainer = container?.generatorParams?.side_references_bloki === 'OUTER' || boxType === 'PANELS';
 
     return (
         <div style={{
@@ -898,163 +1114,23 @@ export function BlokiUI({ projectModel }: Props) {
         }}>
             {renderModulePalette()}
 
-            <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '6px', overflow: 'hidden' }}>
-                <div 
-                    id="sb-accordion-refs"
-                    onClick={() => setIsRefsOpen(!isRefsOpen)}
-                    style={{ 
-                        background: '#3b82f6', 
-                        padding: '8px 10px', 
-                        color: '#fff', 
-                        fontWeight: 'bold', 
-                        fontSize: '13px',
+            {container && boxType === 'EMPTY' && (
+                <button
+                    type="button"
+                    onClick={handleDeleteEmptyBloki}
+                    style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        color: '#f87171',
+                        borderRadius: '4px',
+                        padding: '6px 12px',
+                        fontSize: '11px',
                         cursor: 'pointer',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        userSelect: 'none'
                     }}
                 >
-                    <span>Ściany referencyjne</span>
-                    <span style={{ fontSize: '12px', color: '#93c5fd' }}>
-                        {isRefsOpen ? '▲' : '▼'}
-                    </span>
-                </div>
-
-                {isRefsOpen && (
-                    <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4d4d8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            Referencje
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {renderRefSlot('xMin', 'Bok Lewy')}
-                            {renderRefSlot('xMax', 'Bok Prawy')}
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {renderRefSlot('yMin', 'Przód')}
-                            {renderRefSlot('yMax', 'Tył')}
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {renderRefSlot('zMin', 'Dół')}
-                            {renderRefSlot('zMax', 'Góra')}
-                        </div>
-
-                        <div style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center', 
-                            marginTop: '4px',
-                            padding: '6px 8px',
-                            background: (disabledRefsState.zMin || disabledRefsState.zMax) ? '#451a03' : '#18181b',
-                            border: '1px solid ' + ((disabledRefsState.zMin || disabledRefsState.zMax) ? '#f59e0b' : '#27272a'),
-                            borderRadius: '4px'
-                        }}>
-                            <span style={{ 
-                                color: (disabledRefsState.zMin || disabledRefsState.zMax) ? '#fbbf24' : '#d4d4d8', 
-                                fontSize: '12px',
-                                fontWeight: (disabledRefsState.zMin || disabledRefsState.zMax) ? 'bold' : 'normal'
-                            }}>
-                                {disabledRefsState.zMin && !disabledRefsState.zMax ? 'Wysokość H (od góry):' : (!disabledRefsState.zMin && disabledRefsState.zMax ? 'Wysokość H (od dołu):' : 'Wysokość H:')}
-                            </span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <input 
-                                    type="number" 
-                                    value={maxHeight} 
-                                    onChange={(e) => {
-                                        const raw = e.target.value;
-                                        setMaxHeight(raw);
-                                        if (raw !== '-' && raw !== '' && !isNaN(Number(raw))) {
-                                            triggerUpdateEx({ maxHeight: parseFloat(raw) });
-                                        }
-                                    }}
-                                    onBlur={() => {
-                                        const val = parseFloat(String(maxHeight)) || 0;
-                                        setMaxHeight(val);
-                                        triggerUpdateEx({ maxHeight: val });
-                                    }}
-                                    style={{ 
-                                        width: '100px', 
-                                        padding: '3px 6px', 
-                                        background: '#27272a', 
-                                        border: '1px solid ' + ((disabledRefsState.zMin || disabledRefsState.zMax) ? '#f59e0b' : '#3f3f46'), 
-                                        color: '#fff', 
-                                        borderRadius: '3px', 
-                                        textAlign: 'right', 
-                                        fontSize: '11px',
-                                        fontWeight: (disabledRefsState.zMin || disabledRefsState.zMax) ? 'bold' : 'normal'
-                                    }} 
-                                />
-                                <span style={{ color: '#a1a1aa', fontSize: '10px' }}>mm</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Sekcja konfiguracji aktywnego modułu */}
-            <div style={{ background: '#18181b', border: '1px solid #27272a', padding: '10px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#e4e4e7', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>∨</span> {(() => {
-                        if (boxType === 'EMPTY') return 'Wybór modułu';
-                        const p = SmartModuleRegistry.get(boxType);
-                        return p?.meta.label || boxType;
-                    })()}
-                </div>
-
-                {boxType === 'EMPTY' && (
-                    <div style={{ padding: '8px', background: '#222225', borderRadius: '6px', border: '1px dashed #3f3f46', display: 'flex', justifyContent: 'center' }}>
-                        <button
-                            type="button"
-                            onClick={handleDeleteEmptyBloki}
-                            style={{
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                border: '1px solid rgba(239, 68, 68, 0.4)',
-                                color: '#f87171',
-                                borderRadius: '4px',
-                                padding: '6px 12px',
-                                fontSize: '11px',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                transition: 'all 0.15s ease'
-                            }}
-                            title="Usuń ten pusty Blok z drzewa projektu"
-                        >
-                            <span>✕</span> Usuń ten pusty Blok
-                        </button>
-                    </div>
-                )}
-                {(() => {
-                    if (boxType === 'EMPTY') return null;
-                    const plugin = SmartModuleRegistry.get(boxType);
-                    const isEnabled = SmartModuleRegistry.isModuleEnabled(boxType);
-                    if (plugin && isEnabled) {
-                        const SubComponent = plugin.UIComponent;
-                        return <SubComponent container={container} triggerUpdate={triggerUpdateEx} />;
-                    }
-                    const currentParams = container?.generatorParams || {};
-                    return (
-                        <div style={{ padding: '10px', background: '#222225', borderRadius: '6px', border: '1px dashed #eab308', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#fde047' }}>
-                                ⚠️ Moduł <strong>{boxType}</strong> jest niedostępny lub wyłączony w tym wariancie (Read-Only).
-                            </div>
-                            <div style={{ fontSize: '10px', color: '#a1a1aa', background: '#18181b', padding: '6px', borderRadius: '4px', fontFamily: 'monospace' }}>
-                                {Object.keys(currentParams).length > 0 ? (
-                                    Object.entries(currentParams).map(([k, v]) => (
-                                        <div key={k}>{k}: {String(v)}</div>
-                                    ))
-                                ) : (
-                                    <div>Brak zapisanych parametrów kontenera.</div>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })()}
-            </div>
+                    Usuń ten pusty Blok
+                </button>
+            )}
         </div>
     );
 }

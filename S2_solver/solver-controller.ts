@@ -14,7 +14,8 @@ import { RESIDUAL_TOLERANCE, solveWithConflictResolution } from './core/solver-c
 import { ConstraintDragGroup } from './constraint-drag-group.js';
 import type { ConstraintStore } from './constraint-store.js';
 import { buildSolverInput, collectTransformDeltas, computeReferenceLockedIds, getNodeGroundingPriority } from './solver-bridge.js';
-import { SolveConstraintsCommand } from './solve-constraints-command.js';
+import { SolveConstraintsCommand, type NodeTransformDelta } from './solve-constraints-command.js';
+import type { Command } from '../A1_core/commands/command.js';
 import type { SolverConstraint } from './constraint-types.js';
 import { constraintNodeIds } from './constraint-types.js';
 import { validateConstraints, type ConstraintValidationIssue } from './constraint-validation.js';
@@ -112,7 +113,10 @@ export class SolverController {
      * Natychmiastowy przebieg solvera. Zwraca true, gdy coś zostało przesunięte.
      * `nodeIds` zawęża solve do spójnego komponentu (po gizmo); brak = cały dokument.
      */
-    solveNow(scope?: { nodeIds?: Set<string> }): boolean {
+    solveNow(scope?: {
+        nodeIds?: Set<string>;
+        onCommand?: (deltas: NodeTransformDelta[]) => Command | null;
+    }): boolean {
         if (this._debounceTimer !== null) {
             clearTimeout(this._debounceTimer);
             this._debounceTimer = null;
@@ -180,7 +184,12 @@ export class SolverController {
             }
 
             const deltas = collectTransformDeltas(input);
-            if (deltas.length > 0) {
+            if (scope?.onCommand) {
+                const cmd = scope.onCommand(deltas);
+                if (cmd) {
+                    history.execute(cmd);
+                }
+            } else if (deltas.length > 0) {
                 const command = new SolveConstraintsCommand(deltas);
                 if (!command.isEmpty) {
                     history.execute(command);
@@ -214,7 +223,14 @@ export class SolverController {
             this.requestSolve();
             return;
         }
-        if (event.type === 'transform' || event.type === 'dimensions') {
+        if (event.type === 'dimensions') {
+            this.requestSolve();
+            return;
+        }
+        if (event.type === 'transform') {
+            if (this._history?.isExecuting) {
+                return;
+            }
             this.requestSolve();
         }
     }

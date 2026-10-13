@@ -110,6 +110,7 @@ function makeGroup(
         placementRule: 'standard_od_lewej',
         firstOffsetMm: 32,
         positionsActive: connectors.map(() => true),
+        positionTypes: connectors.map((c) => c.type),
         faceVertsLocalMm: [],
         faceNormalLocalMm: faceNormal,
         connectors,

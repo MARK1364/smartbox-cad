@@ -29,7 +29,7 @@ export function validatePanelDimensionsNm(
         typeof thickness !== 'number' || !Number.isFinite(thickness) || thickness <= 0
     ) {
         throw new Error(
-            `[${context}] Nieprawidłowe wymiary formatki ${model?.id || model?.name || 'nieznana'}: ` +
+            `[${context}] Nieprawidłowe wymiary formatki ${model?.id || 'panel'}: ` +
             `width=${width}, height=${height}, thickness=${thickness} (nm). ` +
             `Wszystkie wymiary muszą być dodatnimi liczbami (zabronione domyślne 600/18 mm).`
         );

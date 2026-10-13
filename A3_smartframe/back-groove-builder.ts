@@ -20,6 +20,8 @@ export interface PanelState {
     localMatrix: Mat4;
     zonePrefix?: string;
     backMarginsNm?: { left?: number; right?: number; top?: number; bottom?: number };
+    /** Mapowanie LCS z silnika — tylko do detekcji TRAVERSE_V (Y←z, Z←y). */
+    lcsMapping?: { X?: string; Y?: string; Z?: string };
 }
 
 const EPS = 50_000; // 0.05 mm
@@ -268,6 +270,12 @@ function horizontalMeshVPointsToWorldBack(target: PanelState): boolean {
     return cadZ.y > 0.5;
 }
 
+function horizontalMeshUPointsToWorldRight(target: PanelState): boolean {
+    const { rotation } = target.localMatrix.decompose();
+    const cadX = rotation.rotateVec3(new Vec3(1, 0, 0));
+    return cadX.x > 0.5;
+}
+
 function grooveOnHorizontal(
     back: PanelState,
     target: PanelState,
@@ -279,8 +287,8 @@ function grooveOnHorizontal(
     const faceD = target.dim_nm.y;
     const backTh = back.dim_nm.z;
     const axis = backThicknessAxis(back);
-    // v=0 przy tyle tylko gdy CAD +Z idzie w przód (−Y) — stary LCS dołu
     const vZeroAtBack = !horizontalMeshVPointsToWorldBack(target);
+    const uZeroAtRight = !horizontalMeshUPointsToWorldRight(target);
 
     let u_nm: number;
     let width_nm: number;
@@ -288,7 +296,6 @@ function grooveOnHorizontal(
     let length_nm: number;
 
     if (axis === 'Y') {
-        // PLECY_Y: pasek równoległy do X, przy +Y
         u_nm = backBox.x0 - (t.x - faceW / 2);
         width_nm = backBox.x1 - backBox.x0;
         length_nm = backTh;
@@ -298,7 +305,6 @@ function grooveOnHorizontal(
             v_nm = backBox.y0 - (t.y - faceD / 2);
         }
     } else {
-        // PLECY_X: pasek równoległy do Y, przy −X
         const midX = (backBox.x0 + backBox.x1) / 2;
         u_nm = midX - backTh / 2 - (t.x - faceW / 2);
         width_nm = backTh;
@@ -310,7 +316,12 @@ function grooveOnHorizontal(
             : y0 - (t.y - faceD / 2);
     }
 
+    if (uZeroAtRight) {
+        u_nm = faceW - u_nm - width_nm;
+    }
+
     const clipped = clipGroove(u_nm, v_nm, width_nm, length_nm, faceW, faceD);
+
     if (!clipped) return null;
 
     return {
@@ -319,6 +330,110 @@ function grooveOnHorizontal(
             type: 'groove',
             face: '+Z',
             params: { ...clipped, depth_nm: Math.min(depth_nm, target.dim_nm.z) }
+        }
+    };
+}
+
+/** TRAVERSE_V: LCS Y←z, Z←y (rotacja [180,0,0] — nie zmieniać). */
+function isTraverseVTop(panel: PanelState): boolean {
+    const role = roleUpper(panel);
+    if (!role.includes('TOP') && !role.includes('WIENIEC_G')) return false;
+    const m = panel.lcsMapping;
+    if (!m) return false;
+    const y = String(m.Y || '').replace(/[+-]/g, '').toUpperCase();
+    const z = String(m.Z || '').replace(/[+-]/g, '').toUpperCase();
+    return y === 'Z' && z === 'Y';
+}
+
+/** Tylny trawers = T2 w id albo loc.y > 0. */
+function isRearTraverseV(panel: PanelState): boolean {
+    if (!isTraverseVTop(panel)) return false;
+    const id = String(panel.id || '');
+    if (/T2|_T2/i.test(id)) return true;
+    return translationOf(panel).y > 0;
+}
+
+/**
+ * OBB „stojący” tylko do styku z plecami: dim.y → Z, dim.z → Y.
+ * Nie zmienia horizontalHostBox dla FULL / TRAVERSE_H / boczków.
+ */
+function standingTraverseVHostBox(panel: PanelState): WorldBox {
+    const t = translationOf(panel);
+    const w = panel.dim_nm.x;
+    const h = panel.dim_nm.y;
+    const th = panel.dim_nm.z;
+    return {
+        x0: t.x - w / 2, x1: t.x + w / 2,
+        y0: t.y - th / 2, y1: t.y + th / 2,
+        z0: t.z - h / 2, z1: t.z + h / 2
+    };
+}
+
+function isGrooveOpenToEdge(
+    u_nm: number,
+    v_nm: number,
+    width_nm: number,
+    length_nm: number,
+    faceW: number,
+    faceH: number
+): boolean {
+    return (
+        u_nm <= EPS ||
+        v_nm <= EPS ||
+        u_nm + width_nm >= faceW - EPS ||
+        v_nm + length_nm >= faceH - EPS
+    );
+}
+
+/**
+ * Wcięcie tylko na tylnym TRAVERSE_V (rotacji nie zmieniać: [180,0,0]).
+ * OUTER FACE_Z_MINUS — ściana W×100; V przy przeciwległej krawędzi lica;
+ * szczelina V = zakładka (11), głębokość = grubość pleców (3).
+ */
+function grooveOnRearTraverseV(
+    back: PanelState,
+    target: PanelState,
+    backBox: WorldBox,
+    depth_nm: number
+): GrooveIntent | null {
+    const t = translationOf(target);
+    const faceW = target.dim_nm.x;
+    const faceH = target.dim_nm.y; // 100 mm
+    const maxDepth = target.dim_nm.z; // 18 mm
+    const backTh = back.dim_nm.z;
+    const axis = backThicknessAxis(back);
+
+    let u_nm: number;
+    let width_nm: number;
+    if (axis === 'Y') {
+        u_nm = backBox.x0 - (t.x - faceW / 2);
+        width_nm = backBox.x1 - backBox.x0;
+    } else {
+        const midX = (backBox.x0 + backBox.x1) / 2;
+        u_nm = midX - backTh / 2 - (t.x - faceW / 2);
+        width_nm = backTh;
+    }
+
+    const length_nm = Math.min(depth_nm, faceH);
+    const cutDepth_nm = Math.min(backTh, maxDepth);
+    const v_nm = faceH - length_nm;
+
+    const clipped = clipGroove(u_nm, v_nm, width_nm, length_nm, faceW, faceH);
+    if (!clipped) return null;
+
+    const open = isGrooveOpenToEdge(
+        clipped.u_nm, clipped.v_nm, clipped.width_nm, clipped.length_nm, faceW, faceH
+    );
+    return {
+        targetNodeId: target.id,
+        feature: {
+            type: 'groove',
+            face: '-Z',
+            params: {
+                ...clipped,
+                depth_nm: cutDepth_nm,
+                ...(open ? { isEdgeNotch: true } : {})
+            }
         }
     };
 }
@@ -338,10 +453,22 @@ export function buildBackGrooves(panels: PanelState[]): GrooveIntent[] {
             const targetZone = target.zonePrefix || '';
             if (targetZone !== '' && backZone !== '' && targetZone !== backZone) continue;
 
+            const depth_nm = pickMarginNm(back, target);
+
+            if (isRearTraverseV(target)) {
+                const hostBox = standingTraverseVHostBox(target);
+                if (!boxesOverlap(backBox, hostBox)) continue;
+                const intent = grooveOnRearTraverseV(back, target, backBox, depth_nm);
+                if (intent) intents.push(intent);
+                continue;
+            }
+
+            // Przedni TRAVERSE_V: bez wpustu (nie styka się z plecami)
+            if (isTraverseVTop(target)) continue;
+
             const hostBox = hostWorldBox(target);
             if (!boxesOverlap(backBox, hostBox)) continue;
 
-            const depth_nm = pickMarginNm(back, target);
             const intent = isHorizontalHost(roleUpper(target))
                 ? grooveOnHorizontal(back, target, backBox, depth_nm)
                 : grooveOnVertical(back, target, backBox, depth_nm);

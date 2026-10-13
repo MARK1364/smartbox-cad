@@ -580,9 +580,9 @@
     "de": "Platte"
   },
   "float.edit_panel_title": {
-    "pl": "Edycja formatki: {name}",
-    "en": "Panel edit: {name}",
-    "de": "Platte bearbeiten: {name}"
+    "pl": "{name}",
+    "en": "{name}",
+    "de": "{name}"
   },
   "float.close": {
     "pl": "Zamknij (Esc)",
@@ -590,9 +590,14 @@
     "de": "Schließen (Esc)"
   },
   "float.subtitle_dims": {
-    "pl": "Wymiary i asocjacje",
-    "en": "Dimensions and associatives",
-    "de": "Maße und Assoziative"
+    "pl": "Relacje, wymiary i odniesienia gabarytu",
+    "en": "Relations, dimensions and size references",
+    "de": "Relationen, Maße und Größenbezüge"
+  },
+  "float.section_dims": {
+    "pl": "Wymiary",
+    "en": "Dimensions",
+    "de": "Maße"
   },
   "float.subtitle_side": {
     "pl": "Strona:",
@@ -615,9 +620,9 @@
     "de": "Rand rechts (P)"
   },
   "float.default_op": {
-    "pl": "Przetłoczenie / Wycięcie",
-    "en": "Emboss / Cutout",
-    "de": "Prägung / Ausschnitt"
+    "pl": "Przetłoczenie",
+    "en": "Emboss",
+    "de": "Prägung"
   },
   "float.dim_w": {
     "pl": "Szerokość (W)",
@@ -1059,6 +1064,11 @@
     "en": "Delete container",
     "de": "Container löschen"
   },
+  "tree.delete_box": {
+    "pl": "Usuń obiekt",
+    "en": "Delete object",
+    "de": "Objekt löschen"
+  },
   "tree.no_dims": {
     "pl": "Brak wymiarów",
     "en": "No dimensions",
@@ -1469,6 +1479,11 @@
     "en": "Export to STL",
     "de": "STL-Export"
   },
+  "app.menu.smartparts_studio": {
+    "pl": "SmartParts Studio…",
+    "en": "SmartParts Studio…",
+    "de": "SmartParts Studio…"
+  },
   "app.menu.saas_cloud": {
     "pl": "Moje projekty w chmurze (SaaS Cloud)...",
     "en": "My cloud projects (SaaS Cloud)...",
@@ -1500,9 +1515,9 @@
     "de": "Startseite / Präsentation (Landing Page)..."
   },
   "app.menu.brand": {
-    "pl": "SmartPanel CAD 3D",
-    "en": "SmartPanel CAD 3D",
-    "de": "SmartPanel CAD 3D"
+    "pl": "Bloki CAD",
+    "en": "Bloki CAD",
+    "de": "Bloki CAD"
   },
   "app.menu.undo": {
     "pl": "Cofnij (Ctrl+Z)",
@@ -1545,9 +1560,9 @@
     "de": "SmartParts"
   },
   "app.tabs.panel": {
-    "pl": "SmartPanel",
-    "en": "SmartPanel",
-    "de": "SmartPanel"
+    "pl": "Formatka",
+    "en": "Panel",
+    "de": "Platte"
   },
   "app.tabs.relations": {
     "pl": "Relacje",
@@ -1565,9 +1580,9 @@
     "de": "SmartParts — parametrische Montageteile (LED, Lüftung, Gitter)"
   },
   "app.tabs.panel_title": {
-    "pl": "SmartPanel — Płaska formatka / płyta meblowa",
-    "en": "SmartPanel — flat panel / furniture board",
-    "de": "SmartPanel — flache Platte / Möbelplatte"
+    "pl": "Formatka — Płaska formatka / płyta meblowa",
+    "en": "Panel — flat panel / furniture board",
+    "de": "Platte — flache Platte / Möbelplatte"
   },
   "app.tabs.relations_title": {
     "pl": "Relacje — Więzy geometryczne i relacje 3D",
@@ -1795,9 +1810,9 @@
     "de": "Preise und Kanten"
   },
   "app.relations_sub": {
-    "pl": "Wiązania",
-    "en": "Constraints",
-    "de": "Zwänge"
+    "pl": "Widoczność SmartFrame · narzędzia relacji w oknie edycji formatki",
+    "en": "SmartFrame visibility · relation tools in panel edit window",
+    "de": "SmartFrame-Sichtbarkeit · Relationstools im Plattenfenster"
   },
   "app.joints_sub": {
     "pl": "Styk płaszczyzn",
@@ -1820,9 +1835,9 @@
     "de": "Manuelle Platte eingefügt"
   },
   "app.status_panel_added": {
-    "pl": "Wstawiono formatkę ({w}×{h} mm) na scenę",
-    "en": "Inserted panel ({w}×{h} mm) on scene",
-    "de": "Platte ({w}×{h} mm) in Szene eingefügt"
+    "pl": "Wstawiono formatkę ({w}×{h} mm) — ustaw Relacje w oknie edycji, potem gabaryt",
+    "en": "Inserted panel ({w}×{h} mm) — set Relations in edit window, then size",
+    "de": "Platte ({w}×{h} mm) eingefügt — Relationen im Fenster setzen, dann Größe"
   },
   "app.apply_material": {
     "pl": "Zastosuj Materiał",
@@ -2045,9 +2060,9 @@
     "de": "Bloki: {name}\n• Klicken für Bloki-Modus"
   },
   "crumb.panel": {
-    "pl": "Formatka: {name}\n• Kliknij, aby przejść do trybu SmartPanel",
-    "en": "Panel: {name}\n• Click to enter SmartPanel mode",
-    "de": "Platte: {name}\n• Klicken für SmartPanel-Modus"
+    "pl": "Formatka: {name}\n• Kliknij, aby przejść do edycji formatki",
+    "en": "Panel: {name}\n• Click to enter panel editing",
+    "de": "Platte: {name}\n• Klicken für Plattenbearbeitung"
   },
   "crumb.assembly": {
     "pl": "Złożenie",
@@ -2179,6 +2194,11 @@
     "en": "DAG graph",
     "de": "DAG-Graph"
   },
+  "modbar.title_smartparts": {
+    "pl": "SmartParts Studio",
+    "en": "SmartParts Studio",
+    "de": "SmartParts Studio"
+  },
   "modbar.refresh_title": {
     "pl": "Pobierz aktualne dane z ProjectDocument w CAD (SSOT)",
     "en": "Fetch current data from CAD ProjectDocument (SSOT)",
@@ -2220,14 +2240,14 @@
     "de": "Manuelle Platte hinzugefügt"
   },
   "cmd.added_to_named": {
-    "pl": "Dodano panel ręczny do „{name}” — w drzewie możesz go przeciągnąć do innego",
-    "en": "Added manual panel to \"{name}\" — drag it elsewhere in the tree",
-    "de": "Manuelle Platte zu „{name}“ hinzugefügt — im Baum anderswohin ziehen"
+    "pl": "Dodano panel do „{name}” — w oknie edycji ustaw Relacje (płaszczyzny / naroża), potem gabaryt",
+    "en": "Added panel to \"{name}\" — set Relations in the edit window (planes / corners), then size",
+    "de": "Platte zu „{name}“ hinzugefügt — Relationen im Bearbeitungsfenster setzen, dann Größe"
   },
   "cmd.added_scene": {
-    "pl": "Dodano panel ręczny na scenę",
-    "en": "Added manual panel to scene",
-    "de": "Manuelle Platte in Szene eingefügt"
+    "pl": "Dodano panel — w oknie edycji ustaw Relacje (płaszczyzny / naroża), potem gabaryt",
+    "en": "Panel added — set Relations in the edit window (planes / corners), then size",
+    "de": "Platte hinzugefügt — Relationen im Bearbeitungsfenster setzen, dann Größe"
   },
   "cmd.project_loaded": {
     "pl": "Wczytano projekt pomyślnie!",

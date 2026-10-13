@@ -27,4 +27,30 @@ describe('buildShelvesPlan Edge Banding', () => {
         expect(() => assertCanonicalShelvesParams({ thickness: 18 })).toThrow(/thickness → grubosc_polki_mm/);
         expect(() => assertCanonicalShelvesParams({ liczba_polek: 3 })).not.toThrow();
     });
+
+    it('SYSTEM_32 / ROW nie tworzy fałszywej formatki System_32 wypełniającej wnękę', () => {
+        for (const wzor of ['SYSTEM_32', 'ROW'] as const) {
+            const plan = buildShelvesPlan(
+                {
+                    liczba_polek: 2,
+                    grubosc_polki_mm: 18,
+                    wzor_nawiercen: wzor,
+                    rozstaw_system32_mm: 32,
+                    start_system32_z_mm: 100,
+                    liczba_otworow_system32: 5
+                },
+                { width_mm: 800, height_mm: 1000, depth_mm: 500 }
+            );
+
+            expect(plan.parts.every(p => p.name !== 'System_32')).toBe(true);
+            expect(plan.parts.every(p => p.role !== 'OTHER')).toBe(true);
+            expect(plan.parts).toHaveLength(2);
+            for (const part of plan.parts) {
+                expect(part.role).toBe('SHELF_PANEL');
+                // Półka ma grubość, nie wysokość wnęki
+                expect(part.dim.z).toBe(18);
+                expect(part.dim.z).toBeLessThan(100);
+            }
+        }
+    });
 });

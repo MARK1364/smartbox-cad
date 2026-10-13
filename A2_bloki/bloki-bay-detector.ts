@@ -60,6 +60,39 @@ interface PanelFaceInfo {
     maxBoundsMm: Vec3;
 }
 
+/** Najbliższy kontener korpusu (preferuj `generatorParams.type` zaczynający się od `korpus`). */
+function findKorpusContainer(start: CADNode | null, document: ProjectDocument): CADNode | null {
+    let curr: CADNode | null = start;
+    let topContainer: CADNode | null = null;
+    while (curr && curr.id !== document.rootNode.id) {
+        const dd = curr.domainData as any;
+        if (dd?.type === 'container' || dd?.generatorParams) {
+            topContainer = curr;
+            if (String(dd.generatorParams?.type || '').startsWith('korpus')) {
+                break;
+            }
+        }
+        curr = curr.parent;
+    }
+    return topContainer;
+}
+
+function isNodeUnderCabinet(node: CADNode | null, cabinetId: string | undefined): boolean {
+    if (!node || !cabinetId) return false;
+    let curr: CADNode | null = node;
+    while (curr) {
+        if (curr.id === cabinetId) return true;
+        curr = curr.parent;
+    }
+    return false;
+}
+
+/** Płaszczyzna przednia korpusu SmartFrame w CAD Y [mm]: środek korpusu − D/2. */
+function smartFrameFrontPlaneYMm(cabNode: CADNode, depthMm: number): number {
+    const originNm = cabNode.getWorldMatrix().transformPoint(new Vec3(0, 0, 0));
+    return nmToMm(originNm.y) - depthMm / 2;
+}
+
 /**
  * Uniwersalnie zbiera wszystkie 6 ścian dla każdej formatki meblowej w scenie.
  * Zgodnie ze standardem LCS z AGENTS.md:
@@ -701,29 +734,27 @@ export function probeBayFromCADPoint(
     const bottomZ = hitBottom.info.worldCenterMm.z;
     const topZ = hitTop.info.worldCenterMm.z;
 
-    // Znajdź wspólnego rodzica korpusu
-    let parentCabinetId: string | undefined = undefined;
-    let cabinetDepthMm: number | undefined = undefined;
-    let curr: CADNode | null = hitLeft.info.node.parent;
-    while (curr && curr.id !== document.rootNode.id) {
-        if (curr.domainData?.type === 'container' || (curr.domainData as any)?.generatorParams) {
-            parentCabinetId = curr.id;
-            const cDepth = (curr.domainData as any)?.depth;
-            if (cDepth) cabinetDepthMm = nmToMm(cDepth);
-            break;
-        }
-        curr = curr.parent;
+    // Korpus z boków wnęki — blok działa w zakresie jednego korpusu
+    const parentCabinet = findKorpusContainer(hitLeft.info.node, document);
+    const parentCabinetId = parentCabinet?.id;
+    const rawCabDepth = (parentCabinet?.domainData as any)?.depth;
+    const cabinetDepthMm = rawCabDepth ? nmToMm(rawCabDepth) : undefined;
+
+    // Odrzuć „przód” z innego korpusu (szafa stojąca przed wnęką bez płyty frontowej)
+    if (hitFront && parentCabinetId && !isNodeUnderCabinet(hitFront.info.node, parentCabinetId)) {
+        hitFront = null;
+    }
+    if (hitBack && parentCabinetId && !isNodeUnderCabinet(hitBack.info.node, parentCabinetId)) {
+        hitBack = null;
     }
 
     // W CAD: Przód szafy to mniejsze Y (-D/2), Tył to większe Y (+D/2)
-    // Gdy brak fizycznego frontu (hitFront), pobierz płaszczyznę przednią na sztywno ze SmartFrame (-D/2)
+    // Brak płyty frontowej w tym korpusie → płaszczyzna ze SmartFrame (-D/2)
     let frontPlaneY: number;
     if (hitFront) {
         frontPlaneY = hitFront.info.worldCenterMm.y;
-    } else if (cabinetDepthMm !== undefined) {
-        const cabNode = parentCabinetId ? document.findNode(parentCabinetId) : null;
-        const cabPosY = cabNode ? nmToMm(cabNode.localMatrix.decompose().translation.y) : 0;
-        frontPlaneY = cabPosY - cabinetDepthMm / 2;
+    } else if (parentCabinet && cabinetDepthMm !== undefined) {
+        frontPlaneY = smartFrameFrontPlaneYMm(parentCabinet, cabinetDepthMm);
     } else {
         frontPlaneY = Math.min(hitLeft.info.minBoundsMm.y, hitRight.info.minBoundsMm.y, hitBottom.info.minBoundsMm.y);
     }
@@ -745,7 +776,8 @@ export function probeBayFromCADPoint(
     const centerZ = (bottomZ + topZ) / 2;
 
     // Znajdź właściwą ścianę przedniej krawędzi (normalna skierowana w przód: normal.y < -0.5)
-    let frontFaceName: FaceName = 'FACE_X_PLUS';
+    // NIE używamy FACE_X_PLUS jako domyślnej — to ściana boku; Y wychodzi w środku głębokości.
+    let frontFaceName: FaceName = 'FACE_Y_MINUS';
     const leftNodeFaces = faces.filter(f => f.node.id === hitLeft!.info.node.id);
     const leftFrontFace = leftNodeFaces.find(f => f.worldNormal.y < -0.5);
     if (leftFrontFace) {
@@ -1231,44 +1263,34 @@ export function probeBayFromSceneRay(
         return null;
     }
 
-    // Znajdź kontener korpusu nadrzędnego
-    let parentCabinetId: string | undefined = undefined;
-    let cabinetDepthMm: number | undefined = undefined;
-    if (document) {
-        const testNodeId = leftInfo.id || bottomInfo.id;
-        let curr: CADNode | null = testNodeId ? document.findNode(testNodeId) : null;
-        let topContainer: CADNode | null = null;
-        while (curr && curr.id !== document.rootNode.id) {
-            const dd = curr.domainData as any;
-            if (dd?.type === 'container' || dd?.generatorParams) {
-                topContainer = curr;
-                // Jeśli natrafimy na korpus SmartFrame (np. korpus3_2), jest to ostateczny rodzic
-                if (dd.generatorParams?.type?.startsWith('korpus')) {
-                    break;
-                }
-            }
-            curr = curr.parent;
-        }
-        if (topContainer) {
-            parentCabinetId = topContainer.id;
-            const cDepth = (topContainer.domainData as any)?.depth;
-            if (cDepth) cabinetDepthMm = nmToMm(cDepth);
-        }
-    }
+    // Korpus z boków wnęki — blok w zakresie jednego korpusu
+    const sideNode = leftInfo.id ? document.findNode(leftInfo.id) : null;
+    const parentCabinet = findKorpusContainer(sideNode, document);
+    const parentCabinetId = parentCabinet?.id;
+    const rawCabDepth = (parentCabinet?.domainData as any)?.depth;
+    const cabinetDepthMm = rawCabDepth ? nmToMm(rawCabDepth) : undefined;
+
+    // Odrzuć trafienie przodu/tyłu spoza tego korpusu (np. szafa stojąca przed wnęką)
+    const frontNode = frontInfo.id ? document.findNode(frontInfo.id) : null;
+    const backNode = backInfo.id ? document.findNode(backInfo.id) : null;
+    const frontInCabinet = !!(hitFront?.hit && isNodeUnderCabinet(frontNode, parentCabinetId));
+    const backInCabinet = !!(hitBack?.hit && isNodeUnderCabinet(backNode, parentCabinetId));
 
     const refMesh = hitLeft.pickedMesh || hitRight.pickedMesh;
     const refBb = refMesh?.getBoundingInfo()?.boundingBox;
 
-    let backZ = hitBack?.hit ? hitBack.pickedPoint.z : (refBb ? refBb.maximumWorld.z : p.z + 300);
+    let backZ = backInCabinet ? hitBack.pickedPoint.z : (refBb ? refBb.maximumWorld.z : p.z + 300);
     let frontZ: number;
-    if (hitFront?.hit) {
+    let frontFace: FaceName = frontInfo.face;
+    if (frontInCabinet) {
         frontZ = hitFront.pickedPoint.z;
-    } else if (cabinetDepthMm !== undefined) {
-        const cabNode = parentCabinetId ? document.findNode(parentCabinetId) : null;
-        const cabPosY = cabNode ? nmToMm(cabNode.localMatrix.decompose().translation.y) : 0;
-        frontZ = cabPosY - cabinetDepthMm / 2;
+    } else if (parentCabinet && cabinetDepthMm !== undefined) {
+        // Brak płyty frontowej w tym korpusie → płaszczyzna ze SmartFrame (−D/2)
+        frontZ = smartFrameFrontPlaneYMm(parentCabinet, cabinetDepthMm);
+        frontFace = 'FACE_Y_MINUS';
     } else {
         frontZ = refBb ? refBb.minimumWorld.z : p.z - 300;
+        frontFace = 'FACE_Y_MINUS';
     }
 
     if (frontZ > backZ) {
@@ -1285,8 +1307,11 @@ export function probeBayFromSceneRay(
     const centerY = (bottomY + topY) / 2; // Babylon Y = CAD Z (wysokość)
     const centerZ = (frontZ + backZ) / 2; // Babylon Z = CAD Y (głębokość)
 
-    const frontRefId = hitFront?.hit ? frontInfo.id : (parentCabinetId || frontInfo.id || leftInfo.id);
-    const frontRefName = hitFront?.hit ? (frontInfo.name || 'Przód') : 'Przód Korpusu';
+    const frontRefId = frontInCabinet ? frontInfo.id : (parentCabinetId || frontInfo.id || leftInfo.id);
+    const frontRefName = frontInCabinet ? (frontInfo.name || 'Przód') : 'Przód Korpusu';
+    const backRefId = backInCabinet ? backInfo.id : leftInfo.id;
+    const backRefName = backInCabinet ? (backInfo.name || 'Tył') : 'Tył';
+    const backFace = backInfo.face;
 
     return {
         boundsMm: { width, height, depth },
@@ -1327,18 +1352,18 @@ export function probeBayFromSceneRay(
                 planeCoordMm: topY
             },
             back: {
-                nodeId: backInfo.id || leftInfo.id,
-                nodeName: backInfo.name || 'Tył',
-                face: backInfo.face,
-                faceName: backInfo.face,
+                nodeId: backRefId,
+                nodeName: backRefName,
+                face: backFace,
+                faceName: backFace,
                 worldPointMm: { x: centerX, y: backZ, z: centerY },
                 planeCoordMm: backZ
             },
             front: {
                 nodeId: frontRefId,
                 nodeName: frontRefName,
-                face: frontInfo.face,
-                faceName: frontInfo.face,
+                face: frontFace,
+                faceName: frontFace,
                 worldPointMm: { x: centerX, y: frontZ, z: centerY },
                 planeCoordMm: frontZ
             },

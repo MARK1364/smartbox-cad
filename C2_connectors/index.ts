@@ -4,14 +4,24 @@
 
 export { ConnectorsUI, CONNECTORS_PANEL_TITLE } from './connectors-ui';
 export { ConnectorStore } from './connector-store';
+export {
+    ConnectorPresetStore,
+    normalizePositionsActive,
+    normalizePositionTypes,
+    summarizePresetMask,
+} from './connector-presets';
 export { CONNECTORS_DOCUMENT_SECTION } from './connectors-types';
+export type { ConnectorPreset } from './connectors-types';
 export { ConnectorVisualizer } from './connector-visualizer';
 export {
     generateConnectors,
     getConnectorDefinition,
+    getConnectorTypeKeys,
     getPlacementRuleDefinition,
     getPlacementRuleKeys,
     getDefaultPlacementRule,
+    getRulePositionTypes,
+    shortConnectorTypeLabel,
     countRulePositions,
     quatFromTo,
     orientAlongFormatkaDepth,

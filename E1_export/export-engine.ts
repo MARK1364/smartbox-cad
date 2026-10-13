@@ -19,11 +19,21 @@ import {
     TITLE_BLOCK_HEIGHT,
     ExportRenderStyle,
 } from './export-types';
+import {
+    collectExportNodePoses,
+    restoreExportNodePoses,
+    cloneExportNodePoses,
+    collectExportNodeVisibility,
+    restoreExportNodeVisibility,
+    cloneExportNodeVisibility,
+    notifyExportSceneRebuild,
+} from './export-view-state.js';
 import { DrawingSheet } from './drawing-sheet';
 import { ContextManager } from '../A1_core/context-manager';
 import { PMIStore } from '../A8_pmi/pmi-data';
 import { resolveAnchorWorld } from '../A8_pmi/pmi-id-bridge';
 import { TOP_BETA, BOTTOM_BETA } from '../S3_scena/named-camera-view.js';
+import { clearLegacyExportStorage } from '../A1_core/export-session-storage.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import exportTekstRaw from './export_tekst.json';
@@ -32,8 +42,6 @@ const exportTekst = exportTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'export';
 
 declare const BABYLON: any;
-
-const SAVED_VIEWS_STORAGE_KEY = 'bloki_cad_manual_sheets_v3';
 
 export interface SheetScreenLayout {
     sheetPixelX: number;
@@ -97,7 +105,9 @@ export class ExportEngine {
     }
 
     constructor() {
-        this.loadSavedViews();
+        // Kadry = SSOT pliku projektu (extensions.drawings). Nie localStorage.
+        this.savedViews = [];
+        clearLegacyExportStorage();
 
         if (typeof window !== 'undefined') {
             window.addEventListener('resize', () => {
@@ -642,8 +652,7 @@ export class ExportEngine {
             if (!store) return;
 
             const annotations = (store.annotations || []).filter((a) => a.visible !== false);
-            const measurements = (store.measurements || []).filter((m) => m.visible !== false);
-            if (annotations.length === 0 && measurements.length === 0) return;
+            if (annotations.length === 0) return;
 
             const area = sheet.getAvailableDrawingArea();
             const viewport = ContextManager.instance?.viewport;
@@ -725,14 +734,7 @@ export class ExportEngine {
                 processPoints(w1, w2, label);
             });
 
-            // Rzutowanie miarek
-            measurements.forEach((msr) => {
-                const w1 = resolveAnchorWorld(scene, msr.anchor1);
-                const w2 = resolveAnchorWorld(scene, msr.anchor2);
-                if (!w1 || !w2) return;
-                const label = msr.text || (msr.distanceMM ? `${msr.distanceMM.toFixed(1)} mm` : '');
-                processPoints(w1, w2, label);
-            });
+
 
             if (svgElements.length > 0) {
                 sheet.addSvgOverlay(svgElements.join('\n'));
@@ -809,6 +811,7 @@ export class ExportEngine {
     public async saveCurrentViewWithThumbnail(customName?: string, description?: string): Promise<SavedExportView> {
         const viewport = ContextManager.instance?.viewport;
         const cam = viewport?.camera;
+        const doc = ContextManager.instance?.document;
 
         let thumbnail: string | undefined = undefined;
         try {
@@ -824,6 +827,8 @@ export class ExportEngine {
             createdAt: new Date().toISOString(),
             paperFormat: this.paperFormat,
             projectionType: this.projectionType,
+            renderStyle: this.renderStyle,
+            showGrid: this.showGrid,
             cameraAlpha: cam ? cam.alpha : Math.PI / 4,
             cameraBeta: cam ? cam.beta : Math.PI / 3,
             cameraRadius: cam ? cam.radius : 1500,
@@ -831,9 +836,11 @@ export class ExportEngine {
             notes: this.notes,
             description: description || '',
             thumbnail,
-            includeBOM: this.includeBOM,
+            includeBOM: false,
             includePMI: this.includePMI,
             titleBlock: { ...this.titleBlock },
+            nodePoses: collectExportNodePoses(doc),
+            nodeVisibility: collectExportNodeVisibility(doc),
         };
 
         this.savedViews.push(newView);
@@ -845,6 +852,7 @@ export class ExportEngine {
     public saveCurrentView(customName?: string): SavedExportView {
         const viewport = ContextManager.instance?.viewport;
         const cam = viewport?.camera;
+        const doc = ContextManager.instance?.document;
 
         const newView: SavedExportView = {
             id: 'view_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -852,20 +860,70 @@ export class ExportEngine {
             createdAt: new Date().toISOString(),
             paperFormat: this.paperFormat,
             projectionType: this.projectionType,
+            renderStyle: this.renderStyle,
+            showGrid: this.showGrid,
             cameraAlpha: cam ? cam.alpha : Math.PI / 4,
             cameraBeta: cam ? cam.beta : Math.PI / 3,
             cameraRadius: cam ? cam.radius : 1500,
             cameraTarget: cam && cam.target ? [cam.target.x, cam.target.y, cam.target.z] : [300, 600, 250],
             notes: this.notes,
-            includeBOM: this.includeBOM,
+            includeBOM: false,
             includePMI: this.includePMI,
             titleBlock: { ...this.titleBlock },
+            nodePoses: collectExportNodePoses(doc),
+            nodeVisibility: collectExportNodeVisibility(doc),
         };
 
         this.savedViews.push(newView);
         this.saveSavedViews();
         this._notify();
         return newView;
+    }
+
+    /**
+     * Aktualizuje wskazany arkusz bieżącym stanem sceny, parametrami kamery i nową miniaturką.
+     */
+    public async updateSavedViewWithCurrent(id: string): Promise<SavedExportView | null> {
+        const view = this.savedViews.find((v) => v.id === id);
+        if (!view) return null;
+
+        const viewport = ContextManager.instance?.viewport;
+        const cam = viewport?.camera;
+        const doc = ContextManager.instance?.document;
+
+        let thumbnail: string | undefined = undefined;
+        try {
+            const sheet = new DrawingSheet(this.paperFormat);
+            thumbnail = await this.captureCroppedViewport(sheet);
+        } catch (e) {
+            console.warn('Nie udało się zaktualizować miniaturki arkusza:', e);
+        }
+
+        view.paperFormat = this.paperFormat;
+        view.projectionType = this.projectionType;
+        view.renderStyle = this.renderStyle;
+        view.showGrid = this.showGrid;
+        if (cam) {
+            view.cameraAlpha = cam.alpha;
+            view.cameraBeta = cam.beta;
+            view.cameraRadius = cam.radius;
+            if (cam.target) {
+                view.cameraTarget = [cam.target.x, cam.target.y, cam.target.z];
+            }
+        }
+        view.notes = this.notes;
+        view.includeBOM = false;
+        view.includePMI = this.includePMI;
+        view.titleBlock = { ...this.titleBlock };
+        if (thumbnail) {
+            view.thumbnail = thumbnail;
+        }
+        view.nodePoses = collectExportNodePoses(doc);
+        view.nodeVisibility = collectExportNodeVisibility(doc);
+
+        this.saveSavedViews();
+        this._notify();
+        return view;
     }
 
     /**
@@ -887,6 +945,8 @@ export class ExportEngine {
                 ...view,
                 titleBlock: { ...(view.titleBlock || {}) },
                 cameraTarget: (view.cameraTarget ? [...view.cameraTarget] : [0, 0, 0]) as [number, number, number],
+                nodePoses: cloneExportNodePoses(view.nodePoses),
+                nodeVisibility: cloneExportNodeVisibility(view.nodeVisibility),
             }))
             : [];
         this.saveSavedViews();
@@ -902,6 +962,8 @@ export class ExportEngine {
             id: 'view_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
             name: `${view.name} (Kopia)`,
             createdAt: new Date().toISOString(),
+            nodePoses: cloneExportNodePoses(view.nodePoses),
+            nodeVisibility: cloneExportNodeVisibility(view.nodeVisibility),
         };
 
         this.savedViews.push(copy);
@@ -914,22 +976,37 @@ export class ExportEngine {
         this.paperFormat = view.paperFormat;
         this.projectionType = view.projectionType;
         this.notes = view.notes;
-        this.includeBOM = view.includeBOM;
+        this.includeBOM = false;
         this.includePMI = view.includePMI;
+        if (view.renderStyle) {
+            this.setRenderStyle(view.renderStyle);
+        }
         if (view.titleBlock) {
             this.titleBlock = { ...this.titleBlock, ...view.titleBlock };
         }
 
+        // Przywrócenie stanu brył, pozycji i widoczności na scenie CAD
+        const doc = ContextManager.instance?.document;
+        restoreExportNodePoses(doc, view.nodePoses);
+        const visibilityRestored = restoreExportNodeVisibility(doc, view.nodeVisibility);
+        if (visibilityRestored.length > 0) {
+            notifyExportSceneRebuild(`Przywrócono kadr: ${view.name}`);
+        }
+
         const viewport = ContextManager.instance?.viewport;
-        if (viewport?.camera) {
+        if (viewport && typeof viewport.applyCameraPose === 'function') {
+            viewport.applyCameraPose(view.cameraAlpha, view.cameraBeta, view.cameraRadius, view.cameraTarget);
+            this.setProjectionType(view.projectionType);
+        } else if (viewport?.camera) {
             const cam = viewport.camera;
+            if (typeof cam.target?.set === 'function' && view.cameraTarget) {
+                cam.target.set(view.cameraTarget[0], view.cameraTarget[1], view.cameraTarget[2]);
+            }
             cam.alpha = view.cameraAlpha;
             cam.beta = view.cameraBeta;
             cam.radius = view.cameraRadius;
-            if (view.cameraTarget) {
-                cam.target = new BABYLON.Vector3(view.cameraTarget[0], view.cameraTarget[1], view.cameraTarget[2]);
-            }
             this.setProjectionType(view.projectionType);
+            viewport.requestRender(5);
         }
 
         this.updatePassepartout();
@@ -1001,30 +1078,12 @@ export class ExportEngine {
         return count;
     }
 
-    private loadSavedViews(): void {
-        try {
-            // Usuwamy stare klucze jeśli istniały w przeglądarce
-            localStorage.removeItem('bloki_cad_export_saved_views');
-            localStorage.removeItem('bloki_cad_export_saved_views_v1');
-            localStorage.removeItem('bloki_cad_manual_sheets_v2');
-            const raw = localStorage.getItem(SAVED_VIEWS_STORAGE_KEY);
-            if (raw) {
-                this.savedViews = JSON.parse(raw);
-            } else {
-                this.savedViews = [];
-            }
-        } catch (e) {
-            console.warn('Nie udało się wczytać zapisanych arkuszy:', e);
-            this.savedViews = [];
-        }
-    }
-
+    /**
+     * Dawniej pisało globalny localStorage — duchy wracały po F5 do nowego projektu.
+     * Trwałość = ProjectDocument.serialize → extensions.drawings.
+     */
     private saveSavedViews(): void {
-        try {
-            localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(this.savedViews));
-        } catch (e) {
-            console.warn('Nie udało się zapisać arkuszy do localStorage:', e);
-        }
+        clearLegacyExportStorage();
     }
 }
 

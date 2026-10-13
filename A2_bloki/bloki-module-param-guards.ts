@@ -57,6 +57,23 @@ export const LEGACY_DOORS_PARAM_ALIASES: Readonly<Record<string, string>> = {
     gap: 'szczelina_mm',
 };
 
+export const LEGACY_SKOSNE_DOORS_PARAM_ALIASES: Readonly<Record<string, string>> = {
+    ...SHARED_FRONT_MM,
+    ...HINGE_LEGACY,
+    door_type: 'rodzaj_drzwi',
+    doorType: 'rodzaj_drzwi',
+    heightLeft: 'dach_kat_deg',
+    heightRight: 'dach_kat_deg',
+    height_left: 'dach_kat_deg',
+    height_right: 'dach_kat_deg',
+    skos_lewa: 'dach_kat_deg',
+    skos_prawa: 'dach_kat_deg',
+    wysokosc_lewy_mm: 'dach_kat_deg',
+    wysokosc_prawy_mm: 'dach_kat_deg',
+    grubosc_wience_dolnego_mm: 'dach_kat_deg',
+    grubosc_wience_gornego_mm: 'dach_kat_deg',
+};
+
 export const LEGACY_DRAWERS_PARAM_ALIASES: Readonly<Record<string, string>> = {
     ...SHARED_FRONT_MM,
     count: 'liczba_szuflad',
@@ -263,6 +280,10 @@ export const LEGACY_LED_EXTERNAL_PARAM_ALIASES: Readonly<Record<string, string>>
 
 export function assertCanonicalDoorsParams(raw: object | null | undefined): void {
     assertNoLegacyKeys(raw, LEGACY_DOORS_PARAM_ALIASES, 'doors');
+}
+
+export function assertCanonicalSkosneDoorsParams(raw: object | null | undefined): void {
+    assertNoLegacyKeys(raw, LEGACY_SKOSNE_DOORS_PARAM_ALIASES, 'skosne_doors');
 }
 
 export function assertCanonicalDrawersParams(raw: object | null | undefined): void {

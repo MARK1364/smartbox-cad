@@ -105,10 +105,22 @@ export interface ConnectorGroup {
     /** Odległość pierwszego otworu od krawędzi [mm]. Przesuwa całą siatkę 32 mm. */
     firstOffsetMm: number;
     positionsActive: boolean[];
+    /** Nadpisanie typu na pozycji (indeks jak w regule). Brak = typ z JSON. */
+    positionTypes: string[];
     /** Wierzchołki części wspólnej styku w LCS formatki [mm]. */
     faceVertsLocalMm: Vec3Tuple[];
     faceNormalLocalMm: Vec3Tuple;
     connectors: ConnectorInstance[];
+}
+
+/** Zapisane narzędzie użytkownika: reguła + offset + maska + typy na siatce 32 mm. */
+export interface ConnectorPreset {
+    id: string;
+    name: string;
+    placementRule: string;
+    firstOffsetMm: number;
+    positionsActive: boolean[];
+    positionTypes: string[];
 }
 
 export interface ConnectorPlacement {

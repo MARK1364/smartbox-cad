@@ -10,6 +10,7 @@ import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { isCylindricalPart } from '../../A1_core/cad-node/part-shape.js';
 import { syncSelectionHighlights } from '../../A1_core/selection-highlight.js';
 import { HardwareLoader } from '../../B1_biblioteka/hardware-loader.js';
+import { syncHangerMeshesFromDocument } from '../../A5_smartparts/hangers/hanger-mesh.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
@@ -211,6 +212,13 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           }
           hardwareViews.delete(hwId);
         }
+      }
+
+      // Zawieszki / SmartPart Studio — półprzezroczyste Party + cuts (po ContainerView)
+      try {
+        syncHangerMeshesFromDocument(document);
+      } catch (err) {
+        console.warn('[rebuildGeometry] syncHangerMeshes:', err);
       }
 
       syncSelectionHighlights(ctx);

@@ -33,9 +33,37 @@ export interface TransformJSON {
     rot: [number, number, number];
 }
 
+export const SUPPORTED_FEATURE_TYPES = ['hole', 'groove'] as const;
+export type SupportedFeatureType = typeof SUPPORTED_FEATURE_TYPES[number];
+
+/**
+ * Walidacja typu feature'a na granicy wejścia (wczytanie / import / edycja projektu).
+ * Rzuca czytelny błąd walidacyjny (Fail-Fast), uniemożliwiając wstrzyknięcie uszkodzonych danych.
+ */
+export function validateFeatureType(feat: { type?: string; id?: number | string }): void {
+    if (!feat || !feat.type || !SUPPORTED_FEATURE_TYPES.includes(feat.type as any)) {
+        throw new Error(
+            `[project-schema] Nieobsługiwany typ feature: "${feat?.type}" (id: ${feat?.id ?? 'brak'}). ` +
+            `Dozwolone typy w natywnym silniku 2.5D to: ${SUPPORTED_FEATURE_TYPES.join(', ')}.`
+        );
+    }
+}
+
+export function validatePanelFeatures(features: any[] | undefined): void {
+    if (!features || !Array.isArray(features)) return;
+    for (const feat of features) {
+        validateFeatureType(feat);
+    }
+}
+
 export interface FeatureJSON {
     id: number;
-    type: "hole" | "fillet" | "groove" | "pocket" | "slot" | string;
+    /**
+     * Typ obróbki/cechy.
+     * Natywny silnik 2.5D wspiera w pełni: "hole" oraz "groove".
+     * Typy "fillet", "pocket", "slot" są zdefiniowane w schemacie pod przyszłe rozszerzenia (rzucają błąd przy walidacji wejściowej).
+     */
+    type: "hole" | "groove" | "fillet" | "pocket" | "slot" | string;
     name?: string;
     visible?: boolean;
     /** Nazwa ściany na której leży feature, np. "front", "back", "left", "right", "top", "bottom" */

@@ -327,6 +327,29 @@ describe('Bloki Bay Detector (3D Geometric Probe)', () => {
         expect(sbContainer.generatorParams.boundary.left.nodeId).toBe(thickeningNode.id);
     });
 
+    it('ignores front hit from another cabinet and uses SmartFrame front plane (−D/2)', () => {
+        // Korpus A (docelowa wnęka) — bez płyty frontowej
+        const cabinetA = doc.createAssembly({ name: 'Korpus A' }) as ContainerModel;
+        cabinetA.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinetA, 800, 2000, 600, 1, 0, 0, 0);
+
+        // Korpus B stoi przed A (przesunięty w −Y) — jego tył „kradnie” raycast przodu
+        const cabinetB = doc.createAssembly({ name: 'Korpus B Przed' }) as ContainerModel;
+        cabinetB.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinetB, 800, 2000, 600, 1, 0, 0, 0);
+        const nodeB = doc.findNode(cabinetB.id)!;
+        nodeB.setLocalTransform(new Vec3(0, mmToNm(-900), 0), Quat.IDENTITY);
+
+        const bay = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 1000 });
+        expect(bay).not.toBeNull();
+        expect(bay!.parentCabinetId).toBe(cabinetA.id);
+        // Przód z SmartFrame korpusu A (−300), nie z tyłu korpusu B (~−600)
+        expect(bay!.boundary.frontPlaneYMm).toBeCloseTo(-300, 0);
+        expect(bay!.boundary.front.nodeId).toBe(cabinetA.id);
+        expect(bay!.boundary.front.nodeName).toBe('Przód Korpusu');
+        expect(bay!.boundsMm.depth).toBeGreaterThanOrEqual(580);
+    });
+
     it('verifies that bay depth spans full cabinet and doors/shelves are placed at cabinet front', () => {
         const cabinet = doc.createAssembly({ name: 'Korpus Pelna Glebokosc' }) as ContainerModel;
         cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };

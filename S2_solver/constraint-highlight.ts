@@ -26,6 +26,7 @@ declare const BABYLON: any;
 const COLOR_A = { r: 0.05, g: 0.85, b: 0.95, a: 0.42 };
 const COLOR_B = { r: 0.95, g: 0.85, b: 0.08, a: 0.42 };
 const COLOR_GROUND = { r: 0.95, g: 0.12, b: 0.85, a: 0.45 };
+const COLOR_VERTEX_LINK = { r: 0.05, g: 0.92, b: 0.98, a: 0.9 };
 
 export class ConstraintHighlightOverlay {
     private static _instance: ConstraintHighlightOverlay | null = null;
@@ -44,6 +45,9 @@ export class ConstraintHighlightOverlay {
     private _rafRefresh: number | null = null;
     private _afterRenderObs: any = null;
     private _disposeFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    private _rubberBandConstraintId: string | null = null;
+    private _rubberBandMesh: any = null;
+    private _pointerObserver: any = null;
 
     get ids(): ReadonlySet<string> {
         return this._ids;
@@ -67,6 +71,7 @@ export class ConstraintHighlightOverlay {
     }
 
     clear(): void {
+        this.stopVertexRubberBand();
         this._ids.clear();
         this._cancelScheduledRefresh();
         this._retireMeshes();
@@ -137,11 +142,24 @@ export class ConstraintHighlightOverlay {
 
     private _drawConstraint(scene: any, doc: any, constraint: SolverConstraint): void {
         const ground = constraint.bindType === 'GROUND';
+        const arrowMode: 'outward' | 'touching' | null =
+            constraint.bindType === 'COPLANAR'
+                ? 'outward'
+                : constraint.bindType === 'FLUSH'
+                  ? 'touching'
+                  : null;
         if (constraint.anchorA) {
-            this._drawAnchor(scene, doc, constraint.anchorA, ground ? COLOR_GROUND : COLOR_A);
+            this._drawAnchor(scene, doc, constraint.anchorA, ground ? COLOR_GROUND : COLOR_A, arrowMode);
         }
         if (!ground && constraint.anchorB) {
-            this._drawAnchor(scene, doc, constraint.anchorB, COLOR_B);
+            this._drawAnchor(scene, doc, constraint.anchorB, COLOR_B, arrowMode);
+        }
+        if (constraint.bindType === 'VERTEX' && constraint.anchorA && constraint.anchorB) {
+            const posA = this._resolveAnchorRenderWorldPoint(doc, constraint.anchorA);
+            const posB = this._resolveAnchorRenderWorldPoint(doc, constraint.anchorB);
+            if (posA && posB) {
+                this._addConnectingTube(scene, posA, posB, COLOR_VERTEX_LINK);
+            }
         }
     }
 
@@ -150,7 +168,13 @@ export class ConstraintHighlightOverlay {
      * (LCS bryły sztywnej). Dzięki temu podświetlenie nie może pokazać innej
      * ściany niż ta, którą solver faktycznie liczy.
      */
-    private _drawAnchor(scene: any, doc: any, anchor: ConstraintAnchor, color: typeof COLOR_A): void {
+    private _drawAnchor(
+        scene: any,
+        doc: any,
+        anchor: ConstraintAnchor,
+        color: typeof COLOR_A,
+        arrowMode: 'outward' | 'touching' | null = null,
+    ): void {
         if (anchor.kind === 'DATUM' || String(anchor.nodeId || '').startsWith('__DATUM__:')) {
             const n = (anchor.localNormalMm || [0, 0, 1]) as number[];
             const c = (anchor.quadCenterMm || anchor.localPointMm || [0, 0, 0]) as number[];
@@ -178,6 +202,7 @@ export class ConstraintHighlightOverlay {
                 anchor.quadWidthMm || 500,
                 anchor.quadHeightMm || 500,
                 color,
+                arrowMode,
             );
             return;
         }
@@ -203,6 +228,7 @@ export class ConstraintHighlightOverlay {
                     quad.width,
                     quad.height,
                     color,
+                    arrowMode,
                 );
                 return;
             }
@@ -231,6 +257,7 @@ export class ConstraintHighlightOverlay {
         width: number,
         height: number,
         color: typeof COLOR_A,
+        arrowMode: 'outward' | 'touching' | null = null,
     ): void {
         const mesh = BABYLON.MeshBuilder.CreatePlane(
             'solver_hl_face',
@@ -258,6 +285,10 @@ export class ConstraintHighlightOverlay {
         const z = this._cadLocalDirToRenderWorld(node, localNormal);
         this._orientPlaneFromAxes(mesh, x, y, z);
         this._meshes.push(mesh);
+
+        if (arrowMode) {
+            this._addNormalArrowChild(scene, mesh, color, arrowMode);
+        }
     }
 
     /** Płaszczyzna wprost w CAD WCS (datum — bez węzła). */
@@ -270,6 +301,7 @@ export class ConstraintHighlightOverlay {
         width: number,
         height: number,
         color: typeof COLOR_A,
+        arrowMode: 'outward' | 'touching' | null = null,
     ): void {
         const mesh = BABYLON.MeshBuilder.CreatePlane(
             'solver_hl_datum',
@@ -294,6 +326,68 @@ export class ConstraintHighlightOverlay {
         const z = cadToRender(new Vec3(normalCad[0], normalCad[1], normalCad[2])).normalize();
         this._orientPlaneFromAxes(mesh, x, y, z);
         this._meshes.push(mesh);
+
+        if (arrowMode) {
+            this._addNormalArrowChild(scene, mesh, color, arrowMode);
+        }
+    }
+
+    /**
+     * Strzałka wektora normalnego ściany (podpowiedź dla relacji COPLANAR / FLUSH).
+     * Osadzona jako dziecko płaszczyzny w osi +Z (kierunek normalnej).
+     * - 'outward' (COPLANAR): trzonek od z=0 do 32, grot od 32 do 46 (wskazuje na zewnątrz).
+     * - 'touching' (FLUSH): trzonek od z=-46 do -14, grot od -14 do 0 (czubek styka się z płaszczyzną z=0).
+     */
+    private _addNormalArrowChild(
+        scene: any,
+        parentMesh: any,
+        color: typeof COLOR_A,
+        arrowMode: 'outward' | 'touching' = 'outward',
+    ): void {
+        if (!parentMesh || typeof BABYLON === 'undefined' || !BABYLON.MeshBuilder) {
+            return;
+        }
+        const shaftLen = 32;
+        const headLen = 14;
+        const shaftDia = 2.8;
+        const headDia = 7.5;
+
+        const isTouching = arrowMode === 'touching';
+        const shaftCenterZ = isTouching ? -headLen - shaftLen / 2 : shaftLen / 2;
+        const headCenterZ = isTouching ? -headLen / 2 : shaftLen + headLen / 2;
+
+        const mat = new BABYLON.StandardMaterial('solver_arrow_mat', scene);
+        mat.diffuseColor = new BABYLON.Color3(color.r, color.g, color.b);
+        mat.emissiveColor = new BABYLON.Color3(color.r, color.g, color.b);
+        mat.alpha = 0.95;
+        mat.disableDepthWrite = true;
+        mat.zOffset = -4;
+
+        const shaft = BABYLON.MeshBuilder.CreateCylinder(
+            'solver_arrow_shaft',
+            { height: shaftLen, diameter: shaftDia },
+            scene,
+        );
+        shaft.rotation.x = Math.PI / 2;
+        shaft.position.z = shaftCenterZ;
+        shaft.material = mat;
+        shaft.isPickable = false;
+        shaft.renderingGroupId = 1;
+        shaft.parent = parentMesh;
+        this._meshes.push(shaft);
+
+        const head = BABYLON.MeshBuilder.CreateCylinder(
+            'solver_arrow_head',
+            { height: headLen, diameterTop: 0, diameterBottom: headDia },
+            scene,
+        );
+        head.rotation.x = Math.PI / 2;
+        head.position.z = headCenterZ;
+        head.material = mat;
+        head.isPickable = false;
+        head.renderingGroupId = 1;
+        head.parent = parentMesh;
+        this._meshes.push(head);
     }
 
     private _addPointWorld(scene: any, node: any, localMm: number[], color: typeof COLOR_A): void {
@@ -311,6 +405,256 @@ export class ConstraintHighlightOverlay {
         const pos = cadToRender(worldCad);
         mesh.position.set(pos.x, pos.y, pos.z);
         this._meshes.push(mesh);
+    }
+
+    private _resolveAnchorRenderWorldPoint(doc: any, anchor: ConstraintAnchor): Vec3 | null {
+        if (!anchor || anchor.kind === 'DATUM' || String(anchor.nodeId || '').startsWith('__DATUM__:')) {
+            return null;
+        }
+        const body = doc.findNode?.(anchor.nodeId);
+        if (!body) {
+            return null;
+        }
+        const geom = anchor.sourceNodeId
+            ? (doc.findNode?.(anchor.sourceNodeId) ?? resolveGeomNode(body, anchor))
+            : body;
+        const resolved = resolveAnchor(body, anchor, geom);
+        if (!resolved) {
+            return null;
+        }
+        const worldCad = localMmToWorldMm(body, resolved.localPointMm as [number, number, number]);
+        return cadToRender(worldCad);
+    }
+
+    /**
+     * Rurka 3D łącząca wskazane narożniki (dla relacji VERTEX / Połącz narożnikami).
+     */
+    private _addConnectingTube(
+        scene: any,
+        posA: Vec3,
+        posB: Vec3,
+        color: typeof COLOR_A,
+    ): void {
+        if (typeof BABYLON === 'undefined' || !BABYLON.MeshBuilder) {
+            return;
+        }
+        const dx = posB.x - posA.x;
+        const dy = posB.y - posA.y;
+        const dz = posB.z - posA.z;
+        const dist = Math.hypot(dx, dy, dz);
+        if (dist < 1.0) {
+            return;
+        }
+
+        const pA = new BABYLON.Vector3(posA.x, posA.y, posA.z);
+        const pB = new BABYLON.Vector3(posB.x, posB.y, posB.z);
+
+        const mat = new BABYLON.StandardMaterial('solver_link_tube_mat', scene);
+        mat.diffuseColor = new BABYLON.Color3(color.r, color.g, color.b);
+        mat.emissiveColor = new BABYLON.Color3(color.r * 0.8, color.g * 0.8, color.b * 0.8);
+        mat.alpha = 0.9;
+        mat.disableDepthWrite = true;
+        mat.zOffset = -3;
+
+        let mesh: any = null;
+        if (typeof BABYLON.MeshBuilder.CreateTube === 'function') {
+            mesh = BABYLON.MeshBuilder.CreateTube(
+                'solver_hl_vertex_tube',
+                {
+                    path: [pA, pB],
+                    radius: 2.2,
+                    tessellation: 12,
+                    sideOrientation: BABYLON.Mesh.DOUBLESIDE,
+                },
+                scene,
+            );
+        } else if (typeof BABYLON.MeshBuilder.CreateCylinder === 'function') {
+            mesh = BABYLON.MeshBuilder.CreateCylinder(
+                'solver_hl_vertex_tube',
+                { height: dist, diameter: 4.4 },
+                scene,
+            );
+            mesh.position.set((posA.x + posB.x) / 2, (posA.y + posB.y) / 2, (posA.z + posB.z) / 2);
+            const up = new BABYLON.Vector3(0, 1, 0);
+            const dir = new BABYLON.Vector3(dx / dist, dy / dist, dz / dist);
+            const axis = BABYLON.Vector3.Cross(up, dir);
+            const dot = up.x * dir.x + up.y * dir.y + up.z * dir.z;
+            if (axis.lengthSquared() > 1e-6) {
+                const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+                if (BABYLON.Quaternion?.RotationAxis) {
+                    mesh.rotationQuaternion = BABYLON.Quaternion.RotationAxis(axis.normalize(), angle);
+                }
+            } else if (dot < 0) {
+                mesh.rotation.x = Math.PI;
+            }
+        }
+
+        if (mesh) {
+            mesh.material = mat;
+            mesh.isPickable = false;
+            mesh.renderingGroupId = 1;
+            this._meshes.push(mesh);
+        }
+    }
+
+    /**
+     * Uruchamia dynamiczną rurkę łączącą Narożnik A z aktualną pozycją wskaźnika myszy w 3D.
+     */
+    startVertexRubberBand(constraintId: string): void {
+        this.stopVertexRubberBand();
+        this._rubberBandConstraintId = constraintId;
+        const scene = ContextManager.instance.viewport?.scene;
+        if (!scene || !scene.onPointerObservable) {
+            return;
+        }
+        this._pointerObserver = scene.onPointerObservable.add((pointerInfo: any) => {
+            if (pointerInfo.type === (BABYLON?.PointerEventTypes?.POINTERMOVE ?? 4)) {
+                this._updateRubberBand(scene, pointerInfo);
+            }
+        });
+        this._updateRubberBand(scene);
+    }
+
+    /**
+     * Zatrzymuje i usuwa dynamiczną rurkę śledzącą wskaźnik myszy.
+     */
+    stopVertexRubberBand(): void {
+        const scene = ContextManager.instance.viewport?.scene;
+        if (this._pointerObserver && scene?.onPointerObservable) {
+            scene.onPointerObservable.remove(this._pointerObserver);
+            this._pointerObserver = null;
+        }
+        if (this._rubberBandMesh) {
+            try {
+                this._rubberBandMesh.dispose();
+            } catch {
+                /* ignore */
+            }
+            this._rubberBandMesh = null;
+        }
+        this._rubberBandConstraintId = null;
+        ContextManager.instance.viewport?.requestRender?.(2);
+    }
+
+    private _updateRubberBand(scene: any, pointerInfo?: any): void {
+        if (!this._rubberBandConstraintId) {
+            return;
+        }
+        const constraint = ConstraintStore.instance.get(this._rubberBandConstraintId);
+        if (!constraint || constraint.bindType !== 'VERTEX' || !constraint.anchorA) {
+            this.stopVertexRubberBand();
+            return;
+        }
+        const doc = ContextManager.instance.document;
+        const posA = this._resolveAnchorRenderWorldPoint(doc, constraint.anchorA);
+        if (!posA) {
+            return;
+        }
+
+        let target: any = null;
+        if (pointerInfo?.pickInfo?.hit && pointerInfo?.pickInfo?.pickedPoint) {
+            const m = pointerInfo.pickInfo.pickedMesh;
+            if (!m || !String(m.name || '').startsWith('solver_')) {
+                target = pointerInfo.pickInfo.pickedPoint;
+            }
+        }
+
+        const pointerX = scene.pointerX ?? pointerInfo?.event?.clientX ?? 0;
+        const pointerY = scene.pointerY ?? pointerInfo?.event?.clientY ?? 0;
+
+        if (!target && typeof scene.pick === 'function') {
+            const pickResult = scene.pick(pointerX, pointerY, (m: any) => {
+                return m?.isPickable && !String(m?.name || '').startsWith('solver_');
+            });
+            if (pickResult?.hit && pickResult.pickedPoint) {
+                target = pickResult.pickedPoint;
+            }
+        }
+
+        if (!target && scene.activeCamera) {
+            if (typeof scene.createPickingRay === 'function') {
+                const ray = scene.createPickingRay(
+                    pointerX,
+                    pointerY,
+                    BABYLON.Matrix?.Identity ? BABYLON.Matrix.Identity() : null,
+                    scene.activeCamera,
+                );
+                if (ray?.direction && ray?.origin) {
+                    const fwd = scene.activeCamera.getForwardRay?.()?.direction || ray.direction;
+                    const pA = new BABYLON.Vector3(posA.x, posA.y, posA.z);
+                    const denom = BABYLON.Vector3?.Dot
+                        ? BABYLON.Vector3.Dot(ray.direction, fwd)
+                        : ray.direction.x * fwd.x + ray.direction.y * fwd.y + ray.direction.z * fwd.z;
+                    if (Math.abs(denom) > 1e-4) {
+                        const diff = pA.subtract(ray.origin);
+                        const num = BABYLON.Vector3?.Dot
+                            ? BABYLON.Vector3.Dot(diff, fwd)
+                            : diff.x * fwd.x + diff.y * fwd.y + diff.z * fwd.z;
+                        const t = num / denom;
+                        if (t > 0) {
+                            target = ray.origin.add(ray.direction.scale(t));
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!target) {
+            return;
+        }
+
+        const pA = new BABYLON.Vector3(posA.x, posA.y, posA.z);
+        const dist = BABYLON.Vector3?.Distance
+            ? BABYLON.Vector3.Distance(pA, target)
+            : Math.hypot(pA.x - target.x, pA.y - target.y, pA.z - target.z);
+
+        if (dist < 2.0) {
+            if (this._rubberBandMesh) {
+                this._rubberBandMesh.isVisible = false;
+            }
+            return;
+        }
+
+        if (this._rubberBandMesh) {
+            try {
+                this._rubberBandMesh.dispose();
+            } catch {
+                /* ignore */
+            }
+            this._rubberBandMesh = null;
+        }
+
+        const mat = new BABYLON.StandardMaterial('solver_rubber_band_mat', scene);
+        mat.diffuseColor = new BABYLON.Color3(COLOR_VERTEX_LINK.r, COLOR_VERTEX_LINK.g, COLOR_VERTEX_LINK.b);
+        mat.emissiveColor = new BABYLON.Color3(COLOR_VERTEX_LINK.r * 0.9, COLOR_VERTEX_LINK.g * 0.9, COLOR_VERTEX_LINK.b * 0.9);
+        mat.alpha = 0.85;
+        mat.disableDepthWrite = true;
+        mat.zOffset = -4;
+
+        if (typeof BABYLON.MeshBuilder?.CreateTube === 'function') {
+            this._rubberBandMesh = BABYLON.MeshBuilder.CreateTube(
+                'solver_rubber_band_tube',
+                {
+                    path: [pA, target],
+                    radius: 2.0,
+                    tessellation: 12,
+                    sideOrientation: BABYLON.Mesh?.DOUBLESIDE ?? 2,
+                },
+                scene,
+            );
+        } else if (typeof BABYLON.MeshBuilder?.CreateCylinder === 'function') {
+            const mesh = BABYLON.MeshBuilder.CreateCylinder('solver_rubber_band_tube', { height: dist, diameter: 4.0 }, scene);
+            mesh.position.set((pA.x + target.x) / 2, (pA.y + target.y) / 2, (pA.z + target.z) / 2);
+            this._rubberBandMesh = mesh;
+        }
+
+        if (this._rubberBandMesh) {
+            this._rubberBandMesh.material = mat;
+            this._rubberBandMesh.isPickable = false;
+            this._rubberBandMesh.renderingGroupId = 1;
+            this._rubberBandMesh.isVisible = true;
+        }
+        ContextManager.instance.viewport?.requestRender?.(2);
     }
 
     /** CreatePlane: lokalne X = szerokość, Y = wysokość, Z = normalna. */

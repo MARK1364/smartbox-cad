@@ -21,7 +21,7 @@ import { handleConstraintPickEvent } from '../../S2_solver/constraint-picker.js'
 import { isConnectorPickActive } from '../../C2_connectors/connector-picker.js';
 import { shouldPromoteSubgeometryToEntity } from '../../A1_core/selection-mode.js';
 import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
-import { openCncFromCad, openReportFromCad, openNestingFromCad } from '../module-data/open-modules.js';
+import { openCncFromCad, openReportFromCad, openNestingFromCad, openSmartPartsStudioFromCad } from '../module-data/open-modules.js';
 import { registerModuleOpenHandler } from '../../A1_core/module-open-port.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
@@ -55,6 +55,7 @@ async function main() {
         openCnc: openCncFromCad,
         openReport: openReportFromCad,
         openNesting: openNestingFromCad,
+        openSmartPartsStudio: openSmartPartsStudioFromCad,
     });
 
     // ─── Inicjalizacja nowej maszyny stanów (FSM) ───
@@ -126,7 +127,7 @@ async function main() {
                         try {
                             refPicker.onSelect(payload);
                         } catch (err: any) {
-                            ctx.ui.setStatus(`⛔ Referencja: ${err?.message || err}`, true);
+                            ctx.ui.setStatus(`⛔ Odniesienie: ${err?.message || err}`, true);
                         }
                     } else if (typeof refPicker.onPick === 'function') {
                         refPicker.onPick(panelModel.id, data.face, {

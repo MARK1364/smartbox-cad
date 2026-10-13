@@ -3,6 +3,7 @@
  */
 
 import type { DocumentExtension, ProjectDocument } from '../A1_core/project-document.js';
+import { normalizePositionTypes, normalizePositionsActive } from './connector-presets.js';
 import {
     CONNECTORS_DOCUMENT_SECTION,
     CONNECTORS_SCHEMA_VERSION,
@@ -13,6 +14,7 @@ import {
     normalizeConnectorSide,
     type ConnectorGroup,
     type ConnectorInstance,
+    type ConnectorPreset,
     type Vec3Tuple,
 } from './connectors-types.js';
 
@@ -22,6 +24,8 @@ export interface ConnectorStoreJSON {
     groups: ConnectorGroup[];
     clipboardRule?: string;
     clipboardFirstOffsetMm?: number;
+    clipboardPositionsActive?: boolean[];
+    clipboardPositionTypes?: string[];
 }
 
 function parseFirstOffsetMm(raw: unknown, fallback: number): number {
@@ -68,6 +72,10 @@ function reviveGroup(raw: any): ConnectorGroup | null {
             legacy2 ? LEGACY_SYMMETRY2_FIRST_OFFSET_MM : DEFAULT_FIRST_OFFSET_MM,
         ),
         positionsActive: Array.isArray(raw.positionsActive) ? raw.positionsActive.map(Boolean) : [],
+        positionTypes: normalizePositionTypes(
+            canonicalPlacementRule(rawRule),
+            Array.isArray(raw.positionTypes) ? raw.positionTypes.map(String) : null,
+        ),
         faceVertsLocalMm: verts,
         faceNormalLocalMm: isTuple(raw.faceNormalLocalMm) ? raw.faceNormalLocalMm : [0, 1, 0],
         connectors,
@@ -87,9 +95,17 @@ export class ConnectorStore {
     groups: ConnectorGroup[] = [];
     clipboardRule = '';
     clipboardFirstOffsetMm = DEFAULT_FIRST_OFFSET_MM;
+    clipboardPositionsActive: boolean[] = [];
+    clipboardPositionTypes: string[] = [];
     editingGroupId = '';
     placementRule = 'standard_od_lewej';
     firstOffsetMm = DEFAULT_FIRST_OFFSET_MM;
+    /** Maska aktywnych pozycji dla nowych wstawień / edytora presetu. */
+    positionsActive: boolean[] = normalizePositionsActive('standard_od_lewej');
+    /** Typy na siatce 32 mm (kołek / konfirmat / mimośród). */
+    positionTypes: string[] = normalizePositionTypes('standard_od_lewej');
+    /** Ostatnio wybrany preset narzędzia (UI). */
+    activePresetId = '';
     private _nextId = 1;
     private _listeners = new Set<ConnectorChangeListener>();
 
@@ -155,7 +171,57 @@ export class ConnectorStore {
         if (group) {
             this.placementRule = group.placementRule;
             this.firstOffsetMm = group.firstOffsetMm ?? DEFAULT_FIRST_OFFSET_MM;
+            this.positionsActive = normalizePositionsActive(
+                group.placementRule,
+                group.positionsActive,
+            );
+            this.positionTypes = normalizePositionTypes(
+                group.placementRule,
+                group.positionTypes,
+            );
         }
+        this.notifyChanged();
+    }
+
+    setPlacementRule(ruleKey: string): void {
+        this.placementRule = canonicalPlacementRule(ruleKey);
+        this.positionsActive = normalizePositionsActive(this.placementRule, this.positionsActive);
+        this.positionTypes = normalizePositionTypes(this.placementRule, this.positionTypes);
+        this.notifyChanged();
+    }
+
+    setPositionsActive(mask: boolean[]): void {
+        this.positionsActive = normalizePositionsActive(this.placementRule, mask);
+        this.notifyChanged();
+    }
+
+    setPositionTypes(types: string[]): void {
+        this.positionTypes = normalizePositionTypes(this.placementRule, types);
+        this.notifyChanged();
+    }
+
+    togglePosition(index: number): void {
+        const next = [...this.positionsActive];
+        if (index < 0 || index >= next.length) return;
+        next[index] = !next[index];
+        this.positionsActive = next;
+        this.notifyChanged();
+    }
+
+    setPositionType(index: number, type: string): void {
+        const next = [...this.positionTypes];
+        if (index < 0 || index >= next.length) return;
+        next[index] = type;
+        this.positionTypes = normalizePositionTypes(this.placementRule, next);
+        this.notifyChanged();
+    }
+
+    applyPreset(preset: ConnectorPreset): void {
+        this.activePresetId = preset.id;
+        this.placementRule = canonicalPlacementRule(preset.placementRule);
+        this.firstOffsetMm = preset.firstOffsetMm ?? DEFAULT_FIRST_OFFSET_MM;
+        this.positionsActive = normalizePositionsActive(this.placementRule, preset.positionsActive);
+        this.positionTypes = normalizePositionTypes(this.placementRule, preset.positionTypes);
         this.notifyChanged();
     }
 
@@ -164,6 +230,14 @@ export class ConnectorStore {
         if (!group) return false;
         this.clipboardRule = group.placementRule;
         this.clipboardFirstOffsetMm = group.firstOffsetMm ?? DEFAULT_FIRST_OFFSET_MM;
+        this.clipboardPositionsActive = normalizePositionsActive(
+            group.placementRule,
+            group.positionsActive,
+        );
+        this.clipboardPositionTypes = normalizePositionTypes(
+            group.placementRule,
+            group.positionTypes,
+        );
         this.notifyChanged();
         return true;
     }
@@ -185,9 +259,14 @@ export class ConnectorStore {
         this.groups = [];
         this.clipboardRule = '';
         this.clipboardFirstOffsetMm = DEFAULT_FIRST_OFFSET_MM;
+        this.clipboardPositionsActive = [];
+        this.clipboardPositionTypes = [];
         this.editingGroupId = '';
         this.placementRule = 'standard_od_lewej';
         this.firstOffsetMm = DEFAULT_FIRST_OFFSET_MM;
+        this.positionsActive = normalizePositionsActive('standard_od_lewej');
+        this.positionTypes = normalizePositionTypes('standard_od_lewej');
+        this.activePresetId = '';
         this._nextId = 1;
         this.notifyChanged();
     }
@@ -201,10 +280,13 @@ export class ConnectorStore {
                 faceVertsLocalMm: g.faceVertsLocalMm.map((v) => [...v] as Vec3Tuple),
                 faceNormalLocalMm: [...g.faceNormalLocalMm] as Vec3Tuple,
                 positionsActive: [...g.positionsActive],
+                positionTypes: [...(g.positionTypes ?? [])],
                 connectors: g.connectors.map((c) => ({ ...c, positionLocalMm: [...c.positionLocalMm] as Vec3Tuple, normalLocalMm: [...c.normalLocalMm] as Vec3Tuple })),
             })),
             clipboardRule: this.clipboardRule,
             clipboardFirstOffsetMm: this.clipboardFirstOffsetMm,
+            clipboardPositionsActive: [...this.clipboardPositionsActive],
+            clipboardPositionTypes: [...this.clipboardPositionTypes],
         };
     }
 
@@ -213,8 +295,12 @@ export class ConnectorStore {
             this.groups = [];
             this.clipboardRule = '';
             this.clipboardFirstOffsetMm = DEFAULT_FIRST_OFFSET_MM;
+            this.clipboardPositionsActive = [];
+            this.clipboardPositionTypes = [];
             this.editingGroupId = '';
             this.firstOffsetMm = DEFAULT_FIRST_OFFSET_MM;
+            this.positionsActive = normalizePositionsActive(this.placementRule);
+            this.positionTypes = normalizePositionTypes(this.placementRule);
             this._nextId = 1;
             this.notifyChanged();
             return;
@@ -228,6 +314,12 @@ export class ConnectorStore {
         this.groups = data.groups.map(reviveGroup).filter((g): g is ConnectorGroup => !!g);
         this.clipboardRule = typeof data.clipboardRule === 'string' ? data.clipboardRule : '';
         this.clipboardFirstOffsetMm = parseFirstOffsetMm(data.clipboardFirstOffsetMm, DEFAULT_FIRST_OFFSET_MM);
+        this.clipboardPositionsActive = Array.isArray(data.clipboardPositionsActive)
+            ? data.clipboardPositionsActive.map(Boolean)
+            : [];
+        this.clipboardPositionTypes = Array.isArray(data.clipboardPositionTypes)
+            ? data.clipboardPositionTypes.map(String)
+            : [];
         this._nextId = Number.isFinite(data.nextId) ? Math.max(1, data.nextId) : this.groups.length + 1;
         this.editingGroupId = '';
         this.notifyChanged();

@@ -8,12 +8,17 @@
 
 import { type DetectedBay, probeBayFromSceneRay } from './bloki-bay-detector.js';
 import { highlightBayInScene, clearBayHighlight } from './bloki-bay-visualizer.js';
+import { probePanelSurfaceFromRay, type DetectedPanelSurface } from './handles/handle-detector.js';
+import { highlightPanelSurface, clearPanelHighlight } from './handles/handle-visualizer.js';
+import { ContextManager } from '../A1_core/context-manager.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
 import { PerformanceConfigManager } from '../A1_core/performance-config.js';
+import type { HandleParamsMm } from './handles/handle-types.js';
 
-export type BlokiPickerMode = 'internal' | 'external';
+export type BlokiPickerMode = 'internal' | 'external' | 'panel';
 export type BayPickerListener = (isActive: boolean, mode?: BlokiPickerMode) => void;
 export type BayDetectedListener = (bay: DetectedBay) => void;
+export type PanelDetectedListener = (surface: DetectedPanelSurface) => void;
 
 export class BlokiBayController {
     private _isPickerActive: boolean = false;
@@ -21,11 +26,27 @@ export class BlokiBayController {
     private _draggedBlokType: string | null = null;
     private _pendingBlokType: string | null = null;
     private _lastDetectedBay: DetectedBay | null = null;
+    private _lastDetectedSurface: DetectedPanelSurface | null = null;
+    private _activeHandleTemplate: Partial<HandleParamsMm> | null = null;
 
     private _pickerSubscribers: Set<BayPickerListener> = new Set();
     private _bayDetectedSubscribers: Set<BayDetectedListener> = new Set();
+    private _panelDetectedSubscribers: Set<PanelDetectedListener> = new Set();
 
     // ─── Stan pickera ─────────────────────────────────────────────
+
+    get activeHandleTemplate(): Partial<HandleParamsMm> | null {
+        return this._activeHandleTemplate;
+    }
+
+    setActiveHandleTemplate(tpl: Partial<HandleParamsMm> | null): void {
+        this._activeHandleTemplate = tpl;
+    }
+
+    setPickerMode(mode: BlokiPickerMode): void {
+        this._pickerMode = mode;
+        this._notifyPickerState();
+    }
 
     get isPickerActive(): boolean {
         return this._isPickerActive;
@@ -43,13 +64,30 @@ export class BlokiBayController {
         this._lastDetectedBay = bay;
     }
 
-    startPicker(pendingType?: string, mode: BlokiPickerMode = 'internal'): void {
+    get lastDetectedSurface(): DetectedPanelSurface | null {
+        return this._lastDetectedSurface;
+    }
+
+    setLastDetectedSurface(surface: DetectedPanelSurface | null): void {
+        this._lastDetectedSurface = surface;
+    }
+
+    startPicker(pendingType?: string, mode?: BlokiPickerMode): void {
         this._isPickerActive = true;
-        this._pickerMode = mode;
+        if (mode) {
+            this._pickerMode = mode;
+        } else if (pendingType === 'HANDLES') {
+            this._pickerMode = 'panel';
+        } else if (pendingType === 'PANELS') {
+            this._pickerMode = 'external';
+        } else {
+            this._pickerMode = 'internal';
+        }
+
         if (pendingType) {
             this._pendingBlokType = pendingType;
         } else {
-            this._pendingBlokType = mode === 'external' ? 'PANELS' : 'EMPTY';
+            this._pendingBlokType = this._pickerMode === 'external' ? 'PANELS' : this._pickerMode === 'panel' ? 'HANDLES' : 'EMPTY';
         }
         this._notifyPickerState();
     }
@@ -59,6 +97,8 @@ export class BlokiBayController {
         this._isPickerActive = false;
         if (!keepHighlight) {
             clearBayHighlight();
+            const scene = ContextManager.instance?.viewport?.scene;
+            if (scene) clearPanelHighlight(scene);
         }
         this._notifyPickerState();
     }
@@ -109,6 +149,8 @@ export class BlokiBayController {
         this._draggedBlokType = blokType;
         if (mode) {
             this._pickerMode = mode;
+        } else if (blokType === 'HANDLES') {
+            this._pickerMode = 'panel';
         } else if (blokType === 'PANELS') {
             this._pickerMode = 'external';
         } else {
@@ -120,7 +162,10 @@ export class BlokiBayController {
         this._draggedBlokType = null;
         if (!keepHighlight) {
             clearBayHighlight();
+            const scene = ContextManager.instance?.viewport?.scene;
+            if (scene) clearPanelHighlight(scene);
         }
+        this._lastDetectedSurface = null;
     }
 
     setPendingBlokType(type: string | null): void {
@@ -137,10 +182,35 @@ export class BlokiBayController {
         if (!scene || !doc) return null;
         const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
         const throttleMs = PerformanceConfigManager.instance.getThrottleHoverMs();
-        if (now - this._lastPointerMoveTime < throttleMs && this._lastDetectedBay) {
+        if (now - this._lastPointerMoveTime < throttleMs && (this._lastDetectedBay || this._lastDetectedSurface)) {
             return this._lastDetectedBay;
         }
         this._lastPointerMoveTime = now;
+
+        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._pickerMode === 'panel';
+
+        if (isPanelMode) {
+            const pick = scene.pick(pointerX, pointerY, (m: any) => {
+                if (!m?.isPickable || !m.isVisible) return false;
+                const name = String(m.name || '');
+                if (name.includes('ground') || name.includes('grid') || name.includes('__handle') || name.includes('blok_bay') || name.includes('blok_plane')) return false;
+                if (name.startsWith('handle_mesh_') || m.metadata?.type === 'smartpart_handle') return false;
+                return true;
+            });
+            if (pick && pick.hit && pick.pickedMesh) {
+                const surface = probePanelSurfaceFromRay(scene, pick, doc);
+                if (surface) {
+                    highlightPanelSurface(scene, surface, this._activeHandleTemplate || {});
+                    this._lastDetectedSurface = surface;
+                    return null;
+                }
+            }
+            if (this._lastDetectedSurface) {
+                clearPanelHighlight(scene);
+                this._lastDetectedSurface = null;
+            }
+            return null;
+        }
 
         const pick = scene.pick(pointerX, pointerY, (m: any) =>
             m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_plane') && !m.name?.includes('blok_bay')
@@ -159,6 +229,14 @@ export class BlokiBayController {
     }
 
     onDropOnScene(): void {
+        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._pickerMode === 'panel';
+        if (isPanelMode && this._lastDetectedSurface) {
+            this.notifyPanelDetected(this._lastDetectedSurface);
+            this.endDrag();
+            this._lastDetectedSurface = null;
+            return;
+        }
+
         const bay = this._lastDetectedBay;
         const optType = this._pendingBlokType || this._draggedBlokType || 'EMPTY';
         const keepHighlight = optType === 'EMPTY';
@@ -187,6 +265,27 @@ export class BlokiBayController {
     subscribeBayDetected(callback: BayDetectedListener): () => void {
         this._bayDetectedSubscribers.add(callback);
         return () => this._bayDetectedSubscribers.delete(callback);
+    }
+
+    // ─── Wykryty panel / formatka ─────────────────────────────────
+
+    notifyPanelDetected(surface: DetectedPanelSurface): void {
+        this.stopPicker(false);
+        const scene = ContextManager.instance?.viewport?.scene;
+        if (scene) clearPanelHighlight(scene);
+
+        for (const sub of this._panelDetectedSubscribers) {
+            try { sub(surface); } catch (err) { console.error(err); }
+        }
+        if (typeof window !== 'undefined') {
+            const detail = Object.assign(surface, { surface, handleParams: this._activeHandleTemplate });
+            window.dispatchEvent(new CustomEvent('bloki-panel-detected', { detail }));
+        }
+    }
+
+    subscribePanelDetected(callback: PanelDetectedListener): () => void {
+        this._panelDetectedSubscribers.add(callback);
+        return () => this._panelDetectedSubscribers.delete(callback);
     }
 }
 

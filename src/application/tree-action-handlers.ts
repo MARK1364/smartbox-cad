@@ -188,8 +188,12 @@ export function registerTreeActionHandlers(
       ctx.ui.setStatus?.('Pokazano tylko zaznaczony element', true);
     } else if (action === 'show-all') {
       const doc = ctx.document;
-      for (const p of getAllPanels(doc)) p.visible = true;
-      for (const c of getAllContainers(doc)) c.visible = true;
+      for (const p of getAllPanels(doc)) {
+        p.visible = true;
+      }
+      for (const c of getAllContainers(doc)) {
+        c.visible = true;
+      }
       const hwNodes = doc.getNodesByType ? doc.getNodesByType(NodeType.HARDWARE) : [];
       for (const hw of hwNodes) {
         if (!hw.domainData) hw.domainData = {} as any;
@@ -198,7 +202,7 @@ export function registerTreeActionHandlers(
       rebuildGeometry();
       doc.emitChange('all');
       (ContextManager.instance as any).notifyIsolationUpdate?.();
-      ctx.ui.setStatus?.('Pokazano wszystkie elementy', true);
+      ctx.ui.setStatus?.('Pokazano cały projekt', true);
     } else if (action === 'toggle-visibility') {
       const panels = getAllPanels(ctx.document);
       for (const panel of panels) {

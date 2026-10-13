@@ -16,12 +16,17 @@ import type {
     PanelsPlanParams,
     ShelfPlanParams,
     ShelvesPlanParams,
+    SkosneDoorsPlanParams,
     TubesPlanParams
 } from './bloki-module-types.js';
 
 import { calculateShelvesPlan, normalizeShelvesParams } from './shelves-engine.js';
 import { calculateShelfPlan, normalizeShelfParams } from './shelf-engine.js';
 import { calculateDoorsPlan, normalizeDoorsParams } from './doors-engine.js';
+import {
+    calculateSkosneDoorsPlan,
+    normalizeSkosneDoorsParams
+} from './skosne-doors-engine.js';
 import { calculateCornerDoorsPlan, normalizeCornerDoorsParams } from './corner-doors-engine.js';
 import { calculateTubesPlan, normalizeTubesParams } from './tubes-engine.js';
 import { calculateDrawersPlan, normalizeDrawersParams } from './drawers-engine.js';
@@ -35,6 +40,8 @@ import {
     calculateLedExternalPlan,
     normalizeLedExternalParams
 } from './led-engine.js';
+import type { HangersPlanParams } from './hangers-types.js';
+import { calculateHangersPlan, normalizeHangersParams } from './hangers-engine.js';
 
 export function buildShelvesPlan(params: ShelvesPlanParams, dims: ModuleDims): BlokiPlanResult {
     const dims_mm = toDimensionsMm(dims);
@@ -52,6 +59,13 @@ export function buildDoorsPlan(params: DoorsPlanParams, dims: ModuleDims): Bloki
     const dims_mm = toDimensionsMm(dims);
     const normalized = normalizeDoorsParams(params, dims_mm);
     return calculateDoorsPlan(dims_mm, normalized);
+}
+
+export function buildSkosneDoorsPlan(params: SkosneDoorsPlanParams, dims: ModuleDims): BlokiPlanResult {
+    const dims_mm = toDimensionsMm(dims);
+    const normalized = normalizeSkosneDoorsParams(params, dims_mm);
+    if (!normalized) return { parts: [], hardware: [] };
+    return calculateSkosneDoorsPlan(dims_mm, normalized);
 }
 
 export function buildCornerDoorsPlan(params: CornerDoorsPlanParams, dims: ModuleDims): BlokiPlanResult {
@@ -106,4 +120,10 @@ export function buildLedExternalPlan(params: LedExternalPlanParams, dims: Module
 export function buildLedPlan(params: LedPlanParams, dims: ModuleDims): BlokiPlanResult {
     const dims_mm = toDimensionsMm(dims);
     return calculateLedPlan(dims_mm, params);
+}
+
+export function buildHangersPlan(params: HangersPlanParams, dims: ModuleDims): BlokiPlanResult {
+    const dims_mm = toDimensionsMm(dims);
+    const normalized = normalizeHangersParams(params, dims_mm);
+    return calculateHangersPlan(dims_mm, normalized);
 }

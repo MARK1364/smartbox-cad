@@ -53,7 +53,7 @@ export const getPanelDimensionsMM = (panel: any) => {
     if (typeof panel.width !== 'number' || panel.width <= 0 ||
         typeof panel.height !== 'number' || panel.height <= 0 ||
         typeof panel.thickness !== 'number' || panel.thickness <= 0) {
-        throw new Error(`[C1_cnc/CncPanel] Formatka "${panel.name || 'unknown'}" nie posiada poprawnych wymiarów fizycznych (W=${panel.width}, H=${panel.height}, T=${panel.thickness}).`);
+        throw new Error(`[C1_cnc/CncPanel] Formatka "${panel.id}" nie posiada poprawnych wymiarów fizycznych (W=${panel.width}, H=${panel.height}, T=${panel.thickness}).`);
     }
     return {
         width: nmToMm(panel.width),
@@ -242,7 +242,21 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     // Formatka docelowa dla wybranego programu CNC jest ZABLOKOWANA na przypisanym obiekcie!
     const lockedPanel = currentProgram ? currentProgram.targetPanel : (isValidFormatka ? effectiveActivePanel : null);
     const defPanelName = tx(cncTekst, 'extractor.panel_default', TX_NS);
+    const effectiveTargetPanel = lockedPanel || (isValidFormatka ? effectiveActivePanel : null);
+    const targetPanelLabel = effectiveTargetPanel?.name || currentProgram?.targetPanelLabel || (isValidFormatka && activePanel?.name) || null;
     const panelName = lockedPanel ? (lockedPanel.name || defPanelName) : (isValidFormatka && activePanel ? (activePanel.name || defPanelName) : null);
+
+    let panelDimsFormatted = '';
+    if (effectiveTargetPanel && typeof effectiveTargetPanel.width === 'number' && effectiveTargetPanel.width > 0) {
+        try {
+            const w = Math.round(nmToMm(effectiveTargetPanel.width) * 10) / 10;
+            const h = Math.round(nmToMm(effectiveTargetPanel.height) * 10) / 10;
+            const t = Math.round(nmToMm(effectiveTargetPanel.thickness) * 10) / 10;
+            panelDimsFormatted = `${w} × ${h} × ${t} mm`;
+        } catch {
+            // ignore
+        }
+    }
 
     const updateProg = useCallback((updaterOrUpdates: Partial<CNCProgramState> | ((p: CNCProgramState) => CNCProgramState)) => {
         if (!activeProgIdRef.current) return;
@@ -549,20 +563,6 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             } else {
                 engine.visualizer?.clearHighlight();
             }
-            if (ContextManager.instance.viewport?.scene?.activeCamera) {
-                const pos = (feat.panelPositions && feat.panelPositions[0]) || feat.panelPosition || (feat.positions && feat.positions[0]) || feat.position || feat.startPoint;
-                if (pos && view?.root) {
-                    try {
-                        const worldPos = BABYLON.Vector3.TransformCoordinates(
-                            new BABYLON.Vector3(pos.x, pos.y, pos.z || 0),
-                            view.root.getWorldMatrix()
-                        );
-                        ContextManager.instance.viewport.scene.activeCamera.setTarget(worldPos);
-                    } catch {
-                        // ignore camera target transform failure
-                    }
-                }
-            }
         }
     }, [pinnedPreviewIdx, resolveCurrentPanelView]);
 
@@ -616,16 +616,6 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             ContextManager.instance.viewport.scene.activeCamera.setTarget(center);
         }
     }, [lockedPanel]);
-
-    // Obsługa Widoku Prostopadłego do ściany (View Normal)
-    const viewNormalToFace = (faceName: string) => {
-        focusCameraOnFormatka();
-        if (ContextManager.instance.appAPI?.viewNormalToFace) {
-            ContextManager.instance.appAPI.viewNormalToFace();
-        } else if (ContextManager.instance.appAPI?.setView) {
-            ContextManager.instance.appAPI.setView(faceName);
-        }
-    };
 
     // Tworzenie nowego programu CNC przypisanego na sztywno do aktywnej formatki
     const handleCreateProgramForFormatka = () => {
@@ -872,6 +862,50 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
                     background: '#3b3e40',
                 }}
             >
+                {/* Wyraźny nagłówek aktywnej formatki CNC */}
+                <div
+                    style={{
+                        background: effectiveTargetPanel
+                            ? 'linear-gradient(135deg, rgba(30, 58, 138, 0.45), rgba(15, 23, 42, 0.75))'
+                            : 'rgba(39, 39, 42, 0.6)',
+                        border: effectiveTargetPanel ? '1px solid #3b82f6' : '1px dashed #64748b',
+                        borderRadius: '6px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        boxShadow: effectiveTargetPanel ? '0 2px 10px rgba(59, 130, 246, 0.25)' : 'none',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '14px' }}>🪵</span>
+                            <span style={{ fontSize: '10px', fontWeight: 700, color: '#93c5fd', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Formatka CNC
+                            </span>
+                        </div>
+                        {panelDimsFormatted && (
+                            <span style={{ fontSize: '11px', color: '#cbd5e1', background: 'rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: '4px', fontFamily: 'monospace', fontWeight: 600 }}>
+                                {panelDimsFormatted}
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 600 }}>Nazwa:</span>
+                        <span style={{
+                            fontSize: '15px',
+                            fontWeight: 700,
+                            color: effectiveTargetPanel ? '#38bdf8' : '#f87171',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            letterSpacing: '0.01em',
+                        }}>
+                            {targetPanelLabel || (effectiveTargetPanel ? defPanelName : tx(cncTekst, 'ui.no_target_panel', TX_NS))}
+                        </span>
+                    </div>
+                </div>
+
                 <button
                     type="button"
                     className={isEmbedded ? 'btn btn-primary' : undefined}
@@ -1376,11 +1410,21 @@ title={tx(cncTekst, 'panel.delete', TX_NS)}
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#ccc', marginTop: '4px' }}>
                                 <span>{storeState.simStatusText}</span>
-                                <span>{storeState.simProgressPercent.toFixed(0)}%</span>
+                                <span>{Math.min(100, Math.max(0, storeState.simProgressPercent)).toFixed(0)}%</span>
                             </div>
                             <div style={{ background: '#111', height: '4px', borderRadius: '2px', overflow: 'hidden' }}>
-                                <div style={{ background: '#4f80bd', height: '100%', width: `${storeState.simProgressPercent}%` }} />
+                                <div style={{ background: '#4f80bd', height: '100%', width: `${Math.min(100, Math.max(0, storeState.simProgressPercent))}%`, transition: 'width 0.15s ease' }} />
                             </div>
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#bbb', cursor: 'pointer', marginTop: '6px' }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={storeState.showToolpaths} 
+                                    onChange={(e) => store.setShowToolpaths(e.target.checked)}
+                                    style={{ accentColor: '#4f80bd', cursor: 'pointer' }}
+                                />
+                                <span>🗺️ {tx(cncTekst, 'simulation.show_toolpaths', TX_NS) || 'Pokaż ścieżki narzędzia (G0/G1)'}</span>
+                            </label>
                         </div>
                     )}
 

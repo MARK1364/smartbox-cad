@@ -5,6 +5,7 @@
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
 import { buildBackGrooves, PanelState } from '../back-groove-builder.js';
+import { buildSkosnyBackGrooves } from '../skosny-back-grooves.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { defaultBackEdgeOverlapMm, readBackEdgeOffset } from '../back-overlap.js';
@@ -31,8 +32,7 @@ export class SyncBackGroovesCommand implements Command {
 
         const offsetsMm = ((cntNode.domainData as any)?.generatorParams?.offsets || {}) as Record<string, number>;
         const cabinetType = String((cntNode.domainData as any)?.generatorParams?.type || '');
-        // Skośny v1: brak wpustów (doczołowo) — OBB-builder zakłada prostopadłe pudła.
-        if (cabinetType.toLowerCase().includes('skosny')) return;
+        const isSkosny = cabinetType.toLowerCase().includes('skosny');
 
         const panelStates: PanelState[] = [];
         for (const childNode of cntNode.children) {
@@ -43,7 +43,8 @@ export class SyncBackGroovesCommand implements Command {
                     role: child.role,
                     dim_nm: { x: child.width, y: child.height, z: child.thickness },
                     localMatrix: childNode.localMatrix,
-                    zonePrefix: child.zonePrefix
+                    zonePrefix: child.zonePrefix,
+                    lcsMapping: child.lcs?.mapping
                 };
                 if (child.role === 'BACK_PANEL') {
                     // Strict: klucz offsetu z key (rename-proof). Display name użytkownik może zmienić
@@ -76,7 +77,9 @@ export class SyncBackGroovesCommand implements Command {
 
         const backPanel = cntNode.children.map((c: any) => c.domainData).find((p: any) => p && p.role === 'BACK_PANEL');
         const isBackPanelDisabled = backPanel && (backPanel.frozen === true || backPanel.visible === false);
-        const intents = isBackPanelDisabled ? [] : buildBackGrooves(panelStates);
+        const intents = isBackPanelDisabled
+            ? []
+            : (isSkosny ? buildSkosnyBackGrooves(cntNode) : buildBackGrooves(panelStates));
 
         const changedNodeIds = new Set<string>();
 
@@ -124,13 +127,22 @@ export class SyncBackGroovesCommand implements Command {
                 const hasFrozenGroove = data.features.some((f: any) => (f.type === 'groove' && f.params?.isBackGroove) && (f.frozen || f.params?.frozen));
                 if (!hasFrozenGroove) {
                     const p = intent.feature.params;
+                    const isNotch = !!p.isEdgeNotch;
                     data.features.push({
                         id: `feat_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
                         type: 'groove',
-                        name: 'Wpust',
-                        face: intent.feature.face === '+Z' ? 'FACE_Z_PLUS' : 'FACE_Z_MINUS',
+                        name: isNotch ? 'Wcięcie' : 'Wpust',
+                        face: ({
+                            '+Z': 'FACE_Z_PLUS',
+                            '-Z': 'FACE_Z_MINUS',
+                            '+Y': 'FACE_Y_PLUS',
+                            '-Y': 'FACE_Y_MINUS',
+                            '+X': 'FACE_X_PLUS',
+                            '-X': 'FACE_X_MINUS'
+                        } as const)[intent.feature.face],
                         params: {
                             isBackGroove: true,
+                            ...(isNotch ? { isEdgeNotch: true } : {}),
                             u: nmToMm(p.u_nm),
                             v: nmToMm(p.v_nm),
                             width: nmToMm(p.width_nm),

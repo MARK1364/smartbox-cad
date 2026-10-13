@@ -6,6 +6,7 @@
 
 import { ProjectDocument } from '../project-document.js';
 import { Command } from './command.js';
+import { nmToMm } from '../cad-math/units.js';
 
 export interface DimensionValues {
     width?: number;
@@ -56,10 +57,29 @@ export class SetDimensionsCommand implements Command {
         if (!node || !node.domainData) return;
 
         const data = node.domainData as any;
-        if (dims.width !== undefined) data.width = dims.width;
-        if (dims.height !== undefined) data.height = dims.height;
-        if (dims.depth !== undefined) data.depth = dims.depth;
-        if (dims.thickness !== undefined) data.thickness = dims.thickness;
+        if (typeof data.setDimensions === 'function'
+            && (dims.width !== undefined || dims.height !== undefined || dims.thickness !== undefined)
+            && dims.depth === undefined
+        ) {
+            // PanelModel.setDimensions — sync thickness_mm + emit modelu
+            data.setDimensions(
+                dims.width !== undefined ? dims.width : data.width,
+                dims.height !== undefined ? dims.height : data.height,
+                dims.thickness !== undefined ? dims.thickness : data.thickness,
+            );
+        } else {
+            if (dims.width !== undefined) data.width = dims.width;
+            if (dims.height !== undefined) data.height = dims.height;
+            if (dims.depth !== undefined) data.depth = dims.depth;
+            if (dims.thickness !== undefined) {
+                data.thickness = dims.thickness;
+                if (!data.custom_properties) data.custom_properties = {};
+                const nm = Number(dims.thickness);
+                if (Number.isFinite(nm) && nm > 0) {
+                    data.custom_properties.thickness_mm = nmToMm(nm);
+                }
+            }
+        }
 
         if (generatorParams !== undefined && data.generatorParams !== undefined) {
             data.generatorParams = JSON.parse(JSON.stringify(generatorParams));

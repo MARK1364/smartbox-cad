@@ -38,6 +38,10 @@ export class SetKorpusOffsetCommand implements Command {
         const data = node?.domainData as any;
         if (!data) return;
         if (!data.generatorParams) data.generatorParams = {};
+        if (this.paramName === 'backOffset' || this.paramName === 'cofniecie_plecow_mm') {
+            data.generatorParams.cofniecie_plecow_mm = value;
+            data.generatorParams.backOffset = value;
+        }
         if (!data.generatorParams.offsets) data.generatorParams.offsets = {};
         data.generatorParams.offsets[this.paramName] = value;
         rebuildSmartFrameContainer(data);

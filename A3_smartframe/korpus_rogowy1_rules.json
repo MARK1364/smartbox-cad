@@ -183,6 +183,24 @@
                 "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
               }
             },
+            "B_WIENIEC_G_T2": {
+              "name": "Dol_Wieniec_G_T2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "TOP_PANEL",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_bloki_child": true
+              },
+              "lcs": {
+                "mapping": { "X": "x", "Y": "y", "Z": "z" },
+                "rotation": [-90, 0, 0],
+                "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+              }
+            },
             "B_PLECY": {
               "name": "Dol_Plecy",
               "type": "Part",

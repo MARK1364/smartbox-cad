@@ -1,5 +1,141 @@
 /* Style panelu SmartParts */
 
+/* ─── Kompaktowy formularz w oknie pływającym ─── */
+.smartparts-edit-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.smartparts-edit-block {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.smartparts-edit-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 22px;
+}
+
+.smartparts-edit-label {
+    font-size: 10px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+.smartparts-edit-val {
+    font-size: 10px;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.smartparts-edit-select {
+    flex: 1;
+    min-width: 0;
+    height: 22px;
+    padding: 0 4px;
+    font-size: 11px;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    border-radius: 4px;
+    color: #fff;
+}
+
+.smartparts-edit-num {
+    width: 44px;
+    height: 22px;
+    padding: 0 3px;
+    font-size: 11px;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    border-radius: 3px;
+    color: #fff;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.smartparts-edit-num:disabled {
+    opacity: 0.55;
+}
+
+.smartparts-edit-check {
+    width: 16px;
+    height: 16px;
+    accent-color: #38bdf8;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.smartparts-edit-uv-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.smartparts-uv-axis-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    min-width: 14px;
+}
+
+.smartparts-edit-drill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: #cbd5e1;
+    cursor: pointer;
+    padding: 3px 0;
+}
+
+.smartparts-edit-drill input[type="checkbox"] {
+    margin: 0;
+    accent-color: #38bdf8;
+}
+
+.smartparts-edit-unit {
+    font-size: 10px;
+    color: #94a3b8;
+}
+
+.smartparts-float .smartparts-toggle-btn {
+    padding: 3px 4px;
+    font-size: 10px;
+}
+
+.smartparts-float .smartparts-preset-check {
+    padding: 3px 4px;
+    gap: 3px;
+    font-size: 10px;
+}
+
+.smartparts-float .smartparts-preset-checks {
+    gap: 3px;
+}
+
+.smartparts-float .smartparts-chip {
+    padding: 2px 5px;
+    font-size: 10px;
+}
+
+.smartparts-float .smartparts-edge-badge {
+    padding: 1px 5px;
+    font-size: 10px;
+    min-width: 32px;
+    justify-content: center;
+}
+
+.smartparts-float .smartparts-uv-box {
+    padding: 5px;
+    gap: 4px;
+}
+
 .smartparts-panel {
     display: flex;
     flex-direction: column;
@@ -12,15 +148,71 @@
     overflow-y: auto;
 }
 
+.smartparts-drag-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+    border: 1px solid #60a5fa;
+    border-radius: 8px;
+    cursor: grab;
+    user-select: none;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
 .smartparts-drag-card:hover {
-    background: #2563eb !important;
-    border-color: #60a5fa !important;
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%) !important;
+    border-color: #93c5fd !important;
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45) !important;
 }
 
 .smartparts-drag-card:active {
     cursor: grabbing !important;
     transform: scale(0.99);
+}
+
+.smartparts-drag-card__grip {
+    display: inline-flex;
+    color: #dbeafe;
+    flex-shrink: 0;
+}
+
+.smartparts-drag-card__preview {
+    width: 36px;
+    height: 30px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(15, 23, 42, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #eff6ff;
+    flex-shrink: 0;
+}
+
+.smartparts-drag-card__text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.smartparts-drag-card__title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.2;
+}
+
+.smartparts-drag-card__sub {
+    font-size: 10px;
+    color: #bfdbfe;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .smartparts-hint {
@@ -32,6 +224,333 @@
     border: 1px dashed rgba(56, 189, 248, 0.3);
     border-radius: 6px;
     padding: 8px 10px;
+}
+
+.smartparts-tools-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.smartparts-section-switch {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.smartparts-section-btn {
+    flex: 1;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #a1a1aa;
+    font-size: 11px;
+    font-weight: 400;
+    cursor: pointer;
+}
+
+.smartparts-section-btn.is-active {
+    background: #27272a;
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+.smartparts-filters {
+    background: #18181b;
+    border: 1px solid #27272a;
+    padding: 10px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.smartparts-filters-title {
+    font-weight: 700;
+    color: #e4e4e7;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.smartparts-search-wrap {
+    position: relative;
+}
+
+.smartparts-search {
+    width: 100%;
+    padding: 5px 28px 5px 8px;
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    color: #fff;
+    border-radius: 4px;
+    font-size: 11px;
+    box-sizing: border-box;
+}
+
+.smartparts-search-clear {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #a1a1aa;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+.smartparts-filter-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.smartparts-list-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 2px;
+    color: #a1a1aa;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.smartparts-list-meta strong {
+    color: #60a5fa;
+}
+
+.smartparts-thumb-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4px;
+    max-height: 380px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.smartparts-thumb-list.is-compact {
+    max-height: 132px;
+}
+
+.smartparts-thumb-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    /* 2 kolumny gdy jest miejsce; poniżej ~280px zawija do 1 (min-width). */
+    flex: 1 1 calc(50% - 2px);
+    min-width: 140px;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 5px 6px;
+    background: #1c1c1f;
+    border: 1px solid #27272a;
+    border-radius: 5px;
+    cursor: grab;
+    user-select: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.smartparts-thumb-row:hover {
+    border-color: #3f3f46;
+}
+
+.smartparts-thumb-row.is-selected {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+}
+
+.smartparts-thumb-row.is-soon {
+    cursor: default;
+    opacity: 0.72;
+}
+
+.smartparts-thumb-grip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #38bdf8;
+    flex-shrink: 0;
+    margin-right: 3px;
+    opacity: 0.85;
+    cursor: grab;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.smartparts-thumb-row:hover .smartparts-thumb-grip {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.smartparts-thumb-preview {
+    width: 28px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: #27272a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #93c5fd;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.smartparts-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 3px;
+    display: block;
+}
+
+.smartparts-thumb-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.smartparts-thumb-name {
+    font-size: 11px;
+    color: #e4e4e7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.smartparts-thumb-row.is-selected .smartparts-thumb-name {
+    color: #93c5fd;
+    font-weight: 700;
+}
+
+.smartparts-thumb-sub {
+    font-size: 9px;
+    color: #71717a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.smartparts-thumb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    background: #182234;
+    border: 1px solid #2563eb;
+    border-radius: 4px;
+    color: #38bdf8;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.smartparts-thumb-delete {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #f87171;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.55;
+}
+
+.smartparts-thumb-row:hover .smartparts-thumb-delete,
+.smartparts-thumb-row.is-selected .smartparts-thumb-delete {
+    opacity: 1;
+}
+
+.smartparts-thumb-delete:hover {
+    background: rgba(239, 68, 68, 0.18);
+}
+
+.smartparts-tool-card {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 72px;
+    min-height: 44px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(39, 39, 42, 0.55);
+    cursor: grab;
+    user-select: none;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.smartparts-tool-card:hover {
+    border-color: #38bdf8;
+    background: rgba(42, 42, 48, 0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+}
+
+.smartparts-tool-card:active {
+    cursor: grabbing;
+}
+
+.smartparts-tool-card__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #93c5fd;
+}
+
+.smartparts-tool-card__label {
+    font-size: 11px;
+    font-weight: 500;
+    color: #e5e7eb;
+    line-height: 1.15;
+}
+
+.smartparts-tool-select-wrap {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    flex: 1 1 140px;
+    min-width: 140px;
+}
+
+.smartparts-tool-select-label {
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.smartparts-tool-select {
+    width: 100%;
+    padding: 7px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #18181b;
+    color: #f1f5f9;
+    font-size: 12px;
+}
+
+.smartparts-tool-select:focus {
+    outline: none;
+    border-color: rgba(56, 189, 248, 0.55);
 }
 
 .smartparts-accordion {
@@ -258,6 +777,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 .smartparts-active-title {
@@ -313,10 +833,45 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
-.smartparts-preset-grid {
+.smartparts-preset-checks {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
+}
+
+.smartparts-preset-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 7px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(15, 23, 42, 0.45);
+    font-size: 11px;
+    color: #cbd5e1;
+    cursor: pointer;
+    user-select: none;
+}
+
+.smartparts-preset-check.is-active {
+    border-color: rgba(56, 189, 248, 0.5);
+    background: rgba(56, 189, 248, 0.12);
+    color: #e0f2fe;
+}
+
+.smartparts-preset-check input {
+    margin: 0;
+    accent-color: #38bdf8;
+}
+
+.smartparts-uv-box.is-locked {
+    opacity: 0.72;
+}
+
+.smartparts-uv-box.is-locked input:disabled,
+.smartparts-uv-box.is-locked button:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .smartparts-preset-btn {
@@ -397,6 +952,33 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+.smartparts-studio-link-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(99, 102, 241, 0.2));
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #38bdf8;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-bottom: 8px;
+}
+
+.smartparts-studio-link-btn:hover {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), rgba(99, 102, 241, 0.35));
+    border-color: #38bdf8;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25);
 }
 
 

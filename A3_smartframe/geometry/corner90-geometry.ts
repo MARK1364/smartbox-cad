@@ -138,8 +138,8 @@ export function resolveCorner90Geometry(
             dim: { x: nailerH, y: nailerW, z: nailerThick },
             loc: { x: locX, y: locY, z: locZ },
             lcs: {
-                mapping: { X: 'z', Y: 'y', Z: 'x' },
-                rotation: [0, 90, 0]
+                mapping: { X: 'y', Y: 'x', Z: 'z' },
+                rotation: [0, 0, -90]
             }
         };
     }
@@ -190,11 +190,11 @@ export function resolveCorner90Geometry(
         const y1 = locY + plateD / 2;
 
         const worldL: [number, number][] = [
-            [x0, y0],
-            [x0 + bok_lewy, y0],
+            [x0, y0 + bokLTh],
+            [x0 + bok_lewy, y0 + bokLTh],
             [x0 + bok_lewy, y1 - bok_prawy],
-            [x1, y1 - bok_prawy],
-            [x1, y1],
+            [x1 - bokPTh, y1 - bok_prawy],
+            [x1 - bokPTh, y1],
             [x0, y1]
         ];
 

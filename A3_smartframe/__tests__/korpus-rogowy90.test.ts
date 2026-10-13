@@ -213,4 +213,34 @@ describe('KORPUS_ROGOWY90 kÄ…townik', () => {
         expect(listwa.loc.x).toBeLessThan(0);
         expect(listwa.loc.y).toBeGreaterThan(0);
     });
+
+    it('wieniec jest wpuszczany pomiedzy boczki (cofniety o grubosc BOK_L i BOK_P)', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_rogowy90',
+            glebokosc_boku_lewego_mm: 600,
+            glebokosc_boku_prawego_mm: 600
+        });
+
+        const top = plan.parts.find(p => p.role === 'TOP_PANEL')!;
+        const bokL = plan.parts.find(p => p.role === 'LEFT_SIDE_PANEL')!;
+        const bokP = plan.parts.find(p => p.role === 'RIGHT_SIDE_PANEL')!;
+        const bokLTh = bokL.dim.y;
+        const bokPTh = bokP.dim.z;
+        const outline = top.customProperties?.outline2d as number[][];
+
+        // Obrys gory [P0..P5]:
+        // P0: u=0, v=bokLTh (styk z BOK_L cofniety o bokLTh)
+        expect(outline[0][0]).toBeCloseTo(0, 1);
+        expect(outline[0][1]).toBeCloseTo(bokLTh, 1);
+
+        // P4: u=plateW - bokPTh, v=plateD (styk z BOK_P cofniety o bokPTh)
+        const plateW = top.dim.x;
+        const plateD = top.dim.y;
+        expect(outline[4][0]).toBeCloseTo(plateW - bokPTh, 1);
+        expect(outline[4][1]).toBeCloseTo(plateD, 1);
+    });
 });

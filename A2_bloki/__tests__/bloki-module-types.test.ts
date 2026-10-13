@@ -4,6 +4,7 @@ import type {
     DoorsPlanParams,
     DrawersPlanParams,
     FlapsPlanParams,
+    SkosneDoorsPlanParams,
     BlokiGeneratorParams
 } from '../bloki-module-types.js';
 import { findBlokiInputTypeViolations } from '../../scripts/bloki-input-audit.mjs';
@@ -33,10 +34,17 @@ describe('Bloki module input contracts', () => {
         const drawers: DrawersPlanParams = { liczba_szuflad: 3, konfiguracje_prowadnic: {} };
         const flaps: FlapsPlanParams = { kierunek_klapy: 'TOP' };
         const cornerDoors: CornerDoorsPlanParams = { grubosc_frontu_mm: 18 };
+        const skosneDoors: SkosneDoorsPlanParams = { rodzaj_drzwi: 'LEFT', dach_kat_deg: -45 };
         const blokDoors: BlokiGeneratorParams = {
             type: 'blok_doors',
             boxType: 'DOORS',
             rodzaj_drzwi: 'LEFT'
+        };
+        const blokSkosneDoors: BlokiGeneratorParams = {
+            type: 'blok_skosne_drzwi',
+            boxType: 'SKOSNE_DOORS',
+            rodzaj_drzwi: 'RIGHT',
+            dach_kat_deg: 45
         };
 
         // @ts-expect-error Misspelled keys are outside the canonical contract.
@@ -47,10 +55,17 @@ describe('Bloki module input contracts', () => {
         const invalidFlapValue: FlapsPlanParams = { kierunek_klapy: 'SIDE' };
         // @ts-expect-error Numeric fields must not accept strings.
         const invalidCornerValue: CornerDoorsPlanParams = { grubosc_frontu_mm: '18' };
+        // @ts-expect-error Drzwi skośne są jednokierunkowe — brak wariantu podwójnego.
+        const invalidSkosneValue: SkosneDoorsPlanParams = { rodzaj_drzwi: 'DOUBLE' };
+        // @ts-expect-error Wycofany alias zamiast kanonicznego *_mm.
+        const invalidSkosneKey: SkosneDoorsPlanParams = { heightLeft: 2000 };
         // @ts-expect-error The type and boxType tags must identify the same module.
         const invalidBlokiType: BlokiGeneratorParams = { type: 'blok_drawers', boxType: 'DOORS' };
 
-        expect([doors, drawers, flaps, cornerDoors, blokDoors]).toHaveLength(5);
-        expect([invalidDoorKey, invalidDrawerValue, invalidFlapValue, invalidCornerValue, invalidBlokiType]).toHaveLength(5);
+        expect([doors, drawers, flaps, cornerDoors, skosneDoors, blokDoors, blokSkosneDoors]).toHaveLength(7);
+        expect([
+            invalidDoorKey, invalidDrawerValue, invalidFlapValue, invalidCornerValue,
+            invalidSkosneValue, invalidSkosneKey, invalidBlokiType
+        ]).toHaveLength(7);
     });
 });

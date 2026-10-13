@@ -52,6 +52,9 @@ export class SmartFrameDragController {
     }
 
     startDrag(liczba_stref: 1 | 2 | 3, params: DraggedKorpusParams): void {
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cad-close-floating-edit'));
+        }
         this._isDragging = true;
         this._draggedZoneCount = liczba_stref;
         this._draggedParams = { ...params };

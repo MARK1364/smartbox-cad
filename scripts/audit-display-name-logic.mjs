@@ -32,11 +32,11 @@ function requirePath(rel, kind = 'plik') {
     return abs;
 }
 
-const DIRS = ['C1_cnc', 'R1_reports', 'E1_export'];
+const DIRS = ['C1_cnc', 'R1_reports', 'E1_export', 'A8_pmi', 'A4_smartpanel'];
 const EXT = new Set(['.ts', '.tsx', '.js']);
 
 // Moduły z kanonicznym kontraktem parametrów korpusu (zero aliasów od wersji pliku 4).
-const CANONICAL_PARAM_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'B1_biblioteka', 'A9_agent', 'src'];
+const CANONICAL_PARAM_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'B1_biblioteka', 'src', 'A8_pmi'];
 
 // Wyjątki: klucze należące do kontraktu A1_core/gizmo-controller (poza zakresem purge).
 const GIZMO_OWNED = new Set(['backOffset', 'topPanelMode', 'traverseWidth']);
@@ -53,7 +53,12 @@ const LEGACY_PARAM_ALIAS = [
 ];
 
 // Pliki, w których nazwa aliasu jest DANE, a nie użyciem: słownik aliasów.
-const ALIAS_DICTIONARY_FILES = new Set(['A3_smartframe/smartframe-types.ts']);
+// Wyjątek: te pliki są DANE słownika aliasów (wycofane -> kanoniczne),
+// a nie miejscem użycia aliasu. Bez wpisu strażnik goniłby sam słownik.
+const ALIAS_DICTIONARY_FILES = new Set([
+    'A3_smartframe/smartframe-types.ts',
+    'A2_bloki/bloki-module-param-guards.ts'
+]);
 
 // Odbiory, dla których `.alias` oznacza realne wejście/wyjście kontraktu korpusu.
 const PARAM_RECEIVERS = [
@@ -72,6 +77,8 @@ const RULES = [
             /===\s*\w+\??\.name\b/,
             /\.name\??\.includes\(/,
             /\.includes\([^()\n]*\.name/,
+            /\.name\??\.(startsWith|endsWith)\(/,
+            /startsWith\(\s*['"]pmi_['"]\)/,
         ],
     },
     {
@@ -273,6 +280,7 @@ const BLOKI_MODULE_ALIAS_DICTIONARY = new Set([
 ]);
 const BLOKI_MODULE_FILES = [
     'A2_bloki/doors-engine.ts', 'A2_bloki/doors-adapter.tsx', 'A2_bloki/doors-drilling-builder.ts',
+    'A2_bloki/skosne-doors-engine.ts', 'A2_bloki/skosne-doors-adapter.tsx', 'A2_bloki/skosne-doors-drilling-builder.ts',
     'A2_bloki/drawers-engine.ts', 'A2_bloki/drawers-adapter.tsx',
     'A2_bloki/flaps-engine.ts', 'A2_bloki/flaps-adapter.tsx', 'A2_bloki/flaps-drilling-builder.ts',
     'A2_bloki/shelves-engine.ts', 'A2_bloki/shelves-adapter.tsx', 'A2_bloki/shelves-drilling-builder.ts',
@@ -286,7 +294,7 @@ const BLOKI_MODULE_FILES = [
     'A2_bloki/bloki-bay-actions.ts', 'A2_bloki/bloki-ui.tsx',
     'A7_material/material-commands.ts',
 ];
-const BLOKI_CONTRACT_LINE = /(?:pushUpdate|triggerUpdate|generatorParams\s*=|\b(?:gp|generatorParams)\s*[.[]|\b(?:normalize(?:Doors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal)|build(?:Doors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal|Led))(?:Plan|Params)\()/;
+const BLOKI_CONTRACT_LINE = /(?:pushUpdate|triggerUpdate|generatorParams\s*=|\b(?:gp|generatorParams)\s*[.[]|\b(?:normalize(?:Doors|SkosneDoors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal)|build(?:Doors|SkosneDoors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal|Led))(?:Plan|Params)\()/;
 let blokiModuleFindings = 0;
 console.log(`\n## BLOKI-MODULE-LEGACY (wszystkie moduły A2 — tylko kanoniczne klucze)`);
 for (const rel of BLOKI_MODULE_FILES) {
@@ -360,8 +368,8 @@ const DEAD_API_RES = [
 ];
 
 const UNIT_GUESS_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'A4_smartpanel', 'A5_smartparts',
-    'A6_agd', 'A9_agent', 'C1_cnc', 'C2_connectors', 'R1_reports', 'R2_rys', 'D1_draw', 'S2_solver',
-    'S4_sciany', 'src', 'B1_biblioteka'];
+    'A6_agd', 'C1_cnc', 'C2_connectors', 'R1_reports', 'R2_rys', 'D1_draw', 'S2_solver',
+    'S4_sciany', 'src', 'B1_biblioteka', 'A8_pmi'];
 const FACE_ALIAS_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'A4_smartpanel', 'A5_smartparts',
     'A6_agd', 'C2_connectors', 'S2_solver', 'o1_operacji'];
 const BLOKI_DIM_DIRS = ['A2_bloki'];

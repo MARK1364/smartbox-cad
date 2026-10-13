@@ -6,6 +6,7 @@ import {
     writeModuleSession,
     openModulePage,
     persistProjectSnapshot,
+    readModuleSession,
     CAD_BRIDGE_CHANNEL,
     MODULE_REFRESH_MSG,
     MODULE_SESSION_UPDATED_MSG,
@@ -17,7 +18,7 @@ import {
     extractDrawPayload,
     extractDagPayload,
 } from './cad-extract';
-import type { ModuleId, ModuleScope } from './types';
+import type { ModuleId, ModuleScope, SmartPartsModulePayload } from './types';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
@@ -59,6 +60,19 @@ export function refreshModuleSessionFromCad(module: ModuleId, scope: ModuleScope
             writeModuleSession('draw', extractDrawPayload(scope, doc));
         } else if (module === 'dag') {
             writeModuleSession('dag', extractDagPayload(scope, doc));
+        } else if (module === 'smartparts') {
+            // Studio nie ekstrahuje geometrii projektu — sesja to tylko meta + opcjonalne packageId
+            const prev = readModuleSession<any>('smartparts');
+            writeModuleSession('smartparts', {
+                meta: {
+                    module: 'smartparts',
+                    sourceId: 'cad',
+                    loadedAt: new Date().toISOString(),
+                    originLabel: scope.name || 'SmartParts Studio',
+                },
+                scope,
+                packageId: prev?.packageId,
+            });
         } else {
             return false;
         }
@@ -146,4 +160,31 @@ export function openDagFromCad(scope: ModuleScope): void {
     const payload = extractDagPayload(scope, doc);
     writeModuleSession('dag', payload);
     openModulePage('dag');
+}
+
+/**
+ * Otwiera SmartParts Studio w osobnym oknie (jak CNC / nesting).
+ * Definicje żyją w katalogu A5 (localStorage) — sesja niesie tylko opcjonalne packageId.
+ */
+export function openSmartPartsStudioFromCad(opts?: {
+    scope?: ModuleScope;
+    packageId?: string;
+}): void {
+    const scope: ModuleScope = opts?.scope || {
+        type: 'PROJECT',
+        id: 'project',
+        name: 'Projekt',
+    };
+    const payload: SmartPartsModulePayload = {
+        meta: {
+            module: 'smartparts',
+            sourceId: 'cad',
+            loadedAt: new Date().toISOString(),
+            originLabel: scope.name || 'SmartParts Studio',
+        },
+        scope,
+        packageId: opts?.packageId,
+    };
+    writeModuleSession('smartparts', payload);
+    openModulePage('smartparts');
 }

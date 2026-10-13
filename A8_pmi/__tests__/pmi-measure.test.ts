@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { v3 } from '../dimension-solver.js';
 import {
     cadDeltasFromRender,
@@ -16,7 +16,11 @@ import {
     computeMeasureLabelDimensions,
     computeMeasureScreenScale,
     MEASURE_BASE_TEXT_H,
+    measureLineWidth,
+    measurePointDiameter,
 } from '../pmi-renderer.js';
+import { findMeasureElementPick } from '../pmi-measure-pick.js';
+import { GeometryType } from '../../A1_core/geometry-detector.js';
 
 describe('cadDeltasFromRender', () => {
     it('mapuje osie Babylon na CAD (Y↔Z)', () => {
@@ -197,7 +201,7 @@ describe('PMIStore measurements', () => {
         store.showUnits = true;
     });
 
-    it('zapisuje i wczytuje miarki razem z wymiarami', () => {
+    it('nie zapisuje pomiarów w toJSON (szybkie podglądy)', () => {
         store.addMeasurement({
             anchor1: {
                 nodeId: 'a', smartIdPath: '', kind: 'VERTEX', subKey: '', subIndex: -1,
@@ -210,12 +214,13 @@ describe('PMIStore measurements', () => {
         });
 
         const json = JSON.parse(JSON.stringify(store.toJSON()));
+        expect(json.measurements).toBeUndefined();
+
         store.fromJSON(null);
         expect(store.measurements).toHaveLength(0);
 
         store.fromJSON(json);
-        expect(store.measurements).toHaveLength(1);
-        expect(store.measurements[0].anchor2.pointLocal.x).toBeCloseTo(100);
+        expect(store.measurements).toHaveLength(0);
     });
 
     it('łańcuch krawędzi pokazuje tylko L (viaAnchor)', () => {
@@ -295,3 +300,92 @@ describe('etykieta miarki (skalowanie i wymiary)', () => {
         expect(screenHPx).toBeCloseTo(38, 1);
     });
 });
+
+describe('rozmiary wizualne miarki (linia i sfery punktów)', () => {
+    const originalLineWidth = PMIStore.instance.lineWidthMM;
+
+    afterEach(() => {
+        PMIStore.instance.lineWidthMM = originalLineWidth;
+    });
+
+    it('measureLineWidth bezpośrednio odzwierciedla ustawienie suwaka lineWidthMM ze store', () => {
+        PMIStore.instance.lineWidthMM = 0.8;
+        expect(measureLineWidth()).toBeCloseTo(0.8, 2);
+
+        PMIStore.instance.lineWidthMM = 3.5;
+        expect(measureLineWidth()).toBeCloseTo(3.5, 2);
+
+        PMIStore.instance.lineWidthMM = 5.0;
+        expect(measureLineWidth()).toBeCloseTo(5.0, 2);
+
+        // Dolny próg bezpieczeństwa
+        PMIStore.instance.lineWidthMM = 0.1;
+        expect(measureLineWidth()).toBeGreaterThanOrEqual(0.5);
+    });
+
+    it('measurePointDiameter bazowo skaluje się proporcjonalnie do grubości linii', () => {
+        PMIStore.instance.lineWidthMM = 1.0;
+        const d1 = measurePointDiameter();
+        PMIStore.instance.lineWidthMM = 2.0;
+        const d2 = measurePointDiameter();
+        expect(d2).toBeGreaterThan(d1);
+    });
+
+    it('przy bliskich pomiarach adaptacyjnie zmniejsza średnicę sfery, aby nie nachodziły na siebie', () => {
+        // Dystans 3 mm: suma promieni (czyli 1x średnica) musi być mniejsza od dystansu 3 mm
+        const d3 = measurePointDiameter(3.0);
+        expect(d3).toBeLessThan(1.0);
+        expect(d3).toBeGreaterThan(0.35);
+
+        // Nawet 2 sfery obok siebie zostawiają widoczną przestrzeń: d3 < 3.0 / 2
+        expect(d3).toBeLessThan(3.0 / 2);
+
+        // Dystans 1.5 mm
+        const d15 = measurePointDiameter(1.5);
+        expect(d15).toBeLessThan(1.5 / 2);
+    });
+});
+
+describe('priorytet snapowania w findMeasureElementPick', () => {
+    it('zwraca narożnik z detekcji zarówno bez Ctrl jak i z Ctrl', () => {
+        const dummyMesh = { id: 'test_mesh', metadata: { panelModel: { id: 'p1' } } };
+        const detection = {
+            hit: true,
+            geometryType: GeometryType.VERTEX,
+            pickedPoint: { x: 10, y: 20, z: 30 },
+            mesh: dummyMesh,
+        };
+
+        const pickWithoutCtrl = findMeasureElementPick({
+            scene: { meshes: [] },
+            pointerX: 100,
+            pointerY: 100,
+            ctrl: false,
+            vertexSnapPx: 14,
+            edgeSnapPx: 14,
+            lastDetection: detection,
+        });
+
+        expect(pickWithoutCtrl).not.toBeNull();
+        expect(pickWithoutCtrl!.kind).toBe('vertex');
+        expect(pickWithoutCtrl!.edge).toBeNull();
+        expect(pickWithoutCtrl!.worldPos).toEqual(v3(10, 20, 30));
+
+        const pickWithCtrl = findMeasureElementPick({
+            scene: { meshes: [] },
+            pointerX: 100,
+            pointerY: 100,
+            ctrl: true,
+            vertexSnapPx: 14,
+            edgeSnapPx: 14,
+            lastDetection: detection,
+        });
+
+        expect(pickWithCtrl).not.toBeNull();
+        expect(pickWithCtrl!.kind).toBe('vertex');
+        expect(pickWithCtrl!.edge).toBeNull();
+        expect(pickWithCtrl!.worldPos).toEqual(v3(10, 20, 30));
+    });
+});
+
+

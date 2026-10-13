@@ -28,6 +28,9 @@ export class CNCEngine {
 
     private unsubscribe: (() => void) | null = null;
     private initializedScene: any = null;
+    private lastVisualStateKey: string | null = null;
+    private lastFeaturesRef: any = null;
+    private lastTargetViewRoot: any = null;
 
     private constructor() {
         this.wcsManager = new WcsManager('G55');
@@ -52,6 +55,9 @@ export class CNCEngine {
         if (!scene) return;
         if (this.initializedScene !== scene) {
             this.initializedScene = scene;
+            this.lastVisualStateKey = null;
+            this.lastFeaturesRef = null;
+            this.lastTargetViewRoot = null;
             
             // Clean up old ones if they existed
             if (this.visualizer) this.visualizer.clear();
@@ -91,12 +97,20 @@ export class CNCEngine {
 
         const activeProg = CAMStateStore.getInstance().getActiveProgram();
         if (!activeProg) {
+            this.lastVisualStateKey = null;
+            this.lastFeaturesRef = null;
+            this.lastTargetViewRoot = null;
             this.visualizer.clear();
             return;
         }
 
         const panel = activeProg.targetPanel;
-        if (!panel) return;
+        if (!panel) {
+            this.lastVisualStateKey = null;
+            this.lastFeaturesRef = null;
+            this.lastTargetViewRoot = null;
+            return;
+        }
 
         const panelViews = ContextManager.instance.panelViews as Map<any, any> | undefined;
         let targetViewRoot: any = null;
@@ -164,8 +178,58 @@ export class CNCEngine {
             z: activeProg.wcsOffsetZ || 0 
         });
 
+        // Sprawdzenie czy zaszła realna zmiana geometrii formatki, cech obróbczych lub układu WCS.
+        // Jeśli zmiana w sklepie dotyczy wyłącznie odtwarzania symulacji (isSimulating, simProgressPercent, itp.),
+        // pomijamy kosztowne niszczenie i ponowne budowanie w Babylon.js siatek 3D features i gizma WCS.
+        const currentKey = [
+            activeProg.id,
+            panel?.id || (panel ? 'p_ref' : 'none'),
+            dims.width,
+            dims.height,
+            dims.thickness,
+            panelRole || 'none',
+            activeProg.cornerIndex,
+            activeProg.wcsName,
+            activeProg.wcsOffsetX || 0,
+            activeProg.wcsOffsetY || 0,
+            activeProg.wcsOffsetZ || 0,
+            activeProg.wcsRotX || 0,
+            activeProg.wcsRotY || 0,
+            activeProg.wcsRotZ || 0,
+            activeProg.features?.length || 0,
+            state.showToolpaths ? 'tp_on' : 'tp_off'
+        ].join(':');
+
+        if (
+            this.lastVisualStateKey === currentKey &&
+            this.lastFeaturesRef === activeProg.features &&
+            this.lastTargetViewRoot === targetViewRoot
+        ) {
+            return;
+        }
+
+        this.lastVisualStateKey = currentKey;
+        this.lastFeaturesRef = activeProg.features;
+        this.lastTargetViewRoot = targetViewRoot;
+
         // Renderowanie 3D z aktualnego stanu features
         this.visualizer.renderFeatures(activeProg.features || [], this.wcsManager, targetViewRoot);
+
+        // Renderowanie ścieżek narzędzia 3D (G0 Rapid Travel / G1 Cutting)
+        if (state.showToolpaths) {
+            const operations = this.camProcessor.processProject({
+                projectName: activeProg.projectName || 'Program',
+                wcsOrigin: this.wcsManager.getOrigin(),
+                wcsName: this.wcsManager.getWcsName(),
+                features: activeProg.features || [],
+                toolAssignments: activeProg.toolAssignments || {},
+                postprocessor: activeProg.postprocessor || 'Mach3',
+                workpieceDimensions: dims
+            });
+            this.visualizer.renderToolpaths(operations, this.wcsManager, targetViewRoot);
+        } else {
+            this.visualizer.clearToolpaths();
+        }
     }
 
     public getDimensionsMM(panel: any): { width: number; height: number; thickness: number } {
@@ -175,7 +239,7 @@ export class CNCEngine {
         if (typeof panel.width !== 'number' || panel.width <= 0 ||
             typeof panel.height !== 'number' || panel.height <= 0 ||
             typeof panel.thickness !== 'number' || panel.thickness <= 0) {
-            throw new Error(`[C1_cnc/CNCEngine] Formatka "${panel.name || 'unknown'}" nie posiada poprawnych wymiarów fizycznych (W=${panel.width}, H=${panel.height}, T=${panel.thickness}).`);
+            throw new Error(`[C1_cnc/CNCEngine] Formatka "${panel.id}" nie posiada poprawnych wymiarów fizycznych (W=${panel.width}, H=${panel.height}, T=${panel.thickness}).`);
         }
         return {
             width: nmToMm(panel.width),

@@ -146,4 +146,45 @@ describe('bindAnchorToRigidBody', () => {
         expect(bound.localNormalMm?.[0]).toBeCloseTo(-1);
         expect(bound.localPointMm?.[0]).toBeCloseTo(-300);
     });
+
+    it('Escape anuluje aktywny constraint picker', async () => {
+        let cancelled = false;
+        const listeners: Record<string, ((e: any) => void)[]> = {};
+        const mockWindow = {
+            addEventListener: (type: string, fn: any) => {
+                listeners[type] = listeners[type] || [];
+                listeners[type].push(fn);
+            },
+            removeEventListener: (type: string, fn: any) => {
+                listeners[type] = (listeners[type] || []).filter((l) => l !== fn);
+            },
+            dispatchEvent: (evt: any) => {
+                for (const fn of listeners[evt.type] || []) {
+                    fn(evt);
+                }
+                return true;
+            },
+        };
+        (globalThis as any).window = mockWindow;
+        (globalThis as any).document = { activeElement: null };
+
+        const { startConstraintPick, getActiveConstraintPicker } = await import('../constraint-picker.js');
+        startConstraintPick({
+            label: 'Test pick',
+            expectedKind: 'FACE',
+            onPick: () => {},
+            onCancel: () => {
+                cancelled = true;
+            },
+        });
+
+        expect(getActiveConstraintPicker()).not.toBeNull();
+        mockWindow.dispatchEvent({ type: 'keydown', key: 'Escape', stopPropagation: () => {} });
+        expect(getActiveConstraintPicker()).toBeNull();
+        expect(cancelled).toBe(true);
+
+        delete (globalThis as any).window;
+        delete (globalThis as any).document;
+    });
 });
+

@@ -15,8 +15,8 @@ import { readOffsetMm } from './back-overlap.js';
 
 /** Klucze to kanoniczne FaceName — `normalizeFaceName` nie przyjmuje aliasów. */
 const FACE_MAPPING: Record<string, Record<string, string>> = {
-    LEFT_SIDE_PANEL: { FACE_Y_PLUS: '-Y', FACE_Y_MINUS: '+Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
-    SIDE_LEFT: { FACE_Y_PLUS: '-Y', FACE_Y_MINUS: '+Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
+    LEFT_SIDE_PANEL: { FACE_Y_PLUS: '+Y', FACE_Y_MINUS: '-Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
+    SIDE_LEFT: { FACE_Y_PLUS: '+Y', FACE_Y_MINUS: '-Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
     RIGHT_SIDE_PANEL: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
     SIDE_RIGHT: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
     // [90,180,0]: Ry=180 lustrzy lokalne ±X względem starego [90,0,0]
@@ -32,6 +32,14 @@ const BACK_PANEL_PLECY_X_MAPPING: Record<string, string> = {
     FACE_X_MINUS: '+X',
     FACE_X_PLUS: '-X',
     FACE_Z_PLUS: 'shiftX'
+};
+
+/** TRAVERSE_V (wieniec górny na sztorc [180, 0, 0]): -Y to góra (+CAD Z / +X), +Y to dół (-CAD Z / -X). */
+const TOP_PANEL_TRAVERSE_V_MAPPING: Record<string, string> = {
+    FACE_Y_MINUS: '+X',
+    FACE_Y_PLUS: '-X',
+    FACE_X_MINUS: '-Y',
+    FACE_X_PLUS: '+Y'
 };
 
 const SHIFT: Record<string, OffsetShiftSpec> = {
@@ -69,6 +77,34 @@ export function resolveBackPanelFaceMapping(panel?: any): Record<string, string>
         return { ...BACK_PANEL_PLECY_X_MAPPING };
     }
     return { ...FACE_MAPPING.BACK_PANEL };
+}
+
+/**
+ * Strict: TRAVERSE_V wykrywamy po rotacji LCS [180, 0, 0] / mappingu Y<->z,
+ * lub konfiguracji topPanelMode kontenera rodzica.
+ */
+export function isTraverseVPanel(panel?: any): boolean {
+    if (!panel) return false;
+    const rot = panel.lcs?.rotation;
+    const mapping = panel.lcs?.mapping;
+    if (Array.isArray(rot) && rot[0] === 180 && rot[1] === 0 && rot[2] === 0 && mapping?.Y === 'z') {
+        return true;
+    }
+    const doc = ContextManager.instance.document;
+    const container = findOwningKorpus(doc, panel.id);
+    const topMode = container?.generatorParams?.topPanelMode || container?.generatorParams?.tryb_wienca_gornego;
+    return topMode === 'TRAVERSE_V';
+}
+
+/**
+ * Mapowanie krawędzi gizmo → offset dla TOP_PANEL.
+ * TRAVERSE_V (stojący pionowo na sztorc) ma odwrócone góra (+X) / dół (-X) względem pełnego wieńca.
+ */
+export function resolveTopPanelFaceMapping(panel?: any): Record<string, string> {
+    if (panel && isTraverseVPanel(panel)) {
+        return { ...TOP_PANEL_TRAVERSE_V_MAPPING };
+    }
+    return { ...FACE_MAPPING.TOP_PANEL };
 }
 
 export function findOwningKorpus(doc: any, entityId: string): any | null {
@@ -127,10 +163,16 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
         if (role === 'BACK_PANEL') {
             return resolveBackPanelFaceMapping(panel);
         }
+        if (role === 'TOP_PANEL') {
+            return resolveTopPanelFaceMapping(panel);
+        }
         return FACE_MAPPING[role] || null;
     },
 
-    getShift(role: string) {
+    getShift(role: string, panel?: any) {
+        if (role === 'TOP_PANEL' && panel && isTraverseVPanel(panel)) {
+            return { paramSuffix: 'shiftY', cadAxis: 'Y', sign: 1 };
+        }
         return SHIFT[role] || null;
     },
 
@@ -143,6 +185,10 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
     },
 
     readOffsetMm(container: any, paramName: string, role?: string) {
+        if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
+            const gp = container?.generatorParams;
+            return gp?.cofniecie_plecow_mm ?? gp?.backOffset ?? gp?.offsets?.backOffset ?? 3;
+        }
         return readOffsetMm(
             container?.generatorParams?.offsets,
             paramName,
@@ -153,12 +199,22 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
     },
 
     previewOffset(container: any, paramName: string, value: number) {
+        if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
+            if (!container.generatorParams) container.generatorParams = {};
+            container.generatorParams.cofniecie_plecow_mm = value;
+            container.generatorParams.backOffset = value;
+        }
         ensureOffsets(container)[paramName] = value;
         rebuildSmartFrameContainer(container);
     },
 
     commitOffset(container: any, paramName: string, oldValue: number, newValue: number) {
         if (oldValue === newValue) return;
+        if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
+            if (!container.generatorParams) container.generatorParams = {};
+            container.generatorParams.cofniecie_plecow_mm = newValue;
+            container.generatorParams.backOffset = newValue;
+        }
         ensureOffsets(container)[paramName] = newValue;
         const history = ContextManager.instance.commandHistory;
         if (!history) {

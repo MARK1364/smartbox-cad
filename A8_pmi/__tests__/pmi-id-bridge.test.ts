@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { buildAnchorRef, meshLocalToRootLocal, resolveAnchorWorld } from '../pmi-id-bridge.js';
+import { buildAnchorRef, meshLocalToRootLocal, resolveAnchorWorld, snapWorldPointToPanelGeometry, SNAP_RADIUS_MM } from '../pmi-id-bridge.js';
 import { v3 } from '../dimension-solver.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 
@@ -92,12 +92,14 @@ function mockPanelScene(opts: {
         parent: root,
         metadata: { type: 'vertex', cornerIndex: 0, panelModel: { id: opts.nodeId } },
         position: { x: v000[0], y: v000[1], z: v000[2] },
+        getAbsolutePosition: () => ({ x: v000[0], y: v000[1], z: v000[2] }),
     };
 
     const vertexMesh4 = {
         parent: root,
         metadata: { type: 'vertex', cornerIndex: 4, panelModel: { id: opts.nodeId } },
         position: { x: v0H0[0], y: v0H0[1], z: v0H0[2] },
+        getAbsolutePosition: () => ({ x: v0H0[0], y: v0H0[1], z: v0H0[2] }),
     };
 
     const panelViews = new Map([
@@ -182,5 +184,49 @@ describe('pmi-id-bridge anchor resolution', () => {
 
         const worldAfter = resolveAnchorWorld(data.scene, anchor);
         expect(worldAfter?.x).toBeCloseTo(-newHw, 0);
+    });
+
+    it('snapWorldPointToPanelGeometry przyciąga do wierzchołka, gdy kliknięcie jest < 30 mm od narożnika', () => {
+        const data = mockPanelScene({ nodeId: 'panel_1' });
+        ContextManager.instance.panelViews = data.panelViews;
+
+        // v000 to wierzchołek cornerIndex 0 w (-300, -360, -9).
+        // Kliknięcie w odległości 15 mm wzdłuż osi X:
+        const clickNear = v3(data.v000[0] + 15, data.v000[1], data.v000[2]);
+        const result = snapWorldPointToPanelGeometry(data.scene, data.faceMesh, clickNear, 30);
+
+        expect(result).not.toBeNull();
+        expect(result?.anchor.kind).toBe('VERTEX');
+        expect(result?.anchor.subKey).toBe('0');
+        expect(result?.worldPos.x).toBeCloseTo(data.v000[0], 0);
+        expect(result?.worldPos.y).toBeCloseTo(data.v000[1], 0);
+    });
+
+    it('snapWorldPointToPanelGeometry zwraca null (brak snapu), gdy kliknięcie jest > 30 mm od narożnika', () => {
+        const data = mockPanelScene({ nodeId: 'panel_1' });
+        ContextManager.instance.panelViews = data.panelViews;
+
+        // Kliknięcie w odległości 45 mm od narożnika (> 30 mm):
+        const clickFar = v3(data.v000[0] + 45, data.v000[1], data.v000[2]);
+        const result = snapWorldPointToPanelGeometry(data.scene, data.faceMesh, clickFar, SNAP_RADIUS_MM);
+
+        expect(result).toBeNull();
+    });
+
+    it('stała SNAP_RADIUS_MM wynosi dokładnie 30 mm i jest używana domyślnie', () => {
+        expect(SNAP_RADIUS_MM).toBe(30);
+
+        const data = mockPanelScene({ nodeId: 'panel_1' });
+        ContextManager.instance.panelViews = data.panelViews;
+
+        // Bez podania 4. argumentu — powinno domyślnie użyć SNAP_RADIUS_MM (30 mm)
+        const clickNear = v3(data.v000[0] + 15, data.v000[1], data.v000[2]);
+        const defaultSnap = snapWorldPointToPanelGeometry(data.scene, data.faceMesh, clickNear);
+        expect(defaultSnap).not.toBeNull();
+        expect(defaultSnap?.anchor.kind).toBe('VERTEX');
+
+        const clickFar = v3(data.v000[0] + 35, data.v000[1], data.v000[2]);
+        const defaultFarSnap = snapWorldPointToPanelGeometry(data.scene, data.faceMesh, clickFar);
+        expect(defaultFarSnap).toBeNull();
     });
 });

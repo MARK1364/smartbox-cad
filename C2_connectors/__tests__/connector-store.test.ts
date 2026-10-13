@@ -20,6 +20,7 @@ function sampleGroup(id = 'CONN_1'): ConnectorGroup {
         placementRule: 'standard_od_lewej',
         firstOffsetMm: 32,
         positionsActive: [true, true],
+        positionTypes: ['kolki_d8x35', 'konfirmat_5x50'],
         faceVertsLocalMm: [
             [0, 9, 0],
             [100, 9, 0],

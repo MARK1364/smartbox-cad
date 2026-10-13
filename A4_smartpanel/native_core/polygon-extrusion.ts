@@ -28,6 +28,12 @@ export function classifyOutlineSegmentEdge(
         if (v <= tolV) return '-Y';
         if (v >= plateD - tolV) return '+Y';
     }
+    // Krawędź skośna rozpięta na szerokości formatki (np. ścięte plecy lub dach)
+    if (du >= plateW * 0.7) {
+        const vAvg = (v0 + v1) / 2;
+        if (vAvg <= plateD * 0.5) return '-Y';
+        if (vAvg > plateD * 0.5) return '+Y';
+    }
     return 'NOTCH';
 }
 

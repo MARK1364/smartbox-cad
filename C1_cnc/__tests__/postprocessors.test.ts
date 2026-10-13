@@ -136,6 +136,64 @@ describe('C1_cnc Postprocessors: CLDataProgram jako jedyne wejście', () => {
             expect(nc).toContain('G81');
             expect(nc.trimEnd().endsWith('M2')).toBe(true);
         });
+
+        it('używa modalnego G81: jedno G81 + kolejne XY, jedna zmiana narzędzia na grupę', () => {
+            const program: CLDataProgram = {
+                projectName: 'Wiercenie',
+                wcsOrigin: { x: 0, y: 0, z: 0 },
+                wcsName: 'G55',
+                commands: [
+                    { type: 'TOOL_SELECT', toolId: 'tool_2', toolDiameter: 5 },
+                    { type: 'SPINDL', spindleRpm: 3000, spindleDirection: 'CW' },
+                    { type: 'FEDRAT', feedRate: 1000 },
+                    {
+                        type: 'CYCLE_DRILL',
+                        point: { x: 10, y: 20, z: 0 },
+                        drillParams: { depth: -10, retractR: 5, type: 'STANDARD' }
+                    },
+                    {
+                        type: 'CYCLE_DRILL',
+                        point: { x: 30, y: 20, z: 0 },
+                        drillParams: { depth: -10, retractR: 5, type: 'STANDARD' }
+                    },
+                    {
+                        type: 'CYCLE_DRILL',
+                        point: { x: 50, y: 20, z: 0 },
+                        drillParams: { depth: -10, retractR: 5, type: 'STANDARD' }
+                    },
+                    { type: 'TOOL_SELECT', toolId: 'tool_6', toolDiameter: 8 },
+                    { type: 'SPINDL', spindleRpm: 3000, spindleDirection: 'CW' },
+                    { type: 'FEDRAT', feedRate: 800 },
+                    {
+                        type: 'CYCLE_DRILL',
+                        point: { x: 100, y: 100, z: 0 },
+                        drillParams: { depth: -12, retractR: 5, type: 'STANDARD' }
+                    },
+                    {
+                        type: 'CYCLE_DRILL',
+                        point: { x: 120, y: 100, z: 0 },
+                        drillParams: { depth: -12, retractR: 5, type: 'STANDARD' }
+                    },
+                    { type: 'STOP' }
+                ],
+                totalLengthMm: 50,
+                estimatedTimeSec: 1,
+                toolIdsUsed: ['tool_2', 'tool_6'],
+                workpieceDimensions: { width: 600, height: 720, thickness: 18 }
+            };
+
+            const nc = post.generateNcCode(program);
+
+            expect((nc.match(/M6 T/g) || []).length).toBe(2);
+            expect((nc.match(/G81/g) || []).length).toBe(2);
+            expect(nc).toContain('G81 X10.000 Y20.000 Z0.000 R5');
+            expect(nc).toMatch(/N\d+ X30\.000 Y20\.000/);
+            expect(nc).toMatch(/N\d+ X50\.000 Y20\.000/);
+            expect(nc).toContain('G81 X100.000 Y100.000 Z0.000 R5');
+            expect(nc).toMatch(/N\d+ X120\.000 Y100\.000/);
+            expect(nc).toContain('G80');
+            expect(nc.trimEnd().endsWith('M2')).toBe(true);
+        });
     });
 });
 
@@ -168,6 +226,45 @@ describe('C1_cnc CAMProcessor: CLDataProgram z operacji', () => {
         expect(program.toolIdsUsed).toEqual(['tool_2_drill_5']);
         expect(program.totalLengthMm).toBeGreaterThan(0);
         expect(program.workpieceDimensions?.thickness).toBe(18);
+    });
+
+    it('buildCLProgram emituje TOOL_SELECT tylko przy zmianie narzędzia', async () => {
+        const { CAMProcessor } = await import('../processor/cam-processor.js');
+        const { ToolLibrary } = await import('../processor/tool-library.js');
+        const library = new ToolLibrary();
+        const tools = library.getAllTools();
+        const drillTool = tools.find(t => t.type === 'drill') || tools[0];
+        expect(drillTool).toBeTruthy();
+
+        const processor = new CAMProcessor(library);
+        const program = processor.buildCLProgram({
+            projectName: 'Grupowanie',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            wcsName: 'G55',
+            features: [
+                {
+                    type: 'hole',
+                    position: { x: 10, y: 10, z: 0 },
+                    positions: [
+                        { x: 10, y: 10, z: 0 },
+                        { x: 40, y: 10, z: 0 },
+                        { x: 70, y: 10, z: 0 }
+                    ],
+                    diameter: drillTool.diameter,
+                    depth: -10,
+                    toolId: drillTool.id
+                } as any
+            ],
+            toolAssignments: {},
+            postprocessor: 'Mach3',
+            workpieceDimensions: { width: 600, height: 720, thickness: 18 }
+        });
+
+        const toolSelects = program.commands.filter(c => c.type === 'TOOL_SELECT');
+        const drills = program.commands.filter(c => c.type === 'CYCLE_DRILL');
+        expect(toolSelects).toHaveLength(1);
+        expect(drills).toHaveLength(3);
+        expect(program.commands.filter(c => c.type === 'GOTO')).toHaveLength(0);
     });
 
     it('cecha bez narzędzia jest pomijana (fail-fast przez raport przypisań)', async () => {

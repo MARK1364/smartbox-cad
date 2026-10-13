@@ -494,32 +494,45 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                         }
                     }
 
-                    // 3–4. Otwory środkowe przód/tył
-                    if (shelfNode) {
-                        const shelfWidth = nmToMm(shelfNode.domainData.width || effectiveWidth);
-                        const uCenterBase = (shelfWidth / 2);
+                }
 
-                        if (frontHoles) {
-                            let uFront = uCenterBase + frontOffsetX;
-                            if (holePattern === 'TRIPLE') {
-                                if (idx === 1) uFront += tripleZOffset;
-                                if (idx === 2) uFront -= tripleZOffset;
-                            }
+                // 3–4. Otwory środkowe przód/tył na krawędzi półki (FACE_Y):
+                // U = szerokość (poziom), V = grubość/pion — TRIPLE tylko po V (nie w pętli worldZ boków).
+                if (shelfNode && (frontHoles || backHoles)) {
+                    const shelfWidth = nmToMm(shelfNode.domainData.width || effectiveWidth);
+                    const uCenterBase = shelfWidth / 2;
+
+                    if (frontHoles) {
+                        const uFront = uCenterBase + frontOffsetX;
+                        const vUnderFront = actualShelfThickness + radius;
+                        const vFrontPositions = [vUnderFront];
+                        if (holePattern === 'TRIPLE') {
+                            vFrontPositions.push(vUnderFront - tripleZOffset);
+                            vFrontPositions.push(vUnderFront + tripleZOffset);
+                        }
+                        for (let vi = 0; vi < vFrontPositions.length; vi++) {
+                            const vSuffix = vi === 0 ? '' : (vi === 1 ? '_top' : '_bottom');
                             pushShelfCenterHole(
-                                shelfNode, i, 'front', suffix,
-                                uFront, actualShelfThickness + radius, offsetFront
+                                shelfNode, i, 'front', vSuffix,
+                                uFront, vFrontPositions[vi], offsetFront
                             );
                         }
+                    }
 
-                        if (backHoles) {
-                            let uBack = uCenterBase + backOffsetX;
-                            if (holePattern === 'TRIPLE') {
-                                if (idx === 1) uBack += tripleZOffset;
-                                if (idx === 2) uBack -= tripleZOffset;
-                            }
+                    if (backHoles) {
+                        const uBack = uCenterBase + backOffsetX;
+                        const vUnderBack = -radius;
+                        const vBackPositions = [vUnderBack];
+                        if (holePattern === 'TRIPLE') {
+                            // FACE_Y_MINUS: V rośnie w przeciwną stronę względem przodu
+                            vBackPositions.push(vUnderBack + tripleZOffset);
+                            vBackPositions.push(vUnderBack - tripleZOffset);
+                        }
+                        for (let vi = 0; vi < vBackPositions.length; vi++) {
+                            const vSuffix = vi === 0 ? '' : (vi === 1 ? '_top' : '_bottom');
                             pushShelfCenterHole(
-                                shelfNode, i, 'back', suffix,
-                                uBack, -radius, 0
+                                shelfNode, i, 'back', vSuffix,
+                                uBack, vBackPositions[vi], 0
                             );
                         }
                     }

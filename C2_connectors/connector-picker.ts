@@ -16,6 +16,7 @@ import {
     executeConnectorCommand,
     ReplaceConnectorGroupCommand,
 } from './connector-commands.js';
+import { normalizePositionTypes } from './connector-presets.js';
 import { ConnectorStore } from './connector-store.js';
 import { ConnectorVisualizer } from './connector-visualizer.js';
 import { pickEligibleFace, scanEligibleConnectorFaces } from './contact-scanner.js';
@@ -62,6 +63,7 @@ export function buildGroupFromContact(
     positionsActive?: boolean[] | null,
     existing?: ConnectorGroup | null,
     firstOffsetMm?: number | null,
+    positionTypes?: string[] | null,
 ): ConnectorGroup | null {
     const parent = document?.findNode?.(face.panelId);
     if (!parent) return null;
@@ -76,6 +78,12 @@ export function buildGroupFromContact(
             : Array(total).fill(true);
     while (active.length < total) active.push(true);
 
+    const types = normalizePositionTypes(
+        placementRule,
+        positionTypes
+            ?? (existing?.positionTypes?.length ? existing.positionTypes : store.positionTypes),
+    );
+
     const { rotation } = parent.getWorldMatrix().decompose();
     const alongWorld = rotation.rotateVec3(Vec3.UNIT_Y);
     const resolvedFirstOffset = firstOffsetMm ?? existing?.firstOffsetMm ?? store.firstOffsetMm;
@@ -86,6 +94,8 @@ export function buildGroupFromContact(
         active,
         [alongWorld.x, alongWorld.y, alongWorld.z],
         resolvedFirstOffset,
+        undefined,
+        types,
     );
 
     const faceVertsLocalMm = face.clippedVertsWorldMm.map((v) => toLocal(parent, v));
@@ -119,6 +129,7 @@ export function buildGroupFromContact(
         placementRule,
         firstOffsetMm: resolvedFirstOffset,
         positionsActive: active.slice(0, total),
+        positionTypes: types.slice(0, total),
         faceVertsLocalMm,
         faceNormalLocalMm: nLocal,
         connectors,
@@ -131,6 +142,7 @@ export function regenerateGroup(
     placementRule: string,
     positionsActive?: boolean[] | null,
     firstOffsetMm?: number | null,
+    positionTypes?: string[] | null,
 ): ConnectorGroup | null {
     const parent = document?.findNode?.(group.parentObjectId);
     if (!parent) return null;
@@ -159,6 +171,7 @@ export function regenerateGroup(
         positionsActive ?? group.positionsActive,
         group,
         firstOffsetMm,
+        positionTypes ?? group.positionTypes,
     );
 }
 
@@ -168,8 +181,8 @@ function rescan(): void {
     ConnectorVisualizer.instance.setEligibleFaces(_faces);
     TooltipManager.instance.setActiveHint({
         id: 'c2_connectors_pick',
-        title: 'Wstaw połączenia',
-        description: `Kliknij złącze | Dodano: ${_count} | ESC = zakończ`,
+        title: 'Złącza',
+        description: `Kliknij płaszczyznę styku na scenie. Dodano: ${_count}.`,
         cancelKey: 'Escape',
         category: 'general',
     });
@@ -179,7 +192,15 @@ function rescan(): void {
 function placeFace(face: EligibleContactFace): void {
     const doc = ContextManager.instance.document;
     const store = ConnectorStore.instance;
-    const group = buildGroupFromContact(doc, face, store.placementRule);
+    const group = buildGroupFromContact(
+        doc,
+        face,
+        store.placementRule,
+        store.positionsActive,
+        null,
+        store.firstOffsetMm,
+        store.positionTypes,
+    );
     if (!group || group.connectors.length === 0) return;
     executeConnectorCommand(new AddConnectorGroupCommand(store, group));
     _count += 1;
@@ -291,6 +312,7 @@ export function applyRuleToGroup(
     placementRule: string,
     positionsActive?: boolean[] | null,
     firstOffsetMm?: number | null,
+    positionTypes?: string[] | null,
 ): boolean {
     const store = ConnectorStore.instance;
     const group = store.get(groupId);
@@ -301,6 +323,7 @@ export function applyRuleToGroup(
         placementRule,
         positionsActive,
         firstOffsetMm ?? store.firstOffsetMm,
+        positionTypes ?? store.positionTypes,
     );
     if (!next) return false;
     executeConnectorCommand(new ReplaceConnectorGroupCommand(store, group, next));

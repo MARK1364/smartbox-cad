@@ -16,10 +16,8 @@ import { PMIStore } from '../A8_pmi/pmi-data';
 import {
   executePMICommand,
   RemoveDimensionCommand,
-  RemoveMeasurementCommand,
   SetDimensionAffixesCommand,
   SetDimensionVisibilityCommand,
-  SetMeasurementVisibilityCommand,
 } from '../A8_pmi/pmi-commands';
 import { ConstraintStore } from '../S2_solver/constraint-store';
 import { ConstraintHighlightOverlay } from '../S2_solver/constraint-highlight';
@@ -156,11 +154,37 @@ export const isHandleTreeItem = (node: CADTreeNode): boolean => {
   );
 };
 
+/** CUSTOM SmartPart (Studio / zawieszki z definition) — panel parametrów + PPM Edytuj. */
+export const isCustomSmartPartTreeItem = (node: CADTreeNode): boolean => {
+  const role = String((node as any).role || '');
+  const genType = String((node as any).generatorParams?.type || '');
+  const gp = (node as any).generatorParams || {};
+  if (role === 'SMARTPART' || genType === 'smartpart_custom') return true;
+  // Grupa zawieszek / Part ze Studio (isSmartPart + definition)
+  if (role === 'SMARTPART_HANGERS' || genType === 'smartpart_hangers') {
+    return Boolean(gp.isSmartPart || gp.definition?.parameters || gp.sourceDefinition);
+  }
+  if (role === 'SMARTPART_HANGER' || genType === 'smartpart_hanger') {
+    return Boolean(gp.isSmartPart || gp.definition);
+  }
+  return false;
+};
+
 export const isHardwareNode = (node: CADTreeNode): boolean => {
   return node.type === 'HARDWARE' || (node as any).hardwareType !== undefined || /zawias|okucie|hinge|prowadnica|rail|boczek/i.test(node.name || '');
 };
 
+/** Cecha cut SmartParta (walec / kieszeń) — nie okucie, nie kontener. */
+export const isFeatureNode = (node: CADTreeNode): boolean => {
+  return (
+    node.type === 'FEATURE' ||
+    (node as any).role === 'SMARTPART_CUT' ||
+    (node as any).generatorParams?.type === 'smartpart_cut'
+  );
+};
+
 export const isBlokiTreeItem = (container: CADTreeNode): boolean => {
+  const genType = String((container as any).generatorParams?.type || '');
   return (
     container.type === 'DRAWERS' ||
     container.type === 'SHELVES' ||
@@ -168,11 +192,18 @@ export const isBlokiTreeItem = (container: CADTreeNode): boolean => {
     (container as any).type === 'bloki' ||
     /bloki/i.test(container.name || '') ||
     container.name?.endsWith('_SB') ||
-    (container as any).generatorParams?.type?.startsWith('bloki') ||
+    genType.startsWith('blok_') ||
+    genType.startsWith('bloki') ||
     (container as any).generatorParams?.boxType !== undefined ||
     (container as any).sb_role !== undefined ||
     (container as any).role === 'BLOKI'
   );
+};
+
+export const isApplianceTreeItem = (container: CADTreeNode): boolean => {
+  const role = String((container as any).role || '');
+  const genType = String((container as any).generatorParams?.type || '');
+  return role === 'APPLIANCE' || genType === 'smart_appliance';
 };
 
 export const isSmartWallTreeItem = (container: CADTreeNode): boolean => {
@@ -313,9 +344,14 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const offConn = ConnectorStore.instance.onChange(bump);
     const offLed = LedChannelStore.instance.subscribe(bump);
     const onTab = (e: Event) => {
-      const tab = (e as CustomEvent).detail?.tab as TreeTab | undefined;
+      const detail = (e as CustomEvent).detail;
+      const tab = detail?.tab as TreeTab | undefined;
+      const constraintId = detail?.constraintId as string | undefined;
       if (tab === 'relacje' || tab === 'wymiary' || tab === 'obiekty' || tab === 'zlacza') {
         setTreeTab(tab);
+      }
+      if (constraintId) {
+        setHighlightedConstraintId(constraintId);
       }
     };
     window.addEventListener(DRZEWO_TAB_EVENT, onTab);
@@ -395,7 +431,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   const constraintStore = ConstraintStore.instance;
   const activeTab: TreeTab = isDrawMode ? 'obiekty' : treeTab;
   const constraintCount = constraintStore.constraints.length;
-  const dimensionCount = pmiStore.annotations.length + pmiStore.measurements.length;
+  const dimensionCount = pmiStore.annotations.length;
   const connectorStore = ConnectorStore.instance;
   const connectorCount = connectorStore.groups.length;
 
@@ -608,6 +644,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const isSelected = selectedNodeId === panel.id ? 'selected' : '';
     const isManual = panel.isManual === true;
     const isFrozen = panel.frozen === true;
+    const isSmartPartPart = isHandleTreeItem(panel) || isCustomSmartPartTreeItem(panel);
 
     const opCount = (panel.holes?.length || 0) + (panel.grooves?.length || 0);
     const cncPrograms = (CAMStateStore as any)?.instance?.getPrograms ? (CAMStateStore as any).instance.getPrograms(panel.id) : [];
@@ -622,9 +659,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
           onDragStart={(e) => {
             e.stopPropagation();
             const payload = {
-              type: 'PANEL',
+              type: isSmartPartPart ? 'HANDLE' : 'PANEL',
               id: panel.id,
-              name: panel.name || 'Formatka',
+              name: panel.name || (isSmartPartPart ? 'SmartPart' : 'Formatka'),
               raw: panel,
             };
             (window as any).__draggedCadNode = payload;
@@ -655,10 +692,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.stopPropagation();
               UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.id });
               UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: 'part',
+                type: isSmartPartPart ? 'handle' : 'part',
                 id: panel.id,
                 uuid: panel.id,
-                name: panel.name || 'Formatka',
+                name: panel.name || (isSmartPartPart ? 'SmartPart' : 'Formatka'),
                 isManual,
                 frozen: isFrozen,
                 clientX: e.clientX,
@@ -765,6 +802,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             {/* Elementy potomne formatki (np. SmartPart Uchwyt, okucia podpięte pod formatkę) */}
             {panel.children && panel.children.length > 0 && (
               panel.children.map((child: CADTreeNode) => {
+                if (isFeatureNode(child)) {
+                  return renderFeatureNode(child);
+                }
                 if (isHardwareNode(child)) {
                   return renderHardwareNode(child);
                 }
@@ -800,6 +840,50 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             )}
           </div>
         )}
+      </div>
+    );
+  };
+
+  const renderFeatureNode = (featNode: CADTreeNode) => {
+    const isSelected = selectedNodeId === featNode.id ? 'selected' : '';
+    const cutType = String(
+      (featNode as any).generatorParams?.cut?.type
+      || (featNode as any).cutType
+      || '',
+    ).toUpperCase();
+    const kindLabel = cutType === 'HOLE' ? 'Cut · otwór' : cutType === 'POCKET' ? 'Cut · kieszeń' : 'Cut';
+
+    return (
+      <div key={featNode.id} className="tree-children" style={{ marginLeft: '12px' }}>
+        <div
+          className={`tree-node is-smart-op ${isSelected}`}
+          style={{ cursor: 'pointer', opacity: featNode.visible === false ? 0.45 : 1 }}
+        >
+          <div
+            className="tree-node-content"
+            onClick={() => {
+              setSelectedNodeId(featNode.id);
+              onSelectNode?.(featNode);
+              if (!isDrawMode) {
+                UIController.instance?.emitTree('select-hardware', { id: featNode.id, name: featNode.name });
+              }
+            }}
+          >
+            <span style={{ width: '8px', display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ color: '#38bdf8', display: 'inline-flex', alignItems: 'center' }}>
+              {TREE_ICONS.tool}
+            </span>
+            <span className="node-name-text" style={{ fontWeight: 500 }}>
+              {featNode.name || 'Cut'}
+            </span>
+            <span style={{ opacity: 0.55, fontSize: '11px', marginLeft: '4px' }}>{kindLabel}</span>
+            {(featNode.width > 0 || featNode.height > 0 || featNode.depth > 0) && (
+              <span style={{ opacity: 0.45, fontSize: '11px', marginLeft: '4px' }}>
+                ({featNode.width}x{featNode.height}x{featNode.depth})
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
@@ -946,11 +1030,17 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
   const renderContainerNode = (container: CADTreeNode) => {
     const isHandle = isHandleTreeItem(container);
-    // SmartWall domyślnie rozwinięty — widać ściany-dzieci; uchwyt domyślnie zwinięty
-    const defaultCollapsed = isHandle ? true : !isSmartWallTreeItem(container);
+    const isCustomSp = isCustomSmartPartTreeItem(container);
+    const isSmartPartLike = isHandle || isCustomSp;
+    const isAgd = isApplianceTreeItem(container);
+    // SmartWall domyślnie rozwinięty — widać ściany-dzieci; uchwyt / custom SP domyślnie zwinięty
+    const defaultCollapsed = isSmartPartLike ? true : !isSmartWallTreeItem(container);
     const isContainerCollapsed = isNodeCollapsed(container.id, defaultCollapsed);
     const isSelected = selectedNodeId === container.id ? 'selected' : '';
     const isEditing = editingNode?.type === 'container' && editingNode?.id === container.id;
+    const treeTypeLabel = isHandle
+      ? 'Uchwyt'
+      : (isCustomSp ? 'SmartPart' : (isAgd ? 'AGD' : (isBlokiTreeItem(container) ? 'Bloki' : 'Korpus')));
 
     return (
       <div key={container.id} className="tree-children">
@@ -966,9 +1056,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             e.stopPropagation();
             const isBlok = isBlokiTreeItem(container);
             const payload = {
-              type: isHandle ? 'HANDLE' : (isBlok ? 'BLOKI' : 'CONTAINER'),
+              type: isHandle ? 'HANDLE' : (isAgd ? 'AGD' : (isBlok ? 'BLOKI' : 'CONTAINER')),
               id: container.id,
-              name: container.name || (isHandle ? 'Uchwyt' : (isBlok ? 'Bloki' : 'Korpus')),
+              name: container.name || treeTypeLabel,
               raw: container,
             };
             (window as any).__draggedCadNode = payload;
@@ -996,10 +1086,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               onSelectNode?.(container);
               if (!isDrawMode) {
                 UIController.instance?.emitTree('select-container', { id: container.id });
-                if (isHandle) {
-                  const smartpartsBtn = document.getElementById('tab-btn-smartparts');
-                  smartpartsBtn?.click();
-                }
+                // SmartPart: edycja tylko przez PPM „Edytuj” (bez auto-skoku zakładki).
               }
             }}
             onContextMenu={(e) => {
@@ -1008,10 +1095,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.stopPropagation();
               UIController.instance?.emitTree('select-container', { id: container.id });
               const isBlok = isBlokiTreeItem(container);
+              // handle = PPM „Edytuj” → floating SmartPart dialog (uchwyt LUB CUSTOM)
+              // agd = PPM „Edytuj AGD” → zakładka AGD
               UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: isHandle ? 'handle' : (isBlok ? 'bloki' : 'container'),
+                type: isSmartPartLike ? 'handle' : (isAgd ? 'agd' : (isBlok ? 'bloki' : 'container')),
                 id: container.id,
-                name: container.name || (isHandle ? 'Uchwyt' : (isBlok ? 'Bloki' : 'Korpus')),
+                name: container.name || treeTypeLabel,
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
@@ -1019,13 +1108,13 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             onDoubleClick={() => {
               if (isDrawMode) return;
               setEditingNode({ type: 'container', id: container.id });
-              setEditValue(container.name || (isHandle ? 'Uchwyt' : 'Korpus'));
+              setEditValue(container.name || treeTypeLabel);
             }}
           >
             <span className="tree-chevron" onClick={(e) => toggleCollapse(container.id, e, defaultCollapsed)}>
               {isContainerCollapsed ? TREE_ICONS.chevronRight : TREE_ICONS.chevronDown}
             </span>
-            {isHandle ? (
+            {isSmartPartLike ? (
               <span style={{ color: '#38bdf8', display: 'inline-flex', alignItems: 'center', marginRight: '4px' }}>
                 {TREE_ICONS.handle}
               </span>
@@ -1047,8 +1136,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 autoFocus
               />
             ) : (
-              <strong className="node-name-text" style={{ color: isHandle ? '#38bdf8' : undefined }}>
-                {container.name || (isHandle ? 'Uchwyt' : 'Kontener')}
+              <strong className="node-name-text" style={{ color: isSmartPartLike ? '#38bdf8' : undefined }}>
+                {container.name || (isHandle ? 'Uchwyt' : (isCustomSp ? 'SmartPart' : 'Kontener'))}
               </strong>
             )}
             <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>
@@ -1084,6 +1173,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         {!isContainerCollapsed &&
           container.children &&
           container.children.map((child: CADTreeNode) => {
+            if (isFeatureNode(child)) {
+              return renderFeatureNode(child);
+            }
             if (isHardwareNode(child)) {
               return renderHardwareNode(child);
             }
@@ -1205,45 +1297,6 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   executePMICommand(new RemoveDimensionCommand(pmiStore, ann.id));
-                }}
-              >
-                {TREE_ICONS.trash}
-              </button>
-            </div>
-          </div>
-        ))}
-        {pmiStore.measurements.map((item) => (
-          <div
-            key={item.id}
-            className={`tree-node ${item.selected ? 'selected' : ''}`}
-            style={{ opacity: item.visible === false ? 0.45 : 1 }}
-          >
-            <div
-              className="tree-node-content"
-              onClick={() => pmiStore.selectMeasurementById(item.id)}
-            >
-              <span className="drzewo-row-kind">Pomiar</span>
-              <span className="node-name-text">{item.text || 'Pomiar'}</span>
-            </div>
-            <div className="tree-node-actions">
-              <button
-                type="button"
-                className="tree-action-btn"
-                title={tx(srcTekst, 'tree.toggle', TX_NS)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  executePMICommand(new SetMeasurementVisibilityCommand(pmiStore, item.id, !item.visible));
-                }}
-              >
-                {item.visible === false ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
-              </button>
-              <button
-                type="button"
-                className="tree-action-btn btn-delete"
-                title={tx(srcTekst, 'tree.delete_measure', TX_NS)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  executePMICommand(new RemoveMeasurementCommand(pmiStore, item.id));
                 }}
               >
                 {TREE_ICONS.trash}
@@ -1405,6 +1458,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         {!isProjectCollapsed &&
           treeRoot.children &&
           treeRoot.children.map((child: CADTreeNode) => {
+            if (isFeatureNode(child)) {
+              return renderFeatureNode(child);
+            }
             if (isHardwareNode(child)) {
               return renderHardwareNode(child);
             }

@@ -5,7 +5,7 @@
 import type { BindType } from './core/contract.js';
 import type { AnchorKind } from './constraint-types.js';
 
-export const SOLVER_PANEL_TITLE = 'Relacje v8.6';
+export const SOLVER_PANEL_TITLE = 'Relacje v1';
 
 export const CONFLICT_REJECT_MESSAGE = 'Relacja powoduje konflikt i nie będzie realizowana.';
 
@@ -40,7 +40,7 @@ export const ADD_BUTTONS: AddButtonDef[] = [
         bindType: 'GROUND',
         label: 'Kotwicz w miejscu',
         title: 'Ground — utwierdź element w bieżącej pozycji',
-        icon: '📌',
+        icon: '⚓',
     },
 ];
 
@@ -48,7 +48,7 @@ export const BIND_TYPE_ICON: Record<BindType, string> = {
     VERTEX: '⬡',
     COPLANAR: '⇉',
     FLUSH: '⇆',
-    GROUND: '📌',
+    GROUND: '⚓',
 };
 
 export const BIND_TYPE_LABEL: Record<BindType, string> = {

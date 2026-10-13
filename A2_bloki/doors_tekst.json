@@ -25,7 +25,7 @@
     "de": "Doppel"
   },
   "gap.label": {
-    "pl": "Szczelina (Środek):",
+    "pl": "Szczelina środkowa:",
     "en": "Center gap:",
     "de": "Mittenfuge:"
   },
@@ -55,9 +55,9 @@
     "de": "Rechts:"
   },
   "hinges.title": {
-    "pl": "Okucia (Zawiasy):",
-    "en": "Hardware (Hinges):",
-    "de": "Beschläge (Scharniere):"
+    "pl": "Pozycja zawiasów:",
+    "en": "Hinge positions:",
+    "de": "Scharnierpositionen:"
   },
   "weight_info.front_weight": {
     "pl": "Waga frontu:",
@@ -79,6 +79,26 @@
     "en": "Suggested hinge count:",
     "de": "Empfohlene Scharnieranzahl:"
   },
+  "weight_info.suggested_hinges_per_leaf": {
+    "pl": "Sugerowana liczba na skrzydło:",
+    "en": "Suggested per leaf:",
+    "de": "Empfohlen pro Flügel:"
+  },
+  "weight_info.active_hinges": {
+    "pl": "Wybrane zawiasy:",
+    "en": "Selected hinges:",
+    "de": "Gewählte Scharniere:"
+  },
+  "weight_info.active_hinges_per_leaf": {
+    "pl": "Wybrane na skrzydło:",
+    "en": "Selected per leaf:",
+    "de": "Gewählt pro Flügel:"
+  },
+  "weight_info.total_in_block": {
+    "pl": "Razem w bloku (×2):",
+    "en": "Total in block (×2):",
+    "de": "Gesamt im Block (×2):"
+  },
   "weight_info.unit_pcs": {
     "pl": "szt.",
     "en": "pcs",
@@ -88,6 +108,11 @@
     "pl": "/ skrz.",
     "en": "/ leaf",
     "de": "/ Flügel"
+  },
+  "hinge_brand.label": {
+    "pl": "Producent:",
+    "en": "Manufacturer:",
+    "de": "Hersteller:"
   },
   "hinge_template.label": {
     "pl": "Szablon...",

@@ -28,6 +28,7 @@ import {
     isSmartApplianceContainer,
 } from './smart-appliance-types.js';
 import { planMicrowave, type AppliancePartPlanMm } from './microwave-engine.js';
+import { resolveHangersReferenceBoxMm } from '../A5_smartparts/hangers/hanger-apply.js';
 
 export function ensureSmartApplianceGeneratorParams(container: ContainerModel, kind: ApplianceKind = 'MICROWAVE'): void {
     if (!container.generatorParams) {
@@ -275,4 +276,35 @@ export function createSmartAppliance(
     }
 
     return cntNode;
+}
+
+/**
+ * Po edycji „Ściany referencyjne” — ten sam schemat boxu co Blok/zawieszki
+ * (`customReferences` + `offsets`), potem rebuild geometrii AGD.
+ */
+export function syncApplianceBayFromRefs(container: ContainerModel, docTarget?: any): boolean {
+    if (!isSmartApplianceContainer(container)) return false;
+    const doc = docTarget || ContextManager.instance.document;
+    if (!doc) return false;
+
+    const box = resolveHangersReferenceBoxMm(container, doc);
+    if (box) {
+        container.width = mmToNm(box.widthMm);
+        container.height = mmToNm(box.heightMm);
+        container.depth = mmToNm(box.depthMm);
+        if (!container.generatorParams) container.generatorParams = {};
+        container.generatorParams.bayWidthMm = Math.round(box.widthMm);
+        container.generatorParams.bayHeightMm = Math.round(box.heightMm);
+        container.generatorParams.bayDepthMm = Math.round(box.depthMm);
+
+        const cntNode = doc.findNode(container.id);
+        if (cntNode) {
+            cntNode.setLocalTransform(
+                new Vec3(mmToNm(box.posX), mmToNm(box.posY), mmToNm(box.posZ)),
+                Quat.IDENTITY,
+            );
+        }
+    }
+
+    return rebuildSmartAppliance(container, doc);
 }

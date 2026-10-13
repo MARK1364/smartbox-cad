@@ -144,7 +144,7 @@ export function PanelsSubModule({ container, triggerUpdate }: { container: Conta
                     <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(panelsTekst, 'side.depth', TX_NS)}</span>
                     <SmartNumericInput
                         value={depth}
-                        min={50} step={0.01} decimals={2} unit="mm"
+                        min={10} step={0.01} decimals={2} unit="mm"
                         style={inputStyle}
                         onChange={(val) => {
                             setDepth(val);

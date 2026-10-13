@@ -44,17 +44,29 @@ export abstract class Postprocessor {
         lines.push(clProgram.wcsName || 'G55');
         lines.push('G80 G90');
 
+        let drillCycleActive = false;
+        let activeDrillKey: string | null = null;
+
+        const cancelDrill = () => {
+            if (!drillCycleActive) return;
+            lines.push(`${getN()} G80`);
+            drillCycleActive = false;
+            activeDrillKey = null;
+        };
+
         for (const cmd of clProgram.commands) {
             switch (cmd.type) {
                 case 'COMMENT':
                     if (cmd.comment) lines.push(`(${cmd.comment})`);
                     break;
 
-                case 'TOOL_SELECT':
+                case 'TOOL_SELECT': {
+                    cancelDrill();
                     const toolNum = cmd.toolId ? cmd.toolId.replace(/[^0-9]/g, '') || '1' : '1';
                     lines.push(`(narzedzie ${cmd.toolName || 'T' + toolNum})`);
                     lines.push(`${getN()} M6 T${toolNum} D${toolNum}`);
                     break;
+                }
 
                 case 'SPINDL':
                     lines.push(`${getN()} M3 S${cmd.spindleRpm || 18000}`);
@@ -65,12 +77,14 @@ export abstract class Postprocessor {
                     break;
 
                 case 'COMPENSATION':
+                    cancelDrill();
                     if (cmd.compensation === 'LEFT') lines.push(`${getN()} G41`);
                     else if (cmd.compensation === 'RIGHT') lines.push(`${getN()} G42`);
                     else lines.push(`${getN()} G40`);
                     break;
 
                 case 'GOTO':
+                    cancelDrill();
                     if (cmd.point) {
                         const pt = cmd.point;
                         lines.push(`${getN()} G1 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)}`);
@@ -81,22 +95,35 @@ export abstract class Postprocessor {
                     if (cmd.point && cmd.drillParams) {
                         const pt = cmd.point;
                         const p = cmd.drillParams;
-                        if (p.type === 'PECK' && p.peckStep) {
-                            lines.push(`${getN()} G83 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)} R${p.retractR} Q${p.peckStep}`);
+                        const isPeck = p.type === 'PECK' && !!p.peckStep;
+                        const drillKey = isPeck
+                            ? `G83|${p.retractR}|${p.peckStep}|${pt.z.toFixed(3)}`
+                            : `G81|${p.retractR}|${pt.z.toFixed(3)}`;
+
+                        if (drillCycleActive && activeDrillKey === drillKey) {
+                            lines.push(`${getN()} X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)}`);
                         } else {
-                            lines.push(`${getN()} G81 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)} R${p.retractR}`);
+                            if (isPeck) {
+                                lines.push(`${getN()} G83 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)} R${p.retractR} Q${p.peckStep}`);
+                            } else {
+                                lines.push(`${getN()} G81 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)} R${p.retractR}`);
+                            }
+                            drillCycleActive = true;
+                            activeDrillKey = drillKey;
                         }
                     }
                     break;
 
                 case 'STOP':
+                    cancelDrill();
                     lines.push(`${getN()} M2`);
                     break;
             }
         }
 
-        if (lines[lines.length - 1] !== `${getN()} M2` && !lines.includes('M2')) {
-            lines.push(`M2`);
+        if (!lines.some(l => l.endsWith('M2') || l === 'M2')) {
+            cancelDrill();
+            lines.push(`${getN()} M2`);
         }
 
         return lines.join('\n');

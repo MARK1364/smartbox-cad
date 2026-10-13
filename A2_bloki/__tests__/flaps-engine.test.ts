@@ -55,4 +55,37 @@ describe('flaps-engine (Functional Core)', () => {
         expect(hwLeft).toBeDefined();
         expect(hwRight).toBeDefined();
     });
+
+    it('sets cup orientation top/bottom toward wreath (not door left/right)', () => {
+        const topPlan = calculateFlapsPlan(
+            { width_mm: 600, height_mm: 400, depth_mm: 350 },
+            normalizeFlapsParams({ kierunek_klapy: 'TOP' })
+        );
+        const bottomPlan = calculateFlapsPlan(
+            { width_mm: 600, height_mm: 400, depth_mm: 350 },
+            normalizeFlapsParams({ kierunek_klapy: 'BOTTOM' })
+        );
+
+        const topCups = topPlan.parts[0].features.filter((f: any) => f.params?.isFlapCup);
+        const bottomCups = bottomPlan.parts[0].features.filter((f: any) => f.params?.isFlapCup);
+
+        expect(topCups.length).toBe(2);
+        expect(bottomCups.length).toBe(2);
+        for (const cup of topCups) {
+            expect(cup.params.orientation).toBe('top');
+            expect(cup.params.isFlapCup).toBe(true);
+        }
+        for (const cup of bottomCups) {
+            expect(cup.params.orientation).toBe('bottom');
+            expect(cup.params.isFlapCup).toBe(true);
+        }
+
+        // Wkręty wzdłuż osi zawiasu (U), nie jak drzwi wzdłuż V
+        const topCup = topCups[0];
+        const topScrew = topPlan.parts[0].features.find(
+            (f: any) => f.params?.isFlapScrew && f.params?.hingeKey === topCup.params.hingeKey
+        );
+        expect(topScrew.params.v).toBeCloseTo(topCup.params.v - 8.5, 1); // edgeDist 31 vs 22.5 od góry
+        expect(Math.abs(topScrew.params.u - topCup.params.u)).toBeCloseTo(22.5, 1);
+    });
 });

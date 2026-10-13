@@ -43,7 +43,8 @@ export class CadTranslateGizmo {
 
         for (const g of [this.xGizmo, this.yGizmo, this.zGizmo]) {
             if (g) {
-                g.updateGizmoRotationToMatchAttachedMesh = true;
+                // Osie świata CAD (nie lokalne obiektu) — jak Creo/SW i główna aplikacja
+                g.updateGizmoRotationToMatchAttachedMesh = false;
                 g.updateGizmoPositionToMatchAttachedMesh = true;
                 if (g.dragBehavior) {
                     g.dragBehavior.dragDeltaRatio = 1.0;

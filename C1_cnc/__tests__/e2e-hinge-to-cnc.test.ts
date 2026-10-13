@@ -248,6 +248,53 @@ describe('E2E: zawias → otwory na formatce → program CNC', () => {
         }
     });
 
+    it('4b. BOK_L: WCS+X∥LCS+Y, WCS+Y∥LCS+X, WCS+Z∥LCS+Z', () => {
+        const rule = WcsRulesMapper.getRuleForRole('LEFT_SIDE_PANEL');
+        expect(rule).not.toBeNull();
+        expect(rule!.rotation.Z).toBe(90);
+        expect(rule!.directions.Y).toBe('-');
+
+        const wcs = new WcsManager('G55');
+        wcs.setRule(rule!);
+        wcs.updateForPanelDimensions(600, 720, 18);
+
+        // Wektor w LCS → współrzędne WCS (po origin = tylko obrót/kierunki)
+        const alongLcsY = wcs.transformVector({ x: 0, y: 10, z: 0 });
+        const alongLcsX = wcs.transformVector({ x: 10, y: 0, z: 0 });
+        const alongLcsZ = wcs.transformVector({ x: 0, y: 0, z: 10 });
+
+        expect(alongLcsY.x).toBeCloseTo(10, 6); // LCS+Y → WCS+X
+        expect(alongLcsY.y).toBeCloseTo(0, 6);
+        expect(alongLcsX.y).toBeCloseTo(10, 6); // LCS+X → WCS+Y
+        expect(alongLcsX.x).toBeCloseTo(0, 6);
+        expect(alongLcsZ.z).toBeCloseTo(10, 6); // LCS+Z → WCS+Z
+        expect(alongLcsZ.x).toBeCloseTo(0, 6);
+        expect(alongLcsZ.y).toBeCloseTo(0, 6);
+    });
+
+    it('4c. BOK_P: WCS+X∥LCS+Y, WCS+Y∥LCS−X, WCS+Z∥LCS+Z', () => {
+        const rule = WcsRulesMapper.getRuleForRole('RIGHT_SIDE_PANEL');
+        expect(rule).not.toBeNull();
+        expect(rule!.rotation.Z).toBe(90);
+        expect(rule!.directions).toEqual({ X: '+', Y: '+', Z: '+' });
+
+        const wcs = new WcsManager('G55');
+        wcs.setRule(rule!);
+        wcs.updateForPanelDimensions(600, 720, 18);
+
+        const alongLcsY = wcs.transformVector({ x: 0, y: 10, z: 0 });
+        const alongLcsNegX = wcs.transformVector({ x: -10, y: 0, z: 0 });
+        const alongLcsZ = wcs.transformVector({ x: 0, y: 0, z: 10 });
+
+        expect(alongLcsY.x).toBeCloseTo(10, 6); // LCS+Y → WCS+X
+        expect(alongLcsY.y).toBeCloseTo(0, 6);
+        expect(alongLcsNegX.y).toBeCloseTo(10, 6); // LCS−X → WCS+Y
+        expect(alongLcsNegX.x).toBeCloseTo(0, 6);
+        expect(alongLcsZ.z).toBeCloseTo(10, 6); // LCS+Z → WCS+Z
+        expect(alongLcsZ.x).toBeCloseTo(0, 6);
+        expect(alongLcsZ.y).toBeCloseTo(0, 6);
+    });
+
     it('5. Program CNC zawiera dokładnie te otwory, które są na formatce', () => {
         const { paneleZOtworami } = zbudujProdukt();
         expect(paneleZOtworami.length).toBeGreaterThan(0);
@@ -282,7 +329,12 @@ describe('E2E: zawias → otwory na formatce → program CNC', () => {
             expect(cykleWiercenia.length).toBe(oczekiwane);
 
             const nc = new Mach3Postprocessor().generateNcCode(program);
-            expect((nc.match(/G81/g) || []).length).toBe(oczekiwane);
+            // Modalny G81: jedno G81 na grupę narzędzia + kolejne XY, nie G81 na każdy otwór.
+            expect(nc).toContain('G81');
+            const toolIds = new Set(operacje.filter(o => o.type === 'drill').map(o => o.toolId));
+            expect((nc.match(/M6 T/g) || []).length).toBe(toolIds.size);
+            const drillHits = (nc.match(/\bX-?\d/g) || []).length;
+            expect(drillHits).toBeGreaterThanOrEqual(oczekiwane);
             expect(nc).toContain('G55');
             expect(nc.trimEnd().endsWith('M2')).toBe(true);
 

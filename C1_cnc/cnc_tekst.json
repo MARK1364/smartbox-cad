@@ -529,6 +529,11 @@
     "en": "Playback Speed:",
     "de": "Wiedergabegeschwindigkeit:"
   },
+  "simulation.show_toolpaths": {
+    "pl": "Pokaż ścieżki narzędzia (G0/G1)",
+    "en": "Show Toolpaths (G0/G1)",
+    "de": "Werkzeugbahnen anzeigen (G0/G1)"
+  },
   "gcode.title": {
     "pl": "Generowanie Kodu NC",
     "en": "NC Code Generation",
@@ -683,6 +688,11 @@
     "pl": "Płyta",
     "en": "Panel",
     "de": "Platte"
+  },
+  "ui.no_target_panel": {
+    "pl": "Brak wybranej formatki",
+    "en": "No panel selected",
+    "de": "Kein Bauteil ausgewählt"
   },
   "extractor.unknown": {
     "pl": "Nieznany",

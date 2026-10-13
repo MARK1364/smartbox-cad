@@ -30,8 +30,8 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: Cont
     const [shelfCount, setShelfCount] = useState<number>(p.liczba_polek ?? 3);
     const [shelfOffsetFront, setShelfOffsetFront] = useState<string | number>(p.odsuniecie_przod_mm ?? 10);
     const [shelfOffsetSide, setShelfOffsetSide] = useState<string | number>(p.luz_boczny_mm ?? 0.5);
-    const [frontInset, setFrontInset] = useState<number>(p.odstep_otworow_przod_mm ?? 37);
-    const [backInset, setBackInset] = useState<number>(p.odstep_otworow_tyl_mm ?? 37);
+    const [frontInset, setFrontInset] = useState<number>(p.odstep_otworow_przod_mm ?? 40);
+    const [backInset, setBackInset] = useState<number>(p.odstep_otworow_tyl_mm ?? 40);
     const [holePattern, setHolePattern] = useState<string>(p.wzor_nawiercen || 'SINGLE');
     const [tripleZOffset, setTripleZOffset] = useState<number>(p.rozstaw_potrojny_z_mm ?? 32);
     const [system32Spacing, setSystem32Spacing] = useState<number>(p.rozstaw_system32_mm ?? 32);
@@ -47,8 +47,8 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: Cont
         setShelfCount(gp.liczba_polek ?? 3);
         setShelfOffsetFront(gp.odsuniecie_przod_mm ?? 10);
         setShelfOffsetSide(gp.luz_boczny_mm ?? 0.5);
-        setFrontInset(gp.odstep_otworow_przod_mm ?? 37);
-        setBackInset(gp.odstep_otworow_tyl_mm ?? 37);
+        setFrontInset(gp.odstep_otworow_przod_mm ?? 40);
+        setBackInset(gp.odstep_otworow_tyl_mm ?? 40);
         setHolePattern(gp.wzor_nawiercen || 'SINGLE');
         setTripleZOffset(gp.rozstaw_potrojny_z_mm ?? 32);
         setSystem32Spacing(gp.rozstaw_system32_mm ?? 32);
@@ -206,6 +206,20 @@ export function ShelvesSubModule({ container, triggerUpdate }: { container: Cont
 
             {holePattern !== 'NONE' && (
                 <>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginTop: '6px',
+                        marginBottom: '2px',
+                    }}>
+                        <div style={{ flex: 1, height: '1px', background: '#3f3f46' }} />
+                        <span style={{ color: '#93c5fd', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+                            {tx(shelvesTekst, 'holes_bar.label', TX_NS)}
+                        </span>
+                        <div style={{ flex: 1, height: '1px', background: '#3f3f46' }} />
+                    </div>
+
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                         <input 
                             type="checkbox" 

@@ -1,0 +1,75 @@
+{
+  "id": "sp:p40",
+  "name": "p40",
+  "units": "mm",
+  "version": "1.0",
+  "type": "CUSTOM",
+  "coordSystem": "CAD",
+  "mainContainer": {
+    "widthMm": 564,
+    "heightMm": 600,
+    "depthMm": 330
+  },
+  "parts": [
+    {
+      "id": "sp:SmartPart_Kontener_1/part:part_1",
+      "name": "Part 1",
+      "widthMm": 18,
+      "heightMm": 38,
+      "depthMm": 68,
+      "xMm": -272,
+      "yMm": 65,
+      "zMm": 250,
+      "refX": "LEFT",
+      "offsetX_mm": 10,
+      "refY": "FRONT",
+      "offsetY_mm": 100,
+      "refZ": "TOP",
+      "offsetZ_mm": 50,
+      "colorHex": "#38bdf8"
+    }
+  ],
+  "cuts": [
+    {
+      "id": "sp:SmartPart_Kontener_1/cut:walec_1",
+      "name": "Walec 1",
+      "type": "HOLE",
+      "diameterMm": 8,
+      "lengthMm": 24,
+      "xMm": -9,
+      "yMm": 0,
+      "zMm": 0,
+      "refX": "LEFT",
+      "offsetX_mm": 0,
+      "refY": "CENTER",
+      "offsetY_mm": 0,
+      "refZ": "CENTER",
+      "offsetZ_mm": 0,
+      "axis": "X",
+      "direction": -1,
+      "partId": "sp:SmartPart_Kontener_1/part:part_1"
+    }
+  ],
+  "parameters": [],
+  "bindings": [],
+  "updatedAt": 1791403966311,
+  "cutsFrame": "PART",
+  "partBody": {
+    "id": "sp:SmartPart_Kontener_1/part:part_1",
+    "name": "Part 1",
+    "widthMm": 18,
+    "heightMm": 38,
+    "depthMm": 68,
+    "xMm": -272,
+    "yMm": 65,
+    "zMm": 250,
+    "refX": "LEFT",
+    "offsetX_mm": 10,
+    "refY": "FRONT",
+    "offsetY_mm": 100,
+    "refZ": "TOP",
+    "offsetZ_mm": 50,
+    "colorHex": "#38bdf8"
+  },
+  "iconDataUrl": "data:image/jpeg;base64,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"
+}

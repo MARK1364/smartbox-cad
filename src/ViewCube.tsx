@@ -8,12 +8,13 @@ const TX_NS = 'src';
 
 export interface ViewCubeProps {
   onSetView: (view: string) => void;
+  style?: React.CSSProperties;
 }
 
 /** Kostka widoków — belka widokowa / viewport overlay. */
-export function ViewCube({ onSetView }: ViewCubeProps) {
+export function ViewCube({ onSetView, style }: ViewCubeProps) {
   return (
-    <div id="view-cube-container" className="view-cube-container">
+    <div id="view-cube-container" className="view-cube-container" style={style}>
       <div id="view-cube-wrapper" className="view-cube-wrapper">
         <div className="cube-face face-front" onClick={() => onSetView('front')}>
           {tx(srcTekst, 'app.cube.front', TX_NS)}

@@ -7,11 +7,11 @@
  */
 import React, { useState, useEffect } from 'react';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
-import { calculateDoorsPlan, normalizeDoorsParams } from './doors-engine.js';
+import { calculateDoorsPlan, normalizeDoorsParams, suggestHingesPerLeaf } from './doors-engine.js';
 import type { ModuleDims } from './base-engine.js';
 import type { BlokiPlanResult } from './bloki-types.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
-import { DEFAULT_HINGE_ID, hingeFrontHolesMm, listByType } from '../B1_biblioteka/index.js';
+import { DEFAULT_HINGE_ID, hingeFrontHolesMm } from '../B1_biblioteka/index.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
@@ -20,6 +20,13 @@ import doorsTekstRaw from './doors_tekst.json';
 import doorsRules from './doors_3_rules_V1.json';
 import { resolveRuleThicknessMm } from './bloki-rules-helper.js';
 import type { DoorsPlanParams } from './bloki-module-types.js';
+import {
+    DEFAULT_HINGE_BRAND,
+    firstHingeIdForBrand,
+    HingeBrandFilter,
+    renderHingeSelectOptions,
+    resolveHingeBrand
+} from './hinge-brand-ui.js';
 
 const doorsTekst = doorsTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'bloki.doors';
@@ -46,29 +53,33 @@ function calculateDoorWeightAndHinges(opts: {
     ovRight: number;
     thickness: number;
     density?: number;
-}): { weightKg: number; suggestedHinges: number; isDouble: boolean } {
-    const isDouble = opts.doorType === 'DOUBLE';
-    const totalW = opts.sbWidth + opts.ovLeft + opts.ovRight;
-    const doorW = isDouble ? Math.max(0, (totalW - opts.gap) / 2) : totalW;
+}): { weightKg: number; suggestedHingesPerLeaf: number; isDouble: boolean } {
+    const isDouble = normalizeDoorType(opts.doorType) === 'DOUBLE';
+    const halfOpening = Math.max(0, (opts.sbWidth - opts.gap) / 2);
+    const doorW = isDouble
+        ? Math.max(halfOpening + opts.ovLeft, halfOpening + opts.ovRight)
+        : opts.sbWidth + opts.ovLeft + opts.ovRight;
     const doorH = opts.sbHeight + opts.ovTop + opts.ovBottom;
     const th = opts.thickness || DEFAULT_DOOR_THICKNESS;
     const density = opts.density || 680;
 
     const volM3 = (doorW * doorH * th) / 1_000_000_000;
     const weightKg = parseFloat((volM3 * density + 0.15).toFixed(2));
+    const suggestedHingesPerLeaf = suggestHingesPerLeaf(doorH, weightKg);
 
-    let suggestedHinges = 2;
-    if (doorH > 2000 || weightKg > 15.0) {
-        suggestedHinges = 5;
-    } else if (doorH > 1600 || weightKg > 9.0) {
-        suggestedHinges = 4;
-    } else if (doorH > 900 || weightKg > 4.5) {
-        suggestedHinges = 3;
-    } else {
-        suggestedHinges = 2;
+    return { weightKg, suggestedHingesPerLeaf, isDouble };
+}
+
+export function countActiveDoorHingesPerLeaf(p: DoorsPlanParams): number {
+    let n = 0;
+    for (let i = 1; i <= 6; i++) {
+        const key = `uzyj_zawias_${i}` as keyof DoorsPlanParams;
+        const defaultOn = i === 1 || i === 6;
+        const raw = p[key];
+        const on = raw === undefined ? defaultOn : Boolean(raw);
+        if (on) n += 1;
     }
-
-    return { weightKg, suggestedHinges, isDouble };
+    return n;
 }
 
 /**
@@ -137,6 +148,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
 
     // Domyślny szablon zawiasów
     const defaultTemplate = p.domyslny_zawias_id || DEFAULT_HINGE_ID;
+    const [hingeBrand, setHingeBrand] = useState<string>(() => resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
     const [hingeTemplate, setHingeTemplate] = useState<string>(defaultTemplate);
 
     const [useHinge1, setUseHinge1] = useState<boolean>(p.uzyj_zawias_1 !== false);
@@ -171,6 +183,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
         setOvBottom(p.nalozenie_dol_mm ?? 15);
         setOvLeft(p.nalozenie_lewe_mm ?? 16);
         setOvRight(p.nalozenie_prawe_mm ?? 16);
+        setHingeBrand(resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
         setHingeTemplate(defTpl);
         setUseHinge1(p.uzyj_zawias_1 !== false);
         setHinge1Pos(p.pozycja_zawias_1_mm ?? 120);
@@ -317,7 +330,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                     const info = calculateDoorWeightAndHinges({
                         sbWidth: sbW,
                         sbHeight: sbH,
-                        doorType,
+                        doorType: activeDoor,
                         gap: toNum(gap, 4),
                         ovTop: toNum(ovTop, 14),
                         ovBottom: toNum(ovBottom, 15),
@@ -334,41 +347,46 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                             fontSize: '11px',
                             color: '#a1a1aa',
                             display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
+                            flexDirection: 'column',
+                            gap: '4px'
                         }}>
-                            <span>
-                                {info.isDouble ? tx(doorsTekst, 'weight_info.leaf_weight', TX_NS) : tx(doorsTekst, 'weight_info.front_weight', TX_NS)} <strong style={{ color: '#f4f4f5' }}>{info.weightKg} kg</strong>{info.isDouble ? ` ${tx(doorsTekst, 'weight_info.times_2', TX_NS)}` : ''}
-                            </span>
-                            <span>
-                                {tx(doorsTekst, 'weight_info.suggested_hinges', TX_NS)} <strong style={{ color: '#60a5fa' }}>{info.suggestedHinges} {tx(doorsTekst, 'weight_info.unit_pcs', TX_NS)}{info.isDouble ? ` ${tx(doorsTekst, 'weight_info.per_leaf', TX_NS)}` : ''}</strong>
-                            </span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>{tx(doorsTekst, 'weight_info.leaf_weight', TX_NS)}</span>
+                                <strong style={{ color: '#f4f4f5' }}>{info.weightKg} kg</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>{tx(doorsTekst, 'weight_info.suggested_hinges_per_leaf', TX_NS)}</span>
+                                <strong style={{ color: '#f4f4f5' }}>{info.suggestedHingesPerLeaf} {tx(doorsTekst, 'weight_info.unit_pcs', TX_NS)}</strong>
+                            </div>
                         </div>
                     );
                 })()}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#d4d4d8', fontSize: '11px' }}>{tx(doorsTekst, 'hinge_template.label', TX_NS)}</span>
-                    <select 
-                        value={hingeTemplate} 
-                        onChange={(e) => { 
-                            const newTpl = e.target.value;
-                            setHingeTemplate(newTpl);
-                            if (!p.zawias_1_szablon) setHinge1Template(getPairedHingeDefault(1, undefined, newTpl));
-                            if (!p.zawias_2_szablon) setHinge2Template(getPairedHingeDefault(2, undefined, newTpl));
-                            if (!p.zawias_3_szablon) setHinge3Template(getPairedHingeDefault(3, undefined, newTpl));
-                            if (!p.zawias_4_szablon) setHinge4Template(getPairedHingeDefault(4, undefined, newTpl));
-                            if (!p.zawias_5_szablon) setHinge5Template(getPairedHingeDefault(5, undefined, newTpl));
-                            if (!p.zawias_6_szablon) setHinge6Template(getPairedHingeDefault(6, undefined, newTpl));
-                            triggerUpdate({ domyslny_zawias_id: newTpl }); 
-                        }}
-                        style={{ width: '180px', padding: '2px 4px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', fontSize: '11px' }}
-                    >
-                        {listByType('HINGE').map((hw) => (
-                            <option key={hw.id} value={hw.id}>[{hw.brand || ''}] {hw.name || hw.id}</option>
-                        ))}
-                    </select>
-                </div>
+                <HingeBrandFilter
+                    value={hingeBrand}
+                    label={tx(doorsTekst, 'hinge_brand.label', TX_NS)}
+                    onChange={(brand) => {
+                        setHingeBrand(brand);
+                        const newTpl = firstHingeIdForBrand(brand, 'DOORS', DEFAULT_HINGE_ID);
+                        setHingeTemplate(newTpl);
+                        setHinge1Template(getPairedHingeDefault(1, undefined, newTpl));
+                        setHinge2Template(getPairedHingeDefault(2, undefined, newTpl));
+                        setHinge3Template(getPairedHingeDefault(3, undefined, newTpl));
+                        setHinge4Template(getPairedHingeDefault(4, undefined, newTpl));
+                        setHinge5Template(getPairedHingeDefault(5, undefined, newTpl));
+                        setHinge6Template(getPairedHingeDefault(6, undefined, newTpl));
+                        triggerUpdate({
+                            producent_zawiasow: brand,
+                            domyslny_zawias_id: newTpl,
+                            zawias_1_szablon: undefined,
+                            zawias_2_szablon: undefined,
+                            zawias_3_szablon: undefined,
+                            zawias_4_szablon: undefined,
+                            zawias_5_szablon: undefined,
+                            zawias_6_szablon: undefined
+                        });
+                    }}
+                />
 
                 {/* Zawiasy 1 do 6 */}
                 {(() => {
@@ -472,11 +490,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                                         whiteSpace: 'nowrap'
                                     }}
                                 >
-                                    {listByType('HINGE').map((hw) => (
-                                        <option key={hw.id} value={hw.id}>
-                                            [{hw.brand || ''}] {hw.name || hw.id}
-                                        </option>
-                                    ))}
+                                    {renderHingeSelectOptions(hingeBrand, 'DOORS')}
                                 </select>
                             </div>
                         );

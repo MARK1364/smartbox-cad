@@ -13,6 +13,11 @@ import { registerSmartFrameModule, smartFrameCabinetModule } from '../../A3_smar
 import { registerBlokiModule } from '../../A2_bloki/register.js';
 import { registerScianyModule, unregisterScianyModule } from '../../S4_sciany/register.js';
 import { registerSmartPartsModule } from '../../A5_smartparts/register.js';
+import {
+    syncHangerDefinitionFromParams,
+    updateSmartPartHangersGroup,
+} from '../../A5_smartparts/hangers/hanger-apply.js';
+import { SMARTPART_HANGERS_GROUP_TYPE } from '../../A5_smartparts/hangers/hanger-types.js';
 
 // Rozszerzenia dokumentu
 import { attachViewportExtension } from '../../S3_scena/viewport-document-extension.js';
@@ -30,6 +35,7 @@ import { MeasureTool } from '../../A8_pmi/pmi-measure-tool.js';
 import { PMIEditOffsetTool } from '../../A8_pmi/pmi-edit-tool.js';
 import { PMIViewportListener, PMI_EDIT_STATE } from '../../A8_pmi/pmi-viewport-listener.js';
 import { PMITextShiftTool, PMI_TEXT_SHIFT_STATE } from '../../A8_pmi/pmi-text-shift-tool.js';
+import { DIMENSION_TOOL_STATE, MEASURE_TOOL_STATE } from '../../A8_pmi/pmi-tool-activate.js';
 
 // Solver
 import { ConstraintStore } from '../../S2_solver/constraint-store.js';
@@ -85,7 +91,11 @@ const blokiModule: CadModule = {
         unregisterBlokiGeometryHandler = registerGeometryUpdateHandler({
             updateBeforeRebuild(doc, containers) {
                 for (const container of containers) {
-                    if (container.generatorParams?.type === 'blok_shelves') {
+                    const isBloki =
+                        !!container.generatorParams?.boxType ||
+                        (typeof container.generatorParams?.type === 'string' && container.generatorParams.type.startsWith('blok_')) ||
+                        (container as any).is_blok === true;
+                    if (isBloki) {
                         update_bloki_core(container, doc);
                     }
                 }
@@ -131,10 +141,31 @@ const scianyModule: CadModule = {
 /**
  * Moduł A5 SmartParts (uchwyty, kanały LED, akcesoria meblowe)
  */
+let unregisterSmartPartsGeometryHandler: (() => void) | null = null;
 const smartPartsModule: CadModule = {
     id: 'A5_smartparts',
-    registerDomain() {
-        registerSmartPartsModule();
+    registerDomain({ ctx }) {
+        registerSmartPartsModule(ctx.document);
+        unregisterSmartPartsGeometryHandler = registerGeometryUpdateHandler({
+            updateBeforeRebuild(doc, containers) {
+                for (const container of containers) {
+                    if (container.generatorParams?.type === SMARTPART_HANGERS_GROUP_TYPE) {
+                        // Najpierw resolve parametrów (offsety z panelu), potem pozycje we wnęce
+                        syncHangerDefinitionFromParams(container);
+                        const node = doc.findNode?.(container.id);
+                        if (node) {
+                            updateSmartPartHangersGroup(node, doc);
+                        }
+                    }
+                }
+            }
+        });
+    },
+    dispose() {
+        if (unregisterSmartPartsGeometryHandler) {
+            unregisterSmartPartsGeometryHandler();
+            unregisterSmartPartsGeometryHandler = null;
+        }
     }
 };
 
@@ -210,6 +241,9 @@ const solverModule: CadModule = {
             end() {
                 ConstraintDragGroup.instance.end();
             },
+            getAffectedNodeIds() {
+                return ConstraintDragGroup.instance.lastComponentIds;
+            },
         });
 
         const history = ContextManager.instance.commandHistory;
@@ -227,27 +261,29 @@ const solverModule: CadModule = {
  * Moduł A8 PMI (Wymiarowanie)
  */
 let pmiViewportListenerRef: PMIViewportListener | null = null;
+let pmiSyncRef: PMISyncController | null = null;
+let pmiRendererRef: PMIRenderer | null = null;
 const pmiModule: CadModule = {
     id: 'A8_pmi',
     registerProjectExtension({ ctx }) {
         const pmiRenderer = new PMIRenderer(ctx.viewport.scene);
         ContextManager.instance.pmiRenderer = pmiRenderer;
+        pmiRendererRef = pmiRenderer;
 
         const pmiSync = new PMISyncController(ctx.viewport.scene, pmiRenderer, PMIStore.instance);
         pmiSync.attach(ctx.document);
         (ContextManager.instance as any).pmiSync = pmiSync;
+        pmiSyncRef = pmiSync;
     },
     registerTools({ ctx, stateMachine }) {
         const pmiRenderer = ContextManager.instance.pmiRenderer;
         if (!pmiRenderer) return;
 
         const dimTool = new DimensionTool(ctx, stateMachine, pmiRenderer);
-        stateMachine.registerState('DIMENSION_TOOL', dimTool);
-        stateMachine.registerState('DimensionTool', dimTool);
+        stateMachine.registerState(DIMENSION_TOOL_STATE, dimTool);
 
         const measureTool = new MeasureTool(ctx, stateMachine, pmiRenderer);
-        stateMachine.registerState('MEASURE_TOOL', measureTool);
-        stateMachine.registerState('MeasureTool', measureTool);
+        stateMachine.registerState(MEASURE_TOOL_STATE, measureTool);
 
         stateMachine.registerState(PMI_EDIT_STATE, new PMIEditOffsetTool(ctx, stateMachine, pmiRenderer, PMIStore.instance));
         stateMachine.registerState(PMI_TEXT_SHIFT_STATE, new PMITextShiftTool(ctx, stateMachine, pmiRenderer, PMIStore.instance));
@@ -260,6 +296,16 @@ const pmiModule: CadModule = {
             pmiViewportListenerRef.dispose();
             pmiViewportListenerRef = null;
         }
+        if (pmiSyncRef) {
+            pmiSyncRef.dispose();
+            pmiSyncRef = null;
+        }
+        if (pmiRendererRef) {
+            pmiRendererRef.dispose();
+            pmiRendererRef = null;
+        }
+        ContextManager.instance.pmiRenderer = null as any;
+        delete (ContextManager.instance as any).pmiSync;
     }
 };
 

@@ -1,5 +1,5 @@
 /**
- * Kontrakty danych podstron (raport / nesting / CNC / draw / dag).
+ * Kontrakty danych podstron (raport / nesting / CNC / draw / dag / smartparts).
  *
  * Moduły nie czytają ProjectDocument. Dostają ten payload — z CAD, JSON albo CSV.
  * Dodatkowe źródła (STEP/DXF dla CNC) podpinają się pod ten sam kształt.
@@ -10,7 +10,7 @@ import type { NestingPart, ContainerScopeInfo, SheetConfig } from '../../n1_nest
 import type { CAMFeature } from '../../C1_cnc/dto/cam-dto';
 import type { CADTreeNode } from '../../R2_rys/drawing-types';
 
-export type ModuleId = 'report' | 'nesting' | 'cnc' | 'draw' | 'dag';
+export type ModuleId = 'report' | 'nesting' | 'cnc' | 'draw' | 'dag' | 'smartparts';
 
 export type ModuleSourceId = 'cad' | 'json' | 'csv' | 'session' | 'dxf';
 
@@ -122,12 +122,21 @@ export interface DagModulePayload {
     };
 }
 
+/** Sesja Studio SmartParts — lekka (definicje w localStorage katalogu A5). */
+export interface SmartPartsModulePayload {
+    meta: ModuleSessionMeta;
+    scope: ModuleScope;
+    /** Opcjonalnie: otwórz konkretny pakiet z katalogu */
+    packageId?: string;
+}
+
 export type AnyModulePayload =
     | ReportModulePayload
     | NestingModulePayload
     | CncModulePayload
     | DrawModulePayload
-    | DagModulePayload;
+    | DagModulePayload
+    | SmartPartsModulePayload;
 
 export interface ModuleDataSource<T> {
     id: ModuleSourceId;

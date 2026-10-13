@@ -22,11 +22,12 @@ const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
 
 const TITLE_KEYS: Record<ModuleId, string> = {
-report: 'modbar.title_report',
+    report: 'modbar.title_report',
     nesting: 'modbar.title_nesting',
     cnc: 'modbar.title_cnc',
     draw: 'modbar.title_draw',
     dag: 'modbar.title_dag',
+    smartparts: 'modbar.title_smartparts',
 };
 
 export function ModuleSourceBar({

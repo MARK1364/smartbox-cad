@@ -22,6 +22,7 @@ import srcTekstRaw from '../src_tekst.json';
 import { CAMStateStore } from '../../C1_cnc/core/cam-state-store.js';
 import { namedCameraView } from '../../S3_scena/named-camera-view.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
+import { openCadEditEntity } from '../floating-edit/cad-edit-entity.js';
 
 declare const BABYLON: any;
 
@@ -232,6 +233,7 @@ export class AppCommands {
             
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
             ui.setStatus('Dodano nowy Korpus (SmartFrame)');
+            openCadEditEntity({ entityId: newContainer.id, kind: 'korpus' });
         };
 
         const fileIO = new ProjectFileIO();
@@ -381,45 +383,6 @@ export class AppCommands {
             viewport.animateCameraTo(nv.alpha, nv.beta, radius, target, nv.up);
         };
 
-        const viewNormalToFace = () => {
-            const faceMesh = facePicker.selectedFace;
-            if (!faceMesh || faceMesh.isDisposed()) {
-                ui.setStatus(tx(srcTekst, 'cmd.click_wall', TX_NS), true);
-                return;
-            }
-            const faceName = faceMesh.metadata?.faceName;
-            const pModel = faceMesh.metadata?.panelModel;
-            if (!faceName || !pModel) {
-                ui.setStatus(tx(srcTekst, 'cmd.pick_wall', TX_NS), true);
-                return;
-            }
-
-            const camera = viewport.scene.activeCamera;
-            if (!camera) return;
-
-            const panelView = panelViews.get(pModel);
-            if (!panelView || !panelView.root) return;
-
-            const root = panelView.root;
-            const centerWorld = root.getAbsolutePosition ? root.getAbsolutePosition() : root.position;
-            const w = pModel.width || 600;
-            const h = pModel.height || 720;
-            const t = pModel.thickness || 18;
-
-            const panelCenter = centerWorld.add(new BABYLON.Vector3(w / 2, h / 2, t / 2));
-            const maxDim = Math.max(w, h, t);
-
-            const nv = namedCameraView(
-                faceName === 'front' || faceName === 'back' || faceName === 'left' ||
-                faceName === 'right' || faceName === 'top' || faceName === 'bottom'
-                    ? faceName
-                    : 'front'
-            );
-            viewport.animateCameraTo(nv.alpha, nv.beta, maxDim * 2.2, panelCenter, nv.up);
-
-            ui.setStatus(`Widok normalny: ${faceName}`, true);
-        };
-
         const setLcsVisible = (visible: boolean) => {
             ContextManager.instance.lcsVisible = visible;
             rebuildGeometry();
@@ -440,7 +403,6 @@ export class AppCommands {
             toggleProjection,
             zoomFit,
             setView: handleViewCubeClick,
-            viewNormalToFace,
             setLcsVisible,
             undo: () => {
                 const cmdHist = ContextManager.instance.commandHistory;

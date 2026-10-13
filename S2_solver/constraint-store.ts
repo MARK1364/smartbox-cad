@@ -80,8 +80,14 @@ export class ConstraintStore {
     }
 
     add(init: Partial<SolverConstraint> & { bindType: BindType }): SolverConstraint {
-        const constraint = makeSolverConstraint({ id: this._generateId(), ...init });
-        this.constraints.push(constraint);
+        const id = init.id || this._generateId();
+        const existingIdx = this.constraints.findIndex((c) => c.id === id);
+        const constraint = makeSolverConstraint({ ...init, id });
+        if (existingIdx !== -1) {
+            this.constraints[existingIdx] = constraint;
+        } else {
+            this.constraints.push(constraint);
+        }
         this.notifyChanged();
         return constraint;
     }

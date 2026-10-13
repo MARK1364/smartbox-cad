@@ -4,7 +4,6 @@ import {
     calcTopHeight,
     applyRealtimeUpdate
 } from './smartframe-adapter.js';
-import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { SmartFrameDragController } from './smartframe-drag-controller.js';
@@ -55,8 +54,8 @@ export function SmartFrameUI({ projectModel }: Props) {
     const [bokPrawy,    setBokPrawy]    = useState(UI_DEFAULTS_R90.glebokosc_boku_prawego_mm ?? 600);
     const [heightLeft,  setHeightLeft]  = useState(UI_DEFAULTS_SKLR.wysokosc_lewy_mm ?? 1000);
     const [heightRight, setHeightRight] = useState(UI_DEFAULTS_SKLR.wysokosc_prawy_mm ?? 2200);
-    const [heightFront, setHeightFront] = useState(UI_DEFAULTS_SKDACH.wysokosc_przod_mm ?? 1000);
-    const [heightBack,  setHeightBack]  = useState(UI_DEFAULTS_SKDACH.wysokosc_tyl_mm ?? 2200);
+    const [heightFront, setHeightFront] = useState(UI_DEFAULTS_SKDACH.wysokosc_przod_mm ?? 2200);
+    const [heightBack,  setHeightBack]  = useState(UI_DEFAULTS_SKDACH.wysokosc_tyl_mm ?? 1000);
     const [activeKorpusName, setActiveKorpusName] = useState<string | null>(null);
 
     const isRogowy1 = cabinetType === 'KORPUS_ROGOWY1';
@@ -265,14 +264,17 @@ export function SmartFrameUI({ projectModel }: Props) {
     }, [projectModel, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, heightFront, heightBack]);
 
     const onWidth  = (v: number) => { setWidth(v);  triggerRealtime(v, height, depth, effectiveZoneCount, bottomHeight, middleHeight, backOffset); };
-    const onHeight = (v: number) => { setHeight(v); triggerRealtime(width, v, depth, effectiveZoneCount, bottomHeight, middleHeight, backOffset); };
+    const onHeight = (v: number) => {
+        setHeight(v);
+        if (isSkosnyDach) setHeightFront(v);
+        triggerRealtime(width, v, depth, effectiveZoneCount, bottomHeight, middleHeight, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, isSkosnyDach ? v : heightFront, heightBack);
+    };
     const onDepth  = (v: number) => { setDepth(v);  triggerRealtime(width, height, v, effectiveZoneCount, bottomHeight, middleHeight, backOffset); };
     const onHB     = (v: number) => { setBottomHeight(v); triggerRealtime(width, height, depth, effectiveZoneCount, v, middleHeight, backOffset); };
     const onHM     = (v: number) => { setMiddleHeight(v); triggerRealtime(width, height, depth, effectiveZoneCount, bottomHeight, v, backOffset); };
-    const onHeightLeft  = (v: number) => { setHeightLeft(v); triggerRealtime(width, Math.max(v, heightRight), depth, 1, Math.max(v, heightRight), 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, v, heightRight); };
-    const onHeightRight = (v: number) => { setHeightRight(v); triggerRealtime(width, Math.max(heightLeft, v), depth, 1, Math.max(heightLeft, v), 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, v); };
-    const onHeightFront = (v: number) => { setHeightFront(v); triggerRealtime(width, Math.max(v, heightBack), depth, 1, Math.max(v, heightBack), 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, v, heightBack); };
-    const onHeightBack  = (v: number) => { setHeightBack(v); triggerRealtime(width, Math.max(heightFront, v), depth, 1, Math.max(heightFront, v), 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, heightFront, v); };
+    const onHeightLeft  = (v: number) => { setHeightLeft(v); triggerRealtime(width, Math.max(v, height), depth, 1, Math.max(v, height), 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, v, height); };
+    const onHeightFront = (v: number) => { setHeight(v); setHeightFront(v); triggerRealtime(width, v, depth, 1, v, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, v, heightBack); };
+    const onHeightBack  = (v: number) => { setHeightBack(v); triggerRealtime(width, height, depth, 1, height, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, height, v); };
 
     const handleCardClick = (cardType: CabinetUiType, zc: 1 | 2 | 3 = 1) => {
         const active = getActiveContainer(projectModel);
@@ -367,6 +369,7 @@ export function SmartFrameUI({ projectModel }: Props) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
                     <div
                         id="smartframe-card-zone-1"
+                        data-rec="smartframe-card-zone-1"
                         className="zone-drag-card"
                         draggable
                         onDragStart={(e) => handleDragStart(1, e, 'KORPUS3')}
@@ -408,6 +411,7 @@ export function SmartFrameUI({ projectModel }: Props) {
 
                     <div
                         id="smartframe-card-zone-2"
+                        data-rec="smartframe-card-zone-2"
                         className="zone-drag-card"
                         draggable
                         onDragStart={(e) => handleDragStart(2, e, 'KORPUS3')}
@@ -451,6 +455,7 @@ export function SmartFrameUI({ projectModel }: Props) {
 
                     <div
                         id="smartframe-card-zone-3"
+                        data-rec="smartframe-card-zone-3"
                         className="zone-drag-card"
                         draggable
                         onDragStart={(e) => handleDragStart(3, e, 'KORPUS3')}
@@ -559,11 +564,9 @@ export function SmartFrameUI({ projectModel }: Props) {
                         }}
                     >
                         <svg width="32" height="42" viewBox="0 0 32 42" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#9ca3af' }}>
-                            <path d="M4 4 H28 V16 H16 V38 H4 Z" stroke="currentColor" fill="currentColor" fillOpacity="0.1" />
-                            <path d="M4 4 H28" stroke="#38bdf8" strokeWidth="2.5" />
-                            <path d="M4 4 V38" stroke="#38bdf8" strokeWidth="2.5" />
-                            <path d="M28 4 V16" stroke="#f87171" strokeWidth="2" />
-                            <path d="M4 38 H16" stroke="#f87171" strokeWidth="2" />
+                            <path d="M4 4 H28 V16 H16 V38 H4 Z" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.12" />
+                            <line x1="4" y1="16" x2="16" y2="16" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" strokeOpacity="0.5" />
+                            <line x1="16" y1="4" x2="16" y2="16" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" strokeOpacity="0.5" />
                         </svg>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px' }}>
                             <span className="hand-icon" title={tx(korpusTekst, 'cards.drag_hint', TX_NS)} style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
@@ -603,8 +606,10 @@ export function SmartFrameUI({ projectModel }: Props) {
                         }}
                     >
                         <svg width="32" height="42" viewBox="0 0 32 42" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#9ca3af' }}>
-                            <path d="M4 38 L4 14 L28 6 L28 38 Z" stroke="currentColor" fill="currentColor" fillOpacity="0.1" />
-                            <path d="M4 14 L28 6" stroke="#38bdf8" strokeWidth="2.5" />
+                            <polygon points="4,6 20,6 28,16 12,16" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.08" />
+                            <polygon points="20,6 28,16 28,33 20,38" stroke="currentColor" strokeWidth="1.5" fill="currentColor" fillOpacity="0.18" />
+                            <rect x="4" y="6" width="16" height="32" rx="0.5" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.12" />
+                            <line x1="4" y1="6" x2="20" y2="6" stroke="currentColor" strokeWidth="2" />
                         </svg>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px' }}>
                             <span className="hand-icon" title={tx(korpusTekst, 'cards.drag_hint', TX_NS)} style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
@@ -644,9 +649,7 @@ export function SmartFrameUI({ projectModel }: Props) {
                         }}
                     >
                         <svg width="32" height="42" viewBox="0 0 32 42" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#9ca3af' }}>
-                            <path d="M6 30 L6 38 L26 38 L26 16 Z" stroke="currentColor" fill="currentColor" fillOpacity="0.1" />
-                            <path d="M6 30 L26 16" stroke="#38bdf8" strokeWidth="2.5" />
-                            <path d="M6 30 L26 16" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="2 2" />
+                            <polygon points="4,22 28,6 28,38 4,38" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.12" />
                         </svg>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px' }}>
                             <span className="hand-icon" title={tx(korpusTekst, 'cards.drag_hint', TX_NS)} style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
@@ -664,164 +667,6 @@ export function SmartFrameUI({ projectModel }: Props) {
                     </div>
                 </div>
             </div>
-
-            <div className="panel-section">
-                <h3>
-                    {activeKorpusName
-                        ? tx(korpusTekst, 'params.title_named', TX_NS, { name: activeKorpusName })
-                        : tx(korpusTekst, 'params.title', TX_NS)}
-                </h3>
-
-                <InputRow label={tx(korpusTekst, 'dims.width', TX_NS)}    value={width}      min={150} max={4000} onChange={onWidth}  />
-                <InputRow label={tx(korpusTekst, 'dims.height', TX_NS)}     value={height}     min={150} max={4000} onChange={onHeight} />
-                <InputRow label={tx(korpusTekst, 'dims.depth', TX_NS)}    value={depth}      min={150} max={4000} onChange={onDepth}  />
-            </div>
-
-            {isRogowy1 && (
-                <div className="panel-section">
-                    <h3>{tx(korpusTekst, 'blind.title', TX_NS)}</h3>
-                    <InputRow label={tx(korpusTekst, 'blind.width', TX_NS)} value={blindWidth} min={50} max={Math.max(50, width - 50)} onChange={onBlindWidth} />
-                    <div className="input-row">
-                        <label>{tx(korpusTekst, 'blind.side', TX_NS)}</label>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                            <button
-                                type="button"
-                                onClick={() => onBlindSide('LEFT')}
-                                style={{
-                                    flex: 1,
-                                    padding: '6px 8px',
-                                    background: blindSide === 'LEFT' ? 'rgba(59, 130, 246, 0.25)' : 'var(--bg-secondary, #252528)',
-                                    border: blindSide === 'LEFT' ? '1px solid #3b82f6' : '1px solid var(--border-color, #3a3a3e)',
-                                    borderRadius: '4px',
-                                    color: 'var(--text-primary, #ddd)',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                {tx(korpusTekst, 'blind.side_LEFT', TX_NS)}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => onBlindSide('RIGHT')}
-                                style={{
-                                    flex: 1,
-                                    padding: '6px 8px',
-                                    background: blindSide === 'RIGHT' ? 'rgba(59, 130, 246, 0.25)' : 'var(--bg-secondary, #252528)',
-                                    border: blindSide === 'RIGHT' ? '1px solid #3b82f6' : '1px solid var(--border-color, #3a3a3e)',
-                                    borderRadius: '4px',
-                                    color: 'var(--text-primary, #ddd)',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                {tx(korpusTekst, 'blind.side_RIGHT', TX_NS)}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {isSkosnyDach && (
-                <div className="panel-section">
-                    <h3>{tx(korpusTekst, 'skosny_dach.title', TX_NS)}</h3>
-                    <InputRow
-                        label={tx(korpusTekst, 'skosny_dach.height_front', TX_NS)}
-                        value={heightFront}
-                        min={100}
-                        max={Math.max(100, height - 50)}
-                        onChange={onHeightFront}
-                    />
-                    <InputRow
-                        label={tx(korpusTekst, 'skosny_dach.height_back', TX_NS)}
-                        value={heightBack}
-                        min={100}
-                        max={4000}
-                        onChange={onHeightBack}
-                    />
-                </div>
-            )}
-
-            {isSkosnyLrUc && (
-                <div className="panel-section">
-                    <h3>{tx(korpusTekst, 'skosny_lr_uc.title', TX_NS)}</h3>
-                    <InputRow
-                        label={tx(korpusTekst, 'skosny_lr.height_left', TX_NS)}
-                        value={heightLeft}
-                        min={100}
-                        max={Math.max(100, height - 50)}
-                        onChange={onHeightLeft}
-                    />
-                    <InputRow
-                        label={tx(korpusTekst, 'skosny_lr.height_right', TX_NS)}
-                        value={heightRight}
-                        min={100}
-                        max={4000}
-                        onChange={onHeightRight}
-                    />
-                </div>
-            )}
-
-            {isRogowy90 && (
-                <div className="panel-section">
-                    <h3>{tx(korpusTekst, 'corner90.title', TX_NS)}</h3>
-                    <InputRow
-                        label={tx(korpusTekst, 'corner90.side_left', TX_NS)}
-                        value={bokLewy}
-                        min={200}
-                        max={Math.max(200, width - 50)}
-                        onChange={onBokLewy}
-                    />
-                    <InputRow
-                        label={tx(korpusTekst, 'corner90.side_right', TX_NS)}
-                        value={bokPrawy}
-                        min={200}
-                        max={Math.max(200, depth - 50)}
-                        onChange={onBokPrawy}
-                    />
-                </div>
-            )}
-
-            {(!isCorner && !isSkosnyOneZone) && zoneCount >= 2 && (
-                <div className="panel-section">
-                    <h3>{tx(korpusTekst, 'zones.title', TX_NS)}</h3>
-                    <InputRow label={tx(korpusTekst, 'zones.bottom', TX_NS)}   value={bottomHeight} min={50} max={3000} onChange={onHB} />
-                    {zoneCount === 3 && (
-                        <InputRow label={tx(korpusTekst, 'zones.middle', TX_NS)} value={middleHeight} min={50} max={3000} onChange={onHM} />
-                    )}
-                    <div className="input-row">
-                        <label>{tx(korpusTekst, 'zones.top', TX_NS)}</label>
-                        <input
-                            type="number"
-                            value={topHeight}
-                            readOnly
-                            disabled
-                        />
-                        <span className="unit">mm</span>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-interface InputRowProps {
-    label: string;
-    value: number;
-    min?: number;
-    max?: number;
-    onChange: (v: number) => void;
-}
-
-function InputRow({ label, value, min = 0, max = 5000, onChange }: InputRowProps) {
-    return (
-        <div className="input-row">
-            <label>{label}</label>
-            <SmartNumericInput
-                value={value}
-                min={min}
-                max={max}
-                step={1}
-                onChange={onChange}
-            />
-            <span className="unit">mm</span>
         </div>
     );
 }

@@ -10,7 +10,7 @@
 import doorsRules from './doors_3_rules_V1.json';
 import { resolveRuleThicknessMm } from './bloki-rules-helper.js';
 import { type ModuleDims } from './base-engine.js';
-import { DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
+import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 import type {
     BlokiDimensions_mm,
     BlokiPlanResult,
@@ -63,6 +63,14 @@ const DEFAULT_HINGE_POS_MM: Record<number, number> = {
     5: 1580,
     6: 120,
 };
+
+/** Sugerowana liczba zawiasów na jedno skrzydło (nie suma dla drzwi podwójnych). */
+export function suggestHingesPerLeaf(doorHeight_mm: number, leafWeightKg: number): number {
+    if (doorHeight_mm > 2000 || leafWeightKg > 15.0) return 5;
+    if (doorHeight_mm > 1600 || leafWeightKg > 9.0) return 4;
+    if (doorHeight_mm > 900 || leafWeightKg > 4.5) return 3;
+    return 2;
+}
 
 export function resolveActiveHinges(raw: DoorsPlanParams = {}, wysokosc_strefy_mm: number): ActiveHingeConfig[] {
     const hinges: ActiveHingeConfig[] = [];
@@ -125,8 +133,10 @@ export function normalizeDoorsParams(
 
 /**
  * Dobiera ID okucia zawiasu dla danego indeksu.
+ * SSOT parowania (np. BLUM 71B/71T na parzyste/nieparste) — współdzielone
+ * z modułem DRZWI SKOSNE, żeby oba fronty dobierały identyczne okucie.
  */
-function resolveHingeId(
+export function resolveHingeId(
     index: number,
     baseHingeId: string,
     customTemplates: Record<number, string>
@@ -255,7 +265,7 @@ export function calculateDoorsPlan(
             const vCenter = hinge.pozycja_lokalna_z_mm + nalozenie_dol_mm;
             const frontHoles = hingeFrontHolesMm(hingeId);
             const cupHole = frontHoles.find(h => h.isCup);
-            const cupEdgeDist = cupHole?.edgeDist ?? 21.5;
+            const cupEdgeDist = cupHole?.edgeDist ?? DEFAULT_HINGE_CUP_EDGE_DIST_MM;
             const u = side === 'left' ? cupEdgeDist : (szerokosc_drzwi_mm - cupEdgeDist);
 
             const hwX = pozycja_drzwi_x_mm - szerokosc_drzwi_mm / 2 + u;

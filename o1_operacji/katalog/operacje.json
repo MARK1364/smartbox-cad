@@ -2,7 +2,7 @@
   "items": {
     "przetloczenie": {
       "id": "przetloczenie",
-      "name": "Przetłoczenie / Wycięcie",
+      "name": "Przetłoczenie",
       "kind": "POCKET",
       "face_hint": "OUTER",
       "insets": { "l": 0.06, "r": 0.06, "t": 0.06, "b": 0.06 },

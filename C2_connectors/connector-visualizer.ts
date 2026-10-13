@@ -14,17 +14,43 @@ import type { EligibleContactFace } from './connectors-types.js';
 
 declare const BABYLON: any;
 
-const COLOR_ELIGIBLE = { r: 0.0, g: 0.5, b: 1.0, a: 0.38 };
-const COLOR_EDGE = { r: 0.0, g: 0.8, b: 1.0, a: 1.0 };
-const COLOR_HOVER = { r: 0.8, g: 0.7, b: 0.0, a: 0.55 };
+const COLOR_ELIGIBLE = { r: 0.05, g: 0.55, b: 1.0, a: 0.42 };
+const COLOR_EDGE = { r: 0.15, g: 0.9, b: 1.0, a: 1.0 };
+const COLOR_HOVER = { r: 1.0, g: 0.78, b: 0.05, a: 0.55 };
 const COLOR_DOWEL = { r: 0.82, g: 0.62, b: 0.28 };
 const COLOR_SCREW = { r: 0.45, g: 0.48, b: 0.52 };
 const COLOR_MINIFIX = { r: 0.2, g: 0.55, b: 0.85 };
+/** Podświetlenie wizualnie większe niż część wspólna — łatwiej złapać wzrokiem. */
+const PATCH_INFLATE_MM = 12;
+/** Lekkie odsunięcie wzdłuż normalnej, żeby pasek nie tonął w powierzchni. */
+const PATCH_NORMAL_LIFT_MM = 0.8;
+const PATCH_RENDER_GROUP = 2;
 
 function colorForType(type: string) {
     if (type.startsWith('kolki')) return COLOR_DOWEL;
     if (type === 'minifix') return COLOR_MINIFIX;
     return COLOR_SCREW;
+}
+
+/** Powiększa wielokąt od środka — tylko wizualizacja (pick zostaje na dokładnym styku). */
+function inflatePolygonMm(verts: Vec3[], amountMm: number): Vec3[] {
+    if (verts.length < 3 || !(amountMm > 0)) return verts;
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    for (const v of verts) {
+        cx += v.x;
+        cy += v.y;
+        cz += v.z;
+    }
+    const n = verts.length;
+    const center = new Vec3(cx / n, cy / n, cz / n);
+    return verts.map((v) => {
+        const d = v.sub(center);
+        const len = d.length();
+        if (len < 1e-6) return v;
+        return center.add(d.scale((len + amountMm) / len));
+    });
 }
 
 /** Cylinder Babylona ma oś +Y — obracamy ją na kierunek styku. */
@@ -159,8 +185,21 @@ export class ConnectorVisualizer {
     }
 
     private _drawPatch(scene: any, face: EligibleContactFace, color: typeof COLOR_ELIGIBLE, withEdge: boolean): void {
-        const verts = face.clippedVertsWorldMm.map((v) => cadToRender(new Vec3(v[0], v[1], v[2])));
-        if (verts.length < 3) return;
+        const cadVerts = inflatePolygonMm(
+            face.clippedVertsWorldMm.map((v) => new Vec3(v[0], v[1], v[2])),
+            PATCH_INFLATE_MM,
+        );
+        if (cadVerts.length < 3) return;
+
+        const nCad = new Vec3(
+            face.normalWorldMm[0],
+            face.normalWorldMm[1],
+            face.normalWorldMm[2],
+        );
+        const nLen = nCad.length();
+        const lift = nLen > 1e-9 ? nCad.scale(PATCH_NORMAL_LIFT_MM / nLen) : new Vec3(0, 0, 0);
+        const verts = cadVerts.map((v) => cadToRender(v.add(lift)));
+
         const positions: number[] = [];
         for (const v of verts) positions.push(v.x, v.y, v.z);
         const indices: number[] = [];
@@ -181,11 +220,14 @@ export class ConnectorVisualizer {
         mat.emissiveColor = new BABYLON.Color3(color.r, color.g, color.b);
         mat.alpha = color.a;
         mat.backFaceCulling = false;
+        mat.disableLighting = true;
         mat.disableDepthWrite = true;
-        mat.zOffset = -3;
+        mat.depthFunction = BABYLON.Engine.ALWAYS;
+        mat.transparencyMode = BABYLON.Material.MATERIAL_ALPHABLEND;
         mesh.material = mat;
         mesh.isPickable = false;
-        mesh.renderingGroupId = 0;
+        mesh.renderingGroupId = PATCH_RENDER_GROUP;
+        mesh.metadata = { ...(mesh.metadata || {}), type: 'c2_eligible_patch' };
         this._eligibleMeshes.push(mesh);
 
         if (withEdge) {
@@ -194,7 +236,12 @@ export class ConnectorVisualizer {
             const lines = BABYLON.MeshBuilder.CreateLines('c2_patch_edge', { points: linePts }, scene);
             lines.color = new BABYLON.Color3(COLOR_EDGE.r, COLOR_EDGE.g, COLOR_EDGE.b);
             lines.isPickable = false;
-            lines.renderingGroupId = 0;
+            lines.renderingGroupId = PATCH_RENDER_GROUP;
+            lines.metadata = { ...(lines.metadata || {}), type: 'c2_eligible_patch' };
+            if (lines.material) {
+                lines.material.disableDepthWrite = true;
+                lines.material.depthFunction = BABYLON.Engine.ALWAYS;
+            }
             this._eligibleMeshes.push(lines);
         }
     }

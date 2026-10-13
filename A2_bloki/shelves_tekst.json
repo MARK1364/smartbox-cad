@@ -14,24 +14,24 @@
     "en": "Number of shelves in the cabinet"
   },
   "shelf_offset_front.label": {
-    "pl": "Odsuń przód:",
-    "en": "Front offset:",
-    "de": "Versatz vorne:"
+    "pl": "Odsuń półkę przód:",
+    "en": "Front shelf offset:",
+    "de": "Regalversatz vorne:"
   },
   "shelf_offset_side.label": {
-    "pl": "Odsuń bok:",
-    "en": "Side offset:",
-    "de": "Versatz Seite:"
+    "pl": "Luz na boku:",
+    "en": "Side clearance:",
+    "de": "Seitliches Spiel:"
   },
   "hole_offset_front.label": {
-    "pl": "Ods. boczne przód:",
-    "en": "Front side offset:",
-    "de": "Seitenabstand vorne:"
+    "pl": "Odsuń otwory przód:",
+    "en": "Front holes offset:",
+    "de": "Lochabstand vorne:"
   },
   "hole_offset_back.label": {
-    "pl": "Ods. boczne tył:",
-    "en": "Back side offset:",
-    "de": "Seitenabstand hinten:"
+    "pl": "Odsuń otwory plecy:",
+    "en": "Back holes offset:",
+    "de": "Lochabstand hinten:"
   },
   "hole_pattern.label": {
     "pl": "Wzór otworów:",
@@ -78,6 +78,11 @@
     "en": "Hole count:",
     "de": "Lochanzahl:"
   },
+  "holes_bar.label": {
+    "pl": "Otwory przód / plecy",
+    "en": "Front / back holes",
+    "de": "Löcher vorne / hinten"
+  },
   "front_holes.label": {
     "pl": "Otwory przód",
     "en": "Front holes",
@@ -89,12 +94,12 @@
     "de": "X-Versatz vorne:"
   },
   "back_holes.label": {
-    "pl": "Otwory tył",
+    "pl": "Otwory plecy",
     "en": "Back holes",
     "de": "Löcher hinten"
   },
   "back_offset_x.label": {
-    "pl": "Offset X tył:",
+    "pl": "Offset X plecy:",
     "en": "X offset back:",
     "de": "X-Versatz hinten:"
   },

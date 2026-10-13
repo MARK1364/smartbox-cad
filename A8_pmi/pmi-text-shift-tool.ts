@@ -35,6 +35,7 @@ export class PMITextShiftTool extends BaseState {
 
     private pointerObserver: any = null;
     private keyboardObserver: any = null;
+    private isCommitted = false;
 
     constructor(
         ctx: CadModuleContext,
@@ -58,6 +59,7 @@ export class PMITextShiftTool extends BaseState {
             return;
         }
 
+        this.isCommitted = false;
         this.originalShiftMM = ann.textShiftMM ?? 0;
         this.lastRenderedShiftMM = this.originalShiftMM;
         this.hasDragged = false;
@@ -102,6 +104,11 @@ export class PMITextShiftTool extends BaseState {
             scene.onKeyboardObservable.remove(this.keyboardObserver);
             this.keyboardObserver = null;
         }
+
+        if (!this.isCommitted) {
+            this.restoreOriginal();
+        }
+
         this.annotationId = null;
         this.hasDragged = false;
         this.dragInitialized = false;
@@ -206,6 +213,7 @@ export class PMITextShiftTool extends BaseState {
         const finalShiftMM = ann.textShiftMM ?? 0;
         ann.textShiftMM = this.originalShiftMM;
         executePMICommand(new SetDimensionTextShiftCommand(this.store, ann.id, finalShiftMM));
+        this.isCommitted = true;
         this.stateMachine.changeState('SELECTION_TOOL');
     }
 

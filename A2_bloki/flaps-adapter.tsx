@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { calculateFlapsPlan, normalizeFlapsParams } from './flaps-engine.js';
 import type { ModuleDims } from './base-engine.js';
-import { DEFAULT_HINGE_ID, listByType } from '../B1_biblioteka/index.js';
+import { DEFAULT_HINGE_ID } from '../B1_biblioteka/index.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
@@ -19,6 +19,13 @@ import flapsTekstRaw from './flaps_tekst.json';
 import flapsRules from './flaps_3_rules_V1.json';
 import { resolveRuleThicknessMm } from './bloki-rules-helper.js';
 import type { FlapsPlanParams } from './bloki-module-types.js';
+import {
+    DEFAULT_HINGE_BRAND,
+    firstHingeIdForBrand,
+    HingeBrandFilter,
+    renderHingeSelectOptions,
+    resolveHingeBrand
+} from './hinge-brand-ui.js';
 
 const flapsTekst = flapsTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'bloki.flaps';
@@ -31,7 +38,7 @@ function dimToMm(raw: number | undefined): number {
     return nmToMm(Number(raw));
 }
 
-function calculateFlapWeightAndLF(opts: {
+function calculateFlapWeightAndHinges(opts: {
     sbWidth: number;
     sbHeight: number;
     ovTop: number;
@@ -40,7 +47,7 @@ function calculateFlapWeightAndLF(opts: {
     ovRight: number;
     thickness: number;
     density?: number;
-}): { weightKg: number; suggestedHinges: number; powerFactorLF: number } {
+}): { weightKg: number; suggestedHinges: number } {
     const flapW = opts.sbWidth + opts.ovLeft + opts.ovRight;
     const flapH = opts.sbHeight + opts.ovTop + opts.ovBottom;
     const th = opts.thickness || DEFAULT_FLAP_THICKNESS;
@@ -48,10 +55,9 @@ function calculateFlapWeightAndLF(opts: {
 
     const volM3 = (flapW * flapH * th) / 1_000_000_000;
     const weightKg = parseFloat((volM3 * density + 0.15).toFixed(2));
-    const powerFactorLF = Math.round(flapH * weightKg);
     const suggestedHinges = (flapW >= 600 || weightKg >= 4.5) ? 3 : 2;
 
-    return { weightKg, suggestedHinges, powerFactorLF };
+    return { weightKg, suggestedHinges };
 }
 
 import type { ContainerModel } from '../A1_core/container-model.js';
@@ -79,6 +85,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
         return base;
     };
 
+    const [hingeBrand, setHingeBrand] = useState<string>(() => resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
     const [useCenterHinge, setUseCenterHinge] = useState<boolean>(!!p.zawias_srodkowy);
     const [hingeLeftTemplate, setHingeLeftTemplate] = useState<string>(
         getPairedFlapHingeDefault('left', p.szablon_zawiasu_lewy)
@@ -98,6 +105,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
         setOvRight(p.nalozenie_prawe_mm ?? 16);
         setHingeLeftOffset(Number(p.odsuniecie_zawiasu_lewe_mm ?? 80));
         setHingeRightOffset(Number(p.odsuniecie_zawiasu_prawe_mm ?? 80));
+        setHingeBrand(resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
         setUseCenterHinge(!!p.zawias_srodkowy);
         setHingeLeftTemplate(getPairedFlapHingeDefault('left', p.szablon_zawiasu_lewy));
         setHingeRightTemplate(getPairedFlapHingeDefault('right', p.szablon_zawiasu_prawy));
@@ -116,14 +124,13 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
             odsuniecie_zawiasu_lewe_mm: hingeLeftOffset,
             odsuniecie_zawiasu_prawe_mm: hingeRightOffset,
             zawias_srodkowy: useCenterHinge,
+            producent_zawiasow: hingeBrand,
             szablon_zawiasu_lewy: hingeLeftTemplate,
             szablon_zawiasu_prawy: hingeRightTemplate,
             szablon_zawiasu_srodkowy: hingeCenterTemplate,
             ...patch
         });
     };
-
-    const hingeList = listByType('HINGE');
 
     return (
         <div className="submodule-box" style={{ background: '#222225', padding: '10px', borderRadius: '4px', border: '1px solid #2d2d30', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -193,12 +200,12 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <span style={{ color: '#d4d4d8', fontSize: '12px', fontWeight: 'bold' }}>{tx(flapsTekst, 'hinges_section.label', TX_NS)}</span>
 
-                {/* Informacja o wadze i sugerowanej ilości zawiasów / współczynniku LF */}
+                {/* Informacja o wadze i sugerowanej ilości zawiasów */}
                 {(() => {
                     const sbW = dimToMm(container?.width);
                     const sbH = dimToMm(container?.height);
                     if (sbW <= 0 || sbH <= 0) return null;
-                    const info = calculateFlapWeightAndLF({
+                    const info = calculateFlapWeightAndHinges({
                         sbWidth: sbW,
                         sbHeight: sbH,
                         ovTop: parseFloat(String(ovTop)) || 0,
@@ -216,19 +223,36 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                             fontSize: '11px',
                             color: '#a1a1aa',
                             display: 'flex',
-                            flexDirection: 'column',
-                            gap: '3px'
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
                         }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span>{tx(flapsTekst, 'weight_info.front_weight', TX_NS)} <strong style={{ color: '#f4f4f5' }}>{info.weightKg} kg</strong></span>
-                                <span>{tx(flapsTekst, 'weight_info.suggested_hinges', TX_NS)} <strong style={{ color: '#60a5fa' }}>{info.suggestedHinges} {tx(flapsTekst, 'weight_info.unit_pcs', TX_NS)}</strong></span>
-                            </div>
-                            <div style={{ fontSize: '10px', color: '#71717a' }}>
-                                {tx(flapsTekst, 'weight_info.lift_factor', TX_NS)} <span style={{ color: '#93c5fa' }}>{info.powerFactorLF}</span>
-                            </div>
+                            <span>{tx(flapsTekst, 'weight_info.front_weight', TX_NS)} <strong style={{ color: '#f4f4f5' }}>{info.weightKg} kg</strong></span>
+                            <span>{tx(flapsTekst, 'weight_info.suggested_hinges', TX_NS)} <strong style={{ color: '#60a5fa' }}>{info.suggestedHinges} {tx(flapsTekst, 'weight_info.unit_pcs', TX_NS)}</strong></span>
                         </div>
                     );
                 })()}
+
+                <HingeBrandFilter
+                    value={hingeBrand}
+                    label={tx(flapsTekst, 'hinge_brand.label', TX_NS)}
+                    onChange={(brand) => {
+                        setHingeBrand(brand);
+                        const base = firstHingeIdForBrand(brand, 'FLAPS', DEFAULT_HINGE_ID);
+                        const left = getPairedFlapHingeDefault('left', undefined, base);
+                        const right = getPairedFlapHingeDefault('right', undefined, base);
+                        const center = getPairedFlapHingeDefault('center', undefined, base);
+                        setHingeLeftTemplate(left);
+                        setHingeRightTemplate(right);
+                        setHingeCenterTemplate(center);
+                        pushUpdate({
+                            producent_zawiasow: brand,
+                            szablon_zawiasu_domyslny: base,
+                            szablon_zawiasu_lewy: left,
+                            szablon_zawiasu_prawy: right,
+                            szablon_zawiasu_srodkowy: center
+                        });
+                    }}
+                />
                 
                 {/* Zawias lewy */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -253,11 +277,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                         }}
                         style={{ flex: 1, minWidth: 0, padding: '2px 3px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', fontSize: '10px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
                     >
-                        {hingeList.map((hw) => (
-                            <option key={hw.id} value={hw.id}>
-                                [{hw.brand || ''}] {hw.name || hw.id}
-                            </option>
-                        ))}
+                        {renderHingeSelectOptions(hingeBrand, 'FLAPS')}
                     </select>
                 </div>
 
@@ -284,11 +304,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                         }}
                         style={{ flex: 1, minWidth: 0, padding: '2px 3px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', fontSize: '10px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
                     >
-                        {hingeList.map((hw) => (
-                            <option key={hw.id} value={hw.id}>
-                                [{hw.brand || ''}] {hw.name || hw.id}
-                            </option>
-                        ))}
+                        {renderHingeSelectOptions(hingeBrand, 'FLAPS')}
                     </select>
                 </div>
 
@@ -317,11 +333,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                         }}
                         style={{ flex: 1, minWidth: 0, padding: '2px 3px', background: useCenterHinge ? '#18181b' : '#18181b80', border: '1px solid #3f3f46', color: useCenterHinge ? '#fff' : '#71717a', borderRadius: '3px', fontSize: '10px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
                     >
-                        {hingeList.map((hw) => (
-                            <option key={hw.id} value={hw.id}>
-                                [{hw.brand || ''}] {hw.name || hw.id}
-                            </option>
-                        ))}
+                        {renderHingeSelectOptions(hingeBrand, 'FLAPS')}
                     </select>
                 </div>
             </div>

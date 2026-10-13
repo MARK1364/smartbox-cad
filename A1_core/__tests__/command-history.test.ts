@@ -83,6 +83,36 @@ describe('CommandHistory and CAD Commands', () => {
         expect(panel.height).toBe(mmToNm(720));
     });
 
+    it('SetDimensionsCommand zmienia grubość niezależnie od materiału i syncuje thickness_mm', () => {
+        const panel = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            materialId: 'W1100_ST9_18',
+        }) as any;
+        (panel as any).custom_properties = {
+            ...(panel.custom_properties || {}),
+            thickness_mm: 18,
+            material: 'W1100_ST9_18',
+        };
+
+        const cmd = new SetDimensionsCommand(
+            panel.id,
+            { width: panel.width, height: panel.height, thickness: panel.thickness },
+            { width: panel.width, height: panel.height, thickness: mmToNm(22) },
+            { label: 'Grubość formatki' },
+        );
+        history.execute(cmd);
+
+        expect(panel.thickness).toBe(mmToNm(22));
+        expect(panel.custom_properties.thickness_mm).toBe(22);
+        expect(panel.materialId).toBe('W1100_ST9_18');
+
+        history.undo();
+        expect(panel.thickness).toBe(mmToNm(18));
+        expect(panel.custom_properties.thickness_mm).toBe(18);
+    });
+
     it('should handle AddNodeCommand and RemoveNodeCommand', () => {
         const container = doc.createAssembly({ name: 'Szafa' });
         const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Formatka' });

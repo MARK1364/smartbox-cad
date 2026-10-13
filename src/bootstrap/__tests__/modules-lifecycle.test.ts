@@ -61,18 +61,18 @@ describe('Bootstrap Module Lifecycle & ViewPort Idempotence', () => {
         // First start
         await startModules(dummyCtx, dummyStateMachine);
         const countFirst = getGeometryUpdateHandlersCount();
-        // A2 bloki + S4 smartwall
-        expect(countFirst).toBe(2);
+        // A2 bloki + S4 smartwall + A5 smartparts
+        expect(countFirst).toBe(3);
 
         // Second start without explicit dispose (startModules calls disposeModules internally)
         await startModules(dummyCtx, dummyStateMachine);
         const countSecond = getGeometryUpdateHandlersCount();
-        expect(countSecond).toBe(2);
+        expect(countSecond).toBe(3);
 
         // Third start
         await startModules(dummyCtx, dummyStateMachine);
         const countThird = getGeometryUpdateHandlersCount();
-        expect(countThird).toBe(2);
+        expect(countThird).toBe(3);
 
         // Explicit dispose
         disposeModules();

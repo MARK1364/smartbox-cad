@@ -3,6 +3,8 @@
  * Definicje formatów papieru, rzutowania, stempla ISO 7200 i zapisanych arkuszy.
  */
 
+import type { ExportNodePose, ExportNodeVisibility } from './export-view-state.js';
+
 export type PaperFormat = 
     | 'A4_LANDSCAPE'
     | 'A4_PORTRAIT'
@@ -70,6 +72,9 @@ export interface SavedExportView {
     includeBOM: boolean;
     includePMI: boolean;
     titleBlock: Partial<TitleBlockInfo>;
+    nodePoses?: ExportNodePose[];
+    /** Widoczność paneli / korpusów / okuć w chwili kadru. */
+    nodeVisibility?: ExportNodeVisibility[];
 }
 
 export interface BOMRow {

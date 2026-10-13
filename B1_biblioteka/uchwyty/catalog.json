@@ -2,6 +2,800 @@
   "units": "mm",
   "type": "HANDLE",
   "version": "1.0.0",
-  "description": "Uchwyty — rozstaw C-C, otwory, art_no w JSON; GLB tylko viewport. Origin: zwykle środek C-C.",
-  "items": {}
+  "description": "Uchwyty REJS — C-C i otwory w JSON; GLB tylko viewport. Origin: środek C-C.",
+  "brand": "REJS",
+  "items": {
+    "REJS_AS01_96": {
+      "seriesId": "as01",
+      "seriesName": "AS01",
+      "handleType": "BAR",
+      "id": "REJS_AS01_96",
+      "name": "AS01 96",
+      "holeDistanceMm": 96,
+      "totalLengthMm": 130,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "AS01-96.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_AS01_128": {
+      "seriesId": "as01",
+      "seriesName": "AS01",
+      "handleType": "BAR",
+      "id": "REJS_AS01_128",
+      "name": "AS01 128",
+      "holeDistanceMm": 128,
+      "totalLengthMm": 162,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "AS01-128.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_AS01_160": {
+      "seriesId": "as01",
+      "seriesName": "AS01",
+      "handleType": "BAR",
+      "id": "REJS_AS01_160",
+      "name": "AS01 160",
+      "holeDistanceMm": 160,
+      "totalLengthMm": 194,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "AS01-160.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_AS01_192": {
+      "seriesId": "as01",
+      "seriesName": "AS01",
+      "handleType": "BAR",
+      "id": "REJS_AS01_192",
+      "name": "AS01 192",
+      "holeDistanceMm": 192,
+      "totalLengthMm": 226,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "AS01-192.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_AS01_320": {
+      "seriesId": "as01",
+      "seriesName": "AS01",
+      "handleType": "BAR",
+      "id": "REJS_AS01_320",
+      "name": "AS01 320",
+      "holeDistanceMm": 320,
+      "totalLengthMm": 354,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "AS01-320.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_AS01_416": {
+      "seriesId": "as01",
+      "seriesName": "AS01",
+      "handleType": "BAR",
+      "id": "REJS_AS01_416",
+      "name": "AS01 416",
+      "holeDistanceMm": 416,
+      "totalLengthMm": 450,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "AS01-416.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_ASTER_96": {
+      "seriesId": "aster",
+      "seriesName": "Aster",
+      "handleType": "BAR",
+      "id": "REJS_ASTER_96",
+      "name": "Aster 96",
+      "holeDistanceMm": 96,
+      "totalLengthMm": 130,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Aster-96.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_ASTER_128": {
+      "seriesId": "aster",
+      "seriesName": "Aster",
+      "handleType": "BAR",
+      "id": "REJS_ASTER_128",
+      "name": "Aster 128",
+      "holeDistanceMm": 128,
+      "totalLengthMm": 162,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Aster-128.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_ASTER_160": {
+      "seriesId": "aster",
+      "seriesName": "Aster",
+      "handleType": "BAR",
+      "id": "REJS_ASTER_160",
+      "name": "Aster 160",
+      "holeDistanceMm": 160,
+      "totalLengthMm": 194,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Aster-160.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_ASTER_192": {
+      "seriesId": "aster",
+      "seriesName": "Aster",
+      "handleType": "BAR",
+      "id": "REJS_ASTER_192",
+      "name": "Aster 192",
+      "holeDistanceMm": 192,
+      "totalLengthMm": 226,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Aster-192.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_96": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_96",
+      "name": "Easy 96",
+      "holeDistanceMm": 96,
+      "totalLengthMm": 130,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-96.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_128": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_128",
+      "name": "Easy 128",
+      "holeDistanceMm": 128,
+      "totalLengthMm": 161,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-128.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_160": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_160",
+      "name": "Easy 160",
+      "holeDistanceMm": 160,
+      "totalLengthMm": 192,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-160.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_192": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_192",
+      "name": "Easy 192",
+      "holeDistanceMm": 192,
+      "totalLengthMm": 225,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-192.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_224": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_224",
+      "name": "Easy 224",
+      "holeDistanceMm": 224,
+      "totalLengthMm": 257,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-224.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_256": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_256",
+      "name": "Easy 256",
+      "holeDistanceMm": 256,
+      "totalLengthMm": 290,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-256.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_288": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_288",
+      "name": "Easy 288",
+      "holeDistanceMm": 288,
+      "totalLengthMm": 322,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-288.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_320": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_320",
+      "name": "Easy 320",
+      "holeDistanceMm": 320,
+      "totalLengthMm": 354,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-320.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_352": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_352",
+      "name": "Easy 352",
+      "holeDistanceMm": 352,
+      "totalLengthMm": 386,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-352.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_384": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_384",
+      "name": "Easy 384",
+      "holeDistanceMm": 384,
+      "totalLengthMm": 418,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-384.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_EASY_416": {
+      "seriesId": "easy",
+      "seriesName": "Easy",
+      "handleType": "BAR",
+      "id": "REJS_EASY_416",
+      "name": "Easy 416",
+      "holeDistanceMm": 416,
+      "totalLengthMm": 450,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Easy-416.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_LINEA_96": {
+      "seriesId": "linea",
+      "seriesName": "Linea",
+      "handleType": "BAR",
+      "id": "REJS_LINEA_96",
+      "name": "Linea 96",
+      "holeDistanceMm": 96,
+      "totalLengthMm": 130,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Linea-96.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_LINEA_128": {
+      "seriesId": "linea",
+      "seriesName": "Linea",
+      "handleType": "BAR",
+      "id": "REJS_LINEA_128",
+      "name": "Linea 128",
+      "holeDistanceMm": 128,
+      "totalLengthMm": 162,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Linea-128.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_LINEA_160": {
+      "seriesId": "linea",
+      "seriesName": "Linea",
+      "handleType": "BAR",
+      "id": "REJS_LINEA_160",
+      "name": "Linea 160",
+      "holeDistanceMm": 160,
+      "totalLengthMm": 194,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Linea-160.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_NIRO": {
+      "seriesId": "niro",
+      "seriesName": "Niro",
+      "handleType": "KNOB",
+      "id": "REJS_NIRO",
+      "name": "Niro",
+      "holeDistanceMm": 0,
+      "totalLengthMm": 30,
+      "depthMm": 28,
+      "thicknessMm": 30,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Niro.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_96": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_96",
+      "name": "Reling 96",
+      "holeDistanceMm": 96,
+      "totalLengthMm": 130,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-96.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_128": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_128",
+      "name": "Reling 128",
+      "holeDistanceMm": 128,
+      "totalLengthMm": 162,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-128.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_160": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_160",
+      "name": "Reling 160",
+      "holeDistanceMm": 160,
+      "totalLengthMm": 194,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-160.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_192": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_192",
+      "name": "Reling 192",
+      "holeDistanceMm": 192,
+      "totalLengthMm": 226,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-192.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_224": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_224",
+      "name": "Reling 224",
+      "holeDistanceMm": 224,
+      "totalLengthMm": 258,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-224.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_256": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_256",
+      "name": "Reling 256",
+      "holeDistanceMm": 256,
+      "totalLengthMm": 290,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-256.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_288": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_288",
+      "name": "Reling 288",
+      "holeDistanceMm": 288,
+      "totalLengthMm": 322,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-288.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_320": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_320",
+      "name": "Reling 320",
+      "holeDistanceMm": 320,
+      "totalLengthMm": 354,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-320.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_352": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_352",
+      "name": "Reling 352",
+      "holeDistanceMm": 352,
+      "totalLengthMm": 386,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-352.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_384": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_384",
+      "name": "Reling 384",
+      "holeDistanceMm": 384,
+      "totalLengthMm": 418,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-384.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_RELING_416": {
+      "seriesId": "reling",
+      "seriesName": "Reling",
+      "handleType": "BAR",
+      "id": "REJS_RELING_416",
+      "name": "Reling 416",
+      "holeDistanceMm": 416,
+      "totalLengthMm": 450,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Reling-416.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_STILO_160": {
+      "seriesId": "stilo",
+      "seriesName": "Stilo",
+      "handleType": "BAR",
+      "id": "REJS_STILO_160",
+      "name": "Stilo 160",
+      "holeDistanceMm": 160,
+      "totalLengthMm": 185,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Stilo-160.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_STILO_256": {
+      "seriesId": "stilo",
+      "seriesName": "Stilo",
+      "handleType": "BAR",
+      "id": "REJS_STILO_256",
+      "name": "Stilo 256",
+      "holeDistanceMm": 256,
+      "totalLengthMm": 281,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Stilo-256.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_TYTANO_128": {
+      "seriesId": "tytano",
+      "seriesName": "Tytano",
+      "handleType": "BAR",
+      "id": "REJS_TYTANO_128",
+      "name": "Tytano 128",
+      "holeDistanceMm": 128,
+      "totalLengthMm": 141,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Tytano-128.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_TYTANO_160": {
+      "seriesId": "tytano",
+      "seriesName": "Tytano",
+      "handleType": "BAR",
+      "id": "REJS_TYTANO_160",
+      "name": "Tytano 160",
+      "holeDistanceMm": 160,
+      "totalLengthMm": 173,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Tytano-160.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_TYTANO_192": {
+      "seriesId": "tytano",
+      "seriesName": "Tytano",
+      "handleType": "BAR",
+      "id": "REJS_TYTANO_192",
+      "name": "Tytano 192",
+      "holeDistanceMm": 192,
+      "totalLengthMm": 205,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Tytano-192.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_TYTANO_256": {
+      "seriesId": "tytano",
+      "seriesName": "Tytano",
+      "handleType": "BAR",
+      "id": "REJS_TYTANO_256",
+      "name": "Tytano 256",
+      "holeDistanceMm": 256,
+      "totalLengthMm": 269,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Tytano-256.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_TYTANO_320": {
+      "seriesId": "tytano",
+      "seriesName": "Tytano",
+      "handleType": "BAR",
+      "id": "REJS_TYTANO_320",
+      "name": "Tytano 320",
+      "holeDistanceMm": 320,
+      "totalLengthMm": 333,
+      "depthMm": 28,
+      "thicknessMm": 12,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Tytano-320.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    },
+    "REJS_VITO": {
+      "seriesId": "vito",
+      "seriesName": "Vito",
+      "handleType": "KNOB",
+      "id": "REJS_VITO",
+      "name": "Vito",
+      "holeDistanceMm": 0,
+      "totalLengthMm": 30,
+      "depthMm": 28,
+      "thicknessMm": 30,
+      "footDiameterMm": 10,
+      "drillDiameterMm": 4,
+      "visual": {
+        "glb": "Vito.glb",
+        "origin": "CC_CENTER",
+        "units": "mm"
+      }
+    }
+  }
 }

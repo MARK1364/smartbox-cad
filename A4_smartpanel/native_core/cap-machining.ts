@@ -5,10 +5,12 @@
 import earcut from 'earcut';
 import { normalizeFaceName } from '../panel-model.js';
 import { getGrooveParamsMm } from '../../A1_core/groove-params.js';
-
-export { getGrooveParamsMm } from '../../A1_core/groove-params.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
 import { computeFaceData, localTo3D } from './face-lcs.js';
+import { readFeatureUV } from './feature-uv.js';
+
+export { getGrooveParamsMm } from '../../A1_core/groove-params.js';
+export { readFeatureUV, hasFeatureParamsUV } from './feature-uv.js';
 
 export type FaceMeshData = { positions: number[]; indices: number[] };
 export type CadEdge = { key: string; points: number[][] };
@@ -218,6 +220,10 @@ export function collectExtraHoles2D(
 
     for (const feat of features) {
         if (isFeatureSkipped(feat)) continue;
+        if (feat.type !== 'hole' && feat.type !== 'groove') {
+            console.warn(`[cap-machining] Pominięto extraHoles dla nieobsługiwanego typu feature: "${feat?.type}" (id: ${feat?.id ?? 'brak'}).`);
+            continue;
+        }
         if (feat.type !== 'groove') continue;
 
         const gp = getGrooveParamsMm(feat.params);
@@ -279,8 +285,7 @@ export function buildFaceMeshWithFeatures(opts: {
 
     for (const feat of feats) {
         if (feat.type === 'hole') {
-            const cxRaw = feat.params.u !== undefined ? feat.params.u : (feat.params.x !== undefined ? feat.params.x : 0);
-            const cyRaw = feat.params.v !== undefined ? feat.params.v : (feat.params.y !== undefined ? feat.params.y : 0);
+            const { u: cxRaw, v: cyRaw } = readFeatureUV(feat.params);
             const r = (feat.params.diameter || 35) / 2;
             const depth = feat.params.depth || 10;
 
@@ -318,23 +323,13 @@ export function buildFaceMeshWithFeatures(opts: {
                     }
                     const pCenterBottom = localTo3D(faceData, cx, cy, depth);
 
-                    const hw = w / 2, hh = h / 2, ht = t / 2;
-                    const EPS = 0.01;
-
-                    const addQuad = (pA: number[], pB: number[], pC: number[], pD: number[]) => {
-                        if (Math.abs(pA[0]) >= hw - EPS || Math.abs(pA[1]) >= hh - EPS || Math.abs(pA[2]) >= ht - EPS) return;
-                        appendQuad(faceResult, pA, pB, pC, pD);
-                    };
-
-                    const addTriangle = (pA: number[], pB: number[], pC: number[]) => {
-                        if (Math.abs(pA[0]) >= hw - EPS || Math.abs(pA[1]) >= hh - EPS || Math.abs(pA[2]) >= ht - EPS) return;
-                        appendTriangle(faceResult, pA, pB, pC);
-                    };
-
+                    // Bez guarda AABB: p3dTop leży zawsze na licu wiercenia (|n|≈t/2),
+                    // więc stary warunek |pA| >= half - EPS kasował WSZYSTKIE ścianki,
+                    // a przy otworze na krawędzi — także dno (pA na boku płyty).
                     for (let i = 0; i < segments; i++) {
                         const nextI = (i + 1) % segments;
-                        addTriangle(p3dBottom[i], pCenterBottom, p3dBottom[nextI]);
-                        addQuad(p3dTop[i], p3dTop[nextI], p3dBottom[nextI], p3dBottom[i]);
+                        appendTriangle(faceResult, p3dBottom[i], pCenterBottom, p3dBottom[nextI]);
+                        appendQuad(faceResult, p3dTop[i], p3dTop[nextI], p3dBottom[nextI], p3dBottom[i]);
                     }
                 }
             }
@@ -399,6 +394,9 @@ export function buildFaceMeshWithFeatures(opts: {
                 appendQuad(w3, p01_0, p01_d, p00_d, p00_0);
                 featureMeshes[`feature_${fid}_w3`] = w3;
             }
+        } else {
+            console.warn(`[cap-machining] Pominięto nieobsługiwany typ feature: "${feat?.type}" (id: ${feat?.id ?? 'brak'}). Dozwolone typy to 'hole' i 'groove'.`);
+            continue;
         }
     }
 
@@ -433,21 +431,135 @@ export function buildFaceMeshWithFeatures(opts: {
     return { mesh: faceResult, featureMeshes };
 }
 
+function clipEdgesByMouths(existingEdges: CadEdge[], mouths: Array<{ p0: number[]; p1: number[] }>): CadEdge[] {
+    if (mouths.length === 0 || existingEdges.length === 0) return [...existingEdges];
+
+    const out: CadEdge[] = [];
+    const EPS = 0.05;
+
+    for (const edge of existingEdges) {
+        if (!edge.points || edge.points.length !== 2) {
+            out.push(edge);
+            continue;
+        }
+
+        const A = edge.points[0];
+        const B = edge.points[1];
+        const dx = B[0] - A[0];
+        const dy = B[1] - A[1];
+        const dz = B[2] - A[2];
+        const L = Math.hypot(dx, dy, dz);
+        if (L < 1e-4) {
+            out.push(edge);
+            continue;
+        }
+
+        const ux = dx / L;
+        const uy = dy / L;
+        const uz = dz / L;
+
+        const cutIntervals: Array<[number, number]> = [];
+
+        for (const mouth of mouths) {
+            const P0 = mouth.p0;
+            const P1 = mouth.p1;
+
+            const v0x = P0[0] - A[0];
+            const v0y = P0[1] - A[1];
+            const v0z = P0[2] - A[2];
+            const s0 = v0x * ux + v0y * uy + v0z * uz;
+            const perp0x = v0x - s0 * ux;
+            const perp0y = v0y - s0 * uy;
+            const perp0z = v0z - s0 * uz;
+            const dist0Sq = perp0x * perp0x + perp0y * perp0y + perp0z * perp0z;
+
+            const v1x = P1[0] - A[0];
+            const v1y = P1[1] - A[1];
+            const v1z = P1[2] - A[2];
+            const s1 = v1x * ux + v1y * uy + v1z * uz;
+            const perp1x = v1x - s1 * ux;
+            const perp1y = v1y - s1 * uy;
+            const perp1z = v1z - s1 * uz;
+            const dist1Sq = perp1x * perp1x + perp1y * perp1y + perp1z * perp1z;
+
+            if (dist0Sq <= EPS * EPS && dist1Sq <= EPS * EPS) {
+                const sMin = Math.min(s0, s1);
+                const sMax = Math.max(s0, s1);
+                const cStart = Math.max(0, sMin);
+                const cEnd = Math.min(L, sMax);
+                if (cEnd - cStart > EPS) {
+                    cutIntervals.push([cStart, cEnd]);
+                }
+            }
+        }
+
+        if (cutIntervals.length === 0) {
+            out.push(edge);
+            continue;
+        }
+
+        cutIntervals.sort((a, b) => a[0] - b[0]);
+        const merged: Array<[number, number]> = [cutIntervals[0]];
+        for (let i = 1; i < cutIntervals.length; i++) {
+            const prev = merged[merged.length - 1];
+            const curr = cutIntervals[i];
+            if (curr[0] <= prev[1] + EPS) {
+                prev[1] = Math.max(prev[1], curr[1]);
+            } else {
+                merged.push(curr);
+            }
+        }
+
+        const surviving: Array<[number, number]> = [];
+        let currPos = 0;
+        for (const [startCut, endCut] of merged) {
+            if (startCut - currPos > EPS) {
+                surviving.push([currPos, startCut]);
+            }
+            currPos = Math.max(currPos, endCut);
+        }
+        if (L - currPos > EPS) {
+            surviving.push([currPos, L]);
+        }
+
+        if (surviving.length === 0) {
+            continue;
+        }
+
+        for (let i = 0; i < surviving.length; i++) {
+            const [sA, sB] = surviving[i];
+            const pA = [A[0] + sA * ux, A[1] + sA * uy, A[2] + sA * uz];
+            const pB = [A[0] + sB * ux, A[1] + sB * uy, A[2] + sB * uz];
+            const key = i === 0 ? edge.key : `${edge.key}_${i}`;
+            out.push({
+                key,
+                points: [pA, pB]
+            });
+        }
+    }
+
+    return out;
+}
+
 export function appendFeatureEdges(
     edges: CadEdge[],
     features: any[] | undefined,
     w: number,
     h: number,
-    t: number
+    t: number,
+    customFaceDataMap?: Record<string, any>
 ): void {
     if (!features) return;
 
+    const mouths: Array<{ p0: number[]; p1: number[] }> = [];
+    const featureEdges: CadEdge[] = [];
+
     for (const feat of features) {
         if (isFeatureSkipped(feat)) continue;
-        const faceData = computeFaceData(feat.face, w, h, t);
+        const normFace = normalizeFaceName(feat.face || feat.side || '');
+        const faceData = (customFaceDataMap && customFaceDataMap[normFace]) || computeFaceData(normFace, w, h, t);
         if (feat.type === 'hole') {
-            const cxRaw = feat.params.u !== undefined ? feat.params.u : (feat.params.x !== undefined ? feat.params.x : 0);
-            const cyRaw = feat.params.v !== undefined ? feat.params.v : (feat.params.y !== undefined ? feat.params.y : 0);
+            const { u: cxRaw, v: cyRaw } = readFeatureUV(feat.params);
             const r = (feat.params.diameter || 35) / 2;
 
             const template = feat.params.template_id || 'SINGLE';
@@ -472,7 +584,7 @@ export function appendFeatureEdges(
                 const circle2D = generateCircle(cx, cy, r, 24);
                 circle2D.push(circle2D[0]);
                 const points = circle2D.map(p => localTo3D(faceData, p[0], p[1], 0));
-                edges.push({
+                featureEdges.push({
                     key: `e_hole_${feat.id}${suffix}`,
                     points
                 });
@@ -498,22 +610,52 @@ export function appendFeatureEdges(
             const p11_d = localTo3D(faceData, u1, v1, depth);
             const p01_d = localTo3D(faceData, u0, v1, depth);
 
-            edges.push({ key: `e_groove_${feat.id}_t1`, points: [p00_0, p10_0] });
-            edges.push({ key: `e_groove_${feat.id}_t2`, points: [p10_0, p11_0] });
-            edges.push({ key: `e_groove_${feat.id}_t3`, points: [p11_0, p01_0] });
-            edges.push({ key: `e_groove_${feat.id}_t4`, points: [p01_0, p00_0] });
+            const EDGE_EPS = 0.05;
+            const throughU0 = u0 <= EDGE_EPS;
+            const throughU1 = u1 >= faceData.width - EDGE_EPS;
+            const throughV0 = v0 <= EDGE_EPS;
+            const throughV1 = v1 >= faceData.height - EDGE_EPS;
 
-            edges.push({ key: `e_groove_${feat.id}_b1`, points: [p00_d, p10_d] });
-            edges.push({ key: `e_groove_${feat.id}_b2`, points: [p10_d, p11_d] });
-            edges.push({ key: `e_groove_${feat.id}_b3`, points: [p11_d, p01_d] });
-            edges.push({ key: `e_groove_${feat.id}_b4`, points: [p01_d, p00_d] });
+            if (throughU0) mouths.push({ p0: p00_0, p1: p01_0 });
+            if (throughU1) mouths.push({ p0: p10_0, p1: p11_0 });
+            if (throughV0) mouths.push({ p0: p00_0, p1: p10_0 });
+            if (throughV1) mouths.push({ p0: p01_0, p1: p11_0 });
 
-            edges.push({ key: `e_groove_${feat.id}_v1`, points: [p00_0, p00_d] });
-            edges.push({ key: `e_groove_${feat.id}_v2`, points: [p10_0, p10_d] });
-            edges.push({ key: `e_groove_${feat.id}_v3`, points: [p11_0, p11_d] });
-            edges.push({ key: `e_groove_${feat.id}_v4`, points: [p01_0, p01_d] });
+            // Narożniki przelotowe (uskok/felc na rogu formatki): wycinamy segment narożnika płyty
+            if (throughU0 && throughV0) mouths.push({ p0: p00_0, p1: p00_d });
+            if (throughU1 && throughV0) mouths.push({ p0: p10_0, p1: p10_d });
+            if (throughU1 && throughV1) mouths.push({ p0: p11_0, p1: p11_d });
+            if (throughU0 && throughV1) mouths.push({ p0: p01_0, p1: p01_d });
+
+            if (!throughV0) featureEdges.push({ key: `e_groove_${feat.id}_t1`, points: [p00_0, p10_0] });
+            if (!throughU1) featureEdges.push({ key: `e_groove_${feat.id}_t2`, points: [p10_0, p11_0] });
+            if (!throughV1) featureEdges.push({ key: `e_groove_${feat.id}_t3`, points: [p11_0, p01_0] });
+            if (!throughU0) featureEdges.push({ key: `e_groove_${feat.id}_t4`, points: [p01_0, p00_0] });
+
+            featureEdges.push({ key: `e_groove_${feat.id}_b1`, points: [p00_d, p10_d] });
+            featureEdges.push({ key: `e_groove_${feat.id}_b2`, points: [p10_d, p11_d] });
+            featureEdges.push({ key: `e_groove_${feat.id}_b3`, points: [p11_d, p01_d] });
+            featureEdges.push({ key: `e_groove_${feat.id}_b4`, points: [p01_d, p00_d] });
+
+            // Krawędzie pionowe cechy istnieją tylko wtedy, gdy przynajmniej jedna ścianka dochodzi do tego narożnika
+            const hasV1 = !(throughU0 && throughV0);
+            const hasV2 = !(throughU1 && throughV0);
+            const hasV3 = !(throughU1 && throughV1);
+            const hasV4 = !(throughU0 && throughV1);
+
+            if (hasV1) featureEdges.push({ key: `e_groove_${feat.id}_v1`, points: [p00_0, p00_d] });
+            if (hasV2) featureEdges.push({ key: `e_groove_${feat.id}_v2`, points: [p10_0, p10_d] });
+            if (hasV3) featureEdges.push({ key: `e_groove_${feat.id}_v3`, points: [p11_0, p11_d] });
+            if (hasV4) featureEdges.push({ key: `e_groove_${feat.id}_v4`, points: [p01_0, p01_d] });
+        } else {
+            console.warn(`[cap-machining] Pominięto krawędzie dla nieobsługiwanego typu feature: "${feat?.type}" (id: ${feat?.id ?? 'brak'}).`);
+            continue;
         }
     }
+
+    const clipped = clipEdgesByMouths(edges, mouths);
+    edges.length = 0;
+    edges.push(...clipped, ...featureEdges);
 }
 
 export function isPointInPolygon2D(x: number, y: number, poly: [number, number][]): boolean {
@@ -551,8 +693,7 @@ export function buildProfileMeshWithFeatures(opts: {
                 if (faceName !== 'FACE_Z_PLUS' && faceName !== 'FACE_Z_MINUS') continue;
 
                 const faceData = computeFaceData(faceName, w, h, t);
-                const cxRaw = feat.params.u !== undefined ? feat.params.u : (feat.params.x !== undefined ? feat.params.x : 0);
-                const cyRaw = feat.params.v !== undefined ? feat.params.v : (feat.params.y !== undefined ? feat.params.y : 0);
+                const { u: cxRaw, v: cyRaw } = readFeatureUV(feat.params);
                 const r = (feat.params.diameter || 35) / 2;
                 const depth = feat.params.depth || 10;
 

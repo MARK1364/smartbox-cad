@@ -31,7 +31,8 @@ const gateErrors = text
             /S2_solver[/\\]/.test(line) ||
             /C2_connectors[/\\]/.test(line) ||
             /A6_agd[/\\]/.test(line) ||
-            /o1_operacji[/\\]/.test(line))
+            /o1_operacji[/\\]/.test(line) ||
+            /S5_studio[/\\]/.test(line))
     );
 
 if (gateErrors.length > 0) {
@@ -40,4 +41,4 @@ if (gateErrors.length > 0) {
     process.exit(1);
 }
 
-console.log('Core typecheck ok (A1 + A2 + A3 + A4 + A5 + C1 + B1_biblioteka + A7 + S2 + C2 + O1).');
+console.log('Core typecheck ok (A1 + A2 + A3 + A4 + A5 + C1 + B1_biblioteka + A7 + S2 + C2 + O1 + S5_studio).');

@@ -106,6 +106,7 @@ export function buildAnnotationRenderData(
         axisSpace: ann.axisSpace,
         matrixWorld: resolved.matrixWorld,
         measureAxisKey: ann.measureAxisKey,
+        offsetAxisKey: ann.offsetAxisKey,
         anchor1World: resolved.anchor1World,
         anchor2World: resolved.anchor2World,
         faceNormal1World: resolved.faceNormal1World,

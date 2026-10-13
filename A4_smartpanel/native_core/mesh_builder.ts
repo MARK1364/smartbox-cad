@@ -1,7 +1,7 @@
 import earcut from 'earcut';
 import { isCylindricalPart } from '../../A1_core/cad-node/part-shape.js';
 import { AluFrameManager } from '../alu-frame-manager.js';
-import { computeFaceData, PANEL_FACE_NAMES } from './face-lcs.js';
+import { computeFaceData, localTo3D, local3DToFaceUV, PANEL_FACE_NAMES } from './face-lcs.js';
 import { buildBoxTopology } from './box-topology.js';
 import { buildPolygonPanelTopology } from './polygon-extrusion.js';
 import { buildBeveledBox, hasEdgeCutConfig, readEdgeCutConfig } from './edge-bevel.js';
@@ -13,6 +13,7 @@ import {
     collectExtraHoles2D,
     featuresOnFace
 } from './cap-machining.js';
+import { readFeatureUV } from './feature-uv.js';
 
 export { validatePanelDimensionsNm } from './panel-dimensions.js';
 
@@ -209,20 +210,190 @@ export function buildMeshFromPanel(model: any) {
     const cutConfig = readEdgeCutConfig(model.edgeBanding || model.custom_properties?.edge_banding);
     if (hasEdgeCutConfig(cutConfig)) {
         const box = buildBeveledBox(modelWidth, modelHeight, modelThickness, cutConfig);
-        const faceOf = (pts: number[][]) => {
-            const positions = pts.flat();
-            return { positions, indices: [0, 1, 2, 0, 2, 3] };
-        };
-        return {
-            FACE_Z_PLUS: faceOf(box.top),
-            FACE_Z_MINUS: faceOf([...box.bottom].reverse()),
-            FACE_X_PLUS: box.sides['+X'],
-            FACE_X_MINUS: box.sides['-X'],
-            FACE_Y_PLUS: box.sides['+Y'],
-            FACE_Y_MINUS: box.sides['-Y'],
+        const hasFeatures = Array.isArray(model.features) && model.features.length > 0;
+
+        if (!hasFeatures) {
+            const faceOf = (pts: number[][]) => {
+                const positions = pts.flat();
+                return { positions, indices: [0, 1, 2, 0, 2, 3] };
+            };
+            return {
+                FACE_Z_PLUS: faceOf(box.top),
+                FACE_Z_MINUS: faceOf([...box.bottom].reverse()),
+                FACE_X_PLUS: box.sides['+X'],
+                FACE_X_MINUS: box.sides['-X'],
+                FACE_Y_PLUS: box.sides['+Y'],
+                FACE_Y_MINUS: box.sides['-Y'],
+                vertices: [...box.top, ...box.bottom],
+                edges: box.edges,
+            };
+        }
+
+        const faceDataZPlus = computeFaceData('FACE_Z_PLUS', modelWidth, modelHeight, modelThickness);
+        const faceDataZMinus = computeFaceData('FACE_Z_MINUS', modelWidth, modelHeight, modelThickness);
+
+        const contourZPlus = box.top.map(p => {
+            const uv = local3DToFaceUV(faceDataZPlus, p as [number, number, number]);
+            return [uv.u, uv.v];
+        });
+        const bottomCcw = [box.bottom[1], box.bottom[0], box.bottom[3], box.bottom[2]];
+        const contourZMinus = bottomCcw.map(p => {
+            const uv = local3DToFaceUV(faceDataZMinus, p as [number, number, number]);
+            return [uv.u, uv.v];
+        });
+
+        const extraHoles2D = collectExtraHoles2D(model.features, modelWidth, modelHeight, modelThickness);
+
+        const builtZPlus = buildFaceMeshWithFeatures({
+            faceData: faceDataZPlus,
+            outerContour: contourZPlus,
+            extraHoles: extraHoles2D['FACE_Z_PLUS'] || [],
+            featuresOnFace: featuresOnFace(model.features, 'FACE_Z_PLUS'),
+            w: modelWidth,
+            h: modelHeight,
+            t: modelThickness
+        });
+
+        const builtZMinus = buildFaceMeshWithFeatures({
+            faceData: faceDataZMinus,
+            outerContour: contourZMinus,
+            extraHoles: extraHoles2D['FACE_Z_MINUS'] || [],
+            featuresOnFace: featuresOnFace(model.features, 'FACE_Z_MINUS'),
+            w: modelWidth,
+            h: modelHeight,
+            t: modelThickness
+        });
+
+        const result: any = {
+            FACE_Z_PLUS: builtZPlus.mesh,
+            FACE_Z_MINUS: builtZMinus.mesh,
             vertices: [...box.top, ...box.bottom],
-            edges: box.edges,
+            edges: [...box.edges],
         };
+
+        const sideFacesConfig: Array<{ face: string; edgeKey: '+X' | '-X' | '+Y' | '-Y'; pts3D: number[][] }> = [
+            { face: 'FACE_X_PLUS', edgeKey: '+X', pts3D: [box.top[1], box.bottom[1], box.bottom[2], box.top[2]] },
+            { face: 'FACE_X_MINUS', edgeKey: '-X', pts3D: [box.bottom[0], box.top[0], box.top[3], box.bottom[3]] },
+            { face: 'FACE_Y_PLUS', edgeKey: '+Y', pts3D: [box.top[3], box.top[2], box.bottom[2], box.bottom[3]] },
+            { face: 'FACE_Y_MINUS', edgeKey: '-Y', pts3D: [box.bottom[0], box.bottom[1], box.top[1], box.top[0]] },
+        ];
+
+        const sideFaceDataMap: Record<string, any> = {};
+        const featuresForEdges = [...model.features];
+
+        for (const side of sideFacesConfig) {
+            const sideFeatures = featuresOnFace(model.features, side.face);
+            const sideExtraHoles = extraHoles2D[side.face] || [];
+            if (sideFeatures.length === 0 && sideExtraHoles.length === 0) {
+                result[side.face] = box.sides[side.edgeKey];
+            } else {
+                // Obliczamy lokalną bazę płaszczyzny bezpośrednio z czworokąta 3D (zachowuje kąt fazy!)
+                const p0 = side.pts3D[0];
+                const du = [side.pts3D[1][0] - p0[0], side.pts3D[1][1] - p0[1], side.pts3D[1][2] - p0[2]];
+                const lenU = Math.hypot(du[0], du[1], du[2]) || 1;
+                const uAxis = [du[0] / lenU, du[1] / lenU, du[2] / lenU];
+
+                const dv = [side.pts3D[3][0] - p0[0], side.pts3D[3][1] - p0[1], side.pts3D[3][2] - p0[2]];
+                const nx = uAxis[1] * dv[2] - uAxis[2] * dv[1];
+                const ny = uAxis[2] * dv[0] - uAxis[0] * dv[2];
+                const nz = uAxis[0] * dv[1] - uAxis[1] * dv[0];
+                const lenN = Math.hypot(nx, ny, nz) || 1;
+                const normal = [nx / lenN, ny / lenN, nz / lenN];
+
+                const vAxis = [
+                    normal[1] * uAxis[2] - normal[2] * uAxis[1],
+                    normal[2] * uAxis[0] - normal[0] * uAxis[2],
+                    normal[0] * uAxis[1] - normal[1] * uAxis[0],
+                ];
+
+                const faceData = {
+                    origin: p0,
+                    uAxis,
+                    vAxis,
+                    normal,
+                    width: lenU,
+                    height: Math.hypot(dv[0], dv[1], dv[2])
+                };
+                sideFaceDataMap[side.face] = faceData;
+
+                const outerContour = side.pts3D.map(p => {
+                    const dx = p[0] - p0[0];
+                    const dy = p[1] - p0[1];
+                    const dz = p[2] - p0[2];
+                    return [
+                        dx * uAxis[0] + dy * uAxis[1] + dz * uAxis[2],
+                        dx * vAxis[0] + dy * vAxis[1] + dz * vAxis[2]
+                    ];
+                });
+
+                // Przeliczamy (u, v) cech z nominalnego LCS na lokalną bazę skośnego czworokąta
+                const nominalFaceData = computeFaceData(side.face, modelWidth, modelHeight, modelThickness);
+                const denom = nominalFaceData.normal[0] * faceData.normal[0] +
+                              nominalFaceData.normal[1] * faceData.normal[1] +
+                              nominalFaceData.normal[2] * faceData.normal[2];
+
+                const mappedSideFeatures = sideFeatures.map(feat => {
+                    if (feat.type !== 'hole' || !feat.params) return feat;
+                    const { u: uNom, v: vNom } = readFeatureUV(feat.params);
+                    const pNominal = localTo3D(nominalFaceData, uNom, vNom, 0);
+
+                    let pSurface = pNominal;
+                    if (Math.abs(denom) > 1e-6) {
+                        const diff = [
+                            pNominal[0] - faceData.origin[0],
+                            pNominal[1] - faceData.origin[1],
+                            pNominal[2] - faceData.origin[2],
+                        ];
+                        const dot = diff[0] * faceData.normal[0] + diff[1] * faceData.normal[1] + diff[2] * faceData.normal[2];
+                        const s = dot / denom;
+                        pSurface = [
+                            pNominal[0] - s * nominalFaceData.normal[0],
+                            pNominal[1] - s * nominalFaceData.normal[1],
+                            pNominal[2] - s * nominalFaceData.normal[2],
+                        ];
+                    }
+
+                    const dx = pSurface[0] - faceData.origin[0];
+                    const dy = pSurface[1] - faceData.origin[1];
+                    const dz = pSurface[2] - faceData.origin[2];
+                    const uMapped = dx * faceData.uAxis[0] + dy * faceData.uAxis[1] + dz * faceData.uAxis[2];
+                    const vMapped = dx * faceData.vAxis[0] + dy * faceData.vAxis[1] + dz * faceData.vAxis[2];
+
+                    const mapped = {
+                        ...feat,
+                        params: {
+                            ...feat.params,
+                            u: uMapped,
+                            v: vMapped,
+                        }
+                    };
+
+                    // Aktualizujemy listę dla appendFeatureEdges
+                    const idx = featuresForEdges.findIndex(f => f.id === feat.id);
+                    if (idx >= 0) featuresForEdges[idx] = mapped;
+
+                    return mapped;
+                });
+
+                const builtSide = buildFaceMeshWithFeatures({
+                    faceData,
+                    outerContour,
+                    extraHoles: sideExtraHoles,
+                    featuresOnFace: mappedSideFeatures,
+                    w: modelWidth,
+                    h: modelHeight,
+                    t: modelThickness
+                });
+                result[side.face] = builtSide.mesh;
+                Object.assign(result, builtSide.featureMeshes);
+            }
+        }
+
+        Object.assign(result, builtZPlus.featureMeshes);
+        Object.assign(result, builtZMinus.featureMeshes);
+        appendFeatureEdges(result.edges, featuresForEdges, modelWidth, modelHeight, modelThickness, sideFaceDataMap);
+
+        return result;
     }
 
     const result: any = {};

@@ -12,6 +12,7 @@
 import { CNCOperation, Vector3D, Tool } from '../dto/cam-dto.js';
 import { ToolLibrary } from '../processor/tool-library.js';
 import { CNCToolMeshFactory } from './tool-mesh-factory.js';
+import { ContextManager } from '../../A1_core/context-manager.js';
 
 declare const BABYLON: any;
 
@@ -48,10 +49,19 @@ export class CNCSimulator {
     private startPos: any = null;   // Vector3
     private endPos: any = null;     // Vector3
     private safeZOffset: number = 25.0; // mm nad powierzchnią (SAFE_Z)
+    private initialMoveDist: number = 1.0;
+    private currentMoveTotalDist: number = 1.0;
 
     private animationObserver: any = null;
     private onStatusCallback?: (info: SimStatusUpdate) => void;
     private wcsRootNode: any = null;
+
+    // Throttling raportowania stanu do React UI (ochrona przed spadkami FPS)
+    private lastReportedStatusText: string = "";
+    private lastReportedOpIndex: number = -1;
+    private lastReportedState: SimState = 'MOVE';
+    private lastReportedPercent: number = -1;
+    private lastReportTime: number = 0;
 
     constructor(scene: any, toolLibrary?: ToolLibrary) {
         this.scene = scene;
@@ -106,6 +116,7 @@ export class CNCSimulator {
         if (this.isPaused) {
             this.isPaused = false;
             this.isRunning = true;
+            (ContextManager.instance as any)?.viewport?.requestRender?.(5);
             return;
         }
 
@@ -116,6 +127,11 @@ export class CNCSimulator {
         this.currentMoveIndex = 0;
         this.currentState = 'MOVE';
         this.stateProgress = 0.0;
+        this.lastReportedStatusText = "";
+        this.lastReportedOpIndex = -1;
+        this.lastReportedState = 'MOVE';
+        this.lastReportedPercent = -1;
+        this.lastReportTime = 0;
 
         const firstOp = this.operations[0];
         const p = firstOp.position;
@@ -127,11 +143,14 @@ export class CNCSimulator {
         this.animationObserver = this.scene.onBeforeRenderObservable.add(() => {
             this.updateSimulationFrame();
         });
+
+        (ContextManager.instance as any)?.viewport?.requestRender?.(5);
     }
 
     public pause(): void {
         this.isPaused = true;
         this.isRunning = false;
+        (ContextManager.instance as any)?.viewport?.requestRender?.(2);
     }
 
     public stop(): void {
@@ -141,6 +160,11 @@ export class CNCSimulator {
         this.currentMoveIndex = 0;
         this.currentState = 'MOVE';
         this.stateProgress = 0.0;
+        this.lastReportedStatusText = "";
+        this.lastReportedOpIndex = -1;
+        this.lastReportedState = 'MOVE';
+        this.lastReportedPercent = -1;
+        this.lastReportTime = 0;
 
         if (this.animationObserver && this.scene) {
             this.scene.onBeforeRenderObservable.remove(this.animationObserver);
@@ -152,6 +176,8 @@ export class CNCSimulator {
             this.toolMesh = null;
             this.activeToolId = null;
         }
+
+        (ContextManager.instance as any)?.viewport?.requestRender?.(2);
 
         if (this.onStatusCallback) {
             this.onStatusCallback({
@@ -227,10 +253,24 @@ export class CNCSimulator {
                 this.toolMesh.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0); // Wiertło (Z-up)
             }
         }
+
+        const targetPosXY = new BABYLON.Vector3(this.startPos.x, this.startPos.y, this.startPos.z + this.safeZOffset);
+        if (this.currentPos) {
+            this.initialMoveDist = Math.max(0.001, BABYLON.Vector3.Distance(this.currentPos, targetPosXY));
+        } else {
+            this.currentPos = targetPosXY.clone();
+            this.initialMoveDist = 1.0;
+        }
+        if (op.type === 'groove' || op.type === 'contour') {
+            this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.startPos, this.endPos));
+        }
     }
 
     private updateSimulationFrame(): void {
         if (!this.isRunning || this.isPaused || this.operations.length === 0) return;
+
+        // Wymuś odświeżenie klatki w trybie Render-on-Demand, aby animacja 3D szła gładko 60/120 FPS
+        (ContextManager.instance as any)?.viewport?.requestRender?.(2);
 
         const dt = (this.scene.getEngine().getDeltaTime() / 1000.0) * this.speedMultiplier; // sekundy
         const targetOp = this.operations[this.currentOpIndex];
@@ -272,6 +312,8 @@ export class CNCSimulator {
                 this.stateProgress = 1.0;
                 if (!isHole) {
                     this.currentState = 'CUT';
+                    const cutTargetPos = new BABYLON.Vector3(this.endPos.x, this.endPos.y, this.endPos.z);
+                    this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.currentPos, cutTargetPos));
                 } else {
                     this.currentState = 'UP';
                 }
@@ -304,6 +346,7 @@ export class CNCSimulator {
                     const nextMove = moves[this.currentMoveIndex];
                     const cutDepth = Math.abs(targetOp.parameters?.depth || 0);
                     this.endPos = new BABYLON.Vector3(nextMove.endPoint.x, nextMove.endPoint.y, nextMove.endPoint.z - cutDepth);
+                    this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.startPos, this.endPos));
 
                     // Obrót tarczy/frezu dla nowego odcinka
                     if (this.toolMesh && targetOp.type === 'groove') {
@@ -369,16 +412,66 @@ export class CNCSimulator {
             this.toolMesh.position = this.currentPos;
         }
 
-        // Raportowanie stanu do interfejsu React
+        // Raportowanie stanu do interfejsu React (zoptymalizowany throttling, aby nie paraliżować Reacta)
         if (this.onStatusCallback) {
-            this.onStatusCallback({
-                statusText,
-                opIndex: this.currentOpIndex,
-                totalOps: this.operations.length,
-                progressPercent: Math.round((this.currentOpIndex / this.operations.length) * 100),
-                state: this.currentState,
-                running: true
-            });
+            const now = performance.now();
+            let opFraction = 0;
+            if (isHole) {
+                if (this.currentState === 'MOVE') {
+                    const targetPosXY = new BABYLON.Vector3(this.startPos.x, this.startPos.y, this.startPos.z + this.safeZOffset);
+                    const d = BABYLON.Vector3.Distance(this.currentPos, targetPosXY);
+                    const frac = Math.max(0, 1.0 - (d / Math.max(1, this.initialMoveDist)));
+                    opFraction = frac * 0.15;
+                } else if (this.currentState === 'DOWN') {
+                    opFraction = 0.15 + Math.min(1.0, Math.max(0, this.stateProgress)) * 0.70;
+                } else if (this.currentState === 'UP') {
+                    opFraction = 0.85 + (1.0 - Math.min(1.0, Math.max(0, this.stateProgress))) * 0.15;
+                }
+            } else {
+                if (this.currentState === 'MOVE') {
+                    const targetPosXY = new BABYLON.Vector3(this.startPos.x, this.startPos.y, this.startPos.z + this.safeZOffset);
+                    const d = BABYLON.Vector3.Distance(this.currentPos, targetPosXY);
+                    const frac = Math.max(0, 1.0 - (d / Math.max(1, this.initialMoveDist)));
+                    opFraction = frac * 0.10;
+                } else if (this.currentState === 'DOWN') {
+                    opFraction = 0.10 + Math.min(1.0, Math.max(0, this.stateProgress)) * 0.10;
+                } else if (this.currentState === 'CUT') {
+                    const moves = targetOp.parameters?.moves || [];
+                    const moveCount = Math.max(1, moves.length);
+                    const cutTargetPos = new BABYLON.Vector3(this.endPos.x, this.endPos.y, this.endPos.z);
+                    const d = BABYLON.Vector3.Distance(this.currentPos, cutTargetPos);
+                    const moveFrac = Math.max(0, 1.0 - (d / Math.max(1, this.currentMoveTotalDist)));
+                    const overallCutFrac = (this.currentMoveIndex + moveFrac) / moveCount;
+                    opFraction = 0.20 + Math.min(1.0, overallCutFrac) * 0.70;
+                } else if (this.currentState === 'UP') {
+                    opFraction = 0.90 + (1.0 - Math.min(1.0, Math.max(0, this.stateProgress))) * 0.10;
+                }
+            }
+
+            const totalProgress = (this.currentOpIndex + opFraction) / Math.max(1, this.operations.length);
+            const currentPercent = Math.min(99, Math.max(0, Math.round(totalProgress * 100)));
+            const stateChanged = this.currentState !== this.lastReportedState;
+            const opChanged = this.currentOpIndex !== this.lastReportedOpIndex;
+            const textChanged = statusText !== this.lastReportedStatusText;
+            const timePassed = (now - this.lastReportTime) >= 80; // max ~12 FPS dla React UI
+            const percentChanged = currentPercent !== this.lastReportedPercent;
+
+            if (stateChanged || opChanged || (timePassed && (percentChanged || textChanged))) {
+                this.lastReportedState = this.currentState;
+                this.lastReportedOpIndex = this.currentOpIndex;
+                this.lastReportedStatusText = statusText;
+                this.lastReportedPercent = currentPercent;
+                this.lastReportTime = now;
+
+                this.onStatusCallback({
+                    statusText,
+                    opIndex: this.currentOpIndex,
+                    totalOps: this.operations.length,
+                    progressPercent: currentPercent,
+                    state: this.currentState,
+                    running: true
+                });
+            }
         }
     }
 }

@@ -15,35 +15,40 @@ export const ExportUI: React.FC = () => {
     // Stan lokalny dla formularzy i modala podglądu
     const [isGenerating, setIsGenerating] = useState(false);
     const [previewZoom, setPreviewZoom] = useState(1);
-    const [showTitleBlockSettings, setShowTitleBlockSettings] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
     const previewSvg = engine.previewSvg;
     const setPreviewSvg = (svg: string | null) => engine.setPreviewSvg(svg);
 
     useEffect(() => {
-        // Po wejściu w zakładkę Eksport natychmiast wyświetl wirtualną formatkę na scenie 3D
+        // W module Eksport arkusz wirtualny jest zawsze widoczny; BOM idzie z raportu, nie stąd.
         engine.setShowBounds(true);
+        engine.setIncludeBOM(false);
         engine.updatePassepartout();
 
         const unsubscribe = engine.subscribe(() => {
             setTick((t) => t + 1);
         });
 
-        // Obsługa klawisza Esc do zamykania modala
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && engine.previewSvg) {
-                engine.setPreviewSvg(null);
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-
         return () => {
             unsubscribe();
-            window.removeEventListener('keydown', handleKeyDown);
             engine.setShowBounds(false);
         };
     }, [engine]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return;
+            if (engine.previewSvg) {
+                engine.setPreviewSvg(null);
+                return;
+            }
+            if (showSettings) setShowSettings(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [engine, showSettings]);
 
     const showTemporaryStatus = (msg: string) => {
         setStatusMessage(msg);
@@ -129,6 +134,20 @@ export const ExportUI: React.FC = () => {
         }
     };
 
+    const handleUpdateViewFrame = async (viewId: string) => {
+        setIsGenerating(true);
+        try {
+            const updated = await engine.updateSavedViewWithCurrent(viewId);
+            if (updated) {
+                showTemporaryStatus(`Nadpisano kadr: ${updated.name}`);
+            }
+        } catch (e: any) {
+            alert(`Błąd aktualizacji kadru: ${e?.message || e}`);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     const handlePrintMultiSheet = async () => {
         if (engine.savedViews.length === 0) {
             alert('Brak arkuszy do druku!');
@@ -177,7 +196,7 @@ export const ExportUI: React.FC = () => {
     return (
         <div className="export-panel-container">
             {/* Header */}
-            <div className="panel-header" style={{ padding: '16px 18px 12px' }}>
+            <div className="panel-header" style={{ padding: '16px 18px 12px', position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <h2 style={{ margin: 0, fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
@@ -189,11 +208,124 @@ export const ExportUI: React.FC = () => {
                         </svg>
                         Eksport Rysunków
                     </h2>
-                    <span className="export-badge-pill">ISO 7200</span>
+                    <button
+                        type="button"
+                        className="export-settings-gear-btn"
+                        onClick={() => setShowSettings((v) => !v)}
+                        title="Opcje arkusza"
+                        aria-label="Opcje arkusza"
+                        aria-expanded={showSettings}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                    </button>
                 </div>
                 <p className="subtitle" style={{ marginTop: '4px' }}>
-                    Menedżer arkuszy wykonawczych, rzuty CAD 2D/3D i dokumentacja
+                    Menedżer arkuszy wykonawczych
                 </p>
+
+                {showSettings && (
+                    <div className="export-settings-popover" role="dialog" aria-label="Opcje arkusza">
+                        <div className="export-settings-popover-header">
+                            <strong>Opcje arkusza</strong>
+                            <button
+                                type="button"
+                                className="export-settings-close-btn"
+                                onClick={() => setShowSettings(false)}
+                                title="Zamknij"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="input-row" style={{ marginBottom: '10px' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Format:</label>
+                            <select
+                                value={engine.paperFormat}
+                                onChange={(e) => engine.setPaperFormat(e.target.value as PaperFormat)}
+                                style={{ flex: 1 }}
+                            >
+                                {(Object.keys(PAPER_FORMATS) as PaperFormat[]).map((fmt) => {
+                                    const info = PAPER_FORMATS[fmt];
+                                    return (
+                                        <option key={fmt} value={fmt}>
+                                            {info.label} ({info.description})
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        </div>
+
+                        <label className="export-checkbox-label" style={{ marginBottom: '12px' }}>
+                            <input
+                                type="checkbox"
+                                checked={engine.includePMI}
+                                onChange={(e) => engine.setIncludePMI(e.target.checked)}
+                            />
+                            <span>Dołącz linie wymiarowe 3D (PMI)</span>
+                        </label>
+
+                        <div className="export-settings-divider">Tabela</div>
+                        <div className="export-titleblock-box" style={{ marginTop: 0 }}>
+                            <div className="input-row">
+                                <label>Projekt:</label>
+                                <input
+                                    type="text"
+                                    value={engine.titleBlock.projectName}
+                                    onChange={(e) => engine.setTitleBlock({ projectName: e.target.value })}
+                                    placeholder="Nazwa projektu"
+                                />
+                            </div>
+                            <div className="input-row">
+                                <label>Mebel:</label>
+                                <input
+                                    type="text"
+                                    value={engine.titleBlock.furnitureName}
+                                    onChange={(e) => engine.setTitleBlock({ furnitureName: e.target.value })}
+                                    placeholder="Nazwa mebla"
+                                />
+                            </div>
+                            <div className="input-row">
+                                <label>Wykonał:</label>
+                                <input
+                                    type="text"
+                                    value={engine.titleBlock.author}
+                                    onChange={(e) => engine.setTitleBlock({ author: e.target.value })}
+                                    placeholder="Autor"
+                                />
+                            </div>
+                            <div className="input-row">
+                                <label>Skala:</label>
+                                <input
+                                    type="text"
+                                    value={engine.titleBlock.scale}
+                                    onChange={(e) => engine.setTitleBlock({ scale: e.target.value })}
+                                    placeholder="np. 1:10"
+                                />
+                            </div>
+                            <div className="input-row">
+                                <label>Nr rysunku:</label>
+                                <input
+                                    type="text"
+                                    value={engine.titleBlock.drawingNumber}
+                                    onChange={(e) => engine.setTitleBlock({ drawingNumber: e.target.value })}
+                                    placeholder="SB-001"
+                                />
+                            </div>
+                            <div className="input-row">
+                                <label>Uwagi:</label>
+                                <input
+                                    type="text"
+                                    value={engine.notes}
+                                    onChange={(e) => engine.setNotes(e.target.value)}
+                                    placeholder="Dodatkowe notatki"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {statusMessage && (
@@ -203,145 +335,7 @@ export const ExportUI: React.FC = () => {
             )}
 
             <div className="export-panel-scrollable">
-                {/* ─── Sekcja 1: Ustawienia Arkusza ─── */}
-                <div className="panel-section">
-                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                            <line x1="3" y1="9" x2="21" y2="9" />
-                            <line x1="9" y1="21" x2="9" y2="9" />
-                        </svg>
-                        Format Arkusza i Kadrowanie
-                    </h3>
-
-                    {/* Wybór formatu arkusza w liście rozwijanej */}
-                    <div className="input-row" style={{ marginTop: '6px', marginBottom: '8px' }}>
-                        <label style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>Format arkuszy:</label>
-                        <select
-                            value={engine.paperFormat}
-                            onChange={(e) => engine.setPaperFormat(e.target.value as PaperFormat)}
-                            style={{ flex: 1 }}
-                        >
-                            {(Object.keys(PAPER_FORMATS) as PaperFormat[]).map((fmt) => {
-                                const info = PAPER_FORMATS[fmt];
-                                return (
-                                    <option key={fmt} value={fmt}>
-                                        {info.label} ({info.description})
-                                    </option>
-                                );
-                            })}
-                        </select>
-                    </div>
-
-                    {/* Checkboxy opcji */}
-                    <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label className="export-checkbox-label">
-                            <input
-                                type="checkbox"
-                                checked={engine.showBounds}
-                                onChange={(e) => engine.setShowBounds(e.target.checked)}
-                            />
-                            <span>Pokaż wirtualny arkusz CAD na scenie (Passepartout)</span>
-                        </label>
-                        <label className="export-checkbox-label">
-                            <input
-                                type="checkbox"
-                                checked={engine.showGrid}
-                                onChange={(e) => engine.setShowGrid(e.target.checked)}
-                            />
-                            <span>Pokaż siatkę podłogową i osie (domyślnie ukryte na arkuszu)</span>
-                        </label>
-                        <label className="export-checkbox-label">
-                            <input
-                                type="checkbox"
-                                checked={engine.includePMI}
-                                onChange={(e) => engine.setIncludePMI(e.target.checked)}
-                            />
-                            <span>Dołącz linie wymiarowe 3D (PMI)</span>
-                        </label>
-                        <label className="export-checkbox-label">
-                            <input
-                                type="checkbox"
-                                checked={engine.includeBOM}
-                                onChange={(e) => engine.setIncludeBOM(e.target.checked)}
-                            />
-                            <span>Dołącz tabelę formatek (BOM)</span>
-                        </label>
-                    </div>
-
-                    {/* Stempel ISO 7200 - Rozwijany */}
-                    <div style={{ marginTop: '12px' }}>
-                        <button
-                            type="button"
-                            className="export-collapsible-btn"
-                            onClick={() => setShowTitleBlockSettings(!showTitleBlockSettings)}
-                        >
-                            <span>Stempel i Metadane ISO 7200</span>
-                            <span style={{ fontSize: '11px' }}>{showTitleBlockSettings ? '▲' : '▼'}</span>
-                        </button>
-
-                        {showTitleBlockSettings && (
-                            <div className="export-titleblock-box">
-                                <div className="input-row">
-                                    <label>Projekt:</label>
-                                    <input
-                                        type="text"
-                                        value={engine.titleBlock.projectName}
-                                        onChange={(e) => engine.setTitleBlock({ projectName: e.target.value })}
-                                        placeholder="Nazwa projektu"
-                                    />
-                                </div>
-                                <div className="input-row">
-                                    <label>Mebel:</label>
-                                    <input
-                                        type="text"
-                                        value={engine.titleBlock.furnitureName}
-                                        onChange={(e) => engine.setTitleBlock({ furnitureName: e.target.value })}
-                                        placeholder="Nazwa mebla"
-                                    />
-                                </div>
-                                <div className="input-row">
-                                    <label>Wykonał:</label>
-                                    <input
-                                        type="text"
-                                        value={engine.titleBlock.author}
-                                        onChange={(e) => engine.setTitleBlock({ author: e.target.value })}
-                                        placeholder="Autor"
-                                    />
-                                </div>
-                                <div className="input-row">
-                                    <label>Skala:</label>
-                                    <input
-                                        type="text"
-                                        value={engine.titleBlock.scale}
-                                        onChange={(e) => engine.setTitleBlock({ scale: e.target.value })}
-                                        placeholder="np. 1:10"
-                                    />
-                                </div>
-                                <div className="input-row">
-                                    <label>Nr rysunku:</label>
-                                    <input
-                                        type="text"
-                                        value={engine.titleBlock.drawingNumber}
-                                        onChange={(e) => engine.setTitleBlock({ drawingNumber: e.target.value })}
-                                        placeholder="SB-001"
-                                    />
-                                </div>
-                                <div className="input-row">
-                                    <label>Uwagi:</label>
-                                    <input
-                                        type="text"
-                                        value={engine.notes}
-                                        onChange={(e) => engine.setNotes(e.target.value)}
-                                        placeholder="Dodatkowe notatki"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* ─── Sekcja 2: Menedżer Arkuszy Rysunkowych (SolidWorks Drawing Sheets) ─── */}
+                {/* ─── Menedżer Arkuszy Rysunkowych ─── */}
                 <div className="panel-section">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                         <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -477,11 +471,6 @@ export const ExportUI: React.FC = () => {
                                                     PMI
                                                 </span>
                                             )}
-                                            {view.includeBOM && (
-                                                <span className="export-sheet-tag bom" title="Zawiera tabelę specyfikacji formatek">
-                                                    BOM
-                                                </span>
-                                            )}
                                         </div>
 
                                         {view.description && (
@@ -492,6 +481,21 @@ export const ExportUI: React.FC = () => {
 
                                         {/* Przyciski operacji na arkuszu */}
                                         <div className="export-sheet-btn-bar">
+                                            <button
+                                                type="button"
+                                                className="export-mini-btn"
+                                                onClick={() => handleUpdateViewFrame(view.id)}
+                                                disabled={isGenerating}
+                                                title="Nadpisz ten arkusz bieżącym stanem sceny: kadr kamery, pozycje i widoczność obiektów"
+                                                style={{
+                                                    background: 'rgba(245, 158, 11, 0.18)',
+                                                    borderColor: 'rgba(245, 158, 11, 0.45)',
+                                                    color: '#fbbf24',
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                Nadpisz
+                                            </button>
                                             <button
                                                 type="button"
                                                 className="export-mini-btn"

@@ -19,6 +19,13 @@ import { PMIAnnotation, PMIStore, formatDistance, formatMeasureText } from './pm
 import { beginResolveBatch, endResolveBatch } from './pmi-id-bridge';
 import { resolvePMIForRender } from './pmi-resolve';
 import { measureDeltaSegments, pathLength } from './pmi-measure';
+import {
+    MEASURE_MAX_PX,
+    MEASURE_MIN_PX,
+    attachScreenConstantScale,
+    measureDiameterAt,
+    pixelsPerMMAtScene,
+} from './pmi-screen-scale';
 import { LABEL_OVERLAP_PAD_PX, resolveLabelOverlaps, ScreenLabel } from './pmi-label-layout';
 
 // ============================================================================
@@ -114,6 +121,20 @@ function measureLabelLineColor(line: string, selected: boolean): string {
     return selected ? MEASURE_TEXT_HEX.L_SELECTED : MEASURE_TEXT_HEX.L;
 }
 
+/** Przyciemniony kolor pod obwódkę tekstu (zamiast czerni). */
+function darkenHexForOutline(hex: string, towardBlack = 0.42): string {
+    const raw = hex.replace('#', '');
+    if (raw.length !== 6) return 'rgba(20, 20, 20, 0.85)';
+    const r = parseInt(raw.slice(0, 2), 16);
+    const g = parseInt(raw.slice(2, 4), 16);
+    const b = parseInt(raw.slice(4, 6), 16);
+    const f = Math.max(0, Math.min(1, towardBlack));
+    const dr = Math.round(r * f);
+    const dg = Math.round(g * f);
+    const db = Math.round(b * f);
+    return `rgb(${dr},${dg},${db})`;
+}
+
 /** Tolerancja trafienia w cienką linię wymiarową [mm]. */
 const DIM_LINE_PICK_THRESHOLD = 12;
 
@@ -169,6 +190,7 @@ export class PMIRenderer {
     private measureVisuals: Map<string, MeasureVisual> = new Map();
     private previewVisual: DimVisual | null = null;
     private measurePreview: MeasureVisual | null = null;
+    private _visible = true;
 
     constructor(scene: any) {
         this.scene = scene;
@@ -177,6 +199,26 @@ export class PMIRenderer {
     // ========================================================================
     // PUBLIC API
     // ========================================================================
+
+    public get visible(): boolean {
+        return this._visible;
+    }
+
+    /**
+     * Przełącza widoczność wszystkich siatek wymiarów i pomiarów w scenie 3D.
+     */
+    public setVisible(v: boolean): void {
+        this._visible = v;
+        for (const vis of this.visuals.values()) {
+            this.setVisualVisible(vis, v);
+        }
+        for (const vis of this.measureVisuals.values()) {
+            this.setMeasureVisualVisible(vis, v);
+        }
+        if (!v) {
+            this.clearPreview();
+        }
+    }
 
     /**
      * Przelicza i rysuje wszystkie zatwierdzone wymiary.
@@ -200,7 +242,7 @@ export class PMIRenderer {
             }
 
             for (const entry of frame.annotations) {
-                if (!entry.visible || !entry.renderData) {
+                if (!entry.visible || !entry.renderData || !this._visible) {
                     const vis = this.visuals.get(entry.id);
                     if (vis) this.setVisualVisible(vis, false);
                     continue;
@@ -218,7 +260,7 @@ export class PMIRenderer {
             }
 
             for (const entry of frame.measurements) {
-                if (!entry.visible || !entry.renderData) {
+                if (!entry.visible || !entry.renderData || !this._visible) {
                     const vis = this.measureVisuals.get(entry.id);
                     if (vis) this.setMeasureVisualVisible(vis, false);
                     continue;
@@ -480,17 +522,24 @@ export class PMIRenderer {
 
         const pickable = !!annotationId;
         tube.isPickable = pickable;
-        if (pickable) {
-            tube.metadata = { pmiAnnotationId: annotationId, pmiTarget: targetPart };
-        }
+        tube.metadata = {
+            ...(tube.metadata || {}),
+            isPmiOverlay: true,
+            ...(pickable ? { pmiAnnotationId: annotationId, pmiTarget: targetPart } : {}),
+        };
 
         return tube;
     }
 
+    private disposeMeshAndMaterial(mesh: any): void {
+        if (!mesh) return;
+        mesh.material?.dispose?.();
+        mesh.dispose?.();
+    }
+
     private disposeLineParts(parts: any[]): void {
         for (const part of parts) {
-            part?.material?.dispose?.();
-            part?.dispose?.();
+            this.disposeMeshAndMaterial(part);
         }
         parts.length = 0;
     }
@@ -512,7 +561,7 @@ export class PMIRenderer {
     ): void {
         if (arrowLen < 0.1) {
             if (vis[key]) {
-                vis[key].dispose();
+                this.disposeMeshAndMaterial(vis[key]);
                 vis[key] = null;
             }
             return;
@@ -549,9 +598,11 @@ export class PMIRenderer {
         const cone = vis[key];
         cone.scaling = new BABYLON.Vector3(diameter, arrowLen, diameter);
         cone.isPickable = !!vis.id && vis.id !== PREVIEW_ID;
-        if (cone.isPickable) {
-            cone.metadata = { ...(cone.metadata || {}), pmiAnnotationId: vis.id };
-        }
+        cone.metadata = {
+            ...(cone.metadata || {}),
+            isPmiOverlay: true,
+            ...(cone.isPickable ? { pmiAnnotationId: vis.id } : {}),
+        };
 
         const mid = v3Scale(v3Add(tipWorld, base), 0.5);
         cone.position = new BABYLON.Vector3(mid.x, mid.y, mid.z);
@@ -710,9 +761,11 @@ export class PMIRenderer {
         plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
         plane.renderingGroupId = 2;
         plane.isPickable = !!annotationId;
-        if (annotationId) {
-            plane.metadata = { pmiAnnotationId: annotationId, pmiTarget: 'text' };
-        }
+        plane.metadata = {
+            ...(plane.metadata || {}),
+            isPmiOverlay: true,
+            ...(annotationId ? { pmiAnnotationId: annotationId, pmiTarget: 'text' } : {}),
+        };
 
         const mat = new BABYLON.StandardMaterial(`pmi_lbl_mat_${vis.id}`, this.scene);
         mat.diffuseTexture = dt;
@@ -791,20 +844,31 @@ export class PMIRenderer {
         for (const part of vis.mainLineParts) part?.dispose?.();
         vis.mainLineParts = [];
 
+        const userMM = measureLineWidth();
         for (let i = 0; i + 1 < path.length; i++) {
+            // Środek segmentu: średnica tak, by na ekranie trzymać suwak w ryzach
+            // min/max px (daleko: min px żeby było widać, blisko: max px żeby nie był kloc).
+            const mid = v3Scale(v3Add(path[i], path[i + 1]), 0.5);
+            const baked = measureDiameterAt(this.scene, mid, userMM);
             const tube = this.createTubeSegment(
                 `pmi_msr_${vis.id}_line_${i}`,
                 path[i],
                 path[i + 1],
-                measureLineWidth(),
+                baked,
                 color,
                 null,
             );
             if (tube) {
                 if (pickId) {
                     tube.isPickable = true;
-                    tube.metadata = { pmiMeasurementId: pickId };
+                    tube.metadata = { ...(tube.metadata || {}), isPmiOverlay: true, pmiMeasurementId: pickId };
                 }
+                attachScreenConstantScale(
+                    tube,
+                    baked,
+                    () => measureDiameterAt(this.scene, mid, measureLineWidth()),
+                    true,
+                );
                 vis.mainLineParts.push(tube);
             }
         }
@@ -818,25 +882,44 @@ export class PMIRenderer {
     ): void {
         for (const p of vis.points) p?.dispose?.();
         vis.points = [];
+
+        let minDist = Infinity;
+        for (let i = 0; i + 1 < path.length; i++) {
+            const d = v3Len(v3Sub(path[i + 1], path[i]));
+            if (d < minDist) minDist = d;
+        }
+        const baseUserMM = measureLineWidth();
+
         for (const [i, pos] of path.entries()) {
+            const baked = measurePointDiameterAt(this.scene, pos, baseUserMM, minDist);
             const sphere = BABYLON.MeshBuilder.CreateSphere(`pmi_msr_${vis.id}_pt_${i}`, {
-                diameter: measurePointDiameter(),
+                diameter: baked,
                 segments: 8,
             }, this.scene);
             sphere.position = this.toB(pos);
             sphere.renderingGroupId = 2;
             sphere.isPickable = !!pickId;
-            if (pickId) sphere.metadata = { pmiMeasurementId: pickId };
+            sphere.metadata = {
+                ...(sphere.metadata || {}),
+                isPmiOverlay: true,
+                ...(pickId ? { pmiMeasurementId: pickId } : {}),
+            };
             const mat = new BABYLON.StandardMaterial(`pmi_msr_${vis.id}_pt_mat_${i}`, this.scene);
             mat.emissiveColor = new BABYLON.Color3(color[0], color[1], color[2]);
             mat.disableLighting = true;
             sphere.material = mat;
+            attachScreenConstantScale(
+                sphere,
+                baked,
+                () => measurePointDiameterAt(this.scene, pos, measureLineWidth(), minDist),
+                false,
+            );
             vis.points.push(sphere);
         }
     }
 
     private updateMeasureDeltas(vis: MeasureVisual, p1: Vec3, p2: Vec3): void {
-        for (const line of vis.deltaLines) line?.dispose?.();
+        for (const line of vis.deltaLines) this.disposeMeshAndMaterial(line);
         vis.deltaLines = [];
 
         const segs = measureDeltaSegments(p1, p2);
@@ -860,6 +943,10 @@ export class PMIRenderer {
             line.alpha = rgba[3];
             line.isPickable = false;
             line.renderingGroupId = 2;
+            line.metadata = {
+                ...(line.metadata || {}),
+                isPmiOverlay: true,
+            };
             vis.deltaLines.push(line);
         }
     }
@@ -1074,7 +1161,7 @@ export class PMIRenderer {
         return Math.hypot(b.x - a.x, b.y - a.y);
     }
 
-    /** Etykieta miarki — badge z tłem (wymiary zostają minimalistyczne). */
+    /** Etykieta miarki — zoptymalizowana tekstura 1024 px bez narzutu mipmap i anizotropii. */
     private buildMeasureTextLabel(
         vis: MeasureVisual,
         lines: string[],
@@ -1104,23 +1191,23 @@ export class PMIRenderer {
 
         for (let i = 0; i < lines.length; i++) {
             const isMain = i === 0;
-            ctx.font = isMain ? 'bold 76px Consolas, monospace' : '56px Consolas, monospace';
+            ctx.font = isMain ? 'bold 74px Consolas, "Courier New", monospace' : 'bold 54px Consolas, "Courier New", monospace';
             const color = measureLabelLineColor(lines[i], selected && isMain);
+            const outline = darkenHexForOutline(color, color === MEASURE_TEXT_HEX.L_SELECTED ? 0.28 : 0.38);
+            const x = texWidth / 2;
+            const y = slotH * (i + 0.5);
 
-            // Wyraźny ciemny obrys i cień, aby tekst był kontrastowy i czytelny na każdym kolorze mebla
-            ctx.lineWidth = 10;
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.92)';
-            ctx.strokeText(lines[i], texWidth / 2, slotH * (i + 0.5));
+            ctx.lineJoin = 'round';
+            ctx.miterLimit = 2;
+            ctx.lineWidth = isMain ? 7 : 5;
+            ctx.strokeStyle = outline;
+            ctx.strokeText(lines[i], x, y);
 
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
             ctx.fillStyle = color;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-            ctx.shadowBlur = 10;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 2;
-            ctx.fillText(lines[i], texWidth / 2, slotH * (i + 0.5));
+            ctx.fillText(lines[i], x, y);
         }
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
         dt.update();
 
         const plane = BABYLON.MeshBuilder.CreatePlane(`pmi_msr_lbl_${vis.id}`, {
@@ -1130,7 +1217,11 @@ export class PMIRenderer {
         plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
         plane.renderingGroupId = 3;
         plane.isPickable = !!pickId;
-        if (pickId) plane.metadata = { pmiMeasurementId: pickId };
+        plane.metadata = {
+            ...(plane.metadata || {}),
+            isPmiOverlay: true,
+            ...(pickId ? { pmiMeasurementId: pickId } : {}),
+        };
 
         const mat = new BABYLON.StandardMaterial(`pmi_msr_lbl_mat_${vis.id}`, this.scene);
         mat.diffuseTexture = dt;
@@ -1167,10 +1258,10 @@ export class PMIRenderer {
     }
 
     private disposeMeasureVisual(vis: MeasureVisual): void {
-        for (const part of vis.mainLineParts) part?.dispose?.();
-        for (const p of vis.points) p?.dispose?.();
-        for (const l of vis.deltaLines) l?.dispose?.();
-        vis.textPlane?.dispose?.();
+        for (const part of vis.mainLineParts) this.disposeMeshAndMaterial(part);
+        for (const p of vis.points) this.disposeMeshAndMaterial(p);
+        for (const l of vis.deltaLines) this.disposeMeshAndMaterial(l);
+        this.disposeMeshAndMaterial(vis.textPlane);
         vis.textTexture?.dispose?.();
         vis.mainLineParts = [];
         vis.points = [];
@@ -1205,8 +1296,10 @@ export class PMIRenderer {
     private disposeVisual(vis: DimVisual): void {
         this.disposeLineParts(vis.dimLineParts);
         this.disposeLineParts(vis.helperLineParts);
-        if (vis.arrowMesh1) vis.arrowMesh1.dispose();
-        if (vis.arrowMesh2) vis.arrowMesh2.dispose();
+        this.disposeMeshAndMaterial(vis.arrowMesh1);
+        this.disposeMeshAndMaterial(vis.arrowMesh2);
+        vis.arrowMesh1 = null;
+        vis.arrowMesh2 = null;
         this.disposeTextLabel(vis);
     }
 }
@@ -1233,10 +1326,40 @@ function drawRoundedRect(
     ctx.closePath();
 }
 
-function measureLineWidth(): number {
-    return Math.max(PMIStore.instance.lineWidthMM * 3.2, 5.5);
+export function measureLineWidth(): number {
+    return Math.max(0.5, PMIStore.instance.lineWidthMM);
 }
 
-function measurePointDiameter(): number {
-    return measureLineWidth() * 1.7;
+export function measurePointDiameter(minDist?: number): number {
+    const base = Math.max(1.6, measureLineWidth() * 1.3);
+    if (minDist !== undefined && Number.isFinite(minDist) && minDist > 0) {
+        // Przy bliskich pomiarach nie pozwalamy na nachodzenie sfer na siebie:
+        // średnica nie przekracza 28% odległości między punktami (z min 0.35 mm).
+        return Math.max(0.35, Math.min(base, minDist * 0.28));
+    }
+    return base;
+}
+
+/**
+ * Średnica punktu pomiaru ze stałym rozmiarem ekranowym (jak pro CAD).
+ * Łączy trzy ograniczenia: suwak użytkownika (przez clamp px), brak nachodzenia
+ * (cap 28% minDist) oraz widoczność z daleka (nigdy poniżej minPx).
+ */
+export function measurePointDiameterAt(scene: any, worldPos: Vec3, userMM: number, minDist?: number): number {
+    const pxPerMM = pixelsPerMMAtScene(scene, worldPos);
+    const base = Math.max(1.6, Math.max(0.5, userMM) * 1.3);
+    if (!Number.isFinite(pxPerMM) || pxPerMM <= 1e-6) {
+        return measurePointDiameter(minDist);
+    }
+    const minMM = MEASURE_MIN_PX / pxPerMM;
+    const maxMM = MEASURE_MAX_PX / pxPerMM;
+    const clamped = Math.min(Math.max(base, minMM), maxMM);
+    if (minDist !== undefined && Number.isFinite(minDist) && minDist > 0) {
+        const cap = Math.max(0.35, minDist * 0.28);
+        // Punkty bliżej niż rozdzielczość ekranu i tak się zleją — wtedy
+        // priorytet ma widoczność (minMM), nie kurczenie do sub-piksela.
+        if (cap < minMM) return minMM;
+        return Math.min(clamped, cap);
+    }
+    return clamped;
 }

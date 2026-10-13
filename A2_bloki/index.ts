@@ -5,6 +5,7 @@
  *   shelf     — wieniec
  *   shelves   — półki + shelves-drilling-*
  *   doors     — drzwi + doors-drilling-*
+ *   skosne-doors — drzwi skośne (trapez) + skosne-doors-drilling-*
  *   corner-doors — drzwi narożne L (fuga)
  *   tubes     — drążek
  *   drawers   — szuflady + drawers-drilling-*
@@ -22,6 +23,13 @@ export { toDimensionsMm, type ModuleDims } from './base-engine.js';
 export { calculateShelvesPlan, normalizeShelvesParams, assertCanonicalShelvesParams } from './shelves-engine.js';
 export { calculateShelfPlan, normalizeShelfParams, assertCanonicalShelfParams } from './shelf-engine.js';
 export { calculateDoorsPlan, normalizeDoorsParams } from './doors-engine.js';
+export {
+    calculateSkosneDoorsPlan,
+    normalizeSkosneDoorsParams,
+    assertCanonicalSkosneDoorsParams,
+    LEGACY_SKOSNE_DOORS_PARAM_ALIASES,
+    skosneDoorHeightAt
+} from './skosne-doors-engine.js';
 export {
     calculateCornerDoorsPlan,
     normalizeCornerDoorsParams,
@@ -60,6 +68,8 @@ export type {
     ShelfHolePattern,
     ShelfPlanParams,
     ShelvesPlanParams,
+    SkosneDoorType,
+    SkosneDoorsPlanParams,
     BlokiGeneratorMetadata,
     BlokiGeneratorParams,
     BlokiGeneratorParamsPatch,
@@ -77,6 +87,7 @@ export { calculateLedPlan } from './led-engine.js';
 export { ShelvesSubModule, buildShelvesPlan } from './shelves-adapter.js';
 export { ShelfSubModule, buildShelfPlan } from './shelf-adapter.js';
 export { DoorsSubModule, buildDoorsPlan } from './doors-adapter.js';
+export { SkosneDoorsSubModule, buildSkosneDoorsPlan } from './skosne-doors-adapter.js';
 export { CornerDoorsSubModule, buildCornerDoorsPlan, normalizeCornerOtwieranie } from './corner-doors-adapter.js';
 export type { CornerOtwieranie } from './corner-doors-adapter.js';
 export { TubesSubModule, buildTubesPlan } from './tubes-adapter.js';
@@ -88,6 +99,7 @@ export { LedSubModule, buildLedPlan, LedInternalSubModule, buildLedInternalPlan,
 
 export { buildShelvesDrillings } from './shelves-drilling-builder.js';
 export { buildDoorsDrillings } from './doors-drilling-builder.js';
+export { buildSkosneDoorsDrillings } from './skosne-doors-drilling-builder.js';
 export { buildDrawersDrillings } from './drawers-drilling-builder.js';
 export { buildFlapsDrillings } from './flaps-drilling-builder.js';
 export { buildTubesDrillings } from './tubes-drilling-builder.js';

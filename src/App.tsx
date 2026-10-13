@@ -13,7 +13,6 @@ import { SaaSUserBadge } from './saas/ui/SaaSUserBadge';
 import { SaaSAuthModal } from './saas/ui/SaaSAuthModal';
 import { SaaSProjectsDashboardModal } from './saas/ui/SaaSProjectsDashboardModal';
 import { SaaSPaywallModal } from './saas/ui/SaaSPaywallModal';
-import { RecorderStudioUI } from '../A9_agent/recorder/RecorderStudioUI';
 import { NewProjectModal } from './NewProjectModal';
 import { PropertiesPanel } from './PropertiesPanel';
 import { FloatingOperationDialog, CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
@@ -27,6 +26,8 @@ import { MaterialScope } from '../A7_material/material-types';
 import { ContextManager } from '../A1_core/context-manager';
 import { applyTabSelectionPolicy } from '../A1_core/selection-highlight';
 import { toggleDimensionTool, deactivateAllPmiTools } from '../A8_pmi/pmi-tool-activate.js';
+import { PMIStore } from '../A8_pmi/pmi-data.js';
+import { HandleDimGizmo } from '../A2_bloki/handles/handle-dim-gizmo.js';
 import { LanguageSelector } from '../T1_tlumaczenia/LanguageSelector';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
@@ -37,22 +38,22 @@ const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
 import { useUiRegionEdgeHint } from './use-ui-region-edge-hint';
 import { CAMStateStore } from '../C1_cnc/core/cam-state-store';
+import { createArcballCameraFactory } from '../C1_cnc/interaction/arcball-camera-session';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput';
 import { AssociativeDimInputs } from '../A4_smartpanel/associative-dim-ui';
 import { isAssocComplete } from '../A4_smartpanel/associative-dim';
-import { PMIUI } from '../A8_pmi/pmi-ui';
+import { PmiTopbarDropdown } from '../A8_pmi/pmi-topbar-dropdown';
 import { SolverUI, SOLVER_PANEL_TITLE } from '../S2_solver/solver-ui';
 import { ConnectorsUI, CONNECTORS_PANEL_TITLE } from '../C2_connectors/connectors-ui';
 import { stopConnectorPick } from '../C2_connectors/connector-picker';
-import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOperationFromPick, handleLedChannelDrop, CAD_EDIT_LIBRARY_OPERATION, featureOperationLabel, featureOperationDetails, isLibraryOperation, isEngineGroove } from '../o1_operacji';
-import { SmartPartsUI, HandleDragController } from '../A5_smartparts';
+import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOperationFromPick, handleLedChannelDrop } from '../o1_operacji';
+import { SmartPartsUI, HandleDragController, HangerDragController, createSmartPartHandle } from '../A5_smartparts';
+import { FloatingEditHost, openCadEditEntity, closeCadFloatingEdit } from './floating-edit';
 import { AgdPanel } from './agd/AgdPanel';
 import { createSmartAppliance, createSmartApplianceInDetectedBay } from '../A6_agd';
 import { ConnectorVisualizer } from '../C2_connectors/connector-visualizer';
 import { isSolverSmartFrameIsolationActive, applyPanelViewSolverVisibility, isSolverTabActive } from '../S2_solver/solver-visibility';
 import { ExportUI, ExportEngine } from '../E1_export';
-import { DrawingProjectExtractor } from '../R2_rys';
-import { E3LibraryExtractor } from '../R2_rys';
 import { Vec3 } from '../A1_core/cad-math/vec3';
 import { Quat } from '../A1_core/cad-math/quat';
 import { mmToNm } from '../A1_core/cad-math/units';
@@ -74,10 +75,11 @@ import {
   useProjectDocument,
   useUIState,
 } from './hooks/use-app-document-state';
-import { usePanelWidths, EDIT_MIN_CONTENT_WIDTH } from './hooks/use-panel-widths';
+import { usePanelWidths } from './hooks/use-panel-widths';
 import { ViewCube } from './ViewCube';
 import { BelkaWidokowa } from './BelkaWidokowa';
 import { DrzewoObiektow } from './DrzewoObiektow';
+import { PanelEdycji } from './PanelEdycji';
 
 export default function App({ initialTab }: { initialTab?: string } = {}) {
   const projectModel = useProjectDocument();
@@ -94,13 +96,35 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     startResizeEdit,
     expandEditPanelIfCollapsed,
   } = usePanelWidths();
-  const [activeTab, setActiveTab] = useState(initialTab || 'tab-a3-smartframe');
-  const handleSwitchTab = useCallback((tab: string) => {
+  const [activeTab, setActiveTabRaw] = useState(initialTab || 'tab-a3-smartframe');
+
+  /**
+   * Wszystkie przełączenia zakładek idą przez tę funkcję.
+   *
+   * `cad-tab-switched` zostaje, bo słuchają go inne moduły — bez konsumenta
+   * zdarzenie nic nie kosztuje, a usuwanie go zmieniałoby kontrakt publiczny.
+   */
+  const setActiveTab = useCallback((tab: string) => {
+    if (tab === ContextManager.instance.activeTab) {
+      return;
+    }
     if (tab !== 'tab-a8-pmi') {
       deactivateAllPmiTools(ContextManager.instance.stateMachine);
+      PMIStore.instance.clearAllMeasurements();
+      ContextManager.instance.pmiRenderer?.clearPreview?.();
+      ContextManager.instance.pmiRenderer?.clearMeasurePreview?.();
+      ContextManager.instance.pmiRenderer?.setVisible?.(false);
     }
-    setActiveTab(tab);
+    HandleDimGizmo.instance.detach();
+    setActiveTabRaw(tab);
+    ContextManager.instance.activeTab = tab;
+    applyTabSelectionPolicy(tab);
+    window.dispatchEvent(new CustomEvent('cad-tab-switched', { detail: { tabId: tab } }));
   }, []);
+
+  const handleSwitchTab = useCallback((tab: string) => {
+    setActiveTab(tab);
+  }, [setActiveTab]);
   const [renderMode, setRenderModeState] = useState('edges');
   const [gridVisible, setGridVisible] = useState(true);
   const [projection, setProjection] = useState('ortho');
@@ -196,7 +220,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const [saasPaywallFeature, setSaasPaywallFeature] = useState<string | null>(null);
   const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
   const [saveCabinetModalOpen, setSaveCabinetModalOpen] = useState(false);
-  const [recorderStudioOpen, setRecorderStudioOpen] = useState(false);
 
   useEffect(() => {
     ContextManager.instance.requestNewProjectDialog = () => {
@@ -271,9 +294,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     }
 
     // Uniwersalna reguła: przejście na inną zakładkę automatycznie wyłącza narzędzia PMI
-    if (activeTab !== 'tab-a8-pmi') {
-      deactivateAllPmiTools(ContextManager.instance.stateMachine);
-    }
+    deactivateAllPmiTools(ContextManager.instance.stateMachine);
 
     if (!facePicker) return;
 
@@ -312,6 +333,25 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
       // CNC: schowaj symbole złączy (kołki/konfirmaty). Lista i otwory w features zostają.
       ConnectorVisualizer.instance.setSymbolsVisible(!isolate);
+
+      if (isCnc) {
+          ContextManager.instance.appAPI?.setLcsVisible?.(true);
+          setLcsVisible(true);
+      }
+
+      // CNC: test arcballa na FORMATCE (cięciwa + pivot). Poza CNC — turntable kamery.
+      const vpForRotation = ContextManager.instance.viewport;
+      if (vpForRotation) {
+          vpForRotation.rotationFactory = isCnc
+              ? createArcballCameraFactory(() => {
+                    const panel =
+                        ContextManager.instance.activePanel ||
+                        ContextManager.instance.document?.activeEntity;
+                    if (!panel) return null;
+                    return ContextManager.instance.panelViews?.get(panel) ?? null;
+                })
+              : null;
+      }
 
       if (!scene) return;
 
@@ -658,43 +698,81 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     }
   }, [uiState, projectModel?.activeEntity]);
 
-  // Auto-switch tab when a Bloki is selected
+  // Auto-switch tab when a Blok / AGD / zawieszki-SmartPart is selected.
   useEffect(() => {
     if (ContextManager.instance.activeReferencePicker) return;
     if (ContextManager.instance.activeConstraintPicker) return;
-    const active = projectModel?.activeEntity;
-    if (active && active.type === 'container' && active.generatorParams?.type?.startsWith('bloki')) {
+    let active: any = projectModel?.activeEntity;
+    const doc = projectModel;
+    const isAppliance = (m: any) => {
+      if (!m) return false;
+      const gt = String(m.generatorParams?.type || '');
+      const role = String(m.role || '');
+      return role === 'APPLIANCE' || gt === 'smart_appliance' || m.generatorParams?.boxType === 'APPLIANCE';
+    };
+    // Part / FEATURE zawieszki → grupa nadrzędna (jak Blok); część AGD → kontener AGD
+    if (active && doc?.findNode) {
+      let node = doc.findNode(active.id);
+      const isHangersOrBlok = (m: any) => {
+        if (!m || m.type !== 'container') return false;
+        if (isAppliance(m)) return false;
+        const gt = String(m.generatorParams?.type || '');
+        const role = String(m.role || '');
+        return gt.startsWith('blok_') || gt.startsWith('bloki') || !!m.generatorParams?.boxType
+          || gt === 'smartpart_hangers' || role === 'SMARTPART_HANGERS';
+      };
+      if (active.type === 'container' && !isHangersOrBlok(active) && !isAppliance(active)) {
+        const parent = node?.parent?.domainData;
+        if (isAppliance(parent) || isHangersOrBlok(parent)) active = parent;
+      }
+      while (active && active.type !== 'container' && node?.parent) {
+        const parent = node.parent.domainData;
+        if (isAppliance(parent) || isHangersOrBlok(parent)) {
+          active = parent;
+          break;
+        }
+        node = node.parent;
+      }
+    }
+    const genType = String(active?.generatorParams?.type || '');
+    const role = String(active?.role || '');
+    const isAgd =
+      active &&
+      active.type === 'container' &&
+      isAppliance(active);
+    const isBlok =
+      active &&
+      active.type === 'container' &&
+      !isAgd &&
+      (genType.startsWith('blok_') || genType.startsWith('bloki') || !!active.generatorParams?.boxType);
+    const isHangersGroup =
+      active &&
+      active.type === 'container' &&
+      (genType === 'smartpart_hangers' || role === 'SMARTPART_HANGERS');
+    if (isAgd) {
+      deactivateAllPmiTools(ContextManager.instance.stateMachine);
+      setActiveTab('tab-agd');
+      expandEditPanelIfCollapsed();
+    } else if (isBlok || isHangersGroup) {
       deactivateAllPmiTools(ContextManager.instance.stateMachine);
       setActiveTab('tab-a2-bloki');
+      expandEditPanelIfCollapsed();
     }
-  }, [projectModel?.activeEntity]);
+  }, [projectModel?.activeEntity, expandEditPanelIfCollapsed]);
 
   useEffect(() => {
-    const onEditOp = () => {
-      deactivateAllPmiTools(ContextManager.instance.stateMachine);
-      setActiveTab('tab-o1-operacji');
-    };
-    const onEditSmartFrame = () => {
-      deactivateAllPmiTools(ContextManager.instance.stateMachine);
-      setActiveTab('tab-a3-smartframe');
-    };
+    // Edycja korpusu = FloatingEditHost (cad-edit-entity / cad-edit-smartframe-korpus) — bez skoku zakładki.
     const onSwitchTab = (e: any) => {
       if (e.detail?.tabId) {
-        if (e.detail.tabId !== 'tab-a8-pmi') {
-          deactivateAllPmiTools(ContextManager.instance.stateMachine);
-        }
+        deactivateAllPmiTools(ContextManager.instance.stateMachine);
         setActiveTab(e.detail.tabId);
         expandEditPanelIfCollapsed();
       }
     };
 
-    window.addEventListener(CAD_EDIT_LIBRARY_OPERATION, onEditOp);
-    window.addEventListener('cad-edit-smartframe-korpus', onEditSmartFrame);
     window.addEventListener('cad-switch-tab', onSwitchTab as EventListener);
 
     return () => {
-      window.removeEventListener(CAD_EDIT_LIBRARY_OPERATION, onEditOp);
-      window.removeEventListener('cad-edit-smartframe-korpus', onEditSmartFrame);
       window.removeEventListener('cad-switch-tab', onSwitchTab as EventListener);
     };
   }, [expandEditPanelIfCollapsed]);
@@ -795,6 +873,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           'SHELVES': { type: 'blok_shelves', label: 'polki' },
           'DRAWERS': { type: 'blok_drawers', label: 'szuflady' },
           'DOORS': { type: 'blok_doors', label: 'drzwi' },
+          'SKOSNE_DOORS': { type: 'blok_skosne_drzwi', label: 'drzwi_skosne' },
           'TUBES': { type: 'blok_tubes', label: 'drazek' },
           'SHELF': { type: 'blok_shelf', label: 'wieniec' },
           'DIVIDERS': { type: 'blok_dividers', label: 'przegrody' },
@@ -818,18 +897,49 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             ctrl.setPendingBlokType(null);
             ctrl.endDrag(optId === 'EMPTY');
           }
-          setActiveTab('tab-a2-bloki');
-          doc.setActiveEntity(sbNode.domainData || sbNode);
+          const model = sbNode.domainData || sbNode;
+          doc.setActiveEntity(model);
+          const id = model?.id || sbNode.id;
+          if (id) openCadEditEntity({ entityId: id, kind: 'blok' });
+        }
+      }
+    };
+
+    const handlePanelDetected = (evt: any) => {
+      const surface = evt?.detail?.surface || evt?.detail;
+      if (!surface || !surface.panelNode) return;
+      const doc = ContextManager.instance.document || projectModel;
+      if (doc) {
+        const ctrl = ContextManager.instance.blokiBayController;
+        const optId = ctrl?.pendingBlokType || ctrl?.draggedBlokType || 'HANDLES';
+        if (optId === 'HANDLES') {
+          const customParams = evt?.detail?.handleParams || ctrl?.activeHandleTemplate || {};
+          const handleNode = createSmartPartHandle(doc, surface.panelNode, customParams, surface);
+          if (handleNode) {
+            if (ctrl) {
+              ctrl.setPendingBlokType(null);
+              ctrl.endDrag();
+            }
+            const model = handleNode.domainData || handleNode;
+            doc.setActiveEntity(model);
+            const id = model?.id || handleNode.id;
+            if (id) openCadEditEntity({ entityId: id, kind: 'smartpart' });
+            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+            window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
+            ContextManager.instance.viewport?.requestRender(2);
+          }
         }
       }
     };
 
     window.addEventListener('bloki-bay-detected', handleBayDetected);
+    window.addEventListener('bloki-panel-detected', handlePanelDetected);
 
     return () => {
       window.removeEventListener('bloki-bay-detected', handleBayDetected);
+      window.removeEventListener('bloki-panel-detected', handlePanelDetected);
     };
-  }, []);
+  }, [expandEditPanelIfCollapsed]);
 
   const selectedPanel = projectModel?.activeEntity;
   const selectedPart = selectedPanel && selectedPanel.type === 'part' ? selectedPanel : null;
@@ -933,22 +1043,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           {/* ─── Pasek Narzędzi CAD ─── */}
           <div id="topbar-main-tabs" className="topbar-tools">
             <button 
-              id="tab-btn-biblioteka"
-              data-tab="tab-b1-biblioteka"
-              className={`topbar-tool-btn ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-b1-biblioteka')}
-              title={tx(srcTekst, 'app.tabs.library_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                <line x1="9" y1="6" x2="16" y2="6" />
-                <line x1="9" y1="10" x2="16" y2="10" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.library', TX_NS)}</span>
-            </button>
-
-            <button 
               id="tab-btn-smartframe"
               data-tab="tab-a3-smartframe"
               className={`topbar-tool-btn ${activeTab === 'tab-a3-smartframe' ? 'active' : ''}`} 
@@ -961,22 +1055,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
               </svg>
               <span>{tx(srcTekst, 'app.tabs.frame', TX_NS)}</span>
-            </button>
-
-            <button
-              id="tab-btn-sciany"
-              data-tab="tab-s4-sciany"
-              className={`topbar-tool-btn ${activeTab === 'tab-s4-sciany' ? 'active' : ''}`}
-              onClick={() => setActiveTab('tab-s4-sciany')}
-              title={tx(srcTekst, 'app.tabs.walls_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 20V6h4v14H4z" />
-                <path d="M10 20V4h4v16h-4z" />
-                <path d="M16 20v-8h4v8h-4z" />
-                <line x1="3" y1="20" x2="21" y2="20" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.walls', TX_NS)}</span>
             </button>
 
             <button 
@@ -994,6 +1072,69 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <line x1="12" y1="8.5" x2="12" y2="18.5" />
               </svg>
               <span>{tx(srcTekst, 'app.tabs.box', TX_NS)}</span>
+            </button>
+
+            <button 
+              id="tab-btn-smartpanel"
+              data-tab="tab-a4-smartpanel"
+              className={`topbar-tool-btn ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-a4-smartpanel')}
+              title={tx(srcTekst, 'app.tabs.panel_title', TX_NS)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 6L21 11L12 16L3 11Z" fill="currentColor" fillOpacity="0.2" />
+                <path d="M3 11v3.5l9 5v-3.5z" fill="currentColor" fillOpacity="0.1" />
+                <path d="M12 16v3.5l9-5V11z" fill="currentColor" fillOpacity="0.3" />
+                <path d="M12 6l9 5v3.5l-9 5-9-5V11z" />
+              </svg>
+              <span>Panel</span>
+            </button>
+
+            <button 
+              id="tab-btn-material"
+              data-tab="tab-a7-material"
+              className={`topbar-tool-btn ${activeTab === 'tab-a7-material' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-a7-material')}
+              title={tx(srcTekst, 'app.tabs.materials_title', TX_NS)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+              </svg>
+              <span>{tx(srcTekst, 'app.tabs.materials', TX_NS)}</span>
+            </button>
+
+            <button 
+              id="tab-btn-biblioteka"
+              data-tab="tab-b1-biblioteka"
+              className={`topbar-tool-btn ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} 
+              onClick={() => setActiveTab('tab-b1-biblioteka')}
+              title={tx(srcTekst, 'app.tabs.library_title', TX_NS)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                <line x1="9" y1="6" x2="16" y2="6" />
+                <line x1="9" y1="10" x2="16" y2="10" />
+              </svg>
+              <span>{tx(srcTekst, 'app.tabs.library', TX_NS)}</span>
+            </button>
+
+            <button
+              id="tab-btn-sciany"
+              data-tab="tab-s4-sciany"
+              className={`topbar-tool-btn ${activeTab === 'tab-s4-sciany' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tab-s4-sciany')}
+              title={tx(srcTekst, 'app.tabs.walls_title', TX_NS)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20V6h4v14H4z" />
+                <path d="M10 20V4h4v16h-4z" />
+                <path d="M16 20v-8h4v8h-4z" />
+                <line x1="3" y1="20" x2="21" y2="20" />
+              </svg>
+              <span>{tx(srcTekst, 'app.tabs.walls', TX_NS)}</span>
             </button>
 
             <button
@@ -1031,22 +1172,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             </button>
 
             <button 
-              id="tab-btn-smartpanel"
-              data-tab="tab-a4-smartpanel"
-              className={`topbar-tool-btn ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-a4-smartpanel')}
-              title={tx(srcTekst, 'app.tabs.panel_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 6L21 11L12 16L3 11Z" fill="currentColor" fillOpacity="0.2" />
-                <path d="M3 11v3.5l9 5v-3.5z" fill="currentColor" fillOpacity="0.1" />
-                <path d="M12 16v3.5l9-5V11z" fill="currentColor" fillOpacity="0.3" />
-                <path d="M12 6l9 5v3.5l-9 5-9-5V11z" />
-              </svg>
-              <span>Panel</span>
-            </button>
-
-            <button 
               id="tab-btn-solver"
               data-tab="tab-s2-solver"
               className={`topbar-tool-btn ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} 
@@ -1058,21 +1183,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
               </svg>
               <span>{tx(srcTekst, 'app.tabs.relations', TX_NS)}</span>
-            </button>
-
-            <button 
-              id="tab-btn-material"
-              data-tab="tab-a7-material"
-              className={`topbar-tool-btn ${activeTab === 'tab-a7-material' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-a7-material')}
-              title={tx(srcTekst, 'app.tabs.materials_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.materials', TX_NS)}</span>
             </button>
 
             <button
@@ -1105,22 +1215,10 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               <span>{tx(srcTekst, 'app.tabs.ops', TX_NS)}</span>
             </button>
 
-            <button 
-              id="tab-btn-pmi"
-              data-tab="tab-a8-pmi"
-              className={`topbar-tool-btn ${activeTab === 'tab-a8-pmi' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-a8-pmi')}
-              title="Wymiary — Linie wymiarowe 3D i koty (PMI)"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="3" y1="4" x2="3" y2="20" />
-                <line x1="21" y1="4" x2="21" y2="20" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <polyline points="7 9 3 12 7 15" />
-                <polyline points="17 9 21 12 17 15" />
-              </svg>
-              <span>Wymiary</span>
-            </button>
+            <PmiTopbarDropdown
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+            />
 
             <button 
               id="tab-btn-export"
@@ -1137,32 +1235,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <polyline points="10 9 9 9 8 9" />
               </svg>
               <span>Eksport</span>
-            </button>
-
-            <button 
-              className="topbar-tool-btn"
-              onClick={() => {
-                const doc = ContextManager.instance.document;
-                if (doc) {
-                  try {
-                    const json = doc.serialize();
-                    localStorage.setItem('smartpanel_project_current_v3', JSON.stringify(json));
-                  } catch (e) {
-                    console.warn('Błąd zapisu projektu do storage:', e);
-                  }
-                }
-                DrawingProjectExtractor.instance.syncLiveSceneTree();
-                E3LibraryExtractor.instance.syncLibrary();
-                window.open(new URL('./e3_drawing.html', window.location.href).href, '_blank');
-              }}
-              title={tx(srcTekst, 'app.tabs.e3_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M3 9h18" />
-                <path d="M9 21V9" />
-              </svg>
-              <span>Rys 2D</span>
             </button>
           </div>
 
@@ -1202,41 +1274,8 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           </div>
         </div>
 
-        {/* ─── Prawa sekcja paska menu: Studio Nagrań + SaaS User Badge & Chmura ─── */}
+        {/* ─── Prawa sekcja paska menu: SaaS User Badge & Chmura ─── */}
         <div className="menu-right" style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingRight: '12px', gap: '8px' }}>
-          <button
-            type="button"
-            id="topbar-workflow-demo-btn"
-            title={tx(srcTekst, 'app.studio_title', TX_NS)}
-            onClick={() => setRecorderStudioOpen(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(245, 158, 11, 0.3))',
-              border: '1px solid rgba(234, 179, 8, 0.6)',
-              color: '#fef08a',
-              padding: '4px 10px',
-              borderRadius: '5px',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              boxShadow: '0 0 10px rgba(234, 179, 8, 0.25)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(234, 179, 8, 0.35)';
-              e.currentTarget.style.borderColor = '#facc15';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(245, 158, 11, 0.3))';
-              e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.6)';
-            }}
-          >
-            <span style={{ fontSize: '13px' }}>🎬</span>
-            <span>{tx(srcTekst, 'app.studio', TX_NS)}</span>
-          </button>
-
           <SaaSUserBadge
             onOpenAuth={() => setSaasAuthModalOpen(true)}
             onOpenDashboard={() => setSaasDashboardOpen(true)}
@@ -1293,48 +1332,15 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       <ViewCube onSetView={(view) => callAPI('setView', view)} />
 
       {/* ─── Panel edycji (moduły: Korpus, Bloki, Formatka…) ── */}
-      <div
-        id="panel-edycji"
-        className={`panel-edycji ${editPanelWidth <= 48 ? 'is-collapsed' : ''}`}
-        aria-label="Panel edycji"
-        data-ui-name="Panel edycji"
-        style={{ width: `${editPanelWidth}px` }}
+      <PanelEdycji
+        editPanelWidth={editPanelWidth}
+        isDraggingEdit={isDraggingEdit}
+        startResizeEdit={startResizeEdit}
       >
-        {/* Gizmo zmiany szerokości (lewa krawędź) / kliknij aby zwinąć/rozwinąć */}
-        <div
-          className={`panel-resize-handle panel-resize-handle--right-panel ${isDraggingEdit ? 'is-dragging' : ''} ${editPanelWidth <= 48 ? 'is-collapsed' : ''}`}
-          onPointerDown={startResizeEdit}
-          title={editPanelWidth <= 48 ? tx(srcTekst, 'app.panel.expand', TX_NS) : tx(srcTekst, 'app.panel.collapse', TX_NS)}
-        >
-          <div className="panel-resize-gizmo">
-            <div className="panel-resize-gizmo-dot" />
-          </div>
-        </div>
-
-        {/* Sztywny kontener wewnętrzny — nie ulega deformacji/ściskaniu poniżej 340px, tylko jest ucinany */}
-        <div 
-          className="panel-inner-content"
-          style={{
-            minWidth: `${EDIT_MIN_CONTENT_WIDTH}px`,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            opacity: editPanelWidth <= 48 ? 0 : 1,
-            pointerEvents: editPanelWidth <= 48 ? 'none' : 'auto',
-            transition: isDraggingEdit ? 'none' : 'opacity 0.15s ease',
-          }}
-        >
-          {/* Nagłówek podpisany tak jak drzewo obiektów */}
-          <div className="panel-header" style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-            <h2 style={{ fontSize: '0.9rem', margin: 0, color: '#e2e8f0' }}>Panel edycji</h2>
-          </div>
-
           {/* Tab 1: A4 SmartPanel */}
         <div className={`tab-content ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} id="tab-a4-smartpanel">
           <div className="panel-header">
-            <h2>SmartPanel</h2>
+            <h2>Formatka</h2>
             <p className="subtitle">Wstawianie i formatki</p>
           </div>
           
@@ -1386,15 +1392,14 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           className={`tab-content ${activeTab === 'tab-a2-bloki' ? 'active' : ''}`} 
           id="tab-a2-bloki"
           style={{ 
-            height: 'calc(100% - 40px)', 
+            height: 'auto', 
             display: activeTab === 'tab-a2-bloki' ? 'flex' : 'none', 
             flexDirection: 'column', 
-            minHeight: 0, 
-            overflowY: 'auto', 
+            overflowY: 'visible', 
             overflowX: 'hidden' 
           }}
         >
-          <div className="panel-header" style={{ flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, background: '#18181b', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px' }}>
+          <div className="panel-header" style={{ flexShrink: 0, background: '#18181b', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px' }}>
             <h2 style={{ fontSize: '13px', margin: 0, fontWeight: 700, lineHeight: '1.2' }}>Bloki</h2>
           </div>
           <BlokiUI projectModel={projectModel} />
@@ -1402,8 +1407,8 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
         {/* Tab: A5 SmartParts */}
         {activeTab === 'tab-a5-smartparts' && (
-          <div className="tab-content active" id="tab-a5-smartparts" style={{ height: 'calc(100% - 40px)', display: 'flex', flexDirection: 'column' }}>
-            <div className="panel-header" style={{ flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, background: '#18181b', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px' }}>
+          <div className="tab-content active" id="tab-a5-smartparts" style={{ height: 'auto', display: 'flex', flexDirection: 'column' }}>
+            <div className="panel-header" style={{ flexShrink: 0, background: '#18181b', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px' }}>
               <h2 style={{ fontSize: '13px', margin: 0, fontWeight: 700, lineHeight: '1.2' }}>SmartParts</h2>
             </div>
             <SmartPartsUI />
@@ -1414,13 +1419,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         <div 
           className={`tab-content ${activeTab === 'tab-agd' ? 'active' : ''}`} 
           id="tab-agd" 
-          style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-agd' ? 'flex' : 'none', flexDirection: 'column' }}
+          style={{ height: 'auto', display: activeTab === 'tab-agd' ? 'flex' : 'none', flexDirection: 'column' }}
         >
           <AgdPanel projectModel={projectModel} />
         </div>
 
         {/* Tab: B1 Biblioteka Korpusów */}
-        <div className={`tab-content ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} id="tab-b1-biblioteka" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-b1-biblioteka' ? 'flex' : 'none', flexDirection: 'column' }}>
+        <div className={`tab-content ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} id="tab-b1-biblioteka" style={{ height: 'auto', display: activeTab === 'tab-b1-biblioteka' ? 'flex' : 'none', flexDirection: 'column' }}>
           <CabinetLibraryPanel 
             projectModel={projectModel} 
             onOpenSaveModal={() => setSaveCabinetModalOpen(true)}
@@ -1436,13 +1441,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         <div
           className={`tab-content ${activeTab === 'tab-s4-sciany' ? 'active' : ''}`}
           id="tab-s4-sciany"
-          style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-s4-sciany' ? 'flex' : 'none', flexDirection: 'column' }}
+          style={{ height: 'auto', display: activeTab === 'tab-s4-sciany' ? 'flex' : 'none', flexDirection: 'column' }}
         >
           <ScianyUI projectModel={projectModel} />
         </div>
 
         {/* Tab 4: A7 Material */}
-        <div className={`tab-content ${activeTab === 'tab-a7-material' ? 'active' : ''}`} id="tab-a7-material" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-a7-material' ? 'flex' : 'none', flexDirection: 'column' }}>
+        <div className={`tab-content ${activeTab === 'tab-a7-material' ? 'active' : ''}`} id="tab-a7-material" style={{ height: 'auto', display: activeTab === 'tab-a7-material' ? 'flex' : 'none', flexDirection: 'column' }}>
           <div className="panel-header">
             <h2>{tx(srcTekst, 'app.materials_title', TX_NS)}</h2>
             <p className="subtitle">{tx(srcTekst, 'app.materials_sub', TX_NS)}</p>
@@ -1453,7 +1458,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         </div>
 
         {/* Tab: S2 Solver */}
-        <div className={`tab-content ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} id="tab-s2-solver" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-s2-solver' ? 'flex' : 'none', flexDirection: 'column' }}>
+        <div className={`tab-content ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} id="tab-s2-solver" style={{ height: 'auto', maxHeight: 'calc(100vh - 120px)', display: activeTab === 'tab-s2-solver' ? 'flex' : 'none', flexDirection: 'column', overflowY: 'auto' }}>
           <div className="panel-header">
             <h2>{SOLVER_PANEL_TITLE}</h2>
             <p className="subtitle">{tx(srcTekst, 'app.relations_sub', TX_NS)}</p>
@@ -1463,7 +1468,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
         {/* Tab: C2 Connectors */}
         {activeTab === 'tab-c2-connectors' && (
-          <div className="tab-content active" id="tab-c2-connectors" style={{ height: 'calc(100% - 40px)', display: 'flex', flexDirection: 'column' }}>
+          <div className="tab-content active" id="tab-c2-connectors" style={{ height: 'auto', maxHeight: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
             <div className="panel-header">
               <h2>{CONNECTORS_PANEL_TITLE}</h2>
               <p className="subtitle">{tx(srcTekst, 'app.joints_sub', TX_NS)}</p>
@@ -1473,7 +1478,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         )}
 
         {activeTab === 'tab-o1-operacji' && (
-          <div className="tab-content active" id="tab-o1-operacji" style={{ height: 'calc(100% - 40px)', display: 'flex', flexDirection: 'column' }}>
+          <div className="tab-content active" id="tab-o1-operacji" style={{ height: 'auto', maxHeight: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
             <div className="panel-header">
               <h2>{OPERACJE_PANEL_TITLE}</h2>
               <p className="subtitle">{tx(srcTekst, 'app.ops_sub', TX_NS)}</p>
@@ -1482,21 +1487,11 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           </div>
         )}
 
-        {/* Tab 7: A8 PMI */}
-        <div className={`tab-content ${activeTab === 'tab-a8-pmi' ? 'active' : ''}`} id="tab-a8-pmi" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-a8-pmi' ? 'flex' : 'none', flexDirection: 'column' }}>
-          <div className="panel-header">
-            <h2>Wymiary</h2>
-            <p className="subtitle">Wymiarowanie CAD</p>
-          </div>
-          <PMIUI />
-        </div>
-
         {/* Tab 8: E1 Export */}
-        <div className={`tab-content ${activeTab === 'tab-e1-export' ? 'active' : ''}`} id="tab-e1-export" style={{ height: 'calc(100% - 40px)', display: activeTab === 'tab-e1-export' ? 'flex' : 'none', flexDirection: 'column' }}>
+        <div className={`tab-content ${activeTab === 'tab-e1-export' ? 'active' : ''}`} id="tab-e1-export" style={{ height: 'auto', display: activeTab === 'tab-e1-export' ? 'flex' : 'none', flexDirection: 'column' }}>
           <ExportUI />
         </div>
-      </div>
-    </div>
+      </PanelEdycji>
 
       {/* ─── 3D Canvas ─────────────────────────────────── */}
       <canvas 
@@ -1555,6 +1550,19 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             }
             return;
           }
+          const hangerDragCtrl = HangerDragController.instance;
+          if (hangerDragCtrl && hangerDragCtrl.isDragging) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const scene = ContextManager.instance.viewport?.scene;
+            const doc = ContextManager.instance.document || projectModel;
+            if (scene && doc) {
+              hangerDragCtrl.onPointerMoveOnScene(scene, x, y, doc);
+              ContextManager.instance.viewport?.requestRender(2);
+            }
+            return;
+          }
         }}
         onDragLeave={() => {
           const bayCtrl = ContextManager.instance.blokiBayController;
@@ -1577,12 +1585,17 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             handleDragCtrl.endDrag();
             ContextManager.instance.viewport?.requestRender(2);
           }
+          const hangerDragCtrl = HangerDragController.instance;
+          if (hangerDragCtrl && hangerDragCtrl.isDragging) {
+            hangerDragCtrl.endDrag();
+            ContextManager.instance.viewport?.requestRender(2);
+          }
         }}
         onDrop={(e) => {
           e.preventDefault();
           const bayCtrl = ContextManager.instance.blokiBayController;
           if (bayCtrl && (bayCtrl.isDragging || bayCtrl.isBayDrag())) {
-            if (bayCtrl.lastDetectedBay) {
+            if (bayCtrl.lastDetectedBay || bayCtrl.lastDetectedSurface) {
               bayCtrl.onDropOnScene();
               return;
             } else {
@@ -1592,7 +1605,17 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           const frameDragCtrl = ContextManager.instance.smartFrameDragController;
           if (frameDragCtrl && frameDragCtrl.isDragging) {
             const doc = ContextManager.instance.document || projectModel;
-            frameDragCtrl.onDropOnScene(doc);
+            const ok = frameDragCtrl.onDropOnScene(doc);
+            if (ok) {
+              const active = doc?.activeEntity;
+              const id = active?.id;
+              if (id) {
+                openCadEditEntity({ entityId: id, kind: 'korpus' });
+              }
+              window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+              window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
+              ContextManager.instance.viewport?.requestRender(2);
+            }
             return;
           }
           const wallDragCtrl = (ContextManager.instance as any).smartWallDragController;
@@ -1606,7 +1629,29 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             const doc = ContextManager.instance.document || projectModel;
             const created = handleDragCtrl.onDropOnScene(doc);
             if (created) {
-              doc?.setActiveEntity?.(created.domainData || created);
+              const model = created.domainData || created;
+              doc?.setActiveEntity?.(model);
+              const containerId = model?.id || created.id;
+              if (containerId) {
+                openCadEditEntity({ entityId: containerId, kind: 'smartpart' });
+              }
+              window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+              window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
+              ContextManager.instance.viewport?.requestRender(2);
+            }
+            return;
+          }
+          const hangerDragCtrl = HangerDragController.instance;
+          if (hangerDragCtrl && hangerDragCtrl.isDragging) {
+            const doc = ContextManager.instance.document || projectModel;
+            const group = hangerDragCtrl.onDropOnScene(doc);
+            if (group) {
+              const model = group.domainData || group;
+              doc?.setActiveEntity?.(model);
+              const containerId = model?.id || group.id;
+              if (containerId) {
+                openCadEditEntity({ entityId: containerId, kind: 'blok' });
+              }
               window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
               window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
               ContextManager.instance.viewport?.requestRender(2);
@@ -2321,19 +2366,13 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
       {/* Okno edycji operacji (pływające, swobodne okno nad sceną 3D) */}
       <FloatingOperationDialog />
+      <FloatingEditHost projectModel={projectModel} />
 
       {/* Modal Weryfikacji i Raportu Rozbieżności CNC (PPM Batch) */}
       <CncValidationReportModal />
 
       {/* Wybór zakrytych płaszczyzn QuickPick (a'la Solid Edge) */}
       <QuickPickPopup />
-      
-      {/* ─── Studio Nagrywania Ruchów & Replay (Nagraj / Odtwórz własną pracę) ─── */}
-      <RecorderStudioUI
-        isOpen={recorderStudioOpen}
-        onClose={() => setRecorderStudioOpen(false)}
-        onSwitchTab={handleSwitchTab}
-      />
 
     </div>
   );

@@ -19,8 +19,10 @@
  * SKRÓTY:
  *   X / Y / Z              — wymuszenie osi odsunięcia
  *   Shift + X / Y / Z      — zablokowanie osi pomiaru
+ *   G / L                  — przełączenie układu osi: Globalny (ortogonalny) / Lokalny
  *   Enter / LMB            — zatwierdzenie
- *   Esc / RMB              — krok wstecz, a z pustego stanu wyjście z narzędzia
+ *   RMB                    — małe menu X / Y / Z: wymuszenie osi pomiaru (np. poziomo przy skosie)
+ *   Esc                    — krok wstecz, a z pustego stanu wyjście z narzędzia
  */
 
 declare const BABYLON: any;
@@ -43,17 +45,23 @@ import {
     directionToLocal,
     freeAnchorRef,
     getWorldMatrixArray,
+    isPmiOverlayMesh,
     meshLocalToRootLocal,
     snapToNearestEdgeEndpoint,
     snapWorldPointToPanelGeometry,
+    SNAP_RADIUS_MM,
     tryBuildEdgeAnchorsFromRootPoints,
 } from './pmi-id-bridge';
 import { storeOffsetFromWorld } from './pmi-resolve';
 import { UIController } from '../A1_core/ui-controller';
+import { TooltipManager } from '../A1_core/tooltip-manager.js';
 import { DetectionResult, GeometryType } from '../A1_core/geometry-detector.js';
 import { PMIGeometryHighlighter } from './pmi-geometry-highlight.js';
 import { setSelectionHighlightSuppressed } from '../A1_core/selection-highlight.js';
 import { findEdgeSegmentsNearPointer, findVerticesNearPointer } from './pmi-edge-pick.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import pmiTekst from './pmi_tekst.json';
+import { ContextMenu, type CtxMenuItem } from '../A1_core/context-menu.js';
 
 // ============================================================================
 // TYPES
@@ -116,6 +124,7 @@ export class DimensionTool extends BaseState {
     // Visual snap indicator & live preview
     private liveGuideLine: any = null;
     private axisGuides: PMIAxisGuides | null = null;
+    private contextMenu: ContextMenu | null = null;
 
     constructor(ctx: CadModuleContext, stateMachine: StateMachine, renderer: PMIRenderer) {
         super(ctx, stateMachine);
@@ -129,15 +138,26 @@ export class DimensionTool extends BaseState {
     private handleWindowKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Control' || e.ctrlKey) {
             this.isCtrlPressed = true;
+            if (this.phase === 'PICK_P2') {
+                this.updateHint();
+            }
         }
     };
 
     private handleWindowKeyUp = (e: KeyboardEvent) => {
-        if (!e.ctrlKey) this.isCtrlPressed = false;
+        if (!e.ctrlKey) {
+            this.isCtrlPressed = false;
+            if (this.phase === 'PICK_P2') {
+                this.updateHint();
+            }
+        }
     };
 
     private handleWindowBlur = () => {
         this.isCtrlPressed = false;
+        if (this.phase === 'PICK_P2') {
+            this.updateHint();
+        }
     };
 
     public onEnter(): void {
@@ -147,7 +167,8 @@ export class DimensionTool extends BaseState {
         this.measureAxisLocked = store.toolMeasureAxis !== 'AUTO';
         this.resetPicks();
 
-        this.setUIStatus('Wymiarowanie: krawędź (1 klik) lub punkt 1. Ctrl = narożnik/krawędź/płaszczyzna.');
+        this.updateHint();
+        this.setUIStatus(tx(pmiTekst, 'hints.step1_desc', 'pmi'));
 
         const scene = this.ctx.viewport.scene;
         this.geometryHighlighter = new PMIGeometryHighlighter(scene);
@@ -223,8 +244,10 @@ export class DimensionTool extends BaseState {
             this.ctx.facePicker.enabled = this.facePickerWasEnabled;
         }
 
+        this.contextMenu?.hide();
         this.disposeLiveGuideLine();
         this.renderer.clearPreview();
+        this.clearHint();
 
         this.setUIStatus('Gotowy');
         this.syncToolLiveState('idle');
@@ -236,6 +259,7 @@ export class DimensionTool extends BaseState {
     }
 
     private resetPicks(): void {
+        this.contextMenu?.hide();
         this.geometryHighlighter?.clearHighlight();
         this.phase = 'PICK_P1';
         this.pick1 = null;
@@ -246,6 +270,7 @@ export class DimensionTool extends BaseState {
         if (this.currentAxisSpace !== 'ALIGNED') this.currentAxisSpace = 'GLOBAL';
         this.disposeAxisGuides();
         this.syncToolLiveState('PICK_P1');
+        this.updateHint();
     }
 
     private syncToolLiveState(phase?: ToolPhase | 'idle'): void {
@@ -270,17 +295,89 @@ export class DimensionTool extends BaseState {
     }
 
     public onContextMenu(intent: Intent): void {
-        this.onCancel(intent);
+        const evt = intent?.pointerInfo?.event as MouseEvent | undefined;
+        const rect = this.ctx.canvas?.getBoundingClientRect();
+        const clientX = evt?.clientX ?? ((rect?.left ?? 0) + (this.ctx.viewport?.scene?.pointerX ?? 0));
+        const clientY = evt?.clientY ?? ((rect?.top ?? 0) + (this.ctx.viewport?.scene?.pointerY ?? 0));
+        this.openContextMenu(clientX, clientY);
+    }
+
+    public openContextMenu(screenX: number, screenY: number): void {
+        if (!this.contextMenu) {
+            this.contextMenu = new ContextMenu();
+            this.contextMenu.onAction((action: string) => {
+                switch (action) {
+                    case 'axis_x':
+                        this.setMeasureAxisExplicit('X');
+                        break;
+                    case 'axis_y':
+                        this.setMeasureAxisExplicit('Y');
+                        break;
+                    case 'axis_z':
+                        this.setMeasureAxisExplicit('Z');
+                        break;
+                }
+            });
+        }
+
+        const items: CtxMenuItem[] = [
+            {
+                toolbar: [
+                    {
+                        icon: '<b style="font-size: 15px; line-height: 1;">X</b>',
+                        caption: '',
+                        label: 'X',
+                        action: 'axis_x',
+                    },
+                    {
+                        icon: '<b style="font-size: 15px; line-height: 1;">Y</b>',
+                        caption: '',
+                        label: 'Y',
+                        action: 'axis_y',
+                    },
+                    {
+                        icon: '<b style="font-size: 15px; line-height: 1;">Z</b>',
+                        caption: '',
+                        label: 'Z',
+                        action: 'axis_z',
+                    },
+                ],
+            },
+        ];
+
+        this.contextMenu.show(screenX, screenY, items, tx(pmiTekst, 'menu.title', 'pmi'));
+    }
+
+    public setMeasureAxisExplicit(key: 'X' | 'Y' | 'Z'): void {
+        this.measureAxisLocked = true;
+        this.currentMeasureAxisKey = key;
+        if (this.currentAxisSpace === 'ALIGNED') {
+            this.currentAxisSpace = 'GLOBAL';
+        }
+        if (this.currentOffsetAxisKey === key) {
+            this.currentOffsetAxisKey = '';
+            this.stickyGuideId = null;
+        }
+        if (this.phase === 'DRAG_OFFSET') {
+            this.updatePreview();
+            this.updateDragOffsetStatus();
+        } else {
+            this.setUIStatus(`Oś pomiaru: ${key}`);
+        }
+        this.syncToolLiveState();
+        this.ctx.viewport?.requestRender?.(2);
     }
 
     public onCancel(_intent: Intent): void {
+        this.contextMenu?.hide();
         this.renderer.clearPreview();
         this.disposeLiveGuideLine();
 
         if (this.phase === 'DRAG_OFFSET' || this.phase === 'PICK_P2') {
             this.resetPicks();
-            this.setUIStatus('Wymiarowanie: krawędź (1 klik) lub punkt 1. Ctrl = narożnik/krawędź/płaszczyzna.');
+            this.setUIStatus(tx(pmiTekst, 'hints.step1_desc', 'pmi'));
         } else {
+            this.clearHint();
             this.stateMachine.changeState('SELECTION_TOOL');
         }
     }
@@ -300,8 +397,42 @@ export class DimensionTool extends BaseState {
     // ========================================================================
 
     private onKeyDown(event: KeyboardEvent): void {
-        const key = (event.key || '').toUpperCase();
-        if (!AXIS_KEYS.includes(key as typeof AXIS_KEYS[number])) return;
+        const rawKey = (event.key || '').toUpperCase();
+
+        if (rawKey === 'G') {
+            event.preventDefault?.();
+            this.setAxisSpace('GLOBAL');
+            if (this.currentOffsetAxisKey) {
+                this.stickyGuideId = guideCandidateId('GLOBAL', this.currentOffsetAxisKey as 'X' | 'Y' | 'Z');
+            }
+            if (this.phase === 'DRAG_OFFSET') {
+                this.updatePreview();
+                this.updateDragOffsetStatus();
+            } else {
+                this.setUIStatus('Układ osi wymiaru: GLOBALNY (Ortogonalny)');
+            }
+            this.syncToolLiveState();
+            return;
+        }
+
+        if (rawKey === 'L') {
+            event.preventDefault?.();
+            this.setAxisSpace('LOCAL');
+            if (this.currentOffsetAxisKey) {
+                this.stickyGuideId = guideCandidateId('LOCAL', this.currentOffsetAxisKey as 'X' | 'Y' | 'Z');
+            }
+            if (this.phase === 'DRAG_OFFSET') {
+                this.updatePreview();
+                this.updateDragOffsetStatus();
+            } else {
+                this.setUIStatus('Układ osi wymiaru: LOKALNY (Wyrównany do elementu)');
+            }
+            this.syncToolLiveState();
+            return;
+        }
+
+        if (!AXIS_KEYS.includes(rawKey as typeof AXIS_KEYS[number])) return;
+        const key = rawKey;
 
         event.preventDefault?.();
 
@@ -327,12 +458,12 @@ export class DimensionTool extends BaseState {
                 this.currentAxisSpace = space;
                 this.currentOffsetAxisKey = key;
                 this.stickyGuideId = guideCandidateId(space, key as 'X' | 'Y' | 'Z');
-                this.setUIStatus(`Oś odsunięcia: ${space === 'LOCAL' ? 'L' : 'G'}:${key}`);
             }
         }
 
         if (this.phase === 'DRAG_OFFSET') {
             this.updatePreview();
+            this.updateDragOffsetStatus();
         }
         this.syncToolLiveState();
     }
@@ -343,8 +474,27 @@ export class DimensionTool extends BaseState {
 
     private onLeftClick(): void {
         if (this.phase === 'DRAG_OFFSET') {
+            if (this.isCtrlPressed) {
+                // Użytkownik wcisnął Ctrl podczas wyciągania — alternatywne wskazanie elementu 2
+                let secondSnap: PickPoint | null = null;
+                if (!this.isVertexUnderCursor()) {
+                    const detected = this.findDetectedEdge();
+                    if (detected) secondSnap = detected.p1;
+                }
+                if (!secondSnap) {
+                    secondSnap = this.findStructuredSnapPoint() ?? this.findSnapPoint();
+                }
+
+                if (secondSnap) {
+                    this.pick2 = secondSnap;
+                    this.beginOffsetDrag();
+                    this.setUIStatus('Wybrano drugi element. Przesuń kursor, aby odsunąć linię wymiaru. LPM zatwierdza.');
+                    return;
+                }
+            }
+
             this.lastClickTime = 0;
-            // Drugie kliknięcie: zatwierdzenie wyciągniętego wymiaru
+            // Kliknięcie bez Ctrl: zatwierdzenie wyciągniętego wymiaru
             this.commitDimension();
             return;
         }
@@ -363,18 +513,17 @@ export class DimensionTool extends BaseState {
         if (this.phase === 'PICK_P1') {
             // Krawędź pod kursorem ma pierwszeństwo przed snapem do punktu — inaczej
             // klik obok linii uciekał do najbliższego narożnika ściany.
-            // Działa zarówno bez Ctrl jak i z Ctrl (Ctrl + krawędź = wybierz krawędź jako P1,
-            // a nie bezpośrednio wyciągaj wymiar — czeka na P2).
             if (!this.isVertexUnderCursor()) {
                 const detectedEdge = this.findDetectedEdge();
                 if (detectedEdge) {
                     if (this.isCtrlPressed) {
-                        // Ctrl + krawędź: zapisz jako P1 i czekaj na P2 (multi-wybór)
+                        // Ctrl + krawędź: zapisz jako P1 i czekaj na P2
                         this.pick1 = detectedEdge.p1;
                         this.pick2 = null;
                         this.phase = 'PICK_P2';
                         this.syncToolLiveState();
-                        this.setUIStatus('Krawędź 1 wybrana. Wskaż punkt 2 lub drugą krawędź (LMB).');
+                        this.updateHint();
+                        this.setUIStatus('Krawędź 1 wybrana. Wskaż punkt 2 lub drugą krawędź docelową (LPM).');
                     } else {
                         // Bez Ctrl: od razu P1+P2 z krawędzi i drag offset
                         this.pick1 = detectedEdge.p1;
@@ -392,23 +541,18 @@ export class DimensionTool extends BaseState {
                 this.pick1 = snap;
                 this.phase = 'PICK_P2';
                 this.syncToolLiveState();
-                this.setUIStatus(this.isCtrlPressed
-                    ? 'Ctrl: wybierz drugi element (narożnik / krawędź / płaszczyzna)'
-                    : 'Wymiarowanie: Wskaż punkt 2 (LMB)');
+                this.updateHint();
+                this.setUIStatus('Punkt 1 wybrany. Wskaż punkt 2 lub drugą krawędź formatki (LPM).');
                 return;
             }
 
-            if (this.isCtrlPressed) {
-                this.setUIStatus('Ctrl: wskaż narożnik, krawędź lub ścianę formatki');
-            } else {
-                this.setUIStatus('Wymiarowanie: wskaż punkt 1 (potem możesz wcisnąć Ctrl do multiwyboru)');
-            }
+            this.setUIStatus(tx(pmiTekst, 'hints.step1_desc', 'pmi'));
             return;
         }
 
         if (this.phase === 'PICK_P2') {
-            // Gdy Ctrl i jest krawędź pod kursorem — użyj jej bliższego końca jako P2
-            if (this.isCtrlPressed && !this.isVertexUnderCursor()) {
+            // Krawędź pod kursorem — użyj jej bliższego końca jako P2
+            if (!this.isVertexUnderCursor()) {
                 const detectedEdge = this.findDetectedEdge();
                 if (detectedEdge) {
                     this.pick2 = detectedEdge.p1;
@@ -424,8 +568,8 @@ export class DimensionTool extends BaseState {
                 this.pick2 = snap;
                 this.disposeLiveGuideLine();
                 this.beginOffsetDrag();
-            } else if (this.isCtrlPressed) {
-                this.setUIStatus('Ctrl: wybierz drugi element (narożnik / krawędź / płaszczyzna)');
+            } else {
+                this.setUIStatus('Wskaż punkt 2 lub krawędź docelową (LPM).');
             }
         }
     }
@@ -435,6 +579,7 @@ export class DimensionTool extends BaseState {
         this.autoDetectAxis();
         this.phase = 'DRAG_OFFSET';
         this.syncToolLiveState();
+        this.updateHint();
 
         const scene = this.ctx.viewport.scene;
         if (this.pick1 && this.pick2 && scene) {
@@ -451,16 +596,20 @@ export class DimensionTool extends BaseState {
         }
 
         this.updateOffsetFromMouse();
-        this.setUIStatus('Przesuń mysz wzdłuż linii ciągłej (GLOBAL) lub przerywanej (LOCAL). LMB zatwierdza, X/Y/Z: oś, Shift+X/Y/Z: pomiar, ESC: anuluj.');
+        this.updateDragOffsetStatus();
     }
 
     private onPointerMove(): void {
         const scene = this.ctx.viewport.scene;
-        // Geometry highlight tylko podczas wyboru punktów (PICK_P1, PICK_P2).
-        // W fazie DRAG_OFFSET punkty są już ustalone — pomijamy zbędne skanowanie i podświetlanie korpusu.
-        if (scene && this.geometryHighlighter && this.phase !== 'DRAG_OFFSET') {
-            const detection = this.geometryHighlighter.update(scene.pointerX, scene.pointerY);
-            this.updateHoverStatus(detection);
+        // Geometry highlight podczas wyboru punktów (PICK_P1, PICK_P2),
+        // lub w DRAG_OFFSET przy wciśniętym Ctrl
+        if (scene && this.geometryHighlighter) {
+            if (this.phase !== 'DRAG_OFFSET' || this.isCtrlPressed) {
+                const detection = this.geometryHighlighter.update(scene.pointerX, scene.pointerY);
+                this.updateHoverStatus(detection);
+            } else {
+                this.geometryHighlighter.clearHighlight();
+            }
         }
 
         // 1. Podgląd linii od P1 do kursora w fazie PICK_P2
@@ -474,30 +623,39 @@ export class DimensionTool extends BaseState {
         // 2. Dynamiczne wyciąganie wymiaru w fazie DRAG_OFFSET
         if (this.phase === 'DRAG_OFFSET' && this.pick1 && this.pick2) {
             this.updateOffsetFromMouse();
+            if (!this.isCtrlPressed) {
+                this.updateDragOffsetStatus();
+            }
         }
+
+        this.ctx.viewport?.requestRender?.(2);
     }
 
     private updateHoverStatus(detection: DetectionResult): void {
-        if (this.phase === 'DRAG_OFFSET') return;
+        if (this.phase === 'DRAG_OFFSET') {
+            if (this.isCtrlPressed && detection.hit) {
+                const label = PMIGeometryHighlighter.labelOf(detection.geometryType);
+                this.setUIStatus(`Ctrl + LPM: precyzyjny wybór do: ${label}`);
+            } else {
+                this.updateDragOffsetStatus();
+            }
+            return;
+        }
 
         if (!detection.hit) {
             if (this.phase === 'PICK_P1') {
-                this.setUIStatus(this.isCtrlPressed
-                    ? 'Ctrl: wskaż narożnik, krawędź lub płaszczyznę'
-                    : 'Wymiarowanie: krawędź (1 klik) lub punkt 1. Ctrl = precyzyjny element.');
+                this.setUIStatus(`${tx(pmiTekst, 'hints.step1_desc', 'pmi')}. Esc: wyjście.`);
             } else if (this.phase === 'PICK_P2') {
-                this.setUIStatus(this.isCtrlPressed
-                    ? 'Ctrl: wybierz drugi element (narożnik / krawędź / płaszczyzna)'
-                    : 'Wymiarowanie: Wskaż punkt 2 (LMB)');
+                this.setUIStatus('Wskaż 2. punkt lub drugą krawędź (LPM). Esc: cofnij do punktu 1.');
             }
             return;
         }
 
         const label = PMIGeometryHighlighter.labelOf(detection.geometryType);
         if (this.phase === 'PICK_P1') {
-            this.setUIStatus(`Wykryto: ${label} — kliknij LMB (punkt 1)`);
+            this.setUIStatus(`Wykryto: ${label} — kliknij LPM, aby wybrać punkt 1 (lub krawędź)`);
         } else if (this.phase === 'PICK_P2') {
-            this.setUIStatus(`Wykryto: ${label} — kliknij LMB (punkt 2)`);
+            this.setUIStatus(`Wykryto: ${label} — kliknij LPM, aby zatwierdzić punkt 2`);
         }
     }
 
@@ -845,7 +1003,7 @@ export class DimensionTool extends BaseState {
                     detection.pickedPoint!.y,
                     detection.pickedPoint!.z,
                 );
-                const snapped = snapWorldPointToPanelGeometry(scene, mesh, worldPos, 1e6);
+                const snapped = snapWorldPointToPanelGeometry(scene, mesh, worldPos, SNAP_RADIUS_MM);
                 if (snapped) {
                     const faceNormalWorld = detection.normal
                         ? v3(detection.normal.x, detection.normal.y, detection.normal.z)
@@ -899,7 +1057,7 @@ export class DimensionTool extends BaseState {
                 const hit = valid[0];
                 const mesh = hit.pickedMesh;
                 const worldPos = v3(hit.pickedPoint.x, hit.pickedPoint.y, hit.pickedPoint.z);
-                const snapped = snapWorldPointToPanelGeometry(scene, mesh, worldPos, 1e6);
+                const snapped = snapWorldPointToPanelGeometry(scene, mesh, worldPos, SNAP_RADIUS_MM);
                 if (snapped) {
                     const norm = hit.getNormal ? hit.getNormal(true) : null;
                     const faceNormalWorld = norm ? v3(norm.x, norm.y, norm.z) : null;
@@ -961,7 +1119,7 @@ export class DimensionTool extends BaseState {
         }
 
         // 3. Dowolny obiekt 3D w scenie
-        const generalHit = scene.pick(pointerX, pointerY, (m: any) => m && m.isPickable && !m.name.startsWith('pmi_'));
+        const generalHit = scene.pick(pointerX, pointerY, (m: any) => m && m.isPickable && !isPmiOverlayMesh(m));
         if (generalHit && generalHit.hit && generalHit.pickedMesh && generalHit.pickedPoint) {
             return this.createPickPointFromHit(generalHit);
         }
@@ -989,24 +1147,30 @@ export class DimensionTool extends BaseState {
             if (snappedEnd) {
                 const p0 = mesh.metadata.brepPoints[0];
                 const p1 = mesh.metadata.brepPoints[1];
-                const edgeDirWorld = v3Normalize(v3Sub(
-                    v3(p1[0], p1[1], p1[2]),
-                    v3(p0[0], p0[1], p0[2]),
-                ));
+                const rootMesh = mesh.parent || mesh;
+                const wm = rootMesh?.getWorldMatrix?.();
+                let edgeDirWorld: Vec3;
+                if (wm) {
+                    const localDiff = new BABYLON.Vector3(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+                    const worldDiff = BABYLON.Vector3.TransformNormal(localDiff, wm);
+                    edgeDirWorld = v3Normalize(v3(worldDiff.x, worldDiff.y, worldDiff.z));
+                } else {
+                    edgeDirWorld = v3Normalize(v3(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]));
+                }
                 const norm = hit.getNormal ? hit.getNormal(true) : null;
                 return {
                     worldPos: snappedEnd.worldPos,
                     anchor: snappedEnd.anchor,
                     edgeDirWorld,
                     faceNormalWorld: norm ? v3(norm.x, norm.y, norm.z) : null,
-                    meshMatrix: getWorldMatrixArray(mesh.parent || mesh),
+                    meshMatrix: getWorldMatrixArray(rootMesh),
                 };
             }
         }
 
         if (mesh?.metadata?.faceName) {
             const scene = this.ctx.viewport.scene;
-            const snapped = scene ? snapWorldPointToPanelGeometry(scene, mesh, worldPos, 1e6) : null;
+            const snapped = scene ? snapWorldPointToPanelGeometry(scene, mesh, worldPos, SNAP_RADIUS_MM) : null;
             if (snapped) {
                 const norm = hit.getNormal ? hit.getNormal(true) : null;
                 const faceNormalWorld = norm ? v3(norm.x, norm.y, norm.z) : null;
@@ -1021,13 +1185,21 @@ export class DimensionTool extends BaseState {
         }
 
         const anchor = mesh ? buildAnchorRef(mesh, worldPos, localOverride) : freeAnchorRef(worldPos);
-        const meshMatrix = mesh ? getWorldMatrixArray(mesh.parent || mesh) : null;
+        const rootMesh = mesh?.parent || mesh;
+        const meshMatrix = mesh ? getWorldMatrixArray(rootMesh) : null;
 
         let edgeDirWorld: Vec3 | null = null;
         if (mesh?.metadata?.type === 'edge' && mesh.metadata.brepPoints && mesh.metadata.brepPoints.length >= 2) {
             const p0 = mesh.metadata.brepPoints[0];
             const p1 = mesh.metadata.brepPoints[1];
-            edgeDirWorld = v3Normalize(v3Sub(v3(p1[0], p1[1], p1[2]), v3(p0[0], p0[1], p0[2])));
+            const wm = rootMesh?.getWorldMatrix?.();
+            if (wm) {
+                const localDiff = new BABYLON.Vector3(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+                const worldDiff = BABYLON.Vector3.TransformNormal(localDiff, wm);
+                edgeDirWorld = v3Normalize(v3(worldDiff.x, worldDiff.y, worldDiff.z));
+            } else {
+                edgeDirWorld = v3Normalize(v3(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]));
+            }
         }
 
         const norm = hit.getNormal ? hit.getNormal(true) : null;
@@ -1054,6 +1226,7 @@ export class DimensionTool extends BaseState {
             axisSpace: this.currentAxisSpace,
             matrixWorld: this.pick1.meshMatrix,
             measureAxisKey: this.currentMeasureAxisKey,
+            offsetAxisKey: this.currentOffsetAxisKey,
             anchor1World: this.pick1.worldPos,
             anchor2World: this.pick2.worldPos,
             faceNormal1World: this.pick1.faceNormalWorld,
@@ -1207,6 +1380,7 @@ export class DimensionTool extends BaseState {
         this.liveGuideLine.color = new BABYLON.Color3(0.2, 0.8, 1.0);
         this.liveGuideLine.isPickable = false;
         this.liveGuideLine.renderingGroupId = 2;
+        this.liveGuideLine.metadata = { ...(this.liveGuideLine.metadata || {}), isPmiOverlay: true };
     }
 
     private disposeLiveGuideLine(): void {
@@ -1220,6 +1394,52 @@ export class DimensionTool extends BaseState {
         if (UIController.instance && typeof UIController.instance.setStatus === 'function') {
             UIController.instance.setStatus(text);
         }
+    }
+
+    private updateHint(): void {
+        const tm = TooltipManager.instance;
+        if (!tm) return;
+
+        if (this.phase === 'PICK_P1') {
+            tm.setActiveHint({
+                id: 'pmi_dimension_p1',
+                title: tx(pmiTekst, 'hints.step1_title', 'pmi'),
+                description: tx(pmiTekst, 'hints.step1_desc', 'pmi'),
+                confirmKey: 'LPM',
+                cancelKey: 'Esc',
+            });
+        } else if (this.phase === 'PICK_P2') {
+            tm.setActiveHint({
+                id: 'pmi_dimension_p2',
+                title: tx(pmiTekst, 'hints.step1_title', 'pmi'),
+                description: this.isCtrlPressed
+                    ? tx(pmiTekst, 'hints.step2_ctrl_desc', 'pmi')
+                    : tx(pmiTekst, 'hints.step1_p2_desc', 'pmi'),
+                confirmKey: 'LPM',
+                cancelKey: 'Esc',
+            });
+        } else if (this.phase === 'DRAG_OFFSET') {
+            tm.setActiveHint({
+                id: 'pmi_dimension_drag',
+                title: tx(pmiTekst, 'hints.step2_title', 'pmi'),
+                description: tx(pmiTekst, 'hints.step2_desc', 'pmi'),
+                confirmKey: 'LPM',
+                cancelKey: 'Esc',
+            });
+        }
+    }
+
+    private clearHint(): void {
+        TooltipManager.instance?.clearActiveHint();
+    }
+
+    private updateDragOffsetStatus(): void {
+        if (this.phase !== 'DRAG_OFFSET' || !this.pick1 || !this.pick2) return;
+        const measurement = this.currentMeasurement();
+        const lengthMM = Math.round(measurement?.lengthMM ?? 0);
+        const space = this.currentAxisSpace === 'LOCAL' ? 'Lokalny' : 'Globalny';
+        const axis = this.currentOffsetAxisKey ? `${space}:${this.currentOffsetAxisKey}` : `${space} (Auto)`;
+        this.setUIStatus(`Odsunięcie wymiaru: ${lengthMM} mm | Oś: ${axis} | LPM: zatwierdź | X/Y/Z: oś | G/L: Global/Lokalny | Esc: cofnij`);
     }
 
     // ========================================================================
@@ -1255,7 +1475,7 @@ export class DimensionTool extends BaseState {
         this.renderer.clearPreview();
 
         this.resetPicks();
-        this.setUIStatus('Wymiar dodany! Kliknij kolejną krawędź lub punkt (Ctrl = precyzyjny element).');
+        this.setUIStatus('Wymiar dodany! Kliknij kolejną krawędź lub wskaż punkt.');
     }
 
     // ========================================================================

@@ -87,7 +87,7 @@ export class ClearBlokiDrillingsCommand implements Command {
             data.features = data.features.filter((f: any) => {
                 if (f.frozen || f.params?.frozen) return true; // Zachowaj zamrożone
                 const fromThisBox = f.params?.sourceContainerId === this.blokContainerId;
-                const isAuto = f.params?.isShelfDrilling || f.params?.isDoorDrilling || f.params?.isDrawerDrilling || f.params?.isFlapDrilling || f.params?.isTubeDrilling || f.params?.isConnectorDrilling;
+                const isAuto = f.params?.isShelfDrilling || f.params?.isDoorDrilling || f.params?.isDrawerDrilling || f.params?.isFlapDrilling || f.params?.isTubeDrilling || f.params?.isConnectorDrilling || f.params?.isHangerDrilling || f.params?.isSmartPartFeature;
                 return !(fromThisBox && isAuto);
             });
 

@@ -87,4 +87,66 @@ describe('BlokiBayController', () => {
         expect(listener).toHaveBeenCalledWith(fakeBay);
         expect(controller.isDragging).toBe(false);
     });
+
+    it('manages panel picker mode and active handle template', () => {
+        const controller = new BlokiBayController();
+        const listener = vi.fn();
+        controller.subscribePicker(listener);
+
+        controller.startPicker('HANDLES');
+        expect(controller.isPickerActive).toBe(true);
+        expect(controller.pickerMode).toBe('panel');
+        expect(controller.pendingBlokType).toBe('HANDLES');
+        expect(listener).toHaveBeenCalledWith(true, 'panel');
+
+        controller.setActiveHandleTemplate({ totalLengthMm: 160, holeDistanceMm: 128 });
+        expect(controller.activeHandleTemplate).toEqual({ totalLengthMm: 160, holeDistanceMm: 128 });
+
+        controller.setPickerMode('internal');
+        expect(controller.pickerMode).toBe('internal');
+        expect(listener).toHaveBeenCalledWith(true, 'internal');
+    });
+
+    it('notifies panel detected listeners and stops picker', () => {
+        const controller = new BlokiBayController();
+        controller.startPicker('HANDLES');
+        expect(controller.isPickerActive).toBe(true);
+
+        const listener = vi.fn();
+        controller.subscribePanelDetected(listener);
+
+        const fakeSurface = {
+            panelNode: { id: 'panel_front_1' },
+            panelModel: { width: 600000000, height: 720000000 },
+            widthMm: 600,
+            heightMm: 720,
+            thicknessMm: 18,
+            faceZ: -9,
+            normalZ: -1,
+        } as any;
+
+        controller.notifyPanelDetected(fakeSurface);
+        expect(controller.isPickerActive).toBe(false);
+        expect(listener).toHaveBeenCalledWith(fakeSurface);
+    });
+
+    it('handles drop in panel mode using lastDetectedSurface', () => {
+        const controller = new BlokiBayController();
+        const fakeSurface = {
+            panelNode: { id: 'panel_front_1' },
+            widthMm: 600,
+            heightMm: 720,
+        } as any;
+
+        controller.startDrag('HANDLES');
+        controller.setLastDetectedSurface(fakeSurface);
+
+        const listener = vi.fn();
+        controller.subscribePanelDetected(listener);
+
+        controller.onDropOnScene();
+        expect(listener).toHaveBeenCalledWith(fakeSurface);
+        expect(controller.isDragging).toBe(false);
+        expect(controller.lastDetectedSurface).toBeNull();
+    });
 });

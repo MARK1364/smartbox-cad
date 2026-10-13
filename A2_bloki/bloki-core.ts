@@ -88,6 +88,7 @@ export function ensure_bloki_name(container: any, docTarget?: any) {
         'blok_shelves': 'blok_polki',
         'blok_drawers': 'blok_szuflady',
         'blok_doors': 'blok_drzwi',
+        'blok_skosne_drzwi': 'blok_drzwi_skosne',
         'blok_corner_doors': 'blok_drzwi_narozne',
         'blok_dividers': 'blok_przegrody',
         'blok_flaps': 'blok_klapy',
@@ -95,7 +96,9 @@ export function ensure_bloki_name(container: any, docTarget?: any) {
         'blok_shelf': 'blok_wieniec',
         'blok_panels': 'blok_blendy',
         'blok_led_external': 'blok_led_podszafkowy',
-        'blok_led_internal': 'blok_led_szafowy'
+        'blok_led_internal': 'blok_led_szafowy',
+        'smartpart_hangers': 'blok_zawieszki',
+        'blok_hangers': 'blok_zawieszki'
     };
 
     const type = container.generatorParams.type || 'blok_empty';
@@ -161,7 +164,7 @@ function findNodeByKey(root: any, partKey: string): any | null {
     return null;
 }
 
-function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, faceName: string, axis: 'x' | 'y' | 'z', lcs: any = null, isMax?: boolean, surface?: string): number {
+export function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, faceName: string, axis: 'x' | 'y' | 'z', lcs: any = null, isMax?: boolean, surface?: string): number {
     if (isOutlineFaceName(faceName)) {
         const outlineCoord = getOutlineFaceCoordinate(panel, panelNode, cabinetNode, faceName, axis);
         if (outlineCoord != null) return outlineCoord;
@@ -376,7 +379,7 @@ function getPanelFaceCoordinate(panel: any, panelNode: any, cabinetNode: any, fa
 /**
  * Wyszukuje węzeł CADNode formatki w drzewie na podstawie konfiguracji referencji.
  */
-function findPanelNodeByRef(refConfig: any, cabinetNode: any, doc: any): any {
+export function findPanelNodeByRef(refConfig: any, cabinetNode: any, doc: any): any {
     if (!refConfig) return null;
     let panelNode: any = null;
     if (refConfig.panelId && cabinetNode && refConfig.panelId !== cabinetNode.id) {
@@ -1051,6 +1054,7 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
     const typeToBox: Record<string, string> = {
         blok_doors: 'DOORS',
         blok_corner_doors: 'CORNER_DOORS',
+        blok_skosne_drzwi: 'SKOSNE_DOORS',
         blok_shelf: 'SHELF',
         blok_tubes: 'TUBES',
         blok_drawers: 'DRAWERS',
@@ -1212,7 +1216,7 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         xMinVal = -widthParam / 2;
         xMaxVal = widthParam / 2;
     } else {
-        return warnMissingRef('xMin', 'nie można ustalić szerokości — ustaw referencje lub wyłącz jedną ścianę boczną');
+        return warnMissingRef('xMin', 'nie można ustalić szerokości — ustaw odniesienia lub wyłącz jedną ścianę boczną');
     }
 
     let yMinVal: number;
@@ -1233,7 +1237,7 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         yMinVal = -depthParam / 2;
         yMaxVal = depthParam / 2;
     } else {
-        return warnMissingRef('yMin', 'nie można ustalić głębokości — ustaw referencje lub wyłącz jedną ścianę czołową');
+        return warnMissingRef('yMin', 'nie można ustalić głębokości — ustaw odniesienia lub wyłącz jedną ścianę czołową');
     }
 
     const isZMinActive = isSideActive('zMin');
@@ -1263,11 +1267,11 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         zMaxVal = heightH;
         sbHeight = heightH;
     } else {
-        return warnMissingRef('zMin', 'nie można ustalić wysokości — ustaw referencje lub wyłącz jedną ścianę pionową');
+        return warnMissingRef('zMin', 'nie można ustalić wysokości — ustaw odniesienia lub wyłącz jedną ścianę pionową');
     }
 
     if (isNaN(sbHeight) || sbHeight <= 0) {
-        return warnMissingRef('zMax', 'nieprawidłowa wysokość po rozwiązaniu referencji');
+        return warnMissingRef('zMax', 'nieprawidłowa wysokość po rozwiązaniu odniesień');
     }
 
     const sbWidth = Math.max(10, Math.abs(xMaxVal - xMinVal));
@@ -1317,6 +1321,16 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
     }
 
     // 4. Uruchom moduł generujący wewnątrz tego gabarytu.
+    if (boxType === 'SKOSNE_DOORS' && foundCabinetNode) {
+        const topPanel = foundCabinetNode.children.find(
+            (c: any) => String(c.domainData?.role || '').toUpperCase() === 'TOP_PANEL'
+        );
+        const rotZ = (topPanel?.domainData as any)?.lcs?.rotation?.[2];
+        if (rotZ !== undefined && Number.isFinite(Number(rotZ))) {
+            params.dach_kat_deg = -Number(rotZ);
+        }
+    }
+
     const dims: ModuleDims = {
         width_mm: sbWidth,
         height_mm: sbHeight,

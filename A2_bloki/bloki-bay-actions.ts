@@ -17,17 +17,19 @@ import type { DetectedBay } from './bloki-bay-detector.js';
 import { update_bloki_core } from './bloki-core.js';
 import { applyCornerDoorsDefaultRefs } from './corner-doors-refs.js';
 import doorsRules from './doors_3_rules_V1.json';
+import skosneDoorsRules from './skosne-doors_3_rules_V1.json';
 import { resolveRuleThicknessMm } from './bloki-rules-helper.js';
 import type {
     CornerDoorsPlanParams,
     LedInternalVariant,
+    SkosneDoorsPlanParams,
     BlokiGeneratorMetadata,
     BlokiGeneratorParams,
     BlokiModuleId,
     BlokiModuleTypeById
 } from './bloki-module-types.js';
 
-export type BlokiCategory = 'internal' | 'external';
+export type BlokiCategory = 'internal' | 'external' | 'panel';
 
 export type BlokiOption = {
     [ModuleId in BlokiModuleId]: {
@@ -50,6 +52,7 @@ export type BlokiOption = {
 export const BLOKI_INTERNAL_OPTIONS: BlokiOption[] = [
     { id: 'SHELVES', type: 'blok_shelves', label: 'Półki', category: 'internal' },
     { id: 'DOORS', type: 'blok_doors', label: 'Drzwi', category: 'internal' },
+    { id: 'SKOSNE_DOORS', type: 'blok_skosne_drzwi', label: 'Drzwi skośne', category: 'internal' },
     { id: 'CORNER_DOORS', type: 'blok_corner_doors', label: 'Drzwi narożne', category: 'internal' },
     { id: 'DRAWERS', type: 'blok_drawers', label: 'Szuflady', category: 'internal' },
     { id: 'FLAPS', type: 'blok_flaps', label: 'Klapy', category: 'internal' },
@@ -64,16 +67,23 @@ export const BLOKI_EXTERNAL_OPTIONS: BlokiOption[] = [
     { id: 'LED_EXTERNAL', type: 'blok_led_external', label: 'Kanał LED', category: 'external' }
 ];
 
+export const BLOKI_PANEL_OPTIONS: BlokiOption[] = [
+    { id: 'HANDLES', type: 'blok_handle', label: 'Uchwyty', category: 'panel' },
+    { id: 'HANGERS', type: 'smartpart_hangers', label: 'Zawieszki', category: 'panel' }
+];
+
 export const BLOKI_ALL_OPTIONS: BlokiOption[] = [
     ...BLOKI_INTERNAL_OPTIONS,
-    ...BLOKI_EXTERNAL_OPTIONS
+    ...BLOKI_EXTERNAL_OPTIONS,
+    ...BLOKI_PANEL_OPTIONS
 ];
 
 function createBlokiGeneratorParams(
     id: BlokiModuleId | 'EMPTY',
     metadata: BlokiGeneratorMetadata,
     params?: BlokiModalParams,
-    cornerDoorsParams: CornerDoorsPlanParams = {}
+    cornerDoorsParams: CornerDoorsPlanParams = {},
+    skosneDoorsParams: SkosneDoorsPlanParams = {}
 ): BlokiGeneratorParams {
     switch (id) {
         case 'EMPTY':
@@ -102,6 +112,26 @@ function createBlokiGeneratorParams(
                 szczelina_mm: params?.szczelina_mm ?? params?.doorGapMm,
                 pozycja_zawias_1_mm: params?.pozycja_zawias_1_mm,
                 pozycja_zawias_6_mm: params?.pozycja_zawias_6_mm
+            };
+        case 'SKOSNE_DOORS':
+            return {
+                ...metadata, boxType: id, type: 'blok_skosne_drzwi',
+                ...skosneDoorsParams,
+                rodzaj_drzwi: (params?.rodzaj_drzwi === 'RIGHT'
+                    ? 'RIGHT'
+                    : params?.rodzaj_drzwi === 'LEFT'
+                        ? 'LEFT'
+                        : skosneDoorsParams.rodzaj_drzwi ?? 'LEFT'),
+                grubosc_frontu_mm: params?.grubosc_frontu_mm ?? resolveRuleThicknessMm(skosneDoorsRules, ['DRZWI_SKOSNE', 'FRONT'], 'front_thickness', 'skosne_doors'),
+                dach_kat_deg: params?.dach_kat_deg ?? skosneDoorsParams.dach_kat_deg,
+                nalozenie_gora_mm: params?.nalozenie_gora_mm ?? 14,
+                nalozenie_dol_mm: params?.nalozenie_dol_mm ?? 15,
+                nalozenie_lewe_mm: params?.nalozenie_lewe_mm ?? 16,
+                nalozenie_prawe_mm: params?.nalozenie_prawe_mm ?? 16,
+                uzyj_zawias_1: true,
+                uzyj_zawias_6: true,
+                pozycja_zawias_1_mm: params?.pozycja_zawias_1_mm ?? 120,
+                pozycja_zawias_6_mm: params?.pozycja_zawias_6_mm ?? 120
             };
         case 'CORNER_DOORS':
             return {
@@ -165,6 +195,10 @@ function createBlokiGeneratorParams(
                 glebokosc_wpustu_mm: params?.glebokosc_wpustu_mm ?? params?.grooveDepthMm ?? 9,
                 frezuj_boki: params?.frezuj_boki ?? params?.cutSides ?? true
             };
+        case 'HANDLES':
+            throw new Error('[Bloki] HANDLES nie posiada generatorParams wnęki — montowane są na formatce (tryb panel)');
+        case 'HANGERS':
+            throw new Error('[Bloki] HANGERS montowane są przez dedykowany mechanizm SmartParts/Bloki');
     }
 }
 
@@ -186,6 +220,7 @@ export interface BlokiModalParams {
     szczelina_wspolna_mm?: number;
     rodzaj_drzwi?: 'LEFT' | 'RIGHT' | 'SINGLE_LEFT' | 'SINGLE_RIGHT' | 'DOUBLE';
     szczelina_mm?: number;
+    dach_kat_deg?: number;
     kierunek_klapy?: 'TOP' | 'BOTTOM';
     liczba_przegrod?: number;
     odstep_gora_mm?: number;
@@ -246,6 +281,7 @@ export const BLOKI_CATEGORY_NAMES: Record<string, string> = {
     'SHELVES': 'blok_polki',
     'DRAWERS': 'blok_szuflady',
     'DOORS': 'blok_drzwi',
+    'SKOSNE_DOORS': 'blok_drzwi_skosne',
     'CORNER_DOORS': 'blok_drzwi_narozne',
     'TUBES': 'blok_drazek',
     'SHELF': 'blok_wieniec',
@@ -253,7 +289,8 @@ export const BLOKI_CATEGORY_NAMES: Record<string, string> = {
     'FLAPS': 'blok_klapy',
     'PANELS': 'blok_blendy',
     'LED_INTERNAL': 'blok_led_szafowy',
-    'LED_EXTERNAL': 'blok_led_podszafkowy'
+    'LED_EXTERNAL': 'blok_led_podszafkowy',
+    'HANDLES': 'blok_uchwyty'
 };
 
 import { Command } from '../A1_core/commands/command.js';
@@ -314,6 +351,9 @@ export function createBlokInDetectedBay(
     params?: BlokiModalParams
 ): CADNode | null {
     if (!document || !bay) return null;
+    if (option.id === 'HANDLES' || option.id === 'HANGERS') {
+        throw new Error(`[Bloki] ${option.label || option.id} montowane są na formatce / dedykowanym mechanizmem, a nie przez createBlokInDetectedBay.`);
+    }
 
     const sbName = BLOKI_CATEGORY_NAMES[option.id] || (option.id === 'EMPTY' ? 'blok_' : `blok_${(option.label || option.id).toLowerCase()}`);
     const parentId = bay.parentCabinetId;
@@ -372,6 +412,41 @@ export function createBlokInDetectedBay(
         }
         return defaultCustomReferences;
     })();
+
+    /**
+     * DRZWI SKOŚNE: kąt nachylenia skosu dachu czytamy bezpośrednio z TOP_PANEL
+     * (lcs.rotation[2] wieńca górnego).
+     *
+     * Brak skosu / brak TOP_PANEL w korpusie = dach_kat_deg pozostaje undefined
+     * (fail-fast, brak zgadywania / brak wartości zastępczych).
+     */
+    const skosneDoorsParams: SkosneDoorsPlanParams = option.id === 'SKOSNE_DOORS'
+        ? (() => {
+            const topPanel = parentCabNode?.children?.find(
+                (c: any) => String(c.domainData?.role || '').toUpperCase() === 'TOP_PANEL'
+            );
+            if (!topPanel) {
+                console.warn(
+                    '[bloki-bay] SKOSNE_DOORS: brak TOP_PANEL w korpusie — nie można wyznaczyć kąta skosu.'
+                );
+                return {} as SkosneDoorsPlanParams;
+            }
+            const rotZ = (topPanel.domainData as any)?.lcs?.rotation?.[2];
+            if (rotZ === undefined || !Number.isFinite(Number(rotZ))) {
+                console.warn(
+                    '[bloki-bay] SKOSNE_DOORS: brak rotacji lcs.rotation[2] w TOP_PANEL — nie można wyznaczyć kąta skosu.'
+                );
+                return {} as SkosneDoorsPlanParams;
+            }
+
+            // lcs.rotation[2] wieńca to -beta_deg dla wzniosu w prawo, więc kąt dachu beta = -rotZ
+            const dach_kat_deg = -Number(rotZ);
+            return {
+                dach_kat_deg,
+                rodzaj_drzwi: dach_kat_deg >= 0 ? 'RIGHT' : 'LEFT'
+            } as SkosneDoorsPlanParams;
+        })()
+        : {};
 
     const cornerDoorsParams: CornerDoorsPlanParams = option.id === 'CORNER_DOORS'
         ? (() => {
@@ -432,7 +507,8 @@ export function createBlokInDetectedBay(
         option.id,
         metadata,
         params,
-        cornerDoorsParams
+        cornerDoorsParams,
+        skosneDoorsParams
     );
 
     // 2. Tworzymy węzeł CADNode dla kontenera

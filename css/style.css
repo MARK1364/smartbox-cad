@@ -206,9 +206,9 @@ body, html {
 }
 
 .assoc-dim {
-    margin: -2px 0 10px 0;
-    padding: 6px 8px 7px;
-    border-radius: 6px;
+    margin: 2px 0 3px 0;
+    padding: 4px 6px 5px;
+    border-radius: 4px;
     background: rgba(0, 0, 0, 0.22);
     border: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -222,8 +222,8 @@ body, html {
 .assoc-dim-plane {
     flex: 1;
     min-width: 0;
-    height: 22px;
-    padding: 0 6px;
+    height: 20px;
+    padding: 0 5px;
     border-radius: 3px;
     border: 1px solid #3f3f46;
     background: #27272a;
@@ -249,8 +249,8 @@ body, html {
 }
 
 .assoc-dim-clear {
-    height: 22px;
-    padding: 0 7px;
+    height: 20px;
+    padding: 0 6px;
     border-radius: 3px;
     border: 1px solid #3f3f46;
     background: #27272a;
@@ -265,12 +265,12 @@ body, html {
 }
 
 .assoc-dim-length {
-    margin-top: 5px;
+    margin-top: 3px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    font-size: 11px;
+    gap: 6px;
+    font-size: 10.5px;
     color: #d4d4d8;
 }
 
@@ -302,6 +302,21 @@ body, html {
     color: #fff;
     border-radius: 2px;
     font-size: 10px;
+}
+
+/* --- Sekcja Ściany Odniesienia / Akordeon Referencji --- */
+
+.ref-walls-accordion {
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 6px;
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ref-walls-accordion.is-open {
+    border-color: rgba(59, 130, 246, 0.55);
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.15);
 }
 
 /* --- Face info --- */
@@ -840,6 +855,7 @@ body, html {
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     z-index: 10;
+    height: calc(100vh - 120px);
     max-height: calc(100vh - 120px);
     display: flex;
     flex-direction: column;
@@ -1221,12 +1237,12 @@ body, html {
     font-size: 11px;
 }
 
-/* Panel edycji — offset pod pasek menu */
+/* Panel edycji — wysokość pod treść (paleta), max do dołu okna */
 #panel-edycji,
 .panel-edycji {
     top: 64px !important;
-    height: calc(100vh - 120px) !important;
-    max-height: calc(100vh - 120px) !important;
+    height: auto !important;
+    max-height: calc(100vh - 80px) !important;
 }
 
 /* Hover szkoleniowy — tylko krawędź regionu, nie wnętrze */
@@ -1309,21 +1325,22 @@ body, html {
     left: 50%;
     transform: translateX(-50%);
     max-width: min(920px, calc(100vw - 360px));
-    background: transparent;
-    border: 1px solid rgba(0, 0, 0, 0.4);
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
-    box-shadow: none;
-    padding: 3px 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    padding: 4px 10px;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 3px;
+    gap: 4px;
     z-index: 14;
     pointer-events: auto;
 }
 
 .belka-hierarchia-sep {
-    color: #000000;
+    color: #94a3b8;
     font-size: 0.82rem;
     font-weight: 700;
     padding: 0 2px;
@@ -1331,9 +1348,9 @@ body, html {
 }
 
 .belka-hierarchia-btn {
-    background: transparent;
-    border: 1px solid rgba(0, 0, 0, 0.35);
-    color: #000000;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
     padding: 3px 8px;
     font-size: 0.76rem;
     font-weight: 600;
@@ -1349,21 +1366,21 @@ body, html {
 }
 
 .belka-hierarchia-btn:hover {
-    background: rgba(0, 0, 0, 0.08);
-    color: #000000;
-    border-color: #000000;
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
 }
 
 .belka-hierarchia-btn.is-current {
-    color: #000000;
-    background: rgba(37, 99, 235, 0.12);
-    border-color: #2563eb;
-    font-weight: 800;
+    color: #93c5fd;
+    background: rgba(37, 99, 235, 0.25);
+    border-color: #3b82f6;
+    font-weight: 700;
 }
 
 .belka-hierarchia-btn.is-current:hover {
-    border-color: #1d4ed8;
-    background: rgba(37, 99, 235, 0.18);
+    border-color: #60a5fa;
+    background: rgba(37, 99, 235, 0.35);
 }
 
 .belka-dropdown-panel {
@@ -1585,15 +1602,22 @@ body, html {
 
 .tab-content {
     display: none;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
-    overflow-y: auto;
+    overflow-y: visible;
     overflow-x: hidden;
     animation: ctxFadeIn 0.15s ease-out;
 }
 
 .tab-content.active {
     display: block;
+}
+
+/* Długie zakładki (solver, operacje…) — scroll wewnątrz max wysokości panelu */
+#panel-edycji .tab-content.has-scroll,
+.panel-edycji .tab-content.has-scroll {
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
 }
 
 .placeholder-text {
@@ -1607,7 +1631,8 @@ body, html {
 /* --- Context Menu --- */
 .ctx-menu {
     position: fixed;
-    min-width: 200px;
+    min-width: 220px;
+    max-width: 320px;
     background: rgba(35, 35, 40, 0.97);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -1622,6 +1647,44 @@ body, html {
 @keyframes ctxFadeIn {
     from { opacity: 0; transform: scale(0.96); }
     to { opacity: 1; transform: scale(1); }
+}
+
+.ctx-menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 8px 3px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 3px;
+}
+
+.ctx-menu-header-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+.ctx-menu-close-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.ctx-menu-close-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
 }
 
 .ctx-menu-separator {
@@ -1676,6 +1739,133 @@ body, html {
 
 .ctx-menu-label {
     flex: 1;
+}
+
+.ctx-menu-shortcut {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: #64748b;
+}
+
+.ctx-menu-section {
+    padding: 6px 10px 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+/* Grupa z pionową etykietą kategorii po lewej stronie */
+.ctx-menu-group {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    padding: 2px 6px;
+}
+
+.ctx-menu-vlabel {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    text-align: center;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    padding: 4px 1px;
+    width: 17px;
+    min-width: 17px;
+    flex-shrink: 0;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ctx-menu-group .ctx-menu-toolbar {
+    flex: 1;
+    padding: 0;
+}
+
+/* Zwarty pasek ikon z podpisami — jak toolbar formularza HTML */
+.ctx-menu-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 4px;
+    padding: 4px 8px 6px;
+}
+
+.ctx-menu-tool {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 3px;
+    min-width: 52px;
+    max-width: 95px;
+    flex: 1 1 0px;
+    padding: 5px 6px 4px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 5px;
+    background: rgba(24, 24, 27, 0.9);
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.ctx-menu-tool:hover {
+    background: rgba(59, 130, 246, 0.28);
+    border-color: rgba(96, 165, 250, 0.55);
+    color: #f8fafc;
+}
+
+.ctx-menu-tool.disabled,
+.ctx-menu-tool:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.ctx-menu-tool.disabled:hover,
+.ctx-menu-tool:disabled:hover {
+    background: rgba(24, 24, 27, 0.9);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+}
+
+.ctx-menu-tool-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: inherit;
+}
+
+.ctx-menu-tool-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.ctx-menu-tool-caption {
+    display: block;
+    width: 100%;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.15;
+    text-align: center;
+    color: #a1a1aa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ctx-menu-tool:hover .ctx-menu-tool-caption {
+    color: #e2e8f0;
 }
 
 
@@ -1985,6 +2175,80 @@ body, html {
     padding: 2px 6px;
     border-radius: 4px;
     letter-spacing: 0.05em;
+}
+
+.export-settings-gear-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+    color: #94a3b8;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.export-settings-gear-btn:hover {
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.45);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.export-settings-gear-btn[aria-expanded="true"] {
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.45);
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.export-settings-popover {
+    position: absolute;
+    top: calc(100% - 4px);
+    right: 12px;
+    z-index: 40;
+    width: min(320px, calc(100% - 24px));
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #1e293b;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.export-settings-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    color: #e2e8f0;
+    font-size: 0.85rem;
+}
+
+.export-settings-close-btn {
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 2px 6px;
+}
+
+.export-settings-close-btn:hover {
+    color: #f1f5f9;
+}
+
+.export-settings-divider {
+    margin: 4px 0 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #94a3b8;
+    letter-spacing: 0.02em;
 }
 
 .export-status-toast {

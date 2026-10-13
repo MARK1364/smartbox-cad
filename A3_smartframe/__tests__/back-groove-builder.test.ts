@@ -4,7 +4,7 @@ import { planCabinet, applyLcsMapping } from '../smartframe-engine.js';
 import { Mat4 } from '../../A1_core/cad-math/mat4';
 import { Quat } from '../../A1_core/cad-math/quat';
 import { Vec3 } from '../../A1_core/cad-math/vec3';
-import { mmToNm } from '../../A1_core/cad-math/units';
+import { mmToNm, nmToMm } from '../../A1_core/cad-math/units';
 import { defaultBackOverlapMm, readBackEdgeOffset } from '../back-overlap';
 
 function panelStatesFromPlan(
@@ -27,7 +27,8 @@ function panelStatesFromPlan(
             role: part.role,
             dim_nm: { x: mmToNm(mapped.x), y: mmToNm(mapped.y), z: mmToNm(mapped.z) },
             localMatrix: Mat4.fromTRS(new Vec3(mmToNm(part.loc.x), mmToNm(part.loc.y), mmToNm(part.loc.z)), rotQuat),
-            zonePrefix: part.zonePrefix
+            zonePrefix: part.zonePrefix,
+            lcsMapping: part.lcs?.mapping
         };
         if (part.role === 'BACK_PANEL') {
             const panelName = part.name || part.key || 'Plecy';
@@ -149,6 +150,47 @@ describe('buildBackGrooves overlap depth', () => {
         expect(leftIntent!.feature?.params.depth_nm).toBeCloseTo(mmToNm(17));
         expect(rightIntent).toBeDefined();
         expect(rightIntent!.feature?.params.depth_nm).toBeCloseTo(mmToNm(17));
+    });
+
+    it('TRAVERSE_V: wcięcie tylko na tylnym T2 (FACE_Z_MINUS, 11×3), przedni bez; boczki nietknięte', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            tryb_wienca_gornego: 'TRAVERSE_V',
+            szerokosc_trawersu_mm: 100,
+            cofniecie_plecow_mm: 3
+        });
+
+        const panels = panelStatesFromPlan(plan);
+        const rear = panels.find((p) => p.role === 'TOP_PANEL' && String(p.id).includes('T2'))!;
+        const front = panels.find((p) => p.role === 'TOP_PANEL' && !String(p.id).includes('T2'))!;
+        const left = panels.find((p) => p.role === 'LEFT_SIDE_PANEL' || String(p.id).includes('BOK_L'))!;
+        expect(rear).toBeDefined();
+        expect(front).toBeDefined();
+        expect(left).toBeDefined();
+
+        const intents = buildBackGrooves(panels);
+        const rearG = intents.find((i) => i.targetNodeId === rear.id);
+        const frontG = intents.find((i) => i.targetNodeId === front.id);
+        const leftG = intents.find((i) => i.targetNodeId === left.id);
+
+        expect(frontG).toBeUndefined();
+        expect(rearG).toBeDefined();
+        expect(rearG!.feature?.face).toBe('-Z');
+        expect(nmToMm(rear.dim_nm.y)).toBeCloseTo(100, 0);
+        expect(nmToMm(rear.dim_nm.z)).toBeCloseTo(18, 0);
+        const back = panels.find((p) => p.role === 'BACK_PANEL')!;
+        expect(nmToMm(rearG!.feature!.params.length_nm)).toBeCloseTo(11, 0);
+        expect(nmToMm(rearG!.feature!.params.depth_nm)).toBeCloseTo(nmToMm(back.dim_nm.z), 0);
+        expect(rearG!.feature!.params.depth_nm).toBeLessThanOrEqual(rear.dim_nm.z);
+        expect(rearG!.feature!.params.isEdgeNotch).toBe(true);
+
+        // Boczek: klasyczny wpust na +Z, bez isEdgeNotch z gałęzi trawersa
+        expect(leftG).toBeDefined();
+        expect(leftG!.feature?.face).toBe('+Z');
+        expect(leftG!.feature!.params.isEdgeNotch).toBeUndefined();
     });
 
     it('isolates back offsets per zone in multi-zone cabinet (e.g. changing Dol_Plecy does NOT change Srodek_Plecy or Gora_Plecy)', () => {

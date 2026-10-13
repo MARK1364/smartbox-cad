@@ -52,6 +52,20 @@ export interface CabinetPartGeometryContext {
     thicknessLookup: CabinetThicknessLookupContext;
 }
 
+/**
+ * Wysokość zajmowana przez wieniec górny w Z [mm].
+ * FULL / TRAVERSE_H → grubość płyty; TRAVERSE_V → szerokość trawersu (stoi na sztorc).
+ */
+function resolveTopOccupyHeightMm(
+    ctx: Pick<CabinetPartGeometryContext, 'top_panel_mode' | 'traverse_width'>,
+    topPlateMm: number
+): number {
+    if ((ctx.top_panel_mode || 'FULL') === 'TRAVERSE_V') {
+        return ctx.traverse_width || 80;
+    }
+    return topPlateMm;
+}
+
 export function resolveCabinetPartGeometry(
     key: string,
     comp: any,
@@ -64,14 +78,34 @@ export function resolveCabinetPartGeometry(
 
     const name = comp.name || key;
     const role = comp.role || "";
-    const pYPlus  = ctx.offsets[`${name}_+Y`] || 0;
-    const pYMinus = ctx.offsets[`${name}_-Y`] || 0;
-    const pXMinus = ctx.offsets[`${name}_-X`] || 0;
-    const pXPlus  = ctx.offsets[`${name}_+X`] || 0;
+    const backEdgeDefault = ctx.back_groove_depth || 11;
+    const isBackPanel = role === "BACK_PANEL";
+    const offsetNames = [name, key, `${ctx.zonePrefix || ''}${key}`, role];
+    const readPanelOffset = (suffix: string): number | undefined => {
+        for (const offsetName of offsetNames) {
+            const value = ctx.offsets[`${offsetName}_${suffix}`];
+            if (value !== undefined && value !== null && Number.isFinite(Number(value))) {
+                return Number(value);
+            }
+        }
+        return undefined;
+    };
+    const pYPlus  = isBackPanel
+        ? readPanelOffset('+Y') ?? readBackEdgeOffset(ctx.offsets, name, '+Y', backEdgeDefault, ctx.zonePrefix)
+        : readPanelOffset('+Y') ?? ctx.offsets[`${name}_+Y`] ?? 0;
+    const pYMinus = isBackPanel
+        ? readPanelOffset('-Y') ?? readBackEdgeOffset(ctx.offsets, name, '-Y', backEdgeDefault, ctx.zonePrefix)
+        : readPanelOffset('-Y') ?? ctx.offsets[`${name}_-Y`] ?? 0;
+    const pXMinus = isBackPanel
+        ? readPanelOffset('-X') ?? readBackEdgeOffset(ctx.offsets, name, '-X', backEdgeDefault, ctx.zonePrefix)
+        : readPanelOffset('-X') ?? ctx.offsets[`${name}_-X`] ?? 0;
+    const pXPlus  = isBackPanel
+        ? readPanelOffset('+X') ?? readBackEdgeOffset(ctx.offsets, name, '+X', backEdgeDefault, ctx.zonePrefix)
+        : readPanelOffset('+X') ?? ctx.offsets[`${name}_+X`] ?? 0;
 
-    const shiftX = ctx.offsets[`${name}_shiftX`] || 0;
-    const shiftY = ctx.offsets[`${name}_shiftY`] || 0;
-    const shiftZ = ctx.offsets[`${name}_shiftZ`] || 0;
+    const shiftX = readPanelOffset('shiftX') ?? 0;
+    const shiftY = readPanelOffset('shiftY') ?? 0;
+    const shiftZ = readPanelOffset('shiftZ') ?? 0;
 
     const cleanKey = key.replace(/^(B_|M_|T_)/i, '');
     const matchedKey = cleanKey.toUpperCase();
@@ -151,27 +185,61 @@ export function resolveCabinetPartGeometry(
 
     // Korpus skośny LR (ucio) — wieniec w świetle + cutAngle na stykach z bokami
     if (ctx.cabinet_type === 'korpus_skosny_lr_uc') {
-        const hL = Math.max(100, ctx.height_left ?? 1000);
-        const hR = Math.max(100, ctx.height_right ?? 2200);
+        const hL_mm = Math.max(1, ctx.height_left ?? 1000);
+        const hR_mm = Math.max(1, ctx.height_right ?? H);
+        const bottomThick = requireCabinetPartThickness("BOTTOM", pfx, ctx.thicknessLookup, ["WIENIEC_D"]);
+        const topThick    = requireCabinetPartThickness("TOP", pfx, ctx.thicknessLookup, ["WIENIEC_G"]);
         return resolveSkosnyLrUcGeometry(matchedKey, role, {
-            W, D,
-            hL, hR, maxH: Math.max(hL, hR),
-            thickness, backOffset, shiftX, shiftY, shiftZ,
-            pXPlus, pXMinus, pYPlus, pYMinus,
-            leftThick, rightThick, innerWidth, midShift
+            W_mm: W,
+            D_mm: D,
+            wysokosc_lewy_mm: hL_mm,
+            wysokosc_prawy_mm: hR_mm,
+            max_wysokosc_mm: Math.max(hL_mm, hR_mm),
+            grubosc_mm: thickness,
+            grubosc_dolny_mm: bottomThick,
+            grubosc_gorny_mm: topThick,
+            odsuniecie_plecow_mm: backOffset,
+            przesuniecie_x_mm: shiftX,
+            przesuniecie_y_mm: shiftY,
+            przesuniecie_z_mm: shiftZ,
+            wpuszczenie_prawe_mm: pXPlus,
+            wpuszczenie_lewe_mm: pXMinus,
+            margines_gorny_mm: pYPlus,
+            margines_dolny_mm: pYMinus,
+            grubosc_lewy_mm: leftThick,
+            grubosc_prawy_mm: rightThick,
+            szerokosc_wewnetrzna_mm: innerWidth,
+            przesuniecie_srodka_mm: midShift
         });
     }
 
     // Korpus skośny LR — osobna geometria (skos w poprzek: lewy niski / prawy wysoki)
     if (ctx.cabinet_type === 'korpus_skosny_lr') {
-        const hL = Math.max(100, ctx.height_left ?? 1000);
-        const hR = Math.max(100, ctx.height_right ?? 2200);
+        const hL_mm = Math.max(1, ctx.height_left ?? 1000);
+        const hR_mm = Math.max(1, ctx.height_right ?? H);
+        const bottomThick = requireCabinetPartThickness("BOTTOM", pfx, ctx.thicknessLookup, ["WIENIEC_D"]);
+        const topThick    = requireCabinetPartThickness("TOP", pfx, ctx.thicknessLookup, ["WIENIEC_G"]);
         return resolveSkosnyLrGeometry(matchedKey, role, {
-            W, D,
-            hL, hR, maxH: Math.max(hL, hR),
-            thickness, backOffset, shiftX, shiftY, shiftZ,
-            pXPlus, pXMinus, pYPlus, pYMinus,
-            leftThick, rightThick, innerWidth, midShift
+            W_mm: W,
+            D_mm: D,
+            wysokosc_lewy_mm: hL_mm,
+            wysokosc_prawy_mm: hR_mm,
+            max_wysokosc_mm: Math.max(hL_mm, hR_mm),
+            grubosc_mm: thickness,
+            grubosc_dolny_mm: bottomThick,
+            grubosc_gorny_mm: topThick,
+            odsuniecie_plecow_mm: backOffset,
+            przesuniecie_x_mm: shiftX,
+            przesuniecie_y_mm: shiftY,
+            przesuniecie_z_mm: shiftZ,
+            wpuszczenie_prawe_mm: pXPlus,
+            wpuszczenie_lewe_mm: pXMinus,
+            margines_gorny_mm: pYPlus,
+            margines_dolny_mm: pYMinus,
+            grubosc_lewy_mm: leftThick,
+            grubosc_prawy_mm: rightThick,
+            szerokosc_wewnetrzna_mm: innerWidth,
+            przesuniecie_srodka_mm: midShift
         });
     }
 
@@ -224,13 +292,15 @@ export function resolveCabinetPartGeometry(
             const trWidth = ctx.traverse_width || 80;
             const isFront = !isWieniecGT2;
             const baseY = isFront ? (-D / 2 + thickness / 2) : (D / 2 - thickness / 2);
+            // pX (czerwone gizmo) → szerokość trawersu (dim.z), NIE grubość.
+            // Po mapping Y←z, Z←y: thickness = dim.y — musi zostać czystą grubością płyty.
             return {
                 thickness,
-                dim: { x: innerWidth + pYMinus + pYPlus, y: thickness + pXMinus + pXPlus, z: trWidth },
+                dim: { x: innerWidth + pYMinus + pYPlus, y: thickness, z: trWidth + pXMinus + pXPlus },
                 loc: {
                     x: midShift + (pYPlus - pYMinus) / 2,
-                    y: baseY + (pXPlus - pXMinus) / 2,
-                    z: H - trWidth / 2 + shiftZ
+                    y: baseY + shiftY,
+                    z: H - trWidth / 2 + shiftZ + (pXPlus - pXMinus) / 2
                 },
                 lcs: {
                     mapping: { X: 'x', Y: 'z', Z: 'y' },
@@ -255,8 +325,10 @@ export function resolveCabinetPartGeometry(
         const overlapTop    = readBackEdgeOffset(ctx.offsets, name, '+Y', defaultGroove, pfx);
 
         const bottomThick = requireCabinetPartThickness("BOTTOM", pfx, ctx.thicknessLookup, ["WIENIEC_D"]);
-        const topThick    = requireCabinetPartThickness("TOP", pfx, ctx.thicknessLookup, ["WIENIEC_G"]);
-        const innerH      = H - bottomThick - topThick;
+        const topPlate    = requireCabinetPartThickness("TOP", pfx, ctx.thicknessLookup, ["WIENIEC_G"]);
+        // FULL/TRAVERSE_H: wysokość = grubość płyty; TRAVERSE_V: wysokość = szerokość trawersu
+        const topOccupy   = resolveTopOccupyHeightMm(ctx, topPlate);
+        const innerH      = H - bottomThick - topOccupy;
 
         const backW       = innerWidth + overlapLeft + overlapRight;
         const backH       = innerH + overlapBottom + overlapTop;
@@ -279,8 +351,10 @@ export function resolveCabinetPartGeometry(
         role === "BLIND_PANEL"
     ) {
         const bottomThick = requireCabinetPartThickness("BOTTOM", pfx, ctx.thicknessLookup, ["WIENIEC_D"]);
-        const topThick    = requireCabinetPartThickness("TOP", pfx, ctx.thicknessLookup, ["WIENIEC_G"]);
-        const innerH      = H - bottomThick - topThick;
+        const topPlate    = requireCabinetPartThickness("TOP", pfx, ctx.thicknessLookup, ["WIENIEC_G"]);
+        // FULL/TRAVERSE_H: wysokość = grubość płyty; TRAVERSE_V: wysokość = szerokość trawersu
+        const topOccupy   = resolveTopOccupyHeightMm(ctx, topPlate);
+        const innerH      = H - bottomThick - topOccupy;
 
         const rulesDefaults = ctx.rules?.parameters?.defaults || ctx.baseRules?.parameters?.defaults || {};
         const validation = ctx.rules?.parameters?.validation || ctx.baseRules?.parameters?.validation || {};

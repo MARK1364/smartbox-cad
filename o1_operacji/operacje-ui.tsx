@@ -66,6 +66,28 @@ const inputStyle: React.CSSProperties = {
     fontSize: '12px',
 };
 
+/** Proste ikony narzędzi — ten sam język co AGD (stroke + lekki fill). */
+function renderOperationIcon(id: string) {
+    if (id === 'rewizja') {
+        // Duża formatka + mały otwór rewizyjny w rogu (~1/4)
+        return (
+            <svg width="18" height="16" viewBox="0 0 18 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+                <rect x="1" y="1" width="16" height="14" rx="1.5" />
+                <rect x="10" y="8" width="5.5" height="5" rx="0.6" fill="currentColor" fillOpacity="0.2" />
+            </svg>
+        );
+    }
+
+    // przetloczenie — formatka z wgłębieniem
+    return (
+        <svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" strokeWidth="1.2">
+            <rect x="1" y="1" width="16" height="12" rx="1.5" />
+            <rect x="4" y="3.5" width="10" height="7" rx="0.8" fill="currentColor" fillOpacity="0.15" />
+            <path d="M4 5.5h10M4 8.5h10" strokeWidth="1" opacity="0.55" />
+        </svg>
+    );
+}
+
 export function OperacjeUI() {
     const recipes = useMemo(() => listOperations(), []);
     // Domyślnie wszystkie sekcje są zwinięte (null)
@@ -222,197 +244,175 @@ export function OperacjeUI() {
                 <span>Przeciągnij operację na formatkę 3D lub kliknij, aby edytować parametry.</span>
             </p>
 
-            <div className="o1-accordion">
-
+            <div className="o1-tools-row">
                 {recipes.map((item) => {
                     const isExpanded = expandedId === item.id;
-                    const isItemEdgeDims = item.placement === 'edge_dims';
-
                     return (
-                        <div
+                        <button
                             key={item.id}
-                            className={`o1-card${isExpanded ? ' is-expanded' : ''}`}
+                            type="button"
+                            className={`o1-tool-btn${isExpanded ? ' is-active' : ''}`}
+                            draggable
+                            onDragStart={(e) => onDragStart(e, item)}
+                            onDragEnd={onDragEnd}
+                            onClick={() => toggleAccordion(item.id)}
+                            title="Przeciągnij na formatkę 3D lub kliknij, aby edytować"
                         >
-                            {/* Nagłówek karty — kliknięcie otwiera/zamyka, przeciągnięcie nakłada w 3D */}
-                            <div
-                                className="o1-card__header"
-                                draggable
-                                onDragStart={(e) => onDragStart(e, item)}
-                                onDragEnd={onDragEnd}
-                                onClick={() => toggleAccordion(item.id)}
-                            >
-                                <div className="o1-card__info" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span className="o1-card__hand-icon" title="Chwyć i przeciągnij na płaszczyznę formatki w 3D" style={{ opacity: 0.75, display: 'inline-flex', alignItems: 'center' }}>
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
-                                            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
-                                            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
-                                            <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
-                                        </svg>
-                                    </span>
-                                    <span className="o1-card__name">{item.name}</span>
-                                </div>
-
-                                <div className="o1-card__actions">
-                                    <span className="o1-card__drag-handle" title="Przeciągnij na płaszczyznę formatki w 3D">
-                                        ⠿
-                                    </span>
-                                    <span className="o1-card__chevron">▶</span>
-                                </div>
-                            </div>
-
-                            {/* Rozwijany formularz edycji */}
-                            {isExpanded && (
-                                <div className="o1-card__body">
-                                    {isItemEdgeDims ? (
-                                        <>
-                                            <label className="o1-field">
-                                                <span>Szerokość (W)</span>
-                                                <SmartNumericInput
-                                                    value={widthMm}
-                                                    min={1}
-                                                    max={2000}
-                                                    step={1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setWidthMm(val);
-                                                        commit({ widthMm: val, heightMm, uMm, vMm, depthMm, through: true, fill: 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-                                            <label className="o1-field">
-                                                <span>Wysokość (H)</span>
-                                                <SmartNumericInput
-                                                    value={heightMm}
-                                                    min={1}
-                                                    max={2000}
-                                                    step={1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setHeightMm(val);
-                                                        commit({ widthMm, heightMm: val, uMm, vMm, depthMm, through: true, fill: 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-                                            <label className="o1-field">
-                                                <span>Od {edgeShortLabel(instance?.params.u_edge || item.edge.uEdge)}</span>
-                                                <SmartNumericInput
-                                                    value={uMm}
-                                                    min={0}
-                                                    max={2000}
-                                                    step={1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setUMm(val);
-                                                        commit({ widthMm, heightMm, uMm: val, vMm, depthMm, through: true, fill: 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-                                            <label className="o1-field">
-                                                <span>Od {edgeShortLabel(instance?.params.v_edge || item.edge.vEdge)}</span>
-                                                <SmartNumericInput
-                                                    value={vMm}
-                                                    min={0}
-                                                    max={2000}
-                                                    step={1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setVMm(val);
-                                                        commit({ widthMm, heightMm, uMm, vMm: val, depthMm, through: true, fill: 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <label className="o1-field">
-                                                <span>Margines lewy (L)</span>
-                                                <SmartNumericInput
-                                                    value={insetLMm}
-                                                    min={0}
-                                                    max={500}
-                                                    step={1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setInsetLMm(val);
-                                                        commit({ insetLMm: val, insetRMm, insetTMm, insetBMm, depthMm, through: item.through ?? false, fill: item.fill ?? 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-                                            <label className="o1-field">
-                                                <span>Margines prawy (P)</span>
-                                                <SmartNumericInput
-                                                    value={insetRMm}
-                                                    min={0}
-                                                    max={500}
-                                                    step={1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setInsetRMm(val);
-                                                        commit({ insetLMm, insetRMm: val, insetTMm, insetBMm, depthMm, through: item.through ?? false, fill: item.fill ?? 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-                                            <label className="o1-field">
-                                                <span>Margines góra (G)</span>
-                                                <SmartNumericInput
-                                                    value={insetTMm}
-                                                    min={0}
-                                                    max={500}
-                                                    step={1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setInsetTMm(val);
-                                                        commit({ insetLMm, insetRMm, insetTMm: val, insetBMm, depthMm, through: item.through ?? false, fill: item.fill ?? 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-                                            <label className="o1-field">
-                                                <span>Margines dół (D)</span>
-                                                <SmartNumericInput
-                                                    value={insetBMm}
-                                                    min={0}
-                                                    max={500}
-                                                    step={1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setInsetBMm(val);
-                                                        commit({ insetLMm, insetRMm, insetTMm, insetBMm: val, depthMm, through: item.through ?? false, fill: item.fill ?? 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-
-                                            <label className="o1-field">
-                                                <span>Głębokość</span>
-                                                <SmartNumericInput
-                                                    value={depthMm}
-                                                    min={0.1}
-                                                    max={50}
-                                                    step={0.1}
-                                                    unit="mm"
-                                                    style={inputStyle}
-                                                    onChange={(val) => {
-                                                        setDepthMm(val);
-                                                        commit({ insetLMm, insetRMm, insetTMm, insetBMm, depthMm: val, through: item.through ?? false, fill: item.fill ?? 'none' }, item.id);
-                                                    }}
-                                                />
-                                            </label>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                            <span className="o1-tool-btn__icon" aria-hidden="true">
+                                {renderOperationIcon(item.id)}
+                            </span>
+                            <span className="o1-tool-btn__name">{item.name}</span>
+                        </button>
                     );
                 })}
             </div>
+
+            {expandedId && currentRecipe && expandedId === currentRecipe.id && (
+                <div className="o1-tool-params">
+                    {currentRecipe.placement === 'edge_dims' ? (
+                        <>
+                            <label className="o1-field">
+                                <span>Szerokość (W)</span>
+                                <SmartNumericInput
+                                    value={widthMm}
+                                    min={1}
+                                    max={2000}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setWidthMm(val);
+                                        commit({ widthMm: val, heightMm, uMm, vMm, depthMm, through: true, fill: 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                            <label className="o1-field">
+                                <span>Wysokość (H)</span>
+                                <SmartNumericInput
+                                    value={heightMm}
+                                    min={1}
+                                    max={2000}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setHeightMm(val);
+                                        commit({ widthMm, heightMm: val, uMm, vMm, depthMm, through: true, fill: 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                            <label className="o1-field">
+                                <span>Od {edgeShortLabel(instance?.params.u_edge || currentRecipe.edge.uEdge)}</span>
+                                <SmartNumericInput
+                                    value={uMm}
+                                    min={0}
+                                    max={2000}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setUMm(val);
+                                        commit({ widthMm, heightMm, uMm: val, vMm, depthMm, through: true, fill: 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                            <label className="o1-field">
+                                <span>Od {edgeShortLabel(instance?.params.v_edge || currentRecipe.edge.vEdge)}</span>
+                                <SmartNumericInput
+                                    value={vMm}
+                                    min={0}
+                                    max={2000}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setVMm(val);
+                                        commit({ widthMm, heightMm, uMm, vMm: val, depthMm, through: true, fill: 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                        </>
+                    ) : (
+                        <>
+                            <label className="o1-field">
+                                <span>Margines lewy (L)</span>
+                                <SmartNumericInput
+                                    value={insetLMm}
+                                    min={0}
+                                    max={500}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setInsetLMm(val);
+                                        commit({ insetLMm: val, insetRMm, insetTMm, insetBMm, depthMm, through: currentRecipe.through ?? false, fill: currentRecipe.fill ?? 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                            <label className="o1-field">
+                                <span>Margines prawy (P)</span>
+                                <SmartNumericInput
+                                    value={insetRMm}
+                                    min={0}
+                                    max={500}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setInsetRMm(val);
+                                        commit({ insetLMm, insetRMm: val, insetTMm, insetBMm, depthMm, through: currentRecipe.through ?? false, fill: currentRecipe.fill ?? 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                            <label className="o1-field">
+                                <span>Margines góra (G)</span>
+                                <SmartNumericInput
+                                    value={insetTMm}
+                                    min={0}
+                                    max={500}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setInsetTMm(val);
+                                        commit({ insetLMm, insetRMm, insetTMm: val, insetBMm, depthMm, through: currentRecipe.through ?? false, fill: currentRecipe.fill ?? 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                            <label className="o1-field">
+                                <span>Margines dół (D)</span>
+                                <SmartNumericInput
+                                    value={insetBMm}
+                                    min={0}
+                                    max={500}
+                                    step={1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setInsetBMm(val);
+                                        commit({ insetLMm, insetRMm, insetTMm, insetBMm: val, depthMm, through: currentRecipe.through ?? false, fill: currentRecipe.fill ?? 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                            <label className="o1-field">
+                                <span>Głębokość</span>
+                                <SmartNumericInput
+                                    value={depthMm}
+                                    min={0.1}
+                                    max={50}
+                                    step={0.1}
+                                    unit="mm"
+                                    style={inputStyle}
+                                    onChange={(val) => {
+                                        setDepthMm(val);
+                                        commit({ insetLMm, insetRMm, insetTMm, insetBMm, depthMm: val, through: currentRecipe.through ?? false, fill: currentRecipe.fill ?? 'none' }, currentRecipe.id);
+                                    }}
+                                />
+                            </label>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

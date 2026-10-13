@@ -34,7 +34,7 @@ describe('Bloki reference picking guard and clear flow', () => {
         let isPicking = false;
         if (!isDisabled) {
             ContextManager.instance.appAPI?.setStatus?.(
-                `Referencja [Bok Lewy] jest przypisana. Aby wybrać inną, najpierw skasuj ją przyciskiem [✕].`
+                `Odniesienie [Bok Lewy] jest przypisane. Aby wybrać inne, najpierw skasuj je przyciskiem [✕].`
             );
         } else {
             isPicking = true;
@@ -43,7 +43,7 @@ describe('Bloki reference picking guard and clear flow', () => {
 
         expect(isPicking).toBe(false);
         expect(ContextManager.instance.activeReferencePicker).toBeUndefined();
-        expect(statusMessages.some(m => m.includes('najpierw skasuj ją przyciskiem [✕]'))).toBe(true);
+        expect(statusMessages.some(m => m.includes('najpierw skasuj je przyciskiem [✕]'))).toBe(true);
     });
 
     it('allows 3D face picking only after reference is cleared (✕ -> disabledReferences)', () => {

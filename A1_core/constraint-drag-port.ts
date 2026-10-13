@@ -12,6 +12,7 @@ export interface ConstraintDragPort {
     buildTransformCommands(document: ProjectDocument, label: string): Command[];
     restoreInitial(document: ProjectDocument): void;
     end(): void;
+    getAffectedNodeIds?(): Set<string>;
 }
 
 let port: ConstraintDragPort | null = null;

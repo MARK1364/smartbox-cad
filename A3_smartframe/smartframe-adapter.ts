@@ -472,21 +472,21 @@ export function runEngineAndApply(
     const isCorner = cabinetType === 'korpus_rogowy1' || cabinetType === 'korpus_rogowy90';
     const isSkosny = cabinetType === 'korpus_skosny' || cabinetType === 'korpus_skosny_dach' || cabinetType === 'korpus_skosny_lr' || cabinetType === 'korpus_skosny_lr_uc';
     // Skośny: wysokość kontenera zawsze = max stron [mm].
-    let hMm = wysokosc_mm;
+    let h_mm = wysokosc_mm;
     if (isSkosny) {
-        const frontMm = gp.wysokosc_przod_mm ?? 1000;
-        const backMm = gp.wysokosc_tyl_mm ?? 2200;
-        hMm = Math.max(hMm, frontMm, backMm);
+        const front_mm = gp.wysokosc_przod_mm ?? wysokosc_mm;
+        const back_mm = gp.wysokosc_tyl_mm ?? 1000;
+        h_mm = Math.max(h_mm, front_mm, back_mm);
     }
     const effectiveZoneCount = (isCorner || isSkosny) ? 1 : zCount;
 
     if (container) {
         container.width = mmToNm(w_mm);
-        container.height = mmToNm(hMm);
+        container.height = mmToNm(h_mm);
         container.depth = mmToNm(glebokosc_mm);
         if (!container.generatorParams) container.generatorParams = {};
         container.generatorParams.szerokosc_mm = w_mm;
-        container.generatorParams.wysokosc_mm = hMm;
+        container.generatorParams.wysokosc_mm = h_mm;
         container.generatorParams.glebokosc_mm = glebokosc_mm;
         container.generatorParams.liczba_stref = effectiveZoneCount as 1 | 2 | 3;
         container.generatorParams.wysokosc_strefy_dolnej_mm = wysokosc_strefy_dolnej_mm;
@@ -499,7 +499,7 @@ export function runEngineAndApply(
 
     const plan = planCabinet({
         szerokosc_mm: w_mm,
-        wysokosc_mm: hMm,
+        wysokosc_mm: h_mm,
         glebokosc_mm: glebokosc_mm,
         liczba_stref: effectiveZoneCount as 1 | 2 | 3,
         wysokosc_strefy_dolnej_mm,
@@ -624,6 +624,7 @@ export interface KorpusParams {
  */
 function buildCabinetGeneratorParams(input: {
     type: string;
+    typ_korpusu?: AdapterCabinetType;
     szerokosc_mm: number;
     wysokosc_mm: number;
     glebokosc_mm: number;
@@ -643,6 +644,7 @@ function buildCabinetGeneratorParams(input: {
 }): Record<string, any> {
     const gp: Record<string, any> = {
         type: input.type,
+        typ_korpusu: input.typ_korpusu || resolveCabinetType(input.type),
         szerokosc_mm: input.szerokosc_mm,
         wysokosc_mm: input.wysokosc_mm,
         glebokosc_mm: input.glebokosc_mm,
@@ -700,12 +702,12 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
         : isRogowy1 ? 'korpus_rogowy1'
         : (gp.type || 'korpus3_2');
 
-    const skosHF = params.wysokosc_przod_mm ?? gp.wysokosc_przod_mm ?? 1000;
-    const skosHB = params.wysokosc_tyl_mm ?? gp.wysokosc_tyl_mm ?? 2200;
-    const skosHL = params.wysokosc_lewy_mm ?? gp.wysokosc_lewy_mm ?? 1000;
-    const skosHR = params.wysokosc_prawy_mm ?? gp.wysokosc_prawy_mm ?? 2200;
-    const skosH = isSkosnyLr ? Math.max(skosHL, skosHR, h_mm) : Math.max(skosHF, skosHB, h_mm);
-    const bottomHeight = params.wysokosc_strefy_dolnej_mm ?? gp.wysokosc_strefy_dolnej_mm ?? (isSkosny ? skosH : h_mm);
+    const skos_hF_mm = params.wysokosc_przod_mm ?? gp.wysokosc_przod_mm ?? h_mm;
+    const skos_hB_mm = params.wysokosc_tyl_mm ?? gp.wysokosc_tyl_mm ?? 1000;
+    const skos_hL_mm = params.wysokosc_lewy_mm ?? gp.wysokosc_lewy_mm ?? 1000;
+    const skos_hR_mm = params.wysokosc_prawy_mm ?? gp.wysokosc_prawy_mm ?? h_mm;
+    const skos_h_mm = isSkosnyLr ? Math.max(skos_hL_mm, skos_hR_mm, h_mm) : Math.max(skos_hF_mm, skos_hB_mm, h_mm);
+    const bottomHeight = params.wysokosc_strefy_dolnej_mm ?? gp.wysokosc_strefy_dolnej_mm ?? (isSkosny ? skos_h_mm : h_mm);
     const middleHeight = params.wysokosc_strefy_srodkowej_mm ?? gp.wysokosc_strefy_srodkowej_mm ?? 0;
     const blindWidth = params.szerokosc_blendy_mm ?? gp.szerokosc_blendy_mm ?? 400;
     const blindSide = params.strona_blendy ?? gp.strona_blendy ?? 'LEFT';
@@ -715,29 +717,30 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
     const bOffset = params.cofniecie_plecow_mm ?? gp.cofniecie_plecow_mm ?? gp.backOffset ?? 3;
 
     container.width  = mmToNm(w_mm);
-    container.height = mmToNm(isSkosny ? skosH : h_mm);
+    container.height = mmToNm(isSkosny ? skos_h_mm : h_mm);
     container.depth  = mmToNm(d_mm);
     if (!container.generatorParams) container.generatorParams = {};
     Object.assign(container.generatorParams, buildCabinetGeneratorParams({
         type: typeStr,
+        typ_korpusu: cabinetType,
         szerokosc_mm: w_mm,
-        wysokosc_mm: isSkosny ? skosH : h_mm,
+        wysokosc_mm: isSkosny ? skos_h_mm : h_mm,
         glebokosc_mm: d_mm,
         liczba_stref: zoneCount,
-        wysokosc_strefy_dolnej_mm: (isCorner || isSkosny) ? (isSkosny ? skosH : h_mm) : bottomHeight,
+        wysokosc_strefy_dolnej_mm: (isCorner || isSkosny) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeight,
         wysokosc_strefy_srodkowej_mm: (isCorner || isSkosny) ? 0 : middleHeight,
         cofniecie_plecow_mm: bOffset,
         offsets: params.offsets,
-        ...(isSkosny && !isSkosnyLr ? { wysokosc_przod_mm: skosHF, wysokosc_tyl_mm: skosHB } : {}),
-        ...(isSkosnyLr ? { wysokosc_lewy_mm: skosHL, wysokosc_prawy_mm: skosHR } : {}),
+        ...(isSkosny && !isSkosnyLr ? { wysokosc_przod_mm: skos_hF_mm, wysokosc_tyl_mm: skos_hB_mm } : {}),
+        ...(isSkosnyLr ? { wysokosc_lewy_mm: skos_hL_mm, wysokosc_prawy_mm: skos_hR_mm } : {}),
         ...(isRogowy1 ? { szerokosc_blendy_mm: blindWidth, strona_blendy: blindSide } : {}),
         ...(isRogowy90 ? { glebokosc_boku_lewego_mm: bokLewy, glebokosc_boku_prawego_mm: bokPrawy } : {})
     }));
     runEngineAndApply(
         container,
-        w_mm, isSkosny ? skosH : h_mm, d_mm,
+        w_mm, isSkosny ? skos_h_mm : h_mm, d_mm,
         zoneCount,
-        (isCorner || isSkosny) ? (isSkosny ? skosH : h_mm) : bottomHeight,
+        (isCorner || isSkosny) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeight,
         (isCorner || isSkosny) ? 0 : middleHeight,
         bOffset, { ...(params.offsets || {}) }
     );

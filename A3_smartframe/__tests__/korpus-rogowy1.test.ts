@@ -112,4 +112,60 @@ describe('KORPUS_ROGOWY1 blind panel', () => {
         expect(right['+Y'].active).toBe(false);
         expect(right['-Y'].active).toBe(false);
     });
+
+    it('TRAVERSE_H / TRAVERSE_V: dwa wieńce TOP (gizmo pomarańczowy)', () => {
+        const base = {
+            szerokosc_mm: 800,
+            wysokosc_mm: 2200,
+            glebokosc_mm: 600,
+            liczba_stref: 1 as const,
+            typ_korpusu: 'korpus_rogowy1' as const,
+            szerokosc_blendy_mm: 400,
+            strona_blendy: 'LEFT' as const,
+            cofniecie_plecow_mm: 3,
+            szerokosc_trawersu_mm: 100,
+        };
+
+        const full = planCabinet({ ...base, tryb_wienca_gornego: 'FULL' });
+        expect(full.parts.filter(p => p.role === 'TOP_PANEL')).toHaveLength(1);
+
+        const th = planCabinet({ ...base, tryb_wienca_gornego: 'TRAVERSE_H' });
+        const thTops = th.parts.filter(p => p.role === 'TOP_PANEL');
+        expect(thTops).toHaveLength(2);
+        expect(thTops.some(p => p.key.includes('WIENIEC_G_T2'))).toBe(true);
+
+        const tv = planCabinet({ ...base, tryb_wienca_gornego: 'TRAVERSE_V' });
+        const tvTops = tv.parts.filter(p => p.role === 'TOP_PANEL');
+        expect(tvTops).toHaveLength(2);
+        expect(tvTops.some(p => p.key.includes('WIENIEC_G_T2'))).toBe(true);
+    });
+
+    it('TRAVERSE_V: blind i plecy skracają się o szerokość trawersu (nie grubość 18)', () => {
+        const base = {
+            szerokosc_mm: 800,
+            wysokosc_mm: 2200,
+            glebokosc_mm: 600,
+            liczba_stref: 1 as const,
+            typ_korpusu: 'korpus_rogowy1' as const,
+            szerokosc_blendy_mm: 400,
+            strona_blendy: 'LEFT' as const,
+            cofniecie_plecow_mm: 3,
+            szerokosc_trawersu_mm: 100,
+        };
+
+        const full = planCabinet({ ...base, tryb_wienca_gornego: 'FULL' });
+        const fullBlind = full.parts.find(p => p.role === 'BLIND_PANEL')!;
+        // 2200 - 18 - 18 = 2164
+        expect(fullBlind.dim.z).toBeCloseTo(2164, 0);
+
+        const tv = planCabinet({ ...base, tryb_wienca_gornego: 'TRAVERSE_V' });
+        const tvBlind = tv.parts.find(p => p.role === 'BLIND_PANEL')!;
+        const tvBack = tv.parts.find(p => p.role === 'BACK_PANEL')!;
+        // 2200 - 18 - 100 = 2082
+        expect(tvBlind.dim.z).toBeCloseTo(2082, 0);
+        // środek światła: 18 + 2082/2 = 1059
+        expect(tvBlind.loc.z).toBeCloseTo(1059, 0);
+        // plecy: innerH + groovey (domyślnie 11+11) = 2082+22 = 2104
+        expect(tvBack.dim.z).toBeCloseTo(2104, 0);
+    });
 });

@@ -16,7 +16,16 @@ import {
 } from '../dto/cam-dto.js';
 import { CLCommand, CLDataProgram } from '../core/cl-data.js';
 import { ToolLibrary } from './tool-library.js';
-import { createVector3D, vecDistance, vecSub, vecNormalize, vecScale, calculateRadiusOffsetPath, generateEffectiveContourPath } from '../geometry/cnc-geometry-utils.js';
+import {
+    createVector3D,
+    vecDistance,
+    vecSub,
+    vecNormalize,
+    vecScale,
+    calculateRadiusOffsetPath,
+    generateEffectiveContourPath,
+    optimizePath2Opt
+} from '../geometry/cnc-geometry-utils.js';
 
 export interface AssignmentIssues {
     unassignedHolesMm: Record<number, number>;
@@ -43,14 +52,14 @@ export class CAMProcessor {
     }
 
     /**
-     * Operacje CNC dla symulatora 3D (CNCOperation[]).
-     * Postprocessory NIE korzystają z tej ścieżki — patrz `buildCLProgram()`.
+     * Operacje CNC dla symulatora 3D i postprocesorów (CNCOperation[]).
+     * Pełna optymalizacja trasy TSP (Nearest Neighbor + 2-Opt) na poziomie pojedynczych operacji i otworów.
      */
     public processProject(project: CAMProject): CNCOperation[] {
         const featuresWithTools = this.assignToolsToFeatures(project.features);
         this.collectAssignmentIssues(featuresWithTools);
-        const optimizedFeatures = this.optimizeFeatureOrder(featuresWithTools);
-        return this.createCncOperations(optimizedFeatures, project.wcsOrigin);
+        const rawOperations = this.createCncOperations(featuresWithTools, project.wcsOrigin);
+        return this.optimizeOperations(rawOperations, project.wcsOrigin);
     }
 
     /**
@@ -67,30 +76,45 @@ export class CAMProcessor {
         let totalLengthMm = 0;
         let estimatedTimeSec = 0;
         let cursor: Vector3D = createVector3D();
+        let activeToolId: string | null = null;
+        let activeRpm: number | null = null;
+        let activeFeed: number | null = null;
 
         for (const op of operations) {
             const tool = this.toolLibrary.getTool(op.toolId);
             const p = op.parameters;
 
             if (!toolIdsUsed.includes(op.toolId)) toolIdsUsed.push(op.toolId);
-            commands.push({
-                type: 'TOOL_SELECT',
-                toolId: op.toolId,
-                toolDiameter: tool?.diameter,
-                toolName: tool?.name,
-            });
-            commands.push({
-                type: 'SPINDL',
-                spindleRpm: p.spindleRpm,
-                spindleDirection: 'CW',
-            });
-            commands.push({ type: 'FEDRAT', feedRate: p.feedRate });
+
+            // Jedna zmiana narzędzia / wrzeciona / posuwu na grupę — nie przy każdym otworze.
+            if (op.toolId !== activeToolId) {
+                commands.push({
+                    type: 'TOOL_SELECT',
+                    toolId: op.toolId,
+                    toolDiameter: tool?.diameter,
+                    toolName: tool?.name,
+                });
+                activeToolId = op.toolId;
+                activeRpm = null;
+                activeFeed = null;
+            }
+            if (p.spindleRpm !== activeRpm) {
+                commands.push({
+                    type: 'SPINDL',
+                    spindleRpm: p.spindleRpm,
+                    spindleDirection: 'CW',
+                });
+                activeRpm = p.spindleRpm ?? null;
+            }
+            if (p.feedRate !== activeFeed) {
+                commands.push({ type: 'FEDRAT', feedRate: p.feedRate });
+                activeFeed = p.feedRate ?? null;
+            }
 
             if (op.type === 'drill') {
                 const retractR = p.retractR ?? 5.0;
-                // Bezpieczna Z nad materiałem, potem sam cykl G81/G83.
-                const safeZ = op.position.z + retractR;
-                commands.push({ type: 'GOTO', point: { x: op.position.x, y: op.position.y, z: safeZ } });
+                // Modalny G81/G83: same CYCLE_DRILL pod rząd — postprocesor emituje
+                // pełny cykl raz, potem same XY. Bez zbędnego G1 nad każdym otworem.
                 commands.push({
                     type: 'CYCLE_DRILL',
                     point: { x: op.position.x, y: op.position.y, z: op.position.z },
@@ -101,9 +125,9 @@ export class CAMProcessor {
                     },
                     toolDiameter: p.diameter,
                 });
-                totalLengthMm += Math.abs(safeZ - op.position.z);
+                totalLengthMm += Math.abs(retractR);
                 estimatedTimeSec += Math.abs(p.depth) / Math.max(1, p.feedRate) * 60;
-                cursor = { x: op.position.x, y: op.position.y, z: op.position.z };
+                cursor = { x: op.position.x, y: op.position.y, z: op.position.z + retractR };
                 continue;
             }
 
@@ -178,7 +202,55 @@ export class CAMProcessor {
     }
 
     /**
-     * Optymalizuje kolejność obróbki: grupowanie według narzędzia + algorytm Nearest Neighbor.
+     * Optymalizuje kolejność fizycznych operacji CNC:
+     * 1. Grupowanie operacji według ID narzędzia (minimalizacja wymian narzędzi).
+     * 2. Optymalizacja komiwojażera TSP (Nearest Neighbor + 2-Opt) dla operacji wiercenia i konturowania,
+     *    co diametralnie skraca sumaryczną drogę jałową (G0 Rapid Travel) i eliminuje przecinanie się tras.
+     */
+    public optimizeOperations(operations: CNCOperation[], wcsOrigin: Vector3D = { x: 0, y: 0, z: 0 }): CNCOperation[] {
+        if (!operations || operations.length <= 1) return operations ? [...operations] : [];
+
+        // 1. Grupowanie według ID narzędzia
+        const byTool: Map<string, CNCOperation[]> = new Map();
+        for (const op of operations) {
+            const tid = op.toolId || "unassigned";
+            if (!byTool.has(tid)) byTool.set(tid, []);
+            byTool.get(tid)!.push(op);
+        }
+
+        const optimized: CNCOperation[] = [];
+        let cursor = { ...wcsOrigin };
+
+        for (const [_, toolOps] of byTool.entries()) {
+            const drills = toolOps.filter(o => o.type === 'drill');
+            const others = toolOps.filter(o => o.type !== 'drill');
+
+            // 2. Optymalizacja otworów (TSP 2-Opt dla każdego narzędzia wiertarskiego)
+            if (drills.length > 0) {
+                const optDrills = optimizePath2Opt(drills, d => d.position, cursor);
+                optimized.push(...optDrills);
+                cursor = { ...optDrills[optDrills.length - 1].position };
+            }
+
+            // 3. Optymalizacja frezowania / wpustów (TSP 2-Opt dla frezów)
+            if (others.length > 0) {
+                const optOthers = optimizePath2Opt(others, o => o.position, cursor);
+                optimized.push(...optOthers);
+                const lastOther = optOthers[optOthers.length - 1];
+                const moves = lastOther.parameters?.moves;
+                if (moves && moves.length > 0 && moves[moves.length - 1].endPoint) {
+                    cursor = { ...moves[moves.length - 1].endPoint };
+                } else {
+                    cursor = { ...lastOther.position };
+                }
+            }
+        }
+
+        return optimized;
+    }
+
+    /**
+     * Optymalizuje kolejność cech CAM: grupowanie według narzędzia + algorytm TSP 2-Opt.
      */
     public optimizeFeatureOrder(features: CAMFeature[]): CAMFeature[] {
         if (!features || features.length === 0) return [];
@@ -192,32 +264,20 @@ export class CAMProcessor {
 
         const optimizedAll: CAMFeature[] = [];
 
-        const getPos = (feat: CAMFeature) => {
+        const getPos = (feat: CAMFeature): Vector3D => {
             if ('position' in feat) return feat.position;
             if ('startPoint' in feat) return feat.startPoint;
             if ('points' in feat && feat.points.length > 0) return feat.points[0];
             return createVector3D();
         };
 
+        let currentPos = createVector3D(0, 0, 0); // Baza WCS
+
         for (const [_, group] of byTool.entries()) {
-            const unvisited = [...group];
-            let currentPos = createVector3D(0, 0, 0); // Baza WCS
-
-            while (unvisited.length > 0) {
-                let nearestIdx = 0;
-                let nearestDist = vecDistance(getPos(unvisited[0]), currentPos);
-
-                for (let i = 1; i < unvisited.length; i++) {
-                    const d = vecDistance(getPos(unvisited[i]), currentPos);
-                    if (d < nearestDist) {
-                        nearestDist = d;
-                        nearestIdx = i;
-                    }
-                }
-
-                const selected = unvisited.splice(nearestIdx, 1)[0];
-                optimizedAll.push(selected);
-                currentPos = getPos(selected);
+            const optGroup = optimizePath2Opt(group, getPos, currentPos);
+            optimizedAll.push(...optGroup);
+            if (optGroup.length > 0) {
+                currentPos = getPos(optGroup[optGroup.length - 1]);
             }
         }
 

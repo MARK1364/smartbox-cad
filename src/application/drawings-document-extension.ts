@@ -7,6 +7,7 @@
  */
 
 import type { DocumentExtension, ProjectDocument } from '../../A1_core/project-document.js';
+import { clearLegacyExportStorage } from '../../A1_core/export-session-storage.js';
 import { ExportEngine } from '../../E1_export/export-engine.js';
 import type { SavedExportView } from '../../E1_export/export-types.js';
 import { ExportEngineV3 } from '../../R2_rys/export-engine.js';
@@ -28,6 +29,20 @@ function cloneSheets(views: SavedExportView[] | undefined | null): SavedExportVi
             ...rest,
             titleBlock: { ...(view.titleBlock || {}) },
             cameraTarget: view.cameraTarget ? [...view.cameraTarget] as [number, number, number] : [0, 0, 0],
+            nodePoses: Array.isArray(view.nodePoses)
+                ? view.nodePoses.map((pose) => ({
+                    nodeId: pose.nodeId,
+                    translationNm: [...(pose.translationNm || [0, 0, 0])] as [number, number, number],
+                    rotationQuat: [...(pose.rotationQuat || [0, 0, 0, 1])] as [number, number, number, number],
+                    scale: pose.scale ? [...pose.scale] as [number, number, number] : undefined,
+                }))
+                : undefined,
+            nodeVisibility: Array.isArray(view.nodeVisibility)
+                ? view.nodeVisibility.map((item) => ({
+                    nodeId: item.nodeId,
+                    visible: item.visible !== false,
+                }))
+                : undefined,
         };
     });
 }
@@ -58,6 +73,7 @@ function loadDrawings(data: DrawingsExtensionJSON | null | undefined): void {
 }
 
 export function attachDrawingsExtension(document: ProjectDocument): () => void {
+    clearLegacyExportStorage();
     const extension: DocumentExtension = {
         serialize: () => serializeDrawings(),
         load: (data) => loadDrawings(data),

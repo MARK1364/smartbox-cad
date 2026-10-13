@@ -26,6 +26,7 @@ import {
 import { makeAnchor, type AnchorKind, type ConstraintAnchor } from './constraint-types.js';
 import type { Vec3 as SolverVec3 } from './core/math3d.js';
 import { makeDatumAnchor, parseDatumPlaneName } from './datum-planes.js';
+import { ConstraintHighlightOverlay } from './constraint-highlight.js';
 
 export interface ActiveConstraintPicker {
     label: string;
@@ -311,7 +312,14 @@ function clearPickerHighlights(): void {
     }
 }
 
+let _constraintKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+
 export function stopConstraintPick(restoreSelectionMode: boolean = true): void {
+    if (_constraintKeyHandler && typeof window !== 'undefined') {
+        window.removeEventListener('keydown', _constraintKeyHandler, true);
+        _constraintKeyHandler = null;
+    }
+    ConstraintHighlightOverlay.instance.stopVertexRubberBand();
     ContextManager.instance.activeConstraintPicker = null;
     clearPickerHighlights();
 
@@ -339,6 +347,22 @@ export function startConstraintPick(picker: ActiveConstraintPicker): void {
 
     clearPickerHighlights();
     ContextManager.instance.activeConstraintPicker = picker;
+
+    if (_constraintKeyHandler && typeof window !== 'undefined') {
+        window.removeEventListener('keydown', _constraintKeyHandler, true);
+        _constraintKeyHandler = null;
+    }
+    if (typeof window !== 'undefined') {
+        _constraintKeyHandler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                e.stopPropagation?.();
+                const cur = ContextManager.instance.activeConstraintPicker;
+                stopConstraintPick();
+                cur?.onCancel?.();
+            }
+        };
+        window.addEventListener('keydown', _constraintKeyHandler, true);
+    }
 
     appApi?.setSelectionMode?.(picker.expectedKind === 'OBJECT' ? 'object' : 'subgeometry');
 
@@ -432,7 +456,7 @@ export function handleConstraintPickEvent(type: string, data: any): boolean {
         const target = resolveBindingTarget(node);
         if (!target) {
             ContextManager.instance.appAPI?.setStatus?.(
-                'Wskaż ścianę formatki, krawędź korpusu albo płaszczyznę datum (Top/Front/Right).',
+                'Wskaż ścianę formatki albo krawędź korpusu.',
                 true,
             );
             return true;

@@ -1,0 +1,12 @@
+{
+  "default_panel_name": {
+    "pl": "Panel",
+    "en": "Panel",
+    "de": "Platte"
+  },
+  "default_edge_band_name": {
+    "pl": "Okleina ABS 0.8x22 mm",
+    "en": "ABS edge band 0.8x22 mm",
+    "de": "ABS-Kante 0,8x22 mm"
+  }
+}

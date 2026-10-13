@@ -13,5 +13,10 @@
     "pl": "Szafka",
     "en": "Cabinet",
     "de": "Schrank"
+  },
+  "default_project_name": {
+    "pl": "Projekt",
+    "en": "Project",
+    "de": "Projekt"
   }
 }

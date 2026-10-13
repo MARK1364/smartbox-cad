@@ -58,7 +58,6 @@ export function SmartNumericInput({
 
     const [localVal, setLocalVal] = useState<string>(formatVal(value));
     const [isFocused, setIsFocused] = useState(false);
-    const timerRef = useRef<any>(null);
 
     useEffect(() => {
         if (!isFocused) {
@@ -72,10 +71,6 @@ export function SmartNumericInput({
     };
 
     const flush = (valStr: string) => {
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-            timerRef.current = null;
-        }
         const parsed = parseNum(valStr);
         if (!isNaN(parsed)) {
             let clamped = parsed;
@@ -85,32 +80,18 @@ export function SmartNumericInput({
                 const factor = Math.pow(10, decimals);
                 clamped = Math.round(clamped * factor) / factor;
             }
-            onChange(clamped);
+            setLocalVal(formatVal(clamped));
+            const currentNum = Number(value);
+            if (isNaN(currentNum) || Math.abs(clamped - currentNum) > 1e-6) {
+                onChange(clamped);
+            }
+        } else {
+            setLocalVal(formatVal(value));
         }
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const raw = e.target.value;
-        setLocalVal(raw);
-
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-        }
-
-        const parsed = parseNum(raw);
-        // Filtrujemy niekompletne wartości w trakcie pisania
-        if (!isNaN(parsed) && (min === undefined || min <= 0 || parsed >= min)) {
-            timerRef.current = setTimeout(() => {
-                let clamped = parsed;
-                if (min !== undefined) clamped = Math.max(min, clamped);
-                if (max !== undefined) clamped = Math.min(max, clamped);
-                if (decimals !== undefined && decimals >= 0) {
-                    const factor = Math.pow(10, decimals);
-                    clamped = Math.round(clamped * factor) / factor;
-                }
-                onChange(clamped);
-            }, debounceMs);
-        }
+        setLocalVal(e.target.value);
     };
 
     const handleBlur = () => {
@@ -123,6 +104,11 @@ export function SmartNumericInput({
             e.preventDefault();
             e.stopPropagation();
             flush(localVal);
+            (e.target as HTMLInputElement).blur();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            setLocalVal(formatVal(value));
             (e.target as HTMLInputElement).blur();
         }
     };

@@ -3,7 +3,6 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { addConstraintWithPick } from './constraint-pick-flow.js';
 import { stopConstraintPick } from './constraint-picker.js';
 import { ConstraintHighlightOverlay } from './constraint-highlight.js';
 import {
@@ -11,6 +10,7 @@ import {
     CONFLICT_REJECT_MESSAGE,
     SOLVER_PANEL_TITLE,
 } from './solver-ui-config.js';
+import { addConstraintDraft } from './constraint-pick-flow.js';
 import {
     getSolverShowOnlySmartFrame,
     setSolverShowOnlySmartFrame,
@@ -21,6 +21,9 @@ interface Props {
     projectModel: any;
 }
 
+/**
+ * Zakładka Relacje w panelu bocznym — widoczność SmartFrame oraz narzędzia dodawania więzów w 3D.
+ */
 export function SolverUI({ projectModel }: Props) {
     void projectModel;
     const [showOnlySmartFrame, setShowOnlySmartFrame] = useState(getSolverShowOnlySmartFrame);
@@ -62,7 +65,12 @@ export function SolverUI({ projectModel }: Props) {
                         (panele zostają klikalne)
                     </span>
                 </label>
+            </div>
 
+            <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#a1a1aa', marginBottom: '6px' }}>
+                    Szybkie łączenie w 3D:
+                </div>
                 <div className="solver-panel__add-row">
                     {ADD_BUTTONS.map((btn) => (
                         <button
@@ -71,8 +79,7 @@ export function SolverUI({ projectModel }: Props) {
                             className="solver-panel__add-btn"
                             title={btn.title}
                             onClick={() => {
-                                setConflictWarning(null);
-                                addConstraintWithPick(btn.bindType);
+                                addConstraintDraft(btn.bindType, true);
                             }}
                         >
                             <span className="solver-panel__add-btn-icon">{btn.icon}</span>
@@ -80,10 +87,6 @@ export function SolverUI({ projectModel }: Props) {
                         </button>
                     ))}
                 </div>
-
-                <p className="solver-panel__tools-hint">
-                    Relacje lądują w drzewie obiektów — zakładka Relacje. Po dodaniu wskaż elementy w 3D.
-                </p>
             </div>
 
             {conflictWarning && (

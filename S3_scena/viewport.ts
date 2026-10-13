@@ -13,6 +13,19 @@ import { WORLD_Y_UP, type CameraUp } from './named-camera-view.js';
 
 declare const BABYLON: any;
 
+/** Opcjonalna sesja obrotu kamery (np. arcball z C1_cnc). Brak = klasyczny turntable alpha/beta. */
+export interface CameraRotationSession {
+    begin(screenX: number, screenY: number): void;
+    move(screenX: number, screenY: number): void;
+    end(): void;
+}
+
+export type CameraRotationFactory = (
+    camera: any,
+    scene: any,
+    canvas: HTMLCanvasElement
+) => CameraRotationSession;
+
 export class Viewport {
     canvas: HTMLCanvasElement;
     engine: any;
@@ -33,10 +46,21 @@ export class Viewport {
     currentRenderMode: 'shaded' | 'edges' | 'wireframe' | 'xray' = 'edges';
     /** PMI / narzędzia: podwójny klik odwołuje narzędzie, nie zoomuje kamery. */
     suppressDoubleTapZoom = false;
+    /**
+     * Gdy ustawione (np. w module CNC), obrót ŚPM / Alt+LPM idzie przez arcball
+     * zamiast inkrementalnego alpha/beta. CAD zostaje na turntable, dopóki nie przeniesiemy.
+     */
+    rotationFactory: CameraRotationFactory | null = null;
+    private _rotationSession: CameraRotationSession | null = null;
 
     private _dirtyFrames: number = 5;
     private _isDirty: boolean = true;
     private _suppressContextMenuUntil: number = 0;
+    /**
+     * CNC arcball: pełna orientacja kostki (matrix3d), bez alpha/beta —
+     * alpha/beta gubią roll i blokują się na biegunach.
+     */
+    private _cubeCssTransform: string | null = null;
 
     /**
      * Sprawdza, czy otwarcie menu kontekstowego powinno zostać zablokowane
@@ -53,6 +77,45 @@ export class Viewport {
     public requestRender(frames: number = 2): void {
         this._dirtyFrames = Math.max(this._dirtyFrames, frames);
         this._isDirty = true;
+    }
+
+    /**
+     * Natychmiast ustawia kamerę bez animacji.
+     * `cam.target = new Vector3()` woła setTarget → rebuildAnglesAndRadius i kasuje alpha/beta.
+     * Mutacja `target.set(...)` + bezpośrednie alpha/beta/radius tego unika.
+     */
+    applyCameraPose(
+        alpha: number,
+        beta: number,
+        radius: number,
+        target?: [number, number, number] | { x: number; y: number; z: number } | null,
+    ): void {
+        const cam = this.camera;
+        if (!cam) return;
+
+        try {
+            this.scene?.stopAnimation?.(cam);
+        } catch {
+            /* ignore */
+        }
+        cam.inertialAlphaOffset = 0;
+        cam.inertialBetaOffset = 0;
+        cam.inertialRadiusOffset = 0;
+        cam.inertialPanningX = 0;
+        cam.inertialPanningY = 0;
+
+        const tx = Array.isArray(target) ? target[0] : target?.x;
+        const ty = Array.isArray(target) ? target[1] : target?.y;
+        const tz = Array.isArray(target) ? target[2] : target?.z;
+        if (tx !== undefined && ty !== undefined && tz !== undefined && typeof cam.target?.set === 'function') {
+            cam.target.set(tx, ty, tz);
+        }
+
+        cam.alpha = alpha;
+        cam.beta = beta;
+        cam.radius = radius;
+        this._updateOrthographicBounds();
+        this.requestRender(5);
     }
 
     /**
@@ -177,6 +240,7 @@ export class Viewport {
                         isPanning = true;
                     } else {
                         isRotating = true;
+                        this._beginRotationSession(this.scene.pointerX, this.scene.pointerY);
                     }
                     lastX = this.scene.pointerX;
                     lastY = this.scene.pointerY;
@@ -195,27 +259,37 @@ export class Viewport {
                 } else if (evt.button === 0) { // Lewy przycisk myszy (LMB)
                     const bayCtrl = ContextManager.instance.blokiBayController;
                     if (bayCtrl?.isPickerActive && !ContextManager.instance.activeReferencePicker) {
-                        const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_bay') && !m.name?.includes('blok_plane'));
-                        if (pick && pick.hit && pick.pickedPoint) {
-                            const cadPoint = {
-                                x: pick.pickedPoint.x,
-                                y: pick.pickedPoint.z,
-                                z: pick.pickedPoint.y
-                            };
-                            const doc = ContextManager.instance.document;
-                            if (doc) {
-                                const bay =
-                                    probeRogowy90BayFromCADPoint(doc, cadPoint) ||
-                                    probeBayFromSceneRay(this.scene, pick, doc) ||
-                                    probeBayFromCADPoint(doc, cadPoint);
-                                if (bay) {
-                                    highlightBayInScene(this.scene, bay);
-                                    bayCtrl.setLastDetectedBay(bay);
-                                    const optType = bayCtrl.pendingBlokType || bayCtrl.draggedBlokType || 'EMPTY';
-                                    bayCtrl.notifyBayDetected(bay, optType === 'EMPTY');
-                                    evt.preventDefault();
-                                    evt.stopPropagation();
-                                    return;
+                        if (bayCtrl.pickerMode === 'panel') {
+                            const surface = bayCtrl.lastDetectedSurface;
+                            if (surface) {
+                                bayCtrl.notifyPanelDetected(surface);
+                                evt.preventDefault();
+                                evt.stopPropagation();
+                                return;
+                            }
+                        } else {
+                            const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_bay') && !m.name?.includes('blok_plane'));
+                            if (pick && pick.hit && pick.pickedPoint) {
+                                const cadPoint = {
+                                    x: pick.pickedPoint.x,
+                                    y: pick.pickedPoint.z,
+                                    z: pick.pickedPoint.y
+                                };
+                                const doc = ContextManager.instance.document;
+                                if (doc) {
+                                    const bay =
+                                        probeRogowy90BayFromCADPoint(doc, cadPoint) ||
+                                        probeBayFromSceneRay(this.scene, pick, doc) ||
+                                        probeBayFromCADPoint(doc, cadPoint);
+                                    if (bay) {
+                                        highlightBayInScene(this.scene, bay);
+                                        bayCtrl.setLastDetectedBay(bay);
+                                        const optType = bayCtrl.pendingBlokType || bayCtrl.draggedBlokType || 'EMPTY';
+                                        bayCtrl.notifyBayDetected(bay, optType === 'EMPTY');
+                                        evt.preventDefault();
+                                        evt.stopPropagation();
+                                        return;
+                                    }
                                 }
                             }
                         }
@@ -228,6 +302,7 @@ export class Viewport {
                         evt.preventDefault();
                     } else if (evt.altKey) { // Alt + LMB dla obrotu
                         isRotating = true;
+                        this._beginRotationSession(this.scene.pointerX, this.scene.pointerY);
                         lastX = this.scene.pointerX;
                         lastY = this.scene.pointerY;
                         evt.preventDefault();
@@ -245,6 +320,7 @@ export class Viewport {
                     isRmbPending = false;
                     isRmbPanning = false;
                 }
+                if (isRotating) this._endRotationSession();
                 isRotating = false;
                 isPanning = false;
             } else if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
@@ -254,22 +330,28 @@ export class Viewport {
                     const throttleMs = PerformanceConfigManager.instance.getThrottleHoverMs();
                     if (now - lastBayProbeTime >= throttleMs) {
                         lastBayProbeTime = now;
-                        const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_bay') && !m.name?.includes('blok_plane'));
-                        if (pick && pick.hit && pick.pickedPoint) {
-                            const cadPoint = {
-                                x: pick.pickedPoint.x,
-                                y: pick.pickedPoint.z,
-                                z: pick.pickedPoint.y
-                            };
-                            const doc = ContextManager.instance.document;
+                        const doc = ContextManager.instance.document;
+                        if (bayCtrl.pickerMode === 'panel') {
                             if (doc) {
-                                const bay =
-                                    probeRogowy90BayFromCADPoint(doc, cadPoint) ||
-                                    probeBayFromSceneRay(this.scene, pick, doc) ||
-                                    probeBayFromCADPoint(doc, cadPoint);
-                                if (bay) {
-                                    highlightBayInScene(this.scene, bay);
-                                    bayCtrl.setLastDetectedBay(bay);
+                                bayCtrl.onPointerMoveOnScene(this.scene, this.scene.pointerX, this.scene.pointerY, doc);
+                            }
+                        } else {
+                            const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_bay') && !m.name?.includes('blok_plane'));
+                            if (pick && pick.hit && pick.pickedPoint) {
+                                const cadPoint = {
+                                    x: pick.pickedPoint.x,
+                                    y: pick.pickedPoint.z,
+                                    z: pick.pickedPoint.y
+                                };
+                                if (doc) {
+                                    const bay =
+                                        probeRogowy90BayFromCADPoint(doc, cadPoint) ||
+                                        probeBayFromSceneRay(this.scene, pick, doc) ||
+                                        probeBayFromCADPoint(doc, cadPoint);
+                                    if (bay) {
+                                        highlightBayInScene(this.scene, bay);
+                                        bayCtrl.setLastDetectedBay(bay);
+                                    }
                                 }
                             }
                         }
@@ -315,8 +397,19 @@ export class Viewport {
 
                     if (deltaX !== 0 || deltaY !== 0) {
                         if (isRotating) {
-                            this.camera.alpha -= deltaX / rotationSensibility;
-                            this.camera.beta -= deltaY / rotationSensibility;
+                            if (this._rotationSession) {
+                                try {
+                                    this._rotationSession.move(this.scene.pointerX, this.scene.pointerY);
+                                } catch (err) {
+                                    console.warn('[Viewport] arcball move failed, fallback turntable:', err);
+                                    this._endRotationSession();
+                                    this.camera.alpha -= deltaX / rotationSensibility;
+                                    this.camera.beta -= deltaY / rotationSensibility;
+                                }
+                            } else {
+                                this.camera.alpha -= deltaX / rotationSensibility;
+                                this.camera.beta -= deltaY / rotationSensibility;
+                            }
                         } else if (isPanning) {
                             const moveSpeed = this.camera.radius * panningSensibility * 0.01;
                             
@@ -840,6 +933,7 @@ export class Viewport {
     animateCameraTo(alpha, beta, radius, target, up?: CameraUp) {
         if (!this.camera) return;
 
+        this.clearViewCubeOverride();
         this._applyCameraUp(up || WORLD_Y_UP);
 
         const fps = 60;
@@ -873,6 +967,26 @@ export class Viewport {
         }
     }
 
+    private _beginRotationSession(screenX: number, screenY: number): void {
+        this._endRotationSession();
+        if (!this.rotationFactory) return;
+        try {
+            this._rotationSession = this.rotationFactory(this.camera, this.scene, this.canvas);
+            this._rotationSession.begin(screenX, screenY);
+        } catch (err) {
+            console.warn('[Viewport] rotationFactory failed, fallback turntable:', err);
+            this._rotationSession = null;
+        }
+    }
+
+    private _endRotationSession(): void {
+        if (!this._rotationSession) return;
+        try {
+            this._rotationSession.end();
+        } catch { /* ignore */ }
+        this._rotationSession = null;
+    }
+
     setPanToolActive(active: boolean) {
         this.isPanToolActive = active;
         if (this.canvas) {
@@ -893,20 +1007,59 @@ export class Viewport {
     }
 
     /**
+     * CNC arcball: ustaw CSS transform kostki (matrix3d / rotate3d) 1:1 z kwaternionem.
+     * Nie używamy alpha/beta — unikamy gimbal lock i „zamarzania”.
+     */
+    setViewCubeCssTransform(cssTransform: string): void {
+        this._cubeCssTransform = cssTransform;
+        this._lastCubeAlpha = null;
+        this._lastCubeBeta = null;
+        this._syncViewCube();
+    }
+
+    /** Bazowa orientacja kostki z kamery (rotateX/Y) — start gestu arcball. */
+    getViewCubeBaseCssFromCamera(): string {
+        if (!this.camera) return 'rotateX(-30deg) rotateY(45deg)';
+        const degX = (this.camera.beta * 180 / Math.PI) - 90;
+        const degY = -((this.camera.alpha * 180 / Math.PI) + 90);
+        return `rotateX(${degX.toFixed(4)}deg) rotateY(${degY.toFixed(4)}deg)`;
+    }
+
+    getViewCubeCssTransform(): string | null {
+        return this._cubeCssTransform;
+    }
+
+    clearViewCubeOverride(): void {
+        if (!this._cubeCssTransform && !(this as any).__cncCubeQuat) return;
+        this._cubeCssTransform = null;
+        (this as any).__cncCubeQuat = null;
+        this._lastCubeAlpha = null;
+        this._lastCubeBeta = null;
+        this._syncViewCube();
+    }
+
+    /**
      * Synchronizuje obrót kostki orientacji (ViewCube w prawym górnym rogu) z kamerą sceny 3D.
      */
     _syncViewCube() {
+        const cubes = typeof window !== 'undefined' && window.document
+            ? window.document.querySelectorAll<HTMLElement>('.view-cube-wrapper')
+            : null;
+        if (!cubes || cubes.length === 0) return;
+
+        if (this._cubeCssTransform) {
+            for (let i = 0; i < cubes.length; i++) {
+                cubes[i].style.transform = this._cubeCssTransform;
+            }
+            return;
+        }
+
         if (!this.camera) return;
         const alpha = this.camera.alpha;
         const beta = this.camera.beta;
         if (alpha === this._lastCubeAlpha && beta === this._lastCubeBeta) return;
         this._lastCubeAlpha = alpha;
         this._lastCubeBeta = beta;
-
-        const cubes = typeof window !== 'undefined' && window.document
-            ? window.document.querySelectorAll<HTMLElement>('.view-cube-wrapper')
-            : null;
-        if (!cubes || cubes.length === 0) return;
 
         const degX = (beta * 180 / Math.PI) - 90;
         const degY = -((alpha * 180 / Math.PI) + 90);

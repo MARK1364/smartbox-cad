@@ -1,0 +1,187 @@
+{
+  "dropdown.dimensions": {
+    "pl": "Wymiary",
+    "en": "Dimensions",
+    "de": "Bemaßung"
+  },
+  "dropdown.orthogonal": {
+    "pl": "Wymiar ortogonalny",
+    "en": "Orthogonal dimension",
+    "de": "Orthogonale Bemaßung"
+  },
+  "dropdown.aligned": {
+    "pl": "Wymiar równoległy",
+    "en": "Aligned dimension",
+    "de": "Parallele Bemaßung"
+  },
+  "dropdown.measure": {
+    "pl": "Pomiar",
+    "en": "Measurement",
+    "de": "Messen"
+  },
+  "dropdown.settings": {
+    "pl": "Ustawienia wymiarów",
+    "en": "Dimension settings",
+    "de": "Bemaßungseinstellungen"
+  },
+  "modal.title": {
+    "pl": "Ustawienia Wymiarowania (PMI)",
+    "en": "PMI Dimension Settings",
+    "de": "PMI Bemaßungseinstellungen"
+  },
+  "modal.units_section": {
+    "pl": "Jednostki i etykiety",
+    "en": "Units & Labels",
+    "de": "Einheiten & Beschriftung"
+  },
+  "modal.unit_mode": {
+    "pl": "Jednostka wyświetlania:",
+    "en": "Display unit:",
+    "de": "Anzeigeeinheit:"
+  },
+  "modal.show_units": {
+    "pl": "Pokaż symbol jednostki (np. mm):",
+    "en": "Show unit symbol (e.g. mm):",
+    "de": "Einheitensymbol anzeigen (z.B. mm):"
+  },
+  "modal.align_to_line": {
+    "pl": "Obracaj tekst wzdłuż linii:",
+    "en": "Align text to line:",
+    "de": "Text an Linie ausrichten:"
+  },
+  "modal.appearance_section": {
+    "pl": "Wygląd i rozmiary",
+    "en": "Appearance & Sizes",
+    "de": "Erscheinungsbild & Größen"
+  },
+  "modal.text_size": {
+    "pl": "Wielkość tekstu (mm):",
+    "en": "Text size (mm):",
+    "de": "Textgröße (mm):"
+  },
+  "modal.line_width": {
+    "pl": "Grubość linii (mm):",
+    "en": "Line width (mm):",
+    "de": "Linienstärke (mm):"
+  },
+  "modal.dim_color": {
+    "pl": "Kolor wymiaru:",
+    "en": "Dimension color:",
+    "de": "Bemaßungsfarbe:"
+  },
+  "modal.selected_color": {
+    "pl": "Kolor zaznaczenia:",
+    "en": "Selection color:",
+    "de": "Auswahlfarbe:"
+  },
+  "modal.snapping_section": {
+    "pl": "Przyciąganie (Snap px)",
+    "en": "Snapping (Snap px)",
+    "de": "Fangfunktion (Snap px)"
+  },
+  "modal.edge_snap": {
+    "pl": "Promień krawędzi (px):",
+    "en": "Edge radius (px):",
+    "de": "Kantenradius (px):"
+  },
+  "modal.vertex_snap": {
+    "pl": "Promień wierzchołka (px):",
+    "en": "Vertex radius (px):",
+    "de": "Scheitelpunktradius (px):"
+  },
+  "modal.actions_section": {
+    "pl": "Zarządzanie wymiarami",
+    "en": "Dimension Management",
+    "de": "Bemaßungsverwaltung"
+  },
+  "modal.total_dimensions": {
+    "pl": "Wszystkich wymiarów w projekcie: {count}",
+    "en": "Total dimensions in project: {count}",
+    "de": "Bemaßungen im Projekt gesamt: {count}"
+  },
+  "modal.toggle_all_visibility": {
+    "pl": "Pokaż / ukryj wszystkie wymiary",
+    "en": "Toggle all dimensions visibility",
+    "de": "Alle Bemaßungen ein-/ausblenden"
+  },
+  "modal.clear_all": {
+    "pl": "Wyczyść wymiary",
+    "en": "Clear all dimensions",
+    "de": "Alle Bemaßungen löschen"
+  },
+  "modal.close": {
+    "pl": "Zamknij",
+    "en": "Close",
+    "de": "Schließen"
+  },
+  "tool.status_offset": {
+    "pl": "Tryb odsunięcia linii: ruszaj kursorem, aby zmienić odsunięcie (X/Y/Z blokuje oś). Kliknij LMB, aby zatwierdzić, ESC anuluje.",
+    "en": "Offset mode: move cursor to change offset (X/Y/Z locks axis). LMB to confirm, ESC to cancel.",
+    "de": "Versatzmodus: Bewegen Sie den Cursor (X/Y/Z sperrt Achse). LMT zum Bestätigen, ESC zum Abbrechen."
+  },
+  "tool.status_text_shift": {
+    "pl": "Tryb przesuwania tekstu: ruszaj kursorem, aby przesunąć tekst wzdłuż linii. Kliknij LMB, aby zatwierdzić, ESC anuluje.",
+    "en": "Text shift mode: move cursor to shift text along the line. LMB to confirm, ESC to cancel.",
+    "de": "Textverschiebung: Bewegen Sie den Cursor. LMT zum Bestätigen, ESC zum Abbrechen."
+  },
+  "tool.status_ready": {
+    "pl": "Gotowy",
+    "en": "Ready",
+    "de": "Bereit"
+  },
+  "hints.step1_title": {
+    "pl": "KROK 1",
+    "en": "STEP 1",
+    "de": "SCHRITT 1"
+  },
+  "hints.step1_desc": {
+    "pl": "Kliknij jeden element lub wybierz dwa z CTRL",
+    "en": "Click one element or select two with CTRL",
+    "de": "Ein Element anklicken oder zwei mit STRG wählen"
+  },
+  "hints.step1_p2_desc": {
+    "pl": "Wskaż drugi element (trzymaj CTRL)",
+    "en": "Pick second element (hold CTRL)",
+    "de": "Zweites Element wählen (STRG halten)"
+  },
+  "hints.step2_title": {
+    "pl": "KROK 2",
+    "en": "STEP 2",
+    "de": "SCHRITT 2"
+  },
+  "hints.step2_desc": {
+    "pl": "Przeciągnij wymiar w danym kierunku XYZ zbliżając się do podświetlonych osi",
+    "en": "Drag dimension in XYZ direction approaching highlighted axes",
+    "de": "Maß in XYZ-Richtung ziehen durch Annähern an hervorgehobene Achsen"
+  },
+  "hints.step2_ctrl_desc": {
+    "pl": "TRZYMASZ CTRL — Precyzyjny wybór do naroża, krawędzi lub płaszczyzny",
+    "en": "HOLDING CTRL — Precise snap to vertex, edge or plane",
+    "de": "STRG GEHALTEN — Präziser Fang für Eckpunkt, Kante oder Fläche"
+  },
+  "hints.measure_step1_title": {
+    "pl": "KROK 1",
+    "en": "STEP 1",
+    "de": "SCHRITT 1"
+  },
+  "hints.measure_step1_desc": {
+    "pl": "Kliknij jeden element lub wybierz dwa z CTRL",
+    "en": "Click one element or select two with CTRL",
+    "de": "Ein Element anklicken oder zwei mit STRG wählen"
+  },
+  "hints.measure_step2_title": {
+    "pl": "KROK 2",
+    "en": "STEP 2",
+    "de": "SCHRITT 2"
+  },
+  "hints.measure_step2_desc": {
+    "pl": "Wskaż drugi element (trzymaj CTRL)",
+    "en": "Pick second element (hold CTRL)",
+    "de": "Zweites Element wählen (STRG halten)"
+  },
+  "menu.title": {
+    "pl": "Kierunek linii wymiarowej",
+    "en": "Dimension line direction",
+    "de": "Richtung der Maßlinie"
+  }
+}

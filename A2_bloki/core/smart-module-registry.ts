@@ -13,9 +13,6 @@ class SmartModuleRegistryImpl {
 
     /** Rejestruje nową wtyczkę modułu Bloki. */
     register<TParams extends object>(plugin: SmartModulePlugin<TParams>): void {
-        if (this.plugins.has(plugin.id)) {
-            console.warn(`[SmartModuleRegistry] Moduł ${plugin.id} został zastąpiony nową rejestracją.`);
-        }
         this.plugins.set(plugin.id, plugin as unknown as SmartModulePlugin<object>);
     }
 

@@ -30,7 +30,11 @@
 Przeliczniki: `1 mm = 1_000_000 nm`, `1 m = 1_000_000_000 nm`.
 
 ### Biblioteka modeli (`B1_biblioteka/`)
-- Nowe GLB i katalogi mm: `B1_biblioteka/{zawiasy|uchwyty|szuflady|silowniki|carga|nozki|…}/` (`catalog.json` + `models/*.glb`).
+- Nowe GLB i katalogi mm: `B1_biblioteka/{zawiasy|uchwyty|szuflady|silowniki|carga|nozki|zawieszki|…}/` (`catalog.json` + `models/*.glb`).
+- **Zasada Trójki Plików (Identyczna Nazwa Bazowa)**: W katalogach biblioteki każdy element opiera się na plikach o DOKŁADNIE TEJ SAMEJ nazwie bazowej leżących w tym samym folderze:
+  1. `{Nazwa}.json` — parametry, wymiary w mm (`"units": "mm"`), definicja brył.
+  2. `{Nazwa}.png` — ikona / miniatura do UI katalogu.
+  3. `{Nazwa}.glb` — model siatki 3D (jeśli element posiada plik GLB; w przypadku braku GLB silnik buduje parametryczne bryły z JSON-a).
 - Legacy: `Biblioteki/okucia/`, `Biblioteki/szuflady.json` — nie usuwać bez migracji; nowe pozycje preferuj w `B1_biblioteka`.
 
 ## Architektura Modułów Bloki (`A2_bloki/`)

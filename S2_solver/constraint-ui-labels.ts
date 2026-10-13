@@ -35,7 +35,7 @@ function elementIndexLabel(anchor: ConstraintAnchor, document: any): string {
     return 'origin';
 }
 
-export function anchorShortLabel(anchor: ConstraintAnchor | null, document: any): string {
+export function anchorPartLabel(anchor: ConstraintAnchor | null, document: any): string {
     if (!anchor) {
         return '';
     }
@@ -43,6 +43,21 @@ export function anchorShortLabel(anchor: ConstraintAnchor | null, document: any)
         return `Datum ${anchor.faceName || 'plane'}`;
     }
     const node = geomNodeForAnchor(anchor, document);
+    return node?.name ?? anchor.nodeId.slice(0, 8);
+}
+
+export function anchorFullLabel(anchor: ConstraintAnchor | null, document: any): string {
+    if (!anchor) {
+        return '';
+    }
+    if (anchor.kind === 'DATUM' || String(anchor.nodeId || '').startsWith('__DATUM__:')) {
+        return `Datum: ${anchor.faceName || 'plane'}`;
+    }
+    const node = geomNodeForAnchor(anchor, document);
     const name = node?.name ?? anchor.nodeId.slice(0, 8);
-    return `${name}[${elementIndexLabel(anchor, document)}]`;
+    return `${name} [${elementIndexLabel(anchor, document)}]`;
+}
+
+export function anchorShortLabel(anchor: ConstraintAnchor | null, document: any): string {
+    return anchorFullLabel(anchor, document);
 }

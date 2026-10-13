@@ -39,19 +39,19 @@
             }
           },
           "wcs_origin_corner": {
-            "X": "-",
+            "X": "+",
             "Y": "-",
             "Z": "+"
           },
           "wcs_axis_directions": {
             "X": "+",
-            "Y": "+",
+            "Y": "-",
             "Z": "+"
           },
           "wcs_axis_rotation": {
             "X": 0,
             "Y": 0,
-            "Z": 0
+            "Z": 90
           }
         },
         "RIGHT_SIDE_PANEL": {
@@ -74,7 +74,7 @@
             }
           },
           "wcs_origin_corner": {
-            "X": "+",
+            "X": "-",
             "Y": "-",
             "Z": "+"
           },
@@ -86,7 +86,7 @@
           "wcs_axis_rotation": {
             "X": 0,
             "Y": 0,
-            "Z": 0
+            "Z": 90
           }
         },
         "TOP_PANEL": {

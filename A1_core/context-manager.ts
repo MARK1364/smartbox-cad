@@ -7,6 +7,7 @@ import { SceneSyncAdapter } from './cad-node/scene-sync-adapter.js';
 
 import { CommandHistory } from './commands/command-history.js';
 import type { ProjectFileIO } from './project-file-io.js';
+import { deactivateAllPmiTools } from '../A8_pmi/pmi-tool-activate.js';
 
 export interface IAppAPI {
     addSmartPanel?: () => void;
@@ -26,7 +27,6 @@ export interface IAppAPI {
     toggleGrid?: () => void;
     toggleProjection?: () => void;
     zoomFit?: () => void;
-    viewNormalToFace?: () => void;
     setView?: (viewName: string) => void;
     setSelectionMode?: (mode: 'object' | 'subgeometry') => void;
     setStatus?: (status: string, highlight?: boolean, kind?: 'info' | 'error') => void;
@@ -58,6 +58,7 @@ export class ContextManager {
     public blokiBayController: any = null;
     public smartFrameDragController: any = null;
     public smartWallDragController: any = null;
+    public solverController: any = null;
     
     // Zmienne używane z poziomu Reacta i UI
     private _activeTab = 'tab-a4-smartpanel';
@@ -75,12 +76,10 @@ export class ContextManager {
 
     /** Uniwersalne wyjście z narzędzi PMI i powrót do SELECTION_TOOL. */
     public deactivatePmiToolsIfActive(): void {
-        const sm = this.stateMachine;
-        if (!sm) return;
-        const current = (sm.getCurrentStateName?.() || '').toUpperCase();
-        if (current.includes('DIMENSION') || current.includes('MEASURE') || current.startsWith('PMI')) {
-            sm.changeState('SELECTION_TOOL');
-        }
+        deactivateAllPmiTools(this.stateMachine);
+        this.pmiRenderer?.clearPreview?.();
+        this.pmiRenderer?.clearMeasurePreview?.();
+        this.pmiRenderer?.setVisible?.(false);
     }
 
     public activeReferencePicker: any = null;

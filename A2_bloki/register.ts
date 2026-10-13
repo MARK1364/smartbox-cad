@@ -11,9 +11,11 @@ import {
 import { registerKorpusRebuiltListener } from '../A1_core/cabinet-port.js';
 import { SyncShelfDrillingsCommand } from './commands/sync-shelf-drillings-command.js';
 import { SyncDoorDrillingsCommand } from './commands/sync-door-drillings-command.js';
+import { SyncSkosneDoorsDrillingsCommand } from './commands/sync-skosne-doors-drillings-command.js';
 import { SyncDrawerDrillingsCommand } from './commands/sync-drawer-drillings-command.js';
 import { SyncFlapsDrillingsCommand } from './commands/sync-flaps-drillings-command.js';
 import { SyncTubesDrillingsCommand } from './commands/sync-tubes-drillings-command.js';
+import { SyncHangersDrillingsCommand } from './commands/sync-hangers-drillings-command.js';
 import { BlokiBayController } from './bloki-bay-controller.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { update_bloki_core } from './bloki-core.js';
@@ -50,8 +52,10 @@ export function registerBlokiModule(): void {
         // 2. Synchronizuj nawiercenia okuć dla zaktualizowanych mebli
         new SyncShelfDrillingsCommand(cabinetId).execute(doc);
         new SyncDoorDrillingsCommand(cabinetId).execute(doc);
+        new SyncSkosneDoorsDrillingsCommand(cabinetId).execute(doc);
         new SyncDrawerDrillingsCommand(cabinetId).execute(doc);
         new SyncFlapsDrillingsCommand(cabinetId).execute(doc);
         new SyncTubesDrillingsCommand(cabinetId).execute(doc);
+        new SyncHangersDrillingsCommand(cabinetId).execute(doc);
     });
 }

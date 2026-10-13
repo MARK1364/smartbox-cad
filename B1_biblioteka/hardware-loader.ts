@@ -9,15 +9,22 @@
 
 declare const BABYLON: any;
 
-// Indeks wszystkich modeli GLB z B1_biblioteka (zawiasy i szuflady)
+import { resolveHingeAlignAxes } from './hinge-align.js';
+
+// Indeks wszystkich modeli GLB z B1_biblioteka (zawiasy, szuflady, uchwyty)
 const HINGE_GLB_MAP = (import.meta as any).glob('./zawiasy/**/*.glb', { query: '?url', eager: true });
 const DRAWER_GLB_MAP = (import.meta as any).glob('./szuflady/**/*.glb', { query: '?url', eager: true });
+const HANDLE_GLB_MAP = (import.meta as any).glob('./uchwyty/**/*.glb', { query: '?url', eager: true });
+const HANGER_GLB_MAP = (import.meta as any).glob('./zawieszki/**/*.glb', { query: '?url', eager: true });
 const ALL_GLB_MAP: Record<string, string> = {};
 
-for (const [p, mod] of Object.entries({ ...HINGE_GLB_MAP, ...DRAWER_GLB_MAP })) {
+for (const [p, mod] of Object.entries({ ...HINGE_GLB_MAP, ...DRAWER_GLB_MAP, ...HANDLE_GLB_MAP, ...HANGER_GLB_MAP })) {
     const filename = p.replace(/^.*[\\/]/, '').toLowerCase();
     const url = (mod as any)?.default || p;
     ALL_GLB_MAP[filename] = url;
+    // Alias bez rozszerzenia → ten sam URL (loadTemplate('Easy-160'))
+    const stem = filename.replace(/\.glb$/i, '');
+    if (stem && !ALL_GLB_MAP[stem]) ALL_GLB_MAP[stem] = url;
 }
 
 export class HardwareLoader {
@@ -104,16 +111,17 @@ export class HardwareLoader {
             }
 
             const baseId = id.replace(/_[LR]$/, '');
-            const cleanId = id.toLowerCase().trim();
-            const cleanBaseId = baseId.toLowerCase().trim();
+            const cleanId = id.toLowerCase().trim().replace(/\.glb$/i, '');
+            const cleanBaseId = baseId.toLowerCase().trim().replace(/\.glb$/i, '');
 
             let loadedResult: any = null;
             let successPath = '';
 
             // 1. Sprawdzenie zaindeksowanych modeli w ALL_GLB_MAP
-            const directUrl = ALL_GLB_MAP[cleanId + '.glb'] || 
-                              ALL_GLB_MAP[cleanBaseId + '.glb'] || 
+            const directUrl = ALL_GLB_MAP[cleanId + '.glb'] ||
+                              ALL_GLB_MAP[cleanBaseId + '.glb'] ||
                               ALL_GLB_MAP[cleanId] ||
+                              ALL_GLB_MAP[cleanBaseId] ||
                               ALL_GLB_MAP['antaro m 500.glb'];
 
             if (directUrl) {
@@ -132,6 +140,14 @@ export class HardwareLoader {
 
             if (!loadedResult || !loadedResult.meshes || loadedResult.meshes.length === 0) {
                 const candidates = [
+                    `/B1_biblioteka/zawieszki/models/${cleanId}.glb`,
+                    `./B1_biblioteka/zawieszki/models/${cleanId}.glb`,
+                    `/B1_biblioteka/zawieszki/models/${id}.glb`,
+                    `./B1_biblioteka/zawieszki/models/${id}.glb`,
+                    `/B1_biblioteka/uchwyty/Rejs/models/${cleanId}.glb`,
+                    `./B1_biblioteka/uchwyty/Rejs/models/${cleanId}.glb`,
+                    `/B1_biblioteka/uchwyty/Rejs/models/${id}.glb`,
+                    `./B1_biblioteka/uchwyty/Rejs/models/${id}.glb`,
                     `/B1_biblioteka/szuflady/Blum/Antaro/models/${id}.glb`,
                     `./B1_biblioteka/szuflady/Blum/Antaro/models/${id}.glb`,
                     `/B1_biblioteka/szuflady/Blum/Antaro/models/${baseId}.glb`,
@@ -197,6 +213,10 @@ export class HardwareLoader {
             }
 
             this._templates.set(id, templateRoot);
+            // Alias po nazwie pliku (uchwyty: Easy-160 / easy-160)
+            if (cleanId && cleanId !== id) this._templates.set(cleanId, templateRoot);
+            const withGlb = `${cleanId}.glb`;
+            if (cleanId && !this._templates.has(withGlb)) this._templates.set(withGlb, templateRoot);
             console.log(`[HardwareLoader] ✅ Załadowano i przygotowano szablon ${id} z ${successPath}`);
             return templateRoot;
         })();
@@ -216,17 +236,43 @@ export class HardwareLoader {
      * Tworzy instancję / klon zawiasu gotowy do umieszczenia na scenie.
      */
     public createHingeInstance(id: string, scene: any): any {
-        const template = this._templates.get(id);
+        return this._cloneHardwareInstance(id, `hw_${id}`, { pickable: false });
+    }
+
+    /**
+     * Klon uchwytu (SmartPart) — pickowalny, origin = środek C-C.
+     */
+    public createHandleInstance(id: string, _scene?: any): any {
+        const stem = id.toLowerCase().replace(/\.glb$/i, '');
+        const keys = [id, stem, `${stem}.glb`, id.replace(/\.glb$/i, '')];
+        for (const key of keys) {
+            if (this._templates.has(key)) {
+                return this._cloneHardwareInstance(key, `handle_${stem}`, { pickable: true });
+            }
+        }
+        // Szablon mógł być zapisany pod oryginalnym id z loadTemplate
+        for (const [key] of this._templates) {
+            if (key.toLowerCase().replace(/\.glb$/i, '') === stem) {
+                return this._cloneHardwareInstance(key, `handle_${stem}`, { pickable: true });
+            }
+        }
+        return null;
+    }
+
+    private _cloneHardwareInstance(
+        templateId: string,
+        namePrefix: string,
+        opts: { pickable: boolean },
+    ): any {
+        const template = this._templates.get(templateId);
         if (!template) return null;
 
-        const cloneName = `hw_${id}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const cloneName = `${namePrefix}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
         const instance = template.clone(cloneName, null, false);
         if (!instance) return null;
 
-        // Reset pozycji do lokalnego zera
         instance.position.set(0, 0, 0);
-
-        // Aktywuj węzeł główny i wszystkie węzły potomne
+        instance.rotation?.set?.(0, 0, 0);
         instance.setEnabled(true);
         const descendants = instance.getDescendants(false);
         for (const node of descendants) {
@@ -235,17 +281,18 @@ export class HardwareLoader {
                 (node as any).isVisible = true;
             }
             if ('isPickable' in node) {
-                (node as any).isPickable = false;
+                (node as any).isPickable = opts.pickable;
             }
             if ((node as any).material) {
                 (node as any).material.backFaceCulling = false;
-                // Elegancki satynowy nikiel
                 if ((node as any).material.specularColor) {
                     (node as any).material.specularColor = new BABYLON.Color3(0.6, 0.6, 0.65);
                 }
             }
         }
-
+        if ('isPickable' in instance) {
+            (instance as any).isPickable = opts.pickable;
+        }
         return instance;
     }
 
@@ -321,33 +368,21 @@ export class HardwareLoader {
         const vAxis = new BABYLON.Vector3(...faceData.vAxis).normalize();
         const normal = new BABYLON.Vector3(...faceData.normal).normalize();
 
-        // X w modelu to kierunek w głąb frontu (-normal)
-        const xDir = normal.scale(-1);
-        let yDir: any;
-        let zDir: any;
-
-        if (orientation === 'top') {
-            // Klapa górna: ramię idzie ku górnej krawędzi (+vAxis)
-            yDir = uAxis.clone();
-            zDir = vAxis.clone();
-        } else if (orientation === 'bottom') {
-            // Klapa dolna: ramię idzie ku dolnej krawędzi (-vAxis)
-            yDir = uAxis.scale(-1);
-            zDir = vAxis.scale(-1);
-        } else if (orientation === 'left' || orientation === true) {
-            // Lewe drzwi: ramię idzie ku lewej krawędzi (-uAxis)
-            yDir = vAxis.clone();
-            zDir = uAxis.clone();
-        } else {
-            // Prawe drzwi: ramię idzie ku prawej krawędzi (+uAxis)
-            yDir = vAxis.scale(-1);
-            zDir = uAxis.scale(-1);
-        }
+        const ori =
+            orientation === true ? 'left' as const
+            : orientation === false ? 'right' as const
+            : orientation;
+        const axes = resolveHingeAlignAxes(
+            [uAxis.x, uAxis.y, uAxis.z],
+            [vAxis.x, vAxis.y, vAxis.z],
+            [normal.x, normal.y, normal.z],
+            ori
+        );
 
         const m = new BABYLON.Matrix();
-        m.setRowFromFloats(0, xDir.x, xDir.y, xDir.z, 0);
-        m.setRowFromFloats(1, yDir.x, yDir.y, yDir.z, 0);
-        m.setRowFromFloats(2, zDir.x, zDir.y, zDir.z, 0);
+        m.setRowFromFloats(0, axes.xDir[0], axes.xDir[1], axes.xDir[2], 0);
+        m.setRowFromFloats(1, axes.yDir[0], axes.yDir[1], axes.yDir[2], 0);
+        m.setRowFromFloats(2, axes.zDir[0], axes.zDir[1], axes.zDir[2], 0);
         m.setRowFromFloats(3, 0, 0, 0, 1);
 
         instance.rotationQuaternion = BABYLON.Quaternion.FromRotationMatrix(m);

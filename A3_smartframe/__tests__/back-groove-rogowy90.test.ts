@@ -91,7 +91,9 @@ describe('Rogowy90 back grooves on real backs', () => {
             return p.length_nm > p.width_nm;
         });
         expect(alongY).toBeDefined();
-        expect(nmToMm(alongY!.feature!.params.u_nm)).toBeLessThan(5);
+        const faceW = botPanel.dim_nm.x;
+        expect(nmToMm(alongY!.feature!.params.u_nm)).toBeGreaterThan(nmToMm(faceW) * 0.5);
+        expect(nmToMm(alongY!.feature!.params.u_nm)).toBeCloseTo(nmToMm(faceW) - th, 0);
 
         // GĹ‚Ä™bokoĹ›Ä‡ zakĹ‚adki 11 mm (nie naroĹĽnik)
         expect(nmToMm(alongX!.feature!.params.depth_nm)).toBeCloseTo(defaultBackOverlapMm(), 0);

@@ -15,7 +15,8 @@
 import { ProjectDocument } from '../A1_core/project-document';
 import { PMIStore } from './pmi-data';
 import { PMIRenderer } from './pmi-renderer';
-import { findNodeRoot, unregisterDimensionSmartId } from './pmi-id-bridge';
+import { findNodeRoot } from './pmi-id-bridge';
+import { executePMICommand, RemoveDimensionCommand } from './pmi-commands';
 
 /** Klucz sekcji PMI w `extensions` pliku projektu (`.spp.json`). */
 export const PMI_DOCUMENT_SECTION = 'pmi';
@@ -153,34 +154,40 @@ export class PMISyncController {
         return changed;
     }
 
+    private isPruning = false;
+
     /**
      * Gdy komponent znika z dokumentu/sceny, wymiary do niego przypięte także
      * powinny zniknąć (zamiast "wisieć" na fallbacku świata).
+     * Usunięcie odbywa się przez CommandHistory, aby zachować możliwość cofnięcia (Undo).
      */
     private pruneOrphanedAnnotations(): void {
-        const toRemove: string[] = [];
+        if (this.isPruning) return;
+        this.isPruning = true;
+        try {
+            const toRemove: string[] = [];
 
-        for (const ann of this.store.annotations) {
-            const node1Missing = !!ann.anchor1.nodeId && !findNodeRoot(this.scene, ann.anchor1.nodeId);
-            const node2Missing = !!ann.anchor2.nodeId && !findNodeRoot(this.scene, ann.anchor2.nodeId);
-            if (node1Missing || node2Missing) {
-                toRemove.push(ann.id);
+            for (const ann of this.store.annotations) {
+                const node1Missing = !!ann.anchor1.nodeId && !findNodeRoot(this.scene, ann.anchor1.nodeId);
+                const node2Missing = !!ann.anchor2.nodeId && !findNodeRoot(this.scene, ann.anchor2.nodeId);
+                if (node1Missing || node2Missing) {
+                    toRemove.push(ann.id);
+                }
             }
-        }
 
-        for (const id of toRemove) {
-            const removed = this.store.removeAnnotation(id);
-            if (removed?.annotation?.smartIdPath) {
-                unregisterDimensionSmartId(removed.annotation.smartIdPath);
+            for (const id of toRemove) {
+                executePMICommand(new RemoveDimensionCommand(this.store, id, 'Usunięto osierocony wymiar'));
             }
-        }
 
-        const toRemoveM: string[] = [];
-        for (const item of this.store.measurements) {
-            const node1Missing = !!item.anchor1.nodeId && !findNodeRoot(this.scene, item.anchor1.nodeId);
-            const node2Missing = !!item.anchor2.nodeId && !findNodeRoot(this.scene, item.anchor2.nodeId);
-            if (node1Missing || node2Missing) toRemoveM.push(item.id);
+            const toRemoveM: string[] = [];
+            for (const item of this.store.measurements) {
+                const node1Missing = !!item.anchor1.nodeId && !findNodeRoot(this.scene, item.anchor1.nodeId);
+                const node2Missing = !!item.anchor2.nodeId && !findNodeRoot(this.scene, item.anchor2.nodeId);
+                if (node1Missing || node2Missing) toRemoveM.push(item.id);
+            }
+            for (const id of toRemoveM) this.store.removeMeasurement(id);
+        } finally {
+            this.isPruning = false;
         }
-        for (const id of toRemoveM) this.store.removeMeasurement(id);
     }
 }

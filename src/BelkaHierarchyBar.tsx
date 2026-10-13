@@ -21,7 +21,7 @@ const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
 
 type CrumbKind = 'assembly' | 'panel' | 'hardware' | 'feature';
-export type CrumbModeType = 'smartframe' | 'bloki' | 'smartpanel' | 'feature' | 'hardware' | 'assembly';
+export type CrumbModeType = 'smartframe' | 'bloki' | 'agd' | 'smartpanel' | 'feature' | 'hardware' | 'assembly';
 
 type Crumb = {
     id: string;
@@ -46,10 +46,26 @@ function isBlokiDomain(data: any): boolean {
     );
 }
 
+function isApplianceDomain(data: any): boolean {
+    if (!data) return false;
+    return data.role === 'APPLIANCE' || String(data.generatorParams?.type || '') === 'smart_appliance';
+}
+
+function isSmartPartHandle(data: any): boolean {
+    if (!data) return false;
+    const genType = String(data.generatorParams?.type || '');
+    return (
+        data.role === 'SMARTPART_HANDLE'
+        || genType === 'smartpart_handle'
+        || data.generatorParams?.partType === 'HANDLE'
+    );
+}
+
 function detectNodeModeType(node: CADNode): CrumbModeType {
     const data = node.domainData as any;
     if (node.nodeType === NodeType.PART) return 'smartpanel';
     if (node.nodeType === NodeType.HARDWARE) return 'hardware';
+    if (isApplianceDomain(data)) return 'agd';
     if (isBlokiDomain(data)) return 'bloki';
     const t = String(data?.generatorParams?.type || data?.type || '').toLowerCase();
     if (t.includes('korpus') || t.includes('rogowy') || data?.is_smartframe) return 'smartframe';
@@ -61,6 +77,7 @@ function nodeLabel(node: CADNode): string {
     const name = (data?.name || node.name || '').trim();
     if (node.nodeType === NodeType.PART) return name || tx(srcTekst, 'crumb.d_panel', TX_NS);
     if (node.nodeType === NodeType.HARDWARE) return name || tx(srcTekst, 'crumb.d_hw', TX_NS);
+    if (isApplianceDomain(data)) return name || 'AGD';
     if (isBlokiDomain(data)) return name || tx(srcTekst, 'crumb.d_box', TX_NS);
     const t = String(data?.generatorParams?.type || data?.type || '').toLowerCase();
     if (t.includes('korpus') || t.includes('rogowy')) return name || tx(srcTekst, 'crumb.d_frame', TX_NS);
@@ -103,21 +120,44 @@ function buildPath(doc: ProjectDocument, selectedFeatureId: string | null): Crum
         });
     }
 
+    // Fallback gdy nic nie jest aktywnie zaznaczone:
+    // Pokaż pierwszy kontener na scenie lub główny projekt
+    if (crumbs.length === 0) {
+        const containers = typeof doc.getContainers === 'function' ? doc.getContainers() : [];
+        if (containers.length > 0) {
+            const first = containers[0];
+            crumbs.push({
+                id: first.id,
+                label: nodeLabel(first),
+                kind: 'assembly',
+                modeType: detectNodeModeType(first),
+            });
+        } else if (doc.rootNode) {
+            crumbs.push({
+                id: doc.rootNode.id,
+                label: doc.name || 'Projekt',
+                kind: 'assembly',
+                modeType: 'assembly',
+            });
+        }
+    }
+
     return crumbs;
 }
 
+/** LPM = tylko zaznaczenie. Okno edycji wyłącznie z PPM „Edytuj”. */
 function selectCrumb(crumb: Crumb, clearFeature?: () => void) {
     const ui = UIController.instance;
+    const doc = ContextManager.instance.document;
     if (!ui) return;
+    if (crumb.id === doc?.rootNode?.id) {
+        clearFeature?.();
+        ui.emitTree('select-none', {});
+        return;
+    }
     if (crumb.kind === 'assembly') {
         clearFeature?.();
         ui.emitTree('select-container', { id: crumb.id });
-        if (crumb.modeType === 'smartframe') {
-            window.dispatchEvent(new CustomEvent('cad-switch-tab', { detail: { tabId: 'tab-a3-smartframe' } }));
-            window.dispatchEvent(new CustomEvent('cad-edit-smartframe-korpus', { detail: { containerId: crumb.id } }));
-        } else if (crumb.modeType === 'bloki') {
-            window.dispatchEvent(new CustomEvent('cad-switch-tab', { detail: { tabId: 'tab-a2-bloki' } }));
-        }
     } else if (crumb.kind === 'panel') {
         clearFeature?.();
         ui.emitTree('select-part', { id: crumb.id, uuid: crumb.id });
@@ -127,7 +167,79 @@ function selectCrumb(crumb: Crumb, clearFeature?: () => void) {
         ui.emitTree('select-hardware', { id: crumb.id });
     } else if (crumb.kind === 'feature' && crumb.panelId) {
         ui.emitTree('select-feature', { id: crumb.id, panelId: crumb.panelId, openProperties: false });
-        window.dispatchEvent(new CustomEvent('cad-switch-tab', { detail: { tabId: 'tab-o1-operacji' } }));
+    }
+}
+
+/** PPM na okruszku belki = to samo menu co w drzewie obiektów. */
+function openCrumbContextMenu(crumb: Crumb, clientX: number, clientY: number) {
+    const ui = UIController.instance;
+    const doc = ContextManager.instance.document;
+    if (!ui || !doc) return;
+
+    if (crumb.kind === 'feature' && crumb.panelId) {
+        const panelNode = doc.findNode(crumb.panelId);
+        const panel = panelNode?.domainData as any;
+        const feat = (panel?.features || []).find((f: any) => f.id === crumb.id);
+        const isSmart = !!feat && feat.params?.source === 'library' && !!feat.params?.library_id;
+        ui.emitTree('select-feature', { id: crumb.id, panelId: crumb.panelId, openProperties: false });
+        ui.emitTree('contextmenu-tree-node', {
+            type: 'feature',
+            id: crumb.id,
+            name: crumb.label,
+            panelId: crumb.panelId,
+            libraryId: feat?.params?.library_id || (isSmart ? 'przetloczenie' : undefined),
+            face: feat?.face,
+            isSmart,
+            source: feat?.params?.source || (isSmart ? 'library' : 'engine'),
+            frozen: feat?.frozen === true || feat?.params?.frozen === true,
+            clientX,
+            clientY,
+        });
+        return;
+    }
+
+    if (crumb.kind === 'panel') {
+        const panelNode = doc.findNode(crumb.id);
+        const panel = panelNode?.domainData as any;
+        ui.emitTree('select-part', { id: crumb.id, uuid: crumb.id });
+        ui.emitTree('contextmenu-tree-node', {
+            type: 'part',
+            id: crumb.id,
+            uuid: crumb.id,
+            name: crumb.label,
+            frozen: !!panel?.frozen,
+            clientX,
+            clientY,
+        });
+        return;
+    }
+
+    if (crumb.kind === 'hardware') {
+        ui.emitTree('select-hardware', { id: crumb.id });
+        ui.emitTree('contextmenu-tree-node', {
+            type: 'hardware',
+            id: crumb.id,
+            name: crumb.label,
+            clientX,
+            clientY,
+        });
+        return;
+    }
+
+    if (crumb.kind === 'assembly') {
+        const node = doc.findNode(crumb.id);
+        const data = node?.domainData;
+        const isHandle = isSmartPartHandle(data);
+        const isAgd = isApplianceDomain(data);
+        const isBlok = isBlokiDomain(data);
+        ui.emitTree('select-container', { id: crumb.id });
+        ui.emitTree('contextmenu-tree-node', {
+            type: isHandle ? 'handle' : (isAgd ? 'agd' : (isBlok ? 'bloki' : 'container')),
+            id: crumb.id,
+            name: crumb.label,
+            clientX,
+            clientY,
+        });
     }
 }
 
@@ -137,6 +249,8 @@ function crumbTooltip(crumb: Crumb): string {
             return tx(srcTekst, 'crumb.cabinet', TX_NS, { name: crumb.label });
         case 'bloki':
             return tx(srcTekst, 'crumb.box', TX_NS, { name: crumb.label });
+        case 'agd':
+            return `AGD: ${crumb.label}`;
         case 'smartpanel':
             return tx(srcTekst, 'crumb.panel', TX_NS, { name: crumb.label });
         case 'feature':
@@ -180,18 +294,21 @@ export const BelkaHierarchyBar: React.FC<BelkaHierarchyBarProps> = ({ projectMod
             } else if (e.detail?.kind === 'panel' || e.detail?.kind === 'container') {
                 setSelectedFeatureId(null);
             }
+            refresh();
         };
         document.addEventListener('bloki-properties-update', onProps);
 
         const onFloatingOp = (e: Event) => {
             const d = (e as CustomEvent).detail || {};
             if (d.featureId) setSelectedFeatureId(String(d.featureId));
+            refresh();
         };
         window.addEventListener(CAD_OPEN_FLOATING_OPERATION, onFloatingOp);
 
         const onProject = () => refresh();
         window.document.addEventListener('bloki-project-changed', onProject);
         window.document.addEventListener('smartpanel-project-changed', onProject);
+        window.addEventListener('pointerup', onProject);
 
         return () => {
             unsub?.();
@@ -199,6 +316,7 @@ export const BelkaHierarchyBar: React.FC<BelkaHierarchyBarProps> = ({ projectMod
             window.removeEventListener(CAD_OPEN_FLOATING_OPERATION, onFloatingOp);
             window.document.removeEventListener('bloki-project-changed', onProject);
             window.document.removeEventListener('smartpanel-project-changed', onProject);
+            window.removeEventListener('pointerup', onProject);
         };
     }, [projectModel, refresh]);
 
@@ -227,6 +345,11 @@ export const BelkaHierarchyBar: React.FC<BelkaHierarchyBarProps> = ({ projectMod
                             className={`belka-hierarchia-btn ${isLast ? 'is-current' : ''}`}
                             title={crumbTooltip(crumb)}
                             onClick={() => selectCrumb(crumb, clearFeature)}
+                            onContextMenu={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                openCrumbContextMenu(crumb, e.clientX, e.clientY);
+                            }}
                         >
                             {crumb.label}
                         </button>

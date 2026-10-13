@@ -31,6 +31,16 @@ export class CommandHistory {
         return this._document;
     }
 
+    /**
+     * Czy trwa wykonywanie komendy.
+     *
+     * Używane przez `S2_solver/solver-controller`, żeby nie odpalać
+     * automatycznego rozwiązywania w trakcie zmiany geometrii.
+     */
+    get isExecuting(): boolean {
+        return this._isExecuting;
+    }
+
     get canUndo(): boolean {
         return this._undoStack.length > 0;
     }

@@ -27,7 +27,7 @@ interface BlokiFrontThicknessSnapshot {
 function isBlokiFrontModule(gp: Record<string, any> | undefined | null): boolean {
     if (!gp) return false;
     const boxType = String(gp.boxType || '').toUpperCase();
-    if (boxType === 'DOORS' || boxType === 'CORNER_DOORS' || boxType === 'FLAPS' || boxType === 'DRAWERS') {
+    if (boxType === 'DOORS' || boxType === 'SKOSNE_DOORS' || boxType === 'CORNER_DOORS' || boxType === 'FLAPS' || boxType === 'DRAWERS') {
         return true;
     }
     const t = String(gp.type || '').toLowerCase();

@@ -130,6 +130,15 @@ export class ModalTransformManager {
                 return;
             }
 
+            // Ignoruj skróty gdy aktywne jest jakiekolwiek dedykowane narzędzie (np. PMI wymiary, pomiary)
+            const sm = ContextManager.instance.stateMachine || ContextManager.instance.appAPI?.stateMachine;
+            if (sm) {
+                const curState = sm.getCurrentStateName?.();
+                if (curState && curState !== 'SELECTION_TOOL' && curState !== 'SelectionTool' && curState !== '') {
+                    return;
+                }
+            }
+
             const key = evt.key.toLowerCase();
 
             if (this.activeMode === 'none') {
@@ -163,6 +172,13 @@ export class ModalTransformManager {
     }
 
     public startTransform(mode: ModalTransformMode): void {
+        const sm = ContextManager.instance.stateMachine || ContextManager.instance.appAPI?.stateMachine;
+        if (sm) {
+            const curState = sm.getCurrentStateName?.();
+            if (curState && curState !== 'SELECTION_TOOL' && curState !== 'SelectionTool' && curState !== '') {
+                return;
+            }
+        }
         ContextManager.instance.deactivatePmiToolsIfActive();
         const doc = ContextManager.instance.document;
         const viewport = ContextManager.instance.viewport;
@@ -285,7 +301,7 @@ export class ModalTransformManager {
                         ContextManager.instance.document!,
                         this.targetEntity.id,
                     );
-                    ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(this.targetEntity.id);
+                    this._syncConstraintGroupMeshes();
                 }
             }
 
@@ -310,7 +326,7 @@ export class ModalTransformManager {
                         ContextManager.instance.document!,
                         this.targetEntity.id,
                     );
-                    ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(this.targetEntity.id);
+                    this._syncConstraintGroupMeshes();
                 }
             }
         }
@@ -651,7 +667,7 @@ export class ModalTransformManager {
 
         cadNode.setLocalTransform(translation, newRot, scale);
         getConstraintDragPort()?.propagateTransform(ContextManager.instance.document!, this.targetEntity.id);
-        ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(this.targetEntity.id);
+        this._syncConstraintGroupMeshes();
 
         if (ContextManager.instance.gizmoController) {
             ContextManager.instance.gizmoController.showRotateGizmo(this.targetEntity);
@@ -673,7 +689,7 @@ export class ModalTransformManager {
 
         cadNode.setLocalTransform(newPosNm, rotation, scale);
         getConstraintDragPort()?.propagateTransform(ContextManager.instance.document!, this.targetEntity.id);
-        ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(this.targetEntity.id);
+        this._syncConstraintGroupMeshes();
 
         if (ContextManager.instance.gizmoController) {
             ContextManager.instance.gizmoController.showTranslateGizmo(this.targetEntity);
@@ -683,6 +699,15 @@ export class ModalTransformManager {
             ContextManager.instance.document.notifyDocumentChanged();
         }
         this._notifyStateChange();
+    }
+
+    private _syncConstraintGroupMeshes(): void {
+        const port = getConstraintDragPort();
+        const fallbackId = this.targetEntity?.id;
+        const affected = port?.getAffectedNodeIds?.() ?? (fallbackId ? [fallbackId] : []);
+        for (const id of affected) {
+            ContextManager.instance.sceneSyncAdapter.syncNodeToMesh(id);
+        }
     }
 }
 

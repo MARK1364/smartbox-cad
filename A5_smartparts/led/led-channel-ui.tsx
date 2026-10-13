@@ -202,7 +202,7 @@ export const LedChannelUI: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => handleClearOrRestoreRef(sideKey)}
-                        title={isDisabled ? 'Przywróć domyślną referencję' : 'Wyłącz referencję'}
+                        title={isDisabled ? 'Przywróć domyślne odniesienie' : 'Wyłącz odniesienie'}
                         style={{
                             padding: '4px 8px',
                             background: '#222730',
@@ -250,8 +250,14 @@ export const LedChannelUI: React.FC = () => {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {/* Sekcja Ścian Referencyjnych (Szeroki niebieski pasek z trójkącikiem - 100% Wzór Bloku) */}
-            <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '6px', overflow: 'hidden' }}>
+            <div
+                className={`ref-walls-accordion ${isRefsOpen ? 'is-open' : ''}`}
+                style={{
+                    borderRadius: '6px',
+                    overflow: 'hidden',
+                    ...(isRefsOpen ? { borderColor: 'rgba(59, 130, 246, 0.55)', boxShadow: '0 0 10px rgba(59, 130, 246, 0.15)' } : {}),
+                }}
+            >
                 <div
                     id="sb-accordion-refs"
                     onClick={() => setIsRefsOpen(!isRefsOpen)}
@@ -268,7 +274,7 @@ export const LedChannelUI: React.FC = () => {
                         userSelect: 'none',
                     }}
                 >
-                    <span>Ściany referencyjne</span>
+                    <span>Ściany odniesienia</span>
                     <span style={{ fontSize: '12px', color: '#93c5fd' }}>
                         {isRefsOpen ? '▲' : '▼'}
                     </span>
@@ -277,7 +283,7 @@ export const LedChannelUI: React.FC = () => {
                 {isRefsOpen && (
                     <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4d4d8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            Referencje
+                            Odniesienia
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>

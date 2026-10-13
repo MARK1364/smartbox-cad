@@ -1,5 +1,5 @@
 /**
- * Drzewo obiektów — panel layoutowy (#drzewo-obiektow) + SceneTree.
+ * Drzewo obiektów — panel layoutowy (#drzewo-obiektow) + SceneTree (lub własna treść).
  */
 
 import React from 'react';
@@ -14,10 +14,13 @@ const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
 
 export interface DrzewoObiektowProps {
-  projectModel: any;
+  /** Wymagane gdy brak `children` — wtedy renderuje SceneTree. */
+  projectModel?: any;
   treeWidth: number;
   isDraggingTree: boolean;
   startResizeTree: (e: React.PointerEvent) => void;
+  /** Gdy podane — zamiast SceneTree (np. Studio SmartParts). */
+  children?: React.ReactNode;
 }
 
 export function DrzewoObiektow({
@@ -25,6 +28,7 @@ export function DrzewoObiektow({
   treeWidth,
   isDraggingTree,
   startResizeTree,
+  children,
 }: DrzewoObiektowProps) {
   const title = tx(srcTekst, 'app.tree.title', TX_NS);
   const collapsed = treeWidth <= 48;
@@ -43,6 +47,9 @@ export function DrzewoObiektow({
           minWidth: `${TREE_MIN_CONTENT_WIDTH}px`,
           width: '100%',
           height: '100%',
+          minHeight: 0,
+          flex: 1,
+          flexShrink: 1,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -72,7 +79,7 @@ export function DrzewoObiektow({
             });
           }}
         >
-          <SceneTree projectModel={projectModel} />
+          {children ?? <SceneTree projectModel={projectModel} />}
         </div>
       </div>
 

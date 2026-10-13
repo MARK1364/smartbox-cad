@@ -12,10 +12,28 @@ import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import { AluFrameManager, AluFrameComponent } from './alu-frame-manager.js';
 import { validatePanelDimensionsNm } from './native_core/panel-dimensions.js';
 import { normalizeFaceName, FACE_NAMES } from '../A1_core/face-name.js';
+import { tx } from '../T1_tlumaczenia/core.js';
+import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import smartpanelTekstRaw from './smartpanel_tekst.json';
+
+const smartpanelTekst = smartpanelTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'smartpanel';
+
+/** Domyślne nazwy do wyświetlania — nigdy do logiki. */
+const defaultPanelName = () => tx(smartpanelTekst, 'default_panel_name', TX_NS);
+const defaultEdgeBandName = () => tx(smartpanelTekst, 'default_edge_band_name', TX_NS);
 
 export { validatePanelDimensionsNm } from './native_core/panel-dimensions.js';
 export { normalizeFaceName, FACE_NAMES, type FaceName } from '../A1_core/face-name.js';
 export { isManualPanel } from '../A1_core/panel-like.js';
+
+/** Monotoniczny licznik id paneli — bez Math.random (deterministyczny w sesji). */
+let _panelIdSeq = 0;
+
+function allocPanelId(): string {
+    _panelIdSeq += 1;
+    return `panel_${_panelIdSeq}`;
+}
 
 // ─── Face definitions ────────────────────────────────────────
 
@@ -107,6 +125,7 @@ export class PanelModel {
         engineManaged = true,
         zoneId = undefined as string | undefined,
         zonePrefix = undefined as string | undefined,
+        id: providedId = undefined as string | undefined,
     }: {
         width: number;
         height: number;
@@ -122,15 +141,18 @@ export class PanelModel {
         engineManaged?: boolean;
         zoneId?: string;
         zonePrefix?: string;
+        id?: string;
     }) {
         validatePanelDimensionsNm({ width, height, thickness, name }, 'PanelModel');
 
-        if ((thickness <= 3_500_000 || role === 'BACK_PANEL') && materialId === 'W1100_ST9_18' && materialName === 'Biały Alpejski') {
+        // Grubość już zwalidowana jako nm → jawna konwersja (bez zgadywania jednostki z magicznej stałej).
+        const thicknessMm = nmToMm(thickness);
+        if ((role === 'BACK_PANEL' || thicknessMm <= 3.5) && materialId === 'W1100_ST9_18') {
             materialId = 'HDF_BIALY_3';
             materialName = 'HDF Biały 3mm';
             materialCode = 'HDF 3mm';
             color = { r: 0.94, g: 0.94, b: 0.94 };
-        } else if ((Math.abs(thickness - 16_000_000) < 500_000 || role === 'DRAWER_BOTTOM' || role === 'DRAWER_BACK') && materialId === 'W1100_ST9_18') {
+        } else if ((role === 'DRAWER_BOTTOM' || role === 'DRAWER_BACK' || Math.abs(thicknessMm - 16) < 0.5) && materialId === 'W1100_ST9_18') {
             materialId = 'W1100_ST9_16';
             materialName = 'Biały Alpejski 16mm';
             materialCode = 'W1100 ST9';
@@ -146,7 +168,12 @@ export class PanelModel {
         this.materialName = materialName;
         this.materialCode = materialCode;
         this.color = color;
-        this.custom_properties = { material: materialId, material_name: materialName, material_code: materialCode };
+        this.custom_properties = {
+            material: materialId,
+            material_name: materialName,
+            material_code: materialCode,
+            thickness_mm: thicknessMm,
+        };
         
         if (zoneId !== undefined) {
             this.zoneId = zoneId;
@@ -157,8 +184,8 @@ export class PanelModel {
         this.name = name;
         this.projectName = "Projekt";
         
-        // ID must be assigned by creator (or generator)
-        this.id = 'panel_' + Math.random().toString(36).substr(2, 9);
+        // ID od twórcy / hydratora; inaczej monotoniczny alokator (bez Math.random).
+        this.id = (typeof providedId === 'string' && providedId.length > 0) ? providedId : allocPanelId();
         
         // Inicjalizacja Głównego ID
         const idMgr = IDManager.getInstance();
@@ -182,6 +209,10 @@ export class PanelModel {
         this.width = width;
         this.height = height;
         this.thickness = thickness;
+        // Grubość geometryczna jest SSOT — nie zależy od SKU materiału.
+        // custom_properties.thickness_mm trzymamy w sync (korpus/bloki czytają stąd).
+        if (!this.custom_properties) this.custom_properties = {};
+        this.custom_properties.thickness_mm = nmToMm(thickness);
         this._emit('dimensions', { width, height, thickness });
     }
 
@@ -269,7 +300,7 @@ export class PanelModel {
         this.edgeBanding[canonical] = {
             active: config.active !== undefined ? config.active : true,
             type_id: config.type_id || existing.type_id || '0.008x0.022',
-            name: config.name || existing.name || 'Okleina ABS 0.8x22 mm',
+            name: config.name ?? existing.name ?? defaultEdgeBandName(),
             thickness_mm: config.thickness_mm !== undefined ? config.thickness_mm : (existing.thickness_mm || 0.8),
             width_mm: config.width_mm !== undefined ? config.width_mm : (existing.width_mm || 22.0),
             color: config.color || existing.color || this.color,
@@ -333,7 +364,7 @@ export class PanelModel {
             this.edgeBanding[k] = {
                 active: true,
                 type_id: config.type_id || '0.008x0.022',
-                name: config.name || 'Okleina ABS 0.8x22 mm',
+                name: config.name || defaultEdgeBandName(),
                 thickness_mm: config.thickness_mm || 0.8,
                 width_mm: config.width_mm || 22.0,
                 color: config.color || this.color,
@@ -509,7 +540,8 @@ export class PanelModel {
             materialId: data.materialId,
             materialName: data.materialName,
             materialCode: data.materialCode,
-            color: data.color
+            color: data.color,
+            id: data.id
         });
         panel.fromJSON(data);
         return panel;
@@ -522,7 +554,7 @@ export class PanelModel {
      */
     loadFromJSON(data) {
         this.projectName = data.projectName || "Projekt";
-        this.name = data.name || "Płyta";
+        this.name = data.name || defaultPanelName();
         this.role = data.role || this.role;
         this.width = data.width;
         this.height = data.height;

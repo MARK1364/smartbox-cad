@@ -13,6 +13,7 @@ import type { CabinetCategory, CabinetTemplate } from '../B1_biblioteka/korpusy/
 import { ContextManager } from '../A1_core/context-manager.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import { SmartFrameDragController } from '../A3_smartframe/smartframe-drag-controller.js';
+import { openCadEditEntity, closeCadFloatingEdit } from './floating-edit/cad-edit-entity.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
@@ -83,6 +84,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
     });
 
     const handleDragStart = (template: CabinetTemplate, e: React.DragEvent) => {
+        closeCadFloatingEdit();
         const dragCtrl = getDragController();
         dragCtrl.startDragTemplate(template);
         try {
@@ -121,6 +123,7 @@ export function CabinetLibraryPanel({ projectModel, onOpenSaveModal }: Props) {
 
         if (node) {
             showNotice(tx(srcTekst, 'lib.inserted', TX_NS, { name: template.name }));
+            openCadEditEntity({ entityId: node.id, kind: 'korpus' });
         }
     };
 

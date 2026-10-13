@@ -152,7 +152,7 @@ export class CAMSyncService {
         if (typeof panel.width !== 'number' || panel.width <= 0 ||
             typeof panel.height !== 'number' || panel.height <= 0 ||
             typeof panel.thickness !== 'number' || panel.thickness <= 0) {
-            throw new Error(`[C1_cnc/cam-sync-service] Panel "${panel?.name || 'unknown'}" nie posiada poprawnych wymiarów fizycznych (W=${panel?.width}, H=${panel?.height}, T=${panel?.thickness}). Wymiary w nanometrach są wymagane do synchronizacji CAM.`);
+            throw new Error(`[C1_cnc/cam-sync-service] Panel "${panel?.id}" nie posiada poprawnych wymiarów fizycznych (W=${panel?.width}, H=${panel?.height}, T=${panel?.thickness}). Wymiary w nanometrach są wymagane do synchronizacji CAM.`);
         }
         const pW = nmToMm(panel.width);
         const pH = nmToMm(panel.height);
@@ -278,7 +278,7 @@ export class CAMSyncService {
         if (typeof panel.width !== 'number' || panel.width <= 0 ||
             typeof panel.height !== 'number' || panel.height <= 0 ||
             typeof panel.thickness !== 'number' || panel.thickness <= 0) {
-            throw new Error(`[C1_cnc/cam-sync-service] Panel "${panel?.name || 'unknown'}" nie posiada poprawnych wymiarów fizycznych (W=${panel?.width}, H=${panel?.height}, T=${panel?.thickness}). Wymiary w nanometrach są wymagane do synchronizacji CAM.`);
+            throw new Error(`[C1_cnc/cam-sync-service] Panel "${panel?.id}" nie posiada poprawnych wymiarów fizycznych (W=${panel?.width}, H=${panel?.height}, T=${panel?.thickness}). Wymiary w nanometrach są wymagane do synchronizacji CAM.`);
         }
         const pW = nmToMm(panel.width);
         const pH = nmToMm(panel.height);

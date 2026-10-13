@@ -83,11 +83,16 @@ describe('SmartFrame Top Panel & Traverses Engine', () => {
         expect(front).toBeDefined();
         expect(rear).toBeDefined();
 
-        // Wymiary pionowe (stojÄ…ce na sztorc): Y = gruboĹ›Ä‡ 18 mm, Z = wysokoĹ›Ä‡ trawersu 100 mm
+        // Wymiary pionowe (stojące na sztorc): Y = grubość 18 mm, Z = wysokość trawersu 100 mm
         expect(front.dim.y).toBe(18);
         expect(front.dim.z).toBe(100);
         expect(rear.dim.y).toBe(18);
         expect(rear.dim.z).toBe(100);
+
+        // Rotacji TRAVERSE_V nie zmieniać — [180,0,0] + mapping Y←z, Z←y
+        expect(front.lcs?.rotation).toEqual([180, 0, 0]);
+        expect(rear.lcs?.rotation).toEqual([180, 0, 0]);
+        expect(front.lcs?.mapping).toEqual({ X: 'x', Y: 'z', Z: 'y' });
 
         // Pozycje w Y: front = -D/2 + T/2 = -300 + 9 = -291, rear = D/2 - T/2 = 300 - 9 = 291
         expect(front.loc.y).toBeCloseTo(-291);
@@ -96,6 +101,72 @@ describe('SmartFrame Top Panel & Traverses Engine', () => {
         // Pozycje w Z: H - 100/2 = 2000 - 50 = 1950
         expect(front.loc.z).toBeCloseTo(1950);
         expect(rear.loc.z).toBeCloseTo(1950);
+    });
+
+    it('TRAVERSE_V: czerwone gizmo (pX) zmienia szerokość trawersu, nie grubość', () => {
+        const base = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            tryb_wienca_gornego: 'TRAVERSE_V',
+            szerokosc_trawersu_mm: 100
+        });
+        const rearBase = base.parts.find(p => p.role === 'TOP_PANEL' && p.key.endsWith('_T2'))!;
+        const offsetKey = rearBase.name || rearBase.key;
+
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            tryb_wienca_gornego: 'TRAVERSE_V',
+            szerokosc_trawersu_mm: 100,
+            offsets: {
+                [`${offsetKey}_+X`]: 20,
+                [`${offsetKey}_-X`]: 10
+            }
+        });
+
+        const rear = plan.parts.find(p => p.role === 'TOP_PANEL' && p.key.endsWith('_T2'))!;
+        expect(rear).toBeDefined();
+        // Grubość płyty stała; pX → dim.z (po LCS = height, nie thickness)
+        expect(rear.dim.y).toBe(18);
+        expect(rear.dim.z).toBe(100 + 20 + 10);
+        expect(rear.thickness).toBe(18);
+        // Asymetria pX przesuwa środek w Z (nie psuje Y / grubości)
+        expect(rear.loc.y).toBeCloseTo(291);
+        expect(rear.loc.z).toBeCloseTo(1950 + (20 - 10) / 2);
+    });
+
+    it('TRAVERSE_V: shiftY przesuwa trawers w osi Y korpusu (osi Z formatki)', () => {
+        const base = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            tryb_wienca_gornego: 'TRAVERSE_V',
+            szerokosc_trawersu_mm: 100
+        });
+        const frontBase = base.parts.find(p => p.role === 'TOP_PANEL' && !p.key.endsWith('_T2'))!;
+        const offsetKey = frontBase.name || frontBase.key;
+
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 2000,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            tryb_wienca_gornego: 'TRAVERSE_V',
+            szerokosc_trawersu_mm: 100,
+            offsets: {
+                [`${offsetKey}_shiftY`]: 25
+            }
+        });
+
+        const front = plan.parts.find(p => p.role === 'TOP_PANEL' && !p.key.endsWith('_T2'))!;
+        expect(front).toBeDefined();
+        // Bazowa pozycja to -D/2 + T/2 = -300 + 9 = -291. Z shiftY = +25 -> -266
+        expect(front.loc.y).toBeCloseTo(-291 + 25);
     });
 
     it('SetKorpusTopPanelConfigCommand supports execute and undo', () => {

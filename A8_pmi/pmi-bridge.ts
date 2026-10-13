@@ -229,6 +229,7 @@ export function resolveMeasureAxis(opts: {
     anchor2World: Vec3;
     faceNormal1World?: Vec3 | null;
     faceNormal2World?: Vec3 | null;
+    offsetAxisKey?: string;
 }): MeasureAxisResolution | null {
     const delta = v3Sub(opts.anchor2World, opts.anchor1World);
     if (v3Len(delta) <= 1e-6) return null;
@@ -254,9 +255,27 @@ export function resolveMeasureAxis(opts: {
     }
 
     let measureKey = (opts.measureAxisKey || 'AUTO').toUpperCase();
+    const offsetKey = (opts.offsetAxisKey || '').toUpperCase();
 
     if (!['X', 'Y', 'Z'].includes(measureKey)) {
-        measureKey = dominantMeasureAxisKey(delta, opts.axisSpace, axisMap);
+        if (['X', 'Y', 'Z'].includes(offsetKey)) {
+            // W trybie AUTO, gdy użytkownik wyciąga wymiar wzdłuż określonej osi (offsetAxisKey),
+            // oś pomiaru musi być do niej prostopadła.
+            const candidates = ['X', 'Y', 'Z'].filter(k => k !== offsetKey);
+            let bestKey = candidates[0];
+            let bestScore = -1;
+            for (const k of candidates) {
+                const ax = axisMap[k] ?? v3(0, 0, 0);
+                const score = Math.abs(v3Dot(delta, ax));
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestKey = k;
+                }
+            }
+            measureKey = bestScore > 1e-4 ? bestKey : dominantMeasureAxisKey(delta, opts.axisSpace, axisMap);
+        } else {
+            measureKey = dominantMeasureAxisKey(delta, opts.axisSpace, axisMap);
+        }
     } else {
         // Zabezpieczenie: wymuszona oś prostopadła do odcinka dałaby wymiar zerowy.
         const chosen = axisMap[measureKey] || axisMap.X;
@@ -317,6 +336,7 @@ export function solveDimensionBridge(opts: {
             axisSpace: opts.axisSpace,
             matrixWorld: opts.matrixWorld,
             measureAxisKey: opts.measureAxisKey,
+            offsetAxisKey: opts.offsetAxisKey,
             anchor1World: opts.anchor1World,
             anchor2World: opts.anchor2World,
             faceNormal1World: opts.faceNormal1World,
@@ -429,6 +449,7 @@ export function getRenderData(opts: {
         axisSpace: opts.axisSpace,
         matrixWorld: opts.matrixWorld,
         measureAxisKey: opts.measureAxisKey,
+        offsetAxisKey: opts.offsetAxisKey,
         anchor1World: opts.anchor1World,
         anchor2World: opts.anchor2World,
         faceNormal1World: opts.faceNormal1World,
@@ -454,21 +475,73 @@ export function getRenderData(opts: {
     });
 
     if (!bridge) {
-        // Fallback directly to parallel offset
-        const ax = v3Normalize(edgeVec);
-        let ay = opts.offsetWorld && v3Len(opts.offsetWorld) > 1e-4 ? v3Normalize(opts.offsetWorld) : v3Cross(ax, v3(0, 0, 1));
-        if (v3Len(ay) < 1e-4) ay = v3Cross(ax, v3(0, 1, 0));
-        ay = v3Normalize(ay);
+        let ax: Vec3;
+        let ay: Vec3;
+        let p1DimW: Vec3;
+        let p2DimW: Vec3;
 
-        const offsetDist = Math.max(v3Len(opts.offsetWorld), 25);
-        const p1DimW = v3Add(opts.anchor1World, v3Scale(ay, offsetDist));
-        const p2DimW = v3Add(opts.anchor2World, v3Scale(ay, offsetDist));
+        if (measure && measure.measureAxisKey !== 'ALIGNED' && measure.lengthMM > 1e-4) {
+            ax = v3Normalize(measure.axisXWorld);
+            // Wyznacz ay prostopadłe do ax
+            if (opts.offsetWorld && v3Len(opts.offsetWorld) > 1e-4) {
+                ay = v3Sub(opts.offsetWorld, v3Scale(ax, v3Dot(opts.offsetWorld, ax)));
+                if (v3Len(ay) > 1e-4) {
+                    ay = v3Normalize(ay);
+                } else {
+                    ay = v3Cross(ax, v3(0, 0, 1));
+                    if (v3Len(ay) < 1e-4) ay = v3Cross(ax, v3(0, 1, 0));
+                    ay = v3Normalize(ay);
+                }
+            } else {
+                ay = v3Cross(ax, v3(0, 0, 1));
+                if (v3Len(ay) < 1e-4) ay = v3Cross(ax, v3(0, 1, 0));
+                ay = v3Normalize(ay);
+            }
+
+            let az = v3Cross(ax, ay);
+            az = v3Len(az) > 1e-4 ? v3Normalize(az) : v3(0, 0, 1);
+
+            const t1 = v3Dot(opts.anchor1World, ax);
+            const t2 = v3Dot(opts.anchor2World, ax);
+
+            const y1 = v3Dot(opts.anchor1World, ay);
+            const y2 = v3Dot(opts.anchor2World, ay);
+            const yMid = (y1 + y2) * 0.5;
+
+            const z1 = v3Dot(opts.anchor1World, az);
+            const z2 = v3Dot(opts.anchor2World, az);
+            const zMid = (z1 + z2) * 0.5;
+
+            const offsetDist = opts.offsetWorld && v3Len(opts.offsetWorld) > 1e-4
+                ? v3Dot(opts.offsetWorld, ay)
+                : 30;
+            const finalOffset = Math.abs(offsetDist) < 1e-4 ? 30 : offsetDist;
+            const yDim = yMid + finalOffset;
+
+            p1DimW = v3Add(v3Add(v3Scale(ax, t1), v3Scale(ay, yDim)), v3Scale(az, zMid));
+            p2DimW = v3Add(v3Add(v3Scale(ax, t2), v3Scale(ay, yDim)), v3Scale(az, zMid));
+        } else {
+            // ALIGNED fallback
+            ax = v3Normalize(edgeVec);
+            ay = opts.offsetWorld && v3Len(opts.offsetWorld) > 1e-4 ? v3Normalize(opts.offsetWorld) : v3Cross(ax, v3(0, 0, 1));
+            if (v3Len(ay) < 1e-4) ay = v3Cross(ax, v3(0, 1, 0));
+            ay = v3Normalize(ay);
+
+            const offsetDist = Math.max(v3Len(opts.offsetWorld), 25);
+            p1DimW = v3Add(opts.anchor1World, v3Scale(ay, offsetDist));
+            p2DimW = v3Add(opts.anchor2World, v3Scale(ay, offsetDist));
+        }
+
+        let fwdW = v3Sub(p2DimW, p1DimW);
+        fwdW = v3Len(fwdW) > 1e-7 ? v3Normalize(fwdW) : v3Copy(ax);
+        let sideW = v3Cross(fwdW, ay);
+        sideW = v3Len(sideW) > 1e-7 ? v3Normalize(sideW) : v3(0, 1, 0);
 
         const thickMain = worldThickness;
         const thickHelper = thickMain * HELPER_LINE_THICKNESS_RATIO;
         const arrowResult = solveArrowPlacement({
             dimP1World: p1DimW, dimP2World: p2DimW,
-            fwdWorld: ax, lineThicknessWorld: thickMain,
+            fwdWorld: fwdW, lineThicknessWorld: thickMain,
             textValue: labelText, fontSizeWorld, config: opts.config,
         });
 
@@ -486,9 +559,9 @@ export function getRenderData(opts: {
             arrowWid: arrowResult.arrowWid,
             dimLineP1World: arrowResult.dimLineP1,
             dimLineP2World: arrowResult.dimLineP2,
-            fwdWorld: ax,
+            fwdWorld: fwdW,
             upWorld: ay,
-            sideWorld: v3Normalize(v3Cross(ax, ay)),
+            sideWorld: sideW,
             thickMain,
             thickHelper,
             labelText,

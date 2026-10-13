@@ -9,6 +9,8 @@ import { constraintHasGeometry, type AnchorKind, type SolverConstraint } from '.
 import { ConstraintHighlightOverlay } from './constraint-highlight.js';
 import { BIND_TYPE_ICON, CONFLICT_REJECT_MESSAGE } from './solver-ui-config.js';
 import type { BindType } from './core/contract.js';
+import { AddConstraintCommand } from './constraint-commands.js';
+import type { NodeTransformDelta } from './solve-constraints-command.js';
 
 export const DRZEWO_TAB_EVENT = 'cad-drzewo-tab';
 export const SOLVER_PICK_EVENT = 'solver-pick-changed';
@@ -55,20 +57,24 @@ export function beginConstraintSlotPick(opts: {
         return;
     }
 
-    const slotLabel = opts.slot === 'A' ? 'A' : 'B';
+    const stepLabel = opts.slot === 'A'
+        ? (opts.thenPickB ? 'Krok 1/2: wskaż pierwszą ścianę w 3D' : 'Wskaż ścianę (A) w 3D')
+        : 'Krok 2/2: wskaż drugą ścianę w 3D';
     const kindHint =
         opts.expectedKind === 'VERTEX'
             ? 'narożnik'
             : opts.expectedKind === 'FACE'
-              ? 'ścianę / datum (Top·Front·Right)'
-              : 'korpus';
+              ? 'ścianę'
+              : 'obiekt';
 
     activePick = { constraintId: opts.constraintId, slot: opts.slot };
+    ConstraintHighlightOverlay.instance.setHighlighted([opts.constraintId]);
     notifyPickChanged();
     startConstraintPick({
-        label: `Więz ${BIND_TYPE_ICON[constraint.bindType]}: wskaż ${kindHint} (${slotLabel}) w 3D — PPM / Q: QuickPick (zakryte), ESC anuluje`,
+        label: `Więz ${BIND_TYPE_ICON[constraint.bindType]}: ${stepLabel} (${kindHint}) — kliknij bezpośrednio w scenie, ESC anuluje`,
         expectedKind: opts.expectedKind,
         onPick: (anchor) => {
+            ConstraintHighlightOverlay.instance.stopVertexRubberBand();
             activePick = null;
             notifyPickChanged();
             const live = store.get(opts.constraintId);
@@ -108,7 +114,25 @@ export function beginConstraintSlotPick(opts: {
             }
 
             store.update(opts.constraintId, patch);
-            (ContextManager.instance as any).solverController?.solveNow?.();
+
+            const isFinalSlot = (live.bindType === 'GROUND' && opts.slot === 'A') || opts.slot === 'B';
+            const solverCtrl = (ContextManager.instance as any).solverController;
+
+            if (isFinalSlot) {
+                solverCtrl?.solveNow?.({
+                    onCommand: (deltas: NodeTransformDelta[]) => {
+                        const finalC = store.get(opts.constraintId);
+                        if (!finalC || finalC.conflict) return null;
+                        return new AddConstraintCommand(finalC, deltas);
+                    },
+                });
+                ContextManager.instance.appAPI?.setStatus?.(
+                    `Relacja ${BIND_TYPE_ICON[live.bindType]} została pomyślnie złączona i przeliczona.`,
+                    false,
+                );
+            } else {
+                solverCtrl?.solveNow?.();
+            }
 
             const after = store.get(opts.constraintId);
             if (after && constraintHasGeometry(after) && after.conflict) {
@@ -125,7 +149,11 @@ export function beginConstraintSlotPick(opts: {
                 }
             }
 
-            ConstraintHighlightOverlay.instance.refresh();
+            if (isFinalSlot) {
+                ConstraintHighlightOverlay.instance.clear();
+            } else {
+                ConstraintHighlightOverlay.instance.refresh();
+            }
 
             if (
                 opts.thenPickB &&
@@ -141,22 +169,68 @@ export function beginConstraintSlotPick(opts: {
             }
         },
         onCancel: () => {
+            ConstraintHighlightOverlay.instance.stopVertexRubberBand();
+            ConstraintHighlightOverlay.instance.clear();
             activePick = null;
             notifyPickChanged();
         },
     });
+
+    if (opts.slot === 'B' && constraint.bindType === 'VERTEX' && constraint.anchorA) {
+        ConstraintHighlightOverlay.instance.startVertexRubberBand(opts.constraintId);
+    } else {
+        ConstraintHighlightOverlay.instance.stopVertexRubberBand();
+    }
 }
 
-export function addConstraintWithPick(bindType: BindType, groundKind: AnchorKind = 'VERTEX'): SolverConstraint {
+/**
+ * Kasuje niedokończone więzy (brak pełnej geometrii A/B) — np. po przełączeniu
+ * „Połącz narożnikami” → „Wyrównaj ściany” nie zostają zepsute inputy.
+ */
+export function removeIncompleteConstraintDrafts(): string[] {
+    const store = ConstraintStore.instance;
+    const removed: string[] = [];
+    for (const c of [...store.constraints]) {
+        if (constraintHasGeometry(c)) continue;
+        store.remove(c.id);
+        removed.push(c.id);
+    }
+    if (removed.length > 0) {
+        ConstraintHighlightOverlay.instance.stopVertexRubberBand();
+        ConstraintHighlightOverlay.instance.setHighlighted([]);
+        notifyPickChanged();
+    }
+    return removed;
+}
+
+/**
+ * Tworzy relację. Przy autoPick=true od razu przechodzi do wskazywania ściany A w 3D.
+ */
+export function addConstraintDraft(bindType: BindType, autoPick: boolean = false): SolverConstraint {
     stopConstraintPick();
+    ConstraintHighlightOverlay.instance.stopVertexRubberBand();
+    removeIncompleteConstraintDrafts();
     const store = ConstraintStore.instance;
     const draft = store.add({ bindType, anchorA: null, anchorB: null });
     openDrzewoRelacjeTab(draft.id);
-    beginConstraintSlotPick({
-        constraintId: draft.id,
-        slot: 'A',
-        expectedKind: expectedKindForBind(bindType, groundKind),
-        thenPickB: bindType !== 'GROUND',
-    });
+    notifyPickChanged();
+    if (autoPick) {
+        beginConstraintSlotPick({
+            constraintId: draft.id,
+            slot: 'A',
+            expectedKind: expectedKindForBind(bindType, bindType === 'GROUND' ? 'VERTEX' : 'FACE'),
+            thenPickB: bindType !== 'GROUND',
+        });
+    } else {
+        ContextManager.instance.appAPI?.setStatus?.(
+            `Relacja ${BIND_TYPE_ICON[bindType]}: wskaż płaszczyznę lub naroże w 3D`,
+            true,
+        );
+    }
     return draft;
+}
+
+/** @deprecated Używaj addConstraintDraft — bez automatycznego startu pipety. */
+export function addConstraintWithPick(bindType: BindType, _groundKind: AnchorKind = 'VERTEX'): SolverConstraint {
+    return addConstraintDraft(bindType, true);
 }

@@ -5,7 +5,7 @@
  * oraz trójwymiarowe gizmo układu bazy WCS (strzałki RGB X/Y/Z z kulką centralną) przyklejane do wierzchołka formatki.
  */
 
-import { HoleFeature, GrooveFeature, ContourFeature, CAMFeature, Vector3D, Tool } from '../dto/cam-dto.js';
+import { HoleFeature, GrooveFeature, ContourFeature, CAMFeature, Vector3D, Tool, CNCOperation } from '../dto/cam-dto.js';
 import { CNCToolMeshFactory } from './tool-mesh-factory.js';
 import { generateEffectiveContourPath } from '../geometry/cnc-geometry-utils.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
@@ -18,6 +18,7 @@ export class CAMVisualizer {
     private wcsGizmoNode: any = null;
     private partAxesNode: any = null;
     private worldMeshes: any[] = [];
+    private toolpathsRootNode: any = null;
 
     constructor(scene: any) {
         this.scene = scene;
@@ -33,6 +34,7 @@ export class CAMVisualizer {
     }
 
     public clear(): void {
+        this.clearToolpaths();
         if (this.camRootNode) {
             this.camRootNode.dispose(false, true);
             this.camRootNode = null;
@@ -261,7 +263,8 @@ export class CAMVisualizer {
                 box.material = grooveMat;
                 
                 const center = BABYLON.Vector3.Center(p1, p2);
-                center.z += (groove.flipDepthDirection ? (groove.depth || 8) / 2 : -(groove.depth || 8) / 2);
+                const isBottomFace = groove.face === 'FACE_Z_MINUS' || Boolean(groove.flipDepthDirection);
+                center.z += isBottomFace ? (groove.depth || 8) / 2 : -(groove.depth || 8) / 2;
                 box.position = center;
                 
                 const dir = p2.subtract(p1);
@@ -427,14 +430,16 @@ export class CAMVisualizer {
             }
         } else if ('startPoint' in feature || feature.type === 'groove') {
             // Wpust
-            const p1 = feature.startPoint || { x: 0, y: 0, z: 0 };
-            const p2 = feature.endPoint || { x: 100, y: 0, z: 0 };
+            const p1 = feature.panelStartPoint || feature.startPoint || { x: 0, y: 0, z: 0 };
+            const p2 = feature.panelEndPoint || feature.endPoint || { x: 100, y: 0, z: 0 };
+            const grooveWidth = feature.width || feature.params?.width || 4;
             const line = BABYLON.MeshBuilder.CreateTube("Highlight_Groove", {
                 path: [new BABYLON.Vector3(p1.x, p1.y, p1.z), new BABYLON.Vector3(p2.x, p2.y, p2.z)],
-                radius: 4.0,
+                radius: Math.max(1.8, grooveWidth / 2 + 0.4),
                 tessellation: 12
             }, this.scene);
             line.material = mat;
+            line.renderingGroupId = 2;
             line.parent = this.highlightRootNode;
         }
 
@@ -476,6 +481,119 @@ export class CAMVisualizer {
         if (this.highlightRootNode) {
             this.highlightRootNode.dispose(false, true);
             this.highlightRootNode = null;
+            (ContextManager.instance as any)?.viewport?.requestRender?.(5);
+        }
+    }
+
+    /**
+     * Rysuje pełne ścieżki przejazdów narzędzia w 3D:
+     * - G0 (Rapid Travel) na wysokości bezpiecznej SafeZ (złocisto-żółte linie łączące kolejne operacje)
+     * - G1 (Cutting / Feed) zanurzanie i ruchy robocze w materiale (seledynowo-zielone linie)
+     */
+    public renderToolpaths(operations: CNCOperation[], wcsManager: any, parentNode: any = null): void {
+        if (!this.scene) return;
+        this.clearToolpaths();
+
+        if (!operations || operations.length === 0) return;
+
+        this.toolpathsRootNode = new BABYLON.TransformNode("CAM_Toolpaths_Root", this.scene);
+        if (parentNode) {
+            this.toolpathsRootNode.parent = parentNode;
+        }
+
+        if (wcsManager) {
+            const origin = wcsManager.getOrigin();
+            const rot = wcsManager.getRotation();
+            const dirs = wcsManager.getDirections();
+            this.toolpathsRootNode.position = new BABYLON.Vector3(origin.x, origin.y, origin.z);
+            this.toolpathsRootNode.rotation = new BABYLON.Vector3(
+                rot.x * Math.PI / 180,
+                rot.y * Math.PI / 180,
+                rot.z * Math.PI / 180
+            );
+            this.toolpathsRootNode.scaling = new BABYLON.Vector3(dirs.x, dirs.y, dirs.z);
+        }
+
+        const safeZOffset = 25.0; // mm nad powierzchnią (SAFE_Z)
+        const rapidLines: Array<any[]> = [];
+        const cuttingLines: Array<any[]> = [];
+
+        let currentCursor = new BABYLON.Vector3(0, 0, safeZOffset);
+
+        for (const op of operations) {
+            const pos = op.position;
+            const opSafePos = new BABYLON.Vector3(pos.x, pos.y, pos.z + safeZOffset);
+
+            // 1. Przejazd szybki G0 do punktu bezpiecznego nad operacją
+            rapidLines.push([currentCursor, opSafePos]);
+
+            if (op.type === 'drill') {
+                const depth = Math.abs(op.parameters?.depth || 10.0);
+                const bottomPos = new BABYLON.Vector3(pos.x, pos.y, pos.z - depth);
+                const surfacePos = new BABYLON.Vector3(pos.x, pos.y, pos.z);
+
+                // G0 najazd z wysokości bezpiecznej do powierzchni materiału
+                rapidLines.push([opSafePos, surfacePos]);
+                // G1 wiercenie wgłąb materiału
+                cuttingLines.push([surfacePos, bottomPos]);
+                // G0 wycofanie
+                rapidLines.push([bottomPos, opSafePos]);
+
+                currentCursor = opSafePos;
+            } else if (op.type === 'groove' || op.type === 'contour') {
+                const moves = op.parameters?.moves || [];
+                const depth = Math.abs(op.parameters?.depth || 0.0);
+                const cutStart = new BABYLON.Vector3(pos.x, pos.y, pos.z - depth);
+
+                // Zanurzenie G1
+                rapidLines.push([opSafePos, new BABYLON.Vector3(pos.x, pos.y, pos.z)]);
+                cuttingLines.push([new BABYLON.Vector3(pos.x, pos.y, pos.z), cutStart]);
+
+                let cutCursor = cutStart;
+                for (const m of moves) {
+                    if (m.endPoint) {
+                        const mEnd = new BABYLON.Vector3(m.endPoint.x, m.endPoint.y, m.endPoint.z - depth);
+                        cuttingLines.push([cutCursor, mEnd]);
+                        cutCursor = mEnd;
+                    }
+                }
+
+                // Wycofanie do SafeZ po zakończeniu konturu
+                const cutRetract = new BABYLON.Vector3(cutCursor.x, cutCursor.y, cutCursor.z + safeZOffset);
+                rapidLines.push([cutCursor, cutRetract]);
+                currentCursor = cutRetract;
+            }
+        }
+
+        // Linie G0 (szybkie, SafeZ) - złocisto-żółte
+        if (rapidLines.length > 0) {
+            const rapidMesh = BABYLON.MeshBuilder.CreateLineSystem("CAM_Toolpath_Rapid_G0", {
+                lines: rapidLines,
+                updatable: false
+            }, this.scene);
+            rapidMesh.color = new BABYLON.Color3(0.98, 0.75, 0.15); // Złocisto-żółty
+            rapidMesh.parent = this.toolpathsRootNode;
+            rapidMesh.isPickable = false;
+        }
+
+        // Linie G1 (robocze) - seledynowo-zielone
+        if (cuttingLines.length > 0) {
+            const cuttingMesh = BABYLON.MeshBuilder.CreateLineSystem("CAM_Toolpath_Cutting_G1", {
+                lines: cuttingLines,
+                updatable: false
+            }, this.scene);
+            cuttingMesh.color = new BABYLON.Color3(0.1, 0.9, 0.45); // Jasny seledyn
+            cuttingMesh.parent = this.toolpathsRootNode;
+            cuttingMesh.isPickable = false;
+        }
+
+        (ContextManager.instance as any)?.viewport?.requestRender?.(5);
+    }
+
+    public clearToolpaths(): void {
+        if (this.toolpathsRootNode) {
+            this.toolpathsRootNode.dispose(false, true);
+            this.toolpathsRootNode = null;
             (ContextManager.instance as any)?.viewport?.requestRender?.(5);
         }
     }

@@ -79,4 +79,17 @@ describe('extensions.drawings', () => {
         expect(ExportEngine.instance.savedViews).toHaveLength(1);
         expect(ExportEngine.instance.savedViews[0].name).toBe('Rzut przód');
     });
+
+    it('does not persist sheets to global localStorage (F5 / nowy projekt)', () => {
+        const legacyKey = 'bloki_cad_manual_sheets_v3';
+        localStorage.setItem(legacyKey, JSON.stringify([sampleSheet]));
+
+        ExportEngine.instance.replaceSavedViews([sampleSheet]);
+        expect(localStorage.getItem(legacyKey)).toBeNull();
+
+        ExportEngine.instance.replaceSavedViews([]);
+        doc.reset('Nowy projekt');
+        expect(ExportEngine.instance.savedViews).toHaveLength(0);
+        expect(localStorage.getItem(legacyKey)).toBeNull();
+    });
 });

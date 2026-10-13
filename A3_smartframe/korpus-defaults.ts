@@ -85,16 +85,17 @@ export function korpusDefaultsForTypeMm(type: KorpusDefaultsCabinetType): Korpus
     }
 
     if (type === 'korpus_skosny' || type === 'korpus_skosny_dach') {
-        const front = rulesMToMm(d.height_front, 1000);
-        const back = rulesMToMm(d.height_back, 2200);
+        const wysokosc_przod_mm = rulesMToMm(d.height_front, 2200);
+        const wysokosc_tyl_mm = rulesMToMm(d.height_back, 1000);
+        const max_wysokosc_mm = Math.max(wysokosc_przod_mm, wysokosc_tyl_mm);
         return {
             ...base,
             liczba_stref: 1,
-            wysokosc_mm: Math.max(front, back),
-            wysokosc_strefy_dolnej_mm: Math.max(front, back),
+            wysokosc_mm: max_wysokosc_mm,
+            wysokosc_strefy_dolnej_mm: max_wysokosc_mm,
             wysokosc_strefy_srodkowej_mm: 0,
-            wysokosc_przod_mm: front,
-            wysokosc_tyl_mm: back
+            wysokosc_przod_mm,
+            wysokosc_tyl_mm
         };
     }
 

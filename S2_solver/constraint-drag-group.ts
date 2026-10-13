@@ -18,6 +18,7 @@ import {
     buildConstraintFrames,
     buildGroundLocks,
     localPointOn,
+    orthonormalize,
     otherNodeId,
     projectOntoConstrainedSpace,
     projectOntoFreeSpace,
@@ -114,42 +115,6 @@ function worldPoint(pose: WorldPose, localNm: Vec3): Vec3 {
     return pose.matrix.transformPoint(localNm);
 }
 
-function transferredPose(
-    frame: ConstraintFrame,
-    sourceId: string,
-    sourceInitial: WorldPose,
-    sourceCurrent: WorldPose,
-    targetInitial: WorldPose,
-    targetId: string,
-): WorldPose {
-    if (frame.kind === 'point') {
-        const srcLocal = localPointOn(frame, sourceId);
-        const tgtLocal = localPointOn(frame, targetId);
-        const sourceNow = worldPoint(sourceCurrent, srcLocal);
-        const offset = Mat4.fromTRS(Vec3.ZERO, targetInitial.rotation, targetInitial.scale).transformPoint(
-            tgtLocal,
-        );
-        return poseFromTRS(sourceNow.sub(offset), targetInitial.rotation, targetInitial.scale);
-    }
-
-    const deltaT = sourceCurrent.translation.sub(sourceInitial.translation);
-    const pointLocal = localPointOn(frame, sourceId);
-    const planeDelta = worldPoint(sourceCurrent, pointLocal).sub(worldPoint(sourceInitial, pointLocal));
-    const transferredT = projectOntoConstrainedSpace(
-        planeDelta.lengthSquared() > 1e-18 ? planeDelta : deltaT,
-        frame.translationConstrainedBasis,
-    );
-
-    const deltaR = worldDeltaRotation(sourceInitial.rotation, sourceCurrent.rotation);
-    const swing = rotationConstrainedDelta(deltaR, frame.twistAxis);
-
-    return poseFromTRS(
-        targetInitial.translation.add(transferredT),
-        applyWorldRotation(targetInitial.rotation, swing),
-        targetInitial.scale,
-    );
-}
-
 function applyGroundLock(lock: GroundLock, initial: WorldPose, current: WorldPose): WorldPose {
     if (lock.mode === 'OBJECT') {
         return initial;
@@ -177,80 +142,175 @@ function applyGroundLock(lock: GroundLock, initial: WorldPose, current: WorldPos
     );
 }
 
-function clampDraggedAgainstFrame(
-    frame: ConstraintFrame,
+function clampDraggedAgainstGrounded(
+    frames: ConstraintFrame[],
+    groundLocks: GroundLock[],
     draggedId: string,
     initialDragged: WorldPose,
     draggedPose: WorldPose,
-    otherInitial: WorldPose,
+    initialPoses: Map<string, WorldPose>,
+    groundedIds: Set<string>,
 ): WorldPose {
-    const otherId = otherNodeId(frame, draggedId);
-    if (!otherId) {
-        return draggedPose;
+    let result = draggedPose;
+
+    for (const lock of groundLocks) {
+        if (lock.nodeId === draggedId) {
+            result = applyGroundLock(lock, initialDragged, result);
+        }
     }
 
-    if (frame.kind === 'point') {
-        const srcLocal = localPointOn(frame, draggedId);
-        const tgtLocal = localPointOn(frame, otherId);
-        const otherPt = worldPoint(otherInitial, tgtLocal);
-        const currentPt = worldPoint(draggedPose, srcLocal);
-        return poseFromTRS(
-            draggedPose.translation.add(otherPt.sub(currentPt)),
-            draggedPose.rotation,
-            draggedPose.scale,
-        );
+    const groundedFrames = frames.filter((f) => {
+        const other = otherNodeId(f, draggedId);
+        return other && groundedIds.has(other);
+    });
+
+    if (groundedFrames.length === 0) {
+        return result;
     }
 
-    const requiredOther = transferredPose(
-        frame,
-        draggedId,
-        initialDragged,
-        draggedPose,
-        otherInitial,
-        otherId,
-    );
-    const driftT = requiredOther.translation.sub(otherInitial.translation);
-    let result = poseFromTRS(
-        draggedPose.translation.sub(driftT),
-        draggedPose.rotation,
-        draggedPose.scale,
-    );
+    // Rotacja: sprawdzamy liczbę niezależnych normalnych więzów płaszczyzn
+    const planeNormals: Vec3[] = [];
+    let hasGroundPoint = false;
+    for (const f of groundedFrames) {
+        if (f.kind === 'point') {
+            hasGroundPoint = true;
+        } else if (f.kind === 'plane' && f.worldNormal) {
+            planeNormals.push(f.worldNormal);
+        }
+    }
+    const rotBasis = orthonormalize(planeNormals);
 
-    if (frame.twistAxis) {
+    if (rotBasis.length >= 2 || (rotBasis.length >= 1 && hasGroundPoint)) {
+        // 2 lub więcej nieparalelnych płaszczyzn lub płaszczyzna + punkt do uziemionych obiektów -> 0 stopni swobody obrotu
+        result = poseFromTRS(result.translation, initialDragged.rotation, result.scale);
+    } else if (rotBasis.length === 1) {
+        // 1 normalna płaszczyzny -> dopuszczalny wyłącznie twist wokół normalnej
+        const normal = rotBasis[0];
         const deltaR = worldDeltaRotation(initialDragged.rotation, result.rotation);
-        const { twist } = swingTwistDecompose(deltaR, frame.twistAxis);
+        const { twist } = swingTwistDecompose(deltaR, normal);
         result = poseFromTRS(
             result.translation,
             applyWorldRotation(initialDragged.rotation, twist),
             result.scale,
         );
     }
+
+    // Translacja: klamrowanie punktów kotwic do płaszczyzn i wierzchołków
+    for (const f of groundedFrames) {
+        const otherId = otherNodeId(f, draggedId)!;
+        const otherInitial = initialPoses.get(otherId);
+        if (!otherInitial) {
+            continue;
+        }
+
+        if (f.kind === 'point') {
+            const srcLocal = localPointOn(f, draggedId);
+            const tgtLocal = localPointOn(f, otherId);
+            const otherPt = worldPoint(otherInitial, tgtLocal);
+            const currentPt = worldPoint(result, srcLocal);
+            result = poseFromTRS(
+                result.translation.add(otherPt.sub(currentPt)),
+                result.rotation,
+                result.scale,
+            );
+        } else if (f.kind === 'plane' && f.worldNormal) {
+            const srcLocal = localPointOn(f, draggedId);
+            const tgtLocal = localPointOn(f, otherId);
+            const otherPt = worldPoint(otherInitial, tgtLocal);
+            const currentPt = worldPoint(result, srcLocal);
+            const error = currentPt.sub(otherPt).dot(f.worldNormal);
+            result = poseFromTRS(
+                result.translation.sub(f.worldNormal.scale(error)),
+                result.rotation,
+                result.scale,
+            );
+        }
+    }
+
     return result;
 }
 
-function accumulateTransfers(
-    frames: ConstraintFrame[],
+function transferPoseToNeighbor(
+    dstFrames: ConstraintFrame[],
     sourceId: string,
     sourceInitial: WorldPose,
     sourceCurrent: WorldPose,
-    targetId: string,
-    targetInitial: WorldPose,
+    dstId: string,
+    dstInitial: WorldPose,
 ): WorldPose {
-    let translation = targetInitial.translation;
-    let rotation = targetInitial.rotation;
-    for (const frame of frames) {
-        const next = transferredPose(
-            frame,
-            sourceId,
-            sourceInitial,
-            sourceCurrent,
-            targetInitial,
-            targetId,
-        );
-        translation = translation.add(next.translation.sub(targetInitial.translation));
-        rotation = next.rotation;
+    const deltaR = worldDeltaRotation(sourceInitial.rotation, sourceCurrent.rotation);
+    const isRotating = Math.abs(deltaR.w) < 0.9999999;
+
+    const planeNormals: Vec3[] = [];
+    let hasPoint = false;
+    for (const f of dstFrames) {
+        if (f.kind === 'point') {
+            hasPoint = true;
+        } else if (f.kind === 'plane' && f.worldNormal) {
+            planeNormals.push(f.worldNormal);
+        }
     }
-    return poseFromTRS(translation, rotation, targetInitial.scale);
+    const planeBasis = orthonormalize(planeNormals);
+    const deltaMatrix = sourceCurrent.matrix.multiply(sourceInitial.matrix.invert());
+
+    if (isRotating) {
+        if (planeBasis.length >= 2 || hasPoint) {
+            // Wszystkie stopnie swobody obrotu odebrane (2+ nieparalelne płaszczyzny lub narożnik) ->
+            // sztywny obrót po orbicie jako jeden obiekt (SolidWorks)
+            const nextMatrix = deltaMatrix.multiply(dstInitial.matrix);
+            return poseFromMatrix(nextMatrix);
+        }
+
+        if (planeBasis.length === 1) {
+            const normal = planeBasis[0];
+            const { swing } = swingTwistDecompose(deltaR, normal);
+            const hasSwing = Math.abs(swing.w) < 0.9999999;
+
+            if (hasSwing) {
+                // Swing: normalna się przechyla, więc sąsiad orbituje sztywno z przeciąganym (SolidWorks),
+                // aby płaszczyzny styku pozostały w 100% równoległe i zbieżne w czasie rzeczywistym
+                const nextMatrix = deltaMatrix.multiply(dstInitial.matrix);
+                return poseFromMatrix(nextMatrix);
+            }
+
+            // Czysty twist: obrót wyłącznie wokół normalnej pojedynczej płaszczyzny (jak obrót monety na stole).
+            // Normalna się nie zmienia, sąsiad nie obraca się, translacja pozostaje związana w normalnej.
+            const deltaT = sourceCurrent.translation.sub(sourceInitial.translation);
+            const transferredT = projectOntoConstrainedSpace(deltaT, planeBasis);
+            return poseFromTRS(
+                dstInitial.translation.add(transferredT),
+                dstInitial.rotation,
+                dstInitial.scale,
+            );
+        }
+
+        const nextMatrix = deltaMatrix.multiply(dstInitial.matrix);
+        return poseFromMatrix(nextMatrix);
+    }
+
+    // Translacja bez obrotu:
+    if (planeBasis.length >= 3 || (planeBasis.length >= 2 && hasPoint)) {
+        const nextMatrix = deltaMatrix.multiply(dstInitial.matrix);
+        return poseFromMatrix(nextMatrix);
+    }
+
+    if (hasPoint) {
+        const frame = dstFrames.find((f) => f.kind === 'point')!;
+        const srcLocal = localPointOn(frame, sourceId);
+        const tgtLocal = localPointOn(frame, dstId);
+        const sourceNow = worldPoint(sourceCurrent, srcLocal);
+        const offset = Mat4.fromTRS(Vec3.ZERO, dstInitial.rotation, dstInitial.scale).transformPoint(tgtLocal);
+        return poseFromTRS(sourceNow.sub(offset), dstInitial.rotation, dstInitial.scale);
+    }
+
+    // Swobodne ślizganie po płaszczyznach (np. 1 płaszczyzna)
+    const deltaT = sourceCurrent.translation.sub(sourceInitial.translation);
+    const transferredT = projectOntoConstrainedSpace(deltaT, planeBasis);
+    return poseFromTRS(
+        dstInitial.translation.add(transferredT),
+        dstInitial.rotation,
+        dstInitial.scale,
+    );
 }
 
 export class ConstraintDragGroup {
@@ -365,38 +425,16 @@ export class ConstraintDragGroup {
         this._conflictIds.clear();
         let draggedPose = poseFromMatrix(draggedNode.getWorldMatrix());
 
-        for (const lock of this._groundLocks) {
-            if (lock.nodeId === draggedNodeId) {
-                draggedPose = applyGroundLock(lock, initialDragged, draggedPose);
-            }
-        }
-
-        for (let pass = 0; pass < 3; pass++) {
-            let changed = false;
-            for (const frame of this._frames) {
-                const other = otherNodeId(frame, draggedNodeId);
-                if (!other || !this._groundedIds.has(other)) {
-                    continue;
-                }
-                const otherInitial = this._initialWorld.get(other);
-                if (!otherInitial) {
-                    continue;
-                }
-                const before = draggedPose.translation;
-                draggedPose = clampDraggedAgainstFrame(
-                    frame,
-                    draggedNodeId,
-                    initialDragged,
-                    draggedPose,
-                    otherInitial,
-                );
-                if (draggedPose.translation.sub(before).length() > 1.0) {
-                    changed = true;
-                }
-            }
-            if (!changed) {
-                break;
-            }
+        for (let pass = 0; pass < 2; pass++) {
+            draggedPose = clampDraggedAgainstGrounded(
+                this._frames,
+                this._groundLocks,
+                draggedNodeId,
+                initialDragged,
+                draggedPose,
+                this._initialWorld,
+                this._groundedIds,
+            );
         }
 
         const poses = new Map<string, WorldPose>();
@@ -433,7 +471,7 @@ export class ConstraintDragGroup {
                 }
                 poses.set(
                     dst,
-                    accumulateTransfers(
+                    transferPoseToNeighbor(
                         dstFrames,
                         sourceId,
                         sourceInitial,

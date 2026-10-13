@@ -14,7 +14,7 @@ export interface OffsetShiftSpec {
 export interface OffsetGizmoHandler {
     id: string;
     getFaceMapping(role: string, panel?: any): Record<string, string> | null;
-    getShift(role: string): OffsetShiftSpec | null;
+    getShift(role: string, panel?: any): OffsetShiftSpec | null;
     resolveContainer(doc: any, panel: any): any | null;
     resolveFrontParam?(panel: any): { kind: string; paramName: string } | null;
     readOffsetMm(container: any, paramName: string, role?: string): number;
