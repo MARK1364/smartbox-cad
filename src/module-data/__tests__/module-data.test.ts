@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { setLocale } from '../../../T1_tlumaczenia/core';
 import { parseNestingCsv } from '../csv-nesting';
 import { filterPanelsByScope } from '../scope-filter';
 import { hydrateCncWorkpiece, snapshotPanelForCnc } from '../cad-extract';
@@ -98,6 +99,7 @@ describe('CNC workpiece', () => {
 });
 
 describe('tree-context-menu', () => {
+    beforeEach(() => { setLocale('pl'); });
     const labelsOf = (items: any[]): string[] => {
         const out: string[] = [];
         for (const i of items || []) {

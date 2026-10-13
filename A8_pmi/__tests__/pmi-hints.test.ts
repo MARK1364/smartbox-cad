@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import pmiTekst from '../pmi_tekst.json';
-import { tx } from '../../T1_tlumaczenia/core';
+import { tx, setLocale } from '../../T1_tlumaczenia/core';
 
 describe('PMI Hints i Tooltips (zgodność z Blender addon)', () => {
+    beforeEach(() => { setLocale('pl'); });
     it('klucze kroków wymiarowania i pomiaru istnieją i są przetłumaczone na pl, en, de', () => {
         const expectedKeys = [
             'hints.step1_title',
