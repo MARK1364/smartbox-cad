@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { syncBlokiLedInternalGrooves, assertCanonicalLedInternalParams } from '../led-internal-engine.js';
-import { buildLedInternalPlan } from '../led-internal-adapter.js';
-import { BLOKI_INTERNAL_OPTIONS, BLOKI_CATEGORY_NAMES } from '../bloki-bay-actions.js';
+import { syncBlokiLedInternalGrooves, assertCanonicalLedInternalParams } from '../13_led-internal-engine.js';
+import { buildLedInternalPlan } from '../13_led-internal-adapter.js';
+import { BLOKI_INTERNAL_OPTIONS, BLOKI_CATEGORY_NAMES } from '../02_bloki-bay-actions.js';
 import { MODULE_TYPES } from '../ui/BlokiFloatingWindow.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';

@@ -80,7 +80,7 @@ describe('KORPUS_SKOSNY_LR_UC (ucięty)', () => {
         const v_left_roof  = maxRoofRel - leftRoofRel;
 
         expect(back.thickness).toBeCloseTo(3, 0);
-        expect(back.material).toBe('HDF_3');
+        expect(back.material).toBe('HDF_BIALY_3');
         expect(back.dim.x).toBeCloseTo(backW, 0);
         expect(back.loc.x).toBeCloseTo((overlap_prawy - overlap_lewy) / 2 + 4, 0);
         expect(back.loc.y).toBeCloseTo(600 / 2 + 3 / 2 - 3 + 6, 0);
@@ -274,7 +274,7 @@ describe('KORPUS_SKOSNY_LR', () => {
         const v_left_roof  = maxRoofRel - leftRoofRel;
 
         expect(back.thickness).toBeCloseTo(3, 0);
-        expect(back.material).toBe('HDF_3');
+        expect(back.material).toBe('HDF_BIALY_3');
         expect(back.dim.x).toBeCloseTo(backW, 0);
         // obrys: v=backH=podłoga, v=małe=dach (wynika z LCS [180,0,0])
         expect((back.customProperties as any).outline2d).toEqual([

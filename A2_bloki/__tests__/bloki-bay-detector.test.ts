@@ -6,10 +6,10 @@ import { runEngineAndApply } from '../../A3_smartframe/smartframe-adapter.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
-import { probeBayFromCADPoint } from '../bloki-bay-detector.js';
-import { createBlokInDetectedBay } from '../bloki-bay-actions.js';
-import { registerBlokiModule } from '../register.js';
-import { highlightBayInScene, clearBayHighlight } from '../bloki-bay-visualizer.js';
+import { probeBayFromCADPoint, probeBayFromSceneRay, isBayDividingPanel } from '../02_bloki-bay-detector.js';
+import { createBlokInDetectedBay } from '../02_bloki-bay-actions.js';
+import { registerBlokiModule } from '../01_register.js';
+import { highlightBayInScene, clearBayHighlight } from '../02_bloki-bay-visualizer.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
@@ -397,6 +397,303 @@ describe('Bloki Bay Detector (3D Geometric Probe)', () => {
         const shelfModel = shelfPartNode.domainData as PanelModel;
         // GĹ‚Ä™bokoĹ›Ä‡ pĂłĹ‚ki to ~590 mm (600 - 10 mm odsadzenia), a nie 300 mm
         expect(nmToMm(shelfModel.height)).toBeGreaterThan(550);
+    });
+
+    it('wykrywa górną płaszczyznę SmartFrame w korpus_skosny (FACE_Z_MINUS, topZ = 2200, bez skosu w środku wieńca)', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus Skosny Przod' }) as ContainerModel;
+        cabinet.generatorParams = {
+            typ_korpusu: 'korpus_skosny',
+            wysokosc_przod_mm: 2200,
+            wysokosc_tyl_mm: 1000
+        };
+        runEngineAndApply(cabinet, 800, 2200, 600, 1, 0, 0, 0);
+
+        const bay = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 500 });
+        expect(bay).not.toBeNull();
+        expect(bay!.slopeAxis).toBeUndefined();
+        expect(bay!.boundary.top.face).toBe('FACE_Z_MINUS');
+        expect(bay!.boundary.top.nodeId).toBe(cabinet.id);
+        expect(bay!.boundary.top.planeCoordMm).toBeCloseTo(2200, 0);
+        expect(bay!.boundary.top.slopeAngleDeg).toBeUndefined();
+    });
+
+    it('probeBayFromSceneRay gracefully handles OUTLINE_SIDE_* and non-canonical face names without crashing', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus Skosny Test' }) as ContainerModel;
+        cabinet.generatorParams = {
+            typ_korpusu: 'korpus_skosny',
+            wysokosc_przod_mm: 2200,
+            wysokosc_tyl_mm: 1000
+        };
+        runEngineAndApply(cabinet, 800, 2200, 600, 1, 0, 0, 0);
+
+        const prevBabylon = (globalThis as any).BABYLON;
+        (globalThis as any).BABYLON = {
+            Vector3: class {
+                x: number; y: number; z: number;
+                constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
+                clone() { return new (globalThis as any).BABYLON.Vector3(this.x, this.y, this.z); }
+                add(v: any) { return new (globalThis as any).BABYLON.Vector3(this.x + v.x, this.y + v.y, this.z + v.z); }
+                subtract(v: any) { return new (globalThis as any).BABYLON.Vector3(this.x - v.x, this.y - v.y, this.z - v.z); }
+                scale(s: number) { return new (globalThis as any).BABYLON.Vector3(this.x * s, this.y * s, this.z * s); }
+                normalize() { return this; }
+                length() { return Math.hypot(this.x, this.y, this.z); }
+            },
+            Ray: class {
+                origin: any; direction: any; length: number;
+                constructor(origin: any, direction: any, length = 1000) {
+                    this.origin = origin; this.direction = direction; this.length = length;
+                }
+            }
+        };
+
+        try {
+            const cabNode = doc.findNode(cabinet.id)!;
+            const sidePanelL = cabNode.children.find(c => c.name.includes('Bok_L')) || cabNode.children[0];
+            const sidePanelR = cabNode.children.find(c => c.name.includes('Bok_P')) || cabNode.children[1];
+            const bottomPanel = cabNode.children.find(c => c.name.includes('Wieniec_D')) || cabNode.children[2];
+            const topPanel = cabNode.children.find(c => c.name.includes('Wieniec_G')) || cabNode.children[3];
+
+            const mockHit = (meshMeta: any, pt: { x: number; y: number; z: number }) => ({
+                hit: true,
+                pickedPoint: pt,
+                pickedMesh: {
+                    metadata: meshMeta,
+                    id: meshMeta.panelModel?.id || 'm_id',
+                    name: 'mesh_name',
+                    isPickable: true,
+                    isVisible: true,
+                    getBoundingInfo: () => ({
+                        boundingBox: {
+                            minimumWorld: { z: -300 },
+                            maximumWorld: { z: 300 }
+                        }
+                    })
+                }
+            });
+
+            const fakeScene = {
+                pickWithRay: (ray: any) => {
+                    if (ray.direction.x < -0.5) {
+                        return mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelL }, { x: -382, y: 1000, z: 0 });
+                    }
+                    if (ray.direction.x > 0.5) {
+                        return mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelR }, { x: 382, y: 1000, z: 0 });
+                    }
+                    if (ray.direction.y < -0.5) {
+                        return mockHit({
+                            faceName: 'OUTLINE_SIDE_0',
+                            outlineEdgeKey: '+Y',
+                            panelModel: bottomPanel
+                        }, { x: 0, y: 18, z: 0 });
+                    }
+                    if (ray.direction.y > 0.5) {
+                        return mockHit({ faceName: 'FACE_Z_MINUS', panelModel: topPanel }, { x: 0, y: 2200, z: 0 });
+                    }
+                    if (ray.direction.z > 0.5) {
+                        return mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelL }, { x: 0, y: 1000, z: 280 });
+                    }
+                    if (ray.direction.z < -0.5) {
+                        return mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelL }, { x: 0, y: 1000, z: -280 });
+                    }
+                    return null;
+                }
+            };
+
+            const pickResult = {
+                hit: true,
+                pickedPoint: new (globalThis as any).BABYLON.Vector3(0, 100, 0),
+                getNormal: () => new (globalThis as any).BABYLON.Vector3(0, 1, 0)
+            };
+
+            const bay = probeBayFromSceneRay(fakeScene, pickResult, doc, 'internal');
+            expect(bay).not.toBeNull();
+            expect(bay!.boundary.bottom.face).toBe('FACE_Y_PLUS');
+        } finally {
+            (globalThis as any).BABYLON = prevBabylon;
+        }
+    });
+
+    it('isBayDividingPanel correctly identifies dividing panels and rejects non-structural panels', () => {
+        expect(isBayDividingPanel('DIVIDER_PLATE')).toBe(true);
+        expect(isBayDividingPanel('VERTICAL_DIVIDER')).toBe(true);
+        expect(isBayDividingPanel('SHELF_BOARD')).toBe(true);
+        expect(isBayDividingPanel(undefined, 'Przegroda_1')).toBe(true);
+        expect(isBayDividingPanel(undefined, 'Wieniec_konstrukcyjny')).toBe(true);
+
+        expect(isBayDividingPanel('FRONT')).toBe(false);
+        expect(isBayDividingPanel('SHELF_PANEL')).toBe(false);
+        expect(isBayDividingPanel('HANDLE')).toBe(false);
+    });
+
+    it('probeBayFromSceneRay detects sub-bay bounded by a vertical divider (blok_dividers) instead of penetrating to the carcass side', () => {
+        const prevBabylon = (globalThis as any).BABYLON;
+        try {
+            (globalThis as any).BABYLON = {
+                Vector3: class {
+                    x: number; y: number; z: number;
+                    constructor(x: number, y: number, z: number) { this.x = x; this.y = y; this.z = z; }
+                    clone() { return new (globalThis as any).BABYLON.Vector3(this.x, this.y, this.z); }
+                    add(v: any) { return new (globalThis as any).BABYLON.Vector3(this.x + v.x, this.y + v.y, this.z + v.z); }
+                    subtract(v: any) { return new (globalThis as any).BABYLON.Vector3(this.x - v.x, this.y - v.y, this.z - v.z); }
+                    scale(s: number) { return new (globalThis as any).BABYLON.Vector3(this.x * s, this.y * s, this.z * s); }
+                    length() { return Math.hypot(this.x, this.y, this.z); }
+                    normalize() { const l = this.length() || 1; return new (globalThis as any).BABYLON.Vector3(this.x / l, this.y / l, this.z / l); }
+                },
+                Ray: class {
+                    origin: any; direction: any; length: number;
+                    constructor(origin: any, direction: any, length: number) {
+                        this.origin = origin; this.direction = direction; this.length = length;
+                    }
+                }
+            };
+
+            const cabinet = doc.createAssembly({ name: 'Korpus 1-strefowy' }) as ContainerModel;
+            cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+            runEngineAndApply(cabinet, 1000, 2000, 600, 1, 0, 0, 0);
+
+            const cabNode = doc.findNode(cabinet.id)!;
+            const sidePanelL = cabNode.children.find(c => c.name.includes('Bok_L')) || cabNode.children[0];
+            const sidePanelR = cabNode.children.find(c => c.name.includes('Bok_P')) || cabNode.children[1];
+            const bottomPanel = cabNode.children.find(c => c.name.includes('Wieniec_D')) || cabNode.children[2];
+            const topPanel = cabNode.children.find(c => c.name.includes('Wieniec_G')) || cabNode.children[3];
+
+            // Dodajemy moduł blok_dividers z przegrodą na środku (X = 0)
+            const dividersAssembly = doc.createAssembly({ name: 'blok_dividers_asm' }, cabinet.id);
+            (dividersAssembly as any).generatorParams = { type: 'blok_dividers', liczba_przegrod: 1 };
+
+            const dividerPanel = doc.createPanel({
+                name: 'Przegroda_1',
+                role: 'DIVIDER_PLATE',
+                width: mmToNm(600),
+                height: mmToNm(1964),
+                thickness: mmToNm(18)
+            }, dividersAssembly.id);
+            const dividerPart = doc.findNode(dividerPanel.id)!;
+
+            const mockHit = (meshMeta: any, pt: { x: number; y: number; z: number }, meshName: string = 'mesh') => ({
+                hit: true,
+                pickedPoint: pt,
+                pickedMesh: {
+                    metadata: meshMeta,
+                    id: meshMeta.panelModel?.id || 'm_id',
+                    name: meshName,
+                    isPickable: true,
+                    isVisible: true,
+                    getBoundingInfo: () => ({
+                        boundingBox: {
+                            minimumWorld: { z: -300 },
+                            maximumWorld: { z: 300 }
+                        }
+                    })
+                }
+            });
+
+            // Scena dla lewej podwnęki: klikamy w X = -250 (między Bok_L w X = -482 a Przegrodą w X = -9)
+            const fakeSceneLeftBay = {
+                pickWithRay: (ray: any, predicate: (m: any) => boolean) => {
+                    // Kierunek -X (w lewo): trafia Bok_L
+                    if (ray.direction.x < -0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelL }, { x: -482, y: 1000, z: 0 }, 'Bok_L');
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    // Kierunek +X (w prawo): trafia Przegrodę_1 w X = -9 (lewa ścianka przegrody o grubości 18 mm wycentrowanej w X=0)
+                    if (ray.direction.x > 0.5) {
+                        const hit = mockHit({
+                            faceName: 'FACE_Z_PLUS',
+                            panelModel: dividerPart,
+                            isBlokChild: true
+                        }, { x: -9, y: 1000, z: 0 }, 'Przegroda_1');
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    if (ray.direction.y < -0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_PLUS', panelModel: bottomPanel }, { x: -250, y: 18, z: 0 }, 'Wieniec_D');
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    if (ray.direction.y > 0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_MINUS', panelModel: topPanel }, { x: -250, y: 1982, z: 0 }, 'Wieniec_G');
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    if (ray.direction.z > 0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelL }, { x: -250, y: 1000, z: 280 });
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    if (ray.direction.z < -0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelL }, { x: -250, y: 1000, z: -280 });
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    return null;
+                }
+            };
+
+            const pickResultLeft = {
+                hit: true,
+                pickedPoint: new (globalThis as any).BABYLON.Vector3(-250, 100, 0),
+                getNormal: () => new (globalThis as any).BABYLON.Vector3(0, 1, 0)
+            };
+
+            const bayLeft = probeBayFromSceneRay(fakeSceneLeftBay, pickResultLeft, doc, 'internal');
+            expect(bayLeft).not.toBeNull();
+            // Szerokość lewej wnęki: od -482 do -9 = 473 mm (a NIE 964 mm pełnego korpusu!)
+            expect(bayLeft!.boundsMm.width).toBeCloseTo(473, 0);
+            expect(bayLeft!.boundary.left.nodeId).toBe(sidePanelL.id);
+            expect(bayLeft!.boundary.right.nodeId).toBe(dividerPart.id);
+            expect(bayLeft!.boundary.right.nodeName).toBe('Przegroda_1');
+            expect(bayLeft!.boundary.right.face).toBe('FACE_Z_PLUS');
+
+            // Scena dla prawej podwnęki: klikamy w X = +250 (między Przegrodą w X = +9 a Bok_P w X = +482)
+            const fakeSceneRightBay = {
+                pickWithRay: (ray: any, predicate: (m: any) => boolean) => {
+                    // Kierunek -X (w lewo): trafia Przegrodę_1 w X = +9 (prawa ścianka przegrody)
+                    if (ray.direction.x < -0.5) {
+                        const hit = mockHit({
+                            faceName: 'FACE_Z_MINUS',
+                            panelModel: dividerPart,
+                            isBlokChild: true
+                        }, { x: 9, y: 1000, z: 0 }, 'Przegroda_1');
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    // Kierunek +X (w prawo): trafia Bok_P
+                    if (ray.direction.x > 0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelR }, { x: 482, y: 1000, z: 0 }, 'Bok_P');
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    if (ray.direction.y < -0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_PLUS', panelModel: bottomPanel }, { x: 250, y: 18, z: 0 }, 'Wieniec_D');
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    if (ray.direction.y > 0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_MINUS', panelModel: topPanel }, { x: 250, y: 1982, z: 0 }, 'Wieniec_G');
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    if (ray.direction.z > 0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelR }, { x: 250, y: 1000, z: 280 });
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    if (ray.direction.z < -0.5) {
+                        const hit = mockHit({ faceName: 'FACE_Z_PLUS', panelModel: sidePanelR }, { x: 250, y: 1000, z: -280 });
+                        return predicate(hit.pickedMesh) ? hit : null;
+                    }
+                    return null;
+                }
+            };
+
+            const pickResultRight = {
+                hit: true,
+                pickedPoint: new (globalThis as any).BABYLON.Vector3(250, 100, 0),
+                getNormal: () => new (globalThis as any).BABYLON.Vector3(0, 1, 0)
+            };
+
+            const bayRight = probeBayFromSceneRay(fakeSceneRightBay, pickResultRight, doc, 'internal');
+            expect(bayRight).not.toBeNull();
+            // Szerokość prawej wnęki: od 9 do 482 = 473 mm
+            expect(bayRight!.boundsMm.width).toBeCloseTo(473, 0);
+            expect(bayRight!.boundary.left.nodeId).toBe(dividerPart.id);
+            expect(bayRight!.boundary.left.nodeName).toBe('Przegroda_1');
+            expect(bayRight!.boundary.left.face).toBe('FACE_Z_MINUS');
+            expect(bayRight!.boundary.right.nodeId).toBe(sidePanelR.id);
+        } finally {
+            (globalThis as any).BABYLON = prevBabylon;
+        }
     });
 });
 

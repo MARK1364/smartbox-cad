@@ -29,8 +29,10 @@ export {
 } from './operacje-apply.js';
 export { attachOperacjeExtension } from './operacje-controller.js';
 export { OperacjeUI } from './operacje-ui.js';
-// SmartParts — LED (re-export dla kompatybilności wstecznej → źródło: A5_smartparts)
-export { LedChannelStore, startGuidedLedPick, stopGuidedLedPick, handleLedChannelDrop } from '../A5_smartparts/led/led-channel-store.js';
-export { LedChannelUI } from '../A5_smartparts/led/led-channel-ui.js';
-export { applyLedChannelToDocument, removeLedChannelFromDocument, computeLedChannelWorldBox, detectCabinetRow } from '../A5_smartparts/led/led-channel-engine.js';
-export type { LedChannelDefinition } from '../A5_smartparts/led/led-channel-types.js';
+// LED zewnętrzny (kanał) — re-eksport z A2_bloki/led (system kanałów podszafkowych).
+// UWAGA: to NIE ten sam system co LED wewnętrzny (A2_bloki/13_led-internal-engine, source 'BLOKI_LED')
+// — różne mechanizmy wykrywania geometrii i różne role montażowe; silniki nie są wymienne.
+export { LedChannelStore, startGuidedLedPick, stopGuidedLedPick, handleLedChannelDrop } from '../A2_bloki/15_led-external-channel-store.js';
+export { LedChannelUI } from '../A2_bloki/15_led-external-channel-ui.js';
+export { applyLedChannelToDocument, removeLedChannelFromDocument, computeLedChannelWorldBox, detectCabinetRow } from '../A2_bloki/15_led-external-channel-engine.js';
+export type { LedChannelDefinition } from '../A2_bloki/15_led-external-channel-types.js';

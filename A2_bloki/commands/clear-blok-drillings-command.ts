@@ -1,13 +1,16 @@
 /**
  * clear-blok-drillings-command.ts
  *
- * Usuwa z formatek korpusu WSZYSTKIE automatyczne nawiercenia pochodzące
- * ze wskazanego kontenera Bloki (dopasowanie po params.sourceContainerId).
+ * Usuwa z formatek korpusu WSZYSTKIE automatyczne obróbki (nawiercenia + frezowania LED)
+ * pochodzące ze wskazanego kontenera Bloki (dopasowanie po params.sourceContainerId).
  *
  * Potrzebna, bo SyncShelfDrillingsCommand i SyncDoorDrillingsCommand czyszczą tylko
  * własny typ otworów (isShelfDrilling / isDoorDrilling). Po zmianie modułu Bloku
  * (np. DRZWI -> WIENIEC) sync poprzedniego modułu już się nie uruchamia, więc bez tej
- * komendy jego otwory zostawałyby na boczkach na zawsze.
+ * komendy jego obróbki zostawałyby na boczkach na zawsze.
+ *
+ * Flaga isLedGroove (frezowania LED z machining-intent) objęta automatami od razu,
+ * by wpusty LED nie zostawały osierocone po zmianie/usunięciu modułu Bloki.
  *
  * Ta sama komenda odpala się przy usunięciu Bloku (RemoveNodeCommand), zanim
  * węzeł zniknie z drzewa — inaczej otwory na bokach korpusu zostają osierocone.
@@ -59,14 +62,16 @@ export class ClearBlokiDrillingsCommand implements Command {
     readonly timestamp: number;
     readonly affectedNodeIds: string[];
     readonly blokContainerId: string;
+    readonly notifyViews: boolean;
 
     private oldFeatures: Map<string, any[]> = new Map();
 
-    constructor(blokContainerId: string) {
+    constructor(blokContainerId: string, notifyViews: boolean = true) {
         this.id = `cmd_clear_bloki_drillings_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
         this.blokContainerId = blokContainerId;
         this.timestamp = Date.now();
         this.affectedNodeIds = [];
+        this.notifyViews = notifyViews;
     }
 
     execute(document: ProjectDocument): void {
@@ -87,7 +92,7 @@ export class ClearBlokiDrillingsCommand implements Command {
             data.features = data.features.filter((f: any) => {
                 if (f.frozen || f.params?.frozen) return true; // Zachowaj zamrożone
                 const fromThisBox = f.params?.sourceContainerId === this.blokContainerId;
-                const isAuto = f.params?.isShelfDrilling || f.params?.isDoorDrilling || f.params?.isDrawerDrilling || f.params?.isFlapDrilling || f.params?.isTubeDrilling || f.params?.isConnectorDrilling || f.params?.isHangerDrilling || f.params?.isSmartPartFeature;
+                const isAuto = f.params?.isShelfDrilling || f.params?.isDoorDrilling || f.params?.isDrawerDrilling || f.params?.isFlapDrilling || f.params?.isTubeDrilling || f.params?.isConnectorDrilling || f.params?.isHangerDrilling || f.params?.isLedGroove || f.params?.isSmartPartFeature;
                 return !(fromThisBox && isAuto);
             });
 
@@ -98,14 +103,16 @@ export class ClearBlokiDrillingsCommand implements Command {
 
         this.affectedNodeIds.push(...Array.from(changedNodeIds));
 
-        // Odśwież widoki formatek, by Babylon przestał rysować usunięte otwory
-        for (const panelNode of panels) {
-            if (!changedNodeIds.has(panelNode.id)) continue;
-            const data = panelNode.domainData as any;
-            if (typeof data.setFeatures === 'function') {
-                data.setFeatures(data.features);
-            } else if (typeof data._emit === 'function') {
-                data._emit('features', { features: data.features });
+        // Odśwież widoki formatek tylko gdy włączone (pomijane gdy zaraz następuje syncDrillings)
+        if (this.notifyViews) {
+            for (const panelNode of panels) {
+                if (!changedNodeIds.has(panelNode.id)) continue;
+                const data = panelNode.domainData as any;
+                if (typeof data.setFeatures === 'function') {
+                    data.setFeatures(data.features);
+                } else if (typeof data._emit === 'function') {
+                    data._emit('features', { features: data.features });
+                }
             }
         }
 

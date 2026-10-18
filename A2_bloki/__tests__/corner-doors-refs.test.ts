@@ -6,8 +6,10 @@ import { mmToNm } from '../../A1_core/cad-math/units.js';
 import {
     buildRogowy90CornerDoorsReferences,
     applyCornerDoorsDefaultRefs,
-} from '../corner-doors-refs.js';
+} from '../07_corner-doors-refs.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
+import { createBlokInDetectedBay } from '../02_bloki-bay-actions.js';
+import { probeRogowy90BayFromCADPoint } from '../../A3_smartframe/rogowy90-bay.js';
 
 describe('corner doors references (rogowy90)', () => {
     let doc: ProjectDocument;
@@ -29,7 +31,7 @@ describe('corner doors references (rogowy90)', () => {
         return doc.findNode(cabinet.id)!;
     }
 
-    it('domyĹ›lne refs (model 4+2): zMin, zMax, xMax, yMin przypisane; xMin, yMax undefined (do wskazania w 3D)', () => {
+    it('domyślne refs (model 4+2): zMin, zMax, xMax, yMin przypisane; xMin, yMax undefined (do wskazania w 3D)', () => {
         const refs = buildRogowy90CornerDoorsReferences(buildCab());
         expect(refs).not.toBeNull();
         expect(refs!.xMin).toBeUndefined();
@@ -37,10 +39,10 @@ describe('corner doors references (rogowy90)', () => {
         expect(refs!.xMax.partKey.toUpperCase()).toMatch(/BOK_P/);
         expect(refs!.yMin.partKey.toUpperCase()).toMatch(/BOK_L/);
         expect(refs!.zMin.face).toBe('FACE_Z_PLUS');
-        expect(refs!.zMax.face).toBe('FACE_Z_PLUS'); // INNER spĂłd wieĹ„ca gĂłry
+        expect(refs!.zMax.face).toBe('FACE_Z_PLUS'); // INNER spód wieńca góry
     });
 
-    it('applyCornerDoorsDefaultRefs â†’ innerL_wieniec i model 4+2', () => {
+    it('applyCornerDoorsDefaultRefs → innerL_wieniec i model 4+2', () => {
         const applied = applyCornerDoorsDefaultRefs(buildCab());
         expect(applied?.cornerAt).toBe('innerL_wieniec');
         expect(applied?.customReferences.xMin).toBeUndefined();
@@ -48,5 +50,29 @@ describe('corner doors references (rogowy90)', () => {
         expect(applied?.customReferences.yMin.partKey.toUpperCase()).toMatch(/BOK_L/);
         expect(applied?.customReferences.xMax.partKey.toUpperCase()).toMatch(/BOK_P/);
         expect(applied?.customReferences.zMax.face).toBe('FACE_Z_PLUS');
+    });
+
+    it('createBlokInDetectedBay z CORNER_DOORS ustawia disabledReferences dla xMin i yMax i tworzy drzwi narożne', () => {
+        const cabNode = buildCab();
+        const bay = probeRogowy90BayFromCADPoint(doc, { x: 250, y: 0, z: 360 });
+        expect(bay).not.toBeNull();
+
+        const blokNode = createBlokInDetectedBay(doc, bay!, {
+            id: 'CORNER_DOORS',
+            label: 'Drzwi narożne',
+            category: 'internal'
+        } as any);
+
+        expect(blokNode).not.toBeNull();
+        const gp = (blokNode!.domainData as any)?.generatorParams;
+        expect(gp).toBeDefined();
+        expect(gp.type).toBe('blok_corner_doors');
+        expect(gp.disabledReferences?.xMin).toBe(true);
+        expect(gp.disabledReferences?.yMax).toBe(true);
+        expect(gp.width_mm).toBeGreaterThan(0);
+        expect(gp.depth_mm).toBeGreaterThan(0);
+        expect(gp.height_mm).toBeGreaterThan(0);
+        // Drzwi prawe i lewe powinny zostać wygenerowane wewnątrz węzła
+        expect(blokNode!.children.length).toBeGreaterThan(0);
     });
 });

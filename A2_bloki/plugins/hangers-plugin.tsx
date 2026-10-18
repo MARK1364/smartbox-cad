@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { HangersPlanParams } from '../hangers-types.js';
-import { buildHangersPlan } from '../module-plans.js';
-import { HangersSubModule } from '../hangers-adapter.js';
+import type { HangersPlanParams } from '../17_hangers-types.js';
+import { buildHangersPlan } from '../01_module-plans.js';
+import { HangersSubModule } from '../17_hangers-adapter.js';
 import { SyncHangersDrillingsCommand } from '../commands/sync-hangers-drillings-command.js';
 
 export const hangersPlugin: SmartModulePlugin<HangersPlanParams> = {

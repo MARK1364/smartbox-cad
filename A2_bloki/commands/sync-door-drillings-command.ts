@@ -2,12 +2,18 @@
  * sync-door-drillings-command.ts
  *
  * Komenda aktualizująca nawiercenia prowadników zawiasów drzwi na formatkach korpusu.
- * Zgodna z architekturą SyncShelfDrillingsCommand.
+ * Po migracji MACHINING logika syncu (snapshot → clear → upsert → emit → undo) leży we
+ * wspólnym rdzeniu machining-sync.ts — komenda podaje tylko builder intencji i tag własności.
  */
 
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
-import { buildDoorsDrillings } from '../doors-drilling-builder.js';
+import { buildDoorsDrillings } from '../05_doors-drilling-builder.js';
+import {
+    emitMachiningFeatures,
+    restoreMachiningFeatures,
+    syncMachiningHoles,
+} from '../01_machining-sync.js';
 
 export class SyncDoorDrillingsCommand implements Command {
     readonly id: string;
@@ -28,62 +34,40 @@ export class SyncDoorDrillingsCommand implements Command {
     execute(document: ProjectDocument): void {
         if (!document) return;
 
-        // 1. Wylicz intencje nawierceń ze Bloku (Drzwi)
+        // 1. Wylicz intencje nawierceń ze Bloku (Drzwi) — warstwa MACHINING
         const intents = buildDoorsDrillings(document, this.cabinetContainerId);
 
-        // 2. Zidentyfikuj wszystkie formatki w dokumencie
-        const panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
-        const changedNodeIds = new Set<string>();
-
-        // 3. Wyczyść stare automatyczne nawiercenia zawiasowe (zachowaj inne obróbki)
-        for (const panelNode of panels) {
-            const data = panelNode.domainData as any;
-            if (data && data.features && Array.isArray(data.features)) {
-                if (!this.oldFeatures.has(panelNode.id)) {
-                    this.oldFeatures.set(panelNode.id, JSON.parse(JSON.stringify(data.features)));
-                }
-
-                const initialLen = data.features.length;
-                data.features = data.features.filter((f: any) => {
-                    if (f.frozen || f.params?.frozen) return true; // Zachowaj zamrożone
-                    return !(f.type === 'hole' && f.params?.isDoorDrilling);
-                });
-
-                if (data.features.length !== initialLen) {
-                    changedNodeIds.add(panelNode.id);
-                }
+        // 2. Zidentyfikuj formatki (jeśli podano cabinetContainerId, tylko tego korpusu)
+        let panels: any[];
+        if (this.cabinetContainerId) {
+            const cabNode = document.findNode(this.cabinetContainerId);
+            if (cabNode) {
+                panels = [];
+                const collect = (n: any) => {
+                    if (n.domainData && n.domainData.type !== 'container') panels.push(n);
+                    for (const ch of n.children) collect(ch);
+                };
+                collect(cabNode);
+            } else {
+                panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
             }
+        } else {
+            panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
         }
 
-        // 4. Zaaplikuj nowe intencje wiercenia do formatek docelowych
-        for (const intent of intents) {
-            const targetNode = document.findNode(intent.targetNodeId);
-            if (!targetNode || !targetNode.domainData) continue;
-
-            const data = targetNode.domainData as any;
-            if (!data.features) data.features = [];
-
-            if (!this.oldFeatures.has(targetNode.id)) {
-                this.oldFeatures.set(targetNode.id, JSON.parse(JSON.stringify(data.features)));
-            }
-
-            data.features.push(intent.feature);
-            changedNodeIds.add(targetNode.id);
-        }
+        // 3+4. Clear własnych automatów + upsert intencji — wspólny rdzeń MACHINING
+        const changedNodeIds = syncMachiningHoles(
+            document,
+            intents,
+            panels,
+            'isDoorDrilling',
+            this.oldFeatures,
+        );
 
         this.affectedNodeIds.push(...Array.from(changedNodeIds));
 
         // 5. Powiadom panele o zmianie features, by Babylon PanelView od razu odrysował otwory
-        for (const panelNode of panels) {
-            if (changedNodeIds.has(panelNode.id)) {
-                const data = panelNode.domainData as any;
-                if (typeof data.setFeatures === 'function') {
-                    data.setFeatures(data.features);
-                } else if (typeof data._emit === 'function') {
-                    data._emit('features', { features: data.features });
-                }
-            }
-        }
+        emitMachiningFeatures(panels, changedNodeIds);
 
         // 6. Powiadom o zmianie dokumentu
         if (typeof document.notifyDocumentChanged === 'function') {
@@ -93,22 +77,6 @@ export class SyncDoorDrillingsCommand implements Command {
 
     undo(document: ProjectDocument): void {
         if (!document) return;
-
-        for (const [nodeId, oldFeats] of this.oldFeatures.entries()) {
-            const node = document.findNode(nodeId);
-            if (node && node.domainData) {
-                const data = node.domainData as any;
-                data.features = JSON.parse(JSON.stringify(oldFeats));
-                if (typeof data.setFeatures === 'function') {
-                    data.setFeatures(data.features);
-                } else if (typeof data._emit === 'function') {
-                    data._emit('features', { features: data.features });
-                }
-            }
-        }
-
-        if (typeof document.notifyDocumentChanged === 'function') {
-            document.notifyDocumentChanged();
-        }
+        restoreMachiningFeatures(document, this.oldFeatures);
     }
 }

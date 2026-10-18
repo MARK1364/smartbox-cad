@@ -2,21 +2,15 @@
  * Adapter: wspólny katalog szuflad (mm, warianty z konfiguracji szuflad)
  * → rekordy RAIL.
  */
-const MM_TO_M = 0.001;
-
-/** CAD-only: nie ma ich we wspólnym pliku. */
-const CAD_RAIL_HEIGHT_M = 0.035;
-const CAD_RAIL_WIDTH_M = 0.027;
+/** CAD-only: stałe gabaryty prowadnicy w milimetrach (mm) */
+const CAD_RAIL_HEIGHT_MM = 35.0;
+const CAD_RAIL_WIDTH_MM = 27.0;
 
 const PRICE_PREFIX: Record<string, string> = {
     M94: 'BLUM_ANTARO_M_'
 };
 
 export const DEFAULT_RAIL_ID = 'M94';
-
-function mmToM(n: number): number {
-    return Number(n) * MM_TO_M;
-}
 
 export function railsFromKonfig(konfig: { szuflady?: any[] }): any[] {
     const items: any[] = [];
@@ -27,8 +21,8 @@ export function railsFromKonfig(konfig: { szuflady?: any[] }): any[] {
                 const key = String(d.dlugosc);
                 const prefix = PRICE_PREFIX[w.id_wariantu];
                 lengths[key] = {
-                    z_offset: mmToM(w.dystans_otworow_od_dolu),
-                    x_positions: (d.otwory_pozycje || []).map(mmToM),
+                    z_offset: Number(w.dystans_otworow_od_dolu ?? 33),
+                    x_positions: (d.otwory_pozycje || []).map(Number),
                     ...(prefix ? { price_id: `${prefix}${key}` } : {})
                 };
             }
@@ -43,18 +37,18 @@ export function railsFromKonfig(konfig: { szuflady?: any[] }): any[] {
                 construction,
                 ...(panels ? { panels } : {}),
                 mount: {
-                    rail_height: CAD_RAIL_HEIGHT_M,
-                    corpus_height: mmToM(w.wysokosc_skrzynki),
-                    width: CAD_RAIL_WIDTH_M
+                    rail_height: CAD_RAIL_HEIGHT_MM,
+                    corpus_height: Number(w.wysokosc_skrzynki ?? 94),
+                    width: CAD_RAIL_WIDTH_MM
                 },
                 drill: {
-                    dia: mmToM((w.promien ?? 1.5) * 2),
-                    depth: mmToM(w.glebokosc ?? 12)
+                    dia: (Number(w.promien ?? 1.5)) * 2,
+                    depth: Number(w.glebokosc ?? 12)
                 },
                 front_holes: {
-                    x_offset: mmToM(w.dystans_otworow_front_od_boku ?? 31),
-                    z_positions: (w.otwory_front_pozycje || []).map(mmToM),
-                    depth: mmToM(w.glebokosc_front ?? 10)
+                    x_offset: Number(w.dystans_otworow_front_od_boku ?? 31),
+                    z_positions: (w.otwory_front_pozycje || []).map(Number),
+                    depth: Number(w.glebokosc_front ?? 10)
                 },
                 lengths
             });

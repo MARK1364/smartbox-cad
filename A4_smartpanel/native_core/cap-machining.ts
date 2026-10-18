@@ -269,6 +269,34 @@ export function featuresOnFace(features: any[] | undefined, face: string): any[]
     });
 }
 
+function isEdgeOnContour(p0: [number, number], p1: [number, number], contour: number[][], eps = 0.05): boolean {
+    if (!contour || contour.length < 2) return false;
+    const n = contour.length;
+    for (let i = 0; i < n; i++) {
+        const c0 = contour[i];
+        const c1 = contour[(i + 1) % n];
+        if (Math.abs(c0[0] - c1[0]) <= eps && Math.abs(p0[0] - p1[0]) <= eps) {
+            if (Math.abs(p0[0] - c0[0]) <= eps) {
+                const minC = Math.min(c0[1], c1[1]) - eps;
+                const maxC = Math.max(c0[1], c1[1]) + eps;
+                if (p0[1] >= minC && p0[1] <= maxC && p1[1] >= minC && p1[1] <= maxC) {
+                    return true;
+                }
+            }
+        }
+        if (Math.abs(c0[1] - c1[1]) <= eps && Math.abs(p0[1] - p1[1]) <= eps) {
+            if (Math.abs(p0[1] - c0[1]) <= eps) {
+                const minC = Math.min(c0[0], c1[0]) - eps;
+                const maxC = Math.max(c0[0], c1[0]) + eps;
+                if (p0[0] >= minC && p0[0] <= maxC && p1[0] >= minC && p1[0] <= maxC) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 export function buildFaceMeshWithFeatures(opts: {
     faceData: ReturnType<typeof computeFaceData>;
     outerContour: number[][];
@@ -367,12 +395,12 @@ export function buildFaceMeshWithFeatures(opts: {
             featureMeshes[`feature_${fid}_bottom`] = bottom;
 
             // Ścianki współpłaszczyznowe z zewnątrznymi licami (przelot U/V) = „cienkie
-            // płaszczyzny” — nie rysuj; otwór i tak wycina collectExtraHoles2D.
+            // płaszczyzny” — nie rysuj; otwór i tak wycina collectExtraHoles2D lub leży na obrysie formatki.
             const EDGE_EPS = 0.05;
-            const throughU0 = u0 <= EDGE_EPS;
-            const throughU1 = u1 >= faceData.width - EDGE_EPS;
-            const throughV0 = v0 <= EDGE_EPS;
-            const throughV1 = v1 >= faceData.height - EDGE_EPS;
+            const throughU0 = u0 <= EDGE_EPS || isEdgeOnContour([u0, v0], [u0, v1], outerContour);
+            const throughU1 = u1 >= faceData.width - EDGE_EPS || isEdgeOnContour([u1, v0], [u1, v1], outerContour);
+            const throughV0 = v0 <= EDGE_EPS || isEdgeOnContour([u0, v0], [u1, v0], outerContour);
+            const throughV1 = v1 >= faceData.height - EDGE_EPS || isEdgeOnContour([u0, v1], [u1, v1], outerContour);
 
             if (!throughV0) {
                 const w0 = emptyMesh();

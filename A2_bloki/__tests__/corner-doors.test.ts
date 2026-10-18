@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { buildCornerDoorsPlan } from '../module-plans.js';
+import { buildCornerDoorsPlan } from '../01_module-plans.js';
 import { applyLcsMapping } from '../../A3_smartframe/smartframe-engine.js';
 import {
     assertCanonicalCornerDoorsParams,
     normalizeCornerDoorsParams
-} from '../corner-doors-engine.js';
+} from '../07_corner-doors-engine.js';
 
 describe('blok_corner_doors', () => {
     /** SB z xMin/yMax na ściankach wcięcia L — narożnik w (−W/2, +D/2). */

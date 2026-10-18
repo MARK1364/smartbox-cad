@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getRenderData, resolveMeasureAxis } from '../pmi-bridge.js';
+import { getRenderData, resolveMeasureAxis, computeAvailableMeasureAxes } from '../pmi-bridge.js';
 import { ArrowMode, solveArrowPlacement, v3, v3Len } from '../dimension-solver.js';
 
 /**
@@ -331,3 +331,68 @@ describe('solveArrowPlacement', () => {
         expect(result.mode).toBe(ArrowMode.OUTSIDE);
     });
 });
+
+describe('computeAvailableMeasureAxes', () => {
+    it('dla pojedynczej prostej krawędzi (wzdłuż osi X) tylko X jest dostępna', () => {
+        const res = computeAvailableMeasureAxes({
+            anchor1World: v3(0, 0, 0),
+            anchor2World: v3(600, 0, 0),
+            axisSpace: 'GLOBAL',
+        });
+
+        expect(res.axes.X.available).toBe(true);
+        expect(res.axes.X.lengthMM).toBe(600);
+
+        expect(res.axes.Y.available).toBe(false);
+        expect(res.axes.Y.lengthMM).toBe(0);
+
+        expect(res.axes.Z.available).toBe(false);
+        expect(res.axes.Z.lengthMM).toBe(0);
+
+        expect(res.isDiagonal).toBe(false);
+        expect(res.availableCount).toBe(1);
+    });
+
+    it('dla przekątnej (np. szerokość X i wysokość Z) obie osie są dostępne, a Y jest wygaszone', () => {
+        // W Babylon CAD: wysokość to Babylon Y (CAD Z)
+        const res = computeAvailableMeasureAxes({
+            anchor1World: v3(0, 0, 0),
+            anchor2World: v3(800, 720, 0),
+            axisSpace: 'GLOBAL',
+        });
+
+        expect(res.axes.X.available).toBe(true);
+        expect(res.axes.X.lengthMM).toBe(800);
+
+        expect(res.axes.Z.available).toBe(true);
+        expect(res.axes.Z.lengthMM).toBe(720);
+
+        expect(res.axes.Y.available).toBe(false);
+        expect(res.axes.Y.lengthMM).toBe(0);
+
+        expect(res.isDiagonal).toBe(true);
+        expect(res.availableCount).toBe(2);
+        expect(res.distance3DMM).toBeCloseTo(1076.3, 1);
+    });
+
+    it('dla pełnej przekątnej przestrzennej 3D wszystkie 3 osie są aktywne', () => {
+        const res = computeAvailableMeasureAxes({
+            anchor1World: v3(0, 0, 0),
+            anchor2World: v3(800, 720, 500),
+            axisSpace: 'GLOBAL',
+        });
+
+        expect(res.axes.X.available).toBe(true);
+        expect(res.axes.X.lengthMM).toBe(800);
+
+        expect(res.axes.Y.available).toBe(true);
+        expect(res.axes.Y.lengthMM).toBe(500);
+
+        expect(res.axes.Z.available).toBe(true);
+        expect(res.axes.Z.lengthMM).toBe(720);
+
+        expect(res.isDiagonal).toBe(true);
+        expect(res.availableCount).toBe(3);
+    });
+});
+

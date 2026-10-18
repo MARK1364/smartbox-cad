@@ -8,7 +8,7 @@ import { ContainerModel } from '../../A1_core/container-model.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
-import { buildTubesDrillings } from '../tubes-drilling-builder.js';
+import { buildTubesDrillings } from '../08_tubes-drilling-builder.js';
 import { SyncTubesDrillingsCommand } from '../commands/sync-tubes-drillings-command.js';
 import { ClearBlokiDrillingsCommand } from '../commands/clear-blok-drillings-command.js';
 

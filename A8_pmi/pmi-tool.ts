@@ -32,7 +32,7 @@ import { Intent } from '../A1_core/interaction/interaction-types';
 import type { CadModuleContext } from '../A1_core/cad-module-context.js';
 import { StateMachine } from '../A1_core/interaction/state-machine';
 import { Vec3, v3, v3Copy, v3Sub, v3Normalize, v3Len } from './dimension-solver';
-import { getRenderData, resolveMeasureAxis } from './pmi-bridge';
+import { getRenderData, resolveMeasureAxis, computeAvailableMeasureAxes } from './pmi-bridge';
 import { axisVectorWorld, beginOffsetDragState, computeOffsetFromPointer } from './pmi-drag';
 import { PMIAxisGuides, axisGuideOrigin, buildOffsetGuideCandidates, estimateGuideLength, guideCandidateId } from './pmi-axis-guides.js';
 import { pickOffsetGuide, createWorldToScreen } from './pmi-axis-guide-pick.js';
@@ -320,28 +320,60 @@ export class DimensionTool extends BaseState {
             });
         }
 
+        const tools: CtxMenuItem[] = [];
+
+        if (this.pick1 && this.pick2) {
+            const avail = computeAvailableMeasureAxes({
+                anchor1World: this.pick1.worldPos,
+                anchor2World: this.pick2.worldPos,
+                axisSpace: this.currentAxisSpace,
+                matrixWorld: this.pick1.meshMatrix,
+            });
+
+            const makeAxisItem = (key: 'X' | 'Y' | 'Z', color: string): CtxMenuItem => {
+                const info = avail.axes[key];
+                const isSelected = this.measureAxisLocked && this.currentMeasureAxisKey === key;
+                const textColor = info.available ? color : '#64748b';
+                const captionText = info.available ? `${Math.round(info.lengthMM)} mm` : '0 mm';
+                return {
+                    icon: `<b style="font-size: 15px; line-height: 1; color: ${textColor};">${key}</b>`,
+                    caption: captionText,
+                    label: `Oś ${key}: ${info.lengthMM} mm${isSelected ? ' (aktywna)' : ''}`,
+                    action: `axis_${key.toLowerCase()}`,
+                    disabled: !info.available,
+                };
+            };
+
+            tools.push(makeAxisItem('X', '#ef4444'));
+            tools.push(makeAxisItem('Y', '#22c55e'));
+            tools.push(makeAxisItem('Z', '#3b82f6'));
+        } else {
+            // Brak wyznaczonych 2 punktów — stan domyślny (wszystkie osie odblokowane)
+            tools.push(
+                {
+                    icon: '<b style="font-size: 15px; line-height: 1; color: #ef4444;">X</b>',
+                    caption: '',
+                    label: 'Oś X',
+                    action: 'axis_x',
+                },
+                {
+                    icon: '<b style="font-size: 15px; line-height: 1; color: #22c55e;">Y</b>',
+                    caption: '',
+                    label: 'Oś Y',
+                    action: 'axis_y',
+                },
+                {
+                    icon: '<b style="font-size: 15px; line-height: 1; color: #3b82f6;">Z</b>',
+                    caption: '',
+                    label: 'Oś Z',
+                    action: 'axis_z',
+                },
+            );
+        }
+
         const items: CtxMenuItem[] = [
             {
-                toolbar: [
-                    {
-                        icon: '<b style="font-size: 15px; line-height: 1;">X</b>',
-                        caption: '',
-                        label: 'X',
-                        action: 'axis_x',
-                    },
-                    {
-                        icon: '<b style="font-size: 15px; line-height: 1;">Y</b>',
-                        caption: '',
-                        label: 'Y',
-                        action: 'axis_y',
-                    },
-                    {
-                        icon: '<b style="font-size: 15px; line-height: 1;">Z</b>',
-                        caption: '',
-                        label: 'Z',
-                        action: 'axis_z',
-                    },
-                ],
+                toolbar: tools,
             },
         ];
 

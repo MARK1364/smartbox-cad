@@ -57,7 +57,7 @@ const LEGACY_PARAM_ALIAS = [
 // a nie miejscem użycia aliasu. Bez wpisu strażnik goniłby sam słownik.
 const ALIAS_DICTIONARY_FILES = new Set([
     'A3_smartframe/smartframe-types.ts',
-    'A2_bloki/bloki-module-param-guards.ts'
+    'A2_bloki/01_bloki-module-param-guards.ts'
 ]);
 
 // Odbiory, dla których `.alias` oznacza realne wejście/wyjście kontraktu korpusu.
@@ -215,10 +215,10 @@ const CORNER_DOORS_LEGACY = [
     'hinge_1_template', 'hinge_2_template', 'hinge_3_template', 'hinge_4_template',
     'hinge_5_template', 'hinge_6_template', 'hinge_template', 'hingeTemplate'
 ];
-const CORNER_DOORS_ALIAS_DICTIONARY = new Set(['A2_bloki/corner-doors-engine.ts']);
+const CORNER_DOORS_ALIAS_DICTIONARY = new Set(['A2_bloki/07_corner-doors-engine.ts']);
 let cornerDoorsFindings = 0;
 console.log(`\n## CORNER-DOORS-LEGACY (tylko kanoniczne *_mm / uzyj_zawias_* / pozycja_zawias_*_mm)`);
-for (const rel of ['A2_bloki/corner-doors-engine.ts', 'A2_bloki/corner-doors-adapter.tsx', 'A2_bloki/bloki-bay-actions.ts']) {
+for (const rel of ['A2_bloki/07_corner-doors-engine.ts', 'A2_bloki/07_corner-doors-adapter.tsx', 'A2_bloki/02_bloki-bay-actions.ts']) {
     const f = requirePath(rel);
     const lines = fs.readFileSync(f, 'utf8').split(/\r?\n/);
     lines.forEach((line, i) => {
@@ -276,22 +276,22 @@ const BLOKI_MODULE_LEGACY = [
     'grooveWidthMm', 'grooveDepthMm', 'cutSides', 'insetTopMm', 'insetBottomMm',
 ];
 const BLOKI_MODULE_ALIAS_DICTIONARY = new Set([
-    'A2_bloki/bloki-module-param-guards.ts',
+    'A2_bloki/01_bloki-module-param-guards.ts',
 ]);
 const BLOKI_MODULE_FILES = [
-    'A2_bloki/doors-engine.ts', 'A2_bloki/doors-adapter.tsx', 'A2_bloki/doors-drilling-builder.ts',
-    'A2_bloki/skosne-doors-engine.ts', 'A2_bloki/skosne-doors-adapter.tsx', 'A2_bloki/skosne-doors-drilling-builder.ts',
-    'A2_bloki/drawers-engine.ts', 'A2_bloki/drawers-adapter.tsx',
-    'A2_bloki/flaps-engine.ts', 'A2_bloki/flaps-adapter.tsx', 'A2_bloki/flaps-drilling-builder.ts',
-    'A2_bloki/shelves-engine.ts', 'A2_bloki/shelves-adapter.tsx', 'A2_bloki/shelves-drilling-builder.ts',
-    'A2_bloki/shelf-engine.ts', 'A2_bloki/shelf-adapter.tsx',
-    'A2_bloki/dividers-engine.ts', 'A2_bloki/dividers-adapter.tsx',
-    'A2_bloki/tubes-engine.ts', 'A2_bloki/tubes-adapter.tsx',
-    'A2_bloki/panels-engine.ts', 'A2_bloki/panels-adapter.tsx',
-    'A2_bloki/led-internal-engine.ts', 'A2_bloki/led-internal-adapter.tsx',
-    'A2_bloki/led-external-engine.ts', 'A2_bloki/led-external-adapter.tsx',
-    'A2_bloki/led-engine.ts',
-    'A2_bloki/bloki-bay-actions.ts', 'A2_bloki/bloki-ui.tsx',
+    'A2_bloki/05_doors-engine.ts', 'A2_bloki/05_doors-adapter.tsx', 'A2_bloki/05_doors-drilling-builder.ts',
+    'A2_bloki/06_skosne-doors-engine.ts', 'A2_bloki/06_skosne-doors-adapter.tsx', 'A2_bloki/06_skosne-doors-drilling-builder.ts',
+    'A2_bloki/09_drawers-engine.ts', 'A2_bloki/09_drawers-adapter.tsx',
+    'A2_bloki/12_flaps-engine.ts', 'A2_bloki/12_flaps-adapter.tsx', 'A2_bloki/12_flaps-drilling-builder.ts',
+    'A2_bloki/04_shelves-engine.ts', 'A2_bloki/04_shelves-adapter.tsx', 'A2_bloki/04_shelves-drilling-builder.ts',
+    'A2_bloki/03_shelf-engine.ts', 'A2_bloki/03_shelf-adapter.tsx',
+    'A2_bloki/10_dividers-engine.ts', 'A2_bloki/10_dividers-adapter.tsx',
+    'A2_bloki/08_tubes-engine.ts', 'A2_bloki/08_tubes-adapter.tsx',
+    'A2_bloki/11_panels-engine.ts', 'A2_bloki/11_panels-adapter.tsx',
+    'A2_bloki/13_led-internal-engine.ts', 'A2_bloki/13_led-internal-adapter.tsx',
+    'A2_bloki/14_led-external-engine.ts', 'A2_bloki/14_led-external-adapter.tsx',
+    'A2_bloki/16_led-engine.ts',
+    'A2_bloki/02_bloki-bay-actions.ts', 'A2_bloki/01_bloki-ui.tsx',
     'A7_material/material-commands.ts',
 ];
 const BLOKI_CONTRACT_LINE = /(?:pushUpdate|triggerUpdate|generatorParams\s*=|\b(?:gp|generatorParams)\s*[.[]|\b(?:normalize(?:Doors|SkosneDoors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal)|build(?:Doors|SkosneDoors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal|Led))(?:Plan|Params)\()/;
@@ -309,8 +309,8 @@ for (const rel of BLOKI_MODULE_FILES) {
             if (/^\w+:\s*['"]/.test(t)) return;
         }
         // Granica createBloki: aliasy mapowane tylko w BlokiModalParams / createBlokiGeneratorParams
-        if (rel === 'A2_bloki/bloki-bay-actions.ts' && /params\?\.\w+/.test(t)) return;
-        if (rel === 'A2_bloki/bloki-bay-actions.ts' && /BlokiModalParams|createBlokiGeneratorParams/.test(t)) return;
+        if (rel === 'A2_bloki/02_bloki-bay-actions.ts' && /params\?\.\w+/.test(t)) return;
+        if (rel === 'A2_bloki/02_bloki-bay-actions.ts' && /BlokiModalParams|createBlokiGeneratorParams/.test(t)) return;
         if (/resolveRuleThicknessMm\([^)]*'(?:front_thickness|thickness|spacer_thickness)'/.test(t)) return;
         if (/grubosc_(?:frontu|polki|wienca|przegrody|blendy)_mm/.test(t)) return;
         // A5 LedChannelDefinition — angielskie klucze kontraktu A5, nie Bloki
@@ -367,10 +367,10 @@ const DEAD_API_RES = [
     [/\bTO_MICRONS\b|\bMicrons\b/, 'wycofany alias "mikrony" — użyj TO_NM / Nanometers'],
 ];
 
-const UNIT_GUESS_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'A4_smartpanel', 'A5_smartparts',
+const UNIT_GUESS_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'A4_smartpanel',
     'A6_agd', 'C1_cnc', 'C2_connectors', 'R1_reports', 'R2_rys', 'D1_draw', 'S2_solver',
     'S4_sciany', 'src', 'B1_biblioteka', 'A8_pmi'];
-const FACE_ALIAS_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'A4_smartpanel', 'A5_smartparts',
+const FACE_ALIAS_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'A4_smartpanel',
     'A6_agd', 'C2_connectors', 'S2_solver', 'o1_operacji'];
 const BLOKI_DIM_DIRS = ['A2_bloki'];
 const DEAD_API_DIRS = UNIT_GUESS_DIRS;
@@ -450,7 +450,7 @@ if (blokiInputFindings > 0) process.exitCode = 1;
 // ─── Twardy zakaz wycofanej nazwy modułu w całym repozytorium ───
 console.log('\n## ZERO-SMARTBOX (zakaz używania wycofanej nazwy w kodzie i dokumentacji)');
 let zeroForbiddenFindings = 0;
-const FORBIDDEN_PATTERN = new RegExp(['smart', 'box'].join(''), 'i');
+const FORBIDDEN_PATTERN = /smart[_\-\s]?box/i;
 
 function walkAllSource(dir, out = []) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

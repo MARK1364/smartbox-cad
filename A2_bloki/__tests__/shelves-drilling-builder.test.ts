@@ -6,7 +6,7 @@ import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { runEngineAndApply } from '../../A3_smartframe/smartframe-adapter.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
-import { buildShelvesDrillings } from '../shelves-drilling-builder.js';
+import { buildShelvesDrillings } from '../04_shelves-drilling-builder.js';
 import { findCabinetPanel } from '../../A1_core/panel-lookup.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
 

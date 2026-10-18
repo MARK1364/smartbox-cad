@@ -6,15 +6,15 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { LedInternalPlanParams } from '../bloki-module-types.js';
-import { buildLedInternalPlan } from '../module-plans.js';
-import { LedInternalSubModule } from '../led-internal-adapter.js';
-import { syncBlokiLedInternalGrooves } from '../led-internal-engine.js';
+import type { LedInternalPlanParams } from '../01_bloki-module-types.js';
+import { buildLedInternalPlan } from '../01_module-plans.js';
+import { LedInternalSubModule } from '../13_led-internal-adapter.js';
+import { SyncLedMachiningCommand } from '../commands/sync-led-machining-command.js';
 
 export const ledInternalPlugin: SmartModulePlugin<LedInternalPlanParams> = {
     id: 'LED_INTERNAL',
     meta: {
-        label: 'Kanał LED (wewn)',
+        label: 'LED wewnętrzny',
         labelKey: 'bloki.led_internal',
         description: 'Profil LED pionowy/poziomy we wnęce',
         category: 'internal',
@@ -29,10 +29,10 @@ export const ledInternalPlugin: SmartModulePlugin<LedInternalPlanParams> = {
         )
     },
     buildPlan: (params, dims) => buildLedInternalPlan(params, dims),
+    // Machining: intencje wpustów przez SyncLedMachiningCommand (snapshot → plan → apply → undo),
+    // identyczny przepływ jak SyncFlapsDrillingsCommand w klapsach.
     syncDrillings: (doc, _cabinetId, containerNode) => {
-        if (containerNode) {
-            syncBlokiLedInternalGrooves(containerNode, doc);
-        }
+        new SyncLedMachiningCommand(containerNode?.id).execute(doc);
     },
     getDefaultParams: () => ({
         szerokosc_wpustu_mm: 15,

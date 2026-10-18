@@ -1,0 +1,144 @@
+{
+  "metadata": {
+    "module_type": "BLOKI_DIVIDERS",
+    "version": "3.0.0",
+    "side_references_bloki": "INNER"
+  },
+  "parameters": {
+    "defaults": {
+      "thickness": 0.018
+    },
+    "validation": {
+      "max_instances": 5
+    },
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "DIVIDER_PLATE": {
+          "description": "Przegrody - oklejony FRONT",
+          "edge_banding": {
+            "+X": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": false,
+              "type_id": "none"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Przegrody",
+      "type": "Assembly",
+      "subcomponents": {
+        "DIVIDERS_1": {
+          "name": "Przegroda_1",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0,
+            -90,
+            0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_bloki_child": true
+          }
+        },
+        "DIVIDERS_2": {
+          "name": "Przegroda_2",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0,
+            -90,
+            0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_bloki_child": true
+          }
+        },
+        "DIVIDERS_3": {
+          "name": "Przegroda_3",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0,
+            -90,
+            0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_bloki_child": true
+          }
+        },
+        "DIVIDERS_4": {
+          "name": "Przegroda_4",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0,
+            -90,
+            0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_bloki_child": true
+          }
+        },
+        "DIVIDERS_5": {
+          "name": "Przegroda_5",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Cube",
+          "role": "DIVIDER_PLATE",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "base_rotation": [
+            0,
+            -90,
+            0
+          ],
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_bloki_child": true
+          }
+        }
+      }
+    }
+  }
+}

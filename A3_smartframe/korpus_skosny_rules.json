@@ -28,8 +28,8 @@
           "edge_banding": {
             "+X": { "active": true, "type_id": "0.008x0.022" },
             "-X": { "active": false, "type_id": "none" },
-            "+Y": { "active": true, "type_id": "0.008x0.022" },
-            "-Y": { "active": true, "type_id": "0.008x0.022" }
+            "+Y": { "active": false, "type_id": "none" },
+            "-Y": { "active": false, "type_id": "none" }
           },
           "wcs_origin_corner": { "X": "-", "Y": "-", "Z": "+" },
           "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" },
@@ -39,8 +39,8 @@
           "edge_banding": {
             "+X": { "active": false, "type_id": "none" },
             "-X": { "active": true, "type_id": "0.008x0.022" },
-            "+Y": { "active": true, "type_id": "0.008x0.022" },
-            "-Y": { "active": true, "type_id": "0.008x0.022" }
+            "+Y": { "active": false, "type_id": "none" },
+            "-Y": { "active": false, "type_id": "none" }
           },
           "wcs_origin_corner": { "X": "+", "Y": "-", "Z": "+" },
           "wcs_axis_directions": { "X": "+", "Y": "+", "Z": "+" },

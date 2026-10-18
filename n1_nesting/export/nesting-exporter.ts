@@ -11,9 +11,10 @@ export class NestingExporter {
     /**
      * Generuje kompletny dokument HTML gotowy do wydruku lub zapisu do PDF.
      */
-    public static generatePrintableHtml(result: NestingResult, config: SheetConfig): string {
+    public static generatePrintableHtml(result: NestingResult, config: SheetConfig, autoPrint = false): string {
         const svgList = result.boards.map((board) => this.generateBoardSvgString(board, config));
         const machineLabel = result.machineType === 'cnc' ? '⚙️ Frezarka CNC (Nesting)' : '🪚 Piła Formatowa / Panelowa';
+        const pageOrientation = config.width >= config.height ? 'landscape' : 'portrait';
 
         let html = `<!DOCTYPE html>
 <html lang="pl">
@@ -22,7 +23,7 @@ export class NestingExporter {
     <title>Plan Rozkroju Płyt (${result.machineType.toUpperCase()}) - Bloki CAD</title>
     <style>
         @page {
-            size: A4 landscape;
+            size: A4 ${pageOrientation};
             margin: 10mm;
         }
         body {
@@ -101,6 +102,38 @@ export class NestingExporter {
             max-width: 100%;
             height: auto;
         }
+        .print-toolbar {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+        }
+        .print-toolbar button {
+            font: 600 13px 'Segoe UI', Arial, sans-serif;
+            background: #4338ca;
+            color: #ffffff;
+            border: 0;
+            border-radius: 6px;
+            padding: 10px 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        .print-toolbar button:hover {
+            background: #3730a3;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                padding: 0;
+            }
+            svg {
+                max-height: none !important;
+            }
+        }
         .parts-table {
             width: 100%;
             border-collapse: collapse;
@@ -119,6 +152,9 @@ export class NestingExporter {
     </style>
 </head>
 <body>
+    <div class="print-toolbar no-print">
+        <button type="button" onclick="window.print()">🖨️ Drukuj / Zapisz jako PDF</button>
+    </div>
     <div class="header">
         <h1>Plan Rozkroju Płyt — <span class="machine-badge">${machineLabel}</span></h1>
         <div>Data: ${new Date().toLocaleDateString('pl-PL')} ${new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -177,7 +213,12 @@ export class NestingExporter {
     </div>`;
         });
 
-        html += `
+        html += autoPrint
+            ? `
+    <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });</script>
+</body>
+</html>`
+            : `
 </body>
 </html>`;
         return html;
@@ -257,7 +298,100 @@ export class NestingExporter {
      */
     public static downloadHtmlReport(result: NestingResult, config: SheetConfig, filename = 'plan-rozkroju.html'): void {
         const html = this.generatePrintableHtml(result, config);
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        this.downloadBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), filename);
+    }
+
+    /**
+     * Otwiera plan rozkroju w nowym oknie i od razu wywołuje okno druku
+     * (możliwość wydruku na drukarce lub zapisu do PDF).
+     */
+    public static printHtmlReport(result: NestingResult, config: SheetConfig): void {
+        const html = this.generatePrintableHtml(result, config, true);
+        this.openPrintWindow(html, 'plan-rozkroju.html');
+    }
+
+    /**
+     * Otwiera wydruk pojedynczego arkusza (SVG) w nowym oknie i wywołuje druk.
+     */
+    public static printBoardSvg(board: PackedBoard, config: SheetConfig): void {
+        const svg = this.generateBoardSvgString(board, config);
+        const title = `Arkusz #${board.boardIndex} (${board.width} × ${board.height} mm)${board.materialLabel ? ' — ' + board.materialLabel : ''}`;
+        this.openPrintWindow(this.wrapSvgHtml(svg, title, config, true), `arkusz-${board.boardIndex}.html`);
+    }
+
+    /**
+     * Pobiera pojedynczy arkusz jako plik SVG.
+     */
+    public static downloadBoardSvg(board: PackedBoard, config: SheetConfig, filename?: string): void {
+        const svg = this.generateBoardSvgString(board, config);
+        this.downloadBlob(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), filename || `arkusz-${board.boardIndex}.svg`);
+    }
+
+    /**
+     * Otwiera nowe okno z dokumentem i uruchamia natywne okno druku.
+     * Gdy przeglądarka zablokuje popup — pobiera plik HTML jako fallback.
+     */
+    private static openPrintWindow(html: string, fallbackFilename: string): void {
+        const win = window.open('', '_blank');
+        if (!win) {
+            this.downloadBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), fallbackFilename);
+            return;
+        }
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+
+        const trigger = () => {
+            try {
+                win.focus();
+                win.print();
+            } catch {
+                /* okno zamknięte przez użytkownika */
+            }
+        };
+        // SVG/HTML zapisuje się synchronicznie — daj przeglądarce chwilę na layout.
+        window.setTimeout(trigger, 400);
+    }
+
+    private static wrapSvgHtml(svg: string, title: string, config: SheetConfig, autoPrint: boolean): string {
+        const orientation = config.width >= config.height ? 'landscape' : 'portrait';
+        return `<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>${this.escapeXml(title)}</title>
+    <style>
+        @page { size: A4 ${orientation}; margin: 8mm; }
+        html, body { margin: 0; padding: 0; background: #ffffff; }
+        .sheet-title {
+            font: 600 14px 'Segoe UI', Arial, sans-serif;
+            color: #111827;
+            padding: 8px 4px;
+        }
+        .svg-wrap svg { width: 100%; height: auto; max-height: none !important; display: block; }
+        .toolbar { padding: 8px; }
+        .toolbar button {
+            font: 600 13px 'Segoe UI', Arial, sans-serif;
+            background: #4338ca;
+            color: #ffffff;
+            border: 0;
+            border-radius: 6px;
+            padding: 10px 16px;
+            cursor: pointer;
+        }
+        @media print { .toolbar { display: none !important; } }
+    </style>
+</head>
+<body>
+    <div class="toolbar"><button type="button" onclick="window.print()">🖨️ Drukuj / Zapisz jako PDF</button></div>
+    <div class="sheet-title">${this.escapeXml(title)}</div>
+    <div class="svg-wrap">${svg}</div>
+    ${autoPrint ? "<script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });</script>" : ''}
+</body>
+</html>`;
+    }
+
+    private static downloadBlob(blob: Blob, filename: string): void {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

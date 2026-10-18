@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { FlapsPlanParams } from '../bloki-module-types.js';
-import { buildFlapsPlan } from '../module-plans.js';
-import { FlapsSubModule } from '../flaps-adapter.js';
+import type { FlapsPlanParams } from '../01_bloki-module-types.js';
+import { buildFlapsPlan } from '../01_module-plans.js';
+import { FlapsSubModule } from '../12_flaps-adapter.js';
 import { SyncFlapsDrillingsCommand } from '../commands/sync-flaps-drillings-command.js';
 
 export const flapsPlugin: SmartModulePlugin<FlapsPlanParams> = {

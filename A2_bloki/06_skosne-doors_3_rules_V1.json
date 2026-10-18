@@ -1,0 +1,95 @@
+{
+  "metadata": {
+    "module_type": "BLOKI_SKOSNE_DOORS",
+    "version": "3.0.0",
+    "side_references_bloki": "INNER"
+  },
+  "parameters": {
+    "defaults": {
+      "front_thickness": 0.018
+    },
+    "validation": {
+      "min_thickness": 0.001,
+      "max_thickness": 0.1
+    },
+    "smart_panel_integration": {
+      "enabled": true,
+      "role_overrides": {
+        "FRONT": {
+          "description": "Fronty skosne - oklejone na 3 krawedziach, krawedz pochylona bez okleiny",
+          "edge_banding": {
+            "+X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "-X": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            },
+            "+Y": {
+              "active": false,
+              "type_id": "none"
+            },
+            "-Y": {
+              "active": true,
+              "type_id": "0.008x0.022"
+            }
+          },
+          "wcs_axis_directions": {
+            "X": "+",
+            "Y": "+",
+            "Z": "+"
+          }
+        }
+      }
+    }
+  },
+  "model_tree": {
+    "root_assembly": {
+      "name": "Drzwi_Skosne",
+      "type": "Assembly",
+      "subcomponents": {
+        "DOOR_SKOSNY": {
+          "name": "Drzwi_Skosne",
+          "type": "Part",
+          "subtype": "Mesh",
+          "object": "Polygon",
+          "role": "FRONT",
+          "report_type": "plyty",
+          "thickness": 0.018,
+          "custom_properties": {
+            "material": "MDF_SUROWY_18",
+            "is_bloki_child": true,
+            "shape": "skos_front"
+          },
+          "lcs": {
+            "mapping": {
+              "X": "x",
+              "Y": "z",
+              "Z": "y"
+            },
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "faces": {
+              "INNER": "FACE_Z_PLUS",
+              "OUTER": "FACE_Z_MINUS"
+            }
+          },
+          "features": [
+            {
+              "type": "Hardware_Instance",
+              "side": "LEFT"
+            },
+            {
+              "type": "Hardware_Instance",
+              "side": "RIGHT"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

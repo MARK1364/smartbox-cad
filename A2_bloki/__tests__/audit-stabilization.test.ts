@@ -9,7 +9,7 @@ import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
 import { Mat4 } from '../../A1_core/cad-math/mat4.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
-import { InsertBlokiCommand } from '../bloki-bay-actions.js';
+import { InsertBlokiCommand } from '../02_bloki-bay-actions.js';
 import { buildBackGrooves, type PanelState } from '../../A3_smartframe/back-groove-builder.js';
 
 describe('Bloki & SmartFrame Audit Stabilization', () => {

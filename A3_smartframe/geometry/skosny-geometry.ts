@@ -369,9 +369,9 @@ export function resolveSkosnyLrGeometry(
             thickness: grubosc_mm,
             dim: { x: slopeLen_mm, y: D_mm, z: grubosc_mm },
             loc: {
-                x: przesuniecie_srodka_mm,
+                x: przesuniecie_srodka_mm + (grubosc_mm / 2) * Math.sin(beta_rad),
                 y: 0,
-                z: (h_lewy_mm + h_prawy_mm) / 2
+                z: (h_lewy_mm + h_prawy_mm) / 2 - (grubosc_mm / 2) * Math.cos(beta_rad)
             },
             lcs: {
                 mapping: { X: 'x', Y: 'y', Z: 'z' },

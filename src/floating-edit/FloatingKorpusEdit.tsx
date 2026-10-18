@@ -262,15 +262,77 @@ export function FloatingKorpusEdit({
                             setHeight(maxH);
                             triggerRealtime(width, maxH, depth, 1, maxH, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, heightFront, v);
                         }} />
+                    {(() => {
+                        const roznica_wysokosci_mm = Math.abs(heightFront - heightBack);
+                        const kat_skosu_deg = depth > 0 ? (Math.atan2(roznica_wysokosci_mm, depth) * 180) / Math.PI : 0;
+                        const cos_kat_skosu = Math.cos((kat_skosu_deg * Math.PI) / 180);
+                        const wieniec_w_pionie_mm = Math.abs(cos_kat_skosu) > 1e-6 ? (18 / cos_kat_skosu).toFixed(1) : '-';
+                        return (
+                            <div style={{
+                                padding: '6px 8px',
+                                background: '#1c1c1f',
+                                border: '1px solid #2d2d30',
+                                borderRadius: '4px',
+                                marginTop: '4px',
+                                marginBottom: '8px',
+                                fontSize: '11px',
+                                color: '#a1a1aa',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>{tx(korpusTekst, 'skosny.angle', TX_NS)}</span>
+                                    <strong style={{ color: '#93c5fd', fontSize: '11px' }}>{kat_skosu_deg.toFixed(2)}°</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>{tx(korpusTekst, 'skosny.vertical_thickness', TX_NS)}</span>
+                                    <strong style={{ color: '#e4e4e7', fontSize: '11px' }}>{wieniec_w_pionie_mm} mm</strong>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </>
             )}
 
             {isSkosnyLrUc && (
-                <InputRow label={tx(korpusTekst, 'skosny_lr.height_left', TX_NS)} value={heightLeft} min={100} max={Math.max(100, height - 1)}
-                    onChange={(v) => {
-                        setHeightLeft(v);
-                        triggerRealtime(width, height, depth, 1, height, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, v, height, heightFront, heightBack);
-                    }} />
+                <>
+                    <InputRow label={tx(korpusTekst, 'skosny_lr.height_left', TX_NS)} value={heightLeft} min={100} max={Math.max(100, height - 1)}
+                        onChange={(v) => {
+                            setHeightLeft(v);
+                            triggerRealtime(width, height, depth, 1, height, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, v, height, heightFront, heightBack);
+                        }} />
+                    {(() => {
+                        const roznica_wysokosci_mm = Math.abs(height - heightLeft);
+                        const kat_skosu_deg = width > 0 ? (Math.atan2(roznica_wysokosci_mm, width) * 180) / Math.PI : 0;
+                        const cos_kat_skosu = Math.cos((kat_skosu_deg * Math.PI) / 180);
+                        const wieniec_w_pionie_mm = Math.abs(cos_kat_skosu) > 1e-6 ? (18 / cos_kat_skosu).toFixed(1) : '-';
+                        return (
+                            <div style={{
+                                padding: '6px 8px',
+                                background: '#1c1c1f',
+                                border: '1px solid #2d2d30',
+                                borderRadius: '4px',
+                                marginTop: '4px',
+                                marginBottom: '8px',
+                                fontSize: '11px',
+                                color: '#a1a1aa',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>{tx(korpusTekst, 'skosny.angle', TX_NS)}</span>
+                                    <strong style={{ color: '#93c5fd', fontSize: '11px' }}>{kat_skosu_deg.toFixed(2)}°</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>{tx(korpusTekst, 'skosny.vertical_thickness', TX_NS)}</span>
+                                    <strong style={{ color: '#e4e4e7', fontSize: '11px' }}>{wieniec_w_pionie_mm} mm</strong>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </>
             )}
 
             {!isCorner && !isSkosnyOneZone && zoneCount >= 2 && (

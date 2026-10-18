@@ -14,8 +14,8 @@ import type { MicrowaveParamsMm } from '../../A6_agd/smart-appliance-types.js';
 import {
     BayReferenceWallsPanel,
     type BayRefsParamsPatch,
-} from '../../A2_bloki/bay-reference-walls-panel.js';
-import { customReferencesFromDetectedBay } from '../../A5_smartparts/hangers/smartpart-bay-placement.js';
+} from '../../A2_bloki/02_bay-reference-walls-panel.js';
+import { customReferencesFromDetectedBay } from '../../A2_bloki/hangers/smartpart-bay-placement.js';
 
 const fieldRow: React.CSSProperties = {
     display: 'flex',

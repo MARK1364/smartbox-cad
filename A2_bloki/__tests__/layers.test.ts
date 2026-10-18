@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { buildShelfPlan } from '../module-plans.js';
+import { buildShelfPlan } from '../01_module-plans.js';
 import { collectNodeCleanupCommands, resetNodeCleanupHandlersForTests } from '../../A1_core/node-cleanup-port.js';
-import { registerBlokiModule } from '../register.js';
+import { registerBlokiModule } from '../01_register.js';
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 

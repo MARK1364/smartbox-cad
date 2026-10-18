@@ -116,7 +116,7 @@ function normalizedOrFallback(vec: Vec3 | null, fallback: Vec3, eps = 1e-7): Vec
     return v3Normalize(v);
 }
 
-function axesMapWorld(axisSpace: string, matrixWorld: Mat4 | null): Record<string, Vec3> {
+export function axesMapWorld(axisSpace: string, matrixWorld: Mat4 | any | null): Record<string, Vec3> {
     const defaultMap: Record<string, Vec3> = {
         X: v3(1, 0, 0),
         Y: v3(0, 0, 1), // CAD głębokość → Babylon Z
@@ -129,6 +129,62 @@ function axesMapWorld(axisSpace: string, matrixWorld: Mat4 | null): Record<strin
         X: normalizedOrFallback(v3(cadAxes.X.x, cadAxes.X.y, cadAxes.X.z), defaultMap.X),
         Y: normalizedOrFallback(v3(cadAxes.Y.x, cadAxes.Y.y, cadAxes.Y.z), defaultMap.Y),
         Z: normalizedOrFallback(v3(cadAxes.Z.x, cadAxes.Z.y, cadAxes.Z.z), defaultMap.Z),
+    };
+}
+
+export interface AxisDistanceInfo {
+    axisKey: 'X' | 'Y' | 'Z';
+    lengthMM: number;
+    available: boolean;
+}
+
+export interface AvailableMeasureAxes {
+    axes: Record<'X' | 'Y' | 'Z', AxisDistanceInfo>;
+    distance3DMM: number;
+    isDiagonal: boolean;
+    availableCount: number;
+}
+
+/**
+ * Oblicza fizyczne odległości (w mm) wzdłuż osi X, Y, Z oraz 3D między dwoma punktami.
+ * Oznacza jako `available` te osie, których rzut przekracza próg (domyślnie 0.5 mm).
+ */
+export function computeAvailableMeasureAxes(opts: {
+    anchor1World: Vec3;
+    anchor2World: Vec3;
+    axisSpace?: string;
+    matrixWorld?: Mat4 | any | null;
+    thresholdMM?: number;
+}): AvailableMeasureAxes {
+    const delta = v3Sub(opts.anchor2World, opts.anchor1World);
+    const distance3DMM = Math.round(v3Len(delta) * 10) / 10;
+    const threshold = opts.thresholdMM ?? 0.5;
+    const axisMap = axesMapWorld(opts.axisSpace || 'GLOBAL', opts.matrixWorld || null);
+
+    const checkAxis = (key: 'X' | 'Y' | 'Z'): AxisDistanceInfo => {
+        const ax = axisMap[key] || v3(1, 0, 0);
+        const len = Math.abs(v3Dot(delta, ax));
+        return {
+            axisKey: key,
+            lengthMM: Math.round(len * 10) / 10,
+            available: len >= threshold,
+        };
+    };
+
+    const axes: Record<'X' | 'Y' | 'Z', AxisDistanceInfo> = {
+        X: checkAxis('X'),
+        Y: checkAxis('Y'),
+        Z: checkAxis('Z'),
+    };
+
+    const availableCount = (axes.X.available ? 1 : 0) + (axes.Y.available ? 1 : 0) + (axes.Z.available ? 1 : 0);
+    const isDiagonal = availableCount > 1;
+
+    return {
+        axes,
+        distance3DMM,
+        isDiagonal,
+        availableCount,
     };
 }
 

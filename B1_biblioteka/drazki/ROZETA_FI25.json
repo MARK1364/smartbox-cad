@@ -1,0 +1,29 @@
+{
+  "id": "ROZETA_FI25",
+  "name": "Rozeta drążka Ø25 mm",
+  "type": "TUBE_SOCKET",
+  "units": "mm",
+  "brand": "Standard",
+  "art_no": "SOCKET-25MM",
+  "price_id": "TUBE_SOCKET_FI25",
+  "usable_in": ["TUBES"],
+  "dimensions": {
+    "diameter": 45,
+    "thickness": 5,
+    "rod_diameter": 25
+  },
+  "machining": {
+    "side_mount": {
+      "holes": [
+        { "name": "Rozeta_Otwor_1", "dia": 3.5, "depth": 12, "pos": [-16, 0, 0] },
+        { "name": "Rozeta_Otwor_2", "dia": 3.5, "depth": 12, "pos": [16, 0, 0] }
+      ]
+    }
+  },
+  "visual": {
+    "shape": "CYLINDER",
+    "diameter": 45,
+    "thickness": 5,
+    "units": "mm"
+  }
+}

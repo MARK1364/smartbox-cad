@@ -8,7 +8,7 @@ import { ContainerModel } from '../../A1_core/container-model.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
-import { buildFlapsDrillings } from '../flaps-drilling-builder.js';
+import { buildFlapsDrillings } from '../12_flaps-drilling-builder.js';
 
 describe('Flaps Drilling Builder (buildFlapsDrillings)', () => {
     let doc: ProjectDocument;

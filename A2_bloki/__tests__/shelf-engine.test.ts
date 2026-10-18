@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildShelfPlan } from '../shelf-adapter.js';
-import { assertCanonicalShelfParams } from '../shelf-engine.js';
+import { buildShelfPlan } from '../03_shelf-adapter.js';
+import { assertCanonicalShelfParams } from '../03_shelf-engine.js';
 
 describe('buildShelfPlan (Bloki Wieniec V1)', () => {
     it('generates shelf with zero side/front/back offsets by default (fits full width and depth)', () => {

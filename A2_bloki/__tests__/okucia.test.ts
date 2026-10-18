@@ -1,6 +1,6 @@
-import { buildFlapsPlan } from '../module-plans.js';
-import { buildDrawersPlan } from '../module-plans.js';
-import { buildDoorsPlan } from '../module-plans.js';
+import { buildFlapsPlan } from '../01_module-plans.js';
+import { buildDrawersPlan } from '../01_module-plans.js';
+import { buildDoorsPlan } from '../01_module-plans.js';
 import { describe, it, expect } from 'vitest';
 import {
     DEFAULT_HINGE_ID,
@@ -53,7 +53,7 @@ describe('Biblioteka okuć', () => {
         expect(cupNm?.edgeDist).toBe(22_500_000);
     });
 
-    it('lists rails from shared szuflady.json (mm konfig → meters)', () => {
+    it('lists rails from shared szuflady.json (all hardware in mm)', () => {
         const rails = listByType('RAIL');
         expect(rails.map((r) => r.id)).toEqual(
             expect.arrayContaining(['D214', 'KOSZ350', 'M94', 'MR100', 'MR150', 'MR200', 'S114', 'S162', 'T108', 'T158', 'BLUM_ANTARO_M'])
@@ -61,15 +61,15 @@ describe('Biblioteka okuć', () => {
         expect(Object.keys(getHardware('M94')?.lengths || {})).toEqual(
             expect.arrayContaining(['300', '350', '400', '450', '500'])
         );
-        expect(getDrawerDrill().corpus_hole.dia).toBeCloseTo(0.003);
-        expect(getDrawerDrill().corpus_hole.depth).toBeCloseTo(0.012);
-        expect(getHardware('M94')?.mount?.corpus_height).toBeCloseTo(0.094);
-        expect(getHardware('D214')?.mount?.corpus_height).toBeCloseTo(0.214);
-        expect(getHardware('M94')?.drill?.dia).toBeCloseTo(0.003);
-        expect(getHardware('M94')?.lengths?.['450']?.x_positions).toEqual([0.037, 0.133, 0.261, 0.357]);
-        expect(getHardware('M94')?.lengths?.['500']?.x_positions).toEqual([0.037, 0.133, 0.261, 0.453]);
-        expect(getHardware('M94')?.front_holes?.z_positions).toEqual([0.02, 0.074]);
-        expect((getHardware('M94')?.front_holes as any)?.x_offset).toBeCloseTo(0.031);
+        expect(getDrawerDrill().corpus_hole.dia).toBeCloseTo(3);
+        expect(getDrawerDrill().corpus_hole.depth).toBeCloseTo(12);
+        expect(getHardware('M94')?.mount?.corpus_height).toBeCloseTo(94);
+        expect(getHardware('D214')?.mount?.corpus_height).toBeCloseTo(214);
+        expect(getHardware('M94')?.drill?.dia).toBeCloseTo(3);
+        expect(getHardware('M94')?.lengths?.['450']?.x_positions).toEqual([37, 133, 261, 357]);
+        expect(getHardware('M94')?.lengths?.['500']?.x_positions).toEqual([37, 133, 261, 453]);
+        expect(getHardware('M94')?.front_holes?.z_positions).toEqual([20, 74]);
+        expect((getHardware('M94')?.front_holes as any)?.x_offset).toBeCloseTo(31);
     });
 });
 

@@ -12,30 +12,30 @@ import {
     validateReferenceFaceOrientation,
     resolveManualReferenceFace,
     canonicalizeRefFaceName,
-} from '../bloki-core.js';
+} from '../01_bloki-core.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { UIController } from '../../A1_core/ui-controller.js';
 import { SetBlokiParamsCommand } from '../commands/set-blok-params-command.js';
-import { ShelvesSubModule } from '../shelves-adapter.js';
-import { ShelfSubModule } from '../shelf-adapter.js';
-import { DoorsSubModule } from '../doors-adapter.js';
-import { SkosneDoorsSubModule } from '../skosne-doors-adapter.js';
-import { CornerDoorsSubModule } from '../corner-doors-adapter.js';
-import { TubesSubModule } from '../tubes-adapter.js';
-import { DrawersSubModule } from '../drawers-adapter.js';
-import { DividersSubModule } from '../dividers-adapter.js';
-import { PanelsSubModule } from '../panels-adapter.js';
-import { FlapsSubModule } from '../flaps-adapter.js';
-import { LedInternalSubModule } from '../led-internal-adapter.js';
-import { LedExternalSubModule } from '../led-external-adapter.js';
+import { ShelvesSubModule } from '../04_shelves-adapter.js';
+import { ShelfSubModule } from '../03_shelf-adapter.js';
+import { DoorsSubModule } from '../05_doors-adapter.js';
+import { SkosneDoorsSubModule } from '../06_skosne-doors-adapter.js';
+import { CornerDoorsSubModule } from '../07_corner-doors-adapter.js';
+import { TubesSubModule } from '../08_tubes-adapter.js';
+import { DrawersSubModule } from '../09_drawers-adapter.js';
+import { DividersSubModule } from '../10_dividers-adapter.js';
+import { PanelsSubModule } from '../11_panels-adapter.js';
+import { FlapsSubModule } from '../12_flaps-adapter.js';
+import { LedInternalSubModule } from '../13_led-internal-adapter.js';
+import { LedExternalSubModule } from '../14_led-external-adapter.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
-import { highlightBayInScene, clearBayHighlight } from '../bloki-bay-visualizer.js';
+import { highlightBayInScene, clearBayHighlight } from '../02_bloki-bay-visualizer.js';
 import {
     highlightBlokiRefSide,
     clearBlokiRefPlaneHint,
     type BlokiRefSideKey,
-} from '../bloki-ref-plane-hint.js';
-import { HEIGHT_H_LOCKED_HINT, isBlokiHeightHLocked } from '../bloki-height-h.js';
+} from '../02_bloki-ref-plane-hint.js';
+import { HEIGHT_H_LOCKED_HINT, isBlokiHeightHLocked } from '../01_bloki-height-h.js';
 
 export const MODULE_TYPES: Record<string, { type: string; label: string; category?: 'internal' | 'external' | 'panel' }> = {
     'EMPTY': { type: 'blok_empty', label: 'Wybierz moduł...' },
@@ -48,9 +48,9 @@ export const MODULE_TYPES: Record<string, { type: string; label: string; categor
     'TUBES': { type: 'blok_tubes', label: 'Drążek', category: 'internal' },
     'SHELF': { type: 'blok_shelf', label: 'Wieniec', category: 'internal' },
     'DIVIDERS': { type: 'blok_dividers', label: 'Przegrody', category: 'internal' },
-    'LED_INTERNAL': { type: 'blok_led_internal', label: 'Kanał LED', category: 'internal' },
+    'LED_INTERNAL': { type: 'blok_led_internal', label: 'LED wewnętrzny', category: 'internal' },
     'PANELS': { type: 'blok_panels', label: 'Blendy', category: 'external' },
-    'LED_EXTERNAL': { type: 'blok_led_external', label: 'Kanał LED', category: 'external' },
+    'LED_EXTERNAL': { type: 'blok_led_external', label: 'LED zewnętrzny (kanał)', category: 'external' },
     'HANDLES': { type: 'blok_handle', label: 'Uchwyty', category: 'panel' },
     'HANGERS': { type: 'smartpart_hangers', label: 'Zawieszki', category: 'panel' }
 };
@@ -252,7 +252,13 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
     const cancelPicking = useCallback(() => {
         setPickingField(null);
         delete ContextManager.instance.activeReferencePicker;
-        const appApi = (window as any).app;
+        const picker = ContextManager.instance.facePicker;
+        if (picker) {
+            picker.selectionMode = 'object';
+            picker.targetSubgeometryType = null;
+            picker.clearSelection();
+        }
+        const appApi = (window as any).app || ContextManager.instance.appAPI;
         if (appApi?.setSelectionMode) appApi.setSelectionMode('object');
     }, []);
 
@@ -277,6 +283,14 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
         }
 
         setPickingField(sideKey);
+
+        const picker = ContextManager.instance.facePicker;
+        if (picker) {
+            picker.selectionMode = 'subgeometry';
+            picker.targetSubgeometryType = 'face';
+            if (typeof picker.resetAllFaceHighlights === 'function') picker.resetAllFaceHighlights();
+            else picker.clearSelection();
+        }
 
         const appApi = (window as any).app || ContextManager.instance.appAPI;
         if (appApi?.setSelectionMode) appApi.setSelectionMode('subgeometry');
@@ -352,6 +366,13 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                 setDisabledRefsState(updatedDisabled);
                 setPickingField(null);
                 delete ContextManager.instance.activeReferencePicker;
+                const picker = ContextManager.instance.facePicker;
+                if (picker) {
+                    picker.selectionMode = 'object';
+                    picker.targetSubgeometryType = null;
+                    if (typeof picker.resetAllFaceHighlights === 'function') picker.resetAllFaceHighlights();
+                    else picker.clearSelection();
+                }
                 if (appApi?.setSelectionMode) appApi.setSelectionMode('object');
 
                 triggerUpdateEx({

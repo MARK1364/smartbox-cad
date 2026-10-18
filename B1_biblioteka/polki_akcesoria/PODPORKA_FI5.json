@@ -1,0 +1,27 @@
+{
+  "id": "PODPORKA_FI5",
+  "name": "Podpórka półki Ø5 mm",
+  "type": "SHELF_PIN",
+  "units": "mm",
+  "brand": "Standard",
+  "art_no": "PIN-5MM",
+  "price_id": "SHELF_PIN_FI5",
+  "usable_in": ["SHELVES", "SHELF"],
+  "mount": {
+    "pin_dia": 5,
+    "pin_depth": 12,
+    "support_length": 8,
+    "support_width": 7
+  },
+  "machining": {
+    "corpus_holes": [
+      { "name": "Podporka_otw", "dia": 5, "depth": 12, "object": "Cylinder" }
+    ],
+    "front_holes": []
+  },
+  "visual": {
+    "glb": "PODPORKA_FI5.glb",
+    "origin": "PIN_FACE",
+    "units": "mm"
+  }
+}

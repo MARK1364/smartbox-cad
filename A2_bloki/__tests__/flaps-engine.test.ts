@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeFlapsParams, calculateFlapsPlan, assertCanonicalFlapsParams } from '../flaps-engine.js';
+import { normalizeFlapsParams, calculateFlapsPlan, assertCanonicalFlapsParams } from '../12_flaps-engine.js';
 
 describe('flaps-engine (Functional Core)', () => {
     it('normalizes canonical parameters', () => {

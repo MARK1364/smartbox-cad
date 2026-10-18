@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { buildSkosneDoorsPlan } from '../module-plans.js';
+import { buildSkosneDoorsPlan } from '../01_module-plans.js';
 import {
+    areSkosneDoorLeavesEqual,
     assertCanonicalSkosneDoorsParams,
     normalizeSkosneDoorsParams,
     skosBetaRad,
@@ -8,7 +9,7 @@ import {
     skosRailVerticalSpanMm,
     skosTopOverlapRiseMm,
     skosTopOverlapRunMm
-} from '../skosne-doors-engine.js';
+} from '../06_skosne-doors-engine.js';
 import { classifyOutlineSegmentEdge } from '../../A4_smartpanel/native_core/polygon-extrusion.js';
 
 /**
@@ -101,22 +102,28 @@ describe('blok_skosne_drzwi', () => {
         // lewa krawędź skrzydła (u=0, x = -W/2 = -300)
         const lewa = skosneDoorHeightAt(0, H_center, W, angleDeg, ovTop, ovBot);
         expect(lewa).toBeCloseTo(H_center - 300 * tanBeta + ovBot + rise, 9);
-        expect(lewa).toBeCloseTo(2000 + ovBot + 14 * cosBeta, 6);
+        expect(lewa).toBeCloseTo(2000 + ovBot + 14 / cosBeta, 6);
 
         // prawa krawędź skrzydła (u=1, x = +W/2 = +300)
         const prawa = skosneDoorHeightAt(1, H_center, W, angleDeg, ovTop, ovBot);
         expect(prawa).toBeCloseTo(H_center + 300 * tanBeta + ovBot + rise, 9);
-        expect(prawa).toBeCloseTo(1000 + ovBot + 14 * cosBeta, 6);
+        expect(prawa).toBeCloseTo(1000 + ovBot + 14 / cosBeta, 6);
     });
 
-    it('nałożenie górne mierzone PROSTOPADLE do skosu: rise = nalozenie·cos(β)', () => {
+    it('nałożenie górne mierzone PROSTOPADLE do skosu: rise = nalozenie/cos(β)', () => {
         const angleDeg = baseSlopeDeg, n = 18;
         const beta = skosBetaRad(angleDeg);
-        expect(skosTopOverlapRiseMm(n, angleDeg)).toBeCloseTo(n * Math.cos(beta), 9);
+        expect(skosTopOverlapRiseMm(n, angleDeg)).toBeCloseTo(n / Math.cos(beta), 9);
         // Kąt płaski 0° → pełne nałożenie, zgodnie z modułem DRZWI
         expect(skosTopOverlapRiseMm(n, 0)).toBeCloseTo(n, 9);
-        // Skos stromy → mniej w pionie (pokrycie idzie wzdłuż skosu)
-        expect(skosTopOverlapRiseMm(n, angleDeg)).toBeLessThan(n);
+        // Skos stromy → więcej w pionie (wyrównanie z górą wieńca t/cos)
+        expect(skosTopOverlapRiseMm(n, angleDeg)).toBeGreaterThan(n);
+    });
+
+    it('nalozenie == grubość wieńca zlicowuje górę drzwi z górą wieńca (bez uskoku)', () => {
+        const t = 18;
+        const rise = skosTopOverlapRiseMm(t, baseSlopeDeg);
+        expect(rise).toBeCloseTo(skosRailVerticalSpanMm(t, baseSlopeDeg), 9);
     });
 
     it('dół jest zawsze pionowy — niezależnie od skosu', () => {
@@ -205,6 +212,153 @@ describe('blok_skosne_drzwi', () => {
         expect(cup.params.side).toBe('right');
         expect(cup.params.u).toBeGreaterThan(540);
         expect(plan.hardware![0].side).toBe('right');
+    });
+
+    // ─── Wariant DOUBLE (drzwi podwójne skośne) ───────────────────────────────
+
+    it('wariant DOUBLE: generuje dwa skrzydła (Drzwi_Skosne_Lewe i Drzwi_Skosne_Prawe) ze szczeliną', () => {
+        const plan = planFrom({
+            rodzaj_drzwi: 'DOUBLE',
+            szczelina_mm: 4,
+            nalozenie_lewe_mm: 16,
+            nalozenie_prawe_mm: 16,
+            nalozenie_dol_mm: 15,
+            nalozenie_gora_mm: 14,
+            uzyj_zawias_1: true,
+            uzyj_zawias_6: true
+        });
+
+        expect(plan.parts).toHaveLength(2);
+        const lewe = plan.parts.find(p => p.name === 'Drzwi_Skosne_Lewe')!;
+        const prawe = plan.parts.find(p => p.name === 'Drzwi_Skosne_Prawe')!;
+        expect(lewe).toBeDefined();
+        expect(prawe).toBeDefined();
+
+        // Szerokości: (600 - 4)/2 = 298, +16 = 314 mm
+        expect(lewe.dim.x).toBeCloseTo(314, 5);
+        expect(prawe.dim.x).toBeCloseTo(314, 5);
+
+        // Pozycje X:
+        // Lewe: -300 - 16 + 157 = -159. Prawa krawędź lewych drzwi = -159 + 157 = -2 mm
+        // Prawe: +300 + 16 - 157 = +159. Lewa krawędź prawych drzwi = +159 - 157 = +2 mm
+        // Szczelina środkowa = +2 - (-2) = 4 mm
+        expect(lewe.loc.x).toBeCloseTo(-159, 5);
+        expect(prawe.loc.x).toBeCloseTo(159, 5);
+
+        // Ciągłość skosu na krawędziach wewnętrznych przy szczelinie:
+        const outlineL = (lewe.customProperties as any).outline2d as number[][];
+        const outlineP = (prawe.customProperties as any).outline2d as number[][];
+
+        // Lewe drzwi: prawa krawędź (u = 314) jest na x = -2 mm
+        // Prawe drzwi: lewa krawędź (u = 0) jest na x = +2 mm
+        const h_lewe_prawe = outlineL[2][1];
+        const h_prawe_lewe = outlineP[3][1];
+        // Różnica wysokości na 4 mm szczeliny przy tanSlope (-5/3): ~ 4 * (-5/3) = ~ -6.67 mm
+        expect(h_lewe_prawe - h_prawe_lewe).toBeCloseTo(4 * (5 / 3), 1);
+
+        // Puszki zawiasów: lewe skrzydło z lewej, prawe skrzydło z prawej
+        const cupL = lewe.features!.find(f => f.params.isDoorCup)!;
+        const cupP = prawe.features!.find(f => f.params.isDoorCup)!;
+        expect(cupL.params.side).toBe('left');
+        expect(cupL.params.u).toBeLessThan(30); // blisko lewej krawędzi
+
+        expect(cupP.params.side).toBe('right');
+        expect(cupP.params.u).toBeGreaterThan(280); // blisko prawej krawędzi (314 - dist)
+
+        // Hardware dla obu stron
+        const hwLeft = plan.hardware!.filter(h => h.side === 'left');
+        const hwRight = plan.hardware!.filter(h => h.side === 'right');
+        expect(hwLeft.length).toBeGreaterThan(0);
+        expect(hwRight.length).toBeGreaterThan(0);
+    });
+
+    it('wariant DOUBLE z niezależnym sterowaniem zawiasami: lewe 5 zawiasów, prawe 2 zawiasy', () => {
+        const plan = planFrom({
+            rodzaj_drzwi: 'DOUBLE',
+            szczelina_mm: 4,
+            nalozenie_lewe_mm: 16,
+            nalozenie_prawe_mm: 16,
+            nalozenie_dol_mm: 15,
+            nalozenie_gora_mm: 14,
+            // Lewe skrzydło: 5 zawiasów (1..5)
+            uzyj_zawias_lewy_1: true,
+            pozycja_zawias_lewy_1_mm: 100,
+            uzyj_zawias_lewy_2: true,
+            pozycja_zawias_lewy_2_mm: 500,
+            uzyj_zawias_lewy_3: true,
+            pozycja_zawias_lewy_3_mm: 900,
+            uzyj_zawias_lewy_4: true,
+            pozycja_zawias_lewy_4_mm: 1300,
+            uzyj_zawias_lewy_5: true,
+            pozycja_zawias_lewy_5_mm: 1700,
+            uzyj_zawias_lewy_6: false,
+            // Prawe skrzydło: tylko 2 zawiasy (dół 1 i góra 6)
+            uzyj_zawias_prawy_1: true,
+            pozycja_zawias_prawy_1_mm: 120,
+            uzyj_zawias_prawy_2: false,
+            uzyj_zawias_prawy_3: false,
+            uzyj_zawias_prawy_4: false,
+            uzyj_zawias_prawy_5: false,
+            uzyj_zawias_prawy_6: true,
+            pozycja_zawias_prawy_6_mm: 150
+        });
+
+        const lewe = plan.parts.find(p => p.name === 'Drzwi_Skosne_Lewe')!;
+        const prawe = plan.parts.find(p => p.name === 'Drzwi_Skosne_Prawe')!;
+        expect(lewe).toBeDefined();
+        expect(prawe).toBeDefined();
+
+        // Lewe skrzydło: 5 puszek zawiasu (indeksy 1..5)
+        const cupsL = (lewe.features ?? []).filter(f => f.params.isDoorCup);
+        expect(cupsL).toHaveLength(5);
+        expect(cupsL.map(c => c.params.hingeIndex)).toEqual([1, 2, 3, 4, 5]);
+        for (const cup of cupsL) {
+            expect(cup.params.side).toBe('left');
+        }
+
+        // Prawe skrzydło: 2 puszki zawiasu (indeksy 1 i 6)
+        const cupsR = (prawe.features ?? []).filter(f => f.params.isDoorCup);
+        expect(cupsR).toHaveLength(2);
+        expect(cupsR.map(c => c.params.hingeIndex)).toEqual([1, 6]);
+        for (const cup of cupsR) {
+            expect(cup.params.side).toBe('right');
+        }
+
+        // Okucia: 5 po lewej, 2 po prawej
+        const hwLeft = plan.hardware!.filter(h => h.side === 'left');
+        const hwRight = plan.hardware!.filter(h => h.side === 'right');
+        expect(hwLeft).toHaveLength(5);
+        expect(hwRight).toHaveLength(2);
+    });
+
+    it('areSkosneDoorLeavesEqual poprawnie wykrywa czy fronty są takie same czy różne', () => {
+        // Kąt 0° -> równe
+        expect(areSkosneDoorLeavesEqual(0, 800)).toBe(true);
+        expect(areSkosneDoorLeavesEqual(undefined, 800)).toBe(true);
+        // Bardzo mały kąt (różnica < 1 mm) -> równe
+        expect(areSkosneDoorLeavesEqual(0.05, 800)).toBe(true);
+
+        // Wyraźny skos (np. 10°, 45°) -> różne
+        expect(areSkosneDoorLeavesEqual(10, 800)).toBe(false);
+        expect(areSkosneDoorLeavesEqual(-25, 600)).toBe(false);
+        expect(areSkosneDoorLeavesEqual(45, 800)).toBe(false);
+    });
+
+    it('wariant DOUBLE przy równych skrzydłach (kąt 0°) automatycznie unifikuje zawiasy (jeden rozstaw dla obu)', () => {
+        const normalized = normalizeSkosneDoorsParams({
+            rodzaj_drzwi: 'DOUBLE',
+            dach_kat_deg: 0,
+            uzyj_zawias_1: true,
+            pozycja_zawias_1_mm: 120,
+            uzyj_zawias_6: true,
+            pozycja_zawias_6_mm: 100
+        }, dims)!;
+
+        // Gdy skrzydła są równe, lewe i prawe zawiasy są identyczne i równe aktywne_zawiasy
+        expect(normalized.aktywne_zawiasy_lewe).toEqual(normalized.aktywne_zawiasy);
+        expect(normalized.aktywne_zawiasy_prawe).toEqual(normalized.aktywne_zawiasy);
+        expect(normalized.aktywne_zawiasy_lewe).toHaveLength(2);
+        expect(normalized.aktywne_zawiasy_prawe).toHaveLength(2);
     });
 
     // ─── Fail-fast ───────────────────────────────────────────────────────────

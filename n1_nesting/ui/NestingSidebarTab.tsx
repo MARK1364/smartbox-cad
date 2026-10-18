@@ -235,8 +235,8 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
         const kerf = getDefaultKerf(machineType);
         const activeGroup = materialGroups.find(m => m.key === materialKey) || materialGroups[0];
         const config: SheetConfig = {
-            width: 2800,
-            height: 2070,
+            width: 2070,
+            height: 2800,
             kerf,
             trimMargin: machineType === 'cnc' ? 15 : 10,
             thickness: activeGroup ? activeGroup.thickness : undefined,

@@ -6,15 +6,15 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { LedExternalPlanParams } from '../bloki-module-types.js';
-import { buildLedExternalPlan } from '../module-plans.js';
-import { LedExternalSubModule } from '../led-external-adapter.js';
-import { syncBlokiLedExternalGrooves } from '../led-external-engine.js';
+import type { LedExternalPlanParams } from '../01_bloki-module-types.js';
+import { buildLedExternalPlan } from '../01_module-plans.js';
+import { LedExternalSubModule } from '../14_led-external-adapter.js';
+import { syncBlokiLedExternalGrooves } from '../14_led-external-engine.js';
 
 export const ledExternalPlugin: SmartModulePlugin<LedExternalPlanParams> = {
     id: 'LED_EXTERNAL',
     meta: {
-        label: 'Kanał LED',
+        label: 'LED zewnętrzny (kanał)',
         labelKey: 'bloki.led_external',
         description: 'Profil LED podszafkowy wpuszczany pod rzędem szafek',
         category: 'external',

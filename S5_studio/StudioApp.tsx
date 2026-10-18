@@ -1,5 +1,5 @@
 /**
- * SmartParts Studio — osobne okno (jak CNC / nesting), entry smartparts.html.
+ * SmartParts Studio — osobne okno (jak CNC / nesting), entry studio.html.
  * Layout CAD: PasekMenu | DrzewoObiektow | BelkaWidokowa | PanelEdycji | #renderCanvas
  */
 

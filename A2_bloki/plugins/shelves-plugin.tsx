@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { ShelvesPlanParams } from '../bloki-module-types.js';
-import { buildShelvesPlan } from '../module-plans.js';
-import { ShelvesSubModule } from '../shelves-adapter.js';
+import type { ShelvesPlanParams } from '../01_bloki-module-types.js';
+import { buildShelvesPlan } from '../01_module-plans.js';
+import { ShelvesSubModule } from '../04_shelves-adapter.js';
 import { SyncShelfDrillingsCommand } from '../commands/sync-shelf-drillings-command.js';
 
 export const shelvesPlugin: SmartModulePlugin<ShelvesPlanParams> = {

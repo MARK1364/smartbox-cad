@@ -3,7 +3,7 @@ import { SmartModuleRegistry } from '../core/smart-module-registry.js';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
 import { shelvesPlugin } from '../plugins/shelves-plugin.js';
 import { drawersPlugin } from '../plugins/drawers-plugin.js';
-import { registerAllBlokiModules } from '../bootstrap-bloki-modules.js';
+import { registerAllBlokiModules } from '../01_bootstrap-bloki-modules.js';
 
 describe('SmartModuleRegistry', () => {
     beforeEach(() => {

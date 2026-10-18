@@ -4,10 +4,10 @@ import { ContextManager } from '../../A1_core/context-manager.js';
 import { CommandHistory } from '../../A1_core/commands/command-history.js';
 import { runEngineAndApply } from '../../A3_smartframe/smartframe-adapter.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
-import { detectCabinetOuterHull, probeBayFromCADPoint } from '../bloki-bay-detector.js';
-import { BlokiBayController } from '../bloki-bay-controller.js';
-import { createBlokInDetectedBay } from '../bloki-bay-actions.js';
-import { registerBlokiModule } from '../register.js';
+import { detectCabinetOuterHull, probeBayFromCADPoint } from '../02_bloki-bay-detector.js';
+import { BlokiBayController } from '../02_bloki-bay-controller.js';
+import { createBlokInDetectedBay } from '../02_bloki-bay-actions.js';
+import { registerBlokiModule } from '../01_register.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
 
 describe('Bloki Outer Hull Detector & External Insertion Tool', () => {

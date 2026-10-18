@@ -1040,24 +1040,24 @@
     "de": "Beschlag einblenden"
   },
   "tree.toggle_led": {
-    "pl": "Ukryj kanał LED",
-    "en": "Hide LED channel",
-    "de": "LED-Kanal ausblenden"
+    "pl": "Ukryj LED zewnętrzny (kanał)",
+    "en": "Hide exterior LED channel",
+    "de": "Außen-LED-Kanal ausblenden"
   },
   "tree.show_led": {
-    "pl": "Pokaż kanał LED",
-    "en": "Show LED channel",
-    "de": "LED-Kanal einblenden"
+    "pl": "Pokaż LED zewnętrzny (kanał)",
+    "en": "Show exterior LED channel",
+    "de": "Außen-LED-Kanal einblenden"
   },
   "tree.led_default": {
-    "pl": "Kanał LED",
-    "en": "LED channel",
-    "de": "LED-Kanal"
+    "pl": "LED zewnętrzny (kanał)",
+    "en": "Exterior LED channel",
+    "de": "Außen-LED-Kanal"
   },
   "tree.delete_led": {
-    "pl": "Usuń kanał LED",
-    "en": "Delete LED channel",
-    "de": "LED-Kanal löschen"
+    "pl": "Usuń LED zewnętrzny (kanał)",
+    "en": "Delete exterior LED channel",
+    "de": "Außen-LED-Kanal löschen"
   },
   "tree.delete_container": {
     "pl": "Usuń kontener",
@@ -1513,6 +1513,11 @@
     "pl": "Strona główna / Prezentacja (Landing Page)...",
     "en": "Home / Showcase (Landing Page)...",
     "de": "Startseite / Präsentation (Landing Page)..."
+  },
+  "app.menu.prices": {
+    "pl": "Cennik (edytor cen)...",
+    "en": "Price list (price editor)...",
+    "de": "Preisliste (Preis-Editor)..."
   },
   "app.menu.brand": {
     "pl": "Bloki CAD",
@@ -1975,14 +1980,14 @@
     "de": "Transparente Körper"
   },
   "belka.mode_shaded": {
-    "pl": "Cieniowany",
-    "en": "Shaded",
-    "de": "Schattiert"
+    "pl": "Materiał",
+    "en": "Material",
+    "de": "Material"
   },
   "belka.mode_shaded_title": {
-    "pl": "Cieniowanie powierzchni",
-    "en": "Surface shading",
-    "de": "Flächenschattierung"
+    "pl": "Podgląd materiałów i tekstur płyt",
+    "en": "Material and texture preview",
+    "de": "Material- und Texturvorschau"
   },
   "belka.proj_title": {
     "pl": "Projekcja kamery",
@@ -2425,9 +2430,9 @@
     "de": ", neue Bohrungen) oder geänderte Parameter."
   },
   "cncval.issues_hint": {
-    "pl": "W formatek doszły nowe cechy (np. Kanał LED, nowe nawierty) lub zmieniono parametry, których brak w utworzonych programach.",
-    "en": "Panels gained new features (e.g. LED channel, new drillings) or changed params missing from programs.",
-    "de": "Platten haben neue Merkmale (z.B. LED-Kanal, neue Bohrungen) oder geänderte Parameter."
+    "pl": "W formatek doszły nowe cechy (np. LED zewnętrzny (kanał), nowe nawierty) lub zmieniono parametry, których brak w utworzonych programach.",
+    "en": "Panels gained new features (e.g. exterior LED channel, new drillings) or changed params missing from programs.",
+    "de": "Platten haben neue Merkmale (z.B. Außen-LED-Kanal, neue Bohrungen) oder geänderte Parameter."
   },
   "cncval.all_ok": {
     "pl": "Wszystkie utworzone programy CNC ({n} szt.) są w 100% zsynchronizowane z modelem CAD!",

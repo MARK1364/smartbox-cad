@@ -13,9 +13,11 @@ import {
 } from '../../A2_bloki/handles/handle-types.js';
 import { HandleEditPanel } from '../../A2_bloki/handles/handle-edit-panel.js';
 import { HandleDimGizmo } from '../../A2_bloki/handles/handle-dim-gizmo.js';
-import { SmartPartEditPanel } from '../../A5_smartparts/smartpart-edit-panel.js';
-import { isCustomSmartPartModel } from '../../S5_studio/index.js';
-import { CAD_CLOSE_FLOATING_SMARTPART } from '../../A5_smartparts/floating-smartpart-dialog.js';
+import {
+    isCustomSmartPartModel,
+    SmartPartEditPanel,
+    CAD_CLOSE_FLOATING_SMARTPART,
+} from '../../S5_studio/index.js';
 import {
     CAD_OPEN_FLOATING_OPERATION,
     CAD_OPEN_FLOATING_PANEL_EDIT,

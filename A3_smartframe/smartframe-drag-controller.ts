@@ -252,7 +252,6 @@ export class SmartFrameDragController {
 
         if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-            (window as any).__rebuildGeometry?.('Utworzono nowy korpus');
         }
 
         this.endDrag();

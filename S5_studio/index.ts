@@ -13,3 +13,6 @@ export * from './smartpart-driver-clipboard.js';
 export * from './smartpart-object-link-clipboard.js';
 export * from './studio-panel-tab.js';
 export { SmartPartStudioModal } from './SmartPartStudioModal.js';
+export { SmartPartParamPanel } from './smartpart-param-panel.js';
+export { SmartPartEditPanel } from './smartpart-edit-panel.js';
+export { CAD_CLOSE_FLOATING_SMARTPART } from './floating-smartpart-dialog.js';

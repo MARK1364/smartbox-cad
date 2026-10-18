@@ -12,7 +12,7 @@ import {
     isTraverseVPanel,
     findOwningKorpus
 } from '../korpus-offset-gizmo';
-import { blokiOffsetGizmoHandler } from '../../A2_bloki/bloki-offset-gizmo';
+import { blokiOffsetGizmoHandler } from '../../A2_bloki/02_bloki-offset-gizmo';
 
 describe('offset gizmo roles', () => {
     beforeEach(() => {

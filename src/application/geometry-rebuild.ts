@@ -10,7 +10,7 @@ import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { isCylindricalPart } from '../../A1_core/cad-node/part-shape.js';
 import { syncSelectionHighlights } from '../../A1_core/selection-highlight.js';
 import { HardwareLoader } from '../../B1_biblioteka/hardware-loader.js';
-import { syncHangerMeshesFromDocument } from '../../A5_smartparts/hangers/hanger-mesh.js';
+import { syncHangerMeshesFromDocument } from '../../A2_bloki/hangers/hanger-mesh.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
@@ -76,8 +76,10 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
         }
       }
 
+      let anyGeometryRebuilt = false;
       for (const panel of currentPanels) {
         let view = panelViews.get(panel);
+        const isNewView = !view;
         if (!view) {
           view = createPanelView(viewport.scene, panel);
           panelViews.set(panel, view);
@@ -101,15 +103,29 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           if (view.root && view.root.parent) view.root.parent = null;
         }
 
-        if (!isCylindricalPart(panel)) {
-          const meshData = panelBuilder.build(panel);
-          view.updateMesh(meshData);
-        }
-        view.lastWidth = panel.width;
-        view.lastHeight = panel.height;
-        view.lastThickness = panel.thickness;
+        const f = panel.features;
+        const fCount = f?.length || 0;
+        const fp = fCount === 0 ? '0' : `${fCount}_${f[0]?.id}_${f[fCount - 1]?.id}`;
+        const isDimsDirty =
+          view.lastWidth !== panel.width ||
+          view.lastHeight !== panel.height ||
+          view.lastThickness !== panel.thickness;
+        const isFeaturesDirty = view.lastFeaturesFingerprint !== fp;
 
-        if (typeof (view as any).renderFeatures === 'function') (view as any).renderFeatures();
+        if (isNewView || isDimsDirty || isFeaturesDirty) {
+          anyGeometryRebuilt = true;
+          if (!isCylindricalPart(panel)) {
+            const meshData = panelBuilder.build(panel);
+            view.updateMesh(meshData);
+          }
+          view.lastWidth = panel.width;
+          view.lastHeight = panel.height;
+          view.lastThickness = panel.thickness;
+          view.lastFeaturesFingerprint = fp;
+
+          if (typeof (view as any).renderFeatures === 'function') (view as any).renderFeatures();
+        }
+
         if (view._updateTransform) view._updateTransform();
 
         const isPanelVis = panel.visible !== false;
@@ -134,19 +150,68 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           hw.role === 'PROWADNICA' ||
           hw.role?.includes('RAIL') ||
           hw.custom_properties?.shape === 'RAIL';
-        if (!isRail) continue;
+        const isShelfPin =
+          hw.hardwareType === 'SHELF_PIN' ||
+          hw.role === 'SHELF_PIN';
+        const isTube =
+          hw.hardwareType === 'TUBE' ||
+          hw.role === 'TUBE_ROD' ||
+          hw.role === 'HOLDER' ||
+          hw.hardwareType === 'TUBE_SOCKET';
+
+        if (!isRail && !isShelfPin && !isTube) continue;
 
         activeHwIds.add(hwNode.id);
         const parentContainer = hwNode.parent?.domainData;
         const containerView = parentContainer ? containerViews.get(parentContainer) : null;
         if (!containerView || !containerView.rootNode) continue;
 
-        const hwId = hw.hardwareId || 'BLUM_ANTARO_M_L';
+        const hwId = hw.hardwareId || (isShelfPin ? 'PODPORKA_FI5' : isTube ? (hw.role === 'TUBE_ROD' ? 'DRAZEK_FI25' : 'ROZETA_FI25') : 'BLUM_ANTARO_M_L');
         const hwLoader = HardwareLoader.instance;
         let hwMesh = hardwareViews.get(hwNode.id);
 
+        if (hwMesh && isTube && hw.role === 'TUBE_ROD') {
+          const lenMm = hw.dim?.x || hw.params?.length_mm || 500;
+          if (hwMesh.metadata?.lengthMm !== lenMm) {
+            try { hwMesh.dispose(); } catch { /* ignore */ }
+            hwMesh = null;
+            hardwareViews.delete(hwNode.id);
+          }
+        }
+
         if (!hwMesh) {
-          if (
+          if (isShelfPin) {
+            if (hwLoader.hasTemplate(hwId)) {
+              hwMesh = hwLoader.createShelfPinInstance(hwId, viewport.scene, hw.side);
+              if (hwMesh) {
+                hwMesh.parent = containerView.rootNode;
+                hardwareViews.set(hwNode.id, hwMesh);
+              }
+            } else {
+              hwLoader
+                .loadTemplate(hwId, viewport.scene)
+                .then(() => {
+                  rebuildGeometry();
+                  viewport.requestRender(10);
+                })
+                .catch(() => {});
+            }
+          } else if (isTube) {
+            const side = hw.side || (hwNode.id?.toLowerCase().includes('_r') ? 'right' : 'left');
+            if (hw.role === 'TUBE_ROD') {
+              const len = hw.dim?.x || hw.params?.length_mm || 500;
+              const dia = hw.dim?.y || hw.params?.diameter_mm || 25;
+              hwMesh = hwLoader.createTubeRodMesh(len, dia, viewport.scene);
+            } else {
+              const dia = hw.dim?.y || hw.params?.diameter_mm || 45;
+              const thick = hw.dim?.x || hw.params?.thickness_mm || 5;
+              hwMesh = hwLoader.createTubeSocketMesh(dia, thick, side, viewport.scene);
+            }
+            if (hwMesh) {
+              hwMesh.parent = containerView.rootNode;
+              hardwareViews.set(hwNode.id, hwMesh);
+            }
+          } else if (
             hwLoader.hasTemplate(hwId) ||
             hwLoader.hasTemplate('BLUM_ANTARO_M_L') ||
             hwLoader.hasTemplate('Antaro M 500')
@@ -174,29 +239,35 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
             hwMesh.parent = containerView.rootNode;
           }
           const side = hw.side || (hwNode.id?.toLowerCase().includes('_r') ? 'right' : 'left');
-          const lenMm = hw.params?.lengthMm || 500;
-          const baseScale = hwMesh.metadata?.baseScale || Math.abs(hwMesh.scaling?.y || 1);
 
           if (hw.loc) {
             hwMesh.position.set(hw.loc.x, hw.loc.z, hw.loc.y);
           }
-          hwMesh.rotation.set(0, Math.PI, 0);
 
-          const scaleX = side === 'right' ? -baseScale : baseScale;
-          const scaleZ = lenMm > 0 ? baseScale * (lenMm / 500) : baseScale;
-          hwMesh.scaling.set(scaleX, baseScale, scaleZ);
+          if (isRail) {
+            const lenMm = hw.params?.lengthMm || 500;
+            const baseScale = hwMesh.metadata?.baseScale || Math.abs(hwMesh.scaling?.y || 1);
+            hwMesh.rotation.set(0, Math.PI, 0);
+
+            const scaleX = side === 'right' ? -baseScale : baseScale;
+            const scaleZ = lenMm > 0 ? baseScale * (lenMm / 500) : baseScale;
+            hwMesh.scaling.set(scaleX, baseScale, scaleZ);
+          } else if (isShelfPin) {
+            hwMesh.rotation.set(0, 0, Math.PI / 2);
+          } else if (isTube) {
+            hwMesh.rotation.set(0, 0, Math.PI / 2);
+          }
 
           const isVisible = hw.visible !== false && parentContainer.visible !== false;
           hwMesh.setEnabled(isVisible);
           hwLoader.setHardwareFrozen(hwMesh, !!hw.frozen);
           hwMesh.metadata = {
             type: 'hardware',
-            hardwareType: hw.hardwareType || 'RAIL',
+            hardwareType: hw.hardwareType || (isRail ? 'RAIL' : isShelfPin ? 'SHELF_PIN' : 'TUBE'),
             hardwareId: hwId,
             cadNode: hwNode,
             id: hwNode.id,
             side: side,
-            baseScale: baseScale,
             frozen: !!hw.frozen,
             visible: isVisible,
           };
@@ -222,6 +293,10 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
       }
 
       syncSelectionHighlights(ctx);
+
+      if (anyGeometryRebuilt && viewport && typeof viewport.applyRenderModeToMeshes === 'function') {
+        viewport.applyRenderModeToMeshes();
+      }
 
       ui.refreshFeatures();
       ui.setStatus(successMessage, true);

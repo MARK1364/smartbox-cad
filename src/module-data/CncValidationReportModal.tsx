@@ -183,7 +183,7 @@ export const CncValidationReportModal: React.FC = () => {
                                     {tx(srcTekst, 'cncval.issues', TX_NS, { n: report?.totalDiscrepancyCount })}
                                 </div>
                                 <div style={{ fontSize: '0.82rem', color: '#fde68a', marginTop: '4px', lineHeight: 1.4 }}>
-                                    {tx(srcTekst, "cncval.issues_hint_a", TX_NS)} <b>Kanał LED</b>{tx(srcTekst, "cncval.issues_hint_b", TX_NS)}
+                                    {tx(srcTekst, "cncval.issues_hint_a", TX_NS)} <b>LED zewnętrzny (kanał)</b>{tx(srcTekst, "cncval.issues_hint_b", TX_NS)}
                                 </div>
                             </div>
                         </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isBlokiHeightHLocked } from '../bloki-height-h.js';
+import { isBlokiHeightHLocked } from '../01_bloki-height-h.js';
 
 describe('isBlokiHeightHLocked', () => {
     it('locks H when top and bottom references are both set', () => {

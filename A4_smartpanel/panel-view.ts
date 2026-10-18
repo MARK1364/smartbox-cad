@@ -58,13 +58,19 @@ function getOrCreatePanelTexture(url: string, scene: any, onFailed?: () => void)
         }
     }
     try {
+        const onLoad = () => {
+            const vp = ContextManager.instance?.viewport;
+            if (vp && typeof vp.requestRender === 'function') {
+                vp.requestRender(3);
+            }
+        };
         const tex = new BABYLON.Texture(
             url,
             scene,
             false,
             false,
             undefined,
-            undefined,
+            onLoad,
             () => {
                 console.warn(`[PanelView] Tekstura "${url}" nie mogła zostać załadowana, przywracam kolor bazowy.`);
                 panelTextureCache.set(key, null);
@@ -100,6 +106,7 @@ export class PanelView {
     lastWidth: number = 0;
     lastHeight: number = 0;
     lastThickness: number = 0;
+    lastFeaturesFingerprint: string = '';
     _dimHandleDragging: boolean = false;
 
     constructor(scene: any, model: any) {
@@ -158,6 +165,7 @@ export class PanelView {
             this._lcsNode = null;
         }
         this._disposeFeatureMarkers();
+        this._disposeVertexSpheres();
         this._disposeCurrentMeshes();
         if (this.root) {
             this.root.dispose();
@@ -336,9 +344,13 @@ export class PanelView {
             if (isFeature) {
                 mat.diffuseColor = new BABYLON.Color3(baseAlpineWhite.r * 0.94, baseAlpineWhite.g * 0.94, baseAlpineWhite.b * 0.94);
             } else {
-                const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model?.role === 'PANEL' || Boolean(this.model?.color);
+                const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
+                const vp = ContextManager.instance?.viewport;
+                const isMaterialMode = vp?.currentRenderMode === 'shaded';
                 const defaultCncGray = { r: 0.70, g: 0.72, b: 0.75 };
-                const col = this.model?.color || (isCnc ? defaultCncGray : (FACE_COLORS[faceName] || baseAlpineWhite));
+                const defaultFastCadGray = { r: 0.90, g: 0.90, b: 0.91 };
+                const rawCol = this.model?.color || FACE_COLORS[faceName] || baseAlpineWhite;
+                const col = isCnc ? defaultCncGray : (isMaterialMode ? rawCol : defaultFastCadGray);
                 mat.diffuseColor = new BABYLON.Color3(col.r, col.g, col.b);
             }
             mat.emissiveColor = BABYLON.Color3.Black();
@@ -427,39 +439,56 @@ export class PanelView {
 
         // Narożniki B-rep
         if (meshData.vertices && meshData.vertices.length > 0) {
-            this._vertexSpheres = [];
-            
-            for (let i = 0; i < meshData.vertices.length; i++) {
-                const p = meshData.vertices[i];
-                const sphere = BABYLON.MeshBuilder.CreateSphere(`vertex_${i}`, { diameter: 10 }, this.scene);
-                
-                const vertMat = new BABYLON.StandardMaterial(`vertexMat_${i}`, this.scene);
-                vertMat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
-                vertMat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
-                vertMat.alpha = 0.0; // Półprzezroczysty na hover
-                
-                const idMgr = IDManager.getInstance();
-                const smartId = idMgr.register(EntityType.VERTEX, this.model.smartId.fullPath, i.toString());
+            const vCount = meshData.vertices.length;
+            const existingCount = this._vertexSpheres ? this._vertexSpheres.length : 0;
 
-                sphere.position = new BABYLON.Vector3(p[0], p[1], p[2]);
-                sphere.parent = this.root;
-                sphere.material = vertMat;
-                sphere.renderingGroupId = 1;
-                
-                // Optymalizacja GPU: visibility = 0 pomija rasteryzację i sortowanie głębokości alpha na GPU,
-                // a raycast (isPickable = true) nadal działa natychmiastowo.
-                sphere.visibility = 0.0;
-                sphere.isPickable = true;
-                sphere.metadata = { 
-                    type: 'vertex', 
-                    smartId: smartId, 
-                    panelModel: this.model, 
-                    cornerIndex: i,
-                    baseColor: new BABYLON.Color3(0.5, 0.1, 0.1),
-                    baseDiffuse: new BABYLON.Color3(1, 0.2, 0.2)
-                };
-                this._vertexSpheres.push(sphere);
+            if (existingCount === vCount) {
+                // Szybka ścieżka: bez niszczenia i alokacji meshy/materiałów, tylko aktualizacja pozycji
+                for (let i = 0; i < vCount; i++) {
+                    const p = meshData.vertices[i];
+                    const sphere = this._vertexSpheres[i];
+                    sphere.position.set(p[0], p[1], p[2]);
+                    if (sphere.parent !== this.root) sphere.parent = this.root;
+                }
+            } else {
+                this._disposeVertexSpheres();
+                this._vertexSpheres = [];
+
+                for (let i = 0; i < vCount; i++) {
+                    const p = meshData.vertices[i];
+                    // segments: 4 redukuje liczbę trójkątów z 2000 do 32 na sferę (98% oszczędności GPU)
+                    const sphere = BABYLON.MeshBuilder.CreateSphere(`vertex_${i}`, { diameter: 10, segments: 4 }, this.scene);
+
+                    const vertMat = new BABYLON.StandardMaterial(`vertexMat_${this.model.id}_${i}`, this.scene);
+                    vertMat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
+                    vertMat.emissiveColor = new BABYLON.Color3(0.5, 0.1, 0.1);
+                    vertMat.alpha = 0.0; // Półprzezroczysty na hover
+
+                    const idMgr = IDManager.getInstance();
+                    const smartId = idMgr.register(EntityType.VERTEX, this.model.smartId.fullPath, i.toString());
+
+                    sphere.position.set(p[0], p[1], p[2]);
+                    sphere.parent = this.root;
+                    sphere.material = vertMat;
+                    sphere.renderingGroupId = 1;
+
+                    // Optymalizacja GPU: visibility = 0 pomija rasteryzację i sortowanie głębokości alpha na GPU,
+                    // a raycast (isPickable = true) nadal działa natychmiastowo.
+                    sphere.visibility = 0.0;
+                    sphere.isPickable = true;
+                    sphere.metadata = { 
+                        type: 'vertex', 
+                        smartId: smartId, 
+                        panelModel: this.model, 
+                        cornerIndex: i,
+                        baseColor: new BABYLON.Color3(0.5, 0.1, 0.1),
+                        baseDiffuse: new BABYLON.Color3(1, 0.2, 0.2)
+                    };
+                    this._vertexSpheres.push(sphere);
+                }
             }
+        } else {
+            this._disposeVertexSpheres();
         }
 
         // Odświeżamy markery feature'ów (walce 3D) dla nowej geometrii
@@ -473,6 +502,26 @@ export class PanelView {
             vp.applyRenderModeToMeshes();
         }
         vp?.requestRender(3);
+
+        // Zapisz fingerprint po przebudowie, by nadrzędny geometry-rebuild nie powielał przebudowy
+        const f = this.model?.features;
+        const fCount = f?.length || 0;
+        (this as any).lastFeaturesFingerprint = fCount === 0 ? '0' : `${fCount}_${f[0]?.id}_${f[fCount - 1]?.id}`;
+        (this as any).lastWidth = this.model?.width;
+        (this as any).lastHeight = this.model?.height;
+        (this as any).lastThickness = this.model?.thickness;
+    }
+
+    _disposeVertexSpheres() {
+        if (this._vertexSpheres && this._vertexSpheres.length > 0) {
+            this._vertexSpheres.forEach((s) => {
+                if (s.material && typeof s.material.dispose === 'function') {
+                    s.material.dispose();
+                }
+                s.dispose();
+            });
+            this._vertexSpheres = [];
+        }
     }
 
     _disposeCurrentMeshes() {
@@ -484,11 +533,7 @@ export class PanelView {
             this._edgeMeshes.forEach((m) => m.dispose());
             this._edgeMeshes = [];
         }
-        if (this._vertexSpheres && this._vertexSpheres.length > 0) {
-            this._vertexSpheres.forEach((s) => s.dispose());
-            this._vertexSpheres = [];
-        }
-        // Nie niszczymy materiałów, użyjemy ich ponownie
+        // _vertexSpheres są ponownie pozycjonowane w updateMesh, a niszczone tylko gdy zmienia się liczba wierzchołków lub w dispose()
     }
 
     _updateMaterialAppearance() {
@@ -498,13 +543,25 @@ export class PanelView {
         const matId = this.model.materialId || this.model.material || this.model.custom_properties?.material;
         const matData = matId ? materialDatabase.getMaterialById(matId) : null;
         
-        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model.role === 'PANEL' || Boolean(this.model.color);
+        const vp = ContextManager.instance?.viewport;
+        const currentRenderMode = (vp?.currentRenderMode as string) || 'edges';
+        const isMaterialMode = currentRenderMode === 'shaded';
+
+        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
         const isArchWall =
             String(this.model?.role || '').toUpperCase() === 'WALL' ||
             String(this.model?.role || '').toUpperCase() === 'WALL_PILLAR' ||
             this.model?.custom_properties?.domain === 'wall_segment';
+
         const defaultCncGray = { r: 0.70, g: 0.72, b: 0.75 };
-        const baseColor = this.model.color || (isCnc ? defaultCncGray : (matData ? matData.color : baseAlpineWhite));
+        // W trybie "Materiał" (shaded) wyświetlamy pełne kolory dekorów/materiałów lub tekstury.
+        // W trybach roboczych (edges i pozostałe) stosujemy szybki, czysty szary CAD dla maksymalnej wydajności (60 FPS).
+        const defaultFastCadGray = { r: 0.90, g: 0.90, b: 0.91 };
+        const rawPanelColor = this.model.color || (matData ? matData.color : baseAlpineWhite);
+        const baseColor = isCnc
+            ? defaultCncGray
+            : (isMaterialMode || isArchWall || matData?.isTransparent ? rawPanelColor : defaultFastCadGray);
+
         const alpha = matData?.isTransparent ? (matData.opacity || 0.45) : 1.0;
         const specularPower = isCnc ? 32 : (matData?.roughness ? Math.round((1.0 - matData.roughness) * 64) : 48);
         
@@ -567,8 +624,9 @@ export class PanelView {
                     if (mat.diffuseTexture) mat.diffuseTexture = null;
                 }
             } else {
-                // Płaszczyzny główne płyty (front/back) — jednolita szarość lub wybrany dekor
-                if (matData?.texture_path && !this.model?.frozen && !isCnc) {
+                // Płaszczyzny główne płyty (front/back) — w trybie "Materiał" (shaded) wyświetlamy tekstury,
+                // a w pozostałych trybach (edges) wyłącznie lekki szary dla maksymalnej wydajności
+                if (isMaterialMode && matData?.texture_path && !this.model?.frozen && !isCnc) {
                     const fallback = () => {
                         if (mat.diffuseTexture) mat.diffuseTexture = null;
                         mat.diffuseColor = new BABYLON.Color3(baseColor.r, baseColor.g, baseColor.b);
@@ -906,7 +964,7 @@ export class PanelView {
             }
         }
 
-        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model?.role === 'PANEL';
+        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
         const defaultLineColor = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.95, 0.3, 0.1);
         const highlightColor = new BABYLON.Color3(0.0, 0.85, 1.0); // Jaskrawy neonowy turkus / błękit
 
@@ -964,7 +1022,7 @@ export class PanelView {
      * Wygasza wszystkie aktywne podświetlenia cech obróbkowych.
      */
     clearFeatureHighlights() {
-        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model?.role === 'PANEL';
+        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
         const defaultLineColor = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.95, 0.3, 0.1);
 
         for (const m of (this._featureMarkers || [])) {
@@ -1020,8 +1078,10 @@ export class PanelView {
         }
 
         const vp = ContextManager.instance.viewport;
-        if (vp && typeof vp.applyRenderModeToMeshes === 'function') {
-            vp.applyRenderModeToMeshes();
+        if (vp && typeof vp.applyRenderModeToMesh === 'function' && Array.isArray(this._featureMarkers)) {
+            for (const marker of this._featureMarkers) {
+                vp.applyRenderModeToMesh(marker);
+            }
         }
     }
 
@@ -1130,7 +1190,7 @@ export class PanelView {
         }
 
 
-        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc' || this.model?.role === 'PANEL';
+        const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
 
         const holeMeta = {
             type: 'feature',

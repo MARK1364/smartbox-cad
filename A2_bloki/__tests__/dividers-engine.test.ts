@@ -1,5 +1,5 @@
-import { buildDividersPlan } from '../module-plans.js';
-import { assertCanonicalDividersParams } from '../dividers-engine.js';
+import { buildDividersPlan } from '../01_module-plans.js';
+import { assertCanonicalDividersParams } from '../10_dividers-engine.js';
 import { describe, it, expect } from 'vitest';
 import { Quat } from '../../A1_core/cad-math/quat.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';

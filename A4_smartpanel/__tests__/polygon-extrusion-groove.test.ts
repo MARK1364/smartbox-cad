@@ -104,4 +104,36 @@ describe('polygon extrusion — wieniec L + wpust', () => {
         expect(typed.OUTLINE_SIDE_0.edgeKey).toBeDefined();
         expect((typed.edges as { key: string }[]).some((e) => e.key.startsWith('e_groove_'))).toBe(true);
     });
+
+    it('wpust dochodzący do boku outline2d (np. wieniec narożny przy boczku) ma otwarty wlot i nie tworzy ścianki czołowej', () => {
+        // Krawędź x = 18 na panelu L
+        const outlineL = [
+            [900, 900],
+            [18, 900],
+            [18, 300],
+            [300, 300],
+            [300, 18],
+            [900, 18]
+        ];
+        const mesh = buildMeshFromPanel({
+            role: 'BOTTOM_PANEL',
+            width: mmToNm(900),
+            height: mmToNm(900),
+            thickness: mmToNm(18),
+            custom_properties: { outline2d: outlineL, shape: 'L_NOTCH' },
+            features: [{
+                id: 'g_side_open',
+                type: 'groove',
+                face: 'FACE_Z_PLUS',
+                params: { u: 18, v: 890, width: 870, length: 3, depth: 11 }
+            }]
+        });
+
+        // Ścianka w3 (przy u = 18) leży dokładnie na boku outline [18, 900]..[18, 300], więc nie powinna istnieć
+        expect(mesh['feature_g_side_open_w3']).toBeUndefined();
+        // Natomiast dno i ścianki boczne istnieją
+        expect(mesh['feature_g_side_open_bottom']?.positions?.length).toBeGreaterThan(0);
+        expect(mesh['feature_g_side_open_w0']?.positions?.length).toBeGreaterThan(0);
+        expect(mesh['feature_g_side_open_w2']?.positions?.length).toBeGreaterThan(0);
+    });
 });

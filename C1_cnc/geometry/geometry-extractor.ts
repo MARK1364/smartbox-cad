@@ -260,8 +260,9 @@ export class GeometryDataExtractor {
                 features.push({
                     featureId: `groove_${feat.id || Math.random().toString(36).substring(2, 9)}`,
                     name: grooveLabel || tx(cncTekst, 'extractor.groove_label', TX_NS, { n: features.length + 1 }),
-                    // Intencja z kodu źródłowego cechy CAD, nie z nazwy:
-                    // BLOKI_LED = sync A2 (led-internal-engine), assembly_led_channel = A5 (led-channel-engine).
+                    // Intencja z kodu źródłowego cechy CAD, nie z nazwy. Dwa odrębne systemy LED:
+                    // BLOKI_LED = LED wewnętrzny (sync A2, led-internal-engine) — profil we wnętrzu szafki,
+                    // assembly_led_channel = LED zewnętrzny (kanał) (A2_bloki/led-channel-engine) — kanał pod korpusami.
                     purpose: (params.source === 'BLOKI_LED' || params.source === 'assembly_led_channel')
                         ? 'LED_CHANNEL'
                         : undefined,

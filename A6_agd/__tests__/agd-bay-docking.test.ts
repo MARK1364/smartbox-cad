@@ -10,7 +10,7 @@ import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { createSmartApplianceInDetectedBay } from '../agd-bay-docking.js';
-import type { DetectedBay } from '../../A2_bloki/bloki-bay-detector.js';
+import type { DetectedBay } from '../../A2_bloki/02_bloki-bay-detector.js';
 
 describe('A6_agd — Smart Appliance Bay Docking', () => {
     function createMockCabinetWithBay(doc: ProjectDocument): { cabNode: CADNode; mockBay: DetectedBay } {

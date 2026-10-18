@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { SkosneDoorsPlanParams } from '../bloki-module-types.js';
-import { buildSkosneDoorsPlan } from '../module-plans.js';
-import { SkosneDoorsSubModule } from '../skosne-doors-adapter.js';
+import type { SkosneDoorsPlanParams } from '../01_bloki-module-types.js';
+import { buildSkosneDoorsPlan } from '../01_module-plans.js';
+import { SkosneDoorsSubModule } from '../06_skosne-doors-adapter.js';
 import { SyncSkosneDoorsDrillingsCommand } from '../commands/sync-skosne-doors-drillings-command.js';
 
 export const skosneDoorsPlugin: SmartModulePlugin<SkosneDoorsPlanParams> = {

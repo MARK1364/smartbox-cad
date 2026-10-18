@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { resolveModulePlugin } from '../bloki-core.js';
-import { registerAllBlokiModules } from '../bootstrap-bloki-modules.js';
+import { resolveModulePlugin } from '../01_bloki-core.js';
+import { registerAllBlokiModules } from '../01_bootstrap-bloki-modules.js';
 import { SmartModuleRegistry } from '../core/smart-module-registry.js';
 
 /**

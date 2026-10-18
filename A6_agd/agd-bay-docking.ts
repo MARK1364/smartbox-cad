@@ -15,7 +15,7 @@ import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { Quat } from '../A1_core/cad-math/quat.js';
 import { ContextManager } from '../A1_core/context-manager.js';
-import type { DetectedBay } from '../A2_bloki/bloki-bay-detector.js';
+import type { DetectedBay } from '../A2_bloki/02_bloki-bay-detector.js';
 import {
     SMART_APPLIANCE_TYPE,
     DEFAULT_MICROWAVE_PARAMS,

@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { syncBlokiLedGrooves } from '../led-engine.js';
-import { assertCanonicalLedInternalParams } from '../led-internal-engine.js';
-import { assertCanonicalLedExternalParams } from '../led-external-engine.js';
-import { buildLedPlan } from '../led-adapter.js';
+import { syncBlokiLedGrooves } from '../16_led-engine.js';
+import { assertCanonicalLedInternalParams } from '../13_led-internal-engine.js';
+import { assertCanonicalLedExternalParams } from '../14_led-external-engine.js';
+import { buildLedPlan } from '../16_led-adapter.js';
 import {
     BLOKI_INTERNAL_OPTIONS,
     BLOKI_EXTERNAL_OPTIONS,
     BLOKI_CATEGORY_NAMES
-} from '../bloki-bay-actions.js';
+} from '../02_bloki-bay-actions.js';
 import { MODULE_TYPES } from '../ui/BlokiFloatingWindow.js';
 
 describe('Bloki LED Module (buildLedPlan & Categories)', () => {

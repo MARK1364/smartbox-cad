@@ -145,18 +145,33 @@ export class PanelModel {
     }) {
         validatePanelDimensionsNm({ width, height, thickness, name }, 'PanelModel');
 
-        // Grubość już zwalidowana jako nm → jawna konwersja (bez zgadywania jednostki z magicznej stałej).
         const thicknessMm = nmToMm(thickness);
-        if ((role === 'BACK_PANEL' || thicknessMm <= 3.5) && materialId === 'W1100_ST9_18') {
-            materialId = 'HDF_BIALY_3';
-            materialName = 'HDF Biały 3mm';
-            materialCode = 'HDF 3mm';
-            color = { r: 0.94, g: 0.94, b: 0.94 };
-        } else if ((role === 'DRAWER_BOTTOM' || role === 'DRAWER_BACK' || Math.abs(thicknessMm - 16) < 0.5) && materialId === 'W1100_ST9_18') {
-            materialId = 'W1100_ST9_16';
-            materialName = 'Biały Alpejski 16mm';
-            materialCode = 'W1100 ST9';
-            color = { r: 0.95, g: 0.95, b: 0.95 };
+        const isDefaultOrLegacy = !materialId ||
+            materialId === 'W1100_ST9_18' ||
+            materialId === 'MDF_SUROWY_18' ||
+            materialId === 'MDF_SUROWY_16' ||
+            materialId === 'HDF_3' ||
+            materialId === 'HDF_SUROWY_3' ||
+            materialId === 'PLYTY_18' ||
+            materialId === 'PLYTY_16';
+
+        if (isDefaultOrLegacy) {
+            if (role === 'BACK_PANEL' || thicknessMm <= 3.5) {
+                materialId = 'HDF_BIALY_3';
+                materialName = 'HDF Biały 3mm';
+                materialCode = 'HDF_WHITE_3';
+                color = { r: 0.94, g: 0.94, b: 0.94 };
+            } else if (role === 'DRAWER_BOTTOM' || role === 'DRAWER_BACK' || role === 'BOX' || Math.abs(thicknessMm - 16) < 0.5) {
+                materialId = 'W1100_ST9_16';
+                materialName = 'Biały Alpejski 16mm';
+                materialCode = 'W1100 ST9';
+                color = { r: 0.95, g: 0.95, b: 0.95 };
+            } else {
+                materialId = 'W1100_ST9_18';
+                materialName = 'Biały Alpejski';
+                materialCode = 'W1100 ST9';
+                color = { r: 0.95, g: 0.95, b: 0.95 };
+            }
         }
 
         this.width = width;
@@ -346,6 +361,9 @@ export class PanelModel {
             '+Y': { active: false, type_id: 'none' },
             '-Y': { active: false, type_id: 'none' }
         };
+        if (this.custom_properties?.shape === 'L_NOTCH' || this.custom_properties?.outline2d) {
+            this.edgeBanding['NOTCH'] = { active: false, type_id: 'none' };
+        }
 
         if (this.custom_properties) {
             this.custom_properties.edge_banding = { ...this.edgeBanding };
@@ -362,6 +380,19 @@ export class PanelModel {
         if (!this.edgeBanding) this.edgeBanding = {};
         for (const k of keys) {
             this.edgeBanding[k] = {
+                active: true,
+                type_id: config.type_id || '0.008x0.022',
+                name: config.name || defaultEdgeBandName(),
+                thickness_mm: config.thickness_mm || 0.8,
+                width_mm: config.width_mm || 22.0,
+                color: config.color || this.color,
+                material_id: config.material_id || this.materialId,
+                price_per_mb: config.price_per_mb || 3.50
+            };
+        }
+
+        if (this.custom_properties?.shape === 'L_NOTCH' || this.custom_properties?.outline2d) {
+            this.edgeBanding['NOTCH'] = {
                 active: true,
                 type_id: config.type_id || '0.008x0.022',
                 name: config.name || defaultEdgeBandName(),

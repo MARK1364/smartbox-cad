@@ -28,7 +28,7 @@ import {
     isSmartApplianceContainer,
 } from './smart-appliance-types.js';
 import { planMicrowave, type AppliancePartPlanMm } from './microwave-engine.js';
-import { resolveHangersReferenceBoxMm } from '../A5_smartparts/hangers/hanger-apply.js';
+import { resolveHangersReferenceBoxMm } from '../A2_bloki/hangers/hanger-apply.js';
 
 export function ensureSmartApplianceGeneratorParams(container: ContainerModel, kind: ApplianceKind = 'MICROWAVE'): void {
     if (!container.generatorParams) {

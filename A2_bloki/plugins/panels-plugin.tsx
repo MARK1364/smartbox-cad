@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { PanelsPlanParams } from '../bloki-module-types.js';
-import { buildPanelsPlan } from '../module-plans.js';
-import { PanelsSubModule } from '../panels-adapter.js';
+import type { PanelsPlanParams } from '../01_bloki-module-types.js';
+import { buildPanelsPlan } from '../01_module-plans.js';
+import { PanelsSubModule } from '../11_panels-adapter.js';
 
 export const panelsPlugin: SmartModulePlugin<PanelsPlanParams> = {
     id: 'PANELS',

@@ -6,7 +6,7 @@ import { AssignMaterialCommand, SetEdgeBandingCommand } from '../material-comman
 import { MaterialItem } from '../material-types.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { initializeSmartFrameEngine, rebuildSmartFrameContainer } from '../../A3_smartframe/smartframe-adapter.js';
-import { update_bloki_core } from '../../A2_bloki/bloki-core.js';
+import { update_bloki_core } from '../../A2_bloki/01_bloki-core.js';
 
 describe('AssignMaterialCommand & SetEdgeBandingCommand', () => {
     let doc: ProjectDocument;

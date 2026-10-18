@@ -75,7 +75,7 @@ describe('Rogowy90 back grooves on real backs', () => {
             expect(nmToMm(minSide)).toBeCloseTo(th, 0);
         }
 
-        // Pasek przy +Y (PLECY_Y): po BOTTOM [90,180,0] v=0 = przĂłd, tyĹ‚ = wysokie v
+        // Pasek przy +Y (PLECY_Y): po BOTTOM [90,180,0] v=0 = przód, tył = wysokie v
         const alongX = bottom.find((g) => {
             const p = g.feature!.params;
             return p.width_nm > p.length_nm;
@@ -84,8 +84,10 @@ describe('Rogowy90 back grooves on real backs', () => {
         const botPanel = panels.find((p) => p.role === 'BOTTOM_PANEL')!;
         const faceD = botPanel.dim_nm.y;
         expect(nmToMm(alongX!.feature!.params.v_nm)).toBeGreaterThan(nmToMm(faceD) * 0.5);
+        // Rowek zaczyna się dokładnie na styku z BOK_P (18 mm od krawędzi), a nie w próżni na zakładce pleców (7 mm)
+        expect(nmToMm(alongX!.feature!.params.u_nm)).toBeCloseTo(18, 0);
 
-        // Pasek przy â’X (PLECY_X): u blisko 0
+        // Pasek przy −X (PLECY_X): u blisko 900 - 3 = 897
         const alongY = bottom.find((g) => {
             const p = g.feature!.params;
             return p.length_nm > p.width_nm;
@@ -94,8 +96,10 @@ describe('Rogowy90 back grooves on real backs', () => {
         const faceW = botPanel.dim_nm.x;
         expect(nmToMm(alongY!.feature!.params.u_nm)).toBeGreaterThan(nmToMm(faceW) * 0.5);
         expect(nmToMm(alongY!.feature!.params.u_nm)).toBeCloseTo(nmToMm(faceW) - th, 0);
+        // Rowek wzdłuż Y zaczyna się dokładnie na styku z BOK_L (18 mm od krawędzi), a nie w próżni (7 mm)
+        expect(nmToMm(alongY!.feature!.params.v_nm)).toBeCloseTo(18, 0);
 
-        // GĹ‚Ä™bokoĹ›Ä‡ zakĹ‚adki 11 mm (nie naroĹĽnik)
+        // Głębokość zakładki 11 mm (nie narożnik)
         expect(nmToMm(alongX!.feature!.params.depth_nm)).toBeCloseTo(defaultBackOverlapMm(), 0);
         expect(nmToMm(alongY!.feature!.params.depth_nm)).toBeCloseTo(defaultBackOverlapMm(), 0);
     });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildMeshFromPanel } from '../native_core/mesh_builder';
 import { mmToNm } from '../../A1_core/cad-math/units';
+import { PanelModel } from '../panel-model';
 
 describe('L outline edge segments', () => {
     it('splits outline into segments with outer edge keys and NOTCH for wcięcie L', () => {
@@ -49,5 +50,24 @@ describe('L outline edge segments', () => {
         // positions: p0t, p1t, p1b, p0b → dół odcinka to p0b (idx 3) → p1b (idx 2)
         expect(bottomEdge0?.points[0]).toEqual([side0.positions[9], side0.positions[10], side0.positions[11]]);
         expect(bottomEdge0?.points[1]).toEqual([side0.positions[6], side0.positions[7], side0.positions[8]]);
+    });
+
+    it('setAllEdges sets NOTCH on L_NOTCH panel, and clearAllEdgeBanding clears it', () => {
+        const panel = new PanelModel({
+            width: mmToNm(882),
+            height: mmToNm(882),
+            thickness: mmToNm(18),
+            role: 'BOTTOM_PANEL'
+        });
+        panel.custom_properties = { shape: 'L_NOTCH' };
+
+        panel.setAllEdges({ type_id: '0.008x0.022' });
+        expect(panel.edgeBanding['NOTCH']).toBeDefined();
+        expect(panel.edgeBanding['NOTCH'].active).toBe(true);
+        expect(panel.edgeBanding['+X'].active).toBe(true);
+
+        panel.clearAllEdgeBanding();
+        expect(panel.edgeBanding['NOTCH'].active).toBe(false);
+        expect(panel.edgeBanding['+X'].active).toBe(false);
     });
 });

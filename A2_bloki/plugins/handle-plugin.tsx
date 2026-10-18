@@ -6,7 +6,7 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { HandlePlanParams } from '../bloki-module-types.js';
+import type { HandlePlanParams } from '../01_bloki-module-types.js';
 import { HandleEditPanel } from '../handles/handle-edit-panel.js';
 
 export const handlePlugin: SmartModulePlugin<HandlePlanParams> = {

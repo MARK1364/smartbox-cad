@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { TubesPlanParams } from '../bloki-module-types.js';
-import { buildTubesPlan } from '../module-plans.js';
-import { TubesSubModule } from '../tubes-adapter.js';
+import type { TubesPlanParams } from '../01_bloki-module-types.js';
+import { buildTubesPlan } from '../01_module-plans.js';
+import { TubesSubModule } from '../08_tubes-adapter.js';
 import { SyncTubesDrillingsCommand } from '../commands/sync-tubes-drillings-command.js';
 
 export const tubesPlugin: SmartModulePlugin<TubesPlanParams> = {

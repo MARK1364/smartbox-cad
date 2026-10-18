@@ -2,11 +2,18 @@
  * A2_bloki/commands/sync-hangers-drillings-command.ts
  *
  * Komenda aktualizująca nawiercenia i wycięcia zawieszek na formatkach korpusu.
+ * Po migracji MACHINING logika syncu leży we wspólnym rdzeniu machining-sync.ts —
+ * komenda podaje tylko builder intencji i tag własności isHangerDrilling.
  */
 
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
-import { buildHangersDrillings } from '../hangers-drilling-builder.js';
+import { buildHangersDrillings } from '../17_hangers-drilling-builder.js';
+import {
+    emitMachiningFeatures,
+    restoreMachiningFeatures,
+    syncMachiningHoles,
+} from '../01_machining-sync.js';
 
 export class SyncHangersDrillingsCommand implements Command {
     readonly id: string;
@@ -27,65 +34,39 @@ export class SyncHangersDrillingsCommand implements Command {
     execute(document: ProjectDocument): void {
         if (!document) return;
 
+        // 1. Wylicz intencje nawierceń ze Bloku (Zawieszki) — warstwa MACHINING
         const intents = buildHangersDrillings(document, this.cabinetContainerId);
-        const panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
-        const changedNodeIds = new Set<string>();
 
-        // 1. Usuń poprzednie nawiercenia zawieszek z formatek
-        for (const panelNode of panels) {
-            const data = panelNode.domainData as any;
-            if (data && data.features && Array.isArray(data.features)) {
-                if (!this.oldFeatures.has(panelNode.id)) {
-                    this.oldFeatures.set(panelNode.id, JSON.parse(JSON.stringify(data.features)));
-                }
-
-                const initialLen = data.features.length;
-                data.features = data.features.filter((f: any) => {
-                    if (f.frozen || f.params?.frozen) return true;
-                    return !(f.params?.isHangerDrilling || f.params?.isSmartPartFeature);
-                });
-
-                if (data.features.length !== initialLen) {
-                    changedNodeIds.add(panelNode.id);
-                }
-            }
+        // 2. Zidentyfikuj formatki scope (korpus, jeśli podano) — zakres 1:1 jak przed migracją
+        let panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
+        if (this.cabinetContainerId) {
+            panels = panels.filter((p: any) =>
+                p.parent?.id === this.cabinetContainerId ||
+                p.domainData?.cabinetId === this.cabinetContainerId ||
+                p.parentContainerId === this.cabinetContainerId
+            );
         }
 
-        // 2. Wstaw nowe nawiercenia i wycięcia
-        for (const intent of intents) {
-            const targetNode = document.findNode(intent.targetNodeId);
-            if (!targetNode || !targetNode.domainData) continue;
-
-            const data = targetNode.domainData as any;
-            if (!data.features) data.features = [];
-
-            if (!this.oldFeatures.has(targetNode.id)) {
-                this.oldFeatures.set(targetNode.id, JSON.parse(JSON.stringify(data.features)));
-            }
-
-            data.features.push(intent.feature);
-            changedNodeIds.add(targetNode.id);
-        }
+        // 3+4. Clear starych automatów isHangerDrilling + upsert intencji — wspólny rdzeń MACHINING
+        const changedNodeIds = syncMachiningHoles(
+            document,
+            intents,
+            panels,
+            'isHangerDrilling',
+            this.oldFeatures,
+        );
 
         this.affectedNodeIds.push(...Array.from(changedNodeIds));
 
-        // 3. Odśwież formatki
-        for (const panelNode of panels) {
-            if (changedNodeIds.has(panelNode.id)) {
-                const data = panelNode.domainData as any;
-                if (typeof data.setFeatures === 'function') {
-                    data.setFeatures(data.features);
-                } else if (typeof data._emit === 'function') {
-                    data._emit('features', { features: data.features });
-                }
-            }
-        }
+        // 5. Powiadom panele o zmianie features, by Babylon PanelView od razu odrysował otwory
+        emitMachiningFeatures(panels, changedNodeIds);
 
+        // 6. Powiadom o zmianie dokumentu
         if (typeof document.notifyDocumentChanged === 'function') {
             document.notifyDocumentChanged();
         }
 
-        // 4. Zgłoś zmianę geometrii jeśli zmieniono formatki
+        // 7. Zgłoś zmianę geometrii jeśli zmieniono formatki
         if (changedNodeIds.size > 0 && typeof (window as any)?.__rebuildGeometry === 'function') {
             (window as any).__rebuildGeometry('SyncHangersDrillingsCommand');
         }
@@ -93,22 +74,6 @@ export class SyncHangersDrillingsCommand implements Command {
 
     undo(document: ProjectDocument): void {
         if (!document) return;
-
-        for (const [nodeId, oldFeats] of this.oldFeatures.entries()) {
-            const node = document.findNode(nodeId);
-            if (node && node.domainData) {
-                const data = node.domainData as any;
-                data.features = JSON.parse(JSON.stringify(oldFeats));
-                if (typeof data.setFeatures === 'function') {
-                    data.setFeatures(data.features);
-                } else if (typeof data._emit === 'function') {
-                    data._emit('features', { features: data.features });
-                }
-            }
-        }
-
-        if (typeof document.notifyDocumentChanged === 'function') {
-            document.notifyDocumentChanged();
-        }
+        restoreMachiningFeatures(document, this.oldFeatures);
     }
 }

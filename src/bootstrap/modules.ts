@@ -10,14 +10,13 @@ import { ContextManager } from '../../A1_core/context-manager.js';
 
 // Moduły domenowe
 import { registerSmartFrameModule, smartFrameCabinetModule } from '../../A3_smartframe/register.js';
-import { registerBlokiModule } from '../../A2_bloki/register.js';
+import { registerBlokiModule } from '../../A2_bloki/01_register.js';
 import { registerScianyModule, unregisterScianyModule } from '../../S4_sciany/register.js';
-import { registerSmartPartsModule } from '../../A5_smartparts/register.js';
 import {
     syncHangerDefinitionFromParams,
     updateSmartPartHangersGroup,
-} from '../../A5_smartparts/hangers/hanger-apply.js';
-import { SMARTPART_HANGERS_GROUP_TYPE } from '../../A5_smartparts/hangers/hanger-types.js';
+} from '../../A2_bloki/hangers/hanger-apply.js';
+import { SMARTPART_HANGERS_GROUP_TYPE } from '../../A2_bloki/hangers/hanger-types.js';
 
 // Rozszerzenia dokumentu
 import { attachViewportExtension } from '../../S3_scena/viewport-document-extension.js';
@@ -63,7 +62,7 @@ import {
 } from '../../A1_core/view-port.js';
 import { ContainerView } from '../../A3_smartframe/container-view.js';
 import { PanelView } from '../../A4_smartpanel/panel-view.js';
-import { update_bloki_core } from '../../A2_bloki/bloki-core.js';
+import { update_bloki_core } from '../../A2_bloki/01_bloki-core.js';
 import { initializeSmartFrameEngine } from '../../A3_smartframe/smartframe-adapter.js';
 
 /**
@@ -91,6 +90,13 @@ const blokiModule: CadModule = {
         unregisterBlokiGeometryHandler = registerGeometryUpdateHandler({
             updateBeforeRebuild(doc, containers) {
                 for (const container of containers) {
+                    if (container.generatorParams?.type === SMARTPART_HANGERS_GROUP_TYPE) {
+                        syncHangerDefinitionFromParams(container);
+                        const node = doc.findNode?.(container.id);
+                        if (node) {
+                            updateSmartPartHangersGroup(node, doc);
+                        }
+                    }
                     const isBloki =
                         !!container.generatorParams?.boxType ||
                         (typeof container.generatorParams?.type === 'string' && container.generatorParams.type.startsWith('blok_')) ||
@@ -135,37 +141,6 @@ const scianyModule: CadModule = {
     },
     dispose() {
         unregisterScianyModule();
-    }
-};
-
-/**
- * Moduł A5 SmartParts (uchwyty, kanały LED, akcesoria meblowe)
- */
-let unregisterSmartPartsGeometryHandler: (() => void) | null = null;
-const smartPartsModule: CadModule = {
-    id: 'A5_smartparts',
-    registerDomain({ ctx }) {
-        registerSmartPartsModule(ctx.document);
-        unregisterSmartPartsGeometryHandler = registerGeometryUpdateHandler({
-            updateBeforeRebuild(doc, containers) {
-                for (const container of containers) {
-                    if (container.generatorParams?.type === SMARTPART_HANGERS_GROUP_TYPE) {
-                        // Najpierw resolve parametrów (offsety z panelu), potem pozycje we wnęce
-                        syncHangerDefinitionFromParams(container);
-                        const node = doc.findNode?.(container.id);
-                        if (node) {
-                            updateSmartPartHangersGroup(node, doc);
-                        }
-                    }
-                }
-            }
-        });
-    },
-    dispose() {
-        if (unregisterSmartPartsGeometryHandler) {
-            unregisterSmartPartsGeometryHandler();
-            unregisterSmartPartsGeometryHandler = null;
-        }
     }
 };
 
@@ -326,7 +301,6 @@ export const CAD_MODULES: CadModule[] = [
     smartPanelModule,
     smartFrameModule,
     blokiModule,
-    smartPartsModule,
     scianyModule,
     viewportModule,
     materialsModule,

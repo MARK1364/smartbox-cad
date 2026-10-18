@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizePanelsParams, calculatePanelsPlan, assertCanonicalPanelsParams } from '../panels-engine.js';
+import { normalizePanelsParams, calculatePanelsPlan, assertCanonicalPanelsParams } from '../11_panels-engine.js';
 
 describe('panels-engine (Functional Core)', () => {
     it('normalizes canonical parameters', () => {

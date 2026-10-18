@@ -1,4 +1,4 @@
-﻿{
+{
   "metadata": {
     "module_type": "SMARTFRAME_KORPUS3",
     "version": "3.0.0",
@@ -30,12 +30,12 @@
               "type_id": "none"
             },
             "+Y": {
-              "active": true,
-              "type_id": "0.008x0.022"
+              "active": false,
+              "type_id": "none"
             },
             "-Y": {
-              "active": true,
-              "type_id": "0.008x0.022"
+              "active": false,
+              "type_id": "none"
             }
           },
           "wcs_origin_corner": {
@@ -65,12 +65,12 @@
               "type_id": "0.008x0.022"
             },
             "+Y": {
-              "active": true,
-              "type_id": "0.008x0.022"
+              "active": false,
+              "type_id": "none"
             },
             "-Y": {
-              "active": true,
-              "type_id": "0.008x0.022"
+              "active": false,
+              "type_id": "none"
             }
           },
           "wcs_origin_corner": {

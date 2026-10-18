@@ -60,11 +60,20 @@ export function buildCabinetSubcomponents(
                     `CAD wymaga jawnych danych grubości z reguł lub parametrów.`
                 );
             }
+            const isBack = comp.role === "BACK_PANEL" || key.toUpperCase().includes("PLECY") || (comp.name || '').toUpperCase().includes("PLECY");
+            const rawMat = comp.custom_properties?.material;
+            const defaultMat = isBack ? "HDF_BIALY_3" : "W1100_ST9_18";
+            const effectiveMat = (!rawMat || rawMat === "MDF_SUROWY_18" || rawMat === "HDF_3") ? defaultMat : rawMat;
+            const effectiveMatName = isBack ? "HDF Biały 3mm" : "Biały Alpejski";
+            const effectiveMatCode = isBack ? "HDF_WHITE_3" : "W1100 ST9";
+
             resultList.push({
                 key,
                 name: comp.name || key,
                 role: comp.role || "PART",
-                material: comp.custom_properties?.material || "",
+                material: effectiveMat,
+                materialName: effectiveMatName,
+                materialCode: effectiveMatCode,
                 thickness: geom.thickness,
                 dim: geom.dim ?? { x: 0, y: 0, z: 0 },
                 loc: {

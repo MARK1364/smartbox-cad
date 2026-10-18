@@ -1,6 +1,7 @@
-import pricesData from './prices.json';
 import smartPanelV1 from '../A4_smartpanel/smart_panel_V1.json';
 import { CuttingPanelContract, AccessoryItem } from './report-data-normalizer';
+import { priceStore } from './price-store';
+import type { PriceDatabase } from './prices-validate';
 
 export interface PanelPricingResult {
     part_id: string;
@@ -48,14 +49,17 @@ export interface GlobalProjectSummary {
 }
 
 export class GlobalReportsEngineWeb {
-    private prices: typeof pricesData;
     private smartPanel: any;
     private materialNameCache: Record<string, string> = {};
 
     constructor() {
-        this.prices = pricesData;
         this.smartPanel = smartPanelV1;
         this._buildMaterialNameCache();
+    }
+
+    /** Ceny zawsze z aktywnego cennika (edytor → localStorage → store). */
+    private get prices(): PriceDatabase {
+        return priceStore.prices;
     }
 
     private _buildMaterialNameCache() {

@@ -6,9 +6,9 @@ import { ContainerModel } from '../../A1_core/container-model.js';
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
-import { BLOKI_ALL_OPTIONS, BLOKI_CATEGORY_NAMES } from '../bloki-bay-actions.js';
-import { buildDrawersPlan } from '../drawers-adapter.js';
-import type { DrawersPlanParams } from '../bloki-module-types.js';
+import { BLOKI_ALL_OPTIONS, BLOKI_CATEGORY_NAMES } from '../02_bloki-bay-actions.js';
+import { buildDrawersPlan } from '../09_drawers-adapter.js';
+import type { DrawersPlanParams } from '../01_bloki-module-types.js';
 import { applyPlanToContainer } from '../../A3_smartframe/smartframe-adapter.js';
 import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer.js';
 

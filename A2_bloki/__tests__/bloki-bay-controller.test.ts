@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BlokiBayController } from '../bloki-bay-controller.js';
-import type { DetectedBay } from '../bloki-bay-detector.js';
+import { BlokiBayController } from '../02_bloki-bay-controller.js';
+import type { DetectedBay } from '../02_bloki-bay-detector.js';
 
 describe('BlokiBayController', () => {
     it('manages picker state and notifies subscribers', () => {

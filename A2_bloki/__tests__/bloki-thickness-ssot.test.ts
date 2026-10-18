@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeShelvesParams } from '../shelves-engine.js';
-import { normalizeDoorsParams } from '../doors-engine.js';
-import { normalizeDrawersParams } from '../drawers-engine.js';
-import { normalizeFlapsParams } from '../flaps-engine.js';
-import { normalizePanelsParams } from '../panels-engine.js';
-import { normalizeShelfParams } from '../shelf-engine.js';
-import { normalizeTubesParams } from '../tubes-engine.js';
-import { resolveRuleThicknessMm } from '../bloki-rules-helper.js';
+import { normalizeShelvesParams } from '../04_shelves-engine.js';
+import { normalizeDoorsParams } from '../05_doors-engine.js';
+import { normalizeDrawersParams } from '../09_drawers-engine.js';
+import { normalizeFlapsParams } from '../12_flaps-engine.js';
+import { normalizePanelsParams } from '../11_panels-engine.js';
+import { normalizeShelfParams } from '../03_shelf-engine.js';
+import { normalizeTubesParams } from '../08_tubes-engine.js';
+import { resolveRuleThicknessMm } from '../01_bloki-rules-helper.js';
 
 describe('A2_bloki SSOT & Fail-Fast Thickness', () => {
     const dummyDims = { width_mm: 600, height_mm: 720, depth_mm: 560 };

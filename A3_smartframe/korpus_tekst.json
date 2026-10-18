@@ -124,6 +124,16 @@
     "en": "Right height",
     "de": "Höhe rechts"
   },
+  "skosny.angle": {
+    "pl": "Kąt skosu dachu",
+    "en": "Roof slope angle",
+    "de": "Dachneigung"
+  },
+  "skosny.vertical_thickness": {
+    "pl": "Wieniec w pionie",
+    "en": "Top rail vertical span",
+    "de": "Deckplatte vertikal"
+  },
   "params.title": {
     "pl": "PARAMETRY KORPUSU",
     "en": "CABINET PARAMETERS",

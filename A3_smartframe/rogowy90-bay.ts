@@ -5,7 +5,7 @@
  * zamiast ścian ramion — stąd „połowa” szafki. Tu wybieramy ramię X lub Y
  * i wiążemy granice z side_references (PLECY_X/Y, BOK_L/BOK_P, wieńce).
  */
-import type { DetectedBay, FaceHitRef } from '../A2_bloki/bloki-bay-detector.js';
+import type { DetectedBay, FaceHitRef } from '../A2_bloki/02_bloki-bay-detector.js';
 import { ProjectDocument } from '../A1_core/project-document.js';
 import { CADNode } from '../A1_core/cad-node/cad-node.js';
 import { PanelModel } from '../A4_smartpanel/panel-model.js';

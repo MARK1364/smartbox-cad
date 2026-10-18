@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { DoorsPlanParams } from '../bloki-module-types.js';
-import { buildDoorsPlan } from '../module-plans.js';
-import { DoorsSubModule } from '../doors-adapter.js';
+import type { DoorsPlanParams } from '../01_bloki-module-types.js';
+import { buildDoorsPlan } from '../01_module-plans.js';
+import { DoorsSubModule } from '../05_doors-adapter.js';
 import { SyncDoorDrillingsCommand } from '../commands/sync-door-drillings-command.js';
 
 export const doorsPlugin: SmartModulePlugin<DoorsPlanParams> = {

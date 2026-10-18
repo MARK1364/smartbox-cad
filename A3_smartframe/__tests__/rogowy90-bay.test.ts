@@ -5,7 +5,7 @@ import { CommandHistory } from '../../A1_core/commands/command-history.js';
 import { runEngineAndApply } from '../smartframe-adapter.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { probeRogowy90BayFromCADPoint } from '../rogowy90-bay.js';
-import { probeBayFromCADPoint } from '../../A2_bloki/bloki-bay-detector.js';
+import { probeBayFromCADPoint } from '../../A2_bloki/02_bloki-bay-detector.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
 
 describe('rogowy90 bay detection', () => {

@@ -18,7 +18,7 @@ import {
     type HandleProducerFilter,
     type HandleModelFilter,
     type HandleSizeFilter,
-} from '../../A5_smartparts/smartparts-catalog.js';
+} from '../01_smartparts-catalog.js';
 import {
     HANDLE_COLOR_OPTIONS,
     DEFAULT_HANDLE_COLOR_ID,

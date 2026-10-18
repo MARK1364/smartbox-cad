@@ -11,12 +11,12 @@
  */
 
 import type { ComponentType, ReactNode } from 'react';
-import type { ModuleDims } from '../base-engine.js';
-import type { BlokiPlanResult } from '../bloki-types.js';
+import type { ModuleDims } from '../01_base-engine.js';
+import type { BlokiPlanResult } from '../01_bloki-types.js';
 import type { ProjectDocument } from '../../A1_core/project-document.js';
 import type { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import type { ContainerModel } from '../../A1_core/container-model.js';
-import type { BlokiModuleId } from '../bloki-module-types.js';
+import type { BlokiModuleId } from '../01_bloki-module-types.js';
 
 export type { BlokiModuleId };
 

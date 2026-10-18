@@ -4,17 +4,17 @@
 
 import React, { useCallback, useMemo, useRef } from 'react';
 import { ContextManager } from '../../A1_core/context-manager.js';
-import { update_bloki_core } from '../../A2_bloki/bloki-core.js';
+import { update_bloki_core } from '../../A2_bloki/01_bloki-core.js';
 import { SmartModuleRegistry } from '../../A2_bloki/core/smart-module-registry.js';
-import type { BlokiGeneratorParamsPatch, BlokiModuleId } from '../../A2_bloki/bloki-module-types.js';
+import type { BlokiGeneratorParamsPatch, BlokiModuleId } from '../../A2_bloki/01_bloki-module-types.js';
 import {
     BayReferenceWallsPanel,
     type BayRefsParamsPatch,
-} from '../../A2_bloki/bay-reference-walls-panel.js';
+} from '../../A2_bloki/02_bay-reference-walls-panel.js';
 import {
     updateSmartPartHangersGroup,
-} from '../../A5_smartparts/hangers/hanger-apply.js';
-import { SMARTPART_HANGERS_GROUP_TYPE } from '../../A5_smartparts/hangers/hanger-types.js';
+} from '../../A2_bloki/hangers/hanger-apply.js';
+import { SMARTPART_HANGERS_GROUP_TYPE } from '../../A2_bloki/hangers/hanger-types.js';
 import { SMARTPART_HANDLE_TYPE } from '../../A2_bloki/handles/handle-types.js';
 import { HandleEditPanel } from '../../A2_bloki/handles/handle-edit-panel.js';
 

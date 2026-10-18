@@ -107,7 +107,7 @@ describe('KORPUS_SKOSNY prototyp', () => {
         const bottomEdge = back.loc.z - back.dim.z / 2;
         const top = back.loc.z + back.dim.z / 2;
         expect(back.thickness).toBeCloseTo(3, 0);
-        expect(back.material).toBe('HDF_3');
+        expect(back.material).toBe('HDF_BIALY_3');
         expect(bottomEdge).toBeCloseTo(18 - 11, 0);
         expect(top).toBeCloseTo(1000 - 18 * Math.cos(roofAngle) + 11, 0);
         expect((back.customProperties as any)?.outline2d).toBeUndefined();

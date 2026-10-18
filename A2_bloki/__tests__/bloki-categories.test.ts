@@ -5,7 +5,7 @@ import {
     BLOKI_PANEL_OPTIONS,
     BLOKI_ALL_OPTIONS,
     type BlokiCategory
-} from '../bloki-bay-actions.js';
+} from '../02_bloki-bay-actions.js';
 import {
     MODULE_TYPES,
     INTERNAL_MODULE_TYPES,

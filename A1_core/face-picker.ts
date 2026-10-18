@@ -146,7 +146,7 @@ export class FacePicker {
                     return;
                 }
 
-                if (this.selectionMode === 'object') {
+                if (this.selectionMode === 'object' && !isPickingReference()) {
                     this._clearHoverHighlights();
                     return;
                 }
@@ -454,7 +454,7 @@ export class FacePicker {
                 return;
             }
 
-            if (this.selectionMode === 'object') {
+            if (this.selectionMode === 'object' && !isPickingReference()) {
                 const constraintPicker = ContextManager.instance.activeConstraintPicker;
                 if (constraintPicker?.expectedKind === 'OBJECT') {
                     const targetModel = panelModel ?? meta?.model;

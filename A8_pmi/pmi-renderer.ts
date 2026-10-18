@@ -22,8 +22,6 @@ import { measureDeltaSegments, pathLength } from './pmi-measure';
 import {
     MEASURE_MAX_PX,
     MEASURE_MIN_PX,
-    attachScreenConstantScale,
-    measureDiameterAt,
     pixelsPerMMAtScene,
 } from './pmi-screen-scale';
 import { LABEL_OVERLAP_PAD_PX, resolveLabelOverlaps, ScreenLabel } from './pmi-label-layout';
@@ -41,9 +39,9 @@ const TEXT_COLOR_PREVIEW = '#0284C7';
 const PREVIEW_ID = '__pmi_preview__';
 const MEASURE_PREVIEW_ID = '__pmi_measure_preview__';
 
-const MEASURE_COLOR: Rgba = [1.0, 1.0, 0.0, 1.0];
+const MEASURE_COLOR: Rgba = [1.0, 0.55, 0.0, 1.0];
 /** Bazowa wysokość tekstu etykiety miarki w przestrzeni CAD [mm]. */
-export const MEASURE_BASE_TEXT_H = 14;
+export const MEASURE_BASE_TEXT_H = 20;
 
 /**
  * Oblicza bazowe wymiary plakietki miarki [mm] na podstawie liczby i długości linii.
@@ -54,10 +52,10 @@ export function computeMeasureLabelDimensions(lines: string[]): {
     planeH: number;
 } {
     const textHWorld = MEASURE_BASE_TEXT_H;
-    const lineH = textHWorld * 0.85;
-    const textWWorld = Math.max(...lines.map(l => l.length * textHWorld * 0.55), 14);
+    const lineH = textHWorld * 0.9;
+    const textWWorld = Math.max(...lines.map(l => l.length * textHWorld * 0.62), 16);
     const totalH = lineH * lines.length;
-    const padWorld = textHWorld * 0.15;
+    const padWorld = textHWorld * 0.2;
     const planeW = textWWorld + padWorld * 2;
     const planeH = totalH + padWorld * 2;
     return { textHWorld, planeW, planeH };
@@ -92,26 +90,26 @@ export function computeMeasureScreenScale(
     }
     if (pxPerMM <= 1e-5 || basePlaneH <= 0) return 1.0;
 
-    // Stały, czytelny rozmiar plakietki na ekranie: 38px (1 linia) do max 84px (4 linie)
-    const targetScreenH = lineCount <= 1 ? 38 : Math.min(lineCount * 17 + 16, 84);
+    // Stały, czytelny rozmiar plakietki na ekranie: 54px (1 linia) do max 132px (4+ linie)
+    const targetScreenH = lineCount <= 1 ? 54 : Math.min(lineCount * 24 + 24, 132);
     const currentScreenH = basePlaneH * pxPerMM;
     return targetScreenH / currentScreenH;
 }
 
 /** Kolory delt (linie przerywane XYZ). */
 const MEASURE_DELTA_COLOR: Record<'X' | 'Y' | 'Z', Rgba> = {
-    X: [1.0, 0.2, 0.2, 0.6],
-    Y: [0.2, 1.0, 0.2, 0.6],
-    Z: [0.2, 0.4, 1.0, 0.6],
+    X: [1.0, 0.3, 0.3, 0.7],
+    Y: [0.3, 1.0, 0.3, 0.7],
+    Z: [0.4, 0.62, 1.0, 0.8],
 };
 
-/** Kolory tekstu etykiety miarki — L żółte, delty jak osie CAD. */
+/** Kolory tekstu etykiety miarki — na białym tle: L czarne, delty w ciemnych barwach osi. */
 const MEASURE_TEXT_HEX = {
-    L: '#ffff00',
-    L_SELECTED: '#ffffff',
-    X: '#ff3333',
-    Y: '#33ff33',
-    Z: '#3366ff',
+    L: '#000000',
+    L_SELECTED: '#000000',
+    X: '#b21f1f',
+    Y: '#1e7a1e',
+    Z: '#1f4fbf',
 } as const;
 
 function measureLabelLineColor(line: string, selected: boolean): string {
@@ -121,18 +119,61 @@ function measureLabelLineColor(line: string, selected: boolean): string {
     return selected ? MEASURE_TEXT_HEX.L_SELECTED : MEASURE_TEXT_HEX.L;
 }
 
-/** Przyciemniony kolor pod obwódkę tekstu (zamiast czerni). */
-function darkenHexForOutline(hex: string, towardBlack = 0.42): string {
-    const raw = hex.replace('#', '');
-    if (raw.length !== 6) return 'rgba(20, 20, 20, 0.85)';
-    const r = parseInt(raw.slice(0, 2), 16);
-    const g = parseInt(raw.slice(2, 4), 16);
-    const b = parseInt(raw.slice(4, 6), 16);
-    const f = Math.max(0, Math.min(1, towardBlack));
-    const dr = Math.round(r * f);
-    const dg = Math.round(g * f);
-    const db = Math.round(b * f);
-    return `rgb(${dr},${dg},${db})`;
+/** Białe tło pod tekst — czytelność wyniku na dowolnym modelu. */
+function paintLabelBackground(ctx: CanvasRenderingContext2D, w: number, h: number, radius = 48): void {
+    const pad = 18;
+    ctx.save();
+    ctx.beginPath();
+    const x0 = pad, y0 = pad, x1 = w - pad, y1 = h - pad;
+    const r = Math.min(radius, (x1 - x0) / 2, (y1 - y0) / 2);
+    ctx.moveTo(x0 + r, y0);
+    ctx.lineTo(x1 - r, y0);
+    ctx.arcTo(x1, y0, x1, y0 + r, r);
+    ctx.lineTo(x1, y1 - r);
+    ctx.arcTo(x1, y1, x1 - r, y1, r);
+    ctx.lineTo(x0 + r, y1);
+    ctx.arcTo(x0, y1, x0, y1 - r, r);
+    ctx.lineTo(x0, y0 + r);
+    ctx.arcTo(x0, y0, x0 + r, y0, r);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.restore();
+}
+
+/** Wspólne ustawienia ostrej tekstury tekstu (anizotropia + bez mipmap blur). */
+function sharpenLabelTexture(dt: any): void {
+    try {
+        const caps = (dt as any)?.getScene?.()?.getEngine?.()?.getCaps?.();
+        const maxAniso = caps?.maxAnisotropy ?? 8;
+        dt.anisotropicFilteringLevel = Math.min(8, Math.max(4, maxAniso));
+    } catch { /* best-effort */ }
+    try {
+        const mode = (BABYLON as any)?.Texture?.TRILINEAR_SAMPLINGMODE;
+        if (typeof dt.updateSamplingMode === 'function' && typeof mode === 'number') {
+            dt.updateSamplingMode(mode);
+        }
+    } catch { /* best-effort */ }
+}
+
+/** Nieoświetlony materiał etykiety — emisja zamiast diffusji = pełna jasność tekstu. */
+function makeLabelMaterial(visId: string, dt: any, tag: 'pmi' | 'msr', scene: any): any {
+    const mat = new BABYLON.StandardMaterial(`${tag === 'msr' ? 'pmi_msr_lbl_mat_' : 'pmi_lbl_mat_'}${visId}`, scene);
+    mat.diffuseTexture = dt;
+    try {
+        mat.emissiveTexture = dt;
+        mat.opacityTexture = dt;
+    } catch { /* starsze buildy */ }
+    mat.diffuseColor = new BABYLON.Color3(0, 0, 0);
+    mat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+    mat.disableLighting = true;
+    mat.backFaceCulling = false;
+    mat.useAlphaFromDiffuseTexture = true;
+    if (mat.disableDepthWrite !== undefined && tag === 'msr') mat.disableDepthWrite = true;
+    return mat;
 }
 
 /** Tolerancja trafienia w cienką linię wymiarową [mm]. */
@@ -178,6 +219,8 @@ interface MeasureVisual {
     basePlaneW?: number;
     basePlaneH?: number;
     lineCount?: number;
+    /** Bez delt → rozmiar stały w świecie (jak label wymiaru), a nie stale na ekranie. */
+    labelWorldFixed?: boolean;
 }
 
 // ============================================================================
@@ -402,10 +445,14 @@ export class PMIRenderer {
             ? annOrId
             : (annotationId ? PMIStore.instance.getAnnotation(annotationId) : null);
 
+        // Linia wymiarowa kończy się u podstawy grotów (solver przycina o arrowLen),
+        // więc stożek nie jest zakrywany czubkiem linii.
+        const dimLineA = rd.dimLineP1World ?? rd.p1DimWorld;
+        const dimLineB = rd.dimLineP2World ?? rd.p2DimWorld;
         this.updateSegmentTubes(
             vis,
             'dimLineParts',
-            [[rd.p1DimWorld, rd.p2DimWorld]],
+            [[dimLineA, dimLineB]],
             lineColor,
             rd.thickMain,
             annotationId,
@@ -549,7 +596,7 @@ export class PMIRenderer {
     // ========================================================================
 
     private updateArrow(
-        vis: DimVisual,
+        vis: any,
         key: 'arrowMesh1' | 'arrowMesh2',
         tipWorld: Vec3,
         fwdWorld: Vec3,
@@ -637,11 +684,13 @@ export class PMIRenderer {
         const textWWorld = Math.max(text.length * textHWorld * charAspect, 8);
 
         const alignToLine = !!PMIStore.instance.alignTextToLine;
-        const cacheKey = `${text}|${textColor}|${textHWorld}|${alignToLine}`;
+        // Wynik na białym tle — tekst zawsze czarny (kolor wymiaru widoczny na liniach).
+        const labelColor = '#000000';
+        const cacheKey = `${text}|${labelColor}|${textHWorld}|${alignToLine}`;
 
         if (vis.textCacheKey !== cacheKey) {
             this.disposeTextLabel(vis);
-            this.buildTextLabel(vis, text, textColor, textWWorld, textHWorld, annotationId);
+            this.buildTextLabel(vis, text, labelColor, textWWorld, textHWorld, annotationId);
             vis.textCacheKey = cacheKey;
         }
 
@@ -736,16 +785,23 @@ export class PMIRenderer {
         textHWorld: number,
         annotationId: string | null,
     ): void {
-        const texWidth = 1024;
-        const texHeight = 256;
+        // Tekstura dopasowana proporcją do płaszczyzny — brak zniekształceń tekstu.
+        const planeW = textWWorld + 6;
+        const planeH = textHWorld + 4;
+        const density = 8; // px/mm — 256px na 32mm wysokości = ostre przy typowym zoomie
+        const texWidth = Math.max(256, Math.min(4096, Math.round(planeW * density)));
+        const texHeight = Math.max(128, Math.min(1024, Math.round(planeH * density)));
 
         const dt = new BABYLON.DynamicTexture(`pmi_tex_${vis.id}`, { width: texWidth, height: texHeight }, this.scene, false);
         dt.hasAlpha = true;
+        sharpenLabelTexture(dt);
 
         const ctx = dt.getContext();
         ctx.clearRect(0, 0, texWidth, texHeight);
+        paintLabelBackground(ctx, texWidth, texHeight, Math.round(texHeight * 0.16));
 
-        ctx.font = 'bold 136px Consolas, monospace';
+        const fontPx = Math.round(texHeight * 0.62);
+        ctx.font = `bold ${fontPx}px Consolas, "Courier New", monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = textColor;
@@ -753,8 +809,8 @@ export class PMIRenderer {
         dt.update();
 
         const plane = BABYLON.MeshBuilder.CreatePlane(`pmi_lbl_${vis.id}`, {
-            width: textWWorld + 6,
-            height: textHWorld + 4,
+            width: planeW,
+            height: planeH,
             sideOrientation: BABYLON.Mesh.DOUBLESIDE,
         }, this.scene);
 
@@ -767,12 +823,7 @@ export class PMIRenderer {
             ...(annotationId ? { pmiAnnotationId: annotationId, pmiTarget: 'text' } : {}),
         };
 
-        const mat = new BABYLON.StandardMaterial(`pmi_lbl_mat_${vis.id}`, this.scene);
-        mat.diffuseTexture = dt;
-        mat.emissiveColor = new BABYLON.Color3(1, 1, 1);
-        mat.disableLighting = true;
-        mat.backFaceCulling = false;
-        mat.useAlphaFromDiffuseTexture = true;
+        const mat = makeLabelMaterial(vis.id, dt, 'pmi', this.scene);
         plane.material = mat;
 
         vis.textPlane = plane;
@@ -823,7 +874,6 @@ export class PMIRenderer {
     ): void {
         const color = selected ? store.selectedColor : MEASURE_COLOR;
         this.updateMeasurePath(vis, path, color, pickId);
-        this.updateMeasurePoints(vis, path, color, pickId);
         const p1 = path[0];
         const p2 = path[path.length - 1];
         if (path.length === 2) {
@@ -835,6 +885,10 @@ export class PMIRenderer {
         this.updateMeasureLabel(vis, path, store, pickId, selected, labelText);
     }
 
+    /**
+     * Linia pomiaru — stała grubość w świecie, ale celowo węższa niż linia
+     * wymiaru (suwak `lineWidthMM` skalowany o połowę).
+     */
     private updateMeasurePath(
         vis: MeasureVisual,
         path: Vec3[],
@@ -844,17 +898,13 @@ export class PMIRenderer {
         for (const part of vis.mainLineParts) part?.dispose?.();
         vis.mainLineParts = [];
 
-        const userMM = measureLineWidth();
+        const widthMM = Math.max(PMIStore.instance.lineWidthMM * 0.5, 0.6);
         for (let i = 0; i + 1 < path.length; i++) {
-            // Środek segmentu: średnica tak, by na ekranie trzymać suwak w ryzach
-            // min/max px (daleko: min px żeby było widać, blisko: max px żeby nie był kloc).
-            const mid = v3Scale(v3Add(path[i], path[i + 1]), 0.5);
-            const baked = measureDiameterAt(this.scene, mid, userMM);
             const tube = this.createTubeSegment(
                 `pmi_msr_${vis.id}_line_${i}`,
                 path[i],
                 path[i + 1],
-                baked,
+                widthMM,
                 color,
                 null,
             );
@@ -863,58 +913,8 @@ export class PMIRenderer {
                     tube.isPickable = true;
                     tube.metadata = { ...(tube.metadata || {}), isPmiOverlay: true, pmiMeasurementId: pickId };
                 }
-                attachScreenConstantScale(
-                    tube,
-                    baked,
-                    () => measureDiameterAt(this.scene, mid, measureLineWidth()),
-                    true,
-                );
                 vis.mainLineParts.push(tube);
             }
-        }
-    }
-
-    private updateMeasurePoints(
-        vis: MeasureVisual,
-        path: Vec3[],
-        color: Rgba,
-        pickId: string | null,
-    ): void {
-        for (const p of vis.points) p?.dispose?.();
-        vis.points = [];
-
-        let minDist = Infinity;
-        for (let i = 0; i + 1 < path.length; i++) {
-            const d = v3Len(v3Sub(path[i + 1], path[i]));
-            if (d < minDist) minDist = d;
-        }
-        const baseUserMM = measureLineWidth();
-
-        for (const [i, pos] of path.entries()) {
-            const baked = measurePointDiameterAt(this.scene, pos, baseUserMM, minDist);
-            const sphere = BABYLON.MeshBuilder.CreateSphere(`pmi_msr_${vis.id}_pt_${i}`, {
-                diameter: baked,
-                segments: 8,
-            }, this.scene);
-            sphere.position = this.toB(pos);
-            sphere.renderingGroupId = 2;
-            sphere.isPickable = !!pickId;
-            sphere.metadata = {
-                ...(sphere.metadata || {}),
-                isPmiOverlay: true,
-                ...(pickId ? { pmiMeasurementId: pickId } : {}),
-            };
-            const mat = new BABYLON.StandardMaterial(`pmi_msr_${vis.id}_pt_mat_${i}`, this.scene);
-            mat.emissiveColor = new BABYLON.Color3(color[0], color[1], color[2]);
-            mat.disableLighting = true;
-            sphere.material = mat;
-            attachScreenConstantScale(
-                sphere,
-                baked,
-                () => measurePointDiameterAt(this.scene, pos, measureLineWidth(), minDist),
-                false,
-            );
-            vis.points.push(sphere);
         }
     }
 
@@ -968,14 +968,25 @@ export class PMIRenderer {
         const accentColor = selected ? toHexColor(store.selectedColor) : toHexColor(MEASURE_COLOR);
         const lines = label.split('\n');
 
-        const dims = computeMeasureLabelDimensions(lines);
-        const planeW = dims.planeW;
-        const planeH = dims.planeH;
+        // Bez delt (1 linia) → rozmiar i styl jak label wymiaru: stały w świecie.
+        const worldFixed = lines.length === 1;
+        let planeW: number;
+        let planeH: number;
+        if (worldFixed) {
+            const textHWorld = Math.max(store.textSizeMM, 12);
+            planeH = textHWorld + 4;
+            planeW = Math.max(lines[0].length * textHWorld * 0.65, 8) + 6;
+        } else {
+            const dims = computeMeasureLabelDimensions(lines);
+            planeW = dims.planeW;
+            planeH = dims.planeH;
+        }
         vis.basePlaneW = planeW;
         vis.basePlaneH = planeH;
         vis.lineCount = lines.length;
+        vis.labelWorldFixed = worldFixed;
 
-        const cacheKey = `${label}|${accentColor}|${selected}|${planeW.toFixed(0)}|${planeH.toFixed(0)}`;
+        const cacheKey = `${label}|${accentColor}|${selected}|${planeW.toFixed(0)}|${planeH.toFixed(0)}|${worldFixed ? 1 : 0}`;
 
         if (vis.textCacheKey !== cacheKey) {
             vis.textPlane?.dispose?.();
@@ -986,7 +997,9 @@ export class PMIRenderer {
 
         if (vis.textPlane) {
             const labelPos = isChain && path.length === 3 ? path[1] : v3Scale(v3Add(p1, p2), 0.5);
-            const scale = this.calculateMeasureScreenScale(labelPos, planeH, lines.length);
+            const scale = worldFixed
+                ? this.computeWorldFixedLabelScale(labelPos, planeH)
+                : this.calculateMeasureScreenScale(labelPos, planeH, lines.length);
             vis.textPlane.scaling.set(scale, scale, scale);
 
             const effectiveH = planeH * scale;
@@ -998,6 +1011,21 @@ export class PMIRenderer {
             vis.labelPreferredWorld = preferred;
             vis.textPlane.position = new BABYLON.Vector3(preferred.x, preferred.y, preferred.z);
         }
+    }
+
+    /**
+     * Skala dla etykiety „stałej w świecie" (bez delt): bazowo 1.0, ale przy
+     * dużym zbliżeniu/oddaleniu ograniczana, by nie zajmowała pół ekranu ani nie znikła.
+     */
+    private computeWorldFixedLabelScale(worldPos: Vec3, basePlaneH: number): number {
+        const pxPerMM = pixelsPerMMAtScene(this.scene, worldPos);
+        if (!Number.isFinite(pxPerMM) || pxPerMM <= 1e-6 || basePlaneH <= 0) return 1;
+        const screenH = basePlaneH * pxPerMM;
+        const MAX_PX = 46;
+        const MIN_PX = 16;
+        if (screenH > MAX_PX) return MAX_PX / screenH;
+        if (screenH < MIN_PX) return MIN_PX / screenH;
+        return 1;
     }
 
     private calculateMeasureScreenScale(worldPos: Vec3, basePlaneH: number, lineCount: number): number {
@@ -1161,7 +1189,10 @@ export class PMIRenderer {
         return Math.hypot(b.x - a.x, b.y - a.y);
     }
 
-    /** Etykieta miarki — zoptymalizowana tekstura 1024 px bez narzutu mipmap i anizotropii. */
+    /**
+     * Etykieta miarki — tekstura proporcjonalna do płaszczyzny (bez zniekształceń),
+     * wysoka gęstość pikseli na linię dla ostrości, tło + outline dla czytelności.
+     */
     private buildMeasureTextLabel(
         vis: MeasureVisual,
         lines: string[],
@@ -1171,8 +1202,14 @@ export class PMIRenderer {
         pickId: string | null,
         selected: boolean,
     ): void {
-        const texWidth = 1024;
-        const texHeight = Math.max(128, 80 * lines.length);
+        // ~300 px na linię — gwarantuje ostrość, a texW nadąża za proporcją płaszczyzny.
+        const slotPx = 300;
+        let texHeight = Math.round(slotPx * lines.length);
+        let texWidth = Math.round(texHeight * (planeW / Math.max(planeH, 1e-3)));
+        // Zabezpieczenie rozmiaru tekstury.
+        if (texWidth > 4096) { texHeight = Math.round(texHeight * (4096 / texWidth)); texWidth = 4096; }
+        if (texWidth < 256) texWidth = 256;
+        texHeight = Math.max(128, texHeight);
 
         const dt = new BABYLON.DynamicTexture(
             `pmi_msr_tex_${vis.id}`,
@@ -1181,9 +1218,11 @@ export class PMIRenderer {
             false,
         );
         dt.hasAlpha = true;
+        sharpenLabelTexture(dt);
 
         const ctx = dt.getContext() as CanvasRenderingContext2D;
         ctx.clearRect(0, 0, texWidth, texHeight);
+        paintLabelBackground(ctx, texWidth, texHeight, Math.round(texHeight * 0.12));
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1191,17 +1230,11 @@ export class PMIRenderer {
 
         for (let i = 0; i < lines.length; i++) {
             const isMain = i === 0;
-            ctx.font = isMain ? 'bold 74px Consolas, "Courier New", monospace' : 'bold 54px Consolas, "Courier New", monospace';
+            const fontPx = Math.round(slotH * (isMain ? 0.72 : 0.6));
+            ctx.font = `bold ${fontPx}px Consolas, "Courier New", monospace`;
             const color = measureLabelLineColor(lines[i], selected && isMain);
-            const outline = darkenHexForOutline(color, color === MEASURE_TEXT_HEX.L_SELECTED ? 0.28 : 0.38);
             const x = texWidth / 2;
             const y = slotH * (i + 0.5);
-
-            ctx.lineJoin = 'round';
-            ctx.miterLimit = 2;
-            ctx.lineWidth = isMain ? 7 : 5;
-            ctx.strokeStyle = outline;
-            ctx.strokeText(lines[i], x, y);
 
             ctx.shadowColor = 'transparent';
             ctx.shadowBlur = 0;
@@ -1223,13 +1256,7 @@ export class PMIRenderer {
             ...(pickId ? { pmiMeasurementId: pickId } : {}),
         };
 
-        const mat = new BABYLON.StandardMaterial(`pmi_msr_lbl_mat_${vis.id}`, this.scene);
-        mat.diffuseTexture = dt;
-        mat.emissiveColor = new BABYLON.Color3(1, 1, 1);
-        mat.disableLighting = true;
-        mat.backFaceCulling = false;
-        mat.useAlphaFromDiffuseTexture = true;
-        if (mat.disableDepthWrite !== undefined) mat.disableDepthWrite = true;
+        const mat = makeLabelMaterial(vis.id, dt, 'msr', this.scene);
         plane.material = mat;
 
         plane.onBeforeRenderObservable.add(() => {
@@ -1237,8 +1264,10 @@ export class PMIRenderer {
             const currentH = vis.basePlaneH ?? planeH;
             const currentW = vis.basePlaneW ?? planeW;
             const count = vis.lineCount ?? lines.length;
-            const pos = vis.labelPreferredWorld || plane.position;
-            const scale = this.calculateMeasureScreenScale(pos, currentH, count);
+            // Bez delt: stały rozmiar w świecie (jak label wymiaru), ale z clampem ekranowym.
+            const scale = vis.labelWorldFixed
+                ? this.computeWorldFixedLabelScale(vis.labelPreferredWorld || plane.position, currentH)
+                : this.calculateMeasureScreenScale(vis.labelPreferredWorld || plane.position, currentH, count);
             if (Math.abs(plane.scaling.y - scale) > 1e-4) {
                 plane.scaling.set(scale, scale, scale);
                 vis.labelWidth = currentW * scale;

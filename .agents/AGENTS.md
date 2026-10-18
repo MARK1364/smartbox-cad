@@ -38,9 +38,41 @@ Przeliczniki: `1 mm = 1_000_000 nm`, `1 m = 1_000_000_000 nm`.
 - Legacy: `Biblioteki/okucia/`, `Biblioteki/szuflady.json` — nie usuwać bez migracji; nowe pozycje preferuj w `B1_biblioteka`.
 
 ## Architektura Modułów Bloki (`A2_bloki/`)
+- **Numeracja plików (prefiks = rodzina)**: Każdy plik w katalogu głównym `A2_bloki/` ma prefiks `NN_` będący numerem RODZINY bloku (nie kolejnym numerem pliku). Dzięki temu pliki jednej rodziny sortują się razem, a dodanie nowego pliku do istniejącej rodziny nie zmienia numeracji. Rodziny:
+  - `01_*` — rdzeń współdzielony (`base-engine`, `bloki-core`, `bloki-types`, `bloki-module-types`, `bloki-ui`, `module-plans`, `machining-intent`, `machining-sync`, `register`, `smartparts-catalog`, `smartparts-ui.css`, `BLOKI_PARAMETERS.md` …)
+  - `02_*` — wnęka (bay): `bloki-bay-*`, `bay-reference-walls-panel`, `bloki-offset-gizmo`, `bloki-ref-plane-hint`
+  - `03_shelf` · `04_shelves` · `05_doors` · `06_skosne-doors` · `07_corner-doors` · `08_tubes` · `09_drawers` · `10_dividers` · `11_panels` · `12_flaps` · `13_led-internal` · `14_led-external` · `15_led-external-channel` · `16_led` · `17_hangers`
+  - **Nowa rodzina** = następny wolny numer (np. `18_...`). Pliki w podfolderach (`commands/`, `handles/`, `hangers/`, `plugins/`, `core/`, `ui/`, `__tests__/`) NIE dostają numeru — są już pogrupowane.
+  - **Wyjątki bez numeru**: `index.ts` (barrel, importy katalogowe `../A2_bloki`), zasoby niebędące modułami (`123.PNG`). Referencje do nazw trzymaj w `scripts/audit-display-name-logic.mjs` zsynchronizowane — brak wpisu w `requirePath` to cicho wyłączona reguła.
 - **Funkcyjny Rdzeń (Functional Core)**: Moduły operują na czystych funkcjach `normalize{Mod}Params(raw, dims)` oraz `calculate{Mod}Plan(dims, params)`. Klasy `*Engine` pełnią wyłącznie rolę cienkich adapterów.
 - **Jawne jednostki fizyczne w zmiennych**: Wszystkie zmienne i DTO wewnątrz silników MUSZĄ posiadać sufiksy jednostek (np. `grubosc_polki_mm`, `odsuniecie_przod_mm`, `liczba_polek`, `szczelina_mm`).
-- **SSOT Parametrów**: Pełna dokumentacja parametrów modułów znajduje się w [`A2_bloki/BLOKI_PARAMETERS.md`](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/BLOKI_PARAMETERS.md).
+- **SSOT Parametrów**: Pełna dokumentacja parametrów modułów znajduje się w [`A2_bloki/01_BLOKI_PARAMETERS.md`](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/01_BLOKI_PARAMETERS.md).
+
+## Procedura Tworzenia Nowych Bloków / Okuć (SmartParts / Studio Workflow)
+
+**OBOWIĄZKOWY PRZEPŁYW PRACY (Studio → JSON → Silnik):**
+Kiedy użytkownik poprosi o dodanie nowego rodzaju bloków lub okuć (np. nowe zawieszki, uchwyty, cargi, podpórki, szuflady itp.), **AGENT MA BEZWZGLĘDNY OBOWIĄZEK PRZYPOMNIEĆ O TYM WORKFLOWIE** i oprzeć implementację na JSON-ie wygenerowanym przez wizualny edytor Studio:
+
+1. **Krok 1: Konfiguracja w wizualnym edytorze STUDIO (`S5_studio/`)**:
+   - Element (kontener główny, ściany referencyjne montażu, bryła okucia, cięcia typu `HOLE` / `POCKET`) jest konfigurowany w wizualnym edytorze **Studio** (`studio.html` / `start_studio.bat`).
+   - Studio generuje ustandaryzowany plik **JSON** z parametrami w milimetrach (`"units": "mm"`).
+   - **Główna zaleta i SSOT:** Struktura JSON wygenerowana przez Studio jest **ZAWSZE TAKA SAMA, powtarzalna i przewidywalna** w całym systemie. Bezwzględny zakaz wymyślania ad-hoc formatów JSON od zera.
+
+2. **Krok 2: Silnik Obliczający na bazie JSON ze Studio**:
+   - Na bazie wygenerowanego JSON-a ze Studio tworzony jest silnik obliczający (`*Engine`) w `A2_bloki/` (lub odpowiedni adapter w bibliotece).
+   - Silnik implementuje czyste funkcje funkcyjnego rdzenia:
+     `normalize{Mod}Params(raw, dims)` oraz `calculate{Mod}Plan(dims, params)`.
+   - Wszystkie zmienne w silniku muszą mieć jawne sufiksy jednostek fizycznych (`*_mm`).
+
+3. **Krok 3: Zasada Trójki Plików w Bibliotece (`B1_biblioteka/`)**:
+   - W folderze kategorii (`zawieszki/`, `uchwyty/`, itp.) element zapisywany jest pod identyczną nazwą bazową:
+     1. `{Nazwa}.json` — wygenerowany ze Studio (parametry w mm, definicja bryły i cięć).
+     2. `{Nazwa}.png` — miniatura do UI katalogu.
+     3. `{Nazwa}.glb` — siatka 3D (jeśli element posiada plik siatki).
+
+**Instrukcja dla agenta na przyszłość:** Jeśli użytkownik poprosi o stworzenie nowego bloku lub rodzaju okucia (np. *"dodajmy nowy rodzaj zawieszek"*):
+Agent natychmiast przypomina:
+> *"Zgodnie z procedurą tworzenia bloków, punktem wyjścia jest konfiguracja w wizualnym edytorze STUDIO (`studio.html`), który generuje znormalizowany JSON o stałej strukturze. Na jego bazie budujemy silnik obliczający. Czy posiadasz już wygenerowany JSON ze Studio, czy przygotowujemy go według standardu Studio?"*
 
 ## Architektura Formatek (SmartPanel)
 - Geometrię płyty buduje **NativePanelBuilder** (`A4_smartpanel/native-panel-builder.ts`, `native_core/mesh_builder.ts`, `polygon-extrusion.ts`).
@@ -60,6 +92,11 @@ Przeliczniki: `1 mm = 1_000_000 nm`, `1 m = 1_000_000_000 nm`.
 NIGDY nie modyfikuj plików bezpośrednio po prośbie użytkownika, jeśli zadanie wymaga więcej niż jednej prostej zmiany. 
 Najpierw przyjmij rolę Managera: przeanalizuj kod, przedstaw użytkownikowi plan działania (implementation_plan) i zapytaj, czy logika ma sens. 
 Dopiero gdy użytkownik zatwierdzi plan (jako QA/Architekt), przejdź do modyfikacji plików zgodnie z listą zadań. Po każdej znaczącej zmianie poinformuj o potrzebie uruchomienia weryfikacji.
+
+## Twardy Zakaz Samowolnego Dodawania Przycisków i Narzędzi
+- **BEZWZGLĘDNY ZAKAZ dodawania nieproszonych przycisków, narzędzi, opcji menu ani akcji UI**, o które użytkownik wprost nie prosił.
+- Nadmiarowe „inwencje” (np. dodawanie dodatkowych trybów 3D, kolejnych przycisków na toolbarach czy nowych akcji kontekstowych) powodują regresje matematyczne i rozpraszają workflow użytkownika.
+- Implementuj WYŁĄCZNIE dokładnie te przyciski i zachowania, o które użytkownik poprosił.
 
 ## Tożsamość i Taksonomia — TWARDE ZASADY (id / rola / nazwa / purpose)
 
@@ -154,7 +191,7 @@ za ciche obejście reguły.
 
 ## Tłumaczenia (T1_tlumaczenia, faza 1: pl/en/de)
 
-- Teksty UI modułu mieszkają w JEDNYM pliku obok modułu: `A2_bloki/shelves_tekst.json` (`{ "klucz": { "pl":…, "en":…, "de":… } }`). Produkcja (`*_rules_V1.json`) trzyma tylko klucze — plików produkcyjnych NIE wysyła się do tłumaczy.
+- Teksty UI modułu mieszkają w JEDNYM pliku obok modułu: `A2_bloki/04_shelves_tekst.json` (`{ "klucz": { "pl":…, "en":…, "de":… } }`). Produkcja (`*_rules_V1.json`) trzyma tylko klucze — plików produkcyjnych NIE wysyła się do tłumaczy.
 - Adaptery: zero polskich stringów w JSX — tylko `tx(tekst, 'klucz', NS)` z `T1_tlumaczenia/core.ts` (fallback aktywny → en → pl) + `useLocale()` z `T1_tlumaczenia/react.tsx`. Placeholdery: `tx(d, 'section.label_template', NS, { n: 3 })`.
 - Nazwy techniczne nodów (`Polka_1`, `Drazek_fi25`), klucze parametrów (`shelfCount`), role, `report_type` — NIETŁUMACZONE, stabilne we wszystkich językach.
 - Niemieckie (`de`) szkice oznacza autor do weryfikacji; cyrylica (`ru/bg/uk`) później jako dopisane klucze — bez zmian kodu.

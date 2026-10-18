@@ -1,11 +1,12 @@
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { UIController } from '../A1_core/ui-controller.js';
-import { LedChannelStore } from '../A5_smartparts/index.js';
+import { LedChannelStore } from '../A2_bloki/15_led-external-channel-store.js';
 import { isExcludedFromProduction } from '../S4_sciany/smartwall-types.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import reportsTekstRaw from './reports_tekst.json';
+import { priceStore } from './price-store';
 
 const reportsTekst = reportsTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'reports';
@@ -94,6 +95,9 @@ export class ReportDataNormalizer {
         }
 
         const keys = ['+X', '-X', '+Y', '-Y'];
+        if (edgeBanding && edgeBanding['NOTCH'] !== undefined) {
+            keys.push('NOTCH');
+        }
         for (const k of keys) {
             const eb = edgeBanding[k];
             if (eb) {
@@ -344,7 +348,7 @@ export class ReportDataNormalizer {
                 const isFrozen = Boolean(node.frozen || domain?.frozen || domain?.params?.frozen);
                 if (!isFrozen) {
                     // Strict: library_id tylko ze strukturalnych pól. Bez nazw display.
-                    let library_id = domain?.library_id || domain?.price_id || roleUpper;
+                    let library_id = domain?.library_id || domain?.price_id || domain?.hardwareId || roleUpper;
                     if (roleUpper === 'PROWADNICA' || roleUpper === 'RAIL') {
                         const rawHw = String(domain?.hardwareId || domain?.library_id || domain?.price_id || domain?.params?.railId || roleUpper).toUpperCase();
                         const len = domain?.params?.lengthMm || 500;
@@ -462,7 +466,9 @@ export class ReportDataNormalizer {
             }
         }
 
-        // Pozycje SmartParts / Kanały LED
+        // Pozycje SmartParts / LED zewnętrzny (kanał) — system 'assembly_led_channel' (A2_bloki/led).
+        // Uwaga: LED wewnętrzny ('BLOKI_LED', led-internal-engine) jest odrębnym systemem
+        // i nie przechodzi przez LedChannelStore.
         try {
             const ledStore = LedChannelStore.instance;
             const placedChannels = (ledStore.channels || []).filter(
@@ -492,10 +498,75 @@ export class ReportDataNormalizer {
 
         return {
             panels,
-            accessories,
+            accessories: this.aggregateAccessories(accessories),
             furnitures: Array.from(furnitureSet),
             containers: Array.from(containerMap.values())
         };
+    }
+
+    /**
+     * Display name pozycji okucia z cennika (SSOT). Zwraca null, gdy brak wpisu —
+     * wtedy zostaje nazwa z węzła. Służy wyłącznie wyświetlaniu scalonej pozycji.
+     */
+    static resolveAccessoryDisplayName(item: AccessoryItem): string | null {
+        const hw = priceStore.prices?.prices_hardware as Record<string, any> | undefined;
+        if (!hw || !item?.library_id) return null;
+
+        const direct = hw[item.library_id];
+        if (direct?.name) return String(direct.name);
+
+        const norm = String(item.library_id).trim().toUpperCase();
+        for (const [k, v] of Object.entries(hw)) {
+            if (k.trim().toUpperCase() === norm && (v as any)?.name) {
+                return String((v as any).name);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Scala powtarzające się okucia/akcesoria i sumuje ich qty.
+     * Tożsamość pozycji = rola + library_id + zakres (mebel/korpus/blok) + wariant (cena własna / powierzchnia).
+     * Pozycje z ceną własną (np. ramki alu) zachowują nazwę wariantu — nie są przemianowywane.
+     */
+    static aggregateAccessories(items: AccessoryItem[]): AccessoryItem[] {
+        const order: string[] = [];
+        const groups = new Map<string, AccessoryItem[]>();
+
+        for (const item of items) {
+            const isCustomPriced = typeof item.custom_unit_price === 'number';
+            const canonical = isCustomPriced ? null : this.resolveAccessoryDisplayName(item);
+            const nameKey = isCustomPriced ? item.name : (canonical ?? item.name);
+            const key = [
+                item.role,
+                item.library_id,
+                item.furniture_name,
+                item.container_id ?? '',
+                item.blok_id ?? '',
+                item.custom_unit_price ?? '',
+                item.area_m2 ?? '',
+                nameKey
+            ].join('|');
+
+            if (!groups.has(key)) {
+                groups.set(key, []);
+                order.push(key);
+            }
+            groups.get(key)!.push(item);
+        }
+
+        const result: AccessoryItem[] = [];
+        for (const key of order) {
+            const group = groups.get(key)!;
+            const merged: AccessoryItem = { ...group[0] };
+            merged.qty = group.reduce((sum, it) => sum + (it.qty || 1), 0);
+            if (group.length > 1 && typeof group[0].custom_unit_price !== 'number') {
+                const canonical = this.resolveAccessoryDisplayName(group[0]);
+                if (canonical) merged.name = canonical;
+            }
+            result.push(merged);
+        }
+        return result;
     }
 
     /**

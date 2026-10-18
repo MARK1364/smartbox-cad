@@ -15,34 +15,34 @@ function sideEdgeRules(rules: any) {
     };
 }
 
-describe('side edge banding defaults (2 short + 1 front long)', () => {
+describe('side edge banding defaults (1 front long only)', () => {
     for (const [name, rules] of [
         ['korpus3', korpus3Rules],
         ['rogowy90', rogowy90Rules],
         ['rogowy1', rogowy1Rules]
     ] as const) {
-        it(`${name}: LEFT +X front, both Y short`, () => {
+        it(`${name}: LEFT +X front only, Y and -X none`, () => {
             const { left } = sideEdgeRules(rules);
             expect(left['+X']).toEqual(ABS);
             expect(left['-X']).toEqual(NONE);
-            expect(left['+Y']).toEqual(ABS);
-            expect(left['-Y']).toEqual(ABS);
+            expect(left['+Y']).toEqual(NONE);
+            expect(left['-Y']).toEqual(NONE);
         });
 
-        it(`${name}: RIGHT -X front, both Y short`, () => {
+        it(`${name}: RIGHT -X front only, Y and +X none`, () => {
             const { right } = sideEdgeRules(rules);
             expect(right['+X']).toEqual(NONE);
             expect(right['-X']).toEqual(ABS);
-            expect(right['+Y']).toEqual(ABS);
-            expect(right['-Y']).toEqual(ABS);
+            expect(right['+Y']).toEqual(NONE);
+            expect(right['-Y']).toEqual(NONE);
         });
     }
 
-    it('rogowy90 Bok_L (LEFT_SIDE_PANEL): +X front, both Y short', () => {
+    it('rogowy90 Bok_L (LEFT_SIDE_PANEL): +X front only', () => {
         const { left } = sideEdgeRules(rogowy90Rules);
         expect(left!['+X']).toEqual(ABS);
         expect(left!['-X']).toEqual(NONE);
-        expect(left!['+Y']).toEqual(ABS);
-        expect(left!['-Y']).toEqual(ABS);
+        expect(left!['+Y']).toEqual(NONE);
+        expect(left!['-Y']).toEqual(NONE);
     });
 });

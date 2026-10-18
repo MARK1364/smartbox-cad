@@ -23,6 +23,7 @@ import type { ReportModulePayload } from './module-data/types';
 import { tx, getLocale } from '../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import srcTekstRaw from './src_tekst.json';
+import { priceStore } from '../R1_reports/price-store';
 
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
@@ -73,6 +74,10 @@ function ReportStandaloneApp() {
         payload ? null : tx(srcTekst, 'entry.report_empty', TX_NS)
     );
     const [refreshHint, setRefreshHint] = useState<string | null>(null);
+    const [priceTick, setPriceTick] = useState(0);
+
+    // Edytor cennika (inna karta) → przelicz raport z nowymi cenami
+    useEffect(() => priceStore.subscribe(() => setPriceTick(t => t + 1)), []);
 
     const reloadFromSession = useCallback(() => {
         const next = readModuleSession<ReportModulePayload>('report');
@@ -145,7 +150,7 @@ function ReportStandaloneApp() {
         } catch {
             return null;
         }
-    }, [payload]);
+    }, [payload, priceTick]);
 
     const handleJson = (text: string, fileName: string) => {
         try {

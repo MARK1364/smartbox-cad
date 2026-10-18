@@ -7,8 +7,8 @@ import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
-import { buildDoorsDrillings } from '../doors-drilling-builder.js';
-import { update_bloki_core } from '../bloki-core.js';
+import { buildDoorsDrillings } from '../05_doors-drilling-builder.js';
+import { update_bloki_core } from '../01_bloki-core.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
 
 describe('Doors Drilling Builder (buildDoorsDrillings)', () => {
@@ -127,8 +127,8 @@ describe('Doors Drilling Builder (buildDoorsDrillings)', () => {
 
     it('generates parallel hinge drillings on BLIND_PANEL on FACE_Z_PLUS for korpus_rogowy1', async () => {
         const { CreateKorpusCommand } = await import('../../A3_smartframe/commands/create-korpus-command.js');
-        const { probeBayFromCADPoint } = await import('../bloki-bay-detector.js');
-        const { createBlokInDetectedBay, BLOKI_INTERNAL_OPTIONS } = await import('../bloki-bay-actions.js');
+        const { probeBayFromCADPoint } = await import('../02_bloki-bay-detector.js');
+        const { createBlokInDetectedBay, BLOKI_INTERNAL_OPTIONS } = await import('../02_bloki-bay-actions.js');
         const { computeFaceData, localTo3D } = await import('../../A4_smartpanel/native_core/face-lcs.js');
         const { nmToMm } = await import('../../A1_core/cad-math/units.js');
 
@@ -195,8 +195,8 @@ describe('Doors Drilling Builder (buildDoorsDrillings)', () => {
 
     it('rejects standard hinge on narrow blind panel edge and produces 0 floating holes', async () => {
         const { CreateKorpusCommand } = await import('../../A3_smartframe/commands/create-korpus-command.js');
-        const { probeBayFromCADPoint } = await import('../bloki-bay-detector.js');
-        const { createBlokInDetectedBay, BLOKI_INTERNAL_OPTIONS } = await import('../bloki-bay-actions.js');
+        const { probeBayFromCADPoint } = await import('../02_bloki-bay-detector.js');
+        const { createBlokInDetectedBay, BLOKI_INTERNAL_OPTIONS } = await import('../02_bloki-bay-actions.js');
 
         const cmd = new CreateKorpusCommand({
             szerokosc_mm: 800,

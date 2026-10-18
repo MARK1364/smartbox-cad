@@ -223,6 +223,13 @@ export function resolveCorner90Geometry(
             customProperties: {
                 shape: 'L_NOTCH',
                 outline2d
+            },
+            edge_banding: {
+                '+X': { active: false, type_id: 'none' },
+                '-X': { active: false, type_id: 'none' },
+                '+Y': { active: false, type_id: 'none' },
+                '-Y': { active: true, type_id: '0.008x0.022' },
+                'NOTCH': { active: true, type_id: '0.008x0.022' }
             }
         };
     }

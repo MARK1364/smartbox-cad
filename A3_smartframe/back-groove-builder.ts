@@ -280,7 +280,8 @@ function grooveOnHorizontal(
     back: PanelState,
     target: PanelState,
     backBox: WorldBox,
-    depth_nm: number
+    depth_nm: number,
+    allPanels?: PanelState[]
 ): GrooveIntent | null {
     const t = translationOf(target);
     const faceW = target.dim_nm.x;
@@ -295,9 +296,37 @@ function grooveOnHorizontal(
     let v_nm: number;
     let length_nm: number;
 
+    const verticalSides = allPanels
+        ? allPanels.filter((p) => isVerticalHost(roleUpper(p)))
+        : [];
+
+    const targetZ = t.z;
+    const targetHalfTh = target.dim_nm.z / 2;
+
     if (axis === 'Y') {
-        u_nm = backBox.x0 - (t.x - faceW / 2);
-        width_nm = backBox.x1 - backBox.x0;
+        let x0 = backBox.x0;
+        let x1 = backBox.x1;
+
+        for (const side of verticalSides) {
+            const sBox = verticalHostBox(side);
+            if (sBox.z1 > targetZ - targetHalfTh - EPS && sBox.z0 < targetZ + targetHalfTh + EPS) {
+                if (sBox.x0 < x1 && sBox.x1 >= x1 - EPS) {
+                    x1 = Math.min(x1, sBox.x0);
+                }
+                if (sBox.x1 > x0 && sBox.x0 <= x0 + EPS) {
+                    x0 = Math.max(x0, sBox.x1);
+                }
+            }
+        }
+
+        const hostX0 = t.x - faceW / 2;
+        const hostX1 = t.x + faceW / 2;
+        x0 = Math.max(x0, hostX0);
+        x1 = Math.min(x1, hostX1);
+        if (x1 - x0 <= EPS) return null;
+
+        u_nm = x0 - hostX0;
+        width_nm = x1 - x0;
         length_nm = backTh;
         if (vZeroAtBack) {
             v_nm = (t.y + faceD / 2) - backBox.y1;
@@ -308,8 +337,24 @@ function grooveOnHorizontal(
         const midX = (backBox.x0 + backBox.x1) / 2;
         u_nm = midX - backTh / 2 - (t.x - faceW / 2);
         width_nm = backTh;
-        const y0 = Math.max(t.y - faceD / 2, backBox.y0);
-        const y1 = Math.min(t.y + faceD / 2, backBox.y1);
+
+        let y0 = Math.max(t.y - faceD / 2, backBox.y0);
+        let y1 = Math.min(t.y + faceD / 2, backBox.y1);
+
+        for (const side of verticalSides) {
+            const sBox = verticalHostBox(side);
+            if (sBox.z1 > targetZ - targetHalfTh - EPS && sBox.z0 < targetZ + targetHalfTh + EPS) {
+                if (sBox.y1 > y0 && sBox.y0 <= y0 + EPS) {
+                    y0 = Math.max(y0, sBox.y1);
+                }
+                if (sBox.y0 < y1 && sBox.y1 >= y1 - EPS) {
+                    y1 = Math.min(y1, sBox.y0);
+                }
+            }
+        }
+
+        if (y1 - y0 <= EPS) return null;
+
         length_nm = y1 - y0;
         v_nm = vZeroAtBack
             ? (t.y + faceD / 2) - y1
@@ -470,7 +515,7 @@ export function buildBackGrooves(panels: PanelState[]): GrooveIntent[] {
             if (!boxesOverlap(backBox, hostBox)) continue;
 
             const intent = isHorizontalHost(roleUpper(target))
-                ? grooveOnHorizontal(back, target, backBox, depth_nm)
+                ? grooveOnHorizontal(back, target, backBox, depth_nm, panels)
                 : grooveOnVertical(back, target, backBox, depth_nm);
             if (intent) intents.push(intent);
         }

@@ -223,7 +223,7 @@ describe('C1_CNC: MachiningRuleEngine & CAMSyncService', () => {
         panel1.cncPrograms = [syncService.autoSynchronizeProgram(panel1, null, toolLibrary)];
         // panel2 nie ma programu CNC
 
-        // Dodajemy nową cechę do panel1 (np. Kanał LED dodany do formatki z programem)
+        // Dodajemy nową cechę do panel1 (np. LED zewnętrzny (kanał) dodany do formatki z programem)
         panel1.features.push({ id: 'led_p1', type: 'groove', name: 'Rowek pod LED', params: { width: 14, depth: 9 } });
 
         // Weryfikacja: tylko panel1 z utworzonym programem ma rozbieżność (brakujący kanał LED)

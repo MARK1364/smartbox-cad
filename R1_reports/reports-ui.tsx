@@ -4,6 +4,7 @@ import { ReportDataNormalizer } from './report-data-normalizer';
 import { HtmlReportsGeneratorWeb } from './html-reports-generator';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { UIController } from '../A1_core/ui-controller.js';
+import { priceStore } from './price-store';
 
 interface ReportsUIProps {
     document?: any;
@@ -78,6 +79,9 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
             });
         };
     }, [propDoc, isStandalone, initialPayload]);
+
+    // ─── Zmiana cennika (edytor cen) → przelicz ponownie ───
+    useEffect(() => priceStore.subscribe(() => setRefreshTick(t => t + 1)), []);
 
     // Obsługa upuszczenia węzła CAD z drzewa obiektów
     const applyDroppedNode = (nodeData: any) => {

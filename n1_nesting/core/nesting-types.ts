@@ -25,6 +25,7 @@ export interface NestingPart {
     thickness_nm?: number;  // Grubość materiału w nanometrach
     quantity: number;
     canRotate: boolean;     // Czy dopuszczalny jest obrót o 90 stopni
+    frozen?: boolean;       // Zamrożona — widoczna na liście, ale wyłączona z rozkroju (jak "Zamroź" w CAD)
     material?: string;      // Nazwa materiału (np. "Biel Alpejska", "HDF Biały")
     grain?: GrainDirection;
     containerId?: string;   // ID szafki / korpusu nadrzędnego
@@ -35,8 +36,8 @@ export interface NestingPart {
 }
 
 export interface SheetConfig {
-    width: number;               // Wymiar płyty X (np. 2800 mm)
-    height: number;              // Wymiar płyty Y (np. 2070 mm)
+    width: number;               // Wymiar płyty X / poziomo (np. 2070 mm)
+    height: number;              // Wymiar płyty Y / pionowo (np. 2800 mm)
     thickness?: number;          // Grubość płyty (np. 18 mm)
     width_nm?: number;           // Wymiar płyty X w nanometrach
     height_nm?: number;          // Wymiar płyty Y w nanometrach
@@ -58,6 +59,8 @@ export interface Rect2D {
 
 export interface PackedPart {
     partId: string;
+    /** Unikalny identyfikator instancji (egzemplarza) formatki — różni się dla każdej sztuki. */
+    instanceId?: string;
     name: string;
     x: number;
     y: number;
@@ -73,6 +76,7 @@ export interface PackedPart {
     realH_nm?: number;      // Rzeczywisty wymiar Y w nanometrach
     rotated: boolean;
     rotationAngle?: number; // Kąt obrotu w stopniach (0, 15, 30, 45, 90...)
+    band?: number;          // Indeks pasa (0-based) — tylko piła (rozkrój gilotynowy)
     material?: string;
     thickness?: number;
     thickness_nm?: number;
@@ -121,6 +125,8 @@ export interface PackedBoard {
     wasteArea: number;
     utilizationPercent: number; // 0 - 100%
     wastePercent: number;       // 0 - 100%
+    strips?: number;            // liczba pasów (cięć gilotynowych pierwszego rzędu) — tylko piła
+    shelfAxis?: 'horizontal' | 'vertical'; // kierunek pasów — potrzebny do odtworzenia planu cięcia
 }
 
 export type NestingMode = 'fast' | 'pro';

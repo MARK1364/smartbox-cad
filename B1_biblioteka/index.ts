@@ -18,7 +18,7 @@ import {
     type HangerHardwareItem,
 } from './zawieszki/hangers-from-catalog.js';
 
-export type HardwareType = 'HINGE' | 'RAIL' | 'HANDLE' | 'HANGER';
+export type HardwareType = 'HINGE' | 'RAIL' | 'HANDLE' | 'HANGER' | 'SHELF_PIN' | 'TUBE_SOCKET';
 export type { HandleHardwareItem, HangerHardwareItem };
 export { handleGlbTemplateId, hangerGlbTemplateId };
 
@@ -233,12 +233,62 @@ for (const [filePath, raw] of Object.entries(hangerFileModules)) {
     }
 }
 
+// Podpórki i złącza półek: polki_akcesoria/**/*.json (catalog.json pomijamy)
+const shelfPinFileModules = (import.meta as any).glob(
+    ['./polki_akcesoria/**/*.json', '!./polki_akcesoria/catalog.json', '!./polki_akcesoria/**/catalog.json'],
+    { eager: true, import: 'default' }
+) as Record<string, any>;
+
+const SHELF_PIN_ITEMS: HardwareItem[] = [];
+for (const raw of Object.values(shelfPinFileModules)) {
+    if (!raw || !raw.id) continue;
+    SHELF_PIN_ITEMS.push({
+        id: raw.id,
+        type: 'SHELF_PIN',
+        name: raw.name || raw.id,
+        brand: raw.brand || 'Standard',
+        art_no: raw.art_no,
+        price_id: raw.price_id,
+        usable_in: raw.usable_in || ['SHELVES', 'SHELF'],
+        mount: raw.mount,
+        machining: raw.machining,
+        visual: raw.visual,
+        definition: raw,
+    });
+}
+
+// Rozetki i akcesoria drążków: drazki/**/*.json (catalog.json pomijamy)
+const tubeSocketFileModules = (import.meta as any).glob(
+    ['./drazki/**/*.json', '!./drazki/catalog.json', '!./drazki/**/catalog.json'],
+    { eager: true, import: 'default' }
+) as Record<string, any>;
+
+const TUBE_SOCKET_ITEMS: HardwareItem[] = [];
+for (const raw of Object.values(tubeSocketFileModules)) {
+    if (!raw || !raw.id) continue;
+    TUBE_SOCKET_ITEMS.push({
+        id: raw.id,
+        type: 'TUBE_SOCKET',
+        name: raw.name || raw.id,
+        brand: raw.brand || 'Standard',
+        art_no: raw.art_no,
+        price_id: raw.price_id,
+        usable_in: raw.usable_in || ['TUBES'],
+        mount: raw.dimensions || raw.mount,
+        machining: raw.machining,
+        visual: raw.visual,
+        definition: raw,
+    });
+}
+
 const ALL_ITEMS: HardwareItem[] = [
     ...HINGE_ITEMS,
     ...railsFromKonfig(szufladyKonfig as { szuflady?: any[] }),
     ...DRAWER_ITEMS,
     ...HANDLE_ITEMS,
     ...HANGER_ITEMS,
+    ...SHELF_PIN_ITEMS,
+    ...TUBE_SOCKET_ITEMS,
 ];
 
 const BY_ID = new Map<string, HardwareItem>();
@@ -321,19 +371,64 @@ export function getHangerOrUndefined(id?: string | null): HardwareItem | undefin
     return hw?.type === 'HANGER' ? hw : undefined;
 }
 
+export const DEFAULT_SHELF_PIN_ID = 'PODPORKA_FI5';
+
+/** Lista podpórek i złączy półek z B1. */
+export function listShelfPins(): HardwareItem[] {
+    return listByType('SHELF_PIN');
+}
+
+export function getShelfPinOrDefault(id?: string | null): HardwareItem {
+    const hw = getHardware(id) || getHardware(DEFAULT_SHELF_PIN_ID);
+    if (hw && hw.type === 'SHELF_PIN') return hw;
+    return {
+        id: DEFAULT_SHELF_PIN_ID,
+        type: 'SHELF_PIN',
+        name: 'Podpórka półki Ø5 mm',
+        brand: 'Standard',
+        machining: {
+            corpus_holes: [{ name: 'Podporka_otw', dia: 5, depth: 12 }]
+        }
+    };
+}
+
+export const DEFAULT_TUBE_SOCKET_ID = 'ROZETA_FI25';
+
+/** Lista rozetek drążków z B1. */
+export function listTubeSockets(): HardwareItem[] {
+    return listByType('TUBE_SOCKET');
+}
+
+export function getTubeSocketOrDefault(id?: string | null): HardwareItem {
+    const hw = getHardware(id) || getHardware(DEFAULT_TUBE_SOCKET_ID);
+    if (hw && hw.type === 'TUBE_SOCKET') return hw;
+    return {
+        id: DEFAULT_TUBE_SOCKET_ID,
+        type: 'TUBE_SOCKET',
+        name: 'Rozeta drążka Ø25 mm',
+        brand: 'Standard',
+        machining: {
+            corpus_holes: [
+                { name: 'Rozeta_Otwor_1', dia: 3.5, depth: 12, y_offset: -16 },
+                { name: 'Rozeta_Otwor_2', dia: 3.5, depth: 12, y_offset: 16 }
+            ]
+        }
+    };
+}
+
 export function getDrawerDrill(id?: string | null): DrawerDrill {
     const hw = getHardware(id) || getHardware(DEFAULT_RAIL_ID);
     return {
         id: 'STANDARD_DRAWER_DRILL',
         corpus_hole: {
-            dia: hw?.drill?.dia ?? 0.003,
-            depth: hw?.drill?.depth ?? 0.012
+            dia: hw?.drill?.dia ?? 3,
+            depth: hw?.drill?.depth ?? 12
         },
         front_hole: {
-            dia: hw?.drill?.dia ?? 0.003,
+            dia: hw?.drill?.dia ?? 3,
             depth: hw?.front_holes && typeof (hw.front_holes as any).depth === 'number'
                 ? (hw.front_holes as any).depth
-                : 0.01
+                : 10
         }
     };
 }

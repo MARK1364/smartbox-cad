@@ -178,7 +178,7 @@ export function extractNestingPayload(scope: ModuleScope, document?: any): Nesti
             type: c.type,
             partsCount: c.partsCount,
         })),
-        config: { width: 2800, height: 2070, kerf: 4, trimMargin: 10, thickness: 18, machineType: 'saw' },
+        config: { width: 2070, height: 2800, kerf: 4, trimMargin: 10, thickness: 18, machineType: 'saw' },
         selectedMaterial: 'ALL',
     };
 }

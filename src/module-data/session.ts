@@ -16,7 +16,7 @@ export const MODULE_PAGES: Record<ModuleId, string> = {
     cnc: './cnc.html',
     draw: './draw.html',
     dag: './dag.html',
-    smartparts: './smartparts.html',
+    smartparts: './studio.html',
 };
 
 /** Nazwa okna CAD — powrót z CAM/modułów fokusuje tę kartę, bez nowego pustego projektu. */

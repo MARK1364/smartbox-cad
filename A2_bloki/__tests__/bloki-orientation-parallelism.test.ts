@@ -13,7 +13,7 @@ import {
     resolveManualReferenceFace,
     getPanelFaceDominantAxis,
     update_bloki_core,
-} from '../bloki-core.js';
+} from '../01_bloki-core.js';
 
 describe('Bloki Orientation & Parallelism Validation', () => {
     let doc: ProjectDocument;
@@ -466,5 +466,27 @@ describe('Bloki Orientation & Parallelism Validation', () => {
         const { rotation } = sbNode.localMatrix.decompose();
         const euler = rotation.toEulerXYZ();
         expect(Math.abs(euler.z)).toBeCloseTo(Math.PI / 2, 1);
+    });
+
+    it('accepts sloped TOP_PANEL and slanted outline face for zMax even when slope exceeds 45 deg', () => {
+        // Skos dachu o kącie 55° (gdzie dominantAxis w rzucie staje się 'x')
+        const roofPanel = new PanelModel({ width: mmToNm(800), height: mmToNm(600), thickness: mmToNm(18) });
+        roofPanel.role = 'TOP_PANEL';
+        (roofPanel as any).lcs = { rotation: [0, 0, -55] };
+
+        const rotRoof = Quat.fromEulerXYZ(0, -(55 * Math.PI) / 180, 0);
+        const roofNode = CADNode.create(NodeType.PART, 'Wieniec_Skosny', roofPanel.id);
+        roofNode.domainData = roofPanel;
+        roofNode.setLocalTransform(new Vec3(0, 0, mmToNm(700)), rotRoof);
+        doc.addNode(cabinet.id, roofNode);
+
+        // 1. Walidacja zMax dla pochyłego TOP_PANEL musi przejść pomyślnie
+        const valRoof = validateReferenceFaceOrientation(roofPanel, roofNode, cabinetNode, 'FACE_Z_MINUS', 'zMax');
+        expect(valRoof.valid).toBe(true);
+
+        // 2. Ręczny wybór resolveManualReferenceFace dla zMax zachowuje wybraną ścianę dachu
+        const resRoof = resolveManualReferenceFace(roofPanel, roofNode, cabinetNode, 'FACE_Z_MINUS', 'zMax');
+        expect(resRoof.face).toBe('FACE_Z_MINUS');
+        expect(resRoof.mapped).toBe(false);
     });
 });

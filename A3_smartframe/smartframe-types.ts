@@ -41,6 +41,8 @@ export interface CabinetGeometryPart {
     name: string;
     role: string;
     material: string;
+    materialName?: string;
+    materialCode?: string;
     thickness: number;
     dim: { x: number; y: number; z: number }; // wymiary formatki w mm
     loc: { x: number; y: number; z: number }; // pozycja lokalna środka formatki w mm

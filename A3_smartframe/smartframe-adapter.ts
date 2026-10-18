@@ -12,6 +12,23 @@ import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { CADNode } from '../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../A1_core/cad-node/node-type.js';
 import korpusRulesData from './korpus3_3_rules.json';
+import korpusRogowy90RulesData from './korpus_rogowy90_rules.json';
+import korpusRogowy1RulesData from './korpus_rogowy1_rules.json';
+import korpusSkosnyRulesData from './korpus_skosny_rules.json';
+
+function resolveCabinetRulesForType(type?: string): any {
+    const t = String(type || '').toLowerCase();
+    if (t === 'korpus_rogowy90' || t.includes('rogowy90') || t.includes('rogowy_90')) {
+        return korpusRogowy90RulesData;
+    }
+    if (t === 'korpus_rogowy1' || t.includes('rogowy1') || t.includes('rogowy_1')) {
+        return korpusRogowy1RulesData;
+    }
+    if (t.startsWith('korpus_skosny')) {
+        return korpusSkosnyRulesData;
+    }
+    return korpusRulesData;
+}
 
 const ABS_EDGE = { active: true, type_id: '0.008x0.022' };
 const NO_EDGE = { active: false, type_id: 'none' };
@@ -143,6 +160,31 @@ function assignPlanFeatures(panel: any, engineFeatures: any[], preserveLibrary: 
     refreshLibraryOperationsOnPanel(panel);
 }
 
+const lcsCache = new Map<string, any>();
+
+function findLcsInModelTree(modelTree: any, role?: string, name?: string): any {
+    const key = `${role || ''}|${name || ''}`;
+    if (lcsCache.has(key)) return lcsCache.get(key);
+
+    const search = (obj: any): any => {
+        for (const k in obj) {
+            const val = obj[k];
+            if (typeof val === 'object' && val !== null) {
+                if ((role && val.role === role) || (name && val.name === name)) {
+                    if (val.lcs) return val.lcs;
+                }
+                const res = search(val);
+                if (res) return res;
+            }
+        }
+        return null;
+    };
+
+    const found = search(modelTree);
+    lcsCache.set(key, found);
+    return found;
+}
+
 /** Kopiuje strukturę operacji z silnika do kontenera w projekcie */
 export function applyPlanToContainer(container: any, operationPlan: any) {
     const activePanelIds = new Set<string>();
@@ -186,18 +228,6 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
         };
         collectPanels(cntNode);
         
-        // Zbieramy z globalnych (inne kontenery)
-        if (doc) {
-            for (const rootChild of doc.rootNode.children) {
-                const domainData = rootChild.domainData as any;
-                if (domainData && domainData.type === 'container') {
-                    collectPanels(rootChild);
-                } else if (domainData) {
-                    candidatePanels.push(domainData);
-                }
-            }
-        }
-        
         for (const p of candidatePanels) {
             if (isManualPanel(p)) continue;
             if (p.features && p.features.length > 0) {
@@ -231,22 +261,10 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
 
         // Pobierz lcs z konfiguracji JSON (przekazane przez silnik w part.lcs lub bezpośrednio w node)
         // part.lcs zostało dodane do modelu
+        const rules = resolveCabinetRulesForType(container?.generatorParams?.type);
         let lcs = part.lcs;
-        if (!lcs && (korpusRulesData as any)?.model_tree) {
-            // Spróbujmy znaleźć lcs w regułach na podstawie role/name
-            const findLCS = (obj: any): any => {
-                for (let key in obj) {
-                    if (typeof obj[key] === 'object' && obj[key] !== null) {
-                        if (obj[key].role === part.role || obj[key].name === part.name) {
-                            if (obj[key].lcs) return obj[key].lcs;
-                        }
-                        const res = findLCS(obj[key]);
-                        if (res) return res;
-                    }
-                }
-                return null;
-            };
-            lcs = findLCS((korpusRulesData as any).model_tree);
+        if (!lcs && rules?.model_tree) {
+            lcs = findLcsInModelTree(rules.model_tree, part.role, part.name);
         }
 
         if (lcs && lcs.mapping) {
@@ -277,7 +295,6 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
         let panelNode: any = panel ? doc?.findNode(panel.id) : null;
 
         // Pobierz domyślne okleinowanie z reguł dla danej roli jeśli panel nie ma jeszcze własnego
-        const rules = korpusRulesData as any;
         const roleOverride = rules?.smart_panel_integration?.role_overrides?.[part.role] || (rules?.parameters?.smart_panel_integration?.role_overrides?.[part.role]);
         let defaultEdgeBanding = part.edge_banding || roleOverride?.edge_banding;
         // BLIND_PANEL: ABS tylko od strony światła — zależne od blindSide
@@ -338,15 +355,21 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             // (setDimensions emituje event, ale outline/custom też wymaga jawnego rebuildu).
             rebuildPanelView(panel);
         } else {
+            const rawMat = part.material;
+            const isLegacyOrEmpty = !rawMat || rawMat === 'MDF_SUROWY_18' || rawMat === 'HDF_3' || rawMat === 'PLYTY_18';
+            const initialMatId = isLegacyOrEmpty ? undefined : rawMat;
+            const initialMatName = isLegacyOrEmpty ? undefined : part.materialName;
+            const initialMatCode = isLegacyOrEmpty ? undefined : part.materialCode;
+
             panel = new PanelModel({
                 width: mmToNm(bbWidth),
                 height: mmToNm(bbHeight),
                 thickness: mmToNm(bbThickness),
                 role: part.role,
                 name: part.name,
-                ...(part.material ? { materialId: part.material } : {}),
-                ...(part.materialName ? { materialName: part.materialName } : {}),
-                ...(part.materialCode ? { materialCode: part.materialCode } : {})
+                ...(initialMatId ? { materialId: initialMatId } : {}),
+                ...(initialMatName ? { materialName: initialMatName } : {}),
+                ...(initialMatCode ? { materialCode: initialMatCode } : {})
             });
             panel.name = part.name;
             panel.role = part.role;
@@ -358,10 +381,13 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
                 panel.setEdgeBanding(defaultEdgeBanding);
             }
             if (part.customProperties || part.custom_properties) {
-                // Merge, nie nadpisanie — konstruktor PanelModel ustawia tu materiał.
+                // Merge, nie nadpisanie — właściwy materiał z panelu ma pierwszeństwo przed legacy z JSON.
                 (panel as any).custom_properties = {
                     ...((panel as any).custom_properties || {}),
-                    ...(part.customProperties || part.custom_properties)
+                    ...(part.customProperties || part.custom_properties),
+                    material: panel.materialId,
+                    material_name: panel.materialName,
+                    material_code: panel.materialCode
                 };
             }
             applyPartClassification(panel, part);

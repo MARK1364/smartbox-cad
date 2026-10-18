@@ -6,9 +6,9 @@
 
 import { ContextManager } from '../A1_core/context-manager.js';
 import { PerformanceConfigManager } from '../A1_core/performance-config.js';
-import { probeBayFromCADPoint, probeBayFromSceneRay } from '../A2_bloki/bloki-bay-detector.js';
+import { probeBayFromCADPoint, probeBayFromSceneRay } from '../A2_bloki/02_bloki-bay-detector.js';
 import { probeRogowy90BayFromCADPoint } from '../A3_smartframe/rogowy90-bay.js';
-import { highlightBayInScene, clearBayHighlight } from '../A2_bloki/bloki-bay-visualizer.js';
+import { highlightBayInScene, clearBayHighlight } from '../A2_bloki/02_bloki-bay-visualizer.js';
 import { WORLD_Y_UP, type CameraUp } from './named-camera-view.js';
 
 declare const BABYLON: any;
@@ -767,6 +767,14 @@ export class Viewport {
         this.scene.meshes.forEach((mesh: any) => {
             this.applyRenderModeToMesh(mesh, mode);
         });
+        const pvs = ContextManager.instance?.panelViews;
+        if (pvs && pvs.size > 0) {
+            pvs.forEach((pv: any) => {
+                if (typeof pv._updateMaterialAppearance === 'function') {
+                    pv._updateMaterialAppearance();
+                }
+            });
+        }
         this.requestRender(2);
     }
 

@@ -16,9 +16,10 @@ const HINGE_GLB_MAP = (import.meta as any).glob('./zawiasy/**/*.glb', { query: '
 const DRAWER_GLB_MAP = (import.meta as any).glob('./szuflady/**/*.glb', { query: '?url', eager: true });
 const HANDLE_GLB_MAP = (import.meta as any).glob('./uchwyty/**/*.glb', { query: '?url', eager: true });
 const HANGER_GLB_MAP = (import.meta as any).glob('./zawieszki/**/*.glb', { query: '?url', eager: true });
+const SHELF_PIN_GLB_MAP = (import.meta as any).glob('./polki_akcesoria/**/*.glb', { query: '?url', eager: true });
 const ALL_GLB_MAP: Record<string, string> = {};
 
-for (const [p, mod] of Object.entries({ ...HINGE_GLB_MAP, ...DRAWER_GLB_MAP, ...HANDLE_GLB_MAP, ...HANGER_GLB_MAP })) {
+for (const [p, mod] of Object.entries({ ...HINGE_GLB_MAP, ...DRAWER_GLB_MAP, ...HANDLE_GLB_MAP, ...HANGER_GLB_MAP, ...SHELF_PIN_GLB_MAP })) {
     const filename = p.replace(/^.*[\\/]/, '').toLowerCase();
     const url = (mod as any)?.default || p;
     ALL_GLB_MAP[filename] = url;
@@ -157,7 +158,13 @@ export class HardwareLoader {
                     `/B1_biblioteka/zawiasy/${id}.glb`,
                     `./B1_biblioteka/zawiasy/${id}.glb`,
                     `/B1_biblioteka/zawiasy/models/${id}.glb`,
-                    `./B1_biblioteka/zawiasy/models/${id}.glb`
+                    `./B1_biblioteka/zawiasy/models/${id}.glb`,
+                    `/B1_biblioteka/polki_akcesoria/models/${id}.glb`,
+                    `./B1_biblioteka/polki_akcesoria/models/${id}.glb`,
+                    `/B1_biblioteka/polki_akcesoria/models/${cleanId}.glb`,
+                    `./B1_biblioteka/polki_akcesoria/models/${cleanId}.glb`,
+                    `/B1_biblioteka/polki_akcesoria/${id}.glb`,
+                    `./B1_biblioteka/polki_akcesoria/${id}.glb`
                 ];
 
                 for (const path of candidates) {
@@ -257,6 +264,98 @@ export class HardwareLoader {
             }
         }
         return null;
+    }
+
+    public createShelfPinInstance(id: string, _scene?: any, side: 'left' | 'right' = 'left'): any {
+        const stem = id.toLowerCase().replace(/\.glb$/i, '');
+        const keys = [id, stem, `${stem}.glb`, id.replace(/\.glb$/i, ''), 'PODPORKA_FI5', 'podporka_fi5'];
+        for (const key of keys) {
+            if (this._templates.has(key)) {
+                const inst = this._cloneHardwareInstance(key, `shelf_pin_${stem}`, { pickable: false });
+                if (inst && side === 'right' && inst.scaling) {
+                    inst.scaling.x *= -1;
+                }
+                return inst;
+            }
+        }
+        for (const [key] of this._templates) {
+            if (key.toLowerCase().replace(/\.glb$/i, '') === stem) {
+                const inst = this._cloneHardwareInstance(key, `shelf_pin_${stem}`, { pickable: false });
+                if (inst && side === 'right' && inst.scaling) {
+                    inst.scaling.x *= -1;
+                }
+                return inst;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Tworzy parametryczną rurę drążka ubraniowego jako cylinder o zadanej długości i średnicy.
+     */
+    public createTubeRodMesh(lengthMm: number, diameterMm: number, scene: any): any {
+        if (typeof BABYLON === 'undefined' || !scene) return null;
+        const mesh = BABYLON.MeshBuilder.CreateCylinder(`tube_rod_${Date.now()}_${Math.floor(Math.random() * 1000)}`, {
+            height: Math.max(1, lengthMm),
+            diameter: Math.max(1, diameterMm),
+            tessellation: 36
+        }, scene);
+        mesh.rotation.set(0, 0, Math.PI / 2);
+
+        let mat = scene.getMaterialByName('b1_tube_chrome_mat');
+        if (!mat) {
+            mat = new BABYLON.StandardMaterial('b1_tube_chrome_mat', scene);
+            mat.diffuseColor = new BABYLON.Color3(0.78, 0.8, 0.83);
+            mat.specularColor = new BABYLON.Color3(0.95, 0.95, 0.98);
+            mat.specularPower = 48;
+        }
+        mesh.material = mat;
+        mesh.metadata = { lengthMm, diameterMm };
+        return mesh;
+    }
+
+    /**
+     * Tworzy parametryczną rozetę drążka ubraniowego (kołnierz + tuleja montażowa).
+     */
+    public createTubeSocketMesh(diameterMm: number, thicknessMm: number, side: 'left' | 'right', scene: any): any {
+        if (typeof BABYLON === 'undefined' || !scene) return null;
+
+        const discH = Math.min(3, thicknessMm);
+        const collarH = 10;
+        const collarDia = 29;
+
+        const disc = BABYLON.MeshBuilder.CreateCylinder('disc', {
+            height: discH,
+            diameter: Math.max(1, diameterMm),
+            tessellation: 36
+        }, scene);
+
+        const collar = BABYLON.MeshBuilder.CreateCylinder('collar', {
+            height: collarH,
+            diameter: collarDia,
+            tessellation: 36
+        }, scene);
+
+        // disc leży przy boku (X=0)
+        // collar wchodzi w stronę środka drążka (+X dla left, -X dla right po rotacji o 90st w Z)
+        const inward = side === 'left' ? -1 : 1;
+        collar.position.y = (discH / 2 + collarH / 2) * inward;
+
+        let merged = BABYLON.Mesh.MergeMeshes([disc, collar], true, true, undefined, false, true);
+        if (!merged) merged = disc;
+        merged.name = `tube_socket_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        merged.rotation.set(0, 0, Math.PI / 2);
+
+        let mat = scene.getMaterialByName('b1_tube_chrome_mat');
+        if (!mat) {
+            mat = new BABYLON.StandardMaterial('b1_tube_chrome_mat', scene);
+            mat.diffuseColor = new BABYLON.Color3(0.78, 0.8, 0.83);
+            mat.specularColor = new BABYLON.Color3(0.95, 0.95, 0.98);
+            mat.specularPower = 48;
+        }
+        merged.material = mat;
+        merged.metadata = { diameterMm, thicknessMm, side };
+        return merged;
     }
 
     private _cloneHardwareInstance(

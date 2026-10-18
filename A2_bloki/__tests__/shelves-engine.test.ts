@@ -1,5 +1,5 @@
-import { buildShelvesPlan } from '../module-plans.js';
-import { assertCanonicalShelvesParams } from '../shelves-engine.js';
+import { buildShelvesPlan } from '../01_module-plans.js';
+import { assertCanonicalShelvesParams } from '../04_shelves-engine.js';
 import { describe, it, expect } from 'vitest';
 
 describe('buildShelvesPlan Edge Banding', () => {
@@ -52,5 +52,17 @@ describe('buildShelvesPlan Edge Banding', () => {
                 expect(part.dim.z).toBeLessThan(100);
             }
         }
+    });
+
+    it('generuje 4 podpórki na każdą półkę z B1_biblioteka (hardware)', () => {
+        const plan = buildShelvesPlan(
+            { liczba_polek: 2, grubosc_polki_mm: 18 },
+            { width_mm: 800, height_mm: 1000, depth_mm: 500 }
+        );
+
+        expect(plan.hardware).toBeDefined();
+        expect(plan.hardware).toHaveLength(8); // 2 półki * 4 podpórki
+        expect(plan.hardware![0].hardwareType).toBe('SHELF_PIN');
+        expect(plan.hardware![0].hardwareId).toBe('PODPORKA_FI5');
     });
 });

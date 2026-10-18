@@ -23,7 +23,6 @@ const gateErrors = text
         (/A1_core[/\\]/.test(line) ||
             /A2_bloki[/\\]/.test(line) ||
             /A3_smartframe[/\\]/.test(line) ||
-            /A5_smartparts[/\\]/.test(line) ||
             /C1_cnc[/\\]/.test(line) ||
             /B1_biblioteka[/\\]/.test(line) ||
             /A4_smartpanel[/\\]/.test(line) ||

@@ -28,7 +28,7 @@ import { ConnectorTreeRow } from '../C2_connectors/connector-tree-row';
 import { canReparentManualPanel, reparentManualPanel } from './application/cad-app-commands';
 import { CAD_EDIT_LIBRARY_OPERATION } from '../o1_operacji';
 import { CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
-import { LedChannelStore, type LedChannelDefinition } from '../A5_smartparts';
+import { LedChannelStore, type LedChannelDefinition } from '../A2_bloki';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';

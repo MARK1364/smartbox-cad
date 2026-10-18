@@ -3,7 +3,7 @@ import { unit } from '../A1_core/unit-system';
 import { UIController, PANEL_DIM_MAX_MM, PANEL_DIM_MIN_MM } from '../A1_core/ui-controller';
 import { SmartFrameUI } from '../A3_smartframe/smartframe-ui';
 import { ScianyUI } from '../S4_sciany/sciany-ui';
-import { BlokiUI } from '../A2_bloki/bloki-ui';
+import { BlokiUI } from '../A2_bloki/01_bloki-ui';
 import { CabinetLibraryPanel } from './CabinetLibraryPanel';
 import { SaveCabinetModal } from './SaveCabinetModal';
 import { SSOTUI } from './ssot-ui';
@@ -47,7 +47,9 @@ import { SolverUI, SOLVER_PANEL_TITLE } from '../S2_solver/solver-ui';
 import { ConnectorsUI, CONNECTORS_PANEL_TITLE } from '../C2_connectors/connectors-ui';
 import { stopConnectorPick } from '../C2_connectors/connector-picker';
 import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOperationFromPick, handleLedChannelDrop } from '../o1_operacji';
-import { SmartPartsUI, HandleDragController, HangerDragController, createSmartPartHandle } from '../A5_smartparts';
+import { HandleDragController } from '../A2_bloki/handles/handle-controller.js';
+import { HangerDragController } from '../A2_bloki/hangers/hanger-controller.js';
+import { createSmartPartHandle } from '../A2_bloki/handles/handle-engine.js';
 import { FloatingEditHost, openCadEditEntity, closeCadFloatingEdit } from './floating-edit';
 import { AgdPanel } from './agd/AgdPanel';
 import { createSmartAppliance, createSmartApplianceInDetectedBay } from '../A6_agd';
@@ -63,10 +65,10 @@ import { NodeType } from '../A1_core/cad-node/node-type';
 import { AddNodeCommand } from '../A1_core/commands/add-node-command';
 import { openCncFromCad, installModuleRefreshBridge } from './module-data/open-modules';
 import { CAD_WINDOW_NAME, installCadModuleBridge } from './module-data/session';
-import { BlokiBayController } from '../A2_bloki/bloki-bay-controller';
+import { BlokiBayController } from '../A2_bloki/02_bloki-bay-controller';
 import { SmartFrameDragController } from '../A3_smartframe/smartframe-drag-controller';
-import { createBlokInDetectedBay, BLOKI_CATEGORY_NAMES } from '../A2_bloki/bloki-bay-actions';
-import { clearBayHighlight, highlightBayInScene } from '../A2_bloki/bloki-bay-visualizer';
+import { createBlokInDetectedBay, BLOKI_CATEGORY_NAMES } from '../A2_bloki/02_bloki-bay-actions';
+import { clearBayHighlight, highlightBayInScene } from '../A2_bloki/02_bloki-bay-visualizer';
 import { ModalTransformManager } from '../A1_core/modal-transform';
 import { HardwareLoader } from '../B1_biblioteka/hardware-loader';
 import {
@@ -464,7 +466,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   });
               }
               if (view._edgeMeshes && Array.isArray(view._edgeMeshes)) {
-                  const showEdge = shouldShow && currentMode !== 'shaded';
+                  const showEdge = shouldShow;
                   view._edgeMeshes.forEach((m: any) => {
                       if (m) {
                           try {
@@ -626,7 +628,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                       name.startsWith('edge_') ||
                       name.startsWith('lines_');
                   if (isEdgeMesh) {
-                      const showEdge = shouldShowMesh && currentMode !== 'shaded';
+                      const showEdge = shouldShowMesh;
                       mesh.setEnabled(showEdge);
                       mesh.visibility = showEdge ? 1.0 : 0.0;
                       mesh.isVisible = showEdge;
@@ -1005,6 +1007,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                   <LanguageSelector compact={false} />
                 </div>
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
+                <a href="cennik.html" target="_blank" id="menuCennik" onClick={() => setFileMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34d399' }}>
+                  {tx(srcTekst, 'app.menu.prices', TX_NS)}
+                </a>
                 <a href="landing.html" target="_blank" id="menuLanding" onClick={() => setFileMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24' }}>
                   {tx(srcTekst, 'app.menu.landing', TX_NS)}
                 </a>
@@ -1135,23 +1140,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
                 <line x1="3" y1="20" x2="21" y2="20" />
               </svg>
               <span>{tx(srcTekst, 'app.tabs.walls', TX_NS)}</span>
-            </button>
-
-            <button
-              id="tab-btn-smartparts"
-              data-tab="tab-a5-smartparts"
-              className={`topbar-tool-btn ${activeTab === 'tab-a5-smartparts' ? 'active' : ''}`}
-              onClick={() => setActiveTab('tab-a5-smartparts')}
-              title={tx(srcTekst, 'app.tabs.parts_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="8" height="8" rx="1" />
-                <rect x="13" y="3" width="8" height="8" rx="1" />
-                <rect x="3" y="13" width="8" height="8" rx="1" />
-                <path d="M13 17h8" />
-                <path d="M17 13v8" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.parts', TX_NS)}</span>
             </button>
 
             <button
@@ -1404,16 +1392,6 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           </div>
           <BlokiUI projectModel={projectModel} />
         </div>
-
-        {/* Tab: A5 SmartParts */}
-        {activeTab === 'tab-a5-smartparts' && (
-          <div className="tab-content active" id="tab-a5-smartparts" style={{ height: 'auto', display: 'flex', flexDirection: 'column' }}>
-            <div className="panel-header" style={{ flexShrink: 0, background: '#18181b', borderBottom: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px' }}>
-              <h2 style={{ fontSize: '13px', margin: 0, fontWeight: 700, lineHeight: '1.2' }}>SmartParts</h2>
-            </div>
-            <SmartPartsUI />
-          </div>
-        )}
 
         {/* Tab: AGD */}
         <div 
@@ -1884,7 +1862,8 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               'FACE_Y_MINUS': '-Y'
             };
 
-            const targetEdgeKey = edgeKeyMap[faceName] || 'ALL';
+            const outlineEdgeKey = (pick?.pickedMesh?.metadata as any)?.outlineEdgeKey as string | undefined;
+            const targetEdgeKey = edgeKeyMap[faceName] || outlineEdgeKey || 'ALL';
             const isRemoval = edge.id === 'REMOVE_EDGE' || edge.active === false;
             const edgeConfig = isRemoval ? {
               active: false,

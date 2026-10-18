@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { ShelfPlanParams } from '../bloki-module-types.js';
-import { buildShelfPlan } from '../module-plans.js';
-import { ShelfSubModule } from '../shelf-adapter.js';
+import type { ShelfPlanParams } from '../01_bloki-module-types.js';
+import { buildShelfPlan } from '../01_module-plans.js';
+import { ShelfSubModule } from '../03_shelf-adapter.js';
 
 export const shelfPlugin: SmartModulePlugin<ShelfPlanParams> = {
     id: 'SHELF',

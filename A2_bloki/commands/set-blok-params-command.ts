@@ -4,7 +4,7 @@
 
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
-import { update_bloki_core } from '../bloki-core.js';
+import { update_bloki_core } from '../01_bloki-core.js';
 
 function cloneParams(params: any): Record<string, any> {
     return JSON.parse(JSON.stringify(params || {}));

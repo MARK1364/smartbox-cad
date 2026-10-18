@@ -97,7 +97,7 @@ export class CAMSyncService {
             ));
         }
 
-        // 4. Wpusty (Rowki, np. Kanał LED, plecy)
+        // 4. Wpusty (Rowki, np. LED zewnętrzny (kanał) / LED wewnętrzny, plecy)
         if ('startPoint' in a && 'startPoint' in b) {
             const ga = a as GrooveFeature;
             const gb = b as GrooveFeature;

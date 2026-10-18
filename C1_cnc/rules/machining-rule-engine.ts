@@ -132,7 +132,8 @@ export class MachiningRuleEngine {
         const width = Number(groove.width || 4);
         const allTools = toolLibrary.getAllTools();
 
-        // Kanał LED: tag purpose ze źródła (emiter CAD / extractor), nie nazwa.
+        // LED (wewnętrzny 'BLOKI_LED' lub zewnętrzny kanał 'assembly_led_channel'):
+        // tag purpose ze źródła (emiter CAD / extractor), nie nazwa.
         // Szerokość >= 8 mm to niezależna heurystyka geometryczna (nie językowa).
         const isLedChannel = groove.purpose === 'LED_CHANNEL' || width >= 8.0;
 

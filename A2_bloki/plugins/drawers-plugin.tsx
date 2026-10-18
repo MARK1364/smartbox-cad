@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { DrawersPlanParams } from '../bloki-module-types.js';
-import { buildDrawersPlan } from '../module-plans.js';
-import { DrawersSubModule } from '../drawers-adapter.js';
+import type { DrawersPlanParams } from '../01_bloki-module-types.js';
+import { buildDrawersPlan } from '../01_module-plans.js';
+import { DrawersSubModule } from '../09_drawers-adapter.js';
 import { SyncDrawerDrillingsCommand } from '../commands/sync-drawer-drillings-command.js';
 
 export const drawersPlugin: SmartModulePlugin<DrawersPlanParams> = {

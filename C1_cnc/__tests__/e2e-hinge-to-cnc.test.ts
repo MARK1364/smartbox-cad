@@ -22,13 +22,13 @@ import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { computeFaceData, localTo3D } from '../../A4_smartpanel/native_core/face-lcs.js';
 
 import { CreateKorpusCommand } from '../../A3_smartframe/commands/create-korpus-command.js';
-import { probeBayFromCADPoint } from '../../A2_bloki/bloki-bay-detector.js';
+import { probeBayFromCADPoint } from '../../A2_bloki/02_bloki-bay-detector.js';
 import {
     createBlokInDetectedBay,
     BLOKI_INTERNAL_OPTIONS
-} from '../../A2_bloki/bloki-bay-actions.js';
-import { buildDoorsDrillings } from '../../A2_bloki/doors-drilling-builder.js';
-import type { DoorsDrillingIntent } from '../../A2_bloki/doors-drilling-intent.js';
+} from '../../A2_bloki/02_bloki-bay-actions.js';
+import { buildDoorsDrillings } from '../../A2_bloki/05_doors-drilling-builder.js';
+import type { DoorsDrillingIntent } from '../../A2_bloki/05_doors-drilling-intent.js';
 
 import { WcsManager } from '../wcs/wcs-manager.js';
 import { WcsRulesMapper } from '../wcs/wcs-rules-mapper.js';

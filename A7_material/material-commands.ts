@@ -3,7 +3,7 @@ import { ProjectDocument } from '../A1_core/project-document.js';
 import { MaterialItem, MaterialScope } from './material-types.js';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import { rebuildSmartFrameContainer } from '../A3_smartframe/smartframe-adapter.js';
-import { update_bloki_core } from '../A2_bloki/bloki-core.js';
+import { update_bloki_core } from '../A2_bloki/01_bloki-core.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { CADNode } from '../A1_core/cad-node/cad-node.js';
 import { isContainerModel } from '../A1_core/domain-data.js';
@@ -445,7 +445,12 @@ export class SetEdgeBandingCommand implements Command {
                     else p.edgeBanding = {};
                 } else {
                     if (typeof p.setAllEdges === 'function') p.setAllEdges(this.edgeConfig);
-                    else p.edgeBanding = { '+X': this.edgeConfig, '-X': this.edgeConfig, '+Y': this.edgeConfig, '-Y': this.edgeConfig };
+                    else {
+                        p.edgeBanding = { '+X': this.edgeConfig, '-X': this.edgeConfig, '+Y': this.edgeConfig, '-Y': this.edgeConfig };
+                        if (p.custom_properties?.shape === 'L_NOTCH' || p.custom_properties?.outline2d) {
+                            p.edgeBanding['NOTCH'] = this.edgeConfig;
+                        }
+                    }
                 }
             } else {
                 if (this.edgeConfig.active === false) {

@@ -147,4 +147,25 @@ describe('wieniec L po applyPlan â€” rzut z gĂłry', () => {
         expect(bokMm.x).toBeGreaterThan(0);
         expect(innerZ).toBeCloseTo(D / 2 - Ay, 5);
     });
+
+    it('wieniec L ma aktywne oklejenie na krawędzi NOTCH w panelu', () => {
+        const cabinet = doc.createAssembly({ name: 'Rogowy90' }) as ContainerModel;
+        cabinet.generatorParams = {
+            type: 'korpus_rogowy90',
+            liczba_stref: 1,
+            glebokosc_boku_lewego_mm: 600,
+            glebokosc_boku_prawego_mm: 600
+        };
+        runEngineAndApply(cabinet, 900, 720, 900, 1, 0, 0, 0);
+
+        const cntNode = doc.findNode(cabinet.id)!;
+        const topNode = cntNode.children.find((c: any) => c.domainData?.role === 'TOP_PANEL')!;
+        const botNode = cntNode.children.find((c: any) => c.domainData?.role === 'BOTTOM_PANEL')!;
+
+        const top = topNode.domainData as any;
+        const bot = botNode.domainData as any;
+
+        expect(top.edgeBanding?.['NOTCH']?.active).toBe(true);
+        expect(bot.edgeBanding?.['NOTCH']?.active).toBe(true);
+    });
 });

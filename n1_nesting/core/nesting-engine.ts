@@ -19,6 +19,7 @@ import {
     NestingScope
 } from './nesting-types';
 import { BinPacker } from './bin-packer';
+import { packGuillotine, ShelfAxis, ShelfOrder, GuillotinePlacement } from './guillotine-packer';
 import { materialDatabase } from '../../A7_material/material-database';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units';
 
@@ -365,6 +366,23 @@ interface InternalRect {
         machineType: MachineType,
         startBoardIndex: number
     ): Promise<PackedBoard[]> {
+        // Piła panelowa wymaga rozkroju gilotynowego (pasy -> detal w pasie).
+        // Frezarka CNC tnie dowolną ścieżką, więc korzysta z MaxRects (lepsze upakowanie).
+        if (machineType === 'saw') {
+            return optimizeSawPacking(
+                rects,
+                usableBoardW_nm,
+                usableBoardH_nm,
+                trim_nm,
+                opts,
+                materialName,
+                thickness,
+                materialLabel,
+                machineType,
+                startBoardIndex
+            );
+        }
+
         const iterations = opts.iterations || 1;
         let bestBoards: PackedBoard[] | null = null;
         let bestScore = Infinity;
@@ -434,6 +452,179 @@ interface InternalRect {
     }
 
     /**
+     * Optymalizuje rozkrój PIŁY: 2-stopniowy gilotynowy (pasy first).
+     * W trybie PRO testuje wiele heurystyk kolejności oraz OBA kierunki pasów
+     * (auto: wybiera wariant z mniejszą liczbą arkuszy i lepszym upakowaniem).
+     */
+    async function optimizeSawPacking(
+        rects: InternalRect[],
+        usableBoardW_nm: number,
+        usableBoardH_nm: number,
+        trim_nm: number,
+        opts: NestingOptions,
+        materialName: string,
+        thickness: number,
+        materialLabel: string,
+        machineType: MachineType,
+        startBoardIndex: number
+    ): Promise<PackedBoard[]> {
+        const bases: Array<{ axis: ShelfAxis; order: ShelfOrder; randomize: boolean }> = [];
+        const axes: ShelfAxis[] = ['horizontal', 'vertical'];
+        const orders: ShelfOrder[] = ['stack', 'area', 'along', 'longest'];
+        for (const axis of axes) {
+            for (const order of orders) {
+                bases.push({ axis, order, randomize: false });
+            }
+        }
+
+        const iterations = Math.max(bases.length, opts.iterations || 1);
+
+        let bestBoards: PackedBoard[] | null = null;
+        let bestScore = Infinity;
+
+        for (let iter = 0; iter < iterations; iter++) {
+            const base = iter < bases.length
+                ? bases[iter]
+                : {
+                    axis: (Math.random() > 0.5 ? 'horizontal' : 'vertical') as ShelfAxis,
+                    order: 'random' as ShelfOrder,
+                    randomize: true
+                };
+
+            const sheets = packGuillotine(
+                rects,
+                usableBoardW_nm,
+                usableBoardH_nm,
+                base.axis,
+                base.order,
+                base.randomize
+            );
+
+            const boards = buildSawBoards(
+                sheets,
+                usableBoardW_nm,
+                usableBoardH_nm,
+                trim_nm,
+                materialName,
+                thickness,
+                materialLabel,
+                machineType,
+                startBoardIndex,
+                base.axis
+            );
+
+            // Minimalizuj liczbę arkuszy, następnie maksymalizuj upakowanie ostatniego arkusza.
+            const lastBoard = boards[boards.length - 1];
+            const score = (boards.length * 1e8) + (lastBoard ? lastBoard.usedArea : 0);
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestBoards = boards;
+            }
+
+            if (iter % 50 === 0 && iter > 0) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        return bestBoards || [];
+    }
+
+    /**
+     * Buduje obiekty PackedBoard na podstawie rozmieszczeń gilotynowych.
+     */
+    function buildSawBoards(
+        sheets: GuillotinePlacement[][],
+        usableBoardW_nm: number,
+        usableBoardH_nm: number,
+        trim_nm: number,
+        materialName: string,
+        thickness: number,
+        materialLabel: string,
+        machineType: MachineType,
+        startBoardIndex: number,
+        shelfAxis: ShelfAxis = 'horizontal'
+    ): PackedBoard[] {
+        const totalBoardW_nm = usableBoardW_nm + (2 * trim_nm);
+        const totalBoardH_nm = usableBoardH_nm + (2 * trim_nm);
+        const totalBoardW_mm = nmToMm(totalBoardW_nm);
+        const totalBoardH_mm = nmToMm(totalBoardH_nm);
+        const totalBoardArea = totalBoardW_mm * totalBoardH_mm;
+
+        const boards: PackedBoard[] = [];
+
+        sheets.forEach((sheet, idx) => {
+            const layout: PackedPart[] = [];
+            const bands = new Set<number>();
+            let areaOnThisBoard = 0;
+
+            sheet.forEach((p) => {
+                const posX_nm = p.x_nm + trim_nm;
+                const posY_nm = p.y_nm + trim_nm;
+                const finalW_mm = nmToMm(p.w_nm);
+                const finalH_mm = nmToMm(p.h_nm);
+
+                layout.push({
+                    partId: p.rect.partId,
+                    instanceId: p.rect.id,
+                    name: p.rect.originalName,
+                    sourceNodeId: p.rect.sourceNodeId,
+                    containerId: p.rect.containerId,
+                    blokId: p.rect.blokId,
+                    furnitureName: p.rect.furnitureName,
+                    material: p.rect.material,
+                    thickness: p.rect.thickness,
+                    thickness_nm: p.rect.thickness_nm,
+                    x: nmToMm(posX_nm),
+                    y: nmToMm(posY_nm),
+                    w: finalW_mm,
+                    h: finalH_mm,
+                    realW: finalW_mm,
+                    realH: finalH_mm,
+                    x_nm: posX_nm,
+                    y_nm: posY_nm,
+                    w_nm: p.w_nm,
+                    h_nm: p.h_nm,
+                    realW_nm: p.w_nm,
+                    realH_nm: p.h_nm,
+                    rotated: p.rotated,
+                    rotationAngle: 0,
+                    band: p.band
+                });
+
+                areaOnThisBoard += (finalW_mm * finalH_mm);
+                bands.add(p.band);
+            });
+
+            const utilizationPercent = (areaOnThisBoard / totalBoardArea) * 100;
+
+            boards.push({
+                boardIndex: startBoardIndex + idx,
+                boardIndexInGroup: idx + 1,
+                material: materialName,
+                thickness,
+                thickness_nm: mmToNm(thickness),
+                materialLabel,
+                machineType,
+                width: totalBoardW_mm,
+                height: totalBoardH_mm,
+                width_nm: totalBoardW_nm,
+                height_nm: totalBoardH_nm,
+                layout,
+                usedArea: areaOnThisBoard,
+                totalArea: totalBoardArea,
+                wasteArea: totalBoardArea - areaOnThisBoard,
+                utilizationPercent,
+                wastePercent: Math.max(0, 100 - utilizationPercent),
+                strips: bands.size,
+                shelfAxis
+            });
+        });
+
+        return boards;
+    }
+
+    /**
      * Pakuje listę prostokątów w serię płyt operując w 100% na nanometrach.
      */
     function packRectangles(
@@ -481,6 +672,7 @@ interface InternalRect {
 
                     layoutData.push({
                         partId: rect.partId,
+                        instanceId: rect.id,
                         name: rect.originalName,
                         sourceNodeId: rect.sourceNodeId,
                         containerId: rect.containerId,

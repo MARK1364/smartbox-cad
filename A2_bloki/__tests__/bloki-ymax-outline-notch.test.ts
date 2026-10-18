@@ -12,7 +12,7 @@ import { classifyOutlineSegmentEdge } from '../../A4_smartpanel/native_core/poly
 import {
     getPanelFaceDominantAxis,
     update_bloki_core,
-} from '../bloki-core.js';
+} from '../01_bloki-core.js';
 
 /**
  * TyĹ‚ Bloku na Ĺ›ciance wciÄ™cia L wieĹ„ca.

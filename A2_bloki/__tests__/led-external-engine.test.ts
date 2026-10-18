@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { syncBlokiLedExternalGrooves, assertCanonicalLedExternalParams } from '../led-external-engine.js';
-import { buildLedExternalPlan } from '../led-external-adapter.js';
-import { BLOKI_EXTERNAL_OPTIONS, BLOKI_CATEGORY_NAMES } from '../bloki-bay-actions.js';
+import { syncBlokiLedExternalGrooves, assertCanonicalLedExternalParams } from '../14_led-external-engine.js';
+import { buildLedExternalPlan } from '../14_led-external-adapter.js';
+import { BLOKI_EXTERNAL_OPTIONS, BLOKI_CATEGORY_NAMES } from '../02_bloki-bay-actions.js';
 import { MODULE_TYPES } from '../ui/BlokiFloatingWindow.js';
-import * as LedChannelEngine from '../../A5_smartparts/led/led-channel-engine.js';
+import * as LedChannelEngine from '../15_led-external-channel-engine.js';
 
 describe('Bloki LED External Module (buildLedExternalPlan)', () => {
     it('registers LED_EXTERNAL in external category', () => {

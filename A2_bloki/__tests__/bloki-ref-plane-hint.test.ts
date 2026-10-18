@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     getBlokiRefFacePlacement,
     BLOKI_REF_SIDE_LABELS,
-} from '../bloki-ref-plane-hint.js';
+} from '../02_bloki-ref-plane-hint.js';
 
 describe('Bloki ref plane hint geometry', () => {
     const W = 800;
@@ -52,5 +52,47 @@ describe('Bloki ref plane hint geometry', () => {
         const top = getBlokiRefFacePlacement('zMax', W, H, D);
         expect(top.ly).toBe(H);
         expect(top.rx).toBeCloseTo(Math.PI / 2);
+    });
+
+    it('tilts and widens zMax plane when slopeAngleDeg is provided', () => {
+        const betaDeg = 30;
+        const betaRad = (betaDeg * Math.PI) / 180;
+        const slopedTop = getBlokiRefFacePlacement('zMax', W, H, D, betaDeg);
+
+        expect(slopedTop.ly).toBe(H);
+        expect(slopedTop.rx).toBeCloseTo(Math.PI / 2);
+        expect(slopedTop.rz).toBeCloseTo(betaRad);
+        expect(slopedTop.planeW).toBeCloseTo(W / Math.cos(betaRad));
+        expect(slopedTop.planeH).toBe(D);
+    });
+
+    it('adapts xMin (left) and xMax (right) heights when slopeAngleDeg is provided', () => {
+        const betaDeg = 30;
+        const betaRad = (betaDeg * Math.PI) / 180;
+        const expectedHLeft = H - (W / 2) * Math.tan(betaRad);
+        const expectedHRight = H + (W / 2) * Math.tan(betaRad);
+
+        const leftSloped = getBlokiRefFacePlacement('xMin', W, H, D, betaDeg);
+        expect(leftSloped.planeH).toBeCloseTo(expectedHLeft);
+        expect(leftSloped.ly).toBeCloseTo(expectedHLeft / 2);
+        expect(leftSloped.planeW).toBe(D);
+
+        const rightSloped = getBlokiRefFacePlacement('xMax', W, H, D, betaDeg);
+        expect(rightSloped.planeH).toBeCloseTo(expectedHRight);
+        expect(rightSloped.ly).toBeCloseTo(expectedHRight / 2);
+        expect(rightSloped.planeW).toBe(D);
+    });
+
+    it('tilts zMax around X axis and expands depth planeH when slopeAxis is Y', () => {
+        const betaDeg = 25;
+        const betaRad = (betaDeg * Math.PI) / 180;
+        const depthSlopedTop = getBlokiRefFacePlacement('zMax', W, H, D, undefined, 'Y', betaDeg);
+
+        expect(depthSlopedTop.ly).toBe(H);
+        expect(depthSlopedTop.rx).toBeCloseTo(Math.PI / 2 + betaRad);
+        expect(depthSlopedTop.ry).toBe(0);
+        expect(depthSlopedTop.rz).toBeUndefined();
+        expect(depthSlopedTop.planeW).toBe(W);
+        expect(depthSlopedTop.planeH).toBeCloseTo(D / Math.cos(betaRad));
     });
 });

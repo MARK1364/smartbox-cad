@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { hangersFromCatalog, hangerGlbTemplateId } from '../hangers-from-catalog.js';
 import { listHangers, getHardware } from '../../index.js';
-import { computeHangerCornerPoses } from '../../../A5_smartparts/hangers/hanger-apply.js';
-import type { DetectedBay } from '../../../A2_bloki/bloki-bay-detector.js';
+import { computeHangerCornerPoses } from '../../../A2_bloki/hangers/hanger-apply.js';
+import type { DetectedBay } from '../../../A2_bloki/02_bloki-bay-detector.js';
 
 describe('B1 zawieszki Camaro', () => {
     it('parses Camaro series JSON', () => {
@@ -51,7 +51,7 @@ describe('B1 zawieszki Camaro', () => {
     });
 
     it('buildHangerCatalog = pliki SmartPart z B1, bez localStorage i bez Camaro', async () => {
-        const { buildHangerCatalog, hangerCatalogDedupKey } = await import('../../../A5_smartparts/smartparts-catalog.js');
+        const { buildHangerCatalog, hangerCatalogDedupKey } = await import('../../../A2_bloki/01_smartparts-catalog.js');
         const hangers = listHangers();
         const folderSmartIds = hangers
             .filter(

@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { DividersPlanParams } from '../bloki-module-types.js';
-import { buildDividersPlan } from '../module-plans.js';
-import { DividersSubModule } from '../dividers-adapter.js';
+import type { DividersPlanParams } from '../01_bloki-module-types.js';
+import { buildDividersPlan } from '../01_module-plans.js';
+import { DividersSubModule } from '../10_dividers-adapter.js';
 
 export const dividersPlugin: SmartModulePlugin<DividersPlanParams> = {
     id: 'DIVIDERS',

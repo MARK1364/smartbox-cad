@@ -72,6 +72,12 @@ describe('KORPUS_ROGOWY90 kÄ…townik', () => {
 
         // Brak BLIND_PANEL (to nie Rogowy1)
         expect(plan.parts.some(p => p.role === 'BLIND_PANEL')).toBe(false);
+
+        // Oklejenie wcięcia wewnętrznego NOTCH
+        expect(bottoms[0].edge_banding).toBeDefined();
+        expect(bottoms[0].edge_banding?.['NOTCH']?.active).toBe(true);
+        expect(tops[0].edge_banding).toBeDefined();
+        expect(tops[0].edge_banding?.['NOTCH']?.active).toBe(true);
     });
 
     it('forces liczba_stref=1', () => {

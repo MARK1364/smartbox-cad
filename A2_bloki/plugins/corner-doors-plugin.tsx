@@ -6,9 +6,9 @@
 
 import React from 'react';
 import type { SmartModulePlugin } from '../core/smart-module-plugin.js';
-import type { CornerDoorsPlanParams } from '../bloki-module-types.js';
-import { buildCornerDoorsPlan } from '../module-plans.js';
-import { CornerDoorsSubModule } from '../corner-doors-adapter.js';
+import type { CornerDoorsPlanParams } from '../01_bloki-module-types.js';
+import { buildCornerDoorsPlan } from '../01_module-plans.js';
+import { CornerDoorsSubModule } from '../07_corner-doors-adapter.js';
 
 export const cornerDoorsPlugin: SmartModulePlugin<CornerDoorsPlanParams> = {
     id: 'CORNER_DOORS',

@@ -61,12 +61,13 @@ function serveEggerTexturesPlugin() {
 
 import { fileURLToPath } from 'node:url';
 import { b1ZawieszkiPlugin } from './vite-plugin-b1-zawieszki.ts';
+import { pricesApiPlugin } from './vite-plugin-prices-api.ts';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   base: './',
   assetsInclude: ['**/*.glb'],
-  plugins: [react(), serveEggerTexturesPlugin(), b1ZawieszkiPlugin()],
+  plugins: [react(), serveEggerTexturesPlugin(), b1ZawieszkiPlugin(), pricesApiPlugin()],
   server: {
     port: 8085
   },
@@ -82,13 +83,14 @@ export default defineConfig({
         report: fileURLToPath(new URL('report.html', import.meta.url)),
         cnc: fileURLToPath(new URL('cnc.html', import.meta.url)),
         dag: fileURLToPath(new URL('dag.html', import.meta.url)),
-        smartparts: fileURLToPath(new URL('smartparts.html', import.meta.url)),
-        studio: fileURLToPath(new URL('studio.html', import.meta.url))
+        studio: fileURLToPath(new URL('studio.html', import.meta.url)),
+        cennik: fileURLToPath(new URL('cennik.html', import.meta.url))
       }
     }
   },
   test: {
     setupFiles: ['./test/setup-storage.ts', './src/application/project-domain.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/scratch/**'],
   }
 })
 

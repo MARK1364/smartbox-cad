@@ -1,6 +1,6 @@
 /**
  * A5_smartparts / studio — SmartPartStudioModal.tsx
- * DEPRECATED: ścieżka robocza to osobne okno smartparts.html
+ * DEPRECATED: ścieżka robocza to osobne okno studio.html
  * (Plik → SmartParts Studio / openSmartPartsStudioFromCad).
  * Modal zostaje tylko dla kompatybilności; nie rozwijaj tu UI.
  */
@@ -563,7 +563,7 @@ export function SmartPartStudioModal({
                     >
                         Ikona PNG
                     </button>
-                    <a href="./smartparts.html" target="_blank" rel="noreferrer" className="cad-btn">
+                    <a href="./studio.html" target="_blank" rel="noreferrer" className="cad-btn">
                         ↗ Otwórz w oknie
                     </a>
                     <button type="button" className="cad-btn" onClick={onClose}>

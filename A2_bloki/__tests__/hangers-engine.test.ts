@@ -6,10 +6,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { calculateHangersPlan, normalizeHangersParams } from '../hangers-engine.js';
-import { extractHangerSets, resolveActiveHangerSet } from '../hangers-types.js';
+import { calculateHangersPlan, normalizeHangersParams } from '../17_hangers-engine.js';
+import { extractHangerSets, resolveActiveHangerSet } from '../17_hangers-types.js';
 import { SmartModuleRegistry } from '../core/smart-module-registry.js';
-import { registerAllBlokiModules } from '../bootstrap-bloki-modules.js';
+import { registerAllBlokiModules } from '../01_bootstrap-bloki-modules.js';
 
 describe('HangersEngine & HangersTypes', () => {
     const singlePackageMock = {

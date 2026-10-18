@@ -6,7 +6,7 @@ import type {
     FlapsPlanParams,
     SkosneDoorsPlanParams,
     BlokiGeneratorParams
-} from '../bloki-module-types.js';
+} from '../01_bloki-module-types.js';
 import { findBlokiInputTypeViolations } from '../../scripts/bloki-input-audit.mjs';
 
 describe('Bloki module input contracts', () => {
@@ -55,8 +55,8 @@ describe('Bloki module input contracts', () => {
         const invalidFlapValue: FlapsPlanParams = { kierunek_klapy: 'SIDE' };
         // @ts-expect-error Numeric fields must not accept strings.
         const invalidCornerValue: CornerDoorsPlanParams = { grubosc_frontu_mm: '18' };
-        // @ts-expect-error Drzwi skośne są jednokierunkowe — brak wariantu podwójnego.
-        const invalidSkosneValue: SkosneDoorsPlanParams = { rodzaj_drzwi: 'DOUBLE' };
+        // @ts-expect-error Enums are restricted to documented values.
+        const invalidSkosneValue: SkosneDoorsPlanParams = { rodzaj_drzwi: 'TRIPLE' };
         // @ts-expect-error Wycofany alias zamiast kanonicznego *_mm.
         const invalidSkosneKey: SkosneDoorsPlanParams = { heightLeft: 2000 };
         // @ts-expect-error The type and boxType tags must identify the same module.

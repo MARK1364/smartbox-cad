@@ -253,20 +253,20 @@ describe('PMIStore measurements', () => {
 });
 
 describe('etykieta miarki (skalowanie i wymiary)', () => {
-    it('oblicza kompaktowe wymiary bazowe (nie przekracza 60 mm wysokości dla 4 linii)', () => {
+    it('oblicza kompaktowe wymiary bazowe (nie przekracza 90 mm wysokości dla 4 linii)', () => {
         const lines = ['L: 600.0 mm', 'dX: 600.0 mm', 'dY: 200.0 mm', 'dZ: 50.0 mm'];
         const dims = computeMeasureLabelDimensions(lines);
 
         expect(dims.textHWorld).toBe(MEASURE_BASE_TEXT_H);
-        expect(dims.planeH).toBeLessThan(60); // w starym kodzie było 480 mm!
-        expect(dims.planeW).toBeLessThan(160); // w starym kodzie było 1185 mm!
-        expect(dims.planeH).toBeGreaterThan(40);
+        expect(dims.planeH).toBeLessThan(90); // w starym kodzie było 480 mm!
+        expect(dims.planeW).toBeLessThan(170); // w starym kodzie było 1185 mm!
+        expect(dims.planeH).toBeGreaterThan(60);
         expect(dims.planeW).toBeGreaterThan(80);
     });
 
     it('dla pojedynczej linii (L:) zachowuje małą wysokość bazową', () => {
         const dims = computeMeasureLabelDimensions(['L: 120.0 mm']);
-        expect(dims.planeH).toBeLessThan(25);
+        expect(dims.planeH).toBeLessThan(32);
     });
 
     it('skaluje plakietkę w dół przy dużym powiększeniu (zoom in), zapobiegając zajęciu pół ekranu', () => {
@@ -278,7 +278,7 @@ describe('etykieta miarki (skalowanie i wymiary)', () => {
 
         expect(scale).toBeLessThan(1.0);
         const screenHPx = basePlaneH * scale * (1080 / 400);
-        expect(screenHPx).toBeCloseTo(84, 1);
+        expect(screenHPx).toBeCloseTo(120, 1);
     });
 
     it('skaluje plakietkę w górę przy oddaleniu (zoom out), utrzymując czytelność z daleka', () => {
@@ -289,15 +289,15 @@ describe('etykieta miarki (skalowanie i wymiary)', () => {
 
         expect(scale).toBeGreaterThan(1.0);
         const screenHPx = basePlaneH * scale * (1080 / 6760);
-        expect(screenHPx).toBeCloseTo(84, 1);
+        expect(screenHPx).toBeCloseTo(120, 1);
     });
 
-    it('dla pojedynczej linii utrzymuje mniejszą stałą wysokość ekranową ok. 38 px', () => {
+    it('dla pojedynczej linii utrzymuje mniejszą stałą wysokość ekranową ok. 54 px', () => {
         const basePlaneH = 20;
         const lineCount = 1;
         const scale = computeMeasureScreenScale(basePlaneH, lineCount, 1, 1080, 1000);
         const screenHPx = basePlaneH * scale * (1080 / 1000);
-        expect(screenHPx).toBeCloseTo(38, 1);
+        expect(screenHPx).toBeCloseTo(54, 1);
     });
 });
 

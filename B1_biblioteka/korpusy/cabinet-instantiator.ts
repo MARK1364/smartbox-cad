@@ -14,7 +14,7 @@ import { Quat } from '../../A1_core/cad-math/quat.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { CreateKorpusCommand } from '../../A3_smartframe/commands/create-korpus-command.js';
-import { update_bloki_core } from '../../A2_bloki/bloki-core.js';
+import { update_bloki_core } from '../../A2_bloki/01_bloki-core.js';
 import type { CabinetTemplate, CabinetSubmoduleRecipe } from './types.js';
 
 export interface InstantiateCabinetOptions {

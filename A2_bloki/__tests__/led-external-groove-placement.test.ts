@@ -4,10 +4,10 @@ import { ProjectDocument } from '../../A1_core/project-document.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { runEngineAndApply } from '../../A3_smartframe/smartframe-adapter.js';
 import { findCabinetPanel } from '../../A1_core/panel-lookup.js';
-import { detectCabinetOuterHull } from '../bloki-bay-detector.js';
-import { syncBlokiLedExternalGrooves } from '../led-external-engine.js';
-import { createBlokInDetectedBay, BLOKI_EXTERNAL_OPTIONS } from '../bloki-bay-actions.js';
-import { LED_CHANNEL_SOURCE } from '../../A5_smartparts/led/led-channel-types.js';
+import { detectCabinetOuterHull } from '../02_bloki-bay-detector.js';
+import { syncBlokiLedExternalGrooves } from '../14_led-external-engine.js';
+import { createBlokInDetectedBay, BLOKI_EXTERNAL_OPTIONS } from '../02_bloki-bay-actions.js';
+import { LED_CHANNEL_SOURCE } from '../15_led-external-channel-types.js';
 import '../../src/application/project-domain.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
 

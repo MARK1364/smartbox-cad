@@ -10,7 +10,7 @@ export function findBlokiInputTypeViolations(relativePath, source) {
         }
     }
 
-    if (relativePath.endsWith('-adapter.tsx') || relativePath === 'A2_bloki/bloki-ui.tsx' || relativePath === 'A2_bloki/bloki-ui.tsx') {
+    if (relativePath.endsWith('-adapter.tsx') || relativePath === 'A2_bloki/01_bloki-ui.tsx' || relativePath === 'A2_bloki/01_bloki-ui.tsx') {
         for (const match of source.matchAll(ANY_CALLBACK)) {
             const line = source.slice(0, match.index).split(/\r?\n/).length;
             violations.push(`${relativePath}:${line}: callback payload is any`);

@@ -4,7 +4,7 @@
 
 import type { ProjectDocument } from '../A1_core/project-document.js';
 import { applyAllLibraryOperations } from './operacje-apply.js';
-import { LedChannelStore } from '../A5_smartparts/led/led-channel-store.js';
+import { LedChannelStore } from '../A2_bloki/15_led-external-channel-store.js';
 
 export function attachOperacjeExtension(document: ProjectDocument): () => void {
     const unreg = document.registerExtension('ledChannels', LedChannelStore.instance);

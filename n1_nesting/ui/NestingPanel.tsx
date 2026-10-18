@@ -18,6 +18,7 @@ import {
 import { getDefaultKerf, getMaterialKey, getMaterialLabel, getMaterialInfo, resolveMaterialName, runNesting } from '../core/nesting-engine';
 import { NestingExporter } from '../export/nesting-exporter';
 import { resolveClampedMovePosition, isPositionColliding, getPartAABB } from '../core/nesting-snap';
+import { buildBoardCutPlan, releasedPartIds, partInstanceKey, BoardCutPlan } from '../core/cut-plan';
 import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer';
 import { ContextManager } from '../../A1_core/context-manager';
 import './nesting.css';
@@ -33,8 +34,8 @@ const DEFAULT_PARTS: NestingPart[] = [
 ];
 
 const DEFAULT_CONFIG: SheetConfig = {
-    width: 2800,
-    height: 2070,
+    width: 2070,
+    height: 2800,
     kerf: 4,
     trimMargin: 10,
     thickness: 18,
@@ -48,6 +49,17 @@ const DEFAULT_CONFIG: SheetConfig = {
  */
 function checkPartCollision(part: PackedPart, layout: PackedPart[], boardW: number, boardH: number, trimMargin: number = 10): boolean {
     return isPositionColliding(part, part.x, part.y, layout, boardW, boardH, 0, trimMargin);
+}
+
+/** Klucz tożsamości formatki — używany do zachowania stanu zamrożenia po synchronizacji ze sceną. */
+function nestingPartKey(p: NestingPart): string {
+    return p.id || p.sourceNodeId || p.name;
+}
+
+/** Zachowuje stan zamrożenia z poprzedniej listy przy podmianie danych ze sceny 3D. */
+function preserveFrozen(prev: NestingPart[], next: NestingPart[]): NestingPart[] {
+    const frozenKeys = new Set(prev.filter((p) => p.frozen).map(nestingPartKey));
+    return next.map((p) => (frozenKeys.has(nestingPartKey(p)) ? { ...p, frozen: true } : p));
 }
 
 interface NestingPanelProps {
@@ -96,7 +108,87 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         boardWidth: number;
         boardHeight: number;
     } | null>(null);
+    const [rotateDrag, setRotateDrag] = useState<{
+        boardIndex: number;
+        partId: string;
+        centerX: number;
+        centerY: number;
+        startAngle: number;
+        startRotation: number;
+        boardWidth: number;
+        boardHeight: number;
+    } | null>(null);
+    const [gizmoPos, setGizmoPos] = useState<{ boardIndex: number; partId: string; left: number; top: number } | null>(null);
+    const [gizmoDrag, setGizmoDrag] = useState<{
+        boardIndex: number;
+        partId: string;
+        startX: number;
+        startY: number;
+        originLeft: number;
+        originTop: number;
+        maxLeft: number;
+        maxTop: number;
+    } | null>(null);
+
+    // Szerokość panelu (przeciąganie lewej krawędzi) — jak panel edycji w CAD.
+    const PANEL_MIN_WIDTH = 260;
+    const PANEL_DEFAULT_WIDTH = 340;
+    const [panelWidth, setPanelWidth] = useState<number>(() => {
+        try {
+            const v = parseInt(localStorage.getItem('cad_nesting_panel_width') || '', 10);
+            if (!isNaN(v) && v >= PANEL_MIN_WIDTH && v <= 2400) return v;
+        } catch { /* ignore */ }
+        return PANEL_DEFAULT_WIDTH;
+    });
+    const [isResizingPanel, setIsResizingPanel] = useState(false);
+
+    // Animowany plan cięcia (tylko piła — arkusze z `shelfAxis`).
+    const [cutPlanBoardIndex, setCutPlanBoardIndex] = useState<number | null>(null);
+    const [cutPlanPartKey, setCutPlanPartKey] = useState<string | null>(null);
+    const [cutStep, setCutStep] = useState(0);
+    const [cutSawT, setCutSawT] = useState(0);
+    const [cutPlaying, setCutPlaying] = useState(false);
+    const cutStepRef = useRef(0);
+    const cutSawTRef = useRef(0);
+
     const svgRefs = useRef<Record<number, SVGSVGElement | null>>({});
+
+    /** Ustawia pozycję piły (licznik wykonanych cięć + postęp bieżącego). */
+    const commitCutPos = (step?: number, t?: number) => {
+        if (step !== undefined) { cutStepRef.current = step; setCutStep(step); }
+        if (t !== undefined) { cutSawTRef.current = t; setCutSawT(t); }
+    };
+
+    const startResizePanel = (e: React.PointerEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsResizingPanel(true);
+        const startX = e.clientX;
+        const startW = panelWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onPointerMove = (moveEv: PointerEvent) => {
+            const delta = startX - moveEv.clientX;
+            const maxW = Math.max(PANEL_MIN_WIDTH, Math.floor(window.innerWidth * 0.7));
+            setPanelWidth(Math.max(PANEL_MIN_WIDTH, Math.min(maxW, startW + delta)));
+        };
+
+        const onPointerUp = () => {
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            setIsResizingPanel(false);
+            setPanelWidth((w) => {
+                try { localStorage.setItem('cad_nesting_panel_width', String(w)); } catch { /* ignore */ }
+                return w;
+            });
+        };
+
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+    };
 
     const getBoardZoom = (bIdx: number) => {
         return zoomMap[bIdx] || { scale: 1.0, originX: 50, originY: 50 };
@@ -129,13 +221,13 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         });
     };
 
-    const rotatePart = (partId: string, boardIndex: number, deltaAngle: number) => {
+    /** Ustawia bezwzględny kąt formatki i dopasowuje pozycję, by nie wyszła poza arkusz. */
+    const applyPartAngle = (partId: string, boardIndex: number, absoluteAngle: number) => {
         setActiveBoards(prev => prev.map(board => {
             if (board.boardIndex !== boardIndex) return board;
             const newLayout = board.layout.map(p => {
                 if (p.partId !== partId) return p;
-                const currentAngle = p.rotationAngle ?? 0;
-                const nextAngle = (currentAngle + deltaAngle + 360) % 360;
+                const nextAngle = ((absoluteAngle % 360) + 360) % 360;
                 const updated = {
                     ...p,
                     rotationAngle: nextAngle,
@@ -153,14 +245,42 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
 
                 updated.x = Math.round(adjX);
                 updated.y = Math.round(adjY);
-
-                if (selectedPart?.partId === partId) {
-                    setSelectedPart(updated);
-                }
                 return updated;
             });
             return { ...board, layout: newLayout };
         }));
+    };
+
+    const rotatePart = (partId: string, boardIndex: number, deltaAngle: number) => {
+        const board = activeBoards.find(b => b.boardIndex === boardIndex);
+        const part = board?.layout.find(p => p.partId === partId);
+        const current = part?.rotationAngle ?? 0;
+        applyPartAngle(partId, boardIndex, current + deltaAngle);
+    };
+
+    /** Start obrotu uchwytem (gizmo) — kąt mierzony względem środka formatki. */
+    const handleRotateHandleDown = (e: React.MouseEvent, part: PackedPart, board: PackedBoard) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const svgEl = svgRefs.current[board.boardIndex];
+        if (!svgEl) return;
+        const rect = svgEl.getBoundingClientRect();
+        const cx = part.x + part.w / 2;
+        const cy = part.y + part.h / 2;
+        const bx = (e.clientX - rect.left) * (board.width / rect.width);
+        const by = (e.clientY - rect.top) * (board.height / rect.height);
+        const startAngle = (Math.atan2(by - cy, bx - cx) * 180) / Math.PI;
+        setSelectedPart(part);
+        setRotateDrag({
+            boardIndex: board.boardIndex,
+            partId: part.partId,
+            centerX: cx,
+            centerY: cy,
+            startAngle,
+            startRotation: part.rotationAngle ?? 0,
+            boardWidth: board.width,
+            boardHeight: board.height
+        });
     };
 
     // Skrót klawiszowy R / Shift+R do obrotu wybranej formatki co 15°
@@ -269,6 +389,68 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         };
     }, [dragState, selectedPart, activeBoards, config]);
 
+    // Obrót formatki uchwytem gizmo (przeciąganie myszką wokół jej środka).
+    useEffect(() => {
+        if (!rotateDrag) return;
+
+        const handleMove = (e: MouseEvent) => {
+            const svgEl = svgRefs.current[rotateDrag.boardIndex];
+            if (!svgEl) return;
+            const rect = svgEl.getBoundingClientRect();
+            const bx = (e.clientX - rect.left) * (rotateDrag.boardWidth / rect.width);
+            const by = (e.clientY - rect.top) * (rotateDrag.boardHeight / rect.height);
+            const ang = (Math.atan2(by - rotateDrag.centerY, bx - rotateDrag.centerX) * 180) / Math.PI;
+            let next = rotateDrag.startRotation + (ang - rotateDrag.startAngle);
+            const snap = e.shiftKey ? 1 : 5;
+            next = Math.round(next / snap) * snap;
+            applyPartAngle(rotateDrag.partId, rotateDrag.boardIndex, next);
+        };
+
+        const handleUp = () => setRotateDrag(null);
+
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleUp);
+        };
+    }, [rotateDrag]);
+
+    // Przeciąganie okna gizmo za nagłówek.
+    useEffect(() => {
+        if (!gizmoDrag) return;
+
+        const handleMove = (e: MouseEvent) => {
+            const left = Math.min(Math.max(gizmoDrag.originLeft + (e.clientX - gizmoDrag.startX), 0), gizmoDrag.maxLeft);
+            const top = Math.min(Math.max(gizmoDrag.originTop + (e.clientY - gizmoDrag.startY), 0), gizmoDrag.maxTop);
+            setGizmoPos({ boardIndex: gizmoDrag.boardIndex, partId: gizmoDrag.partId, left, top });
+        };
+
+        const handleUp = () => setGizmoDrag(null);
+
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleUp);
+        };
+    }, [gizmoDrag]);
+
+    /** Start przeciągania okna gizmo za nagłówek. */
+    const handleGizmoDragStart = (
+        e: React.MouseEvent,
+        boardIndex: number,
+        partId: string,
+        left: number,
+        top: number,
+        maxLeft: number,
+        maxTop: number
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setGizmoDrag({ boardIndex, partId, startX: e.clientX, startY: e.clientY, originLeft: left, originTop: top, maxLeft, maxTop });
+    };
+
     /** Ostre etykiety HTML (nie SVG) — rozmiar w px ekranu, bez rozmycia viewBox. */
     const renderHtmlPartLabel = (part: PackedPart, board: PackedBoard, displayW: number, displayH: number) => {
         const sx = displayW / board.width;
@@ -294,7 +476,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
 
         return (
             <div
-                key={`lbl-${part.partId}`}
+                key={`lbl-${partInstanceKey(part)}`}
                 className="nesting-html-label"
                 style={{
                     left,
@@ -319,7 +501,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         const handleAutoSync = () => {
             const sceneData = extractPartsFrom3DScene();
             if (sceneData && sceneData.parts.length > 0) {
-                setAllProjectParts(sceneData.parts);
+                setAllProjectParts((prev) => preserveFrozen(prev, sceneData.parts));
             }
         };
 
@@ -368,7 +550,15 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     // Formatki z CAD (zakres już wybrany PPM na scenie głównej)
     const scopedParts = allProjectParts;
 
-    // Unikalne grupy materiałowe
+    // Zamrożone formatki są widoczne na liście, ale nie wchodzą do rozkroju.
+    const activeParts = useMemo(() => scopedParts.filter((p) => !p.frozen), [scopedParts]);
+    const frozenCount = useMemo(
+        () => scopedParts.reduce((s, p) => s + (p.frozen ? (p.quantity || 0) : 0), 0),
+        [scopedParts]
+    );
+
+    // Unikalne grupy materiałowe. Grupa pozostaje na liście nawet gdy wszystkie jej
+    // formatki są zamrożone (licznik = tylko aktywne, by dało się je odmrozić).
     const availableMaterials = useMemo(() => {
         const map = new Map<string, { key: string; name: string; thickness: number; label: string; count: number }>();
         scopedParts.forEach((p) => {
@@ -384,7 +574,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                     count: 0
                 });
             }
-            map.get(key)!.count += (p.quantity || 0);
+            map.get(key)!.count += (p.frozen ? 0 : (p.quantity || 0));
         });
         return Array.from(map.values());
     }, [scopedParts]);
@@ -408,7 +598,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     function handleSyncFromScene() {
         const sceneData = extractPartsFrom3DScene();
         if (sceneData && sceneData.parts.length > 0) {
-            setAllProjectParts(sceneData.parts);
+            setAllProjectParts((prev) => preserveFrozen(prev, sceneData.parts));
             setStatusMsg({ text: `Zaimportowano ${sceneData.parts.length} formatek z projektu 3D.`, type: 'success' });
         } else {
             setStatusMsg({ text: 'Brak wykrytych formatek w scenie 3D. Pozostawiono listę.', type: 'error' });
@@ -458,10 +648,12 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         setAllProjectParts([...allProjectParts, newPart]);
     };
 
-    const removePart = (indexInDisplayed: number) => {
+    const toggleFreeze = (indexInDisplayed: number) => {
         const targetPart = displayedParts[indexInDisplayed];
         if (!targetPart) return;
-        setAllProjectParts(allProjectParts.filter((p) => p.id !== targetPart.id));
+        setAllProjectParts((prev) =>
+            prev.map((p) => (p.id === targetPart.id ? { ...p, frozen: !p.frozen } : p))
+        );
     };
 
     const handleRunNesting = async () => {
@@ -469,7 +661,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         setStatusMsg({ text: `Obliczanie rozkroju (${machineType === 'cnc' ? 'Frezarka CNC' : 'Piła'})...`, type: '' });
 
         try {
-            const nestingResult = await runNesting(scopedParts, config, {
+            const nestingResult = await runNesting(activeParts, config, {
                 mode,
                 iterations: mode === 'pro' ? 2000 : 1,
                 selectedMaterial: selectedMaterialFilter,
@@ -498,15 +690,27 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     };
 
     // Automatyczne generowanie rozkroju przy zmianie zestawu / maszyny / materiału
+    // (zamrożone formatki są pomijane — patrz `activeParts`).
     useEffect(() => {
-        if (scopedParts.length > 0) {
+        if (activeParts.length > 0) {
             handleRunNesting();
+        } else {
+            setResult(null);
         }
-    }, [scopedParts, machineType, selectedMaterialFilter, config.width, config.height, config.kerf, config.trimMargin]);
+    }, [activeParts, machineType, selectedMaterialFilter, config.width, config.height, config.kerf, config.trimMargin]);
 
     const handleExportHtml = () => {
         if (!result) return;
         NestingExporter.downloadHtmlReport(result, config);
+    };
+
+    const handlePrintReport = () => {
+        if (!result) return;
+        NestingExporter.printHtmlReport(result, config);
+    };
+
+    const handlePrintBoard = (board: PackedBoard) => {
+        NestingExporter.printBoardSvg(board, config);
     };
 
     useEffect(() => {
@@ -523,19 +727,126 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         return activeBoards.filter((b) => getMaterialKey(b) === viewBoardMaterial);
     }, [activeBoards, viewBoardMaterial]);
 
+    // Plan cięcia bieżącego arkusza (null gdy brak / arkusz nie-gilotynowy).
+    const cutPlanBoard = useMemo(
+        () => (cutPlanBoardIndex === null ? null : activeBoards.find((b) => b.boardIndex === cutPlanBoardIndex) || null),
+        [cutPlanBoardIndex, activeBoards]
+    );
+    const cutPlan = useMemo(
+        () => (cutPlanBoard ? buildBoardCutPlan(cutPlanBoard, cutPlanPartKey || undefined) : null),
+        [cutPlanBoard, cutPlanPartKey]
+    );
+
+    /** Otwiera plan cięcia arkusza; gdy podano formatkę — tylko jej cięcia. */
+    const openCutPlan = (boardIndex: number, partKey?: string | null) => {
+        const key = partKey ?? null;
+        if (cutPlanBoardIndex === boardIndex && (cutPlanPartKey || null) === key) {
+            setCutPlanBoardIndex(null);
+            setCutPlanPartKey(null);
+            setCutPlaying(false);
+            return;
+        }
+        setCutPlanBoardIndex(boardIndex);
+        setCutPlanPartKey(key);
+    };
+
+    /** Przełącza między planem całego arkusza a cięciami jednej formatki. */
+    const switchCutPlanScope = (partKey: string | null) => {
+        setCutPlanPartKey(partKey);
+        setCutPlaying(false);
+    };
+
+    // Reset animacji przy zmianie arkusza / planu.
+    useEffect(() => {
+        setCutPlaying(false);
+        commitCutPos(0, 0);
+    }, [cutPlanBoardIndex, cutPlan]);
+
+    // Animacja: piła przejeżdża przez kolejne cięcia.
+    useEffect(() => {
+        if (!cutPlaying || !cutPlan) return;
+        const total = cutPlan.totalCuts;
+        if (cutStepRef.current >= total) { setCutPlaying(false); return; }
+
+        const CUT_MS = 520;
+        const DWELL_MS = 340;
+        let phase: 'cut' | 'dwell' = cutSawTRef.current >= 1 ? 'dwell' : 'cut';
+        let phaseStart = performance.now();
+        let baseT = cutSawTRef.current >= 1 ? 0 : cutSawTRef.current;
+        let rafId = 0;
+
+        const tick = (now: number) => {
+            const s = cutStepRef.current;
+            if (s >= total) { setCutPlaying(false); return; }
+
+            if (phase === 'cut') {
+                const t = Math.min(1, baseT + (now - phaseStart) / CUT_MS);
+                commitCutPos(undefined, t);
+                if (t >= 1) { phase = 'dwell'; phaseStart = now; }
+            } else if (now - phaseStart >= DWELL_MS) {
+                const next = s + 1;
+                commitCutPos(next, 0);
+                baseT = 0;
+                phase = 'cut';
+                phaseStart = now;
+                if (next >= total) { setCutPlaying(false); return; }
+            }
+            rafId = requestAnimationFrame(tick);
+        };
+
+        rafId = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(rafId);
+    }, [cutPlaying, cutPlan]);
+
+    const cutStepSafe = cutPlan ? Math.min(cutStep, cutPlan.totalCuts) : 0;
+    const releasedSet = cutPlan ? releasedPartIds(cutPlan, cutStepSafe) : null;
+    const cutTargetPart = useMemo(
+        () => (cutPlanBoard && cutPlanPartKey ? cutPlanBoard.layout.find((p) => partInstanceKey(p) === cutPlanPartKey) || null : null),
+        [cutPlanBoard, cutPlanPartKey]
+    );
+    const currentCut = cutPlan && cutStepSafe < cutPlan.totalCuts ? cutPlan.steps[cutStepSafe] : null;
+    const lastDoneCut = cutPlan && cutStepSafe > 0 ? cutPlan.steps[cutStepSafe - 1] : null;
+
+    const cutControl = {
+        play: () => {
+            if (!cutPlan) return;
+            if (cutStepRef.current >= cutPlan.totalCuts) commitCutPos(0, 0);
+            setCutPlaying((v) => !v);
+        },
+        prev: () => { setCutPlaying(false); commitCutPos(Math.max(0, cutStepRef.current - 1), 0); },
+        next: () => { setCutPlaying(false); commitCutPos(Math.min(cutPlan?.totalCuts ?? 0, cutStepRef.current + 1), 0); },
+        reset: () => { setCutPlaying(false); commitCutPos(0, 0); },
+        end: () => { setCutPlaying(false); commitCutPos(cutPlan?.totalCuts ?? 0, 0); },
+        scrub: (v: number) => { setCutPlaying(false); commitCutPos(v, 0); }
+    };
+
     return (
         <div className="nesting-app-page">
             <aside
                 id="panel-edycji"
                 className="sidebar panel-edycji nesting-panel-edycji"
                 aria-label="Panel edycji"
+                style={{ width: `${panelWidth}px` }}
             >
+                <div
+                    className={`nesting-panel-resize ${isResizingPanel ? 'is-dragging' : ''}`}
+                    onPointerDown={startResizePanel}
+                    onDoubleClick={() => {
+                        setPanelWidth(PANEL_DEFAULT_WIDTH);
+                        try { localStorage.setItem('cad_nesting_panel_width', String(PANEL_DEFAULT_WIDTH)); } catch { /* ignore */ }
+                    }}
+                    title="Przeciągnij, aby zmienić szerokość panelu (dwuklik = domyślna)"
+                    role="separator"
+                    aria-orientation="vertical"
+                >
+                    <div className="nesting-panel-resize-gizmo" />
+                </div>
                 <div className="nesting-form-header">
                     <h2>Nesting</h2>
                     <p className="subtitle">
                         {scopeLabel || 'Rozkrój płyt'}
                         {' · '}
-                        {scopedParts.reduce((s, p) => s + (p.quantity || 0), 0)} szt.
+                        {activeParts.reduce((s, p) => s + (p.quantity || 0), 0)} szt.
                     </p>
                 </div>
 
@@ -571,7 +882,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                                 setViewBoardMaterial(e.target.value);
                             }}
                         >
-                            <option value="ALL">Wszystkie ({scopedParts.reduce((s, p) => s + (p.quantity || 0), 0)} szt.)</option>
+                            <option value="ALL">Wszystkie ({activeParts.reduce((s, p) => s + (p.quantity || 0), 0)} szt.)</option>
                             {availableMaterials.map((mat) => (
                                 <option key={mat.key} value={mat.key}>
                                     {mat.label} ({mat.count} szt.)
@@ -630,7 +941,15 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                 <div className="panel list-panel">
                     <div className="panel-header">
                         <h3>
-                            Formatki ({displayedParts.reduce((sum, p) => sum + (p.quantity || 0), 0)})
+                            Formatki ({activeParts.reduce((sum, p) => sum + (p.quantity || 0), 0)})
+                            {frozenCount > 0 && (
+                                <span
+                                    className="frozen-badge"
+                                    title="Zamrożone formatki — widoczne na liście, ale pomijane w rozkroju"
+                                >
+                                    ❄ {frozenCount}
+                                </span>
+                            )}
                         </h3>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                             {!isStandaloneWindow && (
@@ -659,17 +978,17 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                                     <th style={{ width: '48px' }}>Wys.</th>
                                     <th style={{ width: '36px' }}>Szt.</th>
                                     <th style={{ width: '48px' }}>Obrót</th>
-                                    <th style={{ width: '24px' }}></th>
+                                    <th style={{ width: '30px' }} title="Zamroź / Odmroź">❄</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {displayedParts.map((p, idx) => (
-                                    <tr key={p.id || idx}>
-                                        <td>
-                                            <input type="text" value={p.name} onChange={(e) => updatePart(idx, 'name', e.target.value)} />
+                                    <tr key={p.id || idx} className={p.frozen ? 'is-frozen' : undefined}>
+                                        <td title={p.name}>
+                                            <input type="text" value={p.name} title={p.name} onChange={(e) => updatePart(idx, 'name', e.target.value)} />
                                         </td>
-                                        <td>
-                                            <input type="text" value={p.material || 'Biel Alpejska'} onChange={(e) => updatePart(idx, 'material', e.target.value)} style={{ fontSize: '0.75rem' }} />
+                                        <td title={p.material || 'Biel Alpejska'}>
+                                            <input type="text" value={p.material || 'Biel Alpejska'} title={p.material || 'Biel Alpejska'} onChange={(e) => updatePart(idx, 'material', e.target.value)} style={{ fontSize: '0.75rem' }} />
                                         </td>
                                         <td>
                                             <input
@@ -694,7 +1013,16 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                                             </select>
                                         </td>
                                         <td>
-                                            <button className="btn-remove-row" onClick={() => removePart(idx)} title="Usuń">&times;</button>
+                                            <button
+                                                type="button"
+                                                className={`btn-freeze-row ${p.frozen ? 'is-frozen' : ''}`}
+                                                onClick={() => toggleFreeze(idx)}
+                                                title={p.frozen
+                                                    ? 'Odmroź — przywróć formatkę do rozkroju'
+                                                    : 'Zamroź — zostaw na liście, ale pomiń w rozkroju'}
+                                            >
+                                                {p.frozen ? '🔥' : '❄'}
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -708,7 +1036,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                         id="runNestingBtn"
                         className="btn-primary"
                         onClick={handleRunNesting}
-                        disabled={isCalculating || scopedParts.length === 0}
+                        disabled={isCalculating || activeParts.length === 0}
                     >
                         {isCalculating
                             ? 'Obliczanie...'
@@ -762,6 +1090,15 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                         >
                             SVG / HTML
                         </button>
+                        <button
+                            className="btn-secondary"
+                            id="printPdfBtn"
+                            onClick={handlePrintReport}
+                            disabled={!result || result.boards.length === 0}
+                            title="Wydruk całego planu — drukarka lub zapis do PDF"
+                        >
+                            🖨️ Drukuj / PDF
+                        </button>
                     </div>
                 </div>
 
@@ -777,7 +1114,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                         displayedBoards.map((board) => {
                             const zoom = getBoardZoom(board.boardIndex);
                             const selectedPartInThisBoard = board.layout.find(p => p.partId === selectedPart?.partId);
-                            const baseW = 1100;
+                            const baseW = 770;
                             const displayW = Math.round(baseW * zoom.scale);
                             const displayH = Math.round(displayW * (board.height / board.width));
 
@@ -790,24 +1127,38 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                                                 <span className="board-mat-badge">{board.materialLabel}</span>
                                             )}
                                         </span>
-                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                                            Odpad: {board.wastePercent.toFixed(1)}%
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem', color: '#64748b' }}>
+                                            {typeof board.strips === 'number' && board.strips > 0 && (
+                                                <span>Pasy: {board.strips}</span>
+                                            )}
+                                            <span>Odpad: {board.wastePercent.toFixed(1)}%</span>
+                                            <button
+                                                type="button"
+                                                className="btn-secondary"
+                                                onClick={() => handlePrintBoard(board)}
+                                                title="Wydruk tego arkusza (drukarka / PDF)"
+                                                style={{ padding: '2px 8px', fontSize: '0.78rem' }}
+                                            >
+                                                🖨️ Drukuj
+                                            </button>
+                                            {board.shelfAxis && (() => {
+                                                const selKey = selectedPartInThisBoard ? partInstanceKey(selectedPartInThisBoard) : null;
+                                                const openHere = cutPlanBoardIndex === board.boardIndex;
+                                                const activePartMode = openHere && !!cutPlanPartKey;
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        className={`btn-secondary cut-plan-toggle ${openHere ? 'active' : ''}`}
+                                                        onClick={() => openCutPlan(board.boardIndex, selKey)}
+                                                        title={selKey ? 'Animowany plan cięcia — tylko wybrana formatka' : 'Animowany plan cięcia (gilotynowy)'}
+                                                        style={{ padding: '2px 8px', fontSize: '0.78rem' }}
+                                                    >
+                                                        ✂ {activePartMode ? 'Ta formatka' : 'Plan cięcia'}
+                                                    </button>
+                                                );
+                                            })()}
                                         </span>
                                     </div>
-                                    {selectedPartInThisBoard && (
-                                        <div className="part-edit-bar" style={{ width: displayW }}>
-                                            <span>
-                                                {selectedPartInThisBoard.name}
-                                                {' · '}
-                                                Kąt: <strong>{selectedPartInThisBoard.rotationAngle ?? 0}°</strong>
-                                            </span>
-                                            <div style={{ display: 'flex', gap: '6px' }}>
-                                                <button type="button" className="btn-secondary" onClick={() => rotatePart(selectedPartInThisBoard.partId, board.boardIndex, -15)}>−15°</button>
-                                                <button type="button" className="btn-secondary" onClick={() => rotatePart(selectedPartInThisBoard.partId, board.boardIndex, 15)}>+15°</button>
-                                                <button type="button" className="btn-secondary" onClick={() => rotatePart(selectedPartInThisBoard.partId, board.boardIndex, 90)}>90°</button>
-                                            </div>
-                                        </div>
-                                    )}
                                     <div
                                         className="board-stage"
                                         style={{ width: displayW, height: displayH }}
@@ -833,26 +1184,154 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                                             {board.layout.map((part) => {
                                                 const isSelected = selectedPart?.partId === part.partId;
                                                 const colliding = checkPartCollision(part, board.layout, board.width, board.height, config.trimMargin);
+                                                const cutActive = cutPlanBoardIndex === board.boardIndex && !!cutPlan;
+                                                const pKey = partInstanceKey(part);
+                                                let cutCls = '';
+                                                if (cutActive && cutPlanPartKey) {
+                                                    cutCls = pKey === cutPlanPartKey
+                                                        ? (releasedSet && releasedSet.has(pKey) ? ' cut-released' : ' cut-target')
+                                                        : ' cut-hidden';
+                                                } else if (cutActive) {
+                                                    cutCls = releasedSet && releasedSet.has(pKey) ? ' cut-released' : ' cut-pending';
+                                                }
                                                 return (
                                                     <g
-                                                        key={part.partId}
+                                                        key={partInstanceKey(part)}
                                                         transform={`translate(${part.x}, ${part.y}) rotate(${part.rotationAngle ?? 0}, ${part.w / 2}, ${part.h / 2})`}
                                                         style={{ cursor: 'grab' }}
                                                         onMouseDown={(e) => handleMouseDownPart(e, part, board)}
                                                         onClick={(e) => { e.stopPropagation(); setSelectedPart(part); }}
                                                     >
+                                                        <title>{`${part.name} • Przeciągnij, aby przesunąć • Gizmo ⟳ lub klawisz R = obrót`}</title>
                                                         <rect
                                                             width={part.w}
                                                             height={part.h}
-                                                            className={`part-rect${isSelected ? ' selected' : ''}${colliding ? ' colliding' : ''}`}
+                                                            className={`part-rect${isSelected ? ' selected' : ''}${colliding ? ' colliding' : ''}${cutCls}`}
                                                         />
                                                     </g>
                                                 );
                                             })}
+                                            {cutPlanBoardIndex === board.boardIndex && cutPlan && (
+                                                <CutPlanLayer plan={cutPlan} step={cutStepSafe} sawT={cutSawT} />
+                                            )}
                                         </svg>
                                         <div className="board-labels-layer" aria-hidden>
-                                            {board.layout.map((part) => renderHtmlPartLabel(part, board, displayW, displayH))}
+                                            {board.layout
+                                                .filter((part) => !(cutPlanBoardIndex === board.boardIndex && cutPlanPartKey) || partInstanceKey(part) === cutPlanPartKey)
+                                                .map((part) => renderHtmlPartLabel(part, board, displayW, displayH))}
                                         </div>
+                                        {cutPlanBoardIndex === board.boardIndex && cutPlan && (
+                                            <div className="cut-plan-bar">
+                                                <div className="cut-plan-controls">
+                                                    <button type="button" onClick={cutControl.reset} title="Od początku">⏮</button>
+                                                    <button type="button" onClick={cutControl.prev} title="Poprzednie cięcie">◀</button>
+                                                    <button
+                                                        type="button"
+                                                        className="cut-plan-play"
+                                                        onClick={cutControl.play}
+                                                        title={cutPlaying ? 'Pauza' : 'Odtwórz'}
+                                                    >
+                                                        {cutPlaying ? '⏸' : '▶'}
+                                                    </button>
+                                                    <button type="button" onClick={cutControl.next} title="Następne cięcie">▶|</button>
+                                                    <button type="button" onClick={cutControl.end} title="Na koniec">⏭</button>
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={cutPlan.totalCuts}
+                                                        value={cutStepSafe}
+                                                        onChange={(e) => cutControl.scrub(parseInt(e.target.value, 10))}
+                                                        className="cut-plan-slider"
+                                                    />
+                                                    <span className="cut-plan-counter">
+                                                        Cięcia: {cutStepSafe}/{cutPlan.totalCuts}
+                                                        {cutPlanPartKey ? '' : ` · Pasy: ${cutPlan.bands}`}
+                                                    </span>
+                                                    {cutPlanPartKey ? (
+                                                        <button
+                                                            type="button"
+                                                            className="cut-plan-scope"
+                                                            onClick={() => switchCutPlanScope(null)}
+                                                            title="Pokaż cięcia całego arkusza"
+                                                        >
+                                                            Cały arkusz
+                                                        </button>
+                                                    ) : selectedPartInThisBoard ? (
+                                                        <button
+                                                            type="button"
+                                                            className="cut-plan-scope"
+                                                            onClick={() => switchCutPlanScope(partInstanceKey(selectedPartInThisBoard))}
+                                                            title="Pokaż tylko cięcia wybranej formatki"
+                                                        >
+                                                            Tylko ta formatka
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                                <div className="cut-plan-desc">
+                                                    <span className="cut-plan-mode">
+                                                        {cutTargetPart ? `Formatka: ${cutTargetPart.name} (${cutTargetPart.realW} × ${cutTargetPart.realH} mm)` : `Arkusz nr ${board.boardIndex}`}
+                                                    </span>
+                                                    <span className="cut-plan-info">
+                                                        {currentCut
+                                                            ? <>Następne: {currentCut.label}</>
+                                                            : <>Zakończono — {cutTargetPart ? 'formatka odcięta' : 'wszystkie formatki odcięte'}.</>}
+                                                        {lastDoneCut && currentCut ? <em className="cut-plan-last"> · Ostatnie: {lastDoneCut.label}</em> : null}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {selectedPartInThisBoard && (() => {
+                                            const part = selectedPartInThisBoard;
+                                            const sx = displayW / board.width;
+                                            const sy = displayH / board.height;
+                                            const cx = (part.x + part.w / 2) * sx;
+                                            const cy = (part.y + part.h / 2) * sy;
+                                            const theta = ((part.rotationAngle ?? 0) * Math.PI) / 180;
+                                            const R = 34;
+                                            const hx = cx + R * Math.sin(theta);
+                                            const hy = cy - R * Math.cos(theta);
+                                            const tbWidth = 300;
+                                            const tbHeight = 56;
+                                            const maxLeft = Math.max(0, displayW - tbWidth);
+                                            const maxTop = Math.max(0, displayH - tbHeight);
+                                            let tbLeft = Math.min(Math.max(hx + 12, 4), maxLeft);
+                                            let tbTop = Math.min(Math.max(hy - 16, 4), maxTop);
+                                            if (gizmoPos && gizmoPos.boardIndex === board.boardIndex && gizmoPos.partId === part.partId) {
+                                                tbLeft = Math.min(Math.max(gizmoPos.left, 0), maxLeft);
+                                                tbTop = Math.min(Math.max(gizmoPos.top, 0), maxTop);
+                                            }
+                                            return (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        className="part-rotate-handle"
+                                                        style={{ left: hx, top: hy }}
+                                                        onMouseDown={(e) => handleRotateHandleDown(e, part, board)}
+                                                        title="Chwyć i obracaj formatkę (Shift = co 1°)"
+                                                    >⟳</button>
+                                                    <div className="part-gizmo" style={{ left: tbLeft, top: tbTop }}>
+                                                        <div
+                                                            className="part-gizmo-head"
+                                                            onMouseDown={(e) => handleGizmoDragStart(e, board.boardIndex, part.partId, tbLeft, tbTop, maxLeft, maxTop)}
+                                                            title="Przeciągnij, aby przesunąć okno"
+                                                        >
+                                                            <span className="part-gizmo-grip" aria-hidden>⠿</span>
+                                                            <span className="part-gizmo-name" title={part.name}>{part.name}</span>
+                                                            <span className="part-gizmo-angle">{part.rotationAngle ?? 0}°</span>
+                                                        </div>
+                                                        <div className="part-gizmo-row">
+                                                            <button type="button" onClick={() => rotatePart(part.partId, board.boardIndex, -90)} title="Obróć o -90°">−90°</button>
+                                                            <button type="button" onClick={() => rotatePart(part.partId, board.boardIndex, -15)} title="Obróć o -15°">−15°</button>
+                                                            <button type="button" onClick={() => rotatePart(part.partId, board.boardIndex, -5)} title="Obróć o -5°">−5°</button>
+                                                            <button type="button" className="part-gizmo-zero" onClick={() => applyPartAngle(part.partId, board.boardIndex, 0)} title="Reset obrotu (0°)">0°</button>
+                                                            <button type="button" onClick={() => rotatePart(part.partId, board.boardIndex, 5)} title="Obróć o +5°">+5°</button>
+                                                            <button type="button" onClick={() => rotatePart(part.partId, board.boardIndex, 15)} title="Obróć o +15°">+15°</button>
+                                                            <button type="button" onClick={() => rotatePart(part.partId, board.boardIndex, 90)} title="Obróć o +90°">+90°</button>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             );
@@ -861,6 +1340,41 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                 </div>
             </main>
         </div>
+    );
+};
+
+/** Warstwa SVG z liniami cięć gilotynowych + pozycja piły. */
+const CutPlanLayer: React.FC<{ plan: BoardCutPlan; step: number; sawT: number }> = ({ plan, step, sawT }) => {
+    const done = plan.steps.filter((s) => s.order <= step);
+    const current = step < plan.totalCuts ? plan.steps[step] : null;
+
+    let sawX = 0;
+    let sawY = 0;
+    if (current) {
+        const t = Math.max(0, Math.min(1, sawT));
+        sawX = current.x1 + (current.x2 - current.x1) * t;
+        sawY = current.y1 + (current.y2 - current.y1) * t;
+    }
+
+    return (
+        <g className="cut-plan-layer" pointerEvents="none">
+            {done.map((s) => (
+                <line key={s.order} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} className={`cut-line done cut-${s.kind}`} vectorEffect="non-scaling-stroke" />
+            ))}
+            {current && sawT > 0 && (
+                <line
+                    x1={current.x1}
+                    y1={current.y1}
+                    x2={sawX}
+                    y2={sawY}
+                    className={`cut-line current cut-${current.kind}`}
+                    vectorEffect="non-scaling-stroke"
+                />
+            )}
+            {current && (
+                <circle cx={sawX} cy={sawY} r={14} className="cut-saw" vectorEffect="non-scaling-stroke" />
+            )}
+        </g>
     );
 };
 
