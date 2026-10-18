@@ -78,7 +78,6 @@ export default defineConfig({
         main: fileURLToPath(new URL('index.html', import.meta.url)),
         landing: fileURLToPath(new URL('landing.html', import.meta.url)),
         nesting: fileURLToPath(new URL('nesting.html', import.meta.url)),
-        e3_drawing: fileURLToPath(new URL('e3_drawing.html', import.meta.url)),
         draw: fileURLToPath(new URL('draw.html', import.meta.url)),
         report: fileURLToPath(new URL('report.html', import.meta.url)),
         cnc: fileURLToPath(new URL('cnc.html', import.meta.url)),
