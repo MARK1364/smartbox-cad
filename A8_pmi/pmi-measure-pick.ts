@@ -46,6 +46,7 @@ export interface MeasurePickContext {
     vertexSnapPx: number;
     edgeSnapPx: number;
     lastDetection: GeometryDetectionSnapshot | null;
+    hoveredSegment?: EdgeSegmentCandidate | null;
 }
 
 /**
@@ -53,16 +54,14 @@ export interface MeasurePickContext {
  * Bez Ctrl: krawędź ma pierwszeństwo (szybka długość).
  */
 export function findMeasureElementPick(ctx: MeasurePickContext): MeasureElementPick | null {
-    const { scene, pointerX, pointerY, ctrl, vertexSnapPx, edgeSnapPx, lastDetection } = ctx;
+    const { scene, pointerX, pointerY, ctrl, vertexSnapPx, edgeSnapPx, lastDetection, hoveredSegment } = ctx;
     if (!scene) return null;
 
-    const snapRadius = Math.max(vertexSnapPx, 14);
-    const vertices = findVerticesNearPointer(scene, pointerX, pointerY, snapRadius);
+    const snapRadius = vertexSnapPx;
 
     // Narożnik ma ZAWSZE bezwzględne pierwszeństwo przed krawędzią i płaszczyzną
     // (zarówno z Ctrl, jak i bez Ctrl).
-    if (vertices.length > 0) return vertexPickToMeasure(vertices[0]);
-
+    // Jeśli highlighter już wykrył wierzchołek, wykorzystajmy go natychmiast bez ponownego skanowania sceny.
     if (lastDetection?.hit && lastDetection.geometryType === GeometryType.VERTEX
         && lastDetection.pickedPoint && lastDetection.mesh) {
         const worldPos = v3(
@@ -80,12 +79,14 @@ export function findMeasureElementPick(ctx: MeasurePickContext): MeasureElementP
         };
     }
 
-    const edges = findEdgeSegmentsNearPointer(
-        scene,
-        pointerX,
-        pointerY,
-        ctrl ? edgeSnapPx + 4 : edgeSnapPx,
-    );
+    const vertices = snapRadius > 0 ? findVerticesNearPointer(scene, pointerX, pointerY, snapRadius) : [];
+    if (vertices.length > 0) return vertexPickToMeasure(vertices[0]);
+
+    const effectiveEdgeSnapPx = ctrl ? edgeSnapPx + 4 : edgeSnapPx;
+    const edges = (hoveredSegment && hoveredSegment.distPx <= effectiveEdgeSnapPx)
+        ? [hoveredSegment]
+        : findEdgeSegmentsNearPointer(scene, pointerX, pointerY, effectiveEdgeSnapPx);
+
     const planeHit = findPlaneHit(scene, pointerX, pointerY, lastDetection);
 
     if (ctrl) {

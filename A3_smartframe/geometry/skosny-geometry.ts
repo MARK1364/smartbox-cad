@@ -54,26 +54,6 @@ export interface SkosnyLrGeometryContext {
     grubosc_prawy_mm?: number;
     szerokosc_wewnetrzna_mm?: number;
     przesuniecie_srodka_mm?: number;
-
-    // Kompatybilność wsteczna
-    W?: number;
-    D?: number;
-    hL?: number;
-    hR?: number;
-    maxH?: number;
-    thickness?: number;
-    backOffset?: number;
-    shiftX?: number;
-    shiftY?: number;
-    shiftZ?: number;
-    pXPlus?: number;
-    pXMinus?: number;
-    pYPlus?: number;
-    pYMinus?: number;
-    leftThick?: number;
-    rightThick?: number;
-    innerWidth?: number;
-    midShift?: number;
 }
 
 /**
@@ -296,27 +276,27 @@ export function resolveSkosnyLrGeometry(
     role: string,
     o: SkosnyLrGeometryContext
 ): Partial<CabinetGeometryPart> | null {
-    const W_mm = o.W_mm ?? o.W ?? 1200;
-    const D_mm = o.D_mm ?? o.D ?? 600;
-    const h_lewy_mm  = o.wysokosc_lewy_mm  ?? o.hL ?? 1000;
-    const h_prawy_mm = o.wysokosc_prawy_mm ?? o.hR ?? 2200;
-    const max_wysokosc_mm      = o.max_wysokosc_mm ?? o.maxH ?? Math.max(h_lewy_mm, h_prawy_mm);
-    const grubosc_mm           = o.grubosc_mm    ?? o.thickness  ?? 18;
+    const W_mm = o.W_mm ?? 1200;
+    const D_mm = o.D_mm ?? 600;
+    const h_lewy_mm  = o.wysokosc_lewy_mm ?? 1000;
+    const h_prawy_mm = o.wysokosc_prawy_mm ?? 2200;
+    const max_wysokosc_mm      = o.max_wysokosc_mm ?? Math.max(h_lewy_mm, h_prawy_mm);
+    const grubosc_mm           = o.grubosc_mm ?? 18;
     const grubosc_dolny_mm     = o.grubosc_dolny_mm ?? grubosc_mm;
     const grubosc_gorny_mm     = o.grubosc_gorny_mm ?? grubosc_mm;
-    const odsuniecie_plecow_mm = o.odsuniecie_plecow_mm ?? o.backOffset ?? 0;
-    const przesuniecie_x_mm    = o.przesuniecie_x_mm ?? o.shiftX ?? 0;
-    const przesuniecie_y_mm    = o.przesuniecie_y_mm ?? o.shiftY ?? 0;
-    const przesuniecie_z_mm    = o.przesuniecie_z_mm ?? o.shiftZ ?? 0;
-    const wpuszczenie_prawe_mm = o.wpuszczenie_prawe_mm ?? o.pXPlus  ?? 0;
-    const wpuszczenie_lewe_mm  = o.wpuszczenie_lewe_mm  ?? o.pXMinus ?? 0;
-    const margines_gorny_mm    = o.margines_gorny_mm ?? o.pYPlus  ?? 0;
-    const margines_dolny_mm    = o.margines_dolny_mm ?? o.pYMinus ?? 0;
-    const grubosc_lewy_mm      = o.grubosc_lewy_mm  ?? o.leftThick  ?? grubosc_mm;
-    const grubosc_prawy_mm     = o.grubosc_prawy_mm ?? o.rightThick ?? grubosc_mm;
-    const szerokosc_wewnetrzna_mm = o.szerokosc_wewnetrzna_mm ?? o.innerWidth
+    const odsuniecie_plecow_mm = o.odsuniecie_plecow_mm ?? 0;
+    const przesuniecie_x_mm    = o.przesuniecie_x_mm ?? 0;
+    const przesuniecie_y_mm    = o.przesuniecie_y_mm ?? 0;
+    const przesuniecie_z_mm    = o.przesuniecie_z_mm ?? 0;
+    const wpuszczenie_prawe_mm = o.wpuszczenie_prawe_mm ?? 0;
+    const wpuszczenie_lewe_mm  = o.wpuszczenie_lewe_mm ?? 0;
+    const margines_gorny_mm    = o.margines_gorny_mm ?? 0;
+    const margines_dolny_mm    = o.margines_dolny_mm ?? 0;
+    const grubosc_lewy_mm      = o.grubosc_lewy_mm ?? grubosc_mm;
+    const grubosc_prawy_mm     = o.grubosc_prawy_mm ?? grubosc_mm;
+    const szerokosc_wewnetrzna_mm = o.szerokosc_wewnetrzna_mm
         ?? (W_mm - grubosc_lewy_mm - grubosc_prawy_mm);
-    const przesuniecie_srodka_mm  = o.przesuniecie_srodka_mm ?? o.midShift
+    const przesuniecie_srodka_mm  = o.przesuniecie_srodka_mm
         ?? ((grubosc_lewy_mm - grubosc_prawy_mm) / 2);
 
     const beta_rad = Math.atan2(h_prawy_mm - h_lewy_mm, szerokosc_wewnetrzna_mm);
@@ -459,27 +439,27 @@ export function resolveSkosnyLrUcGeometry(
     role: string,
     o: SkosnyLrGeometryContext
 ): Partial<CabinetGeometryPart> | null {
-    const W_mm = o.W_mm ?? o.W ?? 1200;
-    const D_mm = o.D_mm ?? o.D ?? 600;
-    const h_lewy_mm  = o.wysokosc_lewy_mm  ?? o.hL ?? 1000;
-    const h_prawy_mm = o.wysokosc_prawy_mm ?? o.hR ?? 2200;
-    const max_wysokosc_mm      = o.max_wysokosc_mm ?? o.maxH ?? Math.max(h_lewy_mm, h_prawy_mm);
-    const grubosc_mm           = o.grubosc_mm    ?? o.thickness  ?? 18;
+    const W_mm = o.W_mm ?? 1200;
+    const D_mm = o.D_mm ?? 600;
+    const h_lewy_mm  = o.wysokosc_lewy_mm ?? 1000;
+    const h_prawy_mm = o.wysokosc_prawy_mm ?? 2200;
+    const max_wysokosc_mm      = o.max_wysokosc_mm ?? Math.max(h_lewy_mm, h_prawy_mm);
+    const grubosc_mm           = o.grubosc_mm ?? 18;
     const grubosc_dolny_mm     = o.grubosc_dolny_mm ?? grubosc_mm;
     const grubosc_gorny_mm     = o.grubosc_gorny_mm ?? grubosc_mm;
-    const odsuniecie_plecow_mm = o.odsuniecie_plecow_mm ?? o.backOffset ?? 0;
-    const przesuniecie_x_mm    = o.przesuniecie_x_mm ?? o.shiftX ?? 0;
-    const przesuniecie_y_mm    = o.przesuniecie_y_mm ?? o.shiftY ?? 0;
-    const przesuniecie_z_mm    = o.przesuniecie_z_mm ?? o.shiftZ ?? 0;
-    const wpuszczenie_prawe_mm = o.wpuszczenie_prawe_mm ?? o.pXPlus  ?? 0;
-    const wpuszczenie_lewe_mm  = o.wpuszczenie_lewe_mm  ?? o.pXMinus ?? 0;
-    const margines_gorny_mm    = o.margines_gorny_mm ?? o.pYPlus  ?? 0;
-    const margines_dolny_mm    = o.margines_dolny_mm ?? o.pYMinus ?? 0;
-    const grubosc_lewy_mm      = o.grubosc_lewy_mm  ?? o.leftThick  ?? grubosc_mm;
-    const grubosc_prawy_mm     = o.grubosc_prawy_mm ?? o.rightThick ?? grubosc_mm;
-    const szerokosc_wewnetrzna_mm = o.szerokosc_wewnetrzna_mm ?? o.innerWidth
+    const odsuniecie_plecow_mm = o.odsuniecie_plecow_mm ?? 0;
+    const przesuniecie_x_mm    = o.przesuniecie_x_mm ?? 0;
+    const przesuniecie_y_mm    = o.przesuniecie_y_mm ?? 0;
+    const przesuniecie_z_mm    = o.przesuniecie_z_mm ?? 0;
+    const wpuszczenie_prawe_mm = o.wpuszczenie_prawe_mm ?? 0;
+    const wpuszczenie_lewe_mm  = o.wpuszczenie_lewe_mm ?? 0;
+    const margines_gorny_mm    = o.margines_gorny_mm ?? 0;
+    const margines_dolny_mm    = o.margines_dolny_mm ?? 0;
+    const grubosc_lewy_mm      = o.grubosc_lewy_mm ?? grubosc_mm;
+    const grubosc_prawy_mm     = o.grubosc_prawy_mm ?? grubosc_mm;
+    const szerokosc_wewnetrzna_mm = o.szerokosc_wewnetrzna_mm
         ?? (W_mm - grubosc_lewy_mm - grubosc_prawy_mm);
-    const przesuniecie_srodka_mm  = o.przesuniecie_srodka_mm ?? o.midShift
+    const przesuniecie_srodka_mm  = o.przesuniecie_srodka_mm
         ?? ((grubosc_lewy_mm - grubosc_prawy_mm) / 2);
 
     // Kąt dachu po pełnej szerokości szafki W_mm (od krawędzi zewnętrznej lewej do prawej)

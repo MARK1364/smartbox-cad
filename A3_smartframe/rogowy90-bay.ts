@@ -52,7 +52,7 @@ function findRogowyPanel(cabinetNode: CADNode, ...keySuffixes: string[]): CADNod
             if (isBlokiSubtree(node)) return;
             const d = node.domainData as any;
             if (d && (d.type === 'panel' || d.type === 'part')) {
-                const key = String(d.key || node.name || '').toUpperCase();
+                const key = String(d.key || d.role || '').toUpperCase();
                 if (key === suffix || key.endsWith(`_${suffix}`) || key.endsWith(suffix)) {
                     found = node;
                     return;

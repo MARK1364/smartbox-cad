@@ -213,12 +213,17 @@ export class MeasureTool extends BaseState {
             this.geometryHighlighter.update(scene.pointerX, scene.pointerY);
         }
 
-        const snap = this.findElementPick();
+        const snap = this.findElementPick(false);
 
         if (this.phase === 'PICK_P1') {
+            const hasExisting = PMIStore.instance.measurements.length > 0;
             if (!this.isCtrlPressed && snap?.kind === 'edge' && snap.edge) {
                 this.geometryHighlighter?.showEdgeOverlays([snap.edge]);
-                this.renderer.renderMeasurePreview([snap.edge.p1World, snap.edge.p2World]);
+                if (!hasExisting) {
+                    this.renderer.renderMeasurePreview([snap.edge.p1World, snap.edge.p2World]);
+                } else {
+                    this.renderer.clearMeasurePreview();
+                }
                 this.ctx.viewport?.requestRender?.(2);
                 return;
             }
@@ -261,7 +266,7 @@ export class MeasureTool extends BaseState {
         }
         this.lastClickTime = now;
 
-        const snap = this.findElementPick();
+        const snap = this.findElementPick(true);
         if (!snap) return;
 
         // Bez Ctrl + krawędź w fazie PICK_P1 → od razu zmierz krawędź, ale zapamiętaj jako pick1 dla opcjonalnego Ctrl+P2
@@ -319,12 +324,12 @@ export class MeasureTool extends BaseState {
         this.setUIStatus(this.statusForSecondPick(snap));
     }
 
-    private findElementPick(): MeasureElementPick | null {
+    private findElementPick(updateHighlighter = false): MeasureElementPick | null {
         const scene = this.ctx.viewport.scene;
         if (!scene) return null;
 
         const store = PMIStore.instance;
-        if (this.geometryHighlighter) {
+        if (updateHighlighter && this.geometryHighlighter) {
             this.geometryHighlighter.update(scene.pointerX, scene.pointerY);
         }
 
@@ -336,6 +341,7 @@ export class MeasureTool extends BaseState {
             vertexSnapPx: store.vertexSnapPx,
             edgeSnapPx: store.edgeSnapPx,
             lastDetection: this.geometryHighlighter?.lastDetection ?? null,
+            hoveredSegment: this.geometryHighlighter?.currentHoveredSegment ?? null,
         });
     }
 

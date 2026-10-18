@@ -91,11 +91,16 @@ export function getActiveContainer(docTarget: any): any | null {
     return null;
 }
 
-/** Oblicza wysokość strefy górnej */
-export function calcTopHeight(h: number, zCount: number, hB: number, hM: number): number {
-    if (zCount === 1) return h;
-    if (zCount === 2) return Math.max(0, h - hB);
-    return Math.max(0, h - hB - hM);
+/** Oblicza wysokość strefy górnej [mm] */
+export function calcTopHeight(
+    wysokosc_calkowita_mm: number,
+    liczba_stref: number,
+    wysokosc_strefy_dolnej_mm: number,
+    wysokosc_strefy_srodkowej_mm: number
+): number {
+    if (liczba_stref === 1) return wysokosc_calkowita_mm;
+    if (liczba_stref === 2) return Math.max(0, wysokosc_calkowita_mm - wysokosc_strefy_dolnej_mm);
+    return Math.max(0, wysokosc_calkowita_mm - wysokosc_strefy_dolnej_mm - wysokosc_strefy_srodkowej_mm);
 }
 
 export function isBlokiHoleFeature(f: any): boolean {
@@ -463,7 +468,15 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
                 continue;
             }
             const p = childNode.domainData as any;
-            if (!p || p.type === 'container' || p.name?.endsWith('_SB') || p.name?.startsWith('blok_') || childNode.name?.startsWith('blok_') || isManualPanel(p)) {
+            const isBlokiNode = childNode.nodeType === NodeType.ASSEMBLY
+                || p?.is_blok
+                || p.generatorParams?.is_blok
+                || Boolean(p.generatorParams?.boxType)
+                || p.type === 'container'
+                || p.type === 'assembly'
+                || p.type === 'bloki'
+                || p.type === 'bloki_container';
+            if (!p || isBlokiNode || isManualPanel(p)) {
                 continue;
             }
             const panelId = p.smartId?.fullPath || p.id;

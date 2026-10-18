@@ -225,41 +225,49 @@ export function SmartFrameUI({ projectModel }: Props) {
     }, [projectModel]);
 
     const triggerRealtime = useCallback((
-        w: number, h: number, d: number,
-        zc: 1|2|3, hB: number, hM: number, po: number,
+        szerokosc_mm: number,
+        wysokosc_mm: number,
+        glebokosc_mm: number,
+        liczba_stref: 1 | 2 | 3,
+        wysokosc_strefy_dolnej_mm: number,
+        wysokosc_strefy_srodkowej_mm: number,
+        cofniecie_plecow_mm: number,
         type: CabinetUiType = cabinetType,
-        bw: number = blindWidth,
-        bs: BlindSide = blindSide,
-        bl: number = bokLewy,
-        bp: number = bokPrawy,
-        hL: number = heightLeft,
-        hR2: number = heightRight,
-        hF: number = heightFront,
-        hBk: number = heightBack
+        szerokosc_blendy_mm: number = blindWidth,
+        strona_blendy: BlindSide = blindSide,
+        glebokosc_boku_lewego_mm: number = bokLewy,
+        glebokosc_boku_prawego_mm: number = bokPrawy,
+        wysokosc_lewy_mm: number = heightLeft,
+        wysokosc_prawy_mm: number = heightRight,
+        wysokosc_przod_mm: number = heightFront,
+        wysokosc_tyl_mm: number = heightBack
     ) => {
         const corner = type === 'KORPUS_ROGOWY1' || type === 'KORPUS_ROGOWY90';
         const skosnyLrUc = type === 'KORPUS_SKOSNY_LR_UC';
         const skosnyDach = type === 'KORPUS_SKOSNY_DACH';
-        const skosnyH = skosnyLrUc ? Math.max(hL, hR2, h) : skosnyDach ? Math.max(hF, hBk, h) : h;
+        const skosnyH = skosnyLrUc
+            ? Math.max(wysokosc_lewy_mm, wysokosc_prawy_mm, wysokosc_mm)
+            : skosnyDach
+            ? Math.max(wysokosc_przod_mm, wysokosc_tyl_mm, wysokosc_mm)
+            : wysokosc_mm;
         const active = getActiveContainer(projectModel);
         applyRealtimeUpdate(projectModel, {
-            // WyĹ‚Ä…cznie kanoniczny sĹ‚ownik DTO (bez aliasĂłw legacy).
-            szerokosc_mm: w,
+            szerokosc_mm,
             wysokosc_mm: skosnyH,
-            glebokosc_mm: d,
-            liczba_stref: (corner || skosnyLrUc || skosnyDach) ? 1 : zc,
-            wysokosc_strefy_dolnej_mm: hB,
-            wysokosc_strefy_srodkowej_mm: hM,
-            cofniecie_plecow_mm: po,
+            glebokosc_mm,
+            liczba_stref: (corner || skosnyLrUc || skosnyDach) ? 1 : liczba_stref,
+            wysokosc_strefy_dolnej_mm,
+            wysokosc_strefy_srodkowej_mm,
+            cofniecie_plecow_mm,
             typ_korpusu: uiToEngineType(type),
-            szerokosc_blendy_mm: bw,
-            strona_blendy: bs,
-            glebokosc_boku_lewego_mm: bl,
-            glebokosc_boku_prawego_mm: bp,
-            wysokosc_lewy_mm: hL,
-            wysokosc_prawy_mm: hR2,
-            wysokosc_przod_mm: hF,
-            wysokosc_tyl_mm: hBk
+            szerokosc_blendy_mm,
+            strona_blendy,
+            glebokosc_boku_lewego_mm,
+            glebokosc_boku_prawego_mm,
+            wysokosc_lewy_mm,
+            wysokosc_prawy_mm,
+            wysokosc_przod_mm,
+            wysokosc_tyl_mm
         }, active);
     }, [projectModel, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, heightFront, heightBack]);
 

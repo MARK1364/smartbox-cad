@@ -1,5 +1,7 @@
 /**
- * Klient dev-API cennika (Vite, server.py). Zapisywany plik: R1_reports/prices.json.
+ * Klient dev-API cennika (Vite). Zapisywany plik: R1_reports/prices.json.
+ * Przy zapisie poprzednia wersja trafia do R1_reports/prices.backup.json
+ * (kopia awaryjna — przywracana ręcznie przez podmianę pliku w folderze).
  * Wszystkie funkcje są odporne na brak backendu — zwracają błąd zamiast rzucać.
  */
 
@@ -40,15 +42,3 @@ export async function savePricesToServer(prices: PriceDatabase): Promise<PricesA
     }
 }
 
-export async function resetPricesOnServer(): Promise<PricesApiResult & { prices?: PriceDatabase }> {
-    try {
-        const res = await fetch('/api/prices/reset', { method: 'POST' });
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data?.ok) {
-            return { ok: false, error: data?.error || `HTTP ${res.status}` };
-        }
-        return { ok: true, prices: data.prices as PriceDatabase };
-    } catch (err: any) {
-        return { ok: false, error: String(err?.message || err) };
-    }
-}

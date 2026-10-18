@@ -30,12 +30,12 @@
               "type_id": "none"
             },
             "+Y": {
-              "active": false,
-              "type_id": "none"
+              "active": true,
+              "type_id": "0.008x0.022"
             },
             "-Y": {
-              "active": false,
-              "type_id": "none"
+              "active": true,
+              "type_id": "0.008x0.022"
             }
           },
           "wcs_origin_corner": {
@@ -65,12 +65,12 @@
               "type_id": "0.008x0.022"
             },
             "+Y": {
-              "active": false,
-              "type_id": "none"
+              "active": true,
+              "type_id": "0.008x0.022"
             },
             "-Y": {
-              "active": false,
-              "type_id": "none"
+              "active": true,
+              "type_id": "0.008x0.022"
             }
           },
           "wcs_origin_corner": {

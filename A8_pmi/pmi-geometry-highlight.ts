@@ -23,8 +23,8 @@ import {
 /** Identyfikuje odcinek po położeniu, więc pokrywające się krawędzie dają ten sam klucz. */
 function segmentKeyOf(segment: EdgeSegmentCandidate): string {
     const q = (n: number) => Math.round(n * 2);
-    return `${q(segment.p1World.x)},${q(segment.p1World.y)},${q(segment.p1World.z)}`
-        + `|${q(segment.p2World.x)},${q(segment.p2World.y)},${q(segment.p2World.z)}`;
+    return `${q(segment.p1World.x)},${q(segment.p1World.y)},${q(segment.p1World.z)}->`
+        + `${q(segment.p2World.x)},${q(segment.p2World.y)},${q(segment.p2World.z)}`;
 }
 
 const TYPE_LABEL: Record<GeometryType, string> = {
@@ -39,6 +39,7 @@ interface SavedMeshState {
     kind: GeometryType;
     visibility?: number;
     alpha?: number;
+    originalMaterial?: any;
     diffuse?: any;
     emissive?: any;
     lineColor?: any;
@@ -59,6 +60,10 @@ export class PMIGeometryHighlighter {
     private hoveredSegment: EdgeSegmentCandidate | null = null;
     private vertexOverlay: any = null;
 
+    public get currentHoveredSegment(): EdgeSegmentCandidate | null {
+        return this.hoveredSegment;
+    }
+
     constructor(scene: any) {
         this.scene = scene;
         this.detector = new GeometryDetector(scene);
@@ -69,6 +74,47 @@ export class PMIGeometryHighlighter {
         return TYPE_LABEL[type] ?? type;
     }
 
+    private isSameDetection(prev: DetectionResult | null, curr: DetectionResult, segmentKey: string): boolean {
+        if (!prev && !curr.hit) return true;
+        if (!prev || !curr) return false;
+        if (prev.hit !== curr.hit) return false;
+        if (!prev.hit && !curr.hit) return true;
+        if (prev.geometryType !== curr.geometryType) return false;
+        if (prev.mesh !== curr.mesh) return false;
+
+        switch (curr.geometryType) {
+            case GeometryType.VERTEX: {
+                const sameIndex = (prev.cornerIndex >= 0 && curr.cornerIndex >= 0)
+                    ? prev.cornerIndex === curr.cornerIndex
+                    : true;
+                if (!sameIndex) return false;
+                if (prev.pickedPoint && curr.pickedPoint) {
+                    const dx = prev.pickedPoint.x - curr.pickedPoint.x;
+                    const dy = prev.pickedPoint.y - curr.pickedPoint.y;
+                    const dz = prev.pickedPoint.z - curr.pickedPoint.z;
+                    return (dx * dx + dy * dy + dz * dz) < 1e-4;
+                }
+                return true;
+            }
+            case GeometryType.EDGE: {
+                if (this.edgeOverlays.length === 0) return false;
+                if (!segmentKey) return false;
+                if (segmentKey === this.edgeOverlayKey) return true;
+                // Jeśli aktywny jest zestaw wielu nakładek pomiarowych (np. showEdgeOverlays([pick1, snap])),
+                // ruch w obrębie którejkolwiek z tych krawędzi zachowuje aktywny zestaw.
+                if (this.edgeOverlayKey.includes(';')) {
+                    const activeKeys = this.edgeOverlayKey.split(';');
+                    return activeKeys.includes(segmentKey);
+                }
+                return false;
+            }
+            case GeometryType.PLANE:
+                return prev.faceName === curr.faceName;
+            default:
+                return true;
+        }
+    }
+
     /**
      * Wykrywa geometrię pod kursorem i podświetla ją.
      * @returns aktualny wynik detekcji
@@ -77,18 +123,24 @@ export class PMIGeometryHighlighter {
         const result = this.resolveDetection(pointerX, pointerY);
         const segmentKey = this.hoveredSegment ? segmentKeyOf(this.hoveredSegment) : '';
 
-        if (result.mesh === this.hoveredMesh && segmentKey === this.edgeOverlayKey) {
+        if (this.isSameDetection(this.lastDetection, result, segmentKey)) {
+            // Zawsze aktualizujemy lastDetection świeżym wynikiem (w tym dokładnym pickedPoint)
             this.lastDetection = result.hit ? result : null;
             return result;
         }
 
+        // Zachowujemy segment nowo wykryty przez resolveDetection przed wyczyszczeniem poprzedniego podświetlenia
+        const nextSegment = this.hoveredSegment;
+
         this.clearHighlight();
 
         if (result.hit && result.mesh) {
+            this.hoveredSegment = nextSegment;
             this.applyHighlight(result);
             this.hoveredMesh = result.mesh;
         } else {
             this.hoveredMesh = null;
+            this.hoveredSegment = null;
         }
 
         this.lastDetection = result.hit ? result : null;
@@ -101,8 +153,10 @@ export class PMIGeometryHighlighter {
      */
     private resolveDetection(pointerX: number, pointerY: number): DetectionResult {
         const store = PMIStore.instance;
-        const vertexSnap = Math.max(store.vertexSnapPx, 10);
-        const vertices = findVerticesNearPointer(this.scene, pointerX, pointerY, vertexSnap);
+        const vertexSnap = store.vertexSnapPx;
+        const vertices = vertexSnap > 0
+            ? findVerticesNearPointer(this.scene, pointerX, pointerY, vertexSnap)
+            : [];
         const edges = findEdgeSegmentsNearPointer(this.scene, pointerX, pointerY, store.edgeSnapPx);
 
         if (vertices.length > 0) {
@@ -195,6 +249,11 @@ export class PMIGeometryHighlighter {
 
     /** Podświetla krawędzie naraz — wyrazista linia CAD + nakładka tubowa na renderingGroupId 2. */
     public showEdgeOverlays(segments: EdgeSegmentCandidate[]): void {
+        const key = segments.map(segmentKeyOf).join(';');
+        if (key === this.edgeOverlayKey && this.edgeOverlays.length > 0) {
+            return;
+        }
+
         this.disposeEdgeOverlay();
         if (!segments.length) return;
 
@@ -260,7 +319,7 @@ export class PMIGeometryHighlighter {
 
             this.edgeOverlays.push(tube);
         }
-        this.edgeOverlayKey = segments.map(segmentKeyOf).join('|');
+        this.edgeOverlayKey = segments.map(segmentKeyOf).join(';');
         try {
             ContextManager.instance?.viewport?.requestRender?.(2);
         } catch { /* ignore */ }
@@ -276,53 +335,46 @@ export class PMIGeometryHighlighter {
     }
 
     public clearHighlight(): void {
+        const hadOverlays = this.edgeOverlays.length > 0 || this.vertexOverlay !== null;
+        const hadState = this.hoveredMesh !== null || this.saved !== null || this.lastDetection !== null;
+
         this.disposeEdgeOverlay();
         this.disposeVertexOverlay();
 
-        if (!this.hoveredMesh || this.hoveredMesh.isDisposed?.()) {
-            this.hoveredMesh = null;
-            this.saved = null;
-            try {
-                ContextManager.instance?.viewport?.requestRender?.(2);
-            } catch { /* ignore */ }
+        if (!hadOverlays && !hadState) {
             return;
         }
 
         const mesh = this.hoveredMesh;
         const saved = this.saved;
-        if (!saved) {
-            this.hoveredMesh = null;
-            try {
-                ContextManager.instance?.viewport?.requestRender?.(2);
-            } catch { /* ignore */ }
-            return;
-        }
-
-        if (saved.kind === GeometryType.VERTEX) {
-            if (saved.visibility !== undefined) mesh.visibility = saved.visibility;
-            if (mesh.material) {
-                if (saved.alpha !== undefined) mesh.material.alpha = saved.alpha;
-                if (saved.diffuse) mesh.material.diffuseColor = saved.diffuse;
-                if (saved.emissive) mesh.material.emissiveColor = saved.emissive;
-            }
-        } else if (saved.kind === GeometryType.EDGE) {
-            if (mesh.color !== undefined && saved.lineColor) {
-                mesh.color = saved.lineColor;
-            } else if (mesh.material) {
-                if (saved.emissive) mesh.material.emissiveColor = saved.emissive;
-                if (saved.diffuse) mesh.material.diffuseColor = saved.diffuse;
-            }
-        } else if (saved.kind === GeometryType.PLANE && mesh.material) {
-            if (saved.emissive) mesh.material.emissiveColor = saved.emissive;
-            if (saved.diffuse) mesh.material.diffuseColor = saved.diffuse;
-            if (typeof saved.edgesWidth === 'number') mesh.edgesWidth = saved.edgesWidth;
-            if (saved.edgesColor) mesh.edgesColor = saved.edgesColor;
-        }
 
         this.hoveredMesh = null;
         this.saved = null;
         this.hoveredSegment = null;
         this.lastDetection = null;
+
+        if (mesh && !mesh.isDisposed?.() && saved) {
+            if (saved.kind === GeometryType.VERTEX) {
+                if (saved.visibility !== undefined) mesh.visibility = saved.visibility;
+                if (mesh.material) {
+                    if (saved.alpha !== undefined) mesh.material.alpha = saved.alpha;
+                    if (saved.diffuse) mesh.material.diffuseColor = saved.diffuse;
+                    if (saved.emissive) mesh.material.emissiveColor = saved.emissive;
+                }
+            } else if (saved.kind === GeometryType.EDGE) {
+                // Krawędź jest czystym overlayem (overlay-only) — brak mutacji mesh.color ani mesh.material
+            } else if (saved.kind === GeometryType.PLANE && mesh.material) {
+                if (saved.originalMaterial) {
+                    if (mesh.material !== saved.originalMaterial) {
+                        mesh.material.dispose?.();
+                        mesh.material = saved.originalMaterial;
+                    }
+                }
+                if (typeof saved.edgesWidth === 'number') mesh.edgesWidth = saved.edgesWidth;
+                if (saved.edgesColor) mesh.edgesColor = saved.edgesColor;
+            }
+        }
+
         try {
             ContextManager.instance?.viewport?.requestRender?.(2);
         } catch { /* ignore */ }
@@ -345,15 +397,9 @@ export class PMIGeometryHighlighter {
         }
 
         if (result.geometryType === GeometryType.EDGE) {
-            this.saved = {
-                kind: GeometryType.EDGE,
-                lineColor: mesh.color ? mesh.color.clone() : undefined,
-                emissive: mesh.material?.emissiveColor ? mesh.material.emissiveColor.clone() : undefined,
-                diffuse: mesh.material?.diffuseColor ? mesh.material.diffuseColor.clone() : undefined,
-            };
-            if (mesh.color !== undefined) {
-                mesh.color = new BABYLON.Color3(1.0, 0.55, 0.0);
-            }
+            // Kontrakt overlay-only: nie mutujemy mesh.color ani materiału bazowego formatki.
+            // Rysowany jest wyłącznie wyrazisty overlay (linia + cylinder) w renderingGroupId 2.
+            this.saved = { kind: GeometryType.EDGE };
             if (this.hoveredSegment) {
                 this.showEdgeOverlay(this.hoveredSegment);
             }
@@ -364,15 +410,24 @@ export class PMIGeometryHighlighter {
         }
 
         if (result.geometryType === GeometryType.PLANE && mesh.material) {
+            const originalMaterial = mesh.material;
             this.saved = {
                 kind: GeometryType.PLANE,
-                emissive: mesh.material.emissiveColor?.clone?.() ?? mesh.material.emissiveColor,
-                diffuse: mesh.material.diffuseColor?.clone?.() ?? mesh.material.diffuseColor,
+                originalMaterial,
                 edgesWidth: mesh.edgesWidth,
                 edgesColor: mesh.edgesColor?.clone?.() ?? mesh.edgesColor,
             };
-            mesh.material.emissiveColor = new BABYLON.Color3(0.25, 0.45, 0.95);
-            mesh.material.diffuseColor = new BABYLON.Color3(0.35, 0.55, 1.0);
+            if (typeof originalMaterial.clone === 'function') {
+                const hlMat = originalMaterial.clone('pmi_plane_highlight_mat');
+                hlMat.emissiveColor = new BABYLON.Color3(0.25, 0.45, 0.95);
+                hlMat.diffuseColor = new BABYLON.Color3(0.35, 0.55, 1.0);
+                mesh.material = hlMat;
+            } else {
+                const hlMat = new BABYLON.StandardMaterial('pmi_plane_highlight_mat', this.scene);
+                hlMat.emissiveColor = new BABYLON.Color3(0.25, 0.45, 0.95);
+                hlMat.diffuseColor = new BABYLON.Color3(0.35, 0.55, 1.0);
+                mesh.material = hlMat;
+            }
             if (mesh.edgesColor) mesh.edgesColor = new BABYLON.Color4(1.0, 0.75, 0.1, 1.0);
             try {
                 ContextManager.instance?.viewport?.requestRender?.(2);

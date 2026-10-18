@@ -2,11 +2,12 @@
  * Vite middleware: edycja cennika (R1_reports/prices.json) z poziomu przeglądarki.
  *
  * Endpointy (tylko dev-server Vite — start.bat):
- *   GET  /api/prices        → aktualna zawartość cennika
- *   POST /api/prices        → nadpisanie pliku (body: { prices })
- *   POST /api/prices/reset  → przywrócenie cennika domyślnego (prices.default.json)
+ *   GET  /api/prices  → aktualna zawartość cennika
+ *   POST /api/prices  → nadpisanie pliku (body: { prices }); bieżąca wersja trafia do kopii
  *
  * Zapisywany plik to pojedyncze SSOT wyceny: R1_reports/prices.json.
+ * Kopia zapasowa (poprzednia wersja) trzymana jest w R1_reports/prices.backup.json —
+ * celowo niewidoczna w UI; przywraca się ją ręcznie, podmieniając plik w folderze.
  */
 
 import fs from 'node:fs';
@@ -17,13 +18,12 @@ import { serializePriceDatabase, validatePriceDatabase } from './R1_reports/pric
 
 const WEB_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const PRICES_FILE = path.join(WEB_ROOT, 'R1_reports', 'prices.json');
-const DEFAULTS_FILE = path.join(WEB_ROOT, 'R1_reports', 'prices.default.json');
+const BACKUP_FILE = path.join(WEB_ROOT, 'R1_reports', 'prices.backup.json');
 
 const API_PRICES = '/api/prices';
-const API_RESET = '/api/prices/reset';
 
 function readPricesFile(): any {
-    const file = fs.existsSync(PRICES_FILE) ? PRICES_FILE : DEFAULTS_FILE;
+    const file = fs.existsSync(PRICES_FILE) ? PRICES_FILE : BACKUP_FILE;
     return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
@@ -71,27 +71,15 @@ export function pricesApiPlugin(): Plugin {
                         const body = await readJsonBody(req);
                         const prices = body?.prices ?? body;
                         validatePriceDatabase(prices);
+                        const hasBackup = fs.existsSync(PRICES_FILE);
+                        if (hasBackup) fs.copyFileSync(PRICES_FILE, BACKUP_FILE);
                         fs.writeFileSync(PRICES_FILE, serializePriceDatabase(prices), 'utf8');
                         sendJson(res, 200, {
                             ok: true,
                             savedAt: new Date().toISOString(),
                             file: 'R1_reports/prices.json',
+                            backup: hasBackup,
                         });
-                    } catch (err: any) {
-                        sendJson(res, 400, { ok: false, error: String(err?.message || err) });
-                    }
-                    return;
-                }
-
-                if (url === API_RESET && req.method === 'POST') {
-                    try {
-                        if (!fs.existsSync(DEFAULTS_FILE)) {
-                            sendJson(res, 404, { ok: false, error: 'Brak pliku domyślnego cennika (prices.default.json).' });
-                            return;
-                        }
-                        const defaults = JSON.parse(fs.readFileSync(DEFAULTS_FILE, 'utf8'));
-                        fs.writeFileSync(PRICES_FILE, serializePriceDatabase(defaults), 'utf8');
-                        sendJson(res, 200, { ok: true, prices: defaults });
                     } catch (err: any) {
                         sendJson(res, 400, { ok: false, error: String(err?.message || err) });
                     }

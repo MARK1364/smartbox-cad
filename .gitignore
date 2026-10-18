@@ -3,4 +3,5 @@ dist
 .DS_Store
 *.local
 S1_sketcher/webcad-2d-mobile/
+R1_reports/prices.backup.json
 

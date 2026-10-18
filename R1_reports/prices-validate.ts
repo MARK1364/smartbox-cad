@@ -12,7 +12,13 @@ export interface PriceEntry {
     price: number;
     unit?: string;
     name?: string;
+    /** Dodatkowa informacja / podpowiedź (np. „bez hamulca”, „300mm”). */
+    opis?: string;
     brand?: string;
+    /** Kategoria produktu (np. „Zawiasy”, „Szuflady”). */
+    kategoria?: string;
+    /** Indeks / kod produktu nadawany przez firmę (opcjonalny). */
+    indeks?: string;
 }
 
 export type PriceDatabase = Partial<Record<PriceSection, Record<string, number | PriceEntry>>>;
@@ -20,7 +26,7 @@ export type PriceDatabase = Partial<Record<PriceSection, Record<string, number |
 /**
  * Waliduje cały cennik. Rzuca Error z czytelnym komunikatem przy pierwszym błędzie.
  * Kontrakt: obiekt z co najmniej jedną sekcją, każda sekcja to mapa
- * klucz → liczba albo { price, unit?, name? }.
+ * klucz → liczba albo { price, unit?, name?, opis?, brand?, kategoria?, indeks? }.
  */
 export function validatePriceDatabase(db: any): asserts db is PriceDatabase {
     if (!db || typeof db !== 'object' || Array.isArray(db)) {
@@ -43,7 +49,7 @@ export function validatePriceDatabase(db: any): asserts db is PriceDatabase {
                 continue;
             }
             if (!value || typeof value !== 'object' || Array.isArray(value)) {
-                throw new Error(`[${section}] „${key}”: wpis musi być liczbą albo obiektem { price, unit?, name? }.`);
+                throw new Error(`[${section}] „${key}”: wpis musi być liczbą albo obiektem { price, unit?, name?, opis?, brand?, kategoria?, indeks? }.`);
             }
             const entry = value as any;
             if (typeof entry.price !== 'number' || !Number.isFinite(entry.price) || entry.price < 0) {
@@ -55,8 +61,17 @@ export function validatePriceDatabase(db: any): asserts db is PriceDatabase {
             if (entry.name !== undefined && typeof entry.name !== 'string') {
                 throw new Error(`[${section}] „${key}”: pole „name” musi być tekstem.`);
             }
+            if (entry.opis !== undefined && typeof entry.opis !== 'string') {
+                throw new Error(`[${section}] „${key}”: pole „opis” musi być tekstem.`);
+            }
             if (entry.brand !== undefined && typeof entry.brand !== 'string') {
                 throw new Error(`[${section}] „${key}”: pole „brand” musi być tekstem.`);
+            }
+            if (entry.kategoria !== undefined && typeof entry.kategoria !== 'string') {
+                throw new Error(`[${section}] „${key}”: pole „kategoria” musi być tekstem.`);
+            }
+            if (entry.indeks !== undefined && typeof entry.indeks !== 'string') {
+                throw new Error(`[${section}] „${key}”: pole „indeks” musi być tekstem.`);
             }
         }
     }

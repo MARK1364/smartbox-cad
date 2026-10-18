@@ -27,8 +27,8 @@ export function buildCabinetSubcomponents(
             const isTopZone = key === zoneLayout[zoneLayout.length - 1]?.zoneKey;
             const ctx: CabinetPartGeometryContext = {
                 ...context,
-                sb_height: layout.size,
-                top_panel_mode: isTopZone ? context.top_panel_mode : 'FULL'
+                wysokosc_mm: layout.size,
+                tryb_wienca_gornego: isTopZone ? context.tryb_wienca_gornego : 'FULL'
             };
             buildCabinetSubcomponents(
                 comp.subcomponents || {},
@@ -43,7 +43,7 @@ export function buildCabinetSubcomponents(
             const isTopT2 = isT2 && (key.includes("WIENIEC_G") || comp.role === "TOP_PANEL");
             if (isT2 && !isTopT2) continue;
             if (isTopT2) {
-                const mode = context.top_panel_mode || 'FULL';
+                const mode = context.tryb_wienca_gornego || 'FULL';
                 if (mode === 'FULL') continue;
             }
             const cleanKey = prefix && key.startsWith(prefix) ? key.slice(prefix.length) : key;
@@ -60,7 +60,7 @@ export function buildCabinetSubcomponents(
                     `CAD wymaga jawnych danych grubości z reguł lub parametrów.`
                 );
             }
-            const isBack = comp.role === "BACK_PANEL" || key.toUpperCase().includes("PLECY") || (comp.name || '').toUpperCase().includes("PLECY");
+            const isBack = comp.role === "BACK_PANEL";
             const rawMat = comp.custom_properties?.material;
             const defaultMat = isBack ? "HDF_BIALY_3" : "W1100_ST9_18";
             const effectiveMat = (!rawMat || rawMat === "MDF_SUROWY_18" || rawMat === "HDF_3") ? defaultMat : rawMat;
@@ -156,22 +156,22 @@ export function collectCabinetGeometry(
     };
 
     const ctx: CabinetPartGeometryContext = {
-        sb_width: params.szerokosc_mm ?? 600,
-        sb_height: params.wysokosc_mm ?? 720,
-        sb_depth: params.glebokosc_mm ?? 560,
-        back_offset_mm: params.cofniecie_plecow_mm ?? rawInset,
-        back_groove_depth: grooveDepth,
-        top_panel_mode: topPanelMode,
-        traverse_width: traverseWidth,
-        blind_width: szerokosc_blendy_mm,
-        blind_side: strona_blendy,
-        bok_lewy: glebokosc_boku_lewego_mm,
-        bok_prawy: glebokosc_boku_prawego_mm,
-        height_front: wysokosc_przod_mm,
-        height_back: wysokosc_tyl_mm,
-        height_left: wysokosc_lewy_mm,
-        height_right: wysokosc_prawy_mm,
-        cabinet_type: cabinetType,
+        szerokosc_mm: params.szerokosc_mm ?? 600,
+        wysokosc_mm: params.wysokosc_mm ?? 720,
+        glebokosc_mm: params.glebokosc_mm ?? 560,
+        cofniecie_plecow_mm: params.cofniecie_plecow_mm ?? rawInset,
+        wpuszczenie_plecow_mm: grooveDepth,
+        tryb_wienca_gornego: topPanelMode,
+        szerokosc_trawersu_mm: traverseWidth,
+        szerokosc_blendy_mm: szerokosc_blendy_mm,
+        strona_blendy: strona_blendy,
+        glebokosc_boku_lewego_mm: glebokosc_boku_lewego_mm,
+        glebokosc_boku_prawego_mm: glebokosc_boku_prawego_mm,
+        wysokosc_przod_mm: wysokosc_przod_mm,
+        wysokosc_tyl_mm: wysokosc_tyl_mm,
+        wysokosc_lewy_mm: wysokosc_lewy_mm,
+        wysokosc_prawy_mm: wysokosc_prawy_mm,
+        typ_korpusu: cabinetType,
         offsets,
         rules,
         baseRules,

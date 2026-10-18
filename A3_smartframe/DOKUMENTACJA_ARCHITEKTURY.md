@@ -5,14 +5,14 @@ Ten dokument podsumowuje kluczowe zasady integracji oparte na "Single Source of 
 
 ---
 
-## 1. Nazewnictwo (Naming Conventions)
-- **Sufiks `_SB`**: Każdy kontener reprezentujący moduł Bloki (Półki, Szuflady, Drzwi itd.) MUSI mieć nazwę kończącą się przyrostkiem `_SB` (np. `Polki_SB`, `Szuflady_SB`). Nadzoruje to funkcja `ensure_bloki_name`. Jest to krytyczne dla selekcji w drzewie UI i odróżniania inteligentnych modułów wewnętrznych od zwykłych grup.
-- **Klucze Płyt (`part_key`)**: Każda wygenerowana część fizyczna, która wychodzi z silnika korpusu (np. boki, wieńce) otrzymuje unikalną, narzuconą przez JSON rolę (np. `B_BOK_L`, `M_WIENIEC_D`). To "zlepienie" pozwala Blokowi identyfikować ściany bez polegania na wewnętrznym indeksowaniu graficznym.
+## 1. Nazewnictwo i Taksonomia (Naming & Identity Conventions)
+- **Tożsamość i Typy Bloków**: Moduł Bloki (Półki, Szuflady, Drzwi itd.) jest reprezentowany przez kontener o typie węzła `NodeType.ASSEMBLY` z flagą domenową `is_blok: true` oraz odpowiednią rolą (`role: 'SHELF'`, `role: 'DOOR'` itp.). Logika nigdy nie odpytuje stringów wyświetlanych ani nie wymaga specjalnych sufiksów w nazwach.
+- **Klucze Płyt (`part_key` / `key`)**: Każda wygenerowana część fizyczna, która wychodzi z silnika korpusu (np. boki, wieńce) otrzymuje unikalny klucz oraz rolę (np. `LEFT_SIDE_PANEL`, `BOTTOM_PANEL`, `BACK_PANEL`). Pozwala to Blokowi identyfikować ściany bez polegania na indeksowaniu czy nazwach wyświetlanych.
 
 ## 2. Hierarchia Obiektów i Dziedziczenie 3D
 - **Korpus (SmartFrame) jako rodzic**: Zawsze istnieje jeden bazowy element nadrzędny, stanowiący układ odniesienia dla reszty.
-- **Bloki to Dziecko**: Aby zjawiska takie jak "przemieszczanie się w strefy" mogły funkcjonować (brak opóźnień między zmianą przestrzeni w locie), kontenery `_SB` muszą być fizycznymi elementami potomnymi wybranego Korpusu.
-- **Półki / Panele to Wnuki**: Pojedyncze części np. `Polka_1` muszą znajdować się wewnątrz swojego lokalnego `Polki_SB`. Dopiero to ustawienie gwarantuje, że "obrys" Bloku zarządza dziećmi i aktualizuje ich wymiary w globalnej przestrzeni.
+- **Bloki to Dziecko**: Kontenery modułów Bloki są fizycznymi elementami potomnymi wybranego Korpusu w drzewie `CADNode`.
+- **Półki / Panele to Wnuki**: Pojedyncze części np. półki czy szuflady znajdują się wewnątrz swojego nadrzędnego kontenera Bloku. Dopiero to ustawienie gwarantuje, że obrys Bloku zarządza dziećmi i aktualizuje ich wymiary w przestrzeni korpusu.
 
 ## 3. Dynamiczne Ściany Referencyjne (Auto-References)
 Jest to serce elastycznego łączenia modułów. Zamiast zaszywać w kodzie sztywną matematykę (np. *szerokość_wnetrza = szerokosc - 2 * 18mm*), system robi to dynamicznie:

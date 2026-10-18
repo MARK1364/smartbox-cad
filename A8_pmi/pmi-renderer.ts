@@ -138,9 +138,6 @@ function paintLabelBackground(ctx: CanvasRenderingContext2D, w: number, h: numbe
     ctx.closePath();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx.lineWidth = 4;
-    ctx.stroke();
     ctx.restore();
 }
 
@@ -322,7 +319,7 @@ export class PMIRenderer {
                     entry.selected,
                     entry.renderData.labelText,
                 );
-                this.setMeasureVisualVisible(vis, true);
+                this.setMeasureVisualVisible(vis, !this.measurePreview && this._visible);
             }
 
             if (frame.derivedChanged) store.notifyDerivedChanged();
@@ -375,6 +372,14 @@ export class PMIRenderer {
             this.measurePreview = this.createMeasureVisual(MEASURE_PREVIEW_ID);
         }
         this.updateMeasureVisual(this.measurePreview, path, store, null, false);
+        this.setMeasureVisualVisible(this.measurePreview, true);
+
+        // SSOT: Nigdy nie mogą być dwie różne etykiety w tym samym czasie.
+        // Gdy aktywny jest podgląd (preview), ukrywamy zatwierdzone pomiary ze store.
+        for (const vis of this.measureVisuals.values()) {
+            this.setMeasureVisualVisible(vis, false);
+        }
+
         this.resolveOverlappingLabels();
     }
 
@@ -382,6 +387,11 @@ export class PMIRenderer {
         if (this.measurePreview) {
             this.disposeMeasureVisual(this.measurePreview);
             this.measurePreview = null;
+        }
+        if (this._visible) {
+            for (const vis of this.measureVisuals.values()) {
+                this.setMeasureVisualVisible(vis, true);
+            }
         }
     }
 
@@ -486,24 +496,34 @@ export class PMIRenderer {
         diameterMM: number,
         annotationId: string | null,
     ): void {
-        this.disposeLineParts(vis[partsKey]);
+        const parts = vis[partsKey];
+        const isDimLine = partsKey === 'dimLineParts';
+        const hasHitbox = isDimLine && !!annotationId;
 
+        let partIdx = 0;
         for (let i = 0; i < segments.length; i++) {
             const [a, b] = segments[i];
-            const tube = this.createTubeSegment(
+            const tubeDiam = Math.max(diameterMM, isDimLine ? 0.9 : 0.55);
+            const tube = this.updateOrCreateTubeSegment(
+                parts[partIdx] ?? null,
                 `pmi_${vis.id}_${partsKey}_${i}`,
                 a,
                 b,
-                Math.max(diameterMM, partsKey === 'dimLineParts' ? 0.9 : 0.55),
+                tubeDiam,
                 color,
                 annotationId,
-                partsKey === 'dimLineParts' ? 'line' : 'helper',
+                isDimLine ? 'line' : 'helper',
+                false,
             );
-            if (tube) vis[partsKey].push(tube);
+            if (tube) {
+                parts[partIdx] = tube;
+                partIdx++;
+            }
 
             // Dla linii wymiarowej tworzymy niewidoczny, wygodny hitbox ułatwiający chwytanie myszą w 3D
-            if (partsKey === 'dimLineParts' && annotationId) {
-                const hitbox = this.createTubeSegment(
+            if (hasHitbox) {
+                const hitbox = this.updateOrCreateTubeSegment(
+                    parts[partIdx] ?? null,
                     `pmi_${vis.id}_hitbox_${i}`,
                     a,
                     b,
@@ -511,18 +531,23 @@ export class PMIRenderer {
                     [0, 0, 0, 0],
                     annotationId,
                     'line',
+                    true,
                 );
                 if (hitbox) {
-                    hitbox.visibility = 0;
-                    hitbox.isVisible = true;
-                    hitbox.isPickable = true;
-                    vis[partsKey].push(hitbox);
+                    parts[partIdx] = hitbox;
+                    partIdx++;
                 }
             }
         }
+
+        while (parts.length > partIdx) {
+            const excess = parts.pop();
+            this.disposeMeshAndMaterial(excess);
+        }
     }
 
-    private createTubeSegment(
+    private updateOrCreateTubeSegment(
+        existingTube: any | null,
         name: string,
         a: Vec3,
         b: Vec3,
@@ -530,49 +555,68 @@ export class PMIRenderer {
         color: Rgba,
         annotationId: string | null,
         targetPart: 'line' | 'helper' = 'line',
+        isHitbox = false,
     ): any {
         const aB = this.toB(a);
         const bB = this.toB(b);
         const diff = bB.subtract(aB);
         const len = diff.length();
-        if (len < 0.05) return null;
+        if (len < 0.05) {
+            if (existingTube) {
+                existingTube.isVisible = false;
+                existingTube.isPickable = false;
+            }
+            return existingTube;
+        }
 
-        const diameter = Math.max(diameterMM, 0.55);
-        const tube = BABYLON.MeshBuilder.CreateCylinder(name, {
-            height: len,
-            diameter,
-            tessellation: 8,
-        }, this.scene);
+        const diameter = Math.max(diameterMM, isHitbox ? 18 : 0.55);
+        let tube = existingTube;
+        if (!tube || tube.isDisposed?.()) {
+            tube = BABYLON.MeshBuilder.CreateCylinder(name, {
+                height: 1,
+                diameter: 1,
+                tessellation: 8,
+            }, this.scene);
+            const mat = new BABYLON.StandardMaterial(`${name}_mat`, this.scene);
+            mat.disableLighting = true;
+            tube.material = mat;
+            tube.renderingGroupId = 2;
+        }
 
+        tube.isVisible = true;
         tube.position = BABYLON.Vector3.Lerp(aB, bB, 0.5);
+        tube.scaling = new BABYLON.Vector3(diameter, len, diameter);
 
         const dir = diff.normalize();
         const yAxis = new BABYLON.Vector3(0, 1, 0);
         const dot = BABYLON.Vector3.Dot(yAxis, dir);
         if (Math.abs(dot) > 0.999) {
-            if (dot < 0) {
-                tube.rotation.x = Math.PI;
-            }
+            tube.rotationQuaternion = null;
+            tube.rotation = new BABYLON.Vector3(dot < 0 ? Math.PI : 0, 0, 0);
         } else {
             const axis = BABYLON.Vector3.Cross(yAxis, dir).normalize();
             const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
             tube.rotationQuaternion = BABYLON.Quaternion.RotationAxis(axis, angle);
         }
 
-        const mat = new BABYLON.StandardMaterial(`${name}_mat`, this.scene);
-        mat.diffuseColor = new BABYLON.Color3(color[0], color[1], color[2]);
-        mat.emissiveColor = new BABYLON.Color3(color[0] * 0.35, color[1] * 0.35, color[2] * 0.35);
-        mat.disableLighting = true;
-        mat.alpha = color[3];
-        tube.material = mat;
-        tube.renderingGroupId = 2;
+        if (tube.material) {
+            tube.material.diffuseColor = new BABYLON.Color3(color[0], color[1], color[2]);
+            tube.material.emissiveColor = new BABYLON.Color3(color[0] * 0.35, color[1] * 0.35, color[2] * 0.35);
+            tube.material.alpha = color[3];
+        }
 
-        const pickable = !!annotationId;
-        tube.isPickable = pickable;
+        if (isHitbox) {
+            tube.visibility = 0;
+            tube.isPickable = true;
+        } else {
+            tube.visibility = 1;
+            tube.isPickable = !!annotationId;
+        }
+
         tube.metadata = {
             ...(tube.metadata || {}),
             isPmiOverlay: true,
-            ...(pickable ? { pmiAnnotationId: annotationId, pmiTarget: targetPart } : {}),
+            ...(annotationId ? { pmiAnnotationId: annotationId, pmiTarget: targetPart } : {}),
         };
 
         return tube;
@@ -895,59 +939,83 @@ export class PMIRenderer {
         color: Rgba,
         pickId: string | null,
     ): void {
-        for (const part of vis.mainLineParts) part?.dispose?.();
-        vis.mainLineParts = [];
-
+        const parts = vis.mainLineParts;
         const widthMM = Math.max(PMIStore.instance.lineWidthMM * 0.5, 0.6);
-        for (let i = 0; i + 1 < path.length; i++) {
-            const tube = this.createTubeSegment(
+        const segCount = Math.max(0, path.length - 1);
+
+        let partIdx = 0;
+        for (let i = 0; i < segCount; i++) {
+            const tube = this.updateOrCreateTubeSegment(
+                parts[partIdx] ?? null,
                 `pmi_msr_${vis.id}_line_${i}`,
                 path[i],
                 path[i + 1],
                 widthMM,
                 color,
-                null,
+                pickId,
+                'line',
+                false,
             );
             if (tube) {
                 if (pickId) {
                     tube.isPickable = true;
                     tube.metadata = { ...(tube.metadata || {}), isPmiOverlay: true, pmiMeasurementId: pickId };
                 }
-                vis.mainLineParts.push(tube);
+                parts[partIdx] = tube;
+                partIdx++;
             }
+        }
+
+        while (parts.length > partIdx) {
+            const excess = parts.pop();
+            this.disposeMeshAndMaterial(excess);
         }
     }
 
     private updateMeasureDeltas(vis: MeasureVisual, p1: Vec3, p2: Vec3): void {
-        for (const line of vis.deltaLines) this.disposeMeshAndMaterial(line);
-        vis.deltaLines = [];
-
         const segs = measureDeltaSegments(p1, p2);
-        if (segs.length < 2) return;
+        if (segs.length < 2) {
+            for (const line of vis.deltaLines) this.disposeMeshAndMaterial(line);
+            vis.deltaLines = [];
+            return;
+        }
 
+        let idx = 0;
         for (const seg of segs) {
             const rgba = MEASURE_DELTA_COLOR[seg.axis];
             const len = v3Len(v3Sub(seg.b, seg.a));
             const dash = Math.max(8, len / 18);
             const gap = Math.max(6, len / 28);
+            const existing = vis.deltaLines[idx];
+            const hasExisting = existing && !existing.isDisposed?.();
+
             const line = BABYLON.MeshBuilder.CreateDashedLines(
                 `pmi_msr_${vis.id}_d${seg.axis}`,
                 {
                     points: [this.toB(seg.a), this.toB(seg.b)],
                     dashSize: dash,
                     gapSize: gap,
+                    ...(hasExisting ? { instance: existing } : {}),
                 },
                 this.scene,
             );
+            if (!hasExisting) {
+                line.isPickable = false;
+                line.renderingGroupId = 2;
+                line.metadata = {
+                    ...(line.metadata || {}),
+                    isPmiOverlay: true,
+                };
+            }
             line.color = new BABYLON.Color3(rgba[0], rgba[1], rgba[2]);
             line.alpha = rgba[3];
-            line.isPickable = false;
-            line.renderingGroupId = 2;
-            line.metadata = {
-                ...(line.metadata || {}),
-                isPmiOverlay: true,
-            };
-            vis.deltaLines.push(line);
+            vis.deltaLines[idx] = line;
+            idx++;
+        }
+
+        while (vis.deltaLines.length > idx) {
+            const excess = vis.deltaLines.pop();
+            this.disposeMeshAndMaterial(excess);
         }
     }
 
@@ -983,15 +1051,12 @@ export class PMIRenderer {
         }
         vis.basePlaneW = planeW;
         vis.basePlaneH = planeH;
-        vis.lineCount = lines.length;
         vis.labelWorldFixed = worldFixed;
 
         const cacheKey = `${label}|${accentColor}|${selected}|${planeW.toFixed(0)}|${planeH.toFixed(0)}|${worldFixed ? 1 : 0}`;
 
         if (vis.textCacheKey !== cacheKey) {
-            vis.textPlane?.dispose?.();
-            vis.textTexture?.dispose?.();
-            this.buildMeasureTextLabel(vis, lines, accentColor, planeW, planeH, pickId, selected);
+            this.updateOrCreateMeasureTextLabel(vis, lines, accentColor, planeW, planeH, pickId, selected);
             vis.textCacheKey = cacheKey;
         }
 
@@ -1193,7 +1258,7 @@ export class PMIRenderer {
      * Etykieta miarki — tekstura proporcjonalna do płaszczyzny (bez zniekształceń),
      * wysoka gęstość pikseli na linię dla ostrości, tło + outline dla czytelności.
      */
-    private buildMeasureTextLabel(
+    private updateOrCreateMeasureTextLabel(
         vis: MeasureVisual,
         lines: string[],
         accentColor: string,
@@ -1211,29 +1276,44 @@ export class PMIRenderer {
         if (texWidth < 256) texWidth = 256;
         texHeight = Math.max(128, texHeight);
 
-        const dt = new BABYLON.DynamicTexture(
-            `pmi_msr_tex_${vis.id}`,
-            { width: texWidth, height: texHeight },
-            this.scene,
-            false,
-        );
-        dt.hasAlpha = true;
-        sharpenLabelTexture(dt);
+        const previousLineCount = vis.lineCount ?? 0;
+        const canReuse = vis.textTexture && !vis.textTexture.isDisposed?.()
+            && vis.textPlane && !vis.textPlane.isDisposed?.()
+            && previousLineCount === lines.length;
+
+        let dt = vis.textTexture;
+        if (!canReuse || !dt) {
+            vis.textPlane?.dispose?.();
+            vis.textTexture?.dispose?.();
+
+            dt = new BABYLON.DynamicTexture(
+                `pmi_msr_tex_${vis.id}`,
+                { width: texWidth, height: texHeight },
+                this.scene,
+                false,
+            );
+            dt.hasAlpha = true;
+            sharpenLabelTexture(dt);
+            vis.textTexture = dt;
+        }
 
         const ctx = dt.getContext() as CanvasRenderingContext2D;
-        ctx.clearRect(0, 0, texWidth, texHeight);
-        paintLabelBackground(ctx, texWidth, texHeight, Math.round(texHeight * 0.12));
+        const currentSize = dt.getSize ? dt.getSize() : { width: texWidth, height: texHeight };
+        const drawW = currentSize.width || texWidth;
+        const drawH = currentSize.height || texHeight;
+        ctx.clearRect(0, 0, drawW, drawH);
+        paintLabelBackground(ctx, drawW, drawH, Math.round(drawH * 0.12));
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const slotH = texHeight / lines.length;
+        const slotH = drawH / lines.length;
 
         for (let i = 0; i < lines.length; i++) {
             const isMain = i === 0;
             const fontPx = Math.round(slotH * (isMain ? 0.72 : 0.6));
             ctx.font = `bold ${fontPx}px Consolas, "Courier New", monospace`;
             const color = measureLabelLineColor(lines[i], selected && isMain);
-            const x = texWidth / 2;
+            const x = drawW / 2;
             const y = slotH * (i + 0.5);
 
             ctx.shadowColor = 'transparent';
@@ -1243,40 +1323,43 @@ export class PMIRenderer {
         }
         dt.update();
 
-        const plane = BABYLON.MeshBuilder.CreatePlane(`pmi_msr_lbl_${vis.id}`, {
-            width: planeW,
-            height: planeH,
-        }, this.scene);
-        plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
-        plane.renderingGroupId = 3;
-        plane.isPickable = !!pickId;
-        plane.metadata = {
-            ...(plane.metadata || {}),
-            isPmiOverlay: true,
-            ...(pickId ? { pmiMeasurementId: pickId } : {}),
-        };
+        if (!canReuse || !vis.textPlane) {
+            const plane = BABYLON.MeshBuilder.CreatePlane(`pmi_msr_lbl_${vis.id}`, {
+                width: planeW,
+                height: planeH,
+            }, this.scene);
+            plane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+            plane.renderingGroupId = 3;
+            plane.isPickable = !!pickId;
+            plane.metadata = {
+                ...(plane.metadata || {}),
+                isPmiOverlay: true,
+                ...(pickId ? { pmiMeasurementId: pickId } : {}),
+            };
 
-        const mat = makeLabelMaterial(vis.id, dt, 'msr', this.scene);
-        plane.material = mat;
+            const mat = makeLabelMaterial(vis.id, dt, 'msr', this.scene);
+            plane.material = mat;
 
-        plane.onBeforeRenderObservable.add(() => {
-            if (!plane || plane.isDisposed()) return;
-            const currentH = vis.basePlaneH ?? planeH;
-            const currentW = vis.basePlaneW ?? planeW;
-            const count = vis.lineCount ?? lines.length;
-            // Bez delt: stały rozmiar w świecie (jak label wymiaru), ale z clampem ekranowym.
-            const scale = vis.labelWorldFixed
-                ? this.computeWorldFixedLabelScale(vis.labelPreferredWorld || plane.position, currentH)
-                : this.calculateMeasureScreenScale(vis.labelPreferredWorld || plane.position, currentH, count);
-            if (Math.abs(plane.scaling.y - scale) > 1e-4) {
-                plane.scaling.set(scale, scale, scale);
-                vis.labelWidth = currentW * scale;
-                vis.labelHeight = currentH * scale;
-            }
-        });
+            plane.onBeforeRenderObservable.add(() => {
+                if (!plane || plane.isDisposed()) return;
+                const currentH = vis.basePlaneH ?? planeH;
+                const currentW = vis.basePlaneW ?? planeW;
+                const count = vis.lineCount ?? lines.length;
+                // Bez delt: stały rozmiar w świecie (jak label wymiaru), ale z clampem ekranowym.
+                const scale = vis.labelWorldFixed
+                    ? this.computeWorldFixedLabelScale(vis.labelPreferredWorld || plane.position, currentH)
+                    : this.calculateMeasureScreenScale(vis.labelPreferredWorld || plane.position, currentH, count);
+                if (Math.abs(plane.scaling.y - scale) > 1e-4) {
+                    plane.scaling.set(scale, scale, scale);
+                    vis.labelWidth = currentW * scale;
+                    vis.labelHeight = currentH * scale;
+                }
+            });
 
-        vis.textPlane = plane;
-        vis.textTexture = dt;
+            vis.textPlane = plane;
+        }
+
+        vis.lineCount = lines.length;
     }
 
     private setMeasureVisualVisible(vis: MeasureVisual, visible: boolean): void {

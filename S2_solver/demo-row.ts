@@ -10,6 +10,7 @@ import { CreateKorpusCommand } from '../A3_smartframe/commands/create-korpus-com
 import { ConstraintStore } from './constraint-store.js';
 import { makeAnchor, makeSolverConstraint } from './constraint-types.js';
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
+import type { ContainerModel } from '../A1_core/container-model.js';
 
 export function generate10CabinetsRow(widths_mm: number[] = [600, 800, 600, 450, 900, 500, 600, 800, 400, 600]): any[] {
     const ctx = ContextManager.instance;
@@ -99,11 +100,16 @@ export function expandCabinet(index: number = 1, delta_mm: number = 200): void {
         console.warn(`[demo-row] Brak szafki o indeksie ${index}`);
         return;
     }
-    const currentW_mm = nmToMm(target.width);
+    const container = target.domainData as ContainerModel | null;
+    if (!container) {
+        console.warn(`[demo-row] Brak domainData w szafce o indeksie ${index}`);
+        return;
+    }
+    const currentW_mm = nmToMm(container.width);
     const newW_mm = currentW_mm + delta_mm;
-    target.width = mmToNm(newW_mm);
-    if (target.generatorParams) {
-        target.generatorParams.szerokosc_mm = newW_mm;
+    container.width = mmToNm(newW_mm);
+    if (container.generatorParams) {
+        container.generatorParams.szerokosc_mm = newW_mm;
     }
     doc.emitChange('dimensions', [target.id]);
 
