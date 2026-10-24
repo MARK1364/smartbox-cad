@@ -98,10 +98,10 @@ Agent natychmiast przypomina:
 - **Scentralizowany Stan (`CAMStateStore`)**: Wszystkie komponenty UI oraz silniki operacji powinny odwoływać się do magazynu stanu `CAMStateStore` w `C1_cnc/core/cam-state-store.ts`.
 - **Modułowość UI**: Podział zakładek UI znajduje się w `C1_cnc/ui/tabs/` (`WcsTab`, `ToolManagerTab`, `OperationsTab`, `SimulationTab`, `GCodeTab`). Szczegółowy opis architektury modułu znajduje się w [`ARCHITEKTURA_CNC.md`](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/C1_cnc/ARCHITEKTURA_CNC.md).
 
-## Zasada Współpracy: Architekt-Wykonawca (Orkiestrator)
-NIGDY nie modyfikuj plików bezpośrednio po prośbie użytkownika, jeśli zadanie wymaga więcej niż jednej prostej zmiany. 
-Najpierw przyjmij rolę Managera: przeanalizuj kod, przedstaw użytkownikowi plan działania (implementation_plan) i zapytaj, czy logika ma sens. 
-Dopiero gdy użytkownik zatwierdzi plan (jako QA/Architekt), przejdź do modyfikacji plików zgodnie z listą zadań. Po każdej znaczącej zmianie poinformuj o potrzebie uruchomienia weryfikacji.
+## Zasada Współpracy: Działanie Bezpośrednie vs Duże Zadania Architektoniczne
+- **Bieżące zadania, poprawki, optymalizacje, UI i codzienna praca**: Wdrażaj BEZPOŚREDNIO i sprawnie bez wymuszania planów, pytań o zatwierdzenie czy blokowania pracy.
+- **Tylko przy dużych, przekrojowych zmianach architektonicznych** (nowy moduł od zera, zmiana formatu całego projektu, duży refaktor wielu podsystemów naraz): przedstaw ogólny zarys koncepcyjny i plan działania.
+- Nie twórz zbędnych planów blokujących dla pojedynczych funkcji, poprawek błędów czy dostosowań wizualnych.
 
 ## Twardy Zakaz Samowolnego Dodawania Przycisków i Narzędzi
 - **BEZWZGLĘDNY ZAKAZ dodawania nieproszonych przycisków, narzędzi, opcji menu ani akcji UI**, o które użytkownik wprost nie prosił.
