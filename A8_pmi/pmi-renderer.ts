@@ -169,7 +169,7 @@ function makeLabelMaterial(visId: string, dt: any, tag: 'pmi' | 'msr', scene: an
     mat.disableLighting = true;
     mat.backFaceCulling = false;
     mat.useAlphaFromDiffuseTexture = true;
-    if (mat.disableDepthWrite !== undefined && tag === 'msr') mat.disableDepthWrite = true;
+    if (mat.disableDepthWrite !== undefined) mat.disableDepthWrite = true;
     return mat;
 }
 
@@ -728,8 +728,8 @@ export class PMIRenderer {
         const textWWorld = Math.max(text.length * textHWorld * charAspect, 8);
 
         const alignToLine = !!PMIStore.instance.alignTextToLine;
-        // Wynik na białym tle — tekst zawsze czarny (kolor wymiaru widoczny na liniach).
-        const labelColor = '#000000';
+        // Kolor tekstu zgodny ze stanem wymiaru (normalny / zaznaczony / podgląd)
+        const labelColor = textColor;
         const cacheKey = `${text}|${labelColor}|${textHWorld}|${alignToLine}`;
 
         if (vis.textCacheKey !== cacheKey) {
@@ -842,12 +842,18 @@ export class PMIRenderer {
 
         const ctx = dt.getContext();
         ctx.clearRect(0, 0, texWidth, texHeight);
-        paintLabelBackground(ctx, texWidth, texHeight, Math.round(texHeight * 0.16));
 
         const fontPx = Math.round(texHeight * 0.62);
         ctx.font = `bold ${fontPx}px Consolas, "Courier New", monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+
+        // Kontur wokół liter (halo) dla pełnej czytelności na każdym tle 3D bez zasłaniającego tła prostokątnego
+        ctx.lineWidth = Math.max(2, Math.round(fontPx * 0.1));
+        ctx.strokeStyle = textColor === '#ffffff' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.95)';
+        if (typeof ctx.strokeText === 'function') {
+            ctx.strokeText(text, texWidth / 2, texHeight / 2);
+        }
         ctx.fillStyle = textColor;
         ctx.fillText(text, texWidth / 2, texHeight / 2);
         dt.update();

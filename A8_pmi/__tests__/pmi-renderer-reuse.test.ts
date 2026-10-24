@@ -111,6 +111,7 @@ function stubBabylon() {
                     fill() { /* noop */ },
                     stroke() { /* noop */ },
                     fillText() { /* noop */ },
+                    strokeText() { /* noop */ },
                 };
             }
             update() { /* noop */ }
