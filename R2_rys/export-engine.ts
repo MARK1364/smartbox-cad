@@ -64,7 +64,7 @@ export class ExportEngineV3 {
     public titleBlock: TitleBlockInfo = {
         projectName: 'Projekt Mebla CAD',
         furnitureName: 'Szafa Korpusowa',
-        author: 'Bloki CAD',
+        author: 'Crevo CAD',
         date: new Date().toISOString().split('T')[0],
         scale: '1:10',
         sheetNumber: '1/1',
@@ -433,7 +433,7 @@ export class ExportEngineV3 {
                     <text x="${(82 * scale).toFixed(1)}" y="${(23.5 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b" font-family="'Segoe UI', sans-serif">Skala: <tspan fill="#0f172a" font-weight="bold">${scaleStr}</tspan></text>
                     <text x="${(102 * scale).toFixed(1)}" y="${(23.5 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b" font-family="'Segoe UI', sans-serif">Format: <tspan fill="#0f172a" font-weight="bold">${formatLabel}</tspan></text>
 
-                    <text x="${(tbw - 3).toFixed(1)}" y="${(tbh - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end" font-family="'Segoe UI', sans-serif">Bloki CAD E3</text>
+                    <text x="${(tbw - 3).toFixed(1)}" y="${(tbh - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end" font-family="'Segoe UI', sans-serif">Crevo CAD</text>
                 </g>
             </svg>
         `;

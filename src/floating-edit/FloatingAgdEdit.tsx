@@ -16,6 +16,7 @@ import {
     type BayRefsParamsPatch,
 } from '../../A2_bloki/02_bay-reference-walls-panel.js';
 import { customReferencesFromDetectedBay } from '../../A2_bloki/hangers/smartpart-bay-placement.js';
+import { resolveDetectedBay } from '../../A2_bloki/02_bloki-bay-detector.js';
 
 const fieldRow: React.CSSProperties = {
     display: 'flex',
@@ -45,12 +46,15 @@ export function FloatingAgdEdit({ container }: { container: ContainerModel }): R
             return;
         }
         const gp = container.generatorParams || {};
-        if (!gp.customReferences && gp.detectedBay) {
-            gp.customReferences = customReferencesFromDetectedBay(gp.detectedBay);
-            gp.disabledReferences = gp.disabledReferences || {};
-            gp.offsets = gp.offsets || { xMin: 0, xMax: 0, yMin: 0, yMax: 0, zMin: 0, zMax: 0 };
-            gp.side_references_bloki = gp.side_references_bloki || 'INNER';
-            container.generatorParams = { ...gp };
+        if (!gp.customReferences) {
+            const resolvedBay = resolveDetectedBay(gp);
+            if (resolvedBay) {
+                gp.customReferences = customReferencesFromDetectedBay(resolvedBay);
+                gp.disabledReferences = gp.disabledReferences || {};
+                gp.offsets = gp.offsets || { xMin: 0, xMax: 0, yMin: 0, yMax: 0, zMin: 0, zMax: 0 };
+                gp.side_references_bloki = gp.side_references_bloki || 'INNER';
+                container.generatorParams = { ...gp };
+            }
         }
         setParams(getApplianceParamsMm(container));
     }, [container, container?.id]);

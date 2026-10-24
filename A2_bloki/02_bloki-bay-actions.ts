@@ -52,6 +52,7 @@ export type BlokiOption = {
 
 export const BLOKI_INTERNAL_OPTIONS: BlokiOption[] = [
     { id: 'SHELVES', type: 'blok_shelves', label: 'Półki', category: 'internal' },
+    { id: 'CORNER_SHELVES', type: 'blok_corner_shelves', label: 'Półki narożne', category: 'internal' },
     { id: 'DOORS', type: 'blok_doors', label: 'Drzwi', category: 'internal' },
     { id: 'SKOSNE_DOORS', type: 'blok_skosne_drzwi', label: 'Drzwi skośne', category: 'internal' },
     { id: 'CORNER_DOORS', type: 'blok_corner_doors', label: 'Drzwi narożne', category: 'internal' },
@@ -103,6 +104,16 @@ function createBlokiGeneratorParams(
                 rozstaw_system32_mm: params?.rozstaw_system32_mm ?? params?.system32Spacing,
                 start_system32_z_mm: params?.start_system32_z_mm ?? params?.system32StartOffset,
                 liczba_otworow_system32: params?.liczba_otworow_system32 ?? params?.system32HoleCount
+            };
+        case 'CORNER_SHELVES':
+            return {
+                ...metadata, boxType: id, type: 'blok_corner_shelves',
+                liczba_polek: params?.liczba_polek ?? params?.shelfCount ?? 1,
+                odsuniecie_przod_mm: params?.odsuniecie_przod_mm ?? params?.shelfOffsetFrontMm ?? 0,
+                luz_boczny_mm: params?.luz_boczny_mm ?? 0,
+                grubosc_polki_mm: params?.grubosc_polki_mm ?? 18,
+                wzor_nawiercen: params?.wzor_nawiercen ?? params?.holePattern ?? params?.hole_pattern ?? 'SINGLE',
+                podporka_id: params?.podporka_id
             };
         case 'DOORS':
             return {
@@ -208,6 +219,9 @@ export interface BlokiModalParams {
     // kanoniczne
     liczba_polek?: number;
     odsuniecie_przod_mm?: number;
+    luz_boczny_mm?: number;
+    grubosc_polki_mm?: number;
+    podporka_id?: string;
     wzor_nawiercen?: 'SINGLE' | 'TRIPLE' | 'ROW' | 'SYSTEM_32' | 'NONE';
     rozstaw_potrojny_z_mm?: number;
     otwory_przod_aktywne?: boolean;
@@ -284,6 +298,7 @@ export interface BlokiModalParams {
 export const BLOKI_CATEGORY_NAMES: Record<string, string> = {
     'EMPTY': 'blok_',
     'SHELVES': 'blok_polki',
+    'CORNER_SHELVES': 'blok_polki_narozne',
     'DRAWERS': 'blok_szuflady',
     'DOORS': 'blok_drzwi',
     'SKOSNE_DOORS': 'blok_drzwi_skosne',
@@ -510,10 +525,14 @@ export function createBlokInDetectedBay(
     const bayDepthMm = bay.boundsMm?.depth ?? (bay.boundsNm ? nmToMm(bay.boundsNm.depth) : 0);
     const bayHeightMm = bay.boundsMm?.height ?? (bay.boundsNm ? nmToMm(bay.boundsNm.height) : 0);
 
+    // detectedBay w generatorParams jest odchudzone — boundary jest już w metadata.boundary (SSOT)
+    const slimDetectedBay: Partial<DetectedBay> = { ...bay };
+    delete (slimDetectedBay as any).boundary;
+
     const metadata: BlokiGeneratorMetadata = {
         parentContainerId: parentId,
         boundary: bay.boundary,
-        detectedBay: bay,
+        detectedBay: slimDetectedBay as DetectedBay,
         targetZone: isExternal ? 'FULL' : undefined,
         side_references_bloki: isExternal ? 'OUTER' : 'INNER',
         customReferences: initialCustomReferences,

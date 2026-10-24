@@ -188,6 +188,27 @@
                 "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
               }
             },
+            "B_LISTWA_NAROZNA_2": {
+              "name": "Dol_Listwa_Narozna_2",
+              "type": "Part",
+              "subtype": "Mesh",
+              "object": "Cube",
+              "role": "VERTICAL_DIVIDER",
+              "report_type": "plyty",
+              "thickness": 0.018,
+              "custom_properties": {
+                "material": "MDF_SUROWY_18",
+                "is_bloki_child": true,
+                "corner_nailer": true,
+                "corner_nailer_arm": "X",
+                "description": "Druga listwa narożna kątowa 90° (ramię wzdłuż X)"
+              },
+              "lcs": {
+                "mapping": { "X": "x", "Y": "z", "Z": "y" },
+                "rotation": [0, 0, 0],
+                "faces": { "INNER": "FACE_Z_PLUS", "OUTER": "FACE_Z_MINUS" }
+              }
+            },
             "B_BOK_P": {
               "name": "Dol_Bok_P",
               "type": "Part",

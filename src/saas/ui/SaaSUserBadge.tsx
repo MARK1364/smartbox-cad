@@ -240,31 +240,33 @@ export const SaaSUserBadge: React.FC<SaaSUserBadgeProps> = ({
               </button>
             )}
 
-            {/* Szybki przełącznik tierów w celach deweloperskich/testowych */}
-            <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '8px', fontSize: '0.7rem', color: '#64748b' }}>
-              <div>Symulator planu (Dev):</div>
-              <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-                {(['FREE', 'PRO', 'ENTERPRISE'] as SubscriptionTier[]).map(t => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => SaaSAuthService.instance.setTier(t)}
-                    style={{
-                      flex: 1,
-                      padding: '2px 4px',
-                      fontSize: '0.65rem',
-                      background: tier === t ? '#2563eb' : 'rgba(255,255,255,0.05)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '3px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {t}
-                  </button>
-                ))}
+            {/* Szybki przełącznik tierów — WYŁĄCZNIE tryb deweloperski (vite dev). */}
+            {Boolean((import.meta as any).env?.DEV) && (
+              <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '8px', fontSize: '0.7rem', color: '#64748b' }}>
+                <div>Symulator planu (Dev):</div>
+                <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                  {(['FREE', 'PRO', 'ENTERPRISE'] as SubscriptionTier[]).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => SaaSAuthService.instance.setTier(t)}
+                      style={{
+                        flex: 1,
+                        padding: '2px 4px',
+                        fontSize: '0.65rem',
+                        background: tier === t ? '#2563eb' : 'rgba(255,255,255,0.05)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <button
               type="button"

@@ -81,6 +81,8 @@ export interface NormalizedCabinetParams {
     strona_blendy: 'LEFT' | 'RIGHT';
     glebokosc_boku_lewego_mm?: number;
     glebokosc_boku_prawego_mm?: number;
+    szerokosc_listwy_naroznej_mm?: number;
+    typ_listwy_naroznej?: 'POJEDYNCZA' | 'KATOWA_90';
     wysokosc_przod_mm?: number;
     wysokosc_tyl_mm?: number;
     wysokosc_lewy_mm?: number;
@@ -115,6 +117,8 @@ export interface CabinetPlanParams {
     strona_blendy?: 'LEFT' | 'RIGHT';
     glebokosc_boku_lewego_mm?: number;
     glebokosc_boku_prawego_mm?: number;
+    szerokosc_listwy_naroznej_mm?: number;
+    typ_listwy_naroznej?: 'POJEDYNCZA' | 'KATOWA_90';
     wysokosc_przod_mm?: number;
     wysokosc_tyl_mm?: number;
     wysokosc_lewy_mm?: number;
@@ -176,6 +180,16 @@ export const LEGACY_CABINET_PARAM_ALIASES: Readonly<Record<string, string>> = {
     armDepthY: 'glebokosc_boku_prawego_mm',
     bokPrawy: 'glebokosc_boku_prawego_mm',
     bok_prawy: 'glebokosc_boku_prawego_mm',
+    corner_nailer_width: 'szerokosc_listwy_naroznej_mm',
+    cornerNailerWidth: 'szerokosc_listwy_naroznej_mm',
+    nailerWidth: 'szerokosc_listwy_naroznej_mm',
+    nailer_width: 'szerokosc_listwy_naroznej_mm',
+    szerokosc_listwy_mm: 'szerokosc_listwy_naroznej_mm',
+    corner_nailer_type: 'typ_listwy_naroznej',
+    cornerNailerType: 'typ_listwy_naroznej',
+    nailerType: 'typ_listwy_naroznej',
+    nailer_type: 'typ_listwy_naroznej',
+    typ_listwy: 'typ_listwy_naroznej',
     heightFront: 'wysokosc_przod_mm',
     height_front: 'wysokosc_przod_mm',
     heightBack: 'wysokosc_tyl_mm',
@@ -200,6 +214,7 @@ export const CANONICAL_CABINET_PARAM_KEYS: readonly string[] = [
     'tryb_wienca_gornego', 'szerokosc_trawersu_mm',
     'szerokosc_blendy_mm', 'strona_blendy',
     'glebokosc_boku_lewego_mm', 'glebokosc_boku_prawego_mm',
+    'szerokosc_listwy_naroznej_mm', 'typ_listwy_naroznej',
     'wysokosc_przod_mm', 'wysokosc_tyl_mm', 'wysokosc_lewy_mm', 'wysokosc_prawy_mm',
     'typ_korpusu', 'offsets', 'container'
 ];

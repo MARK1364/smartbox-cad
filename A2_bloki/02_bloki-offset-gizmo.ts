@@ -13,16 +13,12 @@ import { findOwningKorpus, korpusOffsetGizmoHandler } from '../A3_smartframe/kor
 /** Klucze to kanoniczne FaceName — `normalizeFaceName` nie przyjmuje aliasów. */
 const FACE_MAPPING: Record<string, Record<string, string>> = {
     VERTICAL_DIVIDER: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
-    DIVIDER: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
-    SHELF_PANEL: { FACE_Y_MINUS: '+X', FACE_Y_PLUS: '-X', FACE_X_MINUS: '-Y', FACE_X_PLUS: '+Y' },
-    SHELF: { FACE_Y_MINUS: '+X', FACE_Y_PLUS: '-X', FACE_X_MINUS: '-Y', FACE_X_PLUS: '+Y' }
+    DIVIDER: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' }
 };
 
 const SHIFT: Record<string, OffsetShiftSpec> = {
     VERTICAL_DIVIDER: { paramSuffix: 'shiftX', cadAxis: 'X', sign: 1 },
-    DIVIDER: { paramSuffix: 'shiftX', cadAxis: 'X', sign: 1 },
-    SHELF_PANEL: { paramSuffix: 'shiftZ', cadAxis: 'Z', sign: 1 },
-    SHELF: { paramSuffix: 'shiftZ', cadAxis: 'Z', sign: 1 }
+    DIVIDER: { paramSuffix: 'shiftX', cadAxis: 'X', sign: 1 }
 };
 
 export const blokiOffsetGizmoHandler: OffsetGizmoHandler = {

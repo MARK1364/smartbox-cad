@@ -14,11 +14,80 @@ import {
 } from './pmi-edge-pick.js';
 import { PMIStore } from './pmi-data.js';
 import {
+    PMIAnchorRef,
+    getBrepGeometryForPanel,
+    planeNormalWorldFromMesh,
+    resolveBrepGeometryPick,
+    ResolvedBrepPick,
+} from './pmi-id-bridge.js';
+import {
     HIGHLIGHT_DIAMETER_PX,
     VERTEX_DIAMETER_PX,
     attachScreenConstantScale,
     worldDiameterForPxAt,
 } from './pmi-screen-scale.js';
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Pobiera PanelView z meshu na podstawie nodeId.
+ */
+function getPanelViewFromMesh(mesh: any): any {
+    const model = mesh?.metadata?.panelModel;
+    if (!model) return null;
+    const panelViews = ContextManager.instance.panelViews;
+    if (!panelViews) return null;
+    const direct = panelViews.get(model) || panelViews.get(model.id);
+    if (direct) return direct;
+    for (const view of panelViews.values()) {
+        if (view?.model?.id === model.id) return view;
+    }
+    return null;
+}
+
+/**
+ * Sprawdza, czy siatka jest do wyboru w PMI.
+ */
+function isPmiSelectableMesh(mesh: any): boolean {
+    if (!mesh || mesh.isDisposed?.()) return false;
+    if (typeof mesh.isEnabled === 'function' && !mesh.isEnabled()) return false;
+    if (mesh.isPickable === false) return false;
+    if (mesh.metadata?.isPmiOverlay) return false;
+    if (!mesh.metadata?.panelModel) return false;
+    return true;
+}
+
+/**
+ * Tworzy DetectionResult z ResolvedBrepPick.
+ */
+function createDetectionFromBrepPick(brepPick: ResolvedBrepPick, hit: any): DetectionResult {
+    return {
+        hit: true,
+        geometryType: geometryTypeFromBrepKind(brepPick.kind),
+        pickedPoint: { x: brepPick.worldPos.x, y: brepPick.worldPos.y, z: brepPick.worldPos.z },
+        normal: brepPick.kind === 'FACE' ? planeNormalWorldFromMesh(hit.pickedMesh) : null,
+        faceName: brepPick.kind === 'FACE' ? brepPick.anchorRef.subKey : null,
+        cornerIndex: brepPick.kind === 'VERTEX' ? parseInt(brepPick.anchorRef.subKey, 10) : -1,
+        edgeKey: brepPick.kind === 'EDGE' ? brepPick.anchorRef.subKey : null,
+        smartId: hit.pickedMesh?.metadata?.smartId ?? null,
+        panelModel: hit.pickedMesh?.metadata?.panelModel ?? null,
+        mesh: hit.pickedMesh,
+    };
+}
+
+/**
+ * Mapuje typ B-rep na GeometryType.
+ */
+function geometryTypeFromBrepKind(kind: string): GeometryType {
+    switch (kind) {
+        case 'VERTEX': return GeometryType.VERTEX;
+        case 'EDGE': return GeometryType.EDGE;
+        case 'FACE': return GeometryType.PLANE;
+        default: return GeometryType.OBJECT;
+    }
+}
 
 /** Identyfikuje odcinek po położeniu, więc pokrywające się krawędzie dają ten sam klucz. */
 function segmentKeyOf(segment: EdgeSegmentCandidate): string {
@@ -176,6 +245,26 @@ export class PMIGeometryHighlighter {
             };
         }
 
+        // Dokładne B-rep płaszczyzny odczytujemy po priorytetowych narożnikach.
+        // Krawędzie zostaną rozstrzygnięte przez kandydatów poniżej, nie przez pick ściany.
+        if (edges.length === 0 && typeof this.scene.pick === 'function') {
+            const hit = this.scene.pick(pointerX, pointerY, (m: any) => isPmiSelectableMesh(m) && Boolean(m.metadata?.faceName));
+            const mesh = hit?.pickedMesh;
+            if (hit?.hit && mesh?.metadata?.panelModel && mesh.metadata.faceName) {
+                const panelView = getPanelViewFromMesh(mesh);
+                if (panelView && getBrepGeometryForPanel(this.scene, mesh.metadata.panelModel.id, mesh.metadata.faceName)) {
+                    const brepPick = resolveBrepGeometryPick(this.scene, hit, panelView);
+                    if (brepPick?.kind === 'FACE') {
+                        // Nie przenoś poprzedniej krawędzi do trafienia w płaszczyznę.
+                        // DimensionTool odczytuje hoveredSegment przy kliknięciu i
+                        // taki stary segment zamieniał wybór FACE na EDGE.
+                        this.hoveredSegment = null;
+                        return createDetectionFromBrepPick(brepPick, hit);
+                    }
+                }
+            }
+        }
+
         const result = this.detector.selectGeometry(pointerX, pointerY, 'AUTO');
 
         if (edges.length === 0) {
@@ -189,6 +278,20 @@ export class PMIGeometryHighlighter {
             && best.distPx > Math.min(18, store.edgeSnapPx * 0.8);
         if (planeInterior) {
             this.hoveredSegment = null;
+            if (result.mesh?.metadata?.panelModel && result.mesh.metadata.faceName) {
+                const panelView = getPanelViewFromMesh(result.mesh);
+                if (panelView && getBrepGeometryForPanel(this.scene, result.mesh.metadata.panelModel.id, result.mesh.metadata.faceName)) {
+                    const fakeHit = {
+                        pickedMesh: result.mesh,
+                        pickedPoint: result.pickedPoint ? new BABYLON.Vector3(result.pickedPoint.x, result.pickedPoint.y, result.pickedPoint.z) : null,
+                        getNormal: () => result.normal ? new BABYLON.Vector3(result.normal.x, result.normal.y, result.normal.z) : null,
+                    };
+                    const brepPick = resolveBrepGeometryPick(this.scene, fakeHit, panelView);
+                    if (brepPick?.kind === 'FACE') {
+                        return createDetectionFromBrepPick(brepPick, fakeHit);
+                    }
+                }
+            }
             return result;
         }
 

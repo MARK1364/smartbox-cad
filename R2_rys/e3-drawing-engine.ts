@@ -36,7 +36,7 @@ export class E3DrawingEngine {
     public titleBlock: E3TitleBlock = {
         projectName: 'Projekt Mebla CAD',
         furnitureName: 'Korpus Meblowy',
-        author: 'Bloki CAD',
+        author: 'Crevo CAD',
         date: new Date().toISOString().split('T')[0],
         scale: '1:10',
         sheetNumber: '1/1',
@@ -359,7 +359,7 @@ export class E3DrawingEngine {
         lines.push(`<text x="${v(tbX + col2Split + 2)}" y="${v(curY + 6.8)}" font-size="2.4" font-weight="bold" fill="#000000">${this.paperFormat.split('_')[0]}</text>`);
 
         // Branding
-        lines.push(`<text x="${v(tbX + tbW - 2)}" y="${v(tbY + tbH - 1.2)}" font-size="1.4" text-anchor="end" fill="#999999">Bloki CAD E3</text>`);
+        lines.push(`<text x="${v(tbX + tbW - 2)}" y="${v(tbY + tbH - 1.2)}" font-size="1.4" text-anchor="end" fill="#999999">Crevo CAD</text>`);
 
         return lines.join('\n');
     }
@@ -377,7 +377,7 @@ export class E3DrawingEngine {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Drukuj Arkusz CAD E3 - Bloki</title>
+                <title>Drukuj Arkusz CAD E3 - Crevo</title>
                 <style>
                     @page {
                         size: ${dims.width}mm ${dims.height}mm;

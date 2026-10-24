@@ -4,26 +4,16 @@
  * Bazowy interfejs i klasy abstrakcyjne dla strategii obróbczych (Wzorzec Strategy dla CAM).
  */
 
-import { CAMFeature, Tool, Vector3D } from '../dto/cam-dto.js';
+import { CAMFeature, CAMStrategyParams, Tool, Vector3D } from '../dto/cam-dto.js';
 import { CLCommand } from '../core/cl-data.js';
 
-export interface StrategyParams {
-    feedRate?: number;
-    spindleRpm?: number;
-    stepoverPercent?: number;  // % średnicy narzędzia (np. 60%)
-    stepdownMm?: number;        // Głębokość w jednym przejściu (mm)
-    leadInMm?: number;         // Wydłużenie/łuk wejścia (mm)
-    leadOutMm?: number;        // Wydłużenie/łuk wyjścia (mm)
-    compensation?: 'OFF' | 'LEFT' | 'RIGHT';
-    peckStepMm?: number;       // Skok przy wierceniu głębokim G83 (mm)
-    reverseDirection?: boolean;
-}
+export type StrategyParams = CAMStrategyParams;
 
 export interface MachiningStrategy {
     readonly id: string;
     readonly name: string;
     readonly description: string;
-    readonly targetFeatureTypes: Array<'hole' | 'groove' | 'contour'>;
+    readonly targetFeatureTypes: Array<'hole' | 'groove' | 'contour' | 'pocket'>;
 
     /**
      * Generuje zestaw neutralnych komend CLData dla podanej cechy i narzędzia.

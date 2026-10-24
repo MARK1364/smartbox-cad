@@ -174,6 +174,8 @@ export interface ProjectionFrame {
 export interface SelectionInput {
     anchor1World: Vec3;
     anchor2World: Vec3;
+    helperAnchor1World?: Vec3;
+    helperAnchor2World?: Vec3;
     edgeDir1World: Vec3 | null;
     edgeDir2World: Vec3 | null;
     faceNormal1World: Vec3 | null;
@@ -542,6 +544,14 @@ export function solveDimension(
     const a2Local = toLocalPoint(frame, selection.anchor2World);
     const a1Frame = v3(a1Local.x, a1Local.y, a1Local.z);
     const a2Frame = v3(a2Local.x, a2Local.y, a2Local.z);
+
+    // Kotwice pomiaru mogą być zrzutowane na płaszczyznę (FACE), ale linie
+    // pomocnicze muszą startować z rzeczywistych punktów wyboru — inaczej
+    // znikają załamania, gdy rzut spłaszcza różnicę wysokości.
+    const h1Local = toLocalPoint(frame, selection.helperAnchor1World ?? selection.anchor1World);
+    const h2Local = toLocalPoint(frame, selection.helperAnchor2World ?? selection.anchor2World);
+    const h1Frame = v3(h1Local.x, h1Local.y, h1Local.z);
+    const h2Frame = v3(h2Local.x, h2Local.y, h2Local.z);
     const dimY = selection.requestedOffset;
 
     const valueLength = Math.abs(a2Frame.x - a1Frame.x) * cfg.unitsScale;
@@ -565,17 +575,17 @@ export function solveDimension(
     const n2Local = toLocalDir(frame, selection.faceNormal2World);
 
     const [forceP1Straight, forceP2Straight] = resolveForceStraight(selection.helperPolicy);
-    const dimZ = resolveDimLineZ(a1Frame.z, a2Frame.z, forceP1Straight, forceP2Straight);
+    const dimZ = resolveDimLineZ(h1Frame.z, h2Frame.z, forceP1Straight, forceP2Straight);
 
     const p1DimLocal = v3(a1Frame.x, dimY, dimZ);
     const p2DimLocal = v3(a2Frame.x, dimY, dimZ);
 
     const side1 = solveHelperSide({
-        anchorLocal: a1Frame, edgeDirLocal: edge1Local, normalLocal: n1Local,
+        anchorLocal: h1Frame, edgeDirLocal: edge1Local, normalLocal: n1Local,
         dimPtLocal: p1DimLocal, cfg, forceStraight: forceP1Straight,
     });
     const side2 = solveHelperSide({
-        anchorLocal: a2Frame, edgeDirLocal: edge2Local, normalLocal: n2Local,
+        anchorLocal: h2Frame, edgeDirLocal: edge2Local, normalLocal: n2Local,
         dimPtLocal: p2DimLocal, cfg, forceStraight: forceP2Straight,
     });
 

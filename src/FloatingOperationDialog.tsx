@@ -54,6 +54,7 @@ export interface FloatingOperationData {
     panelId: string;
     libraryId?: string;
     face?: string;
+    focusSlot?: 'u' | 'v';
 }
 
 export interface FloatingPanelData {
@@ -141,18 +142,19 @@ export const FloatingOperationDialog: React.FC = () => {
             setIsEdgeDims(isEdge);
 
             if (isEdge) {
-                setWidthMm(Number(p.width) || 120);
-                setHeightMm(Number(p.length) || 80);
-                setUMm(Number(p.u_ref) || 100);
-                setVMm(Number(p.v_ref) || 80);
+                setWidthMm(p.width !== undefined ? Number(p.width) : 120);
+                setHeightMm(p.length !== undefined ? Number(p.length) : 80);
+                setUMm(p.u_ref !== undefined ? Number(p.u_ref) : 100);
+                setVMm(p.v_ref !== undefined ? Number(p.v_ref) : 80);
                 setUEdgeLabel(edgeShortLabel(p.u_edge));
                 setVEdgeLabel(edgeShortLabel(p.v_edge));
+                setDepthMm(p.depth !== undefined ? Number(p.depth) : (panel ? Math.round(nmToMm(panel.thickness) * 10) / 10 : 18));
             } else {
-                setInsetLMm(Number(p.insets?.l) || 60);
-                setInsetRMm(Number(p.insets?.r) || 60);
-                setInsetTMm(Number(p.insets?.t) || 60);
-                setInsetBMm(Number(p.insets?.b) || 60);
-                setDepthMm(Number(p.depth) || 3);
+                setInsetLMm(p.insets?.l !== undefined ? Number(p.insets.l) : 60);
+                setInsetRMm(p.insets?.r !== undefined ? Number(p.insets.r) : 60);
+                setInsetTMm(p.insets?.t !== undefined ? Number(p.insets.t) : 60);
+                setInsetBMm(p.insets?.b !== undefined ? Number(p.insets.b) : 60);
+                setDepthMm(p.depth !== undefined ? Number(p.depth) : 3);
             }
         }
     }, []);
@@ -183,6 +185,14 @@ export const FloatingOperationDialog: React.FC = () => {
                 requestAnimationFrame(() => {
                     const h = rootRef.current?.getBoundingClientRect().height || 280;
                     setPos(computeFloatBesideEditPanel(PANEL_EDIT_WIDTH, h));
+                    if (d.focusSlot) {
+                        const inputId = d.focusSlot === 'u' ? 'floating-op-input-u' : 'floating-op-input-v';
+                        setTimeout(() => {
+                            const el = document.getElementById(inputId) as HTMLInputElement | null;
+                            el?.focus();
+                            el?.select();
+                        }, 60);
+                    }
                 });
             }
         };
@@ -456,7 +466,7 @@ export const FloatingOperationDialog: React.FC = () => {
                                 style={inputStyle}
                                 onChange={(val) => {
                                     setWidthMm(val);
-                                    commitOpOverrides({ widthMm: val, heightMm, uMm, vMm, depthMm, through: true, fill: 'none' });
+                                    commitOpOverrides({ widthMm: val, heightMm, uMm, vMm, depthMm: panelThicknessMm || depthMm, through: true, fill: 'none' });
                                 }}
                             />
                         </div>
@@ -471,13 +481,14 @@ export const FloatingOperationDialog: React.FC = () => {
                                 style={inputStyle}
                                 onChange={(val) => {
                                     setHeightMm(val);
-                                    commitOpOverrides({ widthMm, heightMm: val, uMm, vMm, depthMm, through: true, fill: 'none' });
+                                    commitOpOverrides({ widthMm, heightMm: val, uMm, vMm, depthMm: panelThicknessMm || depthMm, through: true, fill: 'none' });
                                 }}
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.from_edge', TX_NS, { edge: uEdgeLabel })}</span>
+                            <span style={{ color: '#cbd5e1' }}>Dystans X</span>
                             <SmartNumericInput
+                                id="floating-op-input-u"
                                 value={uMm}
                                 min={0}
                                 max={Math.max(0, panelWidthMm - 1)}
@@ -486,13 +497,14 @@ export const FloatingOperationDialog: React.FC = () => {
                                 style={inputStyle}
                                 onChange={(val) => {
                                     setUMm(val);
-                                    commitOpOverrides({ widthMm, heightMm, uMm: val, vMm, depthMm, through: true, fill: 'none' });
+                                    commitOpOverrides({ widthMm, heightMm, uMm: val, vMm, depthMm: panelThicknessMm || depthMm, through: true, fill: 'none' });
                                 }}
                             />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#cbd5e1' }}>{tx(srcTekst, 'float.from_edge', TX_NS, { edge: vEdgeLabel })}</span>
+                            <span style={{ color: '#cbd5e1' }}>Dystans Y</span>
                             <SmartNumericInput
+                                id="floating-op-input-v"
                                 value={vMm}
                                 min={0}
                                 max={Math.max(0, panelHeightMm - 1)}
@@ -501,7 +513,7 @@ export const FloatingOperationDialog: React.FC = () => {
                                 style={inputStyle}
                                 onChange={(val) => {
                                     setVMm(val);
-                                    commitOpOverrides({ widthMm, heightMm, uMm, vMm: val, depthMm, through: true, fill: 'none' });
+                                    commitOpOverrides({ widthMm, heightMm, uMm, vMm: val, depthMm: panelThicknessMm || depthMm, through: true, fill: 'none' });
                                 }}
                             />
                         </div>

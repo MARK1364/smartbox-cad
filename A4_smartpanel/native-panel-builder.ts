@@ -17,6 +17,7 @@ export class NativePanelBuilder {
             if (data && data.positions && data.positions.length > 0) {
                 const face: Record<string, unknown> = {
                     positions: new Float32Array(data.positions),
+                    brepPositions: data.positions,
                     indices: new Uint32Array(data.indices || []),
                     normals: null
                 };

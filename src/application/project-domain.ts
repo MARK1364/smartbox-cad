@@ -43,6 +43,8 @@ function migrateLegacyWallSolid(raw: any, nodeJson: any): ContainerModel {
     return container;
 }
 
+import { HardwareModel, hydrateHardware } from '../../A1_core/hardware-model.js';
+
 export function hydrateContainer(raw: any, nodeJson: any): ContainerModel {
     if (raw?.type === LEGACY_WALL_SOLID || raw?.generatorParams?.type === LEGACY_WALL_SOLID) {
         return migrateLegacyWallSolid(raw, nodeJson);
@@ -62,12 +64,16 @@ export function hydratePanel(raw: any, nodeJson: any): PanelModel {
 
 registerDefaultHydrator(NodeType.ASSEMBLY, hydrateContainer);
 registerDefaultHydrator(NodeType.PART, hydratePanel);
+registerDefaultHydrator(NodeType.HARDWARE, hydrateHardware);
 registerDefaultFactory(NodeType.ASSEMBLY, (options) => new ContainerModel(options));
 registerDefaultFactory(NodeType.PART, (options) => new PanelModel(options));
+registerDefaultFactory(NodeType.HARDWARE, (options) => new HardwareModel(options));
 
 export function registerProjectDomain(document: ProjectDocument): void {
     document.registerHydrator(NodeType.ASSEMBLY, hydrateContainer);
     document.registerHydrator(NodeType.PART, hydratePanel);
+    document.registerHydrator(NodeType.HARDWARE, hydrateHardware);
     document.registerFactory(NodeType.ASSEMBLY, (options) => new ContainerModel(options));
     document.registerFactory(NodeType.PART, (options) => new PanelModel(options));
+    document.registerFactory(NodeType.HARDWARE, (options) => new HardwareModel(options));
 }

@@ -11,6 +11,7 @@ import { shelfPlugin } from './plugins/shelf-plugin.js';
 import { doorsPlugin } from './plugins/doors-plugin.js';
 import { skosneDoorsPlugin } from './plugins/skosne-doors-plugin.js';
 import { cornerDoorsPlugin } from './plugins/corner-doors-plugin.js';
+import { cornerShelvesPlugin } from './plugins/corner-shelves-plugin.js';
 import { tubesPlugin } from './plugins/tubes-plugin.js';
 import { drawersPlugin } from './plugins/drawers-plugin.js';
 import { dividersPlugin } from './plugins/dividers-plugin.js';
@@ -27,6 +28,7 @@ export function registerAllBlokiModules(): void {
     SmartModuleRegistry.register(doorsPlugin);
     SmartModuleRegistry.register(skosneDoorsPlugin);
     SmartModuleRegistry.register(cornerDoorsPlugin);
+    SmartModuleRegistry.register(cornerShelvesPlugin);
     SmartModuleRegistry.register(tubesPlugin);
     SmartModuleRegistry.register(drawersPlugin);
     SmartModuleRegistry.register(dividersPlugin);

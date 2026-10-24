@@ -15,7 +15,7 @@ import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { findPanelNodeByRef, getPanelFaceCoordinate } from '../../A2_bloki/01_bloki-core.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
-import type { DetectedBay } from '../../A2_bloki/02_bloki-bay-detector.js';
+import { type DetectedBay, resolveDetectedBay } from '../../A2_bloki/02_bloki-bay-detector.js';
 import { getHangerOrUndefined } from '../../B1_biblioteka/index.js';
 import {
     SMARTPART_HANGER_TYPE,
@@ -265,7 +265,11 @@ export function createSmartPartHangersInBay(
         paramValues: isSmartPart ? paramValues : undefined,
         /** Jak Blok: ściany wnęki edytowalne w zakładce „Ściany referencyjne” (BlokiUI). */
         boundary: bay.boundary,
-        detectedBay: bay,
+        detectedBay: (() => {
+            const slim = { ...bay };
+            delete (slim as any).boundary;
+            return slim;
+        })(),
         side_references_bloki: 'INNER',
         customReferences,
         disabledReferences: {},
@@ -677,7 +681,8 @@ export function updateSmartPartHangersGroup(groupNode: CADNode, document: any): 
         );
     }
     const wallRefs: BayWallRefs | undefined = gp.bayWallRefs;
-    if (!wallRefs && !gp.detectedBay && !gp.customReferences) return false;
+    const resolvedBay = resolveDetectedBay(gp);
+    if (!wallRefs && !resolvedBay && !gp.customReferences) return false;
 
     if (!gp.parentContainerId || !document.findNode(gp.parentContainerId)) {
         const parent = groupNode.parent;
@@ -685,7 +690,7 @@ export function updateSmartPartHangersGroup(groupNode: CADNode, document: any): 
     }
     const cabinetNode = gp.parentContainerId ? document.findNode(gp.parentContainerId) : null;
 
-    const bayFrame = gp.detectedBay ? bayFrameFromDetectedBay(gp.detectedBay) : null;
+    const bayFrame = resolvedBay ? bayFrameFromDetectedBay(resolvedBay) : null;
     let frame = wallRefs ? bayFrameFromDocument(document, wallRefs) : null;
     if (!frame && bayFrame) frame = bayFrame;
 

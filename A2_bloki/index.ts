@@ -45,6 +45,13 @@ export {
     LEGACY_CORNER_DOORS_PARAM_ALIASES,
     type CornerDoorsParams
 } from './07_corner-doors-engine.js';
+export {
+    calculateCornerShelvesPlan,
+    normalizeCornerShelvesParams,
+    assertCanonicalCornerShelvesParams,
+    LEGACY_CORNER_SHELVES_PARAM_ALIASES,
+    type NormalizedCornerShelvesParams
+} from './18_corner-shelves-engine.js';
 export { calculateTubesPlan, normalizeTubesParams, assertCanonicalTubesParams } from './08_tubes-engine.js';
 export { calculateDrawersPlan, normalizeDrawersParams } from './09_drawers-engine.js';
 export { calculateDividersPlan, normalizeDividersParams, assertCanonicalDividersParams } from './10_dividers-engine.js';
@@ -98,6 +105,7 @@ export { DoorsSubModule, buildDoorsPlan } from './05_doors-adapter.js';
 export { SkosneDoorsSubModule, buildSkosneDoorsPlan } from './06_skosne-doors-adapter.js';
 export { CornerDoorsSubModule, buildCornerDoorsPlan, normalizeCornerOtwieranie } from './07_corner-doors-adapter.js';
 export type { CornerOtwieranie } from './07_corner-doors-adapter.js';
+export { CornerShelvesSubModule, buildCornerShelvesPlan } from './18_corner-shelves-adapter.js';
 export { TubesSubModule, buildTubesPlan } from './08_tubes-adapter.js';
 export { DrawersSubModule, buildDrawersPlan } from './09_drawers-adapter.js';
 export { DividersSubModule, buildDividersPlan } from './10_dividers-adapter.js';
@@ -106,6 +114,7 @@ export { FlapsSubModule, buildFlapsPlan } from './12_flaps-adapter.js';
 export { LedSubModule, buildLedPlan, LedInternalSubModule, buildLedInternalPlan, LedExternalSubModule, buildLedExternalPlan } from './16_led-adapter.js';
 
 export { buildShelvesDrillings } from './04_shelves-drilling-builder.js';
+export { buildCornerShelvesDrillings } from './18_corner-shelves-drilling-builder.js';
 export { buildDoorsDrillings } from './05_doors-drilling-builder.js';
 export { buildSkosneDoorsDrillings } from './06_skosne-doors-drilling-builder.js';
 export { buildDrawersDrillings } from './09_drawers-drilling-builder.js';

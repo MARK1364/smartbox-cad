@@ -253,7 +253,11 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
             const scaleZ = lenMm > 0 ? baseScale * (lenMm / 500) : baseScale;
             hwMesh.scaling.set(scaleX, baseScale, scaleZ);
           } else if (isShelfPin) {
-            hwMesh.rotation.set(0, 0, Math.PI / 2);
+            if (hw.rotation) {
+              hwMesh.rotation.set(hw.rotation.x, hw.rotation.y, hw.rotation.z);
+            } else {
+              hwMesh.rotation.set(0, 0, Math.PI / 2);
+            }
           } else if (isTube) {
             hwMesh.rotation.set(0, 0, Math.PI / 2);
           }

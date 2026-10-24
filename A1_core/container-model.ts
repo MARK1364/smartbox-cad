@@ -42,13 +42,21 @@ export class ContainerModel {
     }
 
     toJSON(): Record<string, any> {
+        let gp: GeneratorParams | null = null;
+        if (this.generatorParams) {
+            gp = { ...this.generatorParams };
+            if (gp.boundary && gp.detectedBay && gp.detectedBay.boundary) {
+                gp.detectedBay = { ...gp.detectedBay };
+                delete gp.detectedBay.boundary;
+            }
+        }
         return {
             type: 'container',
             name: this.name,
             width: this.width,
             height: this.height,
             depth: this.depth,
-            generatorParams: this.generatorParams ? { ...this.generatorParams } : null,
+            generatorParams: gp,
         };
     }
 

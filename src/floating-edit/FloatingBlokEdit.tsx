@@ -45,6 +45,7 @@ function resolveBoxType(container: any): string {
             blok_doors: 'DOORS',
             blok_skosne_drzwi: 'SKOSNE_DOORS',
             blok_corner_doors: 'CORNER_DOORS',
+            blok_corner_shelves: 'CORNER_SHELVES',
             blok_drawers: 'DRAWERS',
             blok_flaps: 'FLAPS',
             blok_dividers: 'DIVIDERS',
@@ -86,6 +87,13 @@ export function FloatingBlokEdit({ container }: { container: any }): React.JSX.E
             }
         } else if (!isHandleContainer(container)) {
             update_bloki_core(container, doc);
+            if (typeof (window as any).__rebuildGeometry === 'function') {
+                (window as any).__rebuildGeometry('Bloki update');
+            } else if (typeof doc?._notify === 'function') {
+                doc._notify();
+            } else if (doc?.emitChange) {
+                doc.emitChange('all');
+            }
         }
 
         window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));

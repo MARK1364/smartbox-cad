@@ -74,6 +74,7 @@ export interface BlokiHardware {
     hardwareId: string;
     side?: 'left' | 'right' | 'center';
     loc: { x: number; y: number; z: number }; // pozycja lokalna w mm
+    rotation?: { x: number; y: number; z: number };
     dim?: { x: number; y: number; z: number };
     params?: Record<string, any>;
     customProperties?: Record<string, any>;

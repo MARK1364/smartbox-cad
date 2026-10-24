@@ -26,6 +26,8 @@ describe('Kontrakt parametrów korpusu — zero kompatybilności wstecznej', () 
         expect(() => assertCanonicalCabinetParams({ bokLewy: 600 })).toThrow(/bokLewy → glebokosc_boku_lewego_mm/);
         expect(() => assertCanonicalCabinetParams({ blindWidth: 400 })).toThrow(/blindWidth → szerokosc_blendy_mm/);
         expect(() => assertCanonicalCabinetParams({ armDepth: 600 })).toThrow(/armDepth → glebokosc_boku_lewego_mm/);
+        expect(() => assertCanonicalCabinetParams({ corner_nailer_width: 100 })).toThrow(/corner_nailer_width → szerokosc_listwy_naroznej_mm/);
+        expect(() => assertCanonicalCabinetParams({ nailerWidth: 100 })).toThrow(/nailerWidth → szerokosc_listwy_naroznej_mm/);
     });
 
     it('strażnik przepuszcza kanoniczne wejście i wartości undefined', () => {

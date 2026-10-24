@@ -1,8 +1,12 @@
-import { FeatureEntitlement, SubscriptionTier, TIER_ENTITLEMENTS, UserProfile } from './types';
+import { FeatureEntitlement, LicensePayload, SubscriptionTier, TIER_ENTITLEMENTS, UserProfile } from './types';
+
+/** Symulatory planów działają wyłącznie w trybie developerskim (vite dev). */
+const IS_DEV = (import.meta as any).env?.DEV === true;
 
 export class SaaSLicenseManager {
   private static _instance: SaaSLicenseManager | null = null;
   private _user: UserProfile | null = null;
+  private _license: LicensePayload | null = null;
   private _listeners: Array<(tier: SubscriptionTier) => void> = [];
 
   public static get instance(): SaaSLicenseManager {
@@ -13,8 +17,43 @@ export class SaaSLicenseManager {
   }
 
   public setUser(user: UserProfile | null): void {
+    // Ważna licencja jest źródłem prawdy — nie pozwalamy nadpisać jej sesją mock.
+    if (this._license) return;
+    // Poza DEV nie przyznajemy planów płatnych bez licencji.
+    if (user && user.tier !== 'FREE' && !IS_DEV) {
+      user = { ...user, tier: 'FREE' };
+    }
     this._user = user;
     this.notify();
+  }
+
+  /**
+   * Ustawia zweryfikowaną licencję. Tier i profil wyprowadzane są z licencji —
+   * to jedyna droga do odblokowania funkcji PRO (poza jawnym trybem DEV).
+   */
+  public setLicense(license: LicensePayload | null): void {
+    this._license = license;
+    if (license) {
+      this._user = {
+        id: license.licenseId,
+        email: license.email,
+        fullName: license.fullName || license.email.split('@')[0],
+        tier: license.tier,
+        subscriptionExpiresAt: license.expiresAt,
+        createdAt: license.issuedAt,
+      };
+    } else {
+      this._user = null;
+    }
+    this.notify();
+  }
+
+  public getLicense(): LicensePayload | null {
+    return this._license;
+  }
+
+  public isLicensed(): boolean {
+    return this._license !== null;
   }
 
   public getUser(): UserProfile | null {

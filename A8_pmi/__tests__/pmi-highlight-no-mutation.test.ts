@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { PMIGeometryHighlighter } from '../pmi-geometry-highlight.js';
+import { ContextManager } from '../../A1_core/context-manager.js';
 
 declare const BABYLON: any;
 
@@ -223,6 +224,58 @@ describe('highlight nie zmienia wyglądu korpusu (overlay-only)', () => {
         expect(resB.geometryType).toBe('edge');
         expect(hl.currentHoveredSegment?.mesh).toBe(edgeMeshB);
         expect((hl as any).edgeOverlays.length).toBeGreaterThan(0);
+    });
+
+    it('wybór B-rep płaszczyzny czyści poprzednią krawędź hover', () => {
+        const identity = {
+            m: [
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1,
+            ],
+            clone() { return this; },
+            invert() { return this; },
+        };
+        const faceMesh: any = {
+            metadata: {
+                faceName: 'FACE_X_PLUS',
+                planeNormalLocal: { x: 1, y: 0, z: 0 },
+                panelModel: { id: 'face_pick_panel' },
+            },
+            isPickable: true,
+            isEnabled: () => true,
+            isDisposed: () => false,
+            getWorldMatrix: () => identity,
+            material: new (BABYLON.StandardMaterial as any)(),
+        };
+        const root: any = { getWorldMatrix: () => identity, getChildMeshes: () => [faceMesh] };
+        faceMesh.parent = root;
+        const scene = {
+            ...baseScene([faceMesh]),
+            pick: () => ({
+                hit: true,
+                pickedMesh: faceMesh,
+                pickedPoint: { x: 0.2, y: 0.2, z: 0 },
+            }),
+        };
+        ContextManager.instance.panelViews = new Map([['face_pick_panel', {
+            model: { id: 'face_pick_panel' },
+            root,
+            getBrepFacePositions: () => new Float64Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+            getBrepFaceIndices: () => new Uint32Array([0, 1, 2]),
+            getBrepVertexLocal: () => [],
+            getBrepEdgePoints: () => [],
+            getBrepFaceOriginLocal: () => ({ x: 0, y: 0, z: 0 }),
+            getBrepFaceNormalLocal: () => ({ x: 1, y: 0, z: 0 }),
+        }]]);
+        const hl = new PMIGeometryHighlighter(scene);
+        (hl as any).hoveredSegment = { mesh: { metadata: { type: 'edge' } } };
+
+        const result = hl.update(400, 300);
+
+        expect(result.geometryType).toBe('plane');
+        expect(hl.currentHoveredSegment).toBeNull();
     });
 
     it('zestaw wielu nakładek pomiarowych showEdgeOverlays nie jest niszczony przy ruchu wzdłuż krawędzi', () => {

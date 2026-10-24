@@ -132,6 +132,43 @@ export function axesMapWorld(axisSpace: string, matrixWorld: Mat4 | any | null):
     };
 }
 
+function projectPointOnPlane(point: Vec3, planeOrigin: Vec3, planeNormal: Vec3): Vec3 {
+    const n = v3Normalize(planeNormal);
+    return v3Sub(point, v3Scale(n, v3Dot(v3Sub(point, planeOrigin), n)));
+}
+
+/**
+ * Punkt odniesienia ściany to rzut drugiego elementu na jej płaszczyznę,
+ * a nie miejsce kliknięcia. Dzięki temu wymiar od ściany jest prostopadły
+ * i nie zależy od tego, gdzie użytkownik trafił kursorem.
+ */
+function canonicalMeasureAnchors(opts: {
+    anchor1World: Vec3;
+    anchor2World: Vec3;
+    axisSpace?: string;
+    faceNormal1World?: Vec3 | null;
+    faceNormal2World?: Vec3 | null;
+    isPlane1?: boolean;
+    isPlane2?: boolean;
+}): { anchor1World: Vec3; anchor2World: Vec3 } {
+    let anchor1World = opts.anchor1World;
+    let anchor2World = opts.anchor2World;
+
+    // ALIGNED celowo mierzy rzut na płaszczyznę ściany — tam punkt kliknięcia
+    // jest częścią definicji pomiaru i nie wolno go kanonizować.
+    if ((opts.axisSpace || '').toUpperCase() === 'ALIGNED') {
+        return { anchor1World, anchor2World };
+    }
+
+    if (opts.isPlane1 && opts.faceNormal1World && v3Len(opts.faceNormal1World) > 1e-7) {
+        anchor1World = projectPointOnPlane(anchor2World, anchor1World, opts.faceNormal1World);
+    } else if (opts.isPlane2 && opts.faceNormal2World && v3Len(opts.faceNormal2World) > 1e-7) {
+        anchor2World = projectPointOnPlane(anchor1World, anchor2World, opts.faceNormal2World);
+    }
+
+    return { anchor1World, anchor2World };
+}
+
 export interface AxisDistanceInfo {
     axisKey: 'X' | 'Y' | 'Z';
     lengthMM: number;
@@ -149,16 +186,58 @@ export interface AvailableMeasureAxes {
  * Oblicza fizyczne odległości (w mm) wzdłuż osi X, Y, Z oraz 3D między dwoma punktami.
  * Oznacza jako `available` te osie, których rzut przekracza próg (domyślnie 0.5 mm).
  */
+/**
+ * Sprawdza algebraicznie, czy oś odsunięcia posiada niezerową składową prostopadłą do wektora pomiaru.
+ * Czysta algebra wektorowa: Delta_perp = Delta - (Delta . u) * u.
+ * Jeśli ||Delta_perp|| > 1e-4 mm (numeryczne zero), odsunięcie wzdłuż u jest matematycznie poprawne.
+ */
+export function isOffsetAxisAllowedAlgebraic(opts: {
+    offsetDirWorld: Vec3 | null;
+    anchor1World: Vec3;
+    anchor2World: Vec3;
+    axisSpace?: string;
+    faceNormal1World?: Vec3 | null;
+    faceNormal2World?: Vec3 | null;
+    isPlane1?: boolean;
+    isPlane2?: boolean;
+    lockedMeasureDirWorld?: Vec3 | null;
+}): boolean {
+    if (!opts.offsetDirWorld || v3Len(opts.offsetDirWorld) <= 1e-7) return true;
+    const u = v3Normalize(opts.offsetDirWorld);
+
+    // 1. Jeśli użytkownik ręcznie zablokował oś pomiaru (np. Shift+X):
+    if (opts.lockedMeasureDirWorld && v3Len(opts.lockedMeasureDirWorld) > 1e-7) {
+        const m = v3Normalize(opts.lockedMeasureDirWorld);
+        return Math.abs(v3Dot(u, m)) < 0.998;
+    }
+
+    // 2. Wektor odniesienia pomiaru (dla ścian rzutowany na ich płaszczyznę)
+    const anchors = canonicalMeasureAnchors(opts);
+    const delta = v3Sub(anchors.anchor2World, anchors.anchor1World);
+    if (v3Len(delta) <= 1e-4) return false;
+
+    // Składowa prostopadła do wybranej osi odsunięcia: delta_perp = delta - (delta . u) * u
+    const parallel = v3Scale(u, v3Dot(delta, u));
+    const perp = v3Sub(delta, parallel);
+
+    return v3Len(perp) > 1e-4;
+}
+
 export function computeAvailableMeasureAxes(opts: {
     anchor1World: Vec3;
     anchor2World: Vec3;
     axisSpace?: string;
     matrixWorld?: Mat4 | any | null;
     thresholdMM?: number;
+    faceNormal1World?: Vec3 | null;
+    faceNormal2World?: Vec3 | null;
+    isPlane1?: boolean;
+    isPlane2?: boolean;
 }): AvailableMeasureAxes {
-    const delta = v3Sub(opts.anchor2World, opts.anchor1World);
+    const anchors = canonicalMeasureAnchors(opts);
+    const delta = v3Sub(anchors.anchor2World, anchors.anchor1World);
     const distance3DMM = Math.round(v3Len(delta) * 10) / 10;
-    const threshold = opts.thresholdMM ?? 0.5;
+    const threshold = opts.thresholdMM ?? 1e-4;
     const axisMap = axesMapWorld(opts.axisSpace || 'GLOBAL', opts.matrixWorld || null);
 
     const checkAxis = (key: 'X' | 'Y' | 'Z'): AxisDistanceInfo => {
@@ -223,6 +302,48 @@ function dominantMeasureAxisKey(
     return dominantCadAxisFromRenderDelta(delta.x, delta.y, delta.z);
 }
 
+/**
+ * Oś ramki najbliższa normalnej wybranej ściany.
+ *
+ * Płaszczyzna nie ma wyróżnionego punktu, więc wymiar od ściany musi biec
+ * wzdłuż jej normalnej. Inaczej wynik zależy od miejsca kliknięcia na ścianie
+ * i zmienia się przy samym przestawianiu kierunku odsunięcia linii.
+ */
+function axisKeyAlongDirection(
+    dirWorld: Vec3 | null,
+    axisMap: Record<string, Vec3>,
+): string | null {
+    if (!dirWorld || v3Len(dirWorld) <= 1e-7) return null;
+    const n = v3Normalize(dirWorld);
+
+    let bestKey: string | null = null;
+    let bestScore = 0;
+    for (const k of ['X', 'Y', 'Z']) {
+        const ax = axisMap[k];
+        if (!ax) continue;
+        const score = Math.abs(v3Dot(n, ax));
+        if (score > bestScore) {
+            bestScore = score;
+            bestKey = k;
+        }
+    }
+
+    // Tylko normalna pokrywająca się z osią ramki; ukośna ściana zostaje
+    // przy dotychczasowym wyborze osi.
+    return bestKey && bestScore >= 0.98 ? bestKey : null;
+}
+
+function planeNormalMeasureAxis(
+    normalWorld: Vec3 | null,
+    delta: Vec3,
+    axisMap: Record<string, Vec3>,
+): string | null {
+    const key = axisKeyAlongDirection(normalWorld, axisMap);
+    if (!key) return null;
+    if (Math.abs(v3Dot(delta, axisMap[key])) < 1e-4) return null;
+    return key;
+}
+
 /** Oś prostopadła do pomiaru, wzdłuż której liczone jest odsunięcie linii wymiarowej. */
 function offsetAxisSeed(
     axisMap: Record<string, Vec3>,
@@ -285,9 +406,14 @@ export function resolveMeasureAxis(opts: {
     anchor2World: Vec3;
     faceNormal1World?: Vec3 | null;
     faceNormal2World?: Vec3 | null;
+    /** Pierwszy element to płaszczyzna (ściana), a nie krawędź/wierzchołek. */
+    isPlane1?: boolean;
+    /** Drugi element to płaszczyzna (ściana), a nie krawędź/wierzchołek. */
+    isPlane2?: boolean;
     offsetAxisKey?: string;
 }): MeasureAxisResolution | null {
-    const delta = v3Sub(opts.anchor2World, opts.anchor1World);
+    const anchors = canonicalMeasureAnchors(opts);
+    const delta = v3Sub(anchors.anchor2World, anchors.anchor1World);
     if (v3Len(delta) <= 1e-6) return null;
 
     const axisMap = axesMapWorld(opts.axisSpace, opts.matrixWorld);
@@ -313,8 +439,18 @@ export function resolveMeasureAxis(opts: {
     let measureKey = (opts.measureAxisKey || 'AUTO').toUpperCase();
     const offsetKey = (opts.offsetAxisKey || '').toUpperCase();
 
+    // Ściana (płaszczyzna) narzuca pomiar wzdłuż swojej normalnej. Dzięki temu
+    // wynik nie zależy od punktu kliknięcia na ścianie i nie zmienia się przy
+    // przestawianiu kierunku odsunięcia linii wymiarowej.
+    const planeNormal = (opts.isPlane1 ? opts.faceNormal1World : null)
+        ?? (opts.isPlane2 ? opts.faceNormal2World : null);
+
     if (!['X', 'Y', 'Z'].includes(measureKey)) {
-        if (['X', 'Y', 'Z'].includes(offsetKey)) {
+        const planeKey = planeNormalMeasureAxis(planeNormal ?? null, delta, axisMap);
+
+        if (planeKey) {
+            measureKey = planeKey;
+        } else if (['X', 'Y', 'Z'].includes(offsetKey)) {
             // W trybie AUTO, gdy użytkownik wyciąga wymiar wzdłuż określonej osi (offsetAxisKey),
             // oś pomiaru musi być do niej prostopadła.
             const candidates = ['X', 'Y', 'Z'].filter(k => k !== offsetKey);
@@ -333,10 +469,18 @@ export function resolveMeasureAxis(opts: {
             measureKey = dominantMeasureAxisKey(delta, opts.axisSpace, axisMap);
         }
     } else {
-        // Zabezpieczenie: wymuszona oś prostopadła do odcinka dałaby wymiar zerowy.
-        const chosen = axisMap[measureKey] || axisMap.X;
-        if (Math.abs(v3Dot(delta, chosen)) < 1e-4) {
-            measureKey = dominantMeasureAxisKey(delta, opts.axisSpace, axisMap);
+        // Wymuszona oś leżąca w płaszczyźnie ściany nie ma jednoznacznej
+        // współrzędnej — kotwica ściany jest wtedy punktem kliknięcia.
+        // Dlatego dla ściany zawsze obowiązuje jej normalna.
+        const planeKey = axisKeyAlongDirection(planeNormal ?? null, axisMap);
+        if (planeKey) {
+            measureKey = planeKey;
+        } else {
+            // Zabezpieczenie: wymuszona oś prostopadła do odcinka dałaby wymiar zerowy.
+            const chosen = axisMap[measureKey] || axisMap.X;
+            if (Math.abs(v3Dot(delta, chosen)) < 1e-4) {
+                measureKey = dominantMeasureAxisKey(delta, opts.axisSpace, axisMap);
+            }
         }
     }
 
@@ -361,12 +505,16 @@ export function solveDimensionBridge(opts: {
     offsetWorld: Vec3 | null;
     anchor1World: Vec3;
     anchor2World: Vec3;
+    helperAnchor1World?: Vec3;
+    helperAnchor2World?: Vec3;
     dimHint1World: Vec3;
     dimHint2World: Vec3;
     edgeDir1World?: Vec3 | null;
     edgeDir2World?: Vec3 | null;
     faceNormal1World?: Vec3 | null;
     faceNormal2World?: Vec3 | null;
+    isPlane1?: boolean;
+    isPlane2?: boolean;
     helperPolicy?: HelperPolicy;
     config?: Partial<SolverConfig>;
 }): BridgeSolveResult | null {
@@ -374,7 +522,14 @@ export function solveDimensionBridge(opts: {
     let axisYSeed: Vec3;
     let helperPolicy = opts.helperPolicy ?? HelperPolicy.P1_STRAIGHT_P2_AUTO;
 
-    const delta = v3Sub(opts.anchor2World, opts.anchor1World);
+    // Przy dwóch ścianach helpery startują z naroży wybranych jako wspólna para.
+    // Automatyczne prowadzenie obu stron zapobiega ukośnemu odcinkowi do linii wymiaru.
+    if (opts.isPlane1 && opts.isPlane2 && opts.helperAnchor1World && opts.helperAnchor2World) {
+        helperPolicy = HelperPolicy.BOTH_AUTO;
+    }
+
+    const anchors = canonicalMeasureAnchors(opts);
+    const delta = v3Sub(anchors.anchor2World, anchors.anchor1World);
     const deltaLen = v3Len(delta);
     if (deltaLen <= 1e-6) return null;
 
@@ -393,10 +548,12 @@ export function solveDimensionBridge(opts: {
             matrixWorld: opts.matrixWorld,
             measureAxisKey: opts.measureAxisKey,
             offsetAxisKey: opts.offsetAxisKey,
-            anchor1World: opts.anchor1World,
-            anchor2World: opts.anchor2World,
+            anchor1World: anchors.anchor1World,
+            anchor2World: anchors.anchor2World,
             faceNormal1World: opts.faceNormal1World,
             faceNormal2World: opts.faceNormal2World,
+            isPlane1: opts.isPlane1,
+            isPlane2: opts.isPlane2,
         });
         if (!resolution) return null;
 
@@ -414,7 +571,7 @@ export function solveDimensionBridge(opts: {
     if (!basis) return null;
     const [basisX, basisY, basisZ] = basis;
 
-    const originWorld = v3Lerp(opts.anchor1World, opts.anchor2World, 0.5);
+    const originWorld = v3Lerp(anchors.anchor1World, anchors.anchor2World, 0.5);
     const frameM = mat4FromAxes(basisX, basisY, basisZ, originWorld);
     const frameInv = mat4Invert(frameM);
     if (!frameInv) return null;
@@ -443,8 +600,10 @@ export function solveDimensionBridge(opts: {
     };
 
     const selection: SelectionInput = {
-        anchor1World: v3Copy(opts.anchor1World),
-        anchor2World: v3Copy(opts.anchor2World),
+        anchor1World: v3Copy(anchors.anchor1World),
+        anchor2World: v3Copy(anchors.anchor2World),
+        helperAnchor1World: v3Copy(opts.helperAnchor1World ?? opts.anchor1World),
+        helperAnchor2World: v3Copy(opts.helperAnchor2World ?? opts.anchor2World),
         edgeDir1World: opts.edgeDir1World ? v3Copy(opts.edgeDir1World) : null,
         edgeDir2World: opts.edgeDir2World ? v3Copy(opts.edgeDir2World) : null,
         faceNormal1World: opts.faceNormal1World ? v3Copy(opts.faceNormal1World) : v3Copy(basisZ),
@@ -483,10 +642,14 @@ export function getRenderData(opts: {
     offsetWorld: Vec3;
     anchor1World: Vec3;
     anchor2World: Vec3;
+    helperAnchor1World?: Vec3;
+    helperAnchor2World?: Vec3;
     edgeDir1World?: Vec3 | null;
     edgeDir2World?: Vec3 | null;
     faceNormal1World?: Vec3 | null;
     faceNormal2World?: Vec3 | null;
+    isPlane1?: boolean;
+    isPlane2?: boolean;
     helperPolicy?: HelperPolicy;
     config?: Partial<SolverConfig>;
     worldThickness?: number;
@@ -497,7 +660,8 @@ export function getRenderData(opts: {
     const fontSizeWorld = opts.fontSizeWorld ?? 120;
     const labelText = opts.labelText ?? '';
 
-    const edgeVec = v3Sub(opts.anchor2World, opts.anchor1World);
+    const anchors = canonicalMeasureAnchors(opts);
+    const edgeVec = v3Sub(anchors.anchor2World, anchors.anchor1World);
     const dist = v3Len(edgeVec);
     if (dist <= 1e-6) return null;
 
@@ -506,10 +670,12 @@ export function getRenderData(opts: {
         matrixWorld: opts.matrixWorld,
         measureAxisKey: opts.measureAxisKey,
         offsetAxisKey: opts.offsetAxisKey,
-        anchor1World: opts.anchor1World,
-        anchor2World: opts.anchor2World,
+        anchor1World: anchors.anchor1World,
+        anchor2World: anchors.anchor2World,
         faceNormal1World: opts.faceNormal1World,
         faceNormal2World: opts.faceNormal2World,
+        isPlane1: opts.isPlane1,
+        isPlane2: opts.isPlane2,
     });
 
     const bridge = solveDimensionBridge({
@@ -520,12 +686,16 @@ export function getRenderData(opts: {
         offsetWorld: opts.offsetWorld,
         anchor1World: opts.anchor1World,
         anchor2World: opts.anchor2World,
+        helperAnchor1World: opts.helperAnchor1World,
+        helperAnchor2World: opts.helperAnchor2World,
         dimHint1World: v3Add(opts.anchor1World, opts.offsetWorld),
         dimHint2World: v3Add(opts.anchor2World, opts.offsetWorld),
         edgeDir1World: opts.edgeDir1World,
         edgeDir2World: opts.edgeDir2World,
         faceNormal1World: opts.faceNormal1World,
         faceNormal2World: opts.faceNormal2World,
+        isPlane1: opts.isPlane1,
+        isPlane2: opts.isPlane2,
         helperPolicy: opts.helperPolicy,
         config: opts.config,
     });
@@ -557,15 +727,15 @@ export function getRenderData(opts: {
             let az = v3Cross(ax, ay);
             az = v3Len(az) > 1e-4 ? v3Normalize(az) : v3(0, 0, 1);
 
-            const t1 = v3Dot(opts.anchor1World, ax);
-            const t2 = v3Dot(opts.anchor2World, ax);
+            const t1 = v3Dot(anchors.anchor1World, ax);
+            const t2 = v3Dot(anchors.anchor2World, ax);
 
-            const y1 = v3Dot(opts.anchor1World, ay);
-            const y2 = v3Dot(opts.anchor2World, ay);
+            const y1 = v3Dot(anchors.anchor1World, ay);
+            const y2 = v3Dot(anchors.anchor2World, ay);
             const yMid = (y1 + y2) * 0.5;
 
-            const z1 = v3Dot(opts.anchor1World, az);
-            const z2 = v3Dot(opts.anchor2World, az);
+            const z1 = v3Dot(anchors.anchor1World, az);
+            const z2 = v3Dot(anchors.anchor2World, az);
             const zMid = (z1 + z2) * 0.5;
 
             const offsetDist = opts.offsetWorld && v3Len(opts.offsetWorld) > 1e-4
@@ -584,8 +754,8 @@ export function getRenderData(opts: {
             ay = v3Normalize(ay);
 
             const offsetDist = Math.max(v3Len(opts.offsetWorld), 25);
-            p1DimW = v3Add(opts.anchor1World, v3Scale(ay, offsetDist));
-            p2DimW = v3Add(opts.anchor2World, v3Scale(ay, offsetDist));
+            p1DimW = v3Add(anchors.anchor1World, v3Scale(ay, offsetDist));
+            p2DimW = v3Add(anchors.anchor2World, v3Scale(ay, offsetDist));
         }
 
         let fwdW = v3Sub(p2DimW, p1DimW);
@@ -604,10 +774,10 @@ export function getRenderData(opts: {
         return {
             p1DimWorld: p1DimW,
             p2DimWorld: p2DimW,
-            p1AnchorWorld: v3Copy(opts.anchor1World),
-            p2AnchorWorld: v3Copy(opts.anchor2World),
-            p1BendWorld: v3Copy(opts.anchor1World),
-            p2BendWorld: v3Copy(opts.anchor2World),
+            p1AnchorWorld: v3Copy(opts.helperAnchor1World ?? anchors.anchor1World),
+            p2AnchorWorld: v3Copy(opts.helperAnchor2World ?? anchors.anchor2World),
+            p1BendWorld: v3Copy(opts.helperAnchor1World ?? anchors.anchor1World),
+            p2BendWorld: v3Copy(opts.helperAnchor2World ?? anchors.anchor2World),
             useBrokenP1: false,
             useBrokenP2: false,
             arrowsOutside: arrowResult.mode === ArrowMode.OUTSIDE,
@@ -650,14 +820,16 @@ export function getRenderData(opts: {
         textValue: labelText, fontSizeWorld, config: cfg,
     });
 
-    const p1BendW = solved.bend1World ?? v3Copy(opts.anchor1World);
-    const p2BendW = solved.bend2World ?? v3Copy(opts.anchor2World);
+    const p1AnchorW = v3Copy(opts.helperAnchor1World ?? opts.anchor1World);
+    const p2AnchorW = v3Copy(opts.helperAnchor2World ?? opts.anchor2World);
+    const p1BendW = solved.bend1World ?? p1AnchorW;
+    const p2BendW = solved.bend2World ?? p2AnchorW;
 
     return {
         p1DimWorld: p1DimW,
         p2DimWorld: p2DimW,
-        p1AnchorWorld: v3Copy(opts.anchor1World),
-        p2AnchorWorld: v3Copy(opts.anchor2World),
+        p1AnchorWorld: p1AnchorW,
+        p2AnchorWorld: p2AnchorW,
         p1BendWorld: p1BendW,
         p2BendWorld: p2BendW,
         useBrokenP1: solved.renderBrokenP1,

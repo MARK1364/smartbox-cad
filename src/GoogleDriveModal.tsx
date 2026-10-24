@@ -682,7 +682,7 @@ export const GoogleDriveModal: React.FC<GoogleDriveModalProps> = ({
                 </div>
                 1. {tx(srcTekst, 'gdrive.manual_1', TX_NS)}<br />
                 2. {tx(srcTekst, 'gdrive.manual_2', TX_NS)}<br />
-                3. {tx(srcTekst, 'gdrive.manual_3', TX_NS)} <strong>SmartPanel CAD Projects</strong> {tx(srcTekst, 'gdrive.manual_3_tail', TX_NS)}
+                3. {tx(srcTekst, 'gdrive.manual_3', TX_NS)} <strong>Crevo CAD Projects</strong> {tx(srcTekst, 'gdrive.manual_3_tail', TX_NS)}
               </div>
             </div>
           )}

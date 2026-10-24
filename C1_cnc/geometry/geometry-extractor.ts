@@ -4,7 +4,7 @@
  * Ekstrakcja cech CAM (otwory, wpusty, kontury) z obiektu PanelModel lub sceny 3D.
  */
 
-import { HoleFeature, GrooveFeature, ContourFeature, CAMFeature, CAMData, Vector3D } from '../dto/cam-dto.js';
+import { HoleFeature, GrooveFeature, ContourFeature, PocketFeature, CAMFeature, CAMData, Vector3D } from '../dto/cam-dto.js';
 import { createVector3D, vecAdd, vecScale } from './cnc-geometry-utils.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
 import { getGrooveParamsMm } from '../../A1_core/groove-params.js';
@@ -33,7 +33,7 @@ export class GeometryDataExtractor {
      * @param panel - Instancja PanelModel lub generyczny obiekt z właściwościami panelu
      * @param wcsManager - opcjonalna instancja WcsManager do przeliczenia na współrzędne bazy obróbczej
      */
-    public extractPanelFeatures(panel: any, wcsManager?: any, filterType?: 'hole' | 'groove' | 'contour' | null): CAMData {
+    public extractPanelFeatures(panel: any, wcsManager?: any, filterType?: 'hole' | 'groove' | 'contour' | 'pocket' | null): CAMData {
         const features: CAMFeature[] = [];
 
         if (!panel || panel.frozen === true || panel.params?.frozen === true) {
@@ -77,7 +77,8 @@ export class GeometryDataExtractor {
                 const t = (feat.type || '').toLowerCase();
                 if (filterType === 'hole'    && t !== 'hole' && t !== 'drill')                continue;
                 if (filterType === 'groove'  && t !== 'groove' && t !== 'nut')               continue;
-                if (filterType === 'contour' && t !== 'contour' && t !== 'profile')          continue;
+                if (filterType === 'contour' && t !== 'contour' && t !== 'profile' && t !== 'cutout') continue;
+                if (filterType === 'pocket'  && t !== 'pocket')                              continue;
             }
 
             let faceName = feat.face;
@@ -169,19 +170,21 @@ export class GeometryDataExtractor {
                         existingGroup.positions = [existingGroup.position];
                     }
                     existingGroup.positions.push(pos);
-                    if (!existingGroup.panelPositions) {
-                        existingGroup.panelPositions = existingGroup.positions.map(p => ({ ...p }));
-                    } else {
-                        existingGroup.panelPositions.push({ ...pos });
-                    }
+                    existingGroup.positions.sort((a, b) => (a.x !== b.x ? a.x - b.x : (a.y !== b.y ? a.y - b.y : a.z - b.z)));
+                    existingGroup.panelPositions = existingGroup.positions.map(p => ({ ...p }));
                     existingGroup.holeCount = existingGroup.positions.length;
                     if (feat.id && existingGroup.childFeatureIds) {
                         existingGroup.childFeatureIds.push(feat.id);
+                        existingGroup.childFeatureIds.sort();
                     }
                     existingGroup.name = `${holeLabel} (${existingGroup.holeCount}×)`;
+                    const pFirst = existingGroup.positions[0];
+                    const pLast = existingGroup.positions[existingGroup.positions.length - 1];
+                    existingGroup.featureId = `hole_grp_${diameter}_${depth}_${faceKey || 'na'}_${Math.round(pFirst.x * 10)}_${Math.round(pFirst.y * 10)}_${Math.round(pLast.x * 10)}_${Math.round(pLast.y * 10)}`;
                 } else {
+                    const detHoleKey = `${diameter}_${depth}_${faceKey || 'na'}_${Math.round(pos.x * 10)}_${Math.round(pos.y * 10)}_${Math.round(pos.z * 10)}`;
                     features.push({
-                        featureId: `hole_grp_${diameter}_${depth}_${faceKey || 'na'}_${feat.id || Math.random().toString(36).substring(2, 7)}`,
+                        featureId: `hole_grp_${detHoleKey}`,
                         name: holeLabel,
                         objectName: panelName,
                         diameter,
@@ -193,12 +196,138 @@ export class GeometryDataExtractor {
                         holeCount: 1,
                         childFeatureIds: feat.id ? [feat.id] : [],
                         axis,
+                        panelAxis: axis ? { ...axis } : null,
                         face: faceKey,
                         through: through || undefined,
                         retractR: Number(params.retractR || 5.0),
                         toolId: feat.toolId || null
                     } as HoleFeature);
                 }
+
+            } else if (feat.type === 'pocket') {
+                const gp = getGrooveParamsMm(params);
+                const w = gp.width || Number(params.width || 0);
+                const l = gp.length || Number(params.length || params.height || 0);
+                const depth = Number(params.depth ?? gp.depth ?? 3);
+                const u = gp.u;
+                const v = gp.v;
+
+                let boundaryPoints: Vector3D[] = [];
+                if (faceData) {
+                    const p0: Vector3D = {
+                        x: faceData.origin[0] + u * faceData.uAxis[0] + v * faceData.vAxis[0],
+                        y: faceData.origin[1] + u * faceData.uAxis[1] + v * faceData.vAxis[1],
+                        z: faceData.origin[2] + u * faceData.uAxis[2] + v * faceData.vAxis[2]
+                    };
+                    const p1: Vector3D = {
+                        x: faceData.origin[0] + (u + w) * faceData.uAxis[0] + v * faceData.vAxis[0],
+                        y: faceData.origin[1] + (u + w) * faceData.uAxis[1] + v * faceData.vAxis[1],
+                        z: faceData.origin[2] + (u + w) * faceData.uAxis[2] + v * faceData.vAxis[2]
+                    };
+                    const p2: Vector3D = {
+                        x: faceData.origin[0] + (u + w) * faceData.uAxis[0] + (v + l) * faceData.vAxis[0],
+                        y: faceData.origin[1] + (u + w) * faceData.uAxis[1] + (v + l) * faceData.vAxis[1],
+                        z: faceData.origin[2] + (u + w) * faceData.uAxis[2] + (v + l) * faceData.vAxis[2]
+                    };
+                    const p3: Vector3D = {
+                        x: faceData.origin[0] + u * faceData.uAxis[0] + (v + l) * faceData.vAxis[0],
+                        y: faceData.origin[1] + u * faceData.uAxis[1] + (v + l) * faceData.vAxis[1],
+                        z: faceData.origin[2] + u * faceData.uAxis[2] + (v + l) * faceData.vAxis[2]
+                    };
+                    boundaryPoints = [p0, p1, p2, p3];
+                } else {
+                    boundaryPoints = [
+                        { x: u, y: v, z: 0 },
+                        { x: u + w, y: v, z: 0 },
+                        { x: u + w, y: v + l, z: 0 },
+                        { x: u, y: v + l, z: 0 }
+                    ];
+                }
+
+                const faceNormal: Vector3D = faceData
+                    ? { x: faceData.normal[0], y: faceData.normal[1], z: faceData.normal[2] }
+                    : { x: 0, y: 0, z: 1 };
+
+                const pocketLabel = feat.name ?? params?.name;
+                const detPocketKey = `${faceName || 'na'}_${Math.round(u * 10)}_${Math.round(v * 10)}_${Math.round(w * 10)}_${Math.round(l * 10)}`;
+                features.push({
+                    featureId: feat.id ? `pocket_${feat.id}` : `pocket_${detPocketKey}`,
+                    name: pocketLabel || tx(cncTekst, 'extractor.pocket_label', TX_NS, { n: features.length + 1 }),
+                    objectName: panelName,
+                    face: faceName || 'FACE_Z_PLUS',
+                    width: w,
+                    length: l,
+                    depth,
+                    boundaryPoints,
+                    panelBoundaryPoints: boundaryPoints.map(p => ({ ...p })),
+                    normal: faceNormal,
+                    panelNormal: { ...faceNormal },
+                    toolId: feat.toolId || null
+                } as PocketFeature);
+
+            } else if (feat.type === 'cutout') {
+                const gp = getGrooveParamsMm(params);
+                const w = gp.width || Number(params.width || 0);
+                const l = gp.length || Number(params.length || params.height || 0);
+                const u = gp.u;
+                const v = gp.v;
+                let points: Vector3D[] = [];
+                let depth: number;
+                if (faceData) {
+                    const p0: Vector3D = {
+                        x: faceData.origin[0] + u * faceData.uAxis[0] + v * faceData.vAxis[0],
+                        y: faceData.origin[1] + u * faceData.uAxis[1] + v * faceData.vAxis[1],
+                        z: faceData.origin[2] + u * faceData.uAxis[2] + v * faceData.vAxis[2]
+                    };
+                    const p1: Vector3D = {
+                        x: faceData.origin[0] + (u + w) * faceData.uAxis[0] + v * faceData.vAxis[0],
+                        y: faceData.origin[1] + (u + w) * faceData.uAxis[1] + v * faceData.vAxis[1],
+                        z: faceData.origin[2] + (u + w) * faceData.uAxis[2] + v * faceData.vAxis[2]
+                    };
+                    const p2: Vector3D = {
+                        x: faceData.origin[0] + (u + w) * faceData.uAxis[0] + (v + l) * faceData.vAxis[0],
+                        y: faceData.origin[1] + (u + w) * faceData.uAxis[1] + (v + l) * faceData.vAxis[1],
+                        z: faceData.origin[2] + (u + w) * faceData.uAxis[2] + (v + l) * faceData.vAxis[2]
+                    };
+                    const p3: Vector3D = {
+                        x: faceData.origin[0] + u * faceData.uAxis[0] + (v + l) * faceData.vAxis[0],
+                        y: faceData.origin[1] + u * faceData.uAxis[1] + (v + l) * faceData.vAxis[1],
+                        z: faceData.origin[2] + u * faceData.uAxis[2] + (v + l) * faceData.vAxis[2]
+                    };
+                    points = [p0, p1, p2, p3, { ...p0 }];
+                    // Bezwzględna docelowa wysokość Z dla frezowania przelotowego (przeciwległa powierzchnia formatki)
+                    const nz = faceData.normal ? faceData.normal[2] : 1;
+                    depth = p0.z - nz * pT;
+                } else {
+                    points = [
+                        { x: u, y: v, z: 0 },
+                        { x: u + w, y: v, z: 0 },
+                        { x: u + w, y: v + l, z: 0 },
+                        { x: u, y: v + l, z: 0 },
+                        { x: u, y: v, z: 0 }
+                    ];
+                    depth = -pT;
+                }
+
+                const cutoutLabel = feat.name ?? params?.name;
+                const detCutoutKey = `${faceName || 'na'}_${Math.round(u * 10)}_${Math.round(v * 10)}_${Math.round(w * 10)}_${Math.round(l * 10)}`;
+                const faceNormal: Vector3D = faceData
+                    ? { x: faceData.normal[0], y: faceData.normal[1], z: faceData.normal[2] }
+                    : { x: 0, y: 0, z: 1 };
+                features.push({
+                    featureId: feat.id ? `cutout_${feat.id}` : `cutout_${detCutoutKey}`,
+                    name: cutoutLabel || tx(cncTekst, 'extractor.cutout_label', TX_NS, { n: features.length + 1 }),
+                    objectName: panelName,
+                    depth,
+                    panelDepth: depth,
+                    points,
+                    panelPoints: points.map(p => ({ ...p })),
+                    normal: faceNormal,
+                    panelNormal: { ...faceNormal },
+                    compensation: 'Right',
+                    isInnerContour: true,
+                    toolId: feat.toolId || null
+                } as ContourFeature);
 
             } else if (feat.type === 'groove' || feat.type === 'GROOVE' || feat.type === 'nut') {
                 const gp = getGrooveParamsMm(params);
@@ -256,9 +385,14 @@ export class GeometryDataExtractor {
                     endPoint = { x: pW, y: 0, z: 0 };
                 }
 
+                const faceNormal: Vector3D = faceData
+                    ? { x: faceData.normal[0], y: faceData.normal[1], z: faceData.normal[2] }
+                    : { x: 0, y: 0, z: 1 };
+
                 const grooveLabel = feat.name ?? params?.name;
+                const detGrooveKey = `${faceName || 'na'}_${Math.round(startPoint.x * 10)}_${Math.round(startPoint.y * 10)}_${Math.round(startPoint.z * 10)}_${Math.round(endPoint.x * 10)}_${Math.round(endPoint.y * 10)}_${Math.round(endPoint.z * 10)}`;
                 features.push({
-                    featureId: `groove_${feat.id || Math.random().toString(36).substring(2, 9)}`,
+                    featureId: feat.id ? `groove_${feat.id}` : `groove_${detGrooveKey}`,
                     name: grooveLabel || tx(cncTekst, 'extractor.groove_label', TX_NS, { n: features.length + 1 }),
                     // Intencja z kodu źródłowego cechy CAD, nie z nazwy. Dwa odrębne systemy LED:
                     // BLOKI_LED = LED wewnętrzny (sync A2, led-internal-engine) — profil we wnętrzu szafki,
@@ -274,6 +408,8 @@ export class GeometryDataExtractor {
                     endPoint,
                     panelStartPoint: { ...startPoint },
                     panelEndPoint: { ...endPoint },
+                    normal: faceNormal,
+                    panelNormal: { ...faceNormal },
                     toolId: feat.toolId || null,
                     leadIn: 0,
                     leadOut: 0,
@@ -285,12 +421,14 @@ export class GeometryDataExtractor {
                 const points: Vector3D[] = (params.points || []).map((p: any) => ({ x: p.x || 0, y: p.y || 0, z: p.z || 0 }));
 
                 const contourLabel = feat.name ?? params?.name;
+                const detContourKey = `${Math.round(depth * 10)}_${points.map(p => `${Math.round(p.x * 10)}_${Math.round(p.y * 10)}`).join('_')}`;
                 features.push({
-                    featureId: `contour_${feat.id || Math.random().toString(36).substring(2, 9)}`,
+                    featureId: feat.id ? `contour_${feat.id}` : `contour_${detContourKey}`,
                     name: contourLabel || tx(cncTekst, 'extractor.contour_label', TX_NS, { n: features.length + 1 }),
                     objectName: panelName,
                     depth,
                     points,
+                    panelPoints: points.map(p => ({ ...p })),
                     toolId: feat.toolId || null
                 } as ContourFeature);
             }
@@ -307,9 +445,12 @@ export class GeometryDataExtractor {
                     if (!hf.panelPositions && hf.positions) {
                         hf.panelPositions = hf.positions.map(p => ({ ...p }));
                     }
+                    if (!hf.panelAxis && hf.axis) {
+                        hf.panelAxis = { ...hf.axis };
+                    }
                     f.position = wcsManager.toWcsCoordinates(f.position);
-                    if ('axis' in f && f.axis) {
-                        f.axis = wcsManager.transformVector(f.axis);
+                    if (hf.panelAxis) {
+                        f.axis = wcsManager.transformVector(hf.panelAxis);
                     }
                     if (hf.positions && Array.isArray(hf.positions)) {
                         hf.positions = hf.positions.map(p => wcsManager.toWcsCoordinates(p));
@@ -319,11 +460,48 @@ export class GeometryDataExtractor {
                     const gf = f as GrooveFeature;
                     if (!gf.panelStartPoint) gf.panelStartPoint = { ...gf.startPoint };
                     if (!gf.panelEndPoint) gf.panelEndPoint = { ...gf.endPoint };
+                    if (!gf.panelNormal && gf.normal) gf.panelNormal = { ...gf.normal };
                     f.startPoint = wcsManager.toWcsCoordinates(f.startPoint);
                     f.endPoint = wcsManager.toWcsCoordinates(f.endPoint);
+                    if (gf.panelNormal) {
+                        gf.normal = wcsManager.transformVector(gf.panelNormal);
+                    }
                 }
                 if ('points' in f && Array.isArray(f.points)) {
-                    f.points = f.points.map((p: any) => wcsManager.toWcsCoordinates(p));
+                    const cf = f as ContourFeature;
+                    if (!cf.panelPoints) {
+                        cf.panelPoints = cf.points.map((p: any) => ({ ...p }));
+                    }
+                    if (cf.panelDepth === undefined && typeof cf.depth === 'number') {
+                        cf.panelDepth = cf.depth;
+                    }
+                    if (!cf.panelNormal && cf.normal) {
+                        cf.panelNormal = { ...cf.normal };
+                    }
+                    f.points = cf.panelPoints.map((p: any) => wcsManager.toWcsCoordinates(p));
+                    if (typeof cf.panelDepth === 'number' && cf.panelPoints.length > 0) {
+                        const pTargetLocal = { x: cf.panelPoints[0].x, y: cf.panelPoints[0].y, z: cf.panelDepth };
+                        const pTargetWcs = wcsManager.toWcsCoordinates(pTargetLocal);
+                        cf.depth = pTargetWcs.z;
+                    }
+                    if (cf.panelNormal) {
+                        cf.normal = typeof wcsManager.transformVector === 'function'
+                            ? wcsManager.transformVector(cf.panelNormal)
+                            : { ...cf.panelNormal };
+                    }
+                }
+                if ('boundaryPoints' in f && Array.isArray((f as any).boundaryPoints)) {
+                    const pf = f as PocketFeature;
+                    if (!pf.panelBoundaryPoints) {
+                        pf.panelBoundaryPoints = pf.boundaryPoints.map((p: any) => ({ ...p }));
+                    }
+                    if (!pf.panelNormal && pf.normal) pf.panelNormal = { ...pf.normal };
+                    pf.boundaryPoints = pf.panelBoundaryPoints.map((p: any) => wcsManager.toWcsCoordinates(p));
+                    if (pf.panelNormal) {
+                        pf.normal = typeof wcsManager.transformVector === 'function'
+                            ? wcsManager.transformVector(pf.panelNormal)
+                            : { ...pf.panelNormal };
+                    }
                 }
             }
         }
@@ -331,7 +509,7 @@ export class GeometryDataExtractor {
         return {
             objectName: panelName,
             features,
-            wcsOffset: wcsManager ? wcsManager.getOrigin() : createVector3D(),
+            wcsOffset: (wcsManager && typeof wcsManager.getOrigin === 'function') ? wcsManager.getOrigin() : createVector3D(),
             isDirty: false
         };
     }

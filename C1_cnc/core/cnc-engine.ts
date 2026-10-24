@@ -224,6 +224,8 @@ export class CNCEngine {
                 features: activeProg.features || [],
                 toolAssignments: activeProg.toolAssignments || {},
                 postprocessor: activeProg.postprocessor || 'Mach3',
+                strategyId: activeProg.strategyId,
+                strategyParams: activeProg.strategyParams,
                 workpieceDimensions: dims
             });
             this.visualizer.renderToolpaths(operations, this.wcsManager, targetViewRoot);
@@ -282,6 +284,8 @@ export class CNCEngine {
             features: prog.features,
             toolAssignments: prog.toolAssignments || {},
             postprocessor: prog.postprocessor || 'Mach3',
+            strategyId: prog.strategyId,
+            strategyParams: prog.strategyParams,
             workpieceDimensions: dims
         });
 

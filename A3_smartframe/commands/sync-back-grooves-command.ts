@@ -41,6 +41,10 @@ export class SyncBackGroovesCommand implements Command {
                 const state: PanelState = {
                     id: childNode.id,
                     role: child.role,
+                    key: child.key || childNode.name,
+                    name: childNode.name || child.name,
+                    isCornerNailer: Boolean(child.custom_properties?.corner_nailer || child.corner_nailer),
+                    customProperties: child.custom_properties,
                     dim_nm: { x: child.width, y: child.height, z: child.thickness },
                     localMatrix: childNode.localMatrix,
                     zonePrefix: child.zonePrefix,

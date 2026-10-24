@@ -23,6 +23,43 @@ W całym systemie Bloki obowiązuje ścisły podział jednostek:
 
 ---
 
+## Standard Tworzenia Otworów i Nawierceń (Machining Intent SSOT)
+
+Wszystkie operacje otworów obróbczych (`Feature` typu `HOLE`) na formatkach muszą być tworzone przy użyciu helpera `buildHoleMachiningIntent(opts)` z `01_machining-intent.ts`. Obowiązuje bezwzględny zakaz wstawiania surowych literałów `features.push({ ... })`.
+
+### 1. Otwory Frontowe (Drzwi, Klapy, Drzwi Skośne, Drzwi Narożne)
+- **Reguła**: `rule: 'cup'` dla puszki zawiasu, `rule: 'screw'` dla wkrętów montażowych puszki.
+- **Asocjacja**: `drivenBy: { nodeId: hingeKey, role: 'HARDWARE' }` powiązane z węzłem okucia.
+- **Metadane**: przekazywane przez `extraParams`, np. `{ isDoorCup: true, isCup: true, side: 'INTERIOR' }`.
+- **Ważne (Brak `ownerTag`)**: Otwory frontowe **NIE MOGĄ** mieć `ownerTag: 'isDoorDrilling'` ani `'isFlapDrilling'`, ponieważ ten tag służy poleceniom synchronizatora korpusu (`SyncDoorDrillingsCommand`) do czyszczenia tymczasowych otworów boków.
+
+```typescript
+buildHoleMachiningIntent({
+    face: 'FACE_BACK',
+    u_mm: holeX_mm,
+    v_mm: holeY_mm,
+    diameter_mm: hole.diameter_mm,
+    depth_mm: hole.depth_mm,
+    rule: hole.isCup ? 'cup' : 'screw',
+    drivenBy: { nodeId: hingeKey, role: 'HARDWARE' },
+    sourcePartId: hingeKey,
+    extraParams: {
+        isDoorCup: hole.isCup,
+        isDoorScrew: !hole.isCup,
+        isCup: hole.isCup,
+        isScrew: !hole.isCup,
+        side: 'INTERIOR'
+    }
+});
+```
+
+### 2. Otwory Korpusu (Boki, Wieniec, Półki)
+- **Prowadniki zawiasów / siłowników**: generowane z `ownerTag: 'isDoorDrilling'` lub `ownerTag: 'isFlapDrilling'`.
+- **Podpórki półek**: generowane z `ownerTag: 'isShelfDrilling'`.
+- Umożliwia to asocjację i bezpieczne ponowne przeliczanie/czyszczenie automatów korpusu bez naruszania frontów.
+
+---
+
 ## 1. Moduł: DRZWI (`blok_doors`)
 
 Pliki: [doors-engine.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/05_doors-engine.ts), [doors-adapter.tsx](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/05_doors-adapter.tsx), [doors-drilling-builder.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/05_doors-drilling-builder.ts)

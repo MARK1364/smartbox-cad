@@ -16,6 +16,34 @@ export interface UserProfile {
   createdAt: string;
 }
 
+/**
+ * Zawartość licencji (bez podpisu). To jest część podpisywana kluczem
+ * prywatnym wydawcy; aplikacja weryfikuje ją wbudowanym kluczem publicznym.
+ */
+export interface LicensePayload {
+  /** Unikalny identyfikator licencji (do watermarku / wykrywania wycieków). */
+  licenseId: string;
+  email: string;
+  fullName?: string;
+  tier: SubscriptionTier;
+  /** ISO Date — data wystawienia. */
+  issuedAt: string;
+  /** ISO Date lub null (licencja bezterminowa). */
+  expiresAt: string | null;
+  /** Opcjonalne nadpisanie uprawnień (feature keys). */
+  features?: string[];
+}
+
+/**
+ * Plik licencji `.lic` — payload + podpis Ed25519 (base64url).
+ * Podpis liczony jest po kanonicznej formie payloadu (licz.
+ * `canonicalizeLicensePayload`), więc kolejność pól w pliku nie ma znaczenia.
+ */
+export interface LicenseFile extends LicensePayload {
+  sig: string;
+  alg?: 'Ed25519';
+}
+
 export interface SaaSProjectMetadata {
   id: string;
   userId: string;

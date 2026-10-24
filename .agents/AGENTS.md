@@ -47,6 +47,16 @@ Przeliczniki: `1 mm = 1_000_000 nm`, `1 m = 1_000_000_000 nm`.
 - **Funkcyjny Rdzeń (Functional Core)**: Moduły operują na czystych funkcjach `normalize{Mod}Params(raw, dims)` oraz `calculate{Mod}Plan(dims, params)`. Klasy `*Engine` pełnią wyłącznie rolę cienkich adapterów.
 - **Jawne jednostki fizyczne w zmiennych**: Wszystkie zmienne i DTO wewnątrz silników MUSZĄ posiadać sufiksy jednostek (np. `grubosc_polki_mm`, `odsuniecie_przod_mm`, `liczba_polek`, `szczelina_mm`).
 - **SSOT Parametrów**: Pełna dokumentacja parametrów modułów znajduje się w [`A2_bloki/01_BLOKI_PARAMETERS.md`](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/A2_bloki/01_BLOKI_PARAMETERS.md).
+- **Unifikacja Cech Obróbczych (Machining Intent SSOT)**:
+  Wszystkie otwory obróbcze na płytach i frontach (korpus, półki, drzwi, klapy) MUSZĄ być tworzone wyłącznie przez `buildHoleMachiningIntent(opts)` z `A2_bloki/01_machining-intent.ts`.
+  - **Twardy zakaz**: NIE tworzyć manualnych literałów `features.push({ ... })` ani ad-hoc struktur cech otworów.
+  - **Otwory frontowe (drzwi standardowe, skośne, narożne, klapy)**:
+    - Otwory puszki zawiasu: `rule: 'cup'`. Otwory wkrętów montażowych puszki: `rule: 'screw'`.
+    - Asocjacja sprzętowa: `drivenBy: { nodeId: hingeKey, role: 'HARDWARE' }` (wskazuje węzeł zawiasu/podnośnika).
+    - Metadane i flagi domenowe przekazywać w `extraParams` (np. `{ isDoorCup: true, isCup: true, side: 'INTERIOR' }`).
+    - **Twardy zakaz używania `ownerTag` dla otworów frontowych**: NIE nadawać `ownerTag: 'isDoorDrilling'` ani `'isFlapDrilling'` otworom frontu! Tag ten oznacza otwory korpusu czyszczone dynamicznie przez `SyncDoorDrillingsCommand` / `SyncFlapDrillingsCommand`. Otwory na froncie są integralną częścią bryły frontu i nie mogą być usuwane przez synchronizator korpusu.
+  - **Otwory korpusu (prowadniki, podpórki)**:
+    - Zawsze posiadać właściwy `ownerTag` (`'isDoorDrilling'`, `'isFlapDrilling'`, `'isShelfDrilling'`), `targetNodeId` formatki oraz `drivenBy` wskazujący okucie. Umożliwia to bezpieczną synchronizację i deduplikację otworów korpusu.
 
 ## Procedura Tworzenia Nowych Bloków / Okuć (SmartParts / Studio Workflow)
 
@@ -124,6 +134,19 @@ Logika NIGDY nie czyta stringów wyświetlanych. Obowiązuje trójpodział (+ in
 - Routing obróbki TYLKO przez `resolveProcessingPath()` (`A7_material/material-processing.ts`): `SAW_CNC` (płyty), `GLASS_SHOP` (szkło/lustra), `UPHOLSTERY` (pianki — nóż, brak obrzeża), `PURCHASE` (okucia), `UNRESOLVED` (jawny brak routingu, nie zgadywanie).
 - Kategorie materiału to kody (`BOARD`, `SOLID_WOOD`, `GLASS`, `MIRROR`, `FOAM`, `OTHER`). Wolny polski tekst `category` (`"Płyta Wiórowa"`) zostaje tylko w display (filtr UI, cennik); logika mapuje go raz na brzegu przez `mapLegacyCategoryName()`.
 
+## Taksonomia Cech Obróbczych Płytowych (`A1_core/project-schema.ts`)
+
+Wszystkie cechy geometryczne formatki podlegają ścisłemu podziałowi na 4 typy (`SUPPORTED_FEATURE_TYPES`):
+- `hole`: obróbka punktowa (wiercenie walcowe o średnicy $\varnothing$ i głębokości $Z$).
+- `groove`: liniowy wpust / rowek prowadzony wzdłuż ścieżki (automaty meblowe: nuta pod plecy, kanał LED).
+- `pocket`: wybranie materiału / kieszeń / ramka z dnem (obszar 2D o głębokości $< T$, frezowanie z dnem).
+- `cutout`: wycięcie przelotowe / ramiak witryny na wylot / rewizja pod rury (`through: true`, brak siatki dna).
+
+**Twarde reguły:**
+- Zakaz nazywania ramki, przetłoczenia i rewizji typem `groove`. Wpust `groove` jest wyłącznie wąską ścieżką liniową.
+- Ramka/przetłoczenie bez dna pod szybę witrynową (`through: true`, opcjonalnie `fill: 'glass'`) oraz rewizja MUSZĄ mieć typ `cutout`.
+- Silnik 3D (`cap-machining.ts`) dla `cutout` generuje otwór przelotowy bez siatki dna (`feature_${id}_bottom`), natomiast dla `pocket` generuje dno wgłębienia.
+
 ## Dokumentacja jako kontrakt — reguły MUSZĄ być egzekwowane automatycznie
 
 Zasada zapisana w tym pliku **bez automatycznego sprawdzenia jest prośbą, nie regułą**.
@@ -195,3 +218,8 @@ za ciche obejście reguły.
 - Adaptery: zero polskich stringów w JSX — tylko `tx(tekst, 'klucz', NS)` z `T1_tlumaczenia/core.ts` (fallback aktywny → en → pl) + `useLocale()` z `T1_tlumaczenia/react.tsx`. Placeholdery: `tx(d, 'section.label_template', NS, { n: 3 })`.
 - Nazwy techniczne nodów (`Polka_1`, `Drazek_fi25`), klucze parametrów (`shelfCount`), role, `report_type` — NIETŁUMACZONE, stabilne we wszystkich językach.
 - Niemieckie (`de`) szkice oznacza autor do weryfikacji; cyrylica (`ru/bg/uk`) później jako dopisane klucze — bez zmian kodu.
+
+## Szybka Nawigacja i Cykl Pracy (Fast Feedback Loop)
+- **SSOT Mapy Architektury**: Przed przeszukiwaniem repozytorium zajrzyj do [`docs/ARCHITECTURE_GRAPH.md`](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/docs/ARCHITECTURE_GRAPH.md) — zawiera diagramy przepływu danych i tabelę szybkiego namierzania plików dla szafek, bloków, paneli i CNC.
+- **Zakaz pełnego `npm run verify` przy drobnych zmianach**: W trakcie pracy odpalaj wyłącznie testy powiązane (`npx vitest related --run <plik>` lub `npx vitest run <plik.test.ts>`) oraz szybką kompilację (`npm run typecheck` z `incremental: true`).
+- Pełną bramkę `npm run verify` uruchamiaj wyłącznie po zatwierdzeniu przez użytkownika lub na sam koniec dużego zadania.

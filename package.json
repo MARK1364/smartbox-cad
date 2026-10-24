@@ -1,5 +1,5 @@
 {
-  "name": "smartpanel-web",
+  "name": "crevo",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,8 @@
     "build": "npm run typecheck && vite build --outDir docs",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "repo-map": "node scripts/generate-repo-map.mjs"
   },
   "dependencies": {
     "@types/earcut": "^3.0.0",

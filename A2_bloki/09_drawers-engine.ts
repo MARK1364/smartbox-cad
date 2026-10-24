@@ -23,6 +23,7 @@ import {
     assertCanonicalDrawersParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { buildHoleMachiningIntent } from './01_machining-intent.js';
 
 export { assertCanonicalDrawersParams, LEGACY_DRAWERS_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -352,20 +353,25 @@ function buildFrontHoles(slot: DrawerSlot, frontW: number, frontH: number): any[
         if (v < dia / 2 || v > frontH - dia / 2) return;
         for (const side of ['L', 'R'] as const) {
             const u = side === 'L' ? xOff : (frontW - xOff);
-            features.push({
+            const railNodeId = `drawer_${slot.index}_rail_${side}`;
+            const intent = buildHoleMachiningIntent({
                 id: `drawer_${slot.index}_front_${side}_${zIdx}`,
-                type: 'hole',
+                name: `Otwór montażowy szuflady ${slot.index + 1} (${side})`,
                 face: 'FACE_Z_PLUS',
-                side: 'FACE_Z_PLUS',
-                params: {
+                u_mm: u,
+                v_mm: v,
+                diameter_mm: dia,
+                depth_mm: depth,
+                rule: 'screw',
+                drivenBy: { nodeId: railNodeId, role: 'HARDWARE', hardwareType: 'RAIL' },
+                sourcePartId: railNodeId,
+                generatedBy: 'blok_drawers',
+                extraParams: {
                     template_id: drill.id || 'STANDARD_DRAWER_DRILL',
-                    u,
-                    v,
-                    diameter: dia,
-                    depth,
                     isDrawerFrontHole: true
                 }
             });
+            features.push(intent.feature);
         }
     });
 

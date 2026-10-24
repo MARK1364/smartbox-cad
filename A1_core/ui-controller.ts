@@ -46,7 +46,7 @@ export class UIController {
         statusText: string;
         statusBarActive: boolean;
         /** Wizualny wariant paska statusu — logika czyta TYLKO to, nigdy statusText. */
-        statusKind: 'info' | 'error';
+        statusKind: 'info' | 'error' | 'warning';
         consoleText: string;
         faceInfoHtml: string;
         /** Strukturalny rodzaj selekcji — logika czyta TYLKO to, nigdy faceInfoHtml. */
@@ -152,7 +152,7 @@ export class UIController {
         }
     }
 
-    setStatus(text: string, active = false, kind: 'info' | 'error' = 'info') {
+    setStatus(text: string, active = false, kind: 'info' | 'error' | 'warning' = 'info') {
         this.state.statusText = text;
         this.state.statusBarActive = active;
         this.state.statusKind = kind;

@@ -29,6 +29,7 @@ export interface OperationApplyOverrides {
     fill?: 'none' | 'glass';
     widthMm?: number;
     heightMm?: number;
+    insets?: Partial<OperationInsetsMm>;
     uMm?: number;
     vMm?: number;
     uEdge?: FaceName;
@@ -79,6 +80,9 @@ export function recipeWithOverrides(
     } else {
         const existingInsets = p.insets;
         if (existingInsets) next.insets = { ...next.insets, ...existingInsets };
+        if (overrides?.insets) {
+            next.insets = { ...next.insets, ...overrides.insets };
+        }
         if (overrides?.frameMm != null && Number.isFinite(overrides.frameMm)) {
             next.insets = uniformInsetsMm(overrides.frameMm);
         } else {
@@ -123,6 +127,11 @@ export function recipeWithOverrides(
 
     if (next.through) {
         next.kind = 'THROUGH';
+        if (overrides?.depthMm != null && Number.isFinite(overrides.depthMm)) {
+            next.depthMm = Math.max(MIN_POCKET_MM, overrides.depthMm);
+        } else if (Number.isFinite(p.depth)) {
+            next.depthMm = Number(p.depth);
+        }
     } else if (overrides?.depthMm != null && Number.isFinite(overrides.depthMm)) {
         next.depthMm = Math.max(MIN_POCKET_MM, overrides.depthMm);
         next.kind = 'POCKET';
@@ -189,9 +198,12 @@ export function buildOperationFeature(
     if (!rect) return null;
     const depth = resolveOperationDepthMm(recipe, panel);
 
+    const isThrough = Boolean(recipe.through || recipe.kind === 'THROUGH');
+    const featureType: 'pocket' | 'cutout' = isThrough ? 'cutout' : 'pocket';
+
     return {
         id: existingId || operationFeatureId(recipe.id, faceName),
-        type: 'groove',
+        type: featureType,
         name: recipe.name,
         face: faceName,
         params: {

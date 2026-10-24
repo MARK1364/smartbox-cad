@@ -19,8 +19,8 @@
       { "name": "Wkret_2", "dia": 3, "depth": 10, "edge_dist": 31, "y_offset": -22.5, "object": "Cylinder" }
     ],
     "corpus_holes": [
-      { "name": "Prowadnik_otw_G", "dia": 5, "depth": 12, "front_dist": 37, "z_offset": 16, "object": "Cylinder" },
-      { "name": "Prowadnik_otw_D", "dia": 5, "depth": 12, "front_dist": 37, "z_offset": -16, "object": "Cylinder" }
+      { "name": "Prowadnik_otw_G", "dia": 3, "depth": 12, "front_dist": 37, "z_offset": 16, "object": "Cylinder" },
+      { "name": "Prowadnik_otw_D", "dia": 3, "depth": 12, "front_dist": 37, "z_offset": -16, "object": "Cylinder" }
     ]
   },
   "visual": {

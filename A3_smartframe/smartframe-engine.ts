@@ -113,6 +113,10 @@ export function normalizeCabinetParams(
         glebokosc_boku_prawego_mm: raw.glebokosc_boku_prawego_mm !== undefined
             ? Number(raw.glebokosc_boku_prawego_mm)
             : undefined,
+        szerokosc_listwy_naroznej_mm: raw.szerokosc_listwy_naroznej_mm !== undefined
+            ? Number(raw.szerokosc_listwy_naroznej_mm)
+            : undefined,
+        typ_listwy_naroznej: raw.typ_listwy_naroznej === 'KATOWA_90' ? 'KATOWA_90' : 'POJEDYNCZA',
         wysokosc_przod_mm: raw.wysokosc_przod_mm !== undefined ? Number(raw.wysokosc_przod_mm) : undefined,
         wysokosc_tyl_mm: raw.wysokosc_tyl_mm !== undefined ? Number(raw.wysokosc_tyl_mm) : undefined,
         wysokosc_lewy_mm: raw.wysokosc_lewy_mm !== undefined ? Number(raw.wysokosc_lewy_mm) : undefined,
@@ -201,6 +205,8 @@ export function calculateRogowy90CabinetPlan(
         glebokosc_mm: dims.glebokosc_mm,
         glebokosc_boku_lewego_mm: params.glebokosc_boku_lewego_mm,
         glebokosc_boku_prawego_mm: params.glebokosc_boku_prawego_mm,
+        szerokosc_listwy_naroznej_mm: params.szerokosc_listwy_naroznej_mm,
+        typ_listwy_naroznej: params.typ_listwy_naroznej,
         liczba_stref: 1,
         typ_korpusu: 'korpus_rogowy90'
     };

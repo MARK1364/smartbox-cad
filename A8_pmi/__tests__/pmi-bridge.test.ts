@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getRenderData, resolveMeasureAxis, computeAvailableMeasureAxes } from '../pmi-bridge.js';
+import { getRenderData, resolveMeasureAxis, computeAvailableMeasureAxes, solveDimensionBridge, isOffsetAxisAllowedAlgebraic } from '../pmi-bridge.js';
 import { ArrowMode, solveArrowPlacement, v3, v3Len } from '../dimension-solver.js';
 
 /**
@@ -85,6 +85,21 @@ describe('resolveMeasureAxis', () => {
         expect(result?.lengthMM).toBeCloseTo(500, 6); // sqrt(300^2 + 400^2)
     });
 
+    it('ALIGNED nadal mierzy rzut na płaszczyznę ściany, mimo flagi isPlane', () => {
+        const result = resolveMeasureAxis({
+            ...globalOpts,
+            axisSpace: 'ALIGNED',
+            measureAxisKey: 'X',
+            anchor1World: v3(0, 0, 0),
+            anchor2World: v3(300, 400, 500),
+            faceNormal1World: v3(0, 0, 1),
+            isPlane1: true,
+        });
+
+        expect(result?.measureAxisKey).toBe('ALIGNED');
+        expect(result?.lengthMM).toBeCloseTo(500, 6);
+    });
+
     it('AUTO w LOCAL wybiera oś formatki, nie globalną', () => {
         const rotatedZ90 = [
             0, 1, 0, 0,
@@ -153,6 +168,93 @@ describe('resolveMeasureAxis', () => {
         expect(result?.lengthMM).toBeCloseTo(2000, 6);
     });
 
+    it('dla ściany mierzy wzdłuż jej normalnej, a nie od punktu kliknięcia', () => {
+        // Plecy: normalna CAD Y (Babylon Z). Wcięcie L: punkt o stałej głębokości.
+        // Rzut odcinka na X jest duży, ale ściana nie ma wyróżnionego X.
+        const backNormal = v3(0, 0, 1);
+        const notch = v3(300, 0, 700);
+
+        for (const clickX of [10, 700]) {
+            const result = resolveMeasureAxis({
+                ...globalOpts,
+                measureAxisKey: 'AUTO',
+                anchor1World: v3(clickX, 0, 500),
+                anchor2World: notch,
+                faceNormal1World: backNormal,
+                isPlane1: true,
+            });
+
+            expect(result?.measureAxisKey).toBe('Y');
+            expect(result?.lengthMM).toBeCloseTo(200, 6);
+        }
+    });
+
+    it('kierunek odsunięcia nie zmienia osi pomiaru wyznaczonej przez ścianę', () => {
+        const backNormal = v3(0, 0, 1);
+
+        for (const offsetAxisKey of ['X', 'Y', 'Z']) {
+            const result = resolveMeasureAxis({
+                ...globalOpts,
+                measureAxisKey: 'AUTO',
+                offsetAxisKey,
+                anchor1World: v3(10, 0, 500),
+                anchor2World: v3(300, 0, 700),
+                faceNormal1World: backNormal,
+                isPlane1: true,
+            });
+
+            expect(result?.measureAxisKey).toBe('Y');
+            expect(result?.lengthMM).toBeCloseTo(200, 6);
+        }
+    });
+
+    it('wymuszona oś leżąca w płaszczyźnie ściany nie wraca do punktu kliknięcia', () => {
+        for (const measureAxisKey of ['X', 'Y', 'Z'] as const) {
+            const result = resolveMeasureAxis({
+                ...globalOpts,
+                measureAxisKey,
+                anchor1World: v3(10, 0, 500),
+                anchor2World: v3(300, 0, 700),
+                faceNormal1World: v3(0, 0, 1),
+                isPlane1: true,
+            });
+
+            expect(result?.measureAxisKey).toBe('Y');
+            expect(result?.lengthMM).toBeCloseTo(200, 6);
+        }
+    });
+
+    it('gdy ścianą jest drugi element, również używa jej normalnej', () => {
+        const result = resolveMeasureAxis({
+            ...globalOpts,
+            measureAxisKey: 'AUTO',
+            anchor1World: v3(300, 0, 700),
+            anchor2World: v3(10, 0, 500),
+            faceNormal2World: v3(0, 0, 1),
+            isPlane2: true,
+        });
+
+        expect(result?.measureAxisKey).toBe('Y');
+        expect(result?.lengthMM).toBeCloseTo(200, 6);
+    });
+
+    it('normalna krawędzi na ścianie nie przejmuje osi pomiaru', () => {
+        // faceNormalWorld jest też przekazywana dla krawędzi leżących na ścianie,
+        // ale tylko kotwica FACE (isPlane) ma narzucać normalną.
+        const result = resolveMeasureAxis({
+            ...globalOpts,
+            measureAxisKey: 'AUTO',
+            offsetAxisKey: 'Y',
+            anchor1World: v3(10, 0, 500),
+            anchor2World: v3(300, 0, 700),
+            faceNormal1World: v3(0, 0, 1),
+            isPlane1: false,
+        });
+
+        expect(result?.measureAxisKey).toBe('X');
+        expect(result?.lengthMM).toBeCloseTo(290, 6);
+    });
+
     it('zwraca null dla zdegenerowanego odcinka', () => {
         const result = resolveMeasureAxis({
             ...globalOpts,
@@ -166,6 +268,29 @@ describe('resolveMeasureAxis', () => {
 });
 
 describe('getRenderData', () => {
+    it('buduje podgląd rozstawu 964 mm między dwiema płaszczyznami mimo różnych punktów kliknięcia', () => {
+        const rd = getRenderData({
+            axisSpace: 'GLOBAL',
+            matrixWorld: null,
+            measureAxisKey: 'AUTO',
+            offsetAxisKey: 'Y',
+            offsetWorld: v3(0, 0, 80),
+            anchor1World: v3(-482, -180, -90),
+            anchor2World: v3(482, 210, 130),
+            helperAnchor1World: v3(-482, 210, 130),
+            helperAnchor2World: v3(482, 210, 130),
+            faceNormal1World: v3(-1, 0, 0),
+            faceNormal2World: v3(1, 0, 0),
+            isPlane1: true,
+            isPlane2: true,
+            labelText: '964 mm',
+        });
+
+        expect(rd).not.toBeNull();
+        expect(rd!.resolvedMeasureAxisKey).toBe('X');
+        expect(rd!.valueLength).toBeCloseTo(964, 6);
+    });
+
     const rotatedZ90 = [
         0, 1, 0, 0,
         -1, 0, 0, 0,
@@ -302,6 +427,61 @@ describe('getRenderData', () => {
         );
         expect(span).toBeCloseTo(1000, 1);
     });
+
+    it('wymiar od płaszczyzny pleców do wcięcia nie zależy od kliknięcia ani kierunku odsunięcia', () => {
+        for (const offsetAxisKey of ['X', 'Y', 'Z'] as const) {
+            for (const clickX of [10, 700]) {
+                const rd = getRenderData({
+                    axisSpace: 'GLOBAL',
+                    matrixWorld: null,
+                    measureAxisKey: 'AUTO',
+                    offsetAxisKey,
+                    offsetWorld: v3(120, 0, 0),
+                    anchor1World: v3(clickX, 0, 500),
+                    anchor2World: v3(300, 0, 700),
+                    faceNormal1World: v3(0, 0, 1),
+                    isPlane1: true,
+                    labelText: '200',
+                });
+
+                expect(rd).not.toBeNull();
+                expect(rd!.resolvedMeasureAxisKey).toBe('Y');
+                expect(rd!.valueLength).toBeCloseTo(200, 6);
+                const span = Math.hypot(
+                    rd!.p2DimWorld.x - rd!.p1DimWorld.x,
+                    rd!.p2DimWorld.y - rd!.p1DimWorld.y,
+                    rd!.p2DimWorld.z - rd!.p1DimWorld.z,
+                );
+                expect(span).toBeCloseTo(200, 1);
+            }
+        }
+    });
+
+    it('wymiar od płaszczyzny zachowuje łamaną linię pomocniczą po stronie obiektu', () => {
+        // Płaszczyzna pozioma (CAD Z = Babylon Y). Kanoniczny rzut niweluje
+        // różnicę wysokości, więc linia pomocnicza musi być liczona z
+        // rzeczywistych punktów wyboru, inaczej zniknie załamanie.
+        const rd = getRenderData({
+            axisSpace: 'GLOBAL',
+            matrixWorld: null,
+            measureAxisKey: 'AUTO',
+            offsetAxisKey: 'X',
+            offsetWorld: v3(120, 0, 0),
+            anchor1World: v3(10, 0, 0),
+            anchor2World: v3(300, 700, 200),
+            helperAnchor1World: v3(0, 0, 0),
+            faceNormal1World: v3(0, 1, 0),
+            isPlane1: true,
+            labelText: '700',
+        });
+
+        expect(rd).not.toBeNull();
+        expect(rd!.resolvedMeasureAxisKey).toBe('Z');
+        expect(rd!.valueLength).toBeCloseTo(700, 6);
+        expect(rd!.useBrokenP2).toBe(true);
+        expect(rd!.p1AnchorWorld).toEqual(v3(0, 0, 0));
+        expect(rd!.p2AnchorWorld).toEqual(v3(300, 700, 200));
+    });
 });
 
 describe('solveArrowPlacement', () => {
@@ -333,6 +513,49 @@ describe('solveArrowPlacement', () => {
 });
 
 describe('computeAvailableMeasureAxes', () => {
+    it('solver używa AUTO helperów po obu stronach dla rozstawu dwóch płaszczyzn', () => {
+        const result = solveDimensionBridge({
+            axisSpace: 'GLOBAL',
+            matrixWorld: null,
+            measureAxisKey: 'X',
+            offsetAxisKey: 'Y',
+            offsetWorld: v3(0, 80, 0),
+            anchor1World: v3(-482, 0, 0),
+            anchor2World: v3(482, 0, 0),
+            helperAnchor1World: v3(-482, 250, 350),
+            helperAnchor2World: v3(482, 250, 350),
+            dimHint1World: v3(-482, 80, 0),
+            dimHint2World: v3(482, 80, 0),
+            faceNormal1World: v3(-1, 0, 0),
+            faceNormal2World: v3(1, 0, 0),
+            isPlane1: true,
+            isPlane2: true,
+        });
+        expect(result).not.toBeNull();
+        for (const segments of [result!.solved.helper1SegmentsWorld, result!.solved.helper2SegmentsWorld]) {
+            for (let i = 0; i + 1 < segments.length; i += 1) {
+                expect(Math.abs(segments[i + 1].x - segments[i].x)).toBeCloseTo(0, 5);
+            }
+        }
+    });
+
+    it('dla ściany dostępna jest tylko oś jej normalnej, niezależnie od kliknięcia', () => {
+        for (const clickX of [10, 700]) {
+            const res = computeAvailableMeasureAxes({
+                anchor1World: v3(clickX, 0, 500),
+                anchor2World: v3(300, 0, 700),
+                axisSpace: 'GLOBAL',
+                faceNormal1World: v3(0, 0, 1),
+                isPlane1: true,
+            });
+
+            expect(res.axes.X.available).toBe(false);
+            expect(res.axes.Y.available).toBe(true);
+            expect(res.axes.Y.lengthMM).toBe(200);
+            expect(res.axes.Z.available).toBe(false);
+        }
+    });
+
     it('dla pojedynczej prostej krawędzi (wzdłuż osi X) tylko X jest dostępna', () => {
         const res = computeAvailableMeasureAxes({
             anchor1World: v3(0, 0, 0),
@@ -396,3 +619,60 @@ describe('computeAvailableMeasureAxes', () => {
     });
 });
 
+
+describe('isOffsetAxisAllowedAlgebraic (czysta algebra wektorowa)', () => {
+    it('dla rozstawu dwoch rownoleglych scian w osi X blokuje odsuniecie w X, pozwala na Y i Z', () => {
+        // Dwie rownolegle sciany z normalna X = (1, 0, 0), rozstaw 964 mm
+        const opts = {
+            anchor1World: v3(0, 0, 0),
+            anchor2World: v3(964, 0, 0),
+            faceNormal1World: v3(1, 0, 0),
+            faceNormal2World: v3(-1, 0, 0),
+            isPlane1: true,
+            isPlane2: true,
+        };
+
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(1, 0, 0) })).toBe(false);
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(0, 1, 0) })).toBe(true);
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(0, 0, 1) })).toBe(true);
+    });
+
+    it('dla dwoch naroznikow w pelnej przestrzeni 3D zezwala na wszystkie 3 osie odsuniecia X, Y, Z', () => {
+        const opts = {
+            anchor1World: v3(0, 0, 0),
+            anchor2World: v3(1000, 400, 720),
+            isPlane1: false,
+            isPlane2: false,
+        };
+
+        // Kazde odsuniecie ma niezerowa skladowa prostopadla, wiec pozwala mierzyc pozostale osie
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(1, 0, 0) })).toBe(true);
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(0, 1, 0) })).toBe(true);
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(0, 0, 1) })).toBe(true);
+    });
+
+    it('dla punktow na prostej 1D wzdluz osi X blokuje odsuniecie w X, pozwala w Y i Z', () => {
+        const opts = {
+            anchor1World: v3(0, 0, 0),
+            anchor2World: v3(500, 0, 0),
+            isPlane1: false,
+            isPlane2: false,
+        };
+
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(1, 0, 0) })).toBe(false);
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(0, 1, 0) })).toBe(true);
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(0, 0, 1) })).toBe(true);
+    });
+
+    it('gdy os pomiaru jest zablokowana recznie (np. Shift+X), blokuje odsuniecie rownolegle do niej', () => {
+        const opts = {
+            anchor1World: v3(0, 0, 0),
+            anchor2World: v3(1000, 400, 720),
+            lockedMeasureDirWorld: v3(1, 0, 0),
+        };
+
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(1, 0, 0) })).toBe(false);
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(0, 1, 0) })).toBe(true);
+        expect(isOffsetAxisAllowedAlgebraic({ ...opts, offsetDirWorld: v3(0, 0, 1) })).toBe(true);
+    });
+});

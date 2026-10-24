@@ -10,6 +10,7 @@
 import flapsRules from './12_flaps_3_rules_V1.json';
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
+import { buildHoleMachiningIntent } from './01_machining-intent.js';
 import type {
     BlokiDimensions_mm,
     BlokiPart,
@@ -131,22 +132,27 @@ export function calculateFlapsPlan(
                 ? flapHeight_mm - hole.edgeDist
                 : hole.edgeDist;
             const u = isCup ? uCenter : (uCenter + hole.yOffset);
-            features.push({
+            const intent = buildHoleMachiningIntent({
+                targetNodeId: 'Klapa',
                 id: isCup ? `flap_cup_${hingeKey}` : `flap_screw_${hingeKey}_${hole.name || 's'}`,
-                type: 'hole',
-                side: 'FACE_Z_PLUS',
                 face: 'FACE_Z_PLUS',
-                params: {
-                    template_id: templateId,
+                side: 'FACE_Z_PLUS',
+                template_id: templateId,
+                drivenBy: {
+                    nodeId: `hinge_${hingeKey.toLowerCase()}`,
+                    role: 'HARDWARE',
+                    hardwareType: 'HINGE',
+                    partKey: hingeKey,
+                },
+                rule: isCup ? 'cup' : 'screw',
+                generatedBy: 'blok_flaps',
+                u,
+                v,
+                diameter: hole.dia,
+                depth: hole.depth,
+                sourcePartId: hingeKey,
+                extraParams: {
                     hinge_id: hingeId,
-                    u,
-                    v,
-                    diameter: hole.dia,
-                    depth: hole.depth,
-                    u_mm: u,
-                    v_mm: v,
-                    diameter_mm: hole.dia,
-                    depth_mm: hole.depth,
                     isFlapCup: isCup,
                     isFlapScrew: !isCup,
                     hingeKey: hingeKey,
@@ -154,9 +160,10 @@ export function calculateFlapsPlan(
                     hingeSide: side,
                     side: side,
                     orientation: isTop ? 'top' : 'bottom',
-                    hardwareId: `hinge_${hingeKey.toLowerCase()}`
-                }
+                    hardwareId: `hinge_${hingeKey.toLowerCase()}`,
+                },
             });
+            features.push(intent.feature);
         }
 
         return features;

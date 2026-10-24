@@ -104,12 +104,12 @@ function buildFrame(
 }
 
 /** Ramka z wykrytej wnęki (w chwili wstawienia). */
-export function bayFrameFromDetectedBay(bay: DetectedBay): SmartPartBayFrameMm {
+export function bayFrameFromDetectedBay(bay: DetectedBay, boundaryFallback?: any): SmartPartBayFrameMm {
     const c = bay.centerWorldMm;
     const hw = bay.boundsMm.width / 2;
     const hh = bay.boundsMm.height / 2;
     const hd = bay.boundsMm.depth / 2;
-    const b: any = bay.boundary || {};
+    const b: any = bay.boundary || boundaryFallback || {};
 
     const leftX = b.left?.planeCoordMm ?? (c.x - hw);
     const rightX = b.right?.planeCoordMm ?? (c.x + hw);
@@ -313,12 +313,12 @@ export function bayFrameFromDocument(document: any, refs: BayWallRefs): SmartPar
 }
 
 /** customReferences Bloku (xMin/xMax/…) z DetectedBay — ten sam schemat co createBlokInDetectedBay. */
-export function customReferencesFromDetectedBay(bay: DetectedBay): Record<string, {
+export function customReferencesFromDetectedBay(bay: DetectedBay, boundaryFallback?: any): Record<string, {
     partKey: string;
     face: string;
     panelId: string;
 }> {
-    const b = bay.boundary || ({} as DetectedBay['boundary']);
+    const b = bay.boundary || boundaryFallback || ({} as DetectedBay['boundary']);
     const leftRef = b.left;
     const rightRef = b.right;
     const bottomRef = b.bottom;

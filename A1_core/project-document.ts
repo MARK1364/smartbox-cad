@@ -26,6 +26,7 @@ import {
     type DomainFactory,
     type DomainHydrator,
 } from './domain-registry.js';
+import { HardwareModel } from './hardware-model.js';
 import appPackage from '../package.json';
 import {
     PROJECT_FORMAT,
@@ -369,8 +370,14 @@ export class ProjectDocument {
 
         const json = this._serializeNode(sourceNode);
 
-        const remapIds = (data: any) => {
+        const idMap = new Map<string, string>();
+
+        const collectAndAssignNewIds = (data: any) => {
+            const oldId = data.id;
             const newId = `${data.nodeType || 'node'}_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+            if (oldId) {
+                idMap.set(oldId, newId);
+            }
             data.id = newId;
             data.name = `${data.name || 'Obiekt'} (Kopia)`;
             if (data.domainData) {
@@ -379,11 +386,40 @@ export class ProjectDocument {
             }
             if (data.children && Array.isArray(data.children)) {
                 for (const child of data.children) {
-                    remapIds(child);
+                    collectAndAssignNewIds(child);
                 }
             }
         };
-        remapIds(json);
+        collectAndAssignNewIds(json);
+
+        const remapFeatureReferences = (data: any) => {
+            if (data.domainData && Array.isArray(data.domainData.features)) {
+                for (const feat of data.domainData.features) {
+                    if (feat.drivenBy) {
+                        if (feat.drivenBy.nodeId && idMap.has(feat.drivenBy.nodeId)) {
+                            feat.drivenBy.nodeId = idMap.get(feat.drivenBy.nodeId)!;
+                        }
+                        if (feat.drivenBy.containerId && idMap.has(feat.drivenBy.containerId)) {
+                            feat.drivenBy.containerId = idMap.get(feat.drivenBy.containerId)!;
+                        }
+                    }
+                    if (feat.params) {
+                        if (feat.params.sourceContainerId && idMap.has(feat.params.sourceContainerId)) {
+                            feat.params.sourceContainerId = idMap.get(feat.params.sourceContainerId)!;
+                        }
+                        if (feat.params.handleId && idMap.has(feat.params.handleId)) {
+                            feat.params.handleId = idMap.get(feat.params.handleId)!;
+                        }
+                    }
+                }
+            }
+            if (data.children && Array.isArray(data.children)) {
+                for (const child of data.children) {
+                    remapFeatureReferences(child);
+                }
+            }
+        };
+        remapFeatureReferences(json);
 
         const clonedNode = this._deserializeNode(json);
 
@@ -549,11 +585,16 @@ export class ProjectDocument {
         };
 
         if (node.domainData) {
-            const data = node.domainData as any;
+            let data = node.domainData as any;
             if (typeof data.toJSON !== 'function') {
-                throw new Error(
-                    `ProjectDocument.serialize: węzeł "${node.id}" (${node.nodeType}) ma domainData bez toJSON() — dane zostałyby pominięte.`
-                );
+                if (node.nodeType === NodeType.HARDWARE && data && typeof data === 'object') {
+                    data = HardwareModel.fromJSON(data);
+                    node.domainData = data;
+                } else {
+                    throw new Error(
+                        `ProjectDocument.serialize: węzeł "${node.id}" (${node.nodeType}) ma domainData bez toJSON() — dane zostałyby pominięte.`
+                    );
+                }
             }
             json.domainData = data.toJSON();
         }

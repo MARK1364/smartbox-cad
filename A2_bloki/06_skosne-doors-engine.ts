@@ -33,6 +33,7 @@ import {
     hingeTemplateId
 } from '../B1_biblioteka/index.js';
 import { resolveHingeId } from './05_doors-engine.js';
+import { buildHoleMachiningIntent } from './01_machining-intent.js';
 import {
     assertCanonicalSkosneDoorsParams,
     isHingeEnabled,
@@ -463,29 +464,35 @@ export function calculateSkosneDoorsPlan(
                 const u = side === 'left' ? hole.edgeDist : (doorWidth_mm - hole.edgeDist);
                 const kind = hole.isCup ? 'cup' : 'screw';
                 const suffix = hole.isCup ? '' : `_${hole.name || 's'}`;
-                features.push({
+                const intent = buildHoleMachiningIntent({
+                    targetNodeId: side === 'left' ? 'Drzwi_Lewe' : 'Drzwi_Prawe',
                     id: `hinge_${kind}_${side}_${hinge.index}${suffix}`,
-                    type: 'hole',
-                    side: 'FACE_Z_PLUS',
                     face: 'FACE_Z_PLUS',
-                    params: {
-                        template_id: templateId,
+                    side: 'FACE_Z_PLUS',
+                    template_id: templateId,
+                    drivenBy: {
+                        nodeId: `hinge_${side}_${hinge.index}`,
+                        role: 'HARDWARE',
+                        hardwareType: 'HINGE',
+                        partKey: `Hinge_${side === 'left' ? 'L' : 'R'}${hinge.index}`,
+                    },
+                    rule: hole.isCup ? 'cup' : 'screw',
+                    generatedBy: 'blok_doors',
+                    u,
+                    v: vCenter + hole.yOffset,
+                    diameter: hole.dia,
+                    depth: hole.depth,
+                    sourcePartId: `Hinge_${side === 'left' ? 'L' : 'R'}${hinge.index}`,
+                    extraParams: {
                         hinge_id: hingeId,
-                        u,
-                        v: vCenter + hole.yOffset,
-                        diameter: hole.dia,
-                        depth: hole.depth,
-                        u_mm: u,
-                        v_mm: vCenter + hole.yOffset,
-                        diameter_mm: hole.dia,
-                        depth_mm: hole.depth,
                         isDoorCup: hole.isCup,
                         isDoorScrew: !hole.isCup,
                         hingeIndex: hinge.index,
                         side,
-                        hardwareId: `hinge_${side}_${hinge.index}`
-                    }
+                        hardwareId: `hinge_${side}_${hinge.index}`,
+                    },
                 });
+                features.push(intent.feature);
             }
         }
         return features;

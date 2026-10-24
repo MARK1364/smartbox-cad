@@ -26,9 +26,10 @@ export interface KorpusDefaultsMm {
     /** Szerokość blendy [mm] — tylko korpus_rogowy1. */
     szerokosc_blendy_mm?: number;
     strona_blendy?: 'LEFT' | 'RIGHT';
-    /** Głębokości ramion [mm] — tylko korpus_rogowy90. */
+    /** Głębokości ramion i listwa narożna [mm] — tylko korpus_rogowy90. */
     glebokosc_boku_lewego_mm?: number;
     glebokosc_boku_prawego_mm?: number;
+    szerokosc_listwy_naroznej_mm?: number;
     /** Wysokości skosu [mm] — korpus_skosny / korpus_skosny_lr. */
     wysokosc_przod_mm?: number;
     wysokosc_tyl_mm?: number;
@@ -80,7 +81,8 @@ export function korpusDefaultsForTypeMm(type: KorpusDefaultsCabinetType): Korpus
             wysokosc_strefy_dolnej_mm: base.wysokosc_mm,
             wysokosc_strefy_srodkowej_mm: 0,
             glebokosc_boku_lewego_mm: rulesMToMm(d.bok_lewy ?? d.arm_depth_x ?? d.arm_depth, fallback),
-            glebokosc_boku_prawego_mm: rulesMToMm(d.bok_prawy ?? d.arm_depth_y ?? d.arm_depth, fallback)
+            glebokosc_boku_prawego_mm: rulesMToMm(d.bok_prawy ?? d.arm_depth_y ?? d.arm_depth, fallback),
+            szerokosc_listwy_naroznej_mm: rulesMToMm(d.corner_nailer_width, 100)
         };
     }
 

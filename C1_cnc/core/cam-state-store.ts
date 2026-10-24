@@ -5,7 +5,7 @@
  * Zarządza aktywnym programem CNC, przypisaniami narzędzi, wybranymi strategiami i stanem symulacji.
  */
 
-import { CAMFeature, Tool, Vector3D } from '../dto/cam-dto.js';
+import { CAMFeature, CAMStrategyParams, Tool, Vector3D } from '../dto/cam-dto.js';
 import { CLDataProgram } from './cl-data.js';
 
 export interface CNCProgramState {
@@ -29,6 +29,8 @@ export interface CNCProgramState {
     projectName?: string;
     projectPath?: string;
     isActive?: boolean;
+    strategyId?: string;
+    strategyParams?: CAMStrategyParams;
     clDataProgram?: CLDataProgram | null;
 }
 

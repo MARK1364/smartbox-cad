@@ -45,6 +45,18 @@ export async function bootstrapScene(): Promise<BootstrapContext> {
     const document = new ProjectDocument();
     registerProjectDomain(document);
     const propertiesManager = PropertiesManager.instance;
+
+    // Bezpieczne zwolnienie poprzedniego silnika w przypadku ponownego uruchomienia (HMR)
+    if (ContextManager.instance?.viewport?.engine) {
+        try {
+            ContextManager.instance.viewport.engine.stopRenderLoop();
+            ContextManager.instance.viewport.scene?.dispose();
+            ContextManager.instance.viewport.engine.dispose();
+        } catch (e) {
+            console.warn('[scene-bootstrap] Błąd podczas zwalniania poprzedniego silnika Viewport:', e);
+        }
+    }
+
     const viewport = await Viewport.create(canvas);
 
     const panelViews = new Map<any, PanelView>();

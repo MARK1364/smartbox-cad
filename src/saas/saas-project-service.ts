@@ -267,6 +267,6 @@ export class SaaSProjectService {
 
   private generatePlaceholderThumbnail(): string {
     // Generuje prostą grafikę SVG szafki jako placeholder
-    return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200" fill="%231e293b"><rect width="320" height="200" fill="%230f172a"/><rect x="70" y="30" width="180" height="140" rx="4" fill="%231e293b" stroke="%2338bdf8" stroke-width="2"/><line x1="160" y1="30" x2="160" y2="170" stroke="%2338bdf8" stroke-width="1.5"/><line x1="70" y1="90" x2="160" y2="90" stroke="%2338bdf8" stroke-width="1.5"/><circle cx="145" cy="60" r="3" fill="%23f8fafc"/><circle cx="175" cy="100" r="3" fill="%23f8fafc"/><text x="160" y="190" fill="%2394a3b8" font-size="11" font-family="sans-serif" text-anchor="middle">SmartPanel 3D</text></svg>`;
+    return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200" fill="%231e293b"><rect width="320" height="200" fill="%230f172a"/><rect x="70" y="30" width="180" height="140" rx="4" fill="%231e293b" stroke="%2338bdf8" stroke-width="2"/><line x1="160" y1="30" x2="160" y2="170" stroke="%2338bdf8" stroke-width="1.5"/><line x1="70" y1="90" x2="160" y2="90" stroke="%2338bdf8" stroke-width="1.5"/><circle cx="145" cy="60" r="3" fill="%23f8fafc"/><circle cx="175" cy="100" r="3" fill="%23f8fafc"/><text x="160" y="190" fill="%2394a3b8" font-size="11" font-family="sans-serif" text-anchor="middle">Crevo 3D</text></svg>`;
   }
 }

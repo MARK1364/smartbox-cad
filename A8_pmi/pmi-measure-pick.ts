@@ -5,21 +5,44 @@
  * priorytety (Ctrl vs bez Ctrl) bez pełnej sceny Babylona.
  */
 
+declare const BABYLON: any;
+
 import { GeometryType } from '../A1_core/geometry-detector.js';
 import { Vec3, v3 } from './dimension-solver';
 import {
     PMIAnchorRef,
     buildAnchorRef,
-    isPmiOverlayMesh,
-    snapWorldPointToPanelGeometry,
-    SNAP_RADIUS_MM,
+    localToWorldFromBrep,
+    planeNormalWorldFromMesh,
+    resolveBrepGeometryPick,
 } from './pmi-id-bridge';
-import {
-    EdgeSegmentCandidate,
-    findEdgeSegmentsNearPointer,
-    findVerticesNearPointer,
-} from './pmi-edge-pick.js';
+import { EdgeSegmentCandidate } from './pmi-edge-pick.js';
 import { MeasureElementKind } from './pmi-measure';
+import { ContextManager } from '../A1_core/context-manager';
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Pobiera PanelView z meshu na podstawie nodeId.
+ */
+function getPanelViewFromMesh(mesh: any): any {
+    const model = mesh?.metadata?.panelModel;
+    if (!model) return null;
+    const panelViews = ContextManager.instance.panelViews;
+    if (!panelViews) return null;
+    const direct = panelViews.get(model) || panelViews.get(model.id);
+    if (direct) return direct;
+    for (const view of panelViews.values()) {
+        if (view?.model?.id === model.id) return view;
+    }
+    return null;
+}
+
+// ============================================================================
+// MEASURE ELEMENT PICK
+// ============================================================================
 
 export interface MeasureElementPick {
     worldPos: Vec3;
@@ -50,136 +73,142 @@ export interface MeasurePickContext {
 }
 
 /**
- * Ctrl: narożnik → krawędź (tylko przy rimie) → płaszczyzna.
- * Bez Ctrl: krawędź ma pierwszeństwo (szybka długość).
+ * Wybór jest w całości oparty na aktualnym podświetleniu geometrii.
+ * Dzięki temu klik zawsze wybiera to, co użytkownik widzi w scenie:
+ * narożnik (kula), krawędź (linia) albo płaszczyznę.
  */
 export function findMeasureElementPick(ctx: MeasurePickContext): MeasureElementPick | null {
-    const { scene, pointerX, pointerY, ctrl, vertexSnapPx, edgeSnapPx, lastDetection, hoveredSegment } = ctx;
+    const { scene, lastDetection, hoveredSegment } = ctx;
     if (!scene) return null;
 
-    const snapRadius = vertexSnapPx;
+    if (lastDetection?.hit && lastDetection.pickedPoint && lastDetection.mesh) {
+        // === nowa logika: spróbuj najpierw B-rep ===
+        const panelView = getPanelViewFromMesh(lastDetection.mesh);
+        if (panelView) {
+            const fakeHit = {
+                pickedMesh: lastDetection.mesh,
+                pickedPoint: new BABYLON.Vector3(
+                    lastDetection.pickedPoint.x,
+                    lastDetection.pickedPoint.y,
+                    lastDetection.pickedPoint.z,
+                ),
+                getNormal: (useWorld?: boolean) => {
+                    if (!lastDetection.normal) return null;
+                    return new BABYLON.Vector3(lastDetection.normal.x, lastDetection.normal.y, lastDetection.normal.z);
+                },
+            };
+            const brepPick = resolveBrepGeometryPick(scene, fakeHit, panelView);
+            if (brepPick) {
+                return {
+                    worldPos: brepPick.kind === 'EDGE'
+                        ? brepPick.anchorRef.pointWorldFallback
+                        : brepPick.worldPos,
+                    anchor: brepPick.anchorRef,
+                    mesh: lastDetection.mesh,
+                    kind: mapBrepKindToMeasureKind(brepPick.kind),
+                    edge: brepPick.kind === 'EDGE' ? brepEdgeSegment(lastDetection.mesh, brepPick, panelView) : null,
+                    planeNormal: brepPick.kind === 'FACE' ? planeNormalWorldFromMesh(lastDetection.mesh) : null,
+                };
+            }
+            return null;
+        }
+        if (lastDetection.mesh.metadata?.panelModel) return null;
 
-    // Narożnik ma ZAWSZE bezwzględne pierwszeństwo przed krawędzią i płaszczyzną
-    // (zarówno z Ctrl, jak i bez Ctrl).
-    // Jeśli highlighter już wykrył wierzchołek, wykorzystajmy go natychmiast bez ponownego skanowania sceny.
-    if (lastDetection?.hit && lastDetection.geometryType === GeometryType.VERTEX
+        // Narożnik wybieramy wyłącznie wtedy, gdy highlighter go pokazał.
+        // Brak zapasowego skanu wierzchołków — inaczej klik w płaszczyznę
+        // mógłby po cichu wybrać narożnik.
+        if (lastDetection.geometryType === GeometryType.VERTEX) {
+            const worldPos = v3(
+                lastDetection.pickedPoint.x,
+                lastDetection.pickedPoint.y,
+                lastDetection.pickedPoint.z,
+            );
+            return {
+                worldPos,
+                anchor: buildAnchorRef(lastDetection.mesh, worldPos),
+                mesh: lastDetection.mesh,
+                kind: 'vertex',
+                edge: null,
+                planeNormal: null,
+            };
+        }
+
+        // Podświetlona płaszczyzna ma pierwszeństwo przed pobliską
+        // krawędzią. Klik w ścianę ma pozostać pomiarem płaszczyzny.
+        if (lastDetection.geometryType === GeometryType.PLANE) {
+            const planeHit = findPlaneHit(lastDetection);
+            if (planeHit) return planeHit;
+        }
+
+        if (lastDetection.geometryType === GeometryType.EDGE && hoveredSegment) {
+            return edgePickToMeasure(hoveredSegment);
+        }
+    }
+
+    // Brak podświetlonej geometrii: nie wybieramy niczego.
+    return null;
+}
+
+/**
+ * Mapuje typ B-rep na MeasureElementKind.
+ */
+function mapBrepKindToMeasureKind(kind: string): MeasureElementKind {
+    switch (kind) {
+        case 'VERTEX': return 'vertex';
+        case 'EDGE': return 'edge';
+        case 'FACE': return 'plane';
+        default: return 'vertex';
+    }
+}
+
+/**
+ * Pobiera normalną ściany z danych B-rep.
+ */
+function brepEdgeSegment(mesh: any, brepPick: { worldPos: Vec3 }, panelView: any): EdgeSegmentCandidate | null {
+    const points = mesh?.metadata?.brepPoints;
+    if (!Array.isArray(points) || points.length < 2) return null;
+    const nodeId = mesh?.metadata?.panelModel?.id;
+    if (!nodeId) return null;
+    const p1World = localToWorldFromBrep(nodeId, v3(points[0][0], points[0][1], points[0][2]), panelView);
+    const p2World = localToWorldFromBrep(nodeId, v3(points[1][0], points[1][1], points[1][2]), panelView);
+    if (!p1World || !p2World) return null;
+    return {
+        mesh,
+        p1World,
+        p2World,
+        p1Local: v3(points[0][0], points[0][1], points[0][2]),
+        p2Local: v3(points[1][0], points[1][1], points[1][2]),
+        index1: 0,
+        index2: 1,
+        closestWorld: brepPick.worldPos,
+        distPx: 0,
+        depth: 0,
+    };
+}
+
+export function findPlaneHit(
+    lastDetection: GeometryDetectionSnapshot | null,
+): MeasureElementPick | null {
+    if (lastDetection?.hit && lastDetection.geometryType === GeometryType.PLANE
         && lastDetection.pickedPoint && lastDetection.mesh) {
         const worldPos = v3(
             lastDetection.pickedPoint.x,
             lastDetection.pickedPoint.y,
             lastDetection.pickedPoint.z,
         );
+        const exactNormal = planeNormalWorldFromMesh(lastDetection.mesh);
+        if (!exactNormal) return null;
         return {
             worldPos,
             anchor: buildAnchorRef(lastDetection.mesh, worldPos),
             mesh: lastDetection.mesh,
-            kind: 'vertex',
-            edge: null,
-            planeNormal: null,
-        };
-    }
-
-    const vertices = snapRadius > 0 ? findVerticesNearPointer(scene, pointerX, pointerY, snapRadius) : [];
-    if (vertices.length > 0) return vertexPickToMeasure(vertices[0]);
-
-    const effectiveEdgeSnapPx = ctrl ? edgeSnapPx + 4 : edgeSnapPx;
-    const edges = (hoveredSegment && hoveredSegment.distPx <= effectiveEdgeSnapPx)
-        ? [hoveredSegment]
-        : findEdgeSegmentsNearPointer(scene, pointerX, pointerY, effectiveEdgeSnapPx);
-
-    const planeHit = findPlaneHit(scene, pointerX, pointerY, lastDetection);
-
-    if (ctrl) {
-        const onFaceInterior = !!planeHit && (!edges.length || edges[0].distPx > Math.min(8, edgeSnapPx * 0.45));
-        if (onFaceInterior && planeHit) return planeHit;
-
-        if (edges.length > 0) return edgePickToMeasure(edges[0]);
-        if (planeHit) return planeHit;
-        return fallbackPointPick(scene, pointerX, pointerY);
-    }
-
-    if (edges.length > 0) return edgePickToMeasure(edges[0]);
-    if (planeHit) return planeHit;
-    return fallbackPointPick(scene, pointerX, pointerY);
-}
-
-export function findPlaneHit(
-    scene: any,
-    pointerX: number,
-    pointerY: number,
-    lastDetection: GeometryDetectionSnapshot | null,
-): MeasureElementPick | null {
-    if (!scene) return null;
-
-    if (lastDetection?.hit && lastDetection.geometryType === GeometryType.PLANE
-        && lastDetection.pickedPoint && lastDetection.mesh && lastDetection.normal) {
-        const worldPos = v3(
-            lastDetection.pickedPoint.x,
-            lastDetection.pickedPoint.y,
-            lastDetection.pickedPoint.z,
-        );
-        const snapped = snapWorldPointToPanelGeometry(scene, lastDetection.mesh, worldPos, SNAP_RADIUS_MM);
-        const pos = snapped?.worldPos ?? worldPos;
-        return {
-            worldPos: pos,
-            anchor: snapped?.anchor ?? buildAnchorRef(lastDetection.mesh, pos),
-            mesh: lastDetection.mesh,
             kind: 'plane',
             edge: null,
-            planeNormal: v3(lastDetection.normal.x, lastDetection.normal.y, lastDetection.normal.z),
+            planeNormal: exactNormal,
         };
     }
 
-    const hits = scene.multiPick?.(
-        pointerX,
-        pointerY,
-        (m: any) => m && m.isEnabled() && m.metadata && m.metadata.faceName,
-    );
-    if (!hits || hits.length === 0) return null;
-    const valid = hits.filter((h: any) => h.hit && h.pickedMesh && h.pickedPoint);
-    if (!valid.length) return null;
-    valid.sort((a: any, b: any) => a.distance - b.distance);
-    const hit = valid[0];
-    const worldPos = v3(hit.pickedPoint.x, hit.pickedPoint.y, hit.pickedPoint.z);
-    const snapped = snapWorldPointToPanelGeometry(scene, hit.pickedMesh, worldPos, SNAP_RADIUS_MM);
-    const pos = snapped?.worldPos ?? worldPos;
-    const norm = hit.getNormal ? hit.getNormal(true) : null;
-    if (!norm) return null;
-    return {
-        worldPos: pos,
-        anchor: snapped?.anchor ?? buildAnchorRef(hit.pickedMesh, pos),
-        mesh: hit.pickedMesh,
-        kind: 'plane',
-        edge: null,
-        planeNormal: v3(norm.x, norm.y, norm.z),
-    };
-}
-
-function fallbackPointPick(scene: any, pointerX: number, pointerY: number): MeasureElementPick | null {
-    const hit = scene.pick(pointerX, pointerY, (m: any) => m && m.isPickable && !isPmiOverlayMesh(m));
-    if (hit?.hit && hit.pickedMesh && hit.pickedPoint) {
-        const worldPos = v3(hit.pickedPoint.x, hit.pickedPoint.y, hit.pickedPoint.z);
-        return {
-            worldPos,
-            anchor: buildAnchorRef(hit.pickedMesh, worldPos),
-            mesh: hit.pickedMesh,
-            kind: 'point',
-            edge: null,
-            planeNormal: null,
-        };
-    }
     return null;
-}
-
-function vertexPickToMeasure(v: { mesh: any; world: Vec3 }): MeasureElementPick {
-    return {
-        worldPos: v.world,
-        anchor: buildAnchorRef(v.mesh, v.world),
-        mesh: v.mesh,
-        kind: 'vertex',
-        edge: null,
-        planeNormal: null,
-    };
 }
 
 function edgePickToMeasure(edge: EdgeSegmentCandidate): MeasureElementPick {

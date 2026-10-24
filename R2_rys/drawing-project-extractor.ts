@@ -281,7 +281,7 @@ export class DrawingProjectExtractor {
                         face: f.params?.face || 'FRONT',
                         frozen: !!(f.frozen || f.params?.frozen),
                     });
-                } else if (f.type?.toLowerCase() === 'groove') {
+                } else if (f.type?.toLowerCase() === 'groove' || f.type?.toLowerCase() === 'pocket' || f.type?.toLowerCase() === 'cutout') {
                     grooves.push(mapGrooveFeature(f, height || 720));
                 }
             }
@@ -506,7 +506,7 @@ export class DrawingProjectExtractor {
                     face: f.params?.face || 'FRONT',
                     frozen: !!(f.frozen || f.params?.frozen),
                 });
-            } else if (f.type?.toLowerCase() === 'groove') {
+            } else if (f.type?.toLowerCase() === 'groove' || f.type?.toLowerCase() === 'pocket' || f.type?.toLowerCase() === 'cutout') {
                 grooves.push(mapGrooveFeature(f, height));
             }
         }

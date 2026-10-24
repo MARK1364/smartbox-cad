@@ -9,6 +9,7 @@
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
+import { HardwareModel } from '../../A1_core/hardware-model.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
@@ -107,7 +108,7 @@ export function createSmartPartHandle(
 
     // Dodajemy węzeł okucia HARDWARE dla wyceny, BOM i postprocesora CNC
     const hwNode = CADNode.create(NodeType.HARDWARE, 'Okucie_Uchwyty', `hw_${container.id}`);
-    hwNode.domainData = {
+    hwNode.domainData = HardwareModel.fromJSON({
         id: `hw_${container.id}`,
         name: container.name,
         role: 'HANDLE',
@@ -129,7 +130,7 @@ export function createSmartPartHandle(
             drillDiameterMm: mergedParams.drillDiameterMm,
             holes: layout.holes,
         }
-    } as any;
+    });
 
     const cmd = new AddSmartPartHandleCommand(
         targetPanelNode.id,

@@ -23,6 +23,16 @@ export interface FaceHitRef {
     slopeAngleDeg?: number;
 }
 
+export type BayBoundary = {
+    left: FaceHitRef;
+    right: FaceHitRef;
+    bottom: FaceHitRef;
+    top: FaceHitRef;
+    back: FaceHitRef;
+    front: FaceHitRef;
+    frontPlaneYMm: number;
+};
+
 export interface DetectedBay {
     boundsMm: {
         width: number;  // X: od lewego do prawego boku
@@ -47,15 +57,108 @@ export interface DetectedBay {
     heightRightMm?: number;
     heightFrontMm?: number;
     heightBackMm?: number;
-    boundary: {
-        left: FaceHitRef;
-        right: FaceHitRef;
-        bottom: FaceHitRef;
-        top: FaceHitRef;
-        back: FaceHitRef;
-        front: FaceHitRef;
-        frontPlaneYMm: number;
+    boundary?: BayBoundary;
+}
+
+export type SlimDetectedBay = Omit<DetectedBay, 'boundary'>;
+
+/**
+ * Uzupełnia brakujące wysokości skosu LR na podstawie kąta dachu i wymiarów wnęki.
+ * Dzięki temu slim snapshot nie gubi geometrii wymaganej przez ContainerView.
+ */
+function withDerivedLrSlopeHeights(bay: DetectedBay): DetectedBay {
+    const angleDeg = bay.roofAngleDeg;
+    if (bay.slopeAxis === 'Y' || angleDeg === undefined || !Number.isFinite(Number(angleDeg)) || Math.abs(Number(angleDeg)) <= 0.05) {
+        return bay;
+    }
+    if (bay.heightLeftMm !== undefined && bay.heightRightMm !== undefined) return bay;
+
+    const widthMm = bay.boundsMm?.width;
+    const heightMm = bay.boundsMm?.height;
+    if (!widthMm || !heightMm || widthMm <= 0 || heightMm <= 0) return bay;
+
+    const tanBeta = Math.tan((Number(angleDeg) * Math.PI) / 180);
+    let heightLeftMm = bay.heightLeftMm;
+    let heightRightMm = bay.heightRightMm;
+
+    if (heightLeftMm === undefined && heightRightMm === undefined) {
+        heightLeftMm = Math.max(10, heightMm - (widthMm / 2) * tanBeta);
+        heightRightMm = Math.max(10, heightMm + (widthMm / 2) * tanBeta);
+    } else if (heightLeftMm === undefined) {
+        heightLeftMm = Math.max(10, heightRightMm! - widthMm * tanBeta);
+    } else if (heightRightMm === undefined) {
+        heightRightMm = Math.max(10, heightLeftMm + widthMm * tanBeta);
+    }
+
+    return {
+        ...bay,
+        slopeAxis: bay.slopeAxis ?? 'X',
+        heightLeftMm,
+        heightRightMm,
     };
+}
+
+/**
+ * Rekonstruuje pełny obiekt DetectedBay z generatorParams i wymiarów kontenera.
+ * Jeśli gp.detectedBay istnieje, zwraca go z dowiązanym boundary z gp.boundary (SSOT).
+ * Jeśli gp.detectedBay nie istnieje, rekonstruuje obiekt na bazie gp.boundary i wymiarów kontenera.
+ */
+export function resolveDetectedBay(
+    generatorParams: any,
+    containerDimensionsNm?: { width: number; height: number; depth: number }
+): DetectedBay | null {
+    if (!generatorParams) return null;
+    const boundary: BayBoundary | undefined = generatorParams.boundary || generatorParams.detectedBay?.boundary;
+    const rawBay: DetectedBay | undefined = generatorParams.detectedBay;
+
+    if (rawBay && boundary) {
+        return withDerivedLrSlopeHeights({
+            ...rawBay,
+            boundary
+        });
+    }
+
+    if (!boundary) return rawBay ? withDerivedLrSlopeHeights(rawBay) : null;
+
+    const leftX = boundary.left?.planeCoordMm;
+    const rightX = boundary.right?.planeCoordMm;
+    const bottomZ = boundary.bottom?.planeCoordMm;
+    const topZ = boundary.top?.planeCoordMm;
+    const backY = boundary.back?.planeCoordMm;
+    const frontY = boundary.front?.planeCoordMm ?? boundary.frontPlaneYMm;
+
+    const widthMm = (leftX != null && rightX != null)
+        ? Math.abs(rightX - leftX)
+        : (containerDimensionsNm ? nmToMm(containerDimensionsNm.width) : 0);
+    const heightMm = (topZ != null && bottomZ != null)
+        ? Math.abs(topZ - bottomZ)
+        : (containerDimensionsNm ? nmToMm(containerDimensionsNm.height) : 0);
+    const depthMm = (backY != null && frontY != null)
+        ? Math.abs(frontY - backY)
+        : (containerDimensionsNm ? nmToMm(containerDimensionsNm.depth) : 0);
+
+    const centerX = (leftX != null && rightX != null) ? (leftX + rightX) / 2 : 0;
+    const centerY = (backY != null && frontY != null) ? (backY + frontY) / 2 : 0;
+    const centerZ = (bottomZ != null && topZ != null) ? (bottomZ + topZ) / 2 : 0;
+
+    return withDerivedLrSlopeHeights({
+        boundsMm: { width: widthMm, height: heightMm, depth: depthMm },
+        boundsNm: {
+            width: containerDimensionsNm?.width ?? mmToNm(widthMm),
+            height: containerDimensionsNm?.height ?? mmToNm(heightMm),
+            depth: containerDimensionsNm?.depth ?? mmToNm(depthMm)
+        },
+        centerWorldMm: { x: centerX, y: centerY, z: centerZ },
+        parentCabinetId: generatorParams.parentContainerId || rawBay?.parentCabinetId,
+        roofAngleDeg: rawBay?.roofAngleDeg ?? boundary.top?.slopeAngleDeg,
+        slopeAxis: rawBay?.slopeAxis,
+        roofAngleDepthDeg: rawBay?.roofAngleDepthDeg,
+        heightLeftMm: rawBay?.heightLeftMm,
+        heightRightMm: rawBay?.heightRightMm,
+        heightFrontMm: rawBay?.heightFrontMm,
+        heightBackMm: rawBay?.heightBackMm,
+        boundary
+    });
 }
 
 interface PanelFaceInfo {

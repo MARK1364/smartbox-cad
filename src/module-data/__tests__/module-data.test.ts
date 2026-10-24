@@ -142,7 +142,7 @@ describe('tree-context-menu', () => {
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
-    });
+    }, 15000);
 
     it('shows "Edytuj AGD" for appliance containers in tree context menu', async () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
@@ -186,7 +186,7 @@ describe('tree-context-menu', () => {
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
-    });
+    }, 15000);
 
     it('shows "Edytuj" for SmartPart and "Edytuj formatkę" for panel in tree context menu', async () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');

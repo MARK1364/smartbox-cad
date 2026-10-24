@@ -72,7 +72,7 @@ describe('Bloki Tree Node classification', () => {
             expect(isBlokiTreeItem(childTree)).toBe(true);
             if (opt.id === 'DRAWERS') {
                 expect(childTree.type).toBe('DRAWERS');
-            } else if (opt.id === 'SHELVES') {
+            } else if (opt.id === 'SHELVES' || opt.id === 'CORNER_SHELVES') {
                 expect(childTree.type).toBe('SHELVES');
             } else {
                 expect(childTree.type).toBe('CONTAINER');

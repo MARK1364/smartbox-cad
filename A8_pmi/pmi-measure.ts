@@ -6,10 +6,33 @@
  * Długość zawsze; składowe dX/dY/dZ tylko gdy pomiar nie leży na jednej osi CAD.
  */
 
-import { Vec3, v3, v3Add, v3Copy, v3Dot, v3Len, v3LenSq, v3Scale, v3Sub } from './dimension-solver';
+import { Vec3, v3, v3Add, v3Copy, v3Cross, v3Dot, v3Len, v3LenSq, v3Scale, v3Sub } from './dimension-solver';
 
 /** Poniżej tej wartości składowa jest traktowana jako zero [mm]. */
 export const MEASURE_DELTA_EPS = 0.5;
+
+/** Tolerancja kątowa równoległości płaszczyzn [rad] — parity z FreeCAD (Precision::Angular()). */
+export const PLANE_PARALLEL_ANGLE_RAD = 1e-12;
+
+/** @deprecated Użyj PLANE_PARALLEL_ANGLE_RAD. Zachowane dla zgodności API. */
+export const PLANE_PARALLEL_ANGLE_DEG = (PLANE_PARALLEL_ANGLE_RAD * 180) / Math.PI;
+
+/**
+ * Równoległość liczona z długości iloczynu wektorowego normalnych,
+ * czyli sin(kąta) — stabilniejsze numerycznie niż próg na iloczynie skalarnym
+ * przy bardzo małych tolerancjach.
+ */
+export function planesAreParallel(
+    normal1: Vec3,
+    normal2: Vec3,
+    angleTolRad = PLANE_PARALLEL_ANGLE_RAD,
+): boolean {
+    const len1 = v3Len(normal1);
+    const len2 = v3Len(normal2);
+    const n1 = len1 > 1e-9 ? v3Scale(normal1, 1 / len1) : v3(0, 1, 0);
+    const n2 = len2 > 1e-9 ? v3Scale(normal2, 1 / len2) : v3(0, 1, 0);
+    return v3Len(v3Cross(n1, n2)) <= Math.sin(angleTolRad);
+}
 
 export type MeasureElementKind = 'point' | 'vertex' | 'edge' | 'plane';
 
@@ -285,7 +308,7 @@ export function closestPointsOnPlanes(
 ): { p1: Vec3; p2: Vec3 } {
     const n1 = v3Len(normal1) > 1e-9 ? v3Scale(normal1, 1 / v3Len(normal1)) : v3(0, 1, 0);
     const n2 = v3Len(normal2) > 1e-9 ? v3Scale(normal2, 1 / v3Len(normal2)) : v3(0, 1, 0);
-    const parallel = Math.abs(v3Dot(n1, n2)) > 0.995;
+    const parallel = planesAreParallel(n1, n2);
     if (parallel) {
         const p1 = projectPointOnPlane(hint1, origin1, n1);
         const p2 = projectPointOnPlane(p1, origin2, n2);

@@ -1,0 +1,127 @@
+{
+  "panel.label": {
+    "pl": "Półki narożne",
+    "en": "Corner Shelves",
+    "de": "Eckregale"
+  },
+  "shelf_count.label": {
+    "pl": "Ilość półek:",
+    "en": "Shelf count:",
+    "de": "Regalanzahl:"
+  },
+  "shelf_count.tooltip": {
+    "pl": "Liczba półek L w korpusie narożnym",
+    "en": "Number of L-shaped shelves in corner cabinet",
+    "de": "Anzahl der L-förmigen Regale im Eckschrank"
+  },
+  "shelf_thickness.label": {
+    "pl": "Grubość półki:",
+    "en": "Shelf thickness:",
+    "de": "Regaldicke:"
+  },
+  "shelf_offset_front.label": {
+    "pl": "Odsuń od frontu:",
+    "en": "Front shelf offset:",
+    "de": "Versatz vorne:"
+  },
+  "shelf_offset_front.tooltip": {
+    "pl": "Odsunięcie krawędzi półki od frontu mebla (miejsce na zawiasy narożne)",
+    "en": "Offset of shelf edge from front (space for corner hinges)",
+    "de": "Versatz der Regalkante von der Front (Platz für Eckscharniere)"
+  },
+  "shelf_offset_side.label": {
+    "pl": "Luz boczny:",
+    "en": "Side clearance:",
+    "de": "Seitliches Spiel:"
+  },
+  "shelf_offset_side.tooltip": {
+    "pl": "Luz montażowy od ścian bocznych i pleców",
+    "en": "Clearance from side walls and back panels",
+    "de": "Spiel zu den Seitenwänden und Rückwänden"
+  },
+  "hole_pattern.label": {
+    "pl": "Wzór otworów:",
+    "en": "Hole pattern:",
+    "de": "Lochmuster:"
+  },
+  "hole_pattern.items.SINGLE": {
+    "pl": "Pojedynczy otw.",
+    "en": "Single hole",
+    "de": "Einzelloch"
+  },
+  "hole_pattern.items.TRIPLE": {
+    "pl": "Potrójny otw.",
+    "en": "Triple holes",
+    "de": "Dreifachloch"
+  },
+  "hole_pattern.items.SYSTEM_32": {
+    "pl": "System 32",
+    "en": "System 32",
+    "de": "System 32"
+  },
+  "hole_pattern.items.NONE": {
+    "pl": "Brak otworów",
+    "en": "No holes",
+    "de": "Keine Löcher"
+  },
+  "hole_offset_front.label": {
+    "pl": "Odsuń otwory przód:",
+    "en": "Front holes offset:",
+    "de": "Lochabstand vorne:"
+  },
+  "hole_offset_back.label": {
+    "pl": "Odsuń otwory tył:",
+    "en": "Back holes offset:",
+    "de": "Lochabstand hinten:"
+  },
+  "triple_z_offset.label": {
+    "pl": "Rozstaw otw. (góra/dół):",
+    "en": "Hole spacing (top/bottom):",
+    "de": "Lochabstand (oben/unten):"
+  },
+  "system_32_spacing.label": {
+    "pl": "Rozstaw otw.:",
+    "en": "Hole spacing:",
+    "de": "Lochabstand:"
+  },
+  "system_32_start_offset.label": {
+    "pl": "Dystans od dołu:",
+    "en": "Distance from bottom:",
+    "de": "Abstand von unten:"
+  },
+  "system_32_hole_count.label": {
+    "pl": "Ilość otw.:",
+    "en": "Hole count:",
+    "de": "Lochanzahl:"
+  },
+  "pin.label": {
+    "pl": "Podpórka:",
+    "en": "Shelf support:",
+    "de": "Bodenträger:"
+  },
+  "nailer_cutout.label": {
+    "pl": "Wcięcie na listwę narożną:",
+    "en": "Corner nailer cutout:",
+    "de": "Ausschnitt Eckleiste:"
+  },
+  "nailer_cutout.tooltip": {
+    "pl": "Wycięcie w rogu półki omijające pionową listwę narożną pleców",
+    "en": "Corner cutout bypassing the vertical corner nailer between backs",
+    "de": "Eckausschnitt um die vertikale Eckleiste der Rückwand"
+  },
+  "nailer_width.label": {
+    "pl": "Szerokość listwy:",
+    "en": "Nailer width:",
+    "de": "Leistenbreite:"
+  },
+  "nailer_thickness.label": {
+    "pl": "Grubość listwy:",
+    "en": "Nailer thickness:",
+    "de": "Leistendicke:"
+  },
+  "nailer_clearance.label": {
+    "pl": "Luz wycięcia:",
+    "en": "Cutout clearance:",
+    "de": "Ausschnitt-Spiel:"
+  }
+}

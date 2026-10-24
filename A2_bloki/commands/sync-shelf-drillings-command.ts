@@ -9,6 +9,7 @@
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
 import { buildShelvesDrillings } from '../04_shelves-drilling-builder.js';
+import { buildCornerShelvesDrillings } from '../18_corner-shelves-drilling-builder.js';
 import {
     emitMachiningFeatures,
     restoreMachiningFeatures,
@@ -34,8 +35,11 @@ export class SyncShelfDrillingsCommand implements Command {
     execute(document: ProjectDocument): void {
         if (!document) return;
 
-        // 1. Wylicz intencje nawierceń ze Bloku (Półki) — warstwa MACHINING
-        const intents = buildShelvesDrillings(document, this.cabinetContainerId);
+        // 1. Wylicz intencje nawierceń ze Bloku (Półki standardowe i narożne) — warstwa MACHINING
+        const intents = [
+            ...buildShelvesDrillings(document, this.cabinetContainerId),
+            ...buildCornerShelvesDrillings(document, this.cabinetContainerId)
+        ];
 
         // 2. Zidentyfikuj formatki (jeśli podano cabinetContainerId, tylko tego korpusu)
         let panels: any[];

@@ -220,6 +220,27 @@ describe('KORPUS_ROGOWY90 kÄ…townik', () => {
         expect(listwa.loc.y).toBeGreaterThan(0);
     });
 
+    it('listwa narożna reaguje na parametr szerokosc_listwy_naroznej_mm', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_rogowy90',
+            glebokosc_boku_lewego_mm: 600,
+            glebokosc_boku_prawego_mm: 600,
+            szerokosc_listwy_naroznej_mm: 140
+        });
+
+        const listwa = plan.parts.find(p =>
+            p.key === 'LISTWA_NAROZNA' ||
+            p.key.endsWith('LISTWA_NAROZNA') ||
+            (p.role === 'VERTICAL_DIVIDER' && String((p as any).name || '').toUpperCase().includes('NAROZ'))
+        )!;
+        expect(listwa).toBeDefined();
+        expect(listwa.dim.y).toBe(140);
+    });
+
     it('wieniec jest wpuszczany pomiedzy boczki (cofniety o grubosc BOK_L i BOK_P)', () => {
         const plan = planCabinet({
             szerokosc_mm: 900,
@@ -248,5 +269,86 @@ describe('KORPUS_ROGOWY90 kÄ…townik', () => {
         const plateD = top.dim.y;
         expect(outline[4][0]).toBeCloseTo(plateW - bokPTh, 1);
         expect(outline[4][1]).toBeCloseTo(plateD, 1);
+    });
+
+    it('tryb KATOWA_90 generuje dwie listwy schodzące się pod kątem 90°', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_rogowy90',
+            glebokosc_boku_lewego_mm: 600,
+            glebokosc_boku_prawego_mm: 600,
+            szerokosc_listwy_naroznej_mm: 100,
+            typ_listwy_naroznej: 'KATOWA_90'
+        });
+
+        const listwa1 = plan.parts.find(p => p.key === 'LISTWA_NAROZNA')!;
+        const listwa2 = plan.parts.find(p => p.key === 'LISTWA_NAROZNA_2')!;
+
+        expect(listwa1).toBeDefined();
+        expect(listwa2).toBeDefined();
+
+        // Obie listwy mają wysokość równą wnęce (H - 18 - 18 = 684)
+        expect(listwa1.dim.x).toBeCloseTo(684, 0); // LCS mapping: X=H
+        expect(listwa1.dim.y).toBeCloseTo(100, 0); // szerokość 100 mm
+        expect(listwa1.dim.z).toBeCloseTo(18, 0);  // grubość 18 mm
+
+        // Druga listwa (ramię X) ma długość (100 - 18 = 82 mm)
+        expect(listwa2.dim.x).toBeCloseTo(82, 0);  // 100 - 18
+        expect(listwa2.dim.y).toBeCloseTo(18, 0);  // grubość 18 mm
+        expect(listwa2.dim.z).toBeCloseTo(684, 0); // wysokość wnęki
+
+        // Listwa 1 jest odsunięta w stronę wnętrza na X o 100 mm (zamiast płasko przy plecach)
+        // W rogu: plecy X są na X = -450 + 1.5 = -448.5; listwa1 środek X = -450 + 3 + 100 - 9 = -356
+        expect(listwa1.loc.x).toBeCloseTo(-356, 0);
+        // Listwa 2 zewnętrzna krawędź styka się z plecami X, a czoło z listwą 1
+        expect(listwa2.loc.y).toBeCloseTo(356, 0);
+
+        // Okleinowanie krawędzi stykających się z plecami
+        expect(listwa1.edge_banding?.['-X']?.active).toBe(true);
+        expect(listwa2.edge_banding?.['-X']?.active).toBe(true);
+    });
+
+    it('tryb POJEDYNCZA generuje tylko jedną listwę narożną', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_rogowy90',
+            glebokosc_boku_lewego_mm: 600,
+            glebokosc_boku_prawego_mm: 600,
+            szerokosc_listwy_naroznej_mm: 100,
+            typ_listwy_naroznej: 'POJEDYNCZA'
+        });
+
+        const listwa1 = plan.parts.find(p => p.key === 'LISTWA_NAROZNA');
+        const listwa2 = plan.parts.find(p => p.key === 'LISTWA_NAROZNA_2');
+
+        expect(listwa1).toBeDefined();
+        expect(listwa2).toBeUndefined();
+    });
+
+    it('listwy narożne w trybie KATOWA_90 reagują na offsety gizmo', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_rogowy90',
+            typ_listwy_naroznej: 'KATOWA_90',
+            offsets: {
+                'Listwa_Narozna_shiftX': 10,
+                'Listwa_Narozna_2_shiftY': -5
+            }
+        });
+
+        const listwa1 = plan.parts.find(p => p.key === 'LISTWA_NAROZNA')!;
+        const listwa2 = plan.parts.find(p => p.key === 'LISTWA_NAROZNA_2')!;
+
+        expect(listwa1.loc.x).toBeCloseTo(-356 + 10, 0);
+        expect(listwa2.loc.y).toBeCloseTo(356 - 5, 0);
     });
 });

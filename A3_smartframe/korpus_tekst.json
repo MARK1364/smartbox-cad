@@ -199,6 +199,26 @@
     "en": "Right side",
     "de": "Rechte Seite"
   },
+  "corner90.nailer_width": {
+    "pl": "Szerokość listwy narożnej",
+    "en": "Corner nailer width",
+    "de": "Breite Eckleiste"
+  },
+  "corner90.nailer_type": {
+    "pl": "Listwa narożna",
+    "en": "Corner nailer",
+    "de": "Eckleiste"
+  },
+  "corner90.nailer_single": {
+    "pl": "1 listwa",
+    "en": "Single",
+    "de": "1 Leiste"
+  },
+  "corner90.nailer_corner90": {
+    "pl": "Kątowa 90°",
+    "en": "90° Corner",
+    "de": "90° Winkel"
+  },
   "zones.title": {
     "pl": "Wysokości Stref",
     "en": "Zone heights",

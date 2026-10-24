@@ -70,7 +70,7 @@ describe('o1_operacji builder', () => {
         const panel = makePanel();
         const feat = buildOperationFeature(recipe, panel, 'FACE_Z_MINUS');
         expect(feat).not.toBeNull();
-        expect(feat!.type).toBe('groove');
+        expect(feat!.type).toBe('pocket');
         expect(feat!.params.source).toBe('library');
         expect(feat!.params.u).toBe(60);
         expect(feat!.params.v).toBe(60);
@@ -84,6 +84,7 @@ describe('o1_operacji builder', () => {
         const recipe = getOperation('przetloczenie')!;
         const panel = makePanel(600, 720, 18);
         const feat = applyLibraryOperation(panel, 'przetloczenie', 'FACE_Z_MINUS', { through: true, fill: 'glass' });
+        expect(feat!.type).toBe('cutout');
         expect(feat!.params.depth).toBe(18);
         expect(feat!.params.through).toBe(true);
         expect(feat!.params.fill).toBe('glass');
@@ -305,6 +306,20 @@ describe('o1_operacji rewizja (edge_dims)', () => {
         expect(feat!.params.v_edge).toBe('FACE_Y_MINUS');
         expect(feat!.params.u_ref).toBe(100);
         expect(feat!.params.v_ref).toBe(80);
+    });
+
+    it('rewizja jako wycięcie na wylot (through) nie tworzy siatki dna _bottom w geometrii 3D', () => {
+        const panel = makePanel(600, 720, 18);
+        const feat = applyLibraryOperation(panel, 'rewizja', 'FACE_Z_MINUS');
+        expect(feat).not.toBeNull();
+        const mesh = buildMeshFromPanel(panel);
+        // Otwór na wylot nie może mieć zaślepiającego dna
+        expect(mesh[`feature_${feat!.id}_bottom`]).toBeUndefined();
+        // Ścianki boczne tunelu wycięcia muszą istnieć
+        expect(mesh[`feature_${feat!.id}_w0`]).toBeDefined();
+        expect(mesh[`feature_${feat!.id}_w1`]).toBeDefined();
+        expect(mesh[`feature_${feat!.id}_w2`]).toBeDefined();
+        expect(mesh[`feature_${feat!.id}_w3`]).toBeDefined();
     });
 
     it('po zmianie wysokości płyty v_ref zostaje, środek nie skacze od dołu', () => {

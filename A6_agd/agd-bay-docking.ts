@@ -88,13 +88,17 @@ export function createSmartApplianceInDetectedBay(
         yMax: { partKey: backRef?.nodeName || 'Tył', face: backRef?.face || 'FACE_Z_PLUS', panelId: backRef?.nodeId }
     };
 
+    // detectedBay w generatorParams jest odchudzone — boundary jest już w generatorParams.boundary (SSOT)
+    const slimDetectedBay = { ...bay };
+    delete (slimDetectedBay as any).boundary;
+
     container.generatorParams = {
         type: SMART_APPLIANCE_TYPE,
         kind,
         boxType: 'APPLIANCE',
         parentContainerId: parentId,
         boundary: bay.boundary,
-        detectedBay: bay,
+        detectedBay: slimDetectedBay,
         side_references_bloki: 'INNER',
         customReferences,
         bayWidthMm: Math.round(nmToMm(bayWidthNm)),

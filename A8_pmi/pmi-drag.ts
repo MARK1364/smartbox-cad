@@ -27,6 +27,8 @@ export interface OffsetDragInput {
     dragStartOffsetWorld?: Vec3 | null;
     /** Bias trybu FREE — utrzymuje linię wymiarową pod kursorem od miejsca startu. */
     freeDragBiasWorld?: Vec3 | null;
+    /** Rozwiązana oś pomiaru; dla ortogonalnego wymiaru może różnić się od cięciwy klików. */
+    measureDirWorld?: Vec3 | null;
 }
 
 /** Środek odcinka pomiarowego. */
@@ -39,8 +41,11 @@ export function perpendicularToDimension(
     vector: Vec3,
     anchor1World: Vec3,
     anchor2World: Vec3,
+    measureDirWorld?: Vec3 | null,
 ): Vec3 {
-    const dimDir = v3Sub(anchor2World, anchor1World);
+    const dimDir = measureDirWorld && v3Len(measureDirWorld) > 1e-6
+        ? measureDirWorld
+        : v3Sub(anchor2World, anchor1World);
     const dimDirNorm = v3Len(dimDir) > 1e-6 ? v3Normalize(dimDir) : v3(1, 0, 0);
     const parallel = v3Scale(dimDirNorm, v3Dot(vector, dimDirNorm));
     return v3Sub(vector, parallel);
@@ -55,9 +60,12 @@ export function computeFreeDragBias(
     anchor2World: Vec3,
     dragStartHitWorld: Vec3,
     dragStartOffsetWorld: Vec3,
+    measureDirWorld?: Vec3 | null,
 ): Vec3 {
     const mid = measureMidpoint(anchor1World, anchor2World);
-    const startPerp = perpendicularToDimension(v3Sub(dragStartHitWorld, mid), anchor1World, anchor2World);
+    const startPerp = perpendicularToDimension(
+        v3Sub(dragStartHitWorld, mid), anchor1World, anchor2World, measureDirWorld,
+    );
     return v3Sub(dragStartOffsetWorld, startPerp);
 }
 
@@ -187,7 +195,7 @@ export function computeOffsetFromPointer(input: OffsetDragInput): Vec3 | null {
 
     // Tryb FREE: składowa prostopadła do odcinka + bias startowy.
     const rel = v3Sub(hit, mid);
-    const perp = perpendicularToDimension(rel, anchor1World, anchor2World);
+    const perp = perpendicularToDimension(rel, anchor1World, anchor2World, input.measureDirWorld);
     const bias = input.freeDragBiasWorld ?? v3(0, 0, 0);
     const rawOffset = v3Add(perp, bias);
     const len = v3Len(rawOffset);
@@ -207,6 +215,7 @@ export function beginOffsetDragState(
     anchor1World: Vec3,
     anchor2World: Vec3,
     dragStartOffsetWorld: Vec3 = v3(0, 0, 0),
+    measureDirWorld?: Vec3 | null,
 ): {
     dragStartHitWorld: Vec3;
     dragStartOffsetWorld: Vec3;
@@ -219,6 +228,7 @@ export function beginOffsetDragState(
         anchor2World,
         dragStartHitWorld,
         dragStartOffsetWorld,
+        measureDirWorld,
     );
     return {
         dragStartHitWorld,

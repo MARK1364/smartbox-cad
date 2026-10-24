@@ -46,6 +46,11 @@ export function buildCabinetSubcomponents(
                 const mode = context.tryb_wienca_gornego || 'FULL';
                 if (mode === 'FULL') continue;
             }
+            const isNailer2 = key.endsWith("LISTWA_NAROZNA_2") || key === "B_LISTWA_NAROZNA_2";
+            if (isNailer2) {
+                const nailerMode = context.typ_listwy_naroznej || 'POJEDYNCZA';
+                if (nailerMode !== 'KATOWA_90') continue;
+            }
             const cleanKey = prefix && key.startsWith(prefix) ? key.slice(prefix.length) : key;
             const geom = resolveCabinetPartGeometry(cleanKey, comp, {
                 ...context,
@@ -167,6 +172,8 @@ export function collectCabinetGeometry(
         strona_blendy: strona_blendy,
         glebokosc_boku_lewego_mm: glebokosc_boku_lewego_mm,
         glebokosc_boku_prawego_mm: glebokosc_boku_prawego_mm,
+        szerokosc_listwy_naroznej_mm: params.szerokosc_listwy_naroznej_mm,
+        typ_listwy_naroznej: params.typ_listwy_naroznej,
         wysokosc_przod_mm: wysokosc_przod_mm,
         wysokosc_tyl_mm: wysokosc_tyl_mm,
         wysokosc_lewy_mm: wysokosc_lewy_mm,

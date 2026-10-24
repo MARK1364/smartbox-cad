@@ -22,7 +22,8 @@ export interface GoogleDriveUser {
 const STORAGE_KEY_CLIENT_ID = 'SMARTPANEL_GDRIVE_CLIENT_ID';
 const STORAGE_KEY_ACCESS_TOKEN = 'SMARTPANEL_GDRIVE_ACCESS_TOKEN';
 const STORAGE_KEY_TOKEN_EXPIRY = 'SMARTPANEL_GDRIVE_TOKEN_EXPIRY';
-const APP_FOLDER_NAME = 'SmartPanel CAD Projects';
+const APP_FOLDER_NAME = 'Crevo CAD Projects';
+const LEGACY_APP_FOLDER_NAME = 'SmartPanel CAD Projects';
 
 declare const google: any;
 
@@ -206,7 +207,7 @@ export class GoogleDriveService {
         if (!this._accessToken) throw new Error('Brak autoryzacji Google Drive.');
 
         // 1. Szukaj istniejącego folderu
-        const query = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${APP_FOLDER_NAME}' and trashed=false`);
+        const query = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and (name='${APP_FOLDER_NAME}' or name='${LEGACY_APP_FOLDER_NAME}') and trashed=false`);
         const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
             headers: { Authorization: `Bearer ${this._accessToken}` }
         });

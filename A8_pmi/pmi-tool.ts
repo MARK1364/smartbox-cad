@@ -31,8 +31,8 @@ import { BaseState } from '../A1_core/interaction/states/base-state';
 import { Intent } from '../A1_core/interaction/interaction-types';
 import type { CadModuleContext } from '../A1_core/cad-module-context.js';
 import { StateMachine } from '../A1_core/interaction/state-machine';
-import { Vec3, v3, v3Copy, v3Sub, v3Normalize, v3Len } from './dimension-solver';
-import { getRenderData, resolveMeasureAxis, computeAvailableMeasureAxes } from './pmi-bridge';
+import { Vec3, v3, v3Copy, v3Sub, v3Normalize, v3Len, v3Dot } from './dimension-solver';
+import { getRenderData, resolveMeasureAxis, computeAvailableMeasureAxes, isOffsetAxisAllowedAlgebraic } from './pmi-bridge';
 import { axisVectorWorld, beginOffsetDragState, computeOffsetFromPointer } from './pmi-drag';
 import { PMIAxisGuides, axisGuideOrigin, buildOffsetGuideCandidates, estimateGuideLength, guideCandidateId } from './pmi-axis-guides.js';
 import { pickOffsetGuide, createWorldToScreen } from './pmi-axis-guide-pick.js';
@@ -46,10 +46,12 @@ import {
     freeAnchorRef,
     getWorldMatrixArray,
     isPmiOverlayMesh,
+    localToWorldFromBrep,
     meshLocalToRootLocal,
+    planeNormalWorldFromMesh,
+    resolveBrepGeometryPick,
+    resolveFaceHelperWorlds,
     snapToNearestEdgeEndpoint,
-    snapWorldPointToPanelGeometry,
-    SNAP_RADIUS_MM,
     tryBuildEdgeAnchorsFromRootPoints,
 } from './pmi-id-bridge';
 import { storeOffsetFromWorld } from './pmi-resolve';
@@ -62,6 +64,7 @@ import { findEdgeSegmentsNearPointer, findVerticesNearPointer } from './pmi-edge
 import { tx } from '../T1_tlumaczenia/core.js';
 import pmiTekst from './pmi_tekst.json';
 import { ContextMenu, type CtxMenuItem } from '../A1_core/context-menu.js';
+import { ContextManager } from '../A1_core/context-manager.js';
 
 // ============================================================================
 // TYPES
@@ -328,6 +331,10 @@ export class DimensionTool extends BaseState {
                 anchor2World: this.pick2.worldPos,
                 axisSpace: this.currentAxisSpace,
                 matrixWorld: this.pick1.meshMatrix,
+                faceNormal1World: this.pick1.faceNormalWorld,
+                faceNormal2World: this.pick2.faceNormalWorld,
+                isPlane1: this.pick1.anchor.kind === 'FACE',
+                isPlane2: this.pick2.anchor.kind === 'FACE',
             });
 
             const makeAxisItem = (key: 'X' | 'Y' | 'Z', color: string): CtxMenuItem => {
@@ -386,6 +393,7 @@ export class DimensionTool extends BaseState {
         if (this.currentAxisSpace === 'ALIGNED') {
             this.currentAxisSpace = 'GLOBAL';
         }
+        this.clearParallelOffsetAxis();
         if (this.currentOffsetAxisKey === key) {
             this.currentOffsetAxisKey = '';
             this.stickyGuideId = null;
@@ -481,17 +489,23 @@ export class DimensionTool extends BaseState {
             }
         } else {
             // Sama oś: wymuszenie kierunku odsunięcia w aktualnie aktywnej ramie (G lub L).
-            if (this.currentOffsetAxisKey === key && this.stickyGuideId) {
+            const space = this.currentAxisSpace === 'LOCAL' ? 'LOCAL' : 'GLOBAL';
+            this.currentAxisSpace = space;
+            if (!this.isOffsetAxisAllowed(key, space)) {
+                this.currentOffsetAxisKey = '';
+                this.stickyGuideId = null;
+                this.setUIStatus('Oś odsunięcia musi być prostopadła do osi pomiaru');
+            } else if (this.currentOffsetAxisKey === key && this.stickyGuideId) {
                 this.currentOffsetAxisKey = '';
                 this.stickyGuideId = null;
                 this.setUIStatus('Oś odsunięcia: automatyczna');
             } else {
-                const space = this.currentAxisSpace === 'LOCAL' ? 'LOCAL' : 'GLOBAL';
-                this.currentAxisSpace = space;
                 this.currentOffsetAxisKey = key;
                 this.stickyGuideId = guideCandidateId(space, key as 'X' | 'Y' | 'Z');
             }
         }
+
+        this.clearParallelOffsetAxis();
 
         if (this.phase === 'DRAG_OFFSET') {
             this.updatePreview();
@@ -615,7 +629,13 @@ export class DimensionTool extends BaseState {
 
         const scene = this.ctx.viewport.scene;
         if (this.pick1 && this.pick2 && scene) {
-            const anchor = beginOffsetDragState(scene, this.pick1.worldPos, this.pick2.worldPos, v3(0, 0, 0));
+            const anchor = beginOffsetDragState(
+                scene,
+                this.pick1.worldPos,
+                this.pick2.worldPos,
+                v3(0, 0, 0),
+                this.currentMeasureDirectionWorld(),
+            );
             this.dragStartHitWorld = anchor.dragStartHitWorld;
             this.dragStartOffsetWorld = anchor.dragStartOffsetWorld;
             this.freeDragBiasWorld = anchor.freeDragBiasWorld;
@@ -794,9 +814,20 @@ export class DimensionTool extends BaseState {
         return findVerticesNearPointer(scene, scene.pointerX, scene.pointerY, radiusPx).length > 0;
     }
 
+    /** Wybór musi odpowiadać podświetleniu: gdy highlight pokazuje płaszczyznę, nie podmieniamy jej na krawędź. */
+    private isPlaneUnderCursor(): boolean {
+        const detection = this.geometryHighlighter?.lastDetection;
+        return !!detection?.hit && detection.geometryType === GeometryType.PLANE;
+    }
+
     private findDetectedEdge(): DetectedEdge | null {
         const scene = this.ctx.viewport.scene;
         if (!scene) return null;
+
+        // Płaszczyzna widoczna w highlighcie ma pierwszeństwo przed syntetycznymi
+        // krawędziami jej obrysu. Inaczej klik w ścianę (szczególnie wąską, np. ABS
+        // we wycięciu L) był zapisywany jako krawędź mimo podświetlonej ściany.
+        if (this.isPlaneUnderCursor()) return null;
 
         const pointerX = scene.pointerX;
         const pointerY = scene.pointerY;
@@ -849,172 +880,9 @@ export class DimensionTool extends BaseState {
             return { p1: near, p2: far };
         }
 
-        // B. Krawędź na ścianie formatki (Native Panel Face Plane)
-        const faceHits = scene.multiPick(
-            pointerX,
-            pointerY,
-            (m: any) => m && m.isEnabled() && m.metadata && m.metadata.faceName,
-        );
-
-        if (faceHits && faceHits.length > 0) {
-            const valid = faceHits.filter((h: any) => h.hit && h.pickedMesh && h.pickedPoint);
-            if (valid.length > 0) {
-                type EdgeCandidate = {
-                    hit: any;
-                    mesh: any;
-                    lp1: any;
-                    lp2: any;
-                    d3: number;
-                    dPx: number;
-                };
-                let best: EdgeCandidate | null = null;
-
-                for (const hit of valid) {
-                    const mesh = hit.pickedMesh;
-                    const hitWorld = hit.pickedPoint;
-                    const boundingInfo = mesh.getBoundingInfo();
-                    const bb = boundingInfo.boundingBox;
-                    const min = bb.minimum;
-                    const max = bb.maximum;
-                    const spanX = max.x - min.x;
-                    const spanY = max.y - min.y;
-                    const spanZ = max.z - min.z;
-
-                    const invMatrix = mesh.getWorldMatrix().clone().invert();
-                    const localHit = BABYLON.Vector3.TransformCoordinates(hitWorld, invMatrix);
-
-                    const candidateSegments: [any, any][] = [];
-                    if (spanZ < 1.0) {
-                        const z = (min.z + max.z) / 2;
-                        candidateSegments.push([new BABYLON.Vector3(min.x, min.y, z), new BABYLON.Vector3(min.x, max.y, z)]);
-                        candidateSegments.push([new BABYLON.Vector3(max.x, min.y, z), new BABYLON.Vector3(max.x, max.y, z)]);
-                        candidateSegments.push([new BABYLON.Vector3(min.x, min.y, z), new BABYLON.Vector3(max.x, min.y, z)]);
-                        candidateSegments.push([new BABYLON.Vector3(min.x, max.y, z), new BABYLON.Vector3(max.x, max.y, z)]);
-                    } else if (spanX < 1.0) {
-                        const x = (min.x + max.x) / 2;
-                        candidateSegments.push([new BABYLON.Vector3(x, min.y, min.z), new BABYLON.Vector3(x, max.y, min.z)]);
-                        candidateSegments.push([new BABYLON.Vector3(x, min.y, max.z), new BABYLON.Vector3(x, max.y, max.z)]);
-                        candidateSegments.push([new BABYLON.Vector3(x, min.y, min.z), new BABYLON.Vector3(x, min.y, max.z)]);
-                        candidateSegments.push([new BABYLON.Vector3(x, max.y, min.z), new BABYLON.Vector3(x, max.y, max.z)]);
-                    } else if (spanY < 1.0) {
-                        const y = (min.y + max.y) / 2;
-                        candidateSegments.push([new BABYLON.Vector3(min.x, y, min.z), new BABYLON.Vector3(min.x, y, max.z)]);
-                        candidateSegments.push([new BABYLON.Vector3(max.x, y, min.z), new BABYLON.Vector3(max.x, y, max.z)]);
-                        candidateSegments.push([new BABYLON.Vector3(min.x, y, min.z), new BABYLON.Vector3(max.x, y, min.z)]);
-                        candidateSegments.push([new BABYLON.Vector3(min.x, y, max.z), new BABYLON.Vector3(max.x, y, max.z)]);
-                    }
-                    if (candidateSegments.length === 0) continue;
-
-                    for (const [p1, p2] of candidateSegments) {
-                        const d3 = this.distPointToSegment3D(localHit, p1, p2);
-                        const wm = mesh.getWorldMatrix();
-                        const wp1 = BABYLON.Vector3.TransformCoordinates(p1, wm);
-                        const wp2 = BABYLON.Vector3.TransformCoordinates(p2, wm);
-                        const sp1 = BABYLON.Vector3.Project(
-                            wp1,
-                            BABYLON.Matrix.Identity(),
-                            scene.getTransformMatrix(),
-                            scene.activeCamera.viewport.toGlobal(scene.getEngine().getRenderWidth(), scene.getEngine().getRenderHeight()),
-                        );
-                        const sp2 = BABYLON.Vector3.Project(
-                            wp2,
-                            BABYLON.Matrix.Identity(),
-                            scene.getTransformMatrix(),
-                            scene.activeCamera.viewport.toGlobal(scene.getEngine().getRenderWidth(), scene.getEngine().getRenderHeight()),
-                        );
-                        const dPx = this.distPointToSegment2D(pointerX, pointerY, sp1.x, sp1.y, sp2.x, sp2.y);
-
-                        // Preferujemy segment najbliższy kursora na ekranie, a potem lokalnie w 3D.
-                        if (!best || dPx < best.dPx || (Math.abs(dPx - best.dPx) < 0.5 && d3 < best.d3)) {
-                            best = { hit, mesh, lp1: p1, lp2: p2, d3, dPx };
-                        }
-                    }
-                }
-
-                // Stały próg ekranowy: krawędź musi być naprawdę pod kursorem.
-                const edgeSnapPx = this.isCtrlPressed ? 18 : 14;
-                if (best && best.dPx <= edgeSnapPx) {
-                    const mesh = best.mesh;
-                    const hit = best.hit;
-                    const hitWorld = hit.pickedPoint;
-                    const lp1 = best.lp1;
-                    const lp2 = best.lp2;
-                    const wm = mesh.getWorldMatrix();
-                    const wp1BV = BABYLON.Vector3.TransformCoordinates(lp1, wm);
-                    const wp2BV = BABYLON.Vector3.TransformCoordinates(lp2, wm);
-
-                    const p1World = v3(wp1BV.x, wp1BV.y, wp1BV.z);
-                    const p2World = v3(wp2BV.x, wp2BV.y, wp2BV.z);
-                    const edgeDir = v3Normalize(v3Sub(p2World, p1World));
-
-                    const norm = hit.getNormal ? hit.getNormal(true) : null;
-                    const faceNormal = norm ? v3(norm.x, norm.y, norm.z) : null;
-                    const matArray = getWorldMatrixArray(mesh.parent || mesh);
-
-                    const rp1 = meshLocalToRootLocal(mesh, v3(lp1.x, lp1.y, lp1.z));
-                    const rp2 = meshLocalToRootLocal(mesh, v3(lp2.x, lp2.y, lp2.z));
-                    const edgeAnchors = tryBuildEdgeAnchorsFromRootPoints(
-                        scene,
-                        mesh,
-                        rp1,
-                        rp2,
-                        p1World,
-                        p2World,
-                    );
-
-                    const click = v3(hitWorld.x, hitWorld.y, hitWorld.z);
-
-                    if (edgeAnchors) {
-                        const dA = v3Len(v3Sub(click, edgeAnchors.p1World));
-                        const dB = v3Len(v3Sub(click, edgeAnchors.p2World));
-                        const nearFirst = dA <= dB;
-                        const edgeDirResolved = v3Normalize(v3Sub(edgeAnchors.p2World, edgeAnchors.p1World));
-                        const pNear = {
-                            worldPos: nearFirst ? edgeAnchors.p1World : edgeAnchors.p2World,
-                            anchor: nearFirst ? edgeAnchors.anchor1 : edgeAnchors.anchor2,
-                            edgeDirWorld: edgeDirResolved,
-                            faceNormalWorld: faceNormal,
-                            meshMatrix: matArray,
-                        };
-                        const pFar = {
-                            worldPos: nearFirst ? edgeAnchors.p2World : edgeAnchors.p1World,
-                            anchor: nearFirst ? edgeAnchors.anchor2 : edgeAnchors.anchor1,
-                            edgeDirWorld: edgeDirResolved,
-                            faceNormalWorld: faceNormal,
-                            meshMatrix: matArray,
-                        };
-                        return { p1: pNear, p2: pFar };
-                    }
-
-                    const d1 = v3Len(v3Sub(click, p1World));
-                    const d2 = v3Len(v3Sub(click, p2World));
-                    const nearFirst = d1 <= d2;
-                    const a1 = buildAnchorRef(mesh, p1World, v3(lp1.x, lp1.y, lp1.z));
-                    const a2 = buildAnchorRef(mesh, p2World, v3(lp2.x, lp2.y, lp2.z));
-                    return {
-                        p1: {
-                            worldPos: nearFirst ? p1World : p2World,
-                            anchor: nearFirst ? a1 : a2,
-                            edgeDirWorld: edgeDir,
-                            faceNormalWorld: faceNormal,
-                            meshMatrix: matArray,
-                        },
-                        p2: {
-                            worldPos: nearFirst ? p2World : p1World,
-                            anchor: nearFirst ? a2 : a1,
-                            edgeDirWorld: edgeDir,
-                            faceNormalWorld: faceNormal,
-                            meshMatrix: matArray,
-                        },
-                    };
-                }
-            }
-        }
-
         return null;
     }
 
-    // ========================================================================
     // POINT SNAPPING
     // ========================================================================
 
@@ -1028,27 +896,6 @@ export class DimensionTool extends BaseState {
 
         const detection = this.geometryHighlighter?.lastDetection;
         if (detection?.hit) {
-            if (detection.geometryType === GeometryType.PLANE) {
-                const mesh = detection.mesh;
-                const worldPos = v3(
-                    detection.pickedPoint!.x,
-                    detection.pickedPoint!.y,
-                    detection.pickedPoint!.z,
-                );
-                const snapped = snapWorldPointToPanelGeometry(scene, mesh, worldPos, SNAP_RADIUS_MM);
-                if (snapped) {
-                    const faceNormalWorld = detection.normal
-                        ? v3(detection.normal.x, detection.normal.y, detection.normal.z)
-                        : null;
-                    return {
-                        worldPos: snapped.worldPos,
-                        anchor: snapped.anchor,
-                        edgeDirWorld: null,
-                        faceNormalWorld,
-                        meshMatrix: getWorldMatrixArray(mesh.parent || mesh),
-                    };
-                }
-            }
             const fromDetection = this.pickPointFromDetection(detection);
             if (fromDetection) return fromDetection;
         }
@@ -1086,23 +933,7 @@ export class DimensionTool extends BaseState {
             const valid = faceHits.filter((h: any) => h.hit && h.pickedMesh && h.pickedPoint);
             if (valid.length > 0) {
                 valid.sort((a: any, b: any) => a.distance - b.distance);
-                const hit = valid[0];
-                const mesh = hit.pickedMesh;
-                const worldPos = v3(hit.pickedPoint.x, hit.pickedPoint.y, hit.pickedPoint.z);
-                const snapped = snapWorldPointToPanelGeometry(scene, mesh, worldPos, SNAP_RADIUS_MM);
-                if (snapped) {
-                    const norm = hit.getNormal ? hit.getNormal(true) : null;
-                    const faceNormalWorld = norm ? v3(norm.x, norm.y, norm.z) : null;
-                    return {
-                        worldPos: snapped.worldPos,
-                        anchor: snapped.anchor,
-                        edgeDirWorld: null,
-                        faceNormalWorld,
-                        meshMatrix: getWorldMatrixArray(mesh.parent || mesh),
-                    };
-                }
-                // Płaszczyzna bez bliskiego narożnika — kotwica FACE na ścianie.
-                return this.createPickPointFromHit(hit);
+                return this.createPickPointFromHit(valid[0]);
             }
         }
 
@@ -1165,6 +996,75 @@ export class DimensionTool extends BaseState {
         const mesh = hit.pickedMesh;
         let worldPos = v3(hit.pickedPoint.x, hit.pickedPoint.y, hit.pickedPoint.z);
 
+        // === nowa logika: spróbuj najpierw B-rep ===
+        const panelView = this.getPanelViewFromMesh(mesh);
+        if (panelView) {
+            const brepPick = resolveBrepGeometryPick(this.ctx.viewport.scene, hit, panelView);
+            if (brepPick) {
+                return this.brepPickToPickPoint(brepPick, hit);
+            }
+            // Panelowe picki muszą mieć dokładne dane B-rep; nie przechodzimy
+            // po cichu do normalnych i krawędzi wyliczanych z siatki renderowej.
+            return null;
+        }
+        if (mesh?.metadata?.panelModel) return null;
+
+        // Fallback na stary kod (dla braku B-rep lub自由 anchorów)
+        return this.createPickPointFromHitLegacy(hit, worldPos);
+    }
+
+    /**
+     * KonwertujeResolvedBrepPick na PickPoint.
+     */
+    private brepPickToPickPoint(brepPick: any, hit: any): PickPoint | null {
+        const mesh = hit.pickedMesh;
+        const root = mesh.parent || mesh;
+        const meshMatrix = getWorldMatrixArray(root);
+        const faceNormalWorld = brepPick.kind === 'FACE' ? planeNormalWorldFromMesh(mesh) : null;
+        let worldPos: Vec3 = brepPick.worldPos;
+        let anchor: PMIAnchorRef = brepPick.anchorRef;
+
+        let edgeDirWorld: Vec3 | null = null;
+        const edgePoints = mesh?.metadata?.brepPoints;
+        if (brepPick.kind === 'EDGE' && Array.isArray(edgePoints) && edgePoints.length >= 2) {
+            const p0 = v3(edgePoints[0][0], edgePoints[0][1], edgePoints[0][2]);
+            const p1 = v3(edgePoints[1][0], edgePoints[1][1], edgePoints[1][2]);
+            const d0 = v3Len(v3Sub(brepPick.localPos, p0));
+            const d1 = v3Len(v3Sub(brepPick.localPos, p1));
+            const subIndex: 0 | 1 = d0 <= d1 ? 0 : 1;
+            const localEnd = subIndex === 0 ? p0 : p1;
+            worldPos = localToWorldFromBrep(mesh.metadata.panelModel.id, localEnd, this.getPanelViewFromMesh(mesh));
+            anchor = {
+                ...brepPick.anchorRef,
+                subIndex,
+                pointLocal: localEnd,
+                pointWorldFallback: worldPos,
+            };
+            const panelView = this.getPanelViewFromMesh(mesh);
+            const worldP0 = localToWorldFromBrep(mesh.metadata.panelModel.id, p0, panelView);
+            const worldP1 = localToWorldFromBrep(mesh.metadata.panelModel.id, p1, panelView);
+            edgeDirWorld = v3Normalize(v3(
+                worldP1.x - worldP0.x,
+                worldP1.y - worldP0.y,
+                worldP1.z - worldP0.z,
+            ));
+        }
+
+        return {
+            worldPos,
+            anchor,
+            edgeDirWorld,
+            faceNormalWorld,
+            meshMatrix,
+        };
+    }
+
+    /**
+     * Stara wersja createPickPointFromHit dla fallbacku (brak B-rep).
+     */
+    private createPickPointFromHitLegacy(hit: any, worldPos: Vec3): PickPoint | null {
+        const mesh = hit.pickedMesh;
+
         // Narożnik przyciągamy do jego dokładnej pozycji, a nie do miejsca
         // trafienia w kulkę markera.
         let localOverride: Vec3 | null = null;
@@ -1201,19 +1101,17 @@ export class DimensionTool extends BaseState {
         }
 
         if (mesh?.metadata?.faceName) {
-            const scene = this.ctx.viewport.scene;
-            const snapped = scene ? snapWorldPointToPanelGeometry(scene, mesh, worldPos, SNAP_RADIUS_MM) : null;
-            if (snapped) {
-                const norm = hit.getNormal ? hit.getNormal(true) : null;
-                const faceNormalWorld = norm ? v3(norm.x, norm.y, norm.z) : null;
-                return {
-                    worldPos: snapped.worldPos,
-                    anchor: snapped.anchor,
-                    edgeDirWorld: null,
-                    faceNormalWorld,
-                    meshMatrix: getWorldMatrixArray(mesh.parent || mesh),
-                };
-            }
+            // Klik w ścianę zostaje ścianą. Punkt rysunkowy linii pomocniczej
+            // wybiera dopiero podgląd/render, gdy znane jest położenie wymiaru.
+            const norm = hit.getNormal ? hit.getNormal(true) : null;
+            const faceNormalWorld = norm ? v3(norm.x, norm.y, norm.z) : null;
+            return {
+                worldPos,
+                anchor: buildAnchorRef(mesh, worldPos),
+                edgeDirWorld: null,
+                faceNormalWorld,
+                meshMatrix: getWorldMatrixArray(mesh.parent || mesh),
+            };
         }
 
         const anchor = mesh ? buildAnchorRef(mesh, worldPos, localOverride) : freeAnchorRef(worldPos);
@@ -1240,6 +1138,22 @@ export class DimensionTool extends BaseState {
         return { worldPos, anchor, edgeDirWorld, faceNormalWorld, meshMatrix };
     }
 
+    /**
+     * Pobiera PanelView z meshu na podstawie nodeId.
+     */
+    private getPanelViewFromMesh(mesh: any): any {
+        const model = mesh?.metadata?.panelModel;
+        if (!model) return null;
+        const panelViews = ContextManager.instance.panelViews;
+        if (!panelViews) return null;
+        const direct = panelViews.get(model) || panelViews.get(model.id);
+        if (direct) return direct;
+        for (const view of panelViews.values()) {
+            if (view?.model?.id === model.id) return view;
+        }
+        return null;
+    }
+
     // ========================================================================
     // AXIS DETECTION
     // ========================================================================
@@ -1263,8 +1177,61 @@ export class DimensionTool extends BaseState {
             anchor2World: this.pick2.worldPos,
             faceNormal1World: this.pick1.faceNormalWorld,
             faceNormal2World: this.pick2.faceNormalWorld,
+            isPlane1: this.pick1.anchor.kind === 'FACE',
+            isPlane2: this.pick2.anchor.kind === 'FACE',
         });
         return measure ? { lengthMM: measure.lengthMM, axisKey: measure.measureAxisKey } : null;
+    }
+
+    /** Kierunek rzeczywistej osi wymiaru; ortogonalne wymiary nie używają cięciwy klików. */
+    private currentMeasureDirectionWorld(): Vec3 {
+        if (!this.pick1 || !this.pick2) return v3(1, 0, 0);
+        const delta = v3Sub(this.pick2.worldPos, this.pick1.worldPos);
+        if (this.currentAxisSpace === 'ALIGNED') {
+            return v3Len(delta) > 1e-6 ? v3Normalize(delta) : v3(1, 0, 0);
+        }
+
+        const measure = resolveMeasureAxis({
+            axisSpace: this.currentAxisSpace,
+            matrixWorld: this.pick1.meshMatrix,
+            measureAxisKey: this.currentMeasureAxisKey,
+            offsetAxisKey: this.currentOffsetAxisKey,
+            anchor1World: this.pick1.worldPos,
+            anchor2World: this.pick2.worldPos,
+            faceNormal1World: this.pick1.faceNormalWorld,
+            faceNormal2World: this.pick2.faceNormalWorld,
+            isPlane1: this.pick1.anchor.kind === 'FACE',
+            isPlane2: this.pick2.anchor.kind === 'FACE',
+        });
+        return measure?.axisXWorld ?? (v3Len(delta) > 1e-6 ? v3Normalize(delta) : v3(1, 0, 0));
+    }
+
+    private isOffsetAxisAllowed(axisKey: string, space: string): boolean {
+        if (!this.pick1 || !this.pick2) return true;
+        const direction = axisVectorWorld(axisKey, space, this.pick1?.meshMatrix ?? null);
+        if (!direction) return true;
+
+        const lockedDir = this.measureAxisLocked && this.currentMeasureAxisKey !== 'AUTO'
+            ? axisVectorWorld(this.currentMeasureAxisKey, this.currentAxisSpace, this.pick1?.meshMatrix ?? null)
+            : null;
+
+        return isOffsetAxisAllowedAlgebraic({
+            offsetDirWorld: direction,
+            anchor1World: this.pick1.worldPos,
+            anchor2World: this.pick2.worldPos,
+            axisSpace: this.currentAxisSpace,
+            faceNormal1World: this.pick1.faceNormalWorld,
+            faceNormal2World: this.pick2.faceNormalWorld,
+            isPlane1: this.pick1.anchor.kind === 'FACE',
+            isPlane2: this.pick2.anchor.kind === 'FACE',
+            lockedMeasureDirWorld: lockedDir,
+        });
+    }
+
+    private clearParallelOffsetAxis(): void {
+        if (!this.currentOffsetAxisKey || this.isOffsetAxisAllowed(this.currentOffsetAxisKey, this.currentAxisSpace)) return;
+        this.currentOffsetAxisKey = '';
+        this.stickyGuideId = null;
     }
 
     // ========================================================================
@@ -1274,6 +1241,7 @@ export class DimensionTool extends BaseState {
     private updateOffsetFromMouse(): void {
         if (!this.pick1 || !this.pick2) return;
 
+        this.clearParallelOffsetAxis();
         this.applyHoveredOffsetGuide();
 
         const offset = computeOffsetFromPointer({
@@ -1288,6 +1256,7 @@ export class DimensionTool extends BaseState {
             dragStartHitWorld: this.dragStartHitWorld,
             dragStartOffsetWorld: this.dragStartOffsetWorld,
             freeDragBiasWorld: this.freeDragBiasWorld,
+            measureDirWorld: this.currentMeasureDirectionWorld(),
         });
 
         if (offset) this.currentOffset = offset;
@@ -1305,7 +1274,8 @@ export class DimensionTool extends BaseState {
             origin,
             length: estimateGuideLength(scene, origin),
             localMatrix: localMatrixFromPicks(this.pick1, this.pick2),
-            measureDirWorld: v3Sub(this.pick2.worldPos, this.pick1.worldPos),
+            measureDirWorld: this.currentMeasureDirectionWorld(),
+            isOffsetAllowed: (key, space) => this.isOffsetAxisAllowed(key, space),
         });
 
         const project = createWorldToScreen(scene);
@@ -1336,6 +1306,20 @@ export class DimensionTool extends BaseState {
             store.showUnits,
         );
 
+        const scene = this.ctx.viewport.scene;
+        const helpers = scene
+            ? resolveFaceHelperWorlds({
+                scene,
+                anchor1Ref: this.pick1.anchor,
+                anchor2Ref: this.pick2.anchor,
+                anchor1World: this.pick1.worldPos,
+                anchor2World: this.pick2.worldPos,
+                offsetWorld: this.currentOffset,
+                normal1World: this.pick1.faceNormalWorld,
+                normal2World: this.pick2.faceNormalWorld,
+            })
+            : null;
+
         const rd = getRenderData({
             axisSpace: this.currentAxisSpace,
             matrixWorld: this.pick1.meshMatrix,
@@ -1344,10 +1328,14 @@ export class DimensionTool extends BaseState {
             offsetWorld: this.currentOffset,
             anchor1World: this.pick1.worldPos,
             anchor2World: this.pick2.worldPos,
+            helperAnchor1World: helpers?.helper1World ?? this.pick1.worldPos,
+            helperAnchor2World: helpers?.helper2World ?? this.pick2.worldPos,
             edgeDir1World: this.pick1.edgeDirWorld,
             edgeDir2World: this.pick2.edgeDirWorld,
             faceNormal1World: this.pick1.faceNormalWorld,
             faceNormal2World: this.pick2.faceNormalWorld,
+            isPlane1: this.pick1.anchor.kind === 'FACE',
+            isPlane2: this.pick2.anchor.kind === 'FACE',
             worldThickness: store.lineWidthMM,
             fontSizeWorld: store.textSizeMM,
             labelText,
@@ -1380,7 +1368,8 @@ export class DimensionTool extends BaseState {
             origin,
             length: estimateGuideLength(scene, origin),
             localMatrix: localMatrixFromPicks(this.pick1, this.pick2),
-            measureDirWorld: v3Sub(this.pick2.worldPos, this.pick1.worldPos),
+            measureDirWorld: this.currentMeasureDirectionWorld(),
+            isOffsetAllowed: (key, space) => this.isOffsetAxisAllowed(key, space),
         });
         const activeId = this.stickyGuideId
             || (this.currentOffsetAxisKey
@@ -1521,6 +1510,7 @@ export class DimensionTool extends BaseState {
             this.stickyGuideId = null;
             this.disposeAxisGuides();
         }
+        this.clearParallelOffsetAxis();
         if (this.phase === 'DRAG_OFFSET') this.updatePreview();
     }
 
@@ -1532,6 +1522,7 @@ export class DimensionTool extends BaseState {
         this.currentMeasureAxisKey = axis;
         this.measureAxisLocked = axis !== 'AUTO';
         PMIStore.instance.toolMeasureAxis = axis;
+        this.clearParallelOffsetAxis();
         if (this.phase === 'DRAG_OFFSET') this.updatePreview();
     }
 

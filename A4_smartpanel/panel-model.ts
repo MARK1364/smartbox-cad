@@ -528,7 +528,25 @@ export class PanelModel {
             associativeDims: this.associativeDims,
             panelForm: this.panelForm,
             frameTemplateId: this.frameTemplateId,
-            features: this.features.map(f => ({ ...f, params: { ...f.params } }))
+            features: this.features.map(f => ({ ...f, params: { ...f.params } })),
+            ...(this.cncPrograms && this.cncPrograms.length > 0 ? {
+                cncPrograms: this.cncPrograms.map(p => {
+                    const { targetPanel: _tp, ...rest } = p;
+                    try {
+                        return JSON.parse(JSON.stringify(rest));
+                    } catch {
+                        return {
+                            id: p.id,
+                            name: p.name,
+                            wcsName: p.wcsName,
+                            cornerIndex: p.cornerIndex,
+                            postprocessor: p.postprocessor,
+                            features: p.features || [],
+                            toolAssignments: p.toolAssignments || {}
+                        };
+                    }
+                })
+            } : {})
         };
     }
 
@@ -558,6 +576,14 @@ export class PanelModel {
                 params: { ...(f.params || {}) }
             }));
             this._nextId = this.features.reduce((max, f) => Math.max(max, (f.id || 0) + 1), 1);
+        }
+        if (data.cncPrograms && Array.isArray(data.cncPrograms)) {
+            this.cncPrograms = data.cncPrograms.map((p: any) => ({
+                ...p,
+                targetPanel: this,
+                targetPanelId: String(this.id || p.targetPanelId || ''),
+                targetPanelLabel: this.name
+            }));
         }
     }
 

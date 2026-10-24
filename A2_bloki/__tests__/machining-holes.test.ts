@@ -16,6 +16,12 @@ import {
     syncMachiningHoles,
 } from '../01_machining-sync.js';
 import { SyncDoorDrillingsCommand } from '../commands/sync-door-drillings-command.js';
+import { calculateDoorsPlan, normalizeDoorsParams } from '../05_doors-engine.js';
+import { calculateFlapsPlan, normalizeFlapsParams } from '../12_flaps-engine.js';
+import { calculateSkosneDoorsPlan, normalizeSkosneDoorsParams } from '../06_skosne-doors-engine.js';
+import { calculateCornerDoorsPlan, normalizeCornerDoorsParams } from '../07_corner-doors-engine.js';
+import { calculateDrawersPlan, normalizeDrawersParams } from '../09_drawers-engine.js';
+import { calculateShelvesPlan, normalizeShelvesParams } from '../04_shelves-engine.js';
 
 describe('machining-intent — buildHoleMachiningIntent', () => {
     it('buduje intencję hole w kanonicznym kształcie serializacji (identyczny jak buildery doors/flaps)', () => {
@@ -90,6 +96,239 @@ describe('machining-intent — buildHoleMachiningIntent', () => {
         });
         expect(intent.feature.params.isShelfDrilling).toBe(true);
         expect(intent.feature.params.clearance).toBe(1.5);
+    });
+
+    it('obsługuje extraParams i opcjonalny targetNodeId', () => {
+        const intent = buildHoleMachiningIntent({
+            id: 'cup_test',
+            face: 'FACE_Z_PLUS',
+            u: 21.5,
+            v: 100,
+            diameter: 35,
+            depth: 13,
+            ownerTag: 'isDoorDrilling',
+            extraParams: {
+                isDoorCup: true,
+                hinge_id: 'TEST_HINGE',
+            },
+        });
+        expect(intent.targetNodeId).toBe('');
+        expect(intent.feature.params.isDoorDrilling).toBe(true);
+        expect(intent.feature.params.isDoorCup).toBe(true);
+        expect(intent.feature.params.hinge_id).toBe('TEST_HINGE');
+    });
+
+    it('silnik drzwi (calculateDoorsPlan) buduje otwory puszki i wkrętów przez buildHoleMachiningIntent', () => {
+        const dims = { width_mm: 600, height_mm: 720, depth_mm: 560 };
+        const plan = calculateDoorsPlan(
+            dims,
+            normalizeDoorsParams({ rodzaj_drzwi: 'LEFT' }, dims)
+        );
+        const front = plan.parts[0];
+        expect(front.features).toBeDefined();
+        const features = front.features!;
+        expect(features.length).toBeGreaterThan(0);
+
+        for (const f of features) {
+            expect(f.type).toBe('hole');
+            expect(f.face).toBe('FACE_Z_PLUS');
+            expect(f.side).toBe('FACE_Z_PLUS');
+            expect(f.generatedBy).toBe('blok_doors');
+            expect(['cup', 'screw']).toContain(f.rule);
+            expect(f.drivenBy?.role).toBe('HARDWARE');
+            expect(f.drivenBy?.hardwareType).toBe('HINGE');
+            expect(f.params.u_mm).toBe(f.params.u);
+            expect(f.params.v_mm).toBe(f.params.v);
+            expect(f.params.diameter_mm).toBe(f.params.diameter);
+            expect(f.params.depth_mm).toBe(f.params.depth);
+        }
+
+        const cups = features.filter((f: any) => f.rule === 'cup');
+        const screws = features.filter((f: any) => f.rule === 'screw');
+        expect(cups.length).toBe(2);
+        expect(screws.length).toBe(4);
+        for (const c of cups) {
+            expect(c.params.isDoorCup).toBe(true);
+            expect(c.params.isDoorScrew).toBe(false);
+        }
+        for (const s of screws) {
+            expect(s.params.isDoorCup).toBe(false);
+            expect(s.params.isDoorScrew).toBe(true);
+        }
+    });
+
+    it('silnik klap (calculateFlapsPlan) buduje otwory puszki i wkrętów przez buildHoleMachiningIntent', () => {
+        const plan = calculateFlapsPlan(
+            { width_mm: 600, height_mm: 400, depth_mm: 350 },
+            normalizeFlapsParams({ kierunek_klapy: 'TOP' })
+        );
+        const flap = plan.parts[0];
+        expect(flap.features).toBeDefined();
+        const features = flap.features!;
+        expect(features.length).toBeGreaterThan(0);
+
+        for (const f of features) {
+            expect(f.type).toBe('hole');
+            expect(f.face).toBe('FACE_Z_PLUS');
+            expect(f.side).toBe('FACE_Z_PLUS');
+            expect(f.generatedBy).toBe('blok_flaps');
+            expect(['cup', 'screw']).toContain(f.rule);
+            expect(f.drivenBy?.role).toBe('HARDWARE');
+            expect(f.drivenBy?.hardwareType).toBe('HINGE');
+            expect(f.params.orientation).toBe('top');
+            expect(f.params.u_mm).toBe(f.params.u);
+            expect(f.params.v_mm).toBe(f.params.v);
+            expect(f.params.diameter_mm).toBe(f.params.diameter);
+            expect(f.params.depth_mm).toBe(f.params.depth);
+        }
+
+        const cups = features.filter((f: any) => f.rule === 'cup');
+        expect(cups.length).toBe(2);
+        for (const c of cups) {
+            expect(c.params.isFlapCup).toBe(true);
+            expect(c.params.isFlapScrew).toBe(false);
+        }
+    });
+
+    it('silnik drzwi skośnych (calculateSkosneDoorsPlan) buduje otwory puszki i wkrętów przez buildHoleMachiningIntent', () => {
+        const dims = { width_mm: 600, height_mm: 1500, depth_mm: 600 };
+        const normalized = normalizeSkosneDoorsParams({
+            rodzaj_drzwi: 'LEFT',
+            grubosc_frontu_mm: 18,
+            dach_kat_deg: -30,
+            uzyj_zawias_1: true,
+            uzyj_zawias_6: true,
+        }, dims);
+        const plan = calculateSkosneDoorsPlan(dims, normalized!);
+        const front = plan.parts.find(p => p.role === 'FRONT');
+        expect(front).toBeDefined();
+        expect(front!.features).toBeDefined();
+        const features = front!.features!;
+        expect(features.length).toBeGreaterThan(0);
+
+        for (const f of features) {
+            expect(f.type).toBe('hole');
+            expect(f.face).toBe('FACE_Z_PLUS');
+            expect(f.side).toBe('FACE_Z_PLUS');
+            expect(f.generatedBy).toBe('blok_doors');
+            expect(['cup', 'screw']).toContain(f.rule);
+            expect(f.drivenBy?.role).toBe('HARDWARE');
+            expect(f.drivenBy?.hardwareType).toBe('HINGE');
+            expect(f.drivenBy?.nodeId).toBe(`hinge_${f.params.side}_${f.params.hingeIndex}`);
+            expect(f.params.u_mm).toBe(f.params.u);
+            expect(f.params.v_mm).toBe(f.params.v);
+            expect(f.params.diameter_mm).toBe(f.params.diameter);
+            expect(f.params.depth_mm).toBe(f.params.depth);
+        }
+    });
+
+    it('silnik drzwi narożnych (calculateCornerDoorsPlan) buduje otwory puszki i wkrętów przez buildHoleMachiningIntent', () => {
+        const dims = { width_mm: 352, height_mm: 684, depth_mm: 352 };
+        const normalized = normalizeCornerDoorsParams({
+            grubosc_frontu_mm: 18,
+            szczelina_srodkowa_mm: 0,
+            nalozenie_gora_mm: 0,
+            nalozenie_dol_mm: 0,
+            nalozenie_lewe_mm: 16,
+            nalozenie_prawe_mm: 0,
+            uzyj_zawias_1: true,
+            pozycja_zawias_1_mm: 100,
+            uzyj_zawias_6: true,
+            pozycja_zawias_6_mm: 584,
+        }, dims);
+        const plan = calculateCornerDoorsPlan(dims, normalized!);
+        expect(plan.parts.length).toBe(2);
+
+        for (const part of plan.parts) {
+            expect(part.features).toBeDefined();
+            const features = part.features!;
+            expect(features.length).toBeGreaterThan(0);
+            for (const f of features) {
+                expect(f.type).toBe('hole');
+                expect(f.face).toBe('FACE_Z_PLUS');
+                expect(f.side).toBe('FACE_Z_PLUS');
+                expect(f.generatedBy).toBe('blok_doors');
+                expect(['cup', 'screw']).toContain(f.rule);
+                expect(f.drivenBy?.role).toBe('HARDWARE');
+                expect(f.drivenBy?.hardwareType).toBe('HINGE');
+                const hwSide = part.name === 'Drzwi_Lewe' ? 'lewe' : 'prawe';
+                expect(f.drivenBy?.nodeId).toBe(`hinge_gap_${hwSide}_${f.params.hingeIndex}`);
+                expect(f.params.hardwareId).toBe(`hinge_gap_${f.params.side}_${f.params.hingeIndex}`);
+                expect(f.params.hingeInGap).toBe(true);
+                expect(f.params.u_mm).toBe(f.params.u);
+                expect(f.params.v_mm).toBe(f.params.v);
+                expect(f.params.diameter_mm).toBe(f.params.diameter);
+                expect(f.params.depth_mm).toBe(f.params.depth);
+            }
+        }
+    });
+
+    it('silnik szuflad (calculateDrawersPlan) buduje otwory montażowe frontu przez buildHoleMachiningIntent', () => {
+        const dims = { width_mm: 600, height_mm: 720, depth_mm: 500 };
+        const normalized = normalizeDrawersParams({
+            liczba_szuflad: 2,
+            domyslny_system_prowadnic_id: 'BLUM_ANTARO_M',
+            grubosc_frontu_mm: 18
+        }, dims);
+        const plan = calculateDrawersPlan(dims, normalized!);
+        const front = plan.parts.find(p => p.role === 'FRONT');
+        expect(front).toBeDefined();
+        expect(front!.features).toBeDefined();
+        const features = front!.features!;
+        expect(features.length).toBeGreaterThan(0);
+        for (const f of features) {
+            expect(f.type).toBe('hole');
+            expect(f.face).toBe('FACE_Z_PLUS');
+            expect(f.side).toBe('FACE_Z_PLUS');
+            expect(f.generatedBy).toBe('blok_drawers');
+            expect(f.rule).toBe('screw');
+            expect(f.drivenBy?.role).toBe('HARDWARE');
+            expect(f.drivenBy?.hardwareType).toBe('RAIL');
+            expect(f.drivenBy?.nodeId).toMatch(/^drawer_\d+_rail_[LR]$/);
+            expect(f.params.sourcePartId).toBe(f.drivenBy?.nodeId);
+            expect(f.params.isDrawerFrontHole).toBe(true);
+            expect(f.params.u_mm).toBe(f.params.u);
+            expect(f.params.v_mm).toBe(f.params.v);
+            expect(f.params.diameter_mm).toBe(f.params.diameter);
+            expect(f.params.depth_mm).toBe(f.params.depth);
+        }
+    });
+
+    it('silnik półek (calculateShelvesPlan) buduje otwory podpórek przez buildHoleMachiningIntent', () => {
+        const dims = { width_mm: 600, height_mm: 720, depth_mm: 500 };
+        const normalized = normalizeShelvesParams({
+            liczba_polek: 2,
+            grubosc_polki_mm: 18,
+            wzor_nawiercen: 'SINGLE',
+            otwory_przod_aktywne: true,
+            otwory_tyl_aktywne: true
+        }, dims);
+        const plan = calculateShelvesPlan(dims, normalized!);
+        const shelf = plan.parts.find(p => p.role === 'SHELF_PANEL');
+        expect(shelf).toBeDefined();
+        expect(shelf!.features).toBeDefined();
+        const features = shelf!.features!;
+        expect(features.length).toBeGreaterThan(0);
+
+        for (const f of features) {
+            expect(f.type).toBe('hole');
+            expect(f.generatedBy).toBe('blok_shelves');
+            expect(f.rule).toBe('shelf_pin');
+            expect(f.params.isShelfDrilling).toBe(true);
+            expect(f.params.is_assembly_drilling).toBe(true);
+            expect(f.params.u_mm).toBe(f.params.u);
+            expect(f.params.v_mm).toBe(f.params.v);
+            expect(f.params.diameter_mm).toBe(f.params.diameter);
+            expect(f.params.depth_mm).toBe(f.params.depth);
+        }
+
+        const pinHoles = features.filter((f: any) => f.params.sourcePartId);
+        expect(pinHoles.length).toBeGreaterThan(0);
+        for (const f of pinHoles) {
+            expect(f.drivenBy?.role).toBe('HARDWARE');
+            expect(f.drivenBy?.hardwareType).toBe('SHELF_PIN');
+            expect(f.drivenBy?.nodeId).toBe(f.params.sourcePartId);
+        }
     });
 
     it('isOwnedHole rozpoznaje wyłącznie pasujący tag własności danego modułu', () => {

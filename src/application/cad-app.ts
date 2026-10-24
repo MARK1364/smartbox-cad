@@ -28,7 +28,7 @@ import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
 import { getAllPanels } from './document-queries.js';
 import { createRebuildGeometry } from './geometry-rebuild.js';
-import { generate10CabinetsRow, expandCabinet } from '../../S2_solver/demo-row.js';
+import { generate10CabinetsRow, expandCabinet, generateWardrobeDemo } from '../../S2_solver/demo-row.js';
 import { registerTreeActionHandlers } from './tree-action-handlers.js';
 
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
@@ -262,6 +262,7 @@ async function main() {
 
     (window as any).generate10CabinetsRow = generate10CabinetsRow;
     (window as any).expandCabinet = expandCabinet;
+    (window as any).generateWardrobeDemo = generateWardrobeDemo;
 
     document.addEventListener('keydown', (e) => {
         const activeTag = document.activeElement?.tagName;
@@ -326,4 +327,11 @@ async function main() {
 
 
 
-main().catch(err => console.error('Bootstrap error:', err));
+if (typeof window !== 'undefined' && (window as any).__cadAppStarted) {
+    console.log('[cad-app] Application already running — skipping duplicate bootstrap (HMR)');
+} else {
+    if (typeof window !== 'undefined') {
+        (window as any).__cadAppStarted = true;
+    }
+    main().catch(err => console.error('Bootstrap error:', err));
+}

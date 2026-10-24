@@ -41,6 +41,8 @@ export interface HoleFeature {
     toolId?: string | null;
     /** Wektor kierunku wiercenia (np. [0, 0, -1]) */
     axis?: Vector3D | null;
+    /** Wektor kierunku wiercenia w układzie lokalnym formatki (przed WCS) */
+    panelAxis?: Vector3D | null;
     /** Ściana formatki (FACE_X_* = czoło wieńca, FACE_Z_* = płaszczyzna). */
     face?: string;
     /** Otwór na wylot (konfirmat w boczku). */
@@ -71,6 +73,10 @@ export interface GrooveFeature {
     panelStartPoint?: Vector3D;
     /** Punkt końcowy wpustu w układzie lokalnym formatki (przed WCS) */
     panelEndPoint?: Vector3D;
+    /** Wektor normalny ściany w przestrzeni WCS */
+    normal?: Vector3D;
+    /** Wektor normalny ściany w układzie lokalnym formatki */
+    panelNormal?: Vector3D;
     /** Ściana formatki (np. FACE_Z_PLUS, FACE_Z_MINUS) */
     face?: string;
     /** Szerokość wpustu (mm) */
@@ -97,6 +103,8 @@ export interface ContourFeature {
     name?: string;
     /** Punkty konturu frezowania (mm) */
     points: Vector3D[];
+    /** Punkty konturu w układzie lokalnym formatki (przed WCS) */
+    panelPoints?: Vector3D[];
     /** Głębokość cięcia (mm) */
     depth: number;
     /** Nazwa/ID obiektu źródłowego */
@@ -113,9 +121,57 @@ export interface ContourFeature {
     reverseDirection?: boolean;
     /** Kompensacja promienia narzędzia (G41/G42/G40) */
     compensation?: 'Left' | 'Right' | 'Center';
+    /** Czy kontur jest wycięciem wewnętrznym (np. okno ramiaka / rewizja przelotowa) */
+    isInnerContour?: boolean;
+    /** Docelowy poziom Z cięcia w układzie lokalnym formatki (przed WCS) */
+    panelDepth?: number;
+    /** Wektor normalny ściany w przestrzeni WCS */
+    normal?: Vector3D;
+    /** Wektor normalny ściany w układzie lokalnym formatki */
+    panelNormal?: Vector3D;
 }
 
-export type CAMFeature = HoleFeature | GrooveFeature | ContourFeature;
+export interface PocketFeature {
+    name?: string;
+    /** Unikalny identyfikator cechy */
+    featureId: string;
+    /** Nazwa/ID formatki */
+    objectName: string;
+    /** Ściana formatki */
+    face?: string;
+    /** Szerokość kieszeni (mm) */
+    width: number;
+    /** Długość kieszeni (mm) */
+    length: number;
+    /** Głębokość wybrania (mm) */
+    depth: number;
+    /** 4 naroża obrysu kieszeni w przestrzeni WCS (mm) */
+    boundaryPoints: Vector3D[];
+    /** 4 naroża obrysu kieszeni w układzie lokalnym formatki (mm) */
+    panelBoundaryPoints?: Vector3D[];
+    /** Wektor normalny ściany w przestrzeni WCS */
+    normal?: Vector3D;
+    /** Wektor normalny ściany w układzie lokalnym formatki */
+    panelNormal?: Vector3D;
+    /** Przypisane ID narzędzia */
+    toolId?: string | null;
+    /** Promień zaokrąglenia narożników kieszeni (opcjonalny) */
+    cornerFilletRadius?: number;
+}
+
+export type CAMFeature = HoleFeature | GrooveFeature | ContourFeature | PocketFeature;
+
+export interface CAMStrategyParams {
+    feedRate?: number;
+    spindleRpm?: number;
+    stepoverPercent?: number;
+    stepdownMm?: number;
+    leadInMm?: number;
+    leadOutMm?: number;
+    compensation?: 'OFF' | 'LEFT' | 'RIGHT';
+    peckStepMm?: number;
+    reverseDirection?: boolean;
+}
 
 export interface ToolParameters {
     feedRate: number;      // mm/min
@@ -140,6 +196,8 @@ export interface CAMProject {
     toolAssignments: Record<string, string>; // featureId -> toolId
     projectName: string;
     postprocessor: string; // np. "Mach3", "Fanuc", "Biesse"
+    strategyId?: string;
+    strategyParams?: CAMStrategyParams;
     workpieceDimensions?: { width: number; height: number; thickness: number };
 }
 
@@ -157,11 +215,15 @@ export interface CNCOperationParameters {
     retractR?: number;
     width?: number;
     moves?: CNCMove[];
+    approachPoint?: Vector3D;
+    retractPoint?: Vector3D;
+    axis?: Vector3D;
+    face?: string;
     [key: string]: any;
 }
 
 export interface CNCOperation {
-    type: 'drill' | 'contour' | 'groove';
+    type: 'drill' | 'contour' | 'groove' | 'pocket';
     toolId: string;
     position: Vector3D;
     parameters: CNCOperationParameters;

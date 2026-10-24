@@ -73,16 +73,16 @@ export class GizmoController {
             'FACE_X_MINUS': '-X'
         },
         'VERTICAL_DIVIDER': {
-            'FACE_Y_MINUS': '-Y',
             'FACE_Y_PLUS': '+Y',
-            'FACE_X_PLUS': '+X',
-            'FACE_X_MINUS': '-X'
+            'FACE_Y_MINUS': '-Y',
+            'FACE_X_MINUS': '+X',
+            'FACE_X_PLUS': '-X'
         },
         'DIVIDER': {
-            'FACE_Y_MINUS': '-Y',
             'FACE_Y_PLUS': '+Y',
-            'FACE_X_PLUS': '+X',
-            'FACE_X_MINUS': '-X'
+            'FACE_Y_MINUS': '-Y',
+            'FACE_X_MINUS': '+X',
+            'FACE_X_PLUS': '-X'
         },
         'BOTTOM_PANEL': {
             // [90,180,0]: Ry=180 — tylna = −X (jak TOP)
@@ -96,18 +96,6 @@ export class GizmoController {
             'FACE_Y_PLUS': '+X',  // Lokalny +Y leży z TYŁU korpusu (+X / pXPlus offset)
             'FACE_X_MINUS': '-Y', // Krawędź lewa (-Y offset)
             'FACE_X_PLUS': '+Y'   // Krawędź prawa (+Y offset)
-        },
-        'SHELF_PANEL': {
-            'FACE_Y_MINUS': '+X',
-            'FACE_Y_PLUS': '-X',
-            'FACE_X_MINUS': '-Y',
-            'FACE_X_PLUS': '+Y'
-        },
-        'SHELF': {
-            'FACE_Y_MINUS': '+X',
-            'FACE_Y_PLUS': '-X',
-            'FACE_X_MINUS': '-Y',
-            'FACE_X_PLUS': '+Y'
         },
         'BACK_PANEL': {
             'FACE_Y_PLUS': '-Y', 'FACE_Y_MINUS': '+Y',
@@ -1008,8 +996,10 @@ export class GizmoController {
         const activeEntity = doc.activeEntity;
         if (!activeEntity || !this.isEntityVisible(activeEntity)) return;
 
-        // Gizma push/pull (pomarańczowe kulki) są zarezerwowane WYŁĄCZNIE dla zakładki Korpus (A3_smartframe / selectionMode === 'object')
-        if (facePicker && facePicker.selectionMode !== 'object') {
+        // Gizma push/pull korpusu: wyłączone w modułach obróbczych/CAM, solverze relacji lub podczas aktywnego pickera referencji/więzów
+        const activeTab = ContextManager.instance.activeTab;
+        const isPickingRef = Boolean(ContextManager.instance.activeReferencePicker || ContextManager.instance.activeConstraintPicker);
+        if (isPickingRef || activeTab === 'tab-c1-cnc' || activeTab === 'tab-s2-solver' || activeTab === 'tab-o1-operacji' || activeTab === 'tab-a4-smartpanel') {
             return;
         }
 
@@ -1110,10 +1100,6 @@ export class GizmoController {
                 mat.emissiveColor = emissiveColor;
                 sphere.material = mat;
                 sphere.setParent(view.root);
-                if (isCenterPlane) {
-                    // Odsunięcie niebieskiego gizma offsetu w bok (+X w LCS formatki) poza pionową oś zielonych kul (Y+/Y-)
-                    sphere.position.x += 60;
-                }
 
                 const dragBehavior = new BABYLON.PointerDragBehavior({
                     dragAxis: normal
@@ -1219,34 +1205,36 @@ export class GizmoController {
             if (view && view.root && role) {
                 let shiftParam = '';
                 let shiftAxis = new BABYLON.Vector3(1, 0, 0); // Domyślnie X
-                
-                const shiftSpec = handler?.getShift ? handler.getShift(role, targetEntity) : null;
-                if (shiftSpec) {
-                    shiftParam = shiftSpec.paramSuffix;
-                    if (shiftSpec.cadAxis === 'X') {
-                        shiftAxis = new BABYLON.Vector3(shiftSpec.sign, 0, 0);
-                    } else if (shiftSpec.cadAxis === 'Y') {
-                        // CAD Y = Babylon Z (głębokość szafki = oś Z formatki TRAVERSE_V)
-                        shiftAxis = new BABYLON.Vector3(0, 0, shiftSpec.sign);
-                    } else if (shiftSpec.cadAxis === 'Z') {
-                        // CAD Z = Babylon Y (wysokość szafki)
-                        shiftAxis = new BABYLON.Vector3(0, shiftSpec.sign, 0);
-                    }
-                } else if (role.includes('LEFT') || role === 'LEFT_SIDE_PANEL' || role === 'SIDE_LEFT') {
-                    shiftParam = 'shiftX';
-                    shiftAxis = new BABYLON.Vector3(-1, 0, 0); // Dla lewego boku (-X na zewnątrz korpusu)
-                } else if (role.includes('SIDE') || role.includes('DIVIDER')) {
-                    shiftParam = 'shiftX';
-                    shiftAxis = new BABYLON.Vector3(1, 0, 0);  // Dla prawego boku i przegród (+X na zewnątrz korpusu)
-                } else if (role.includes('BOTTOM') || role === 'BOTTOM_PANEL') {
-                    shiftParam = 'shiftZ';
-                    shiftAxis = new BABYLON.Vector3(0, -1, 0); // Dla wieńca dolnego (-Z na zewnątrz korpusu w dół)
-                } else if (role.includes('TOP') || role.includes('SHELF')) {
-                    shiftParam = 'shiftZ';
-                    shiftAxis = new BABYLON.Vector3(0, 1, 0);  // Dla wieńca górnego i półek (+Z na zewnątrz korpusu w górę)
-                } else if (role.includes('BACK')) {
-                    // Plecy mają już dedykowane niebieskie gizmo dla backOffset (brak duplikatu shiftY)
+
+                // Plecy mają już dedykowane niebieskie gizmo na FACE_Z_PLUS dla backOffset / shift (brak duplikatu centerSphere)
+                if (role === 'BACK_PANEL' || role.includes('BACK')) {
                     shiftParam = '';
+                } else {
+                    const shiftSpec = handler?.getShift ? handler.getShift(role, targetEntity) : null;
+                    if (shiftSpec) {
+                        shiftParam = shiftSpec.paramSuffix;
+                        if (shiftSpec.cadAxis === 'X') {
+                            shiftAxis = new BABYLON.Vector3(shiftSpec.sign, 0, 0);
+                        } else if (shiftSpec.cadAxis === 'Y') {
+                            // CAD Y = Babylon Z (głębokość szafki = oś Z formatki TRAVERSE_V)
+                            shiftAxis = new BABYLON.Vector3(0, 0, shiftSpec.sign);
+                        } else if (shiftSpec.cadAxis === 'Z') {
+                            // CAD Z = Babylon Y (wysokość szafki)
+                            shiftAxis = new BABYLON.Vector3(0, shiftSpec.sign, 0);
+                        }
+                    } else if (role.includes('LEFT') || role === 'LEFT_SIDE_PANEL' || role === 'SIDE_LEFT') {
+                        shiftParam = 'shiftX';
+                        shiftAxis = new BABYLON.Vector3(-1, 0, 0); // Dla lewego boku (-X na zewnątrz korpusu)
+                    } else if (role.includes('SIDE') || role.includes('DIVIDER')) {
+                        shiftParam = 'shiftX';
+                        shiftAxis = new BABYLON.Vector3(1, 0, 0);  // Dla prawego boku i przegród (+X na zewnątrz korpusu)
+                    } else if (role.includes('BOTTOM') || role === 'BOTTOM_PANEL') {
+                        shiftParam = 'shiftZ';
+                        shiftAxis = new BABYLON.Vector3(0, -1, 0); // Dla wieńca dolnego (-Z na zewnątrz korpusu w dół)
+                    } else if (role.includes('TOP') || role === 'TOP_PANEL') {
+                        shiftParam = 'shiftZ';
+                        shiftAxis = new BABYLON.Vector3(0, 1, 0);  // Dla wieńca górnego (+Z na zewnątrz korpusu w górę)
+                    }
                 }
 
                 if (shiftParam) {
@@ -1255,9 +1243,10 @@ export class GizmoController {
                     view.root.computeWorldMatrix(true);
                     const worldPos = view.root.getAbsolutePosition ? view.root.getAbsolutePosition().clone() : view.root.position.clone();
                     
-                    const centerSphere = BABYLON.MeshBuilder.CreateSphere(`faceGizmoSphere_center`, { diameter: 24 }, viewport.scene);
+                    const centerSphere = BABYLON.MeshBuilder.CreateSphere(`faceGizmoSphere_center`, { diameter: 30 }, viewport.scene);
                     centerSphere.metadata = { paramName: paramName };
                     centerSphere.position.copyFrom(worldPos);
+                    centerSphere.position.addInPlace(shiftAxis.scale(20));
                     centerSphere.setParent(view.root);
                     
                     // Środkowa kula do przesuwania (move / shift) -> ZAWSZE NIEBIESKA

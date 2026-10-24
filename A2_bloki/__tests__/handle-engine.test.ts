@@ -147,6 +147,8 @@ describe('A5_smartparts — Handle Engine & Overhang Calculations', () => {
         expect(h1.params.depth).toBe(18);
         expect(h1.params.isHandleDrilling).toBe(true);
         expect(h1.params.sourceContainerId).toBe(containerData.id);
+        expect((h1 as any).drivenBy?.nodeId).toBe(hwNode!.id);
+        expect((h2 as any).drivenBy?.nodeId).toBe(hwNode!.id);
 
         // Współrzędne (u, v) dla FACE_Z_MINUS (panelW=600, panelH=360, center=(0, 145), holes x=-80, +80):
         // u = 600/2 - hole.x; v = hole.y + 360/2 = 145 + 180 = 325 mm

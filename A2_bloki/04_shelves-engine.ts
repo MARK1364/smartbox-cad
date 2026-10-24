@@ -22,6 +22,7 @@ import {
     assertCanonicalShelvesParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { buildHoleMachiningIntent } from './01_machining-intent.js';
 
 export { assertCanonicalShelvesParams, LEGACY_SHELVES_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -176,51 +177,52 @@ export function calculateShelvesPlan(
         const features: any[] = [];
         const holeZ_mm = srodek_z_mm - grubosc_polki_mm / 2 - promien_otworu_mm;
 
-        const addHole = (id: string, name: string, face: string, u: number, v: number, clearance = 0) => {
-            features.push({
+        const addHole = (id: string, name: string, face: string, u: number, v: number, clearance = 0, pinSuffix?: string) => {
+            const hwId = pinSuffix ? `shelf_${indeks_polki}_pin_${pinSuffix}` : undefined;
+            const intent = buildHoleMachiningIntent({
                 id,
                 name,
-                type: 'hole',
-                face,
-                side: face,
-                is_assembly_drilling: true,
-                visible: false,
-                params: {
+                face: face as any,
+                u_mm: u,
+                v_mm: v,
+                diameter_mm: srednica_otworu_mm,
+                depth_mm: glebokosc_otworu_mm,
+                rule: 'shelf_pin',
+                ownerTag: 'isShelfDrilling',
+                drivenBy: hwId ? { nodeId: hwId, role: 'HARDWARE', hardwareType: 'SHELF_PIN' } : undefined,
+                sourcePartId: hwId,
+                generatedBy: 'blok_shelves',
+                extraParams: {
                     template_id: 'SINGLE',
-                    // Kanoniczne *_mm; legacy u/v/diameter/depth dla downstream CAM/testów
-                    u_mm: u,
-                    v_mm: v,
-                    diameter_mm: srednica_otworu_mm,
-                    depth_mm: glebokosc_otworu_mm,
-                    u,
-                    v,
-                    diameter: srednica_otworu_mm,
-                    depth: glebokosc_otworu_mm,
                     clearance,
                     shelfZ: srodek_z_mm,
                     holeZ: holeZ_mm,
                     is_assembly_drilling: true
                 }
             });
+            const feat = intent.feature as any;
+            feat.is_assembly_drilling = true;
+            feat.visible = false;
+            features.push(feat);
         };
 
         const uUnderLeft = -promien_otworu_mm;
         const uUnderRight = grubosc_polki_mm + promien_otworu_mm;
 
-        addHole(`hole_shelf_${indeks_polki}_left_front`, 'Lewy przód', 'FACE_X_MINUS', uUnderLeft, pozycja_otworu_przod_v_mm, luz_boczny_mm);
-        addHole(`hole_shelf_${indeks_polki}_left_back`, 'Lewy tył', 'FACE_X_MINUS', uUnderLeft, pozycja_otworu_tyl_v_mm, luz_boczny_mm);
-        addHole(`hole_shelf_${indeks_polki}_right_front`, 'Prawy przód', 'FACE_X_PLUS', uUnderRight, pozycja_otworu_przod_v_mm, luz_boczny_mm);
-        addHole(`hole_shelf_${indeks_polki}_right_back`, 'Prawy tył', 'FACE_X_PLUS', uUnderRight, pozycja_otworu_tyl_v_mm, luz_boczny_mm);
+        addHole(`hole_shelf_${indeks_polki}_left_front`, 'Lewy przód', 'FACE_X_MINUS', uUnderLeft, pozycja_otworu_przod_v_mm, luz_boczny_mm, 'LF');
+        addHole(`hole_shelf_${indeks_polki}_left_back`, 'Lewy tył', 'FACE_X_MINUS', uUnderLeft, pozycja_otworu_tyl_v_mm, luz_boczny_mm, 'LB');
+        addHole(`hole_shelf_${indeks_polki}_right_front`, 'Prawy przód', 'FACE_X_PLUS', uUnderRight, pozycja_otworu_przod_v_mm, luz_boczny_mm, 'RF');
+        addHole(`hole_shelf_${indeks_polki}_right_back`, 'Prawy tył', 'FACE_X_PLUS', uUnderRight, pozycja_otworu_tyl_v_mm, luz_boczny_mm, 'RB');
 
         if (wzor_nawiercen === 'TRIPLE') {
-            addHole(`hole_shelf_${indeks_polki}_left_front_top`, 'Lewy przód góra', 'FACE_X_MINUS', uUnderLeft + rozstaw_potrojny_z_mm, pozycja_otworu_przod_v_mm, luz_boczny_mm);
-            addHole(`hole_shelf_${indeks_polki}_left_front_bottom`, 'Lewy przód dół', 'FACE_X_MINUS', uUnderLeft - rozstaw_potrojny_z_mm, pozycja_otworu_przod_v_mm, luz_boczny_mm);
-            addHole(`hole_shelf_${indeks_polki}_left_back_top`, 'Lewy tył góra', 'FACE_X_MINUS', uUnderLeft + rozstaw_potrojny_z_mm, pozycja_otworu_tyl_v_mm, luz_boczny_mm);
-            addHole(`hole_shelf_${indeks_polki}_left_back_bottom`, 'Lewy tył dół', 'FACE_X_MINUS', uUnderLeft - rozstaw_potrojny_z_mm, pozycja_otworu_tyl_v_mm, luz_boczny_mm);
-            addHole(`hole_shelf_${indeks_polki}_right_front_top`, 'Prawy przód góra', 'FACE_X_PLUS', uUnderRight - rozstaw_potrojny_z_mm, pozycja_otworu_przod_v_mm, luz_boczny_mm);
-            addHole(`hole_shelf_${indeks_polki}_right_front_bottom`, 'Prawy przód dół', 'FACE_X_PLUS', uUnderRight + rozstaw_potrojny_z_mm, pozycja_otworu_przod_v_mm, luz_boczny_mm);
-            addHole(`hole_shelf_${indeks_polki}_right_back_top`, 'Prawy tył góra', 'FACE_X_PLUS', uUnderRight - rozstaw_potrojny_z_mm, pozycja_otworu_tyl_v_mm, luz_boczny_mm);
-            addHole(`hole_shelf_${indeks_polki}_right_back_bottom`, 'Prawy tył dół', 'FACE_X_PLUS', uUnderRight + rozstaw_potrojny_z_mm, pozycja_otworu_tyl_v_mm, luz_boczny_mm);
+            addHole(`hole_shelf_${indeks_polki}_left_front_top`, 'Lewy przód góra', 'FACE_X_MINUS', uUnderLeft + rozstaw_potrojny_z_mm, pozycja_otworu_przod_v_mm, luz_boczny_mm, 'LF');
+            addHole(`hole_shelf_${indeks_polki}_left_front_bottom`, 'Lewy przód dół', 'FACE_X_MINUS', uUnderLeft - rozstaw_potrojny_z_mm, pozycja_otworu_przod_v_mm, luz_boczny_mm, 'LF');
+            addHole(`hole_shelf_${indeks_polki}_left_back_top`, 'Lewy tył góra', 'FACE_X_MINUS', uUnderLeft + rozstaw_potrojny_z_mm, pozycja_otworu_tyl_v_mm, luz_boczny_mm, 'LB');
+            addHole(`hole_shelf_${indeks_polki}_left_back_bottom`, 'Lewy tył dół', 'FACE_X_MINUS', uUnderLeft - rozstaw_potrojny_z_mm, pozycja_otworu_tyl_v_mm, luz_boczny_mm, 'LB');
+            addHole(`hole_shelf_${indeks_polki}_right_front_top`, 'Prawy przód góra', 'FACE_X_PLUS', uUnderRight - rozstaw_potrojny_z_mm, pozycja_otworu_przod_v_mm, luz_boczny_mm, 'RF');
+            addHole(`hole_shelf_${indeks_polki}_right_front_bottom`, 'Prawy przód dół', 'FACE_X_PLUS', uUnderRight + rozstaw_potrojny_z_mm, pozycja_otworu_przod_v_mm, luz_boczny_mm, 'RF');
+            addHole(`hole_shelf_${indeks_polki}_right_back_top`, 'Prawy tył góra', 'FACE_X_PLUS', uUnderRight - rozstaw_potrojny_z_mm, pozycja_otworu_tyl_v_mm, luz_boczny_mm, 'RB');
+            addHole(`hole_shelf_${indeks_polki}_right_back_bottom`, 'Prawy tył dół', 'FACE_X_PLUS', uUnderRight + rozstaw_potrojny_z_mm, pozycja_otworu_tyl_v_mm, luz_boczny_mm, 'RB');
         }
 
         if (otwory_przod_aktywne) {

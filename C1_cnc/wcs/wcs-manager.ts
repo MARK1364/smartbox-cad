@@ -6,7 +6,7 @@
  * transformacje układu oraz punkt zerowy. Obsługuje też ręczne modyfikacje użytkownika.
  */
 
-import { Vector3D } from '../dto/cam-dto.js';
+import { Vector3D, CAMFeature, HoleFeature, GrooveFeature, ContourFeature } from '../dto/cam-dto.js';
 import { createVector3D } from '../geometry/cnc-geometry-utils.js';
 import { WcsRule } from './wcs-rules-mapper.js';
 import { Mat4 } from '../../A1_core/cad-math/mat4.js';
@@ -122,6 +122,78 @@ export class WcsManager {
     }
 
     /**
+     * Translacja punktu przestrzeni WCS z powrotem do układu lokalnego formatki (Panel Coordinates).
+     * Ścisła operacja odwrotna do toWcsCoordinates (inwersja rotacji, dirs oraz translacja origin).
+     */
+    public toPanelCoordinates(wcsPoint: Vector3D): Vector3D {
+        const totalRot = this.getRotation();
+        const dirs = this.getDirections();
+
+        // 1. Odwrócenie kierunków dirs
+        const unDir = new Vec3(
+            dirs.x !== 0 ? wcsPoint.x / dirs.x : wcsPoint.x,
+            dirs.y !== 0 ? wcsPoint.y / dirs.y : wcsPoint.y,
+            dirs.z !== 0 ? wcsPoint.z / dirs.z : wcsPoint.z
+        );
+
+        // 2. Odwrócenie rotacji
+        const rx = -totalRot.x * Math.PI / 180;
+        const ry = -totalRot.y * Math.PI / 180;
+        const rz = -totalRot.z * Math.PI / 180;
+        const qx = Quat.fromAxisAngle(Vec3.UNIT_X, rx);
+        const qy = Quat.fromAxisAngle(Vec3.UNIT_Y, ry);
+        const qz = Quat.fromAxisAngle(Vec3.UNIT_Z, rz);
+        const rotQuat = qz.multiply(qy).multiply(qx);
+        const rotMatrix = Mat4.fromQuaternion(rotQuat);
+        const invRotMatrix = rotMatrix.invert();
+
+        const unRot = invRotMatrix ? invRotMatrix.transformDirection(unDir) : unDir;
+
+        // 3. Dodanie punktu początkowego origin
+        const origin = this.getOrigin();
+        return {
+            x: unRot.x + origin.x,
+            y: unRot.y + origin.y,
+            z: unRot.z + origin.z
+        };
+    }
+
+    /**
+     * Transformacja wektora kierunkowego (np. osi otworu lub normalnej wpustu)
+     * z układu WCS z powrotem do układu lokalnego formatki (Panel Coordinates).
+     * Wektor podlega odwróceniu kierunków dirs i odwróceniu rotacji bez translacji origin.
+     */
+    public toPanelVector(wcsVector: Vector3D): Vector3D {
+        const totalRot = this.getRotation();
+        const dirs = this.getDirections();
+
+        // 1. Odwrócenie kierunków dirs
+        const unDir = new Vec3(
+            dirs.x !== 0 ? wcsVector.x / dirs.x : wcsVector.x,
+            dirs.y !== 0 ? wcsVector.y / dirs.y : wcsVector.y,
+            dirs.z !== 0 ? wcsVector.z / dirs.z : wcsVector.z
+        );
+
+        // 2. Odwrócenie rotacji
+        const rx = -totalRot.x * Math.PI / 180;
+        const ry = -totalRot.y * Math.PI / 180;
+        const rz = -totalRot.z * Math.PI / 180;
+        const qx = Quat.fromAxisAngle(Vec3.UNIT_X, rx);
+        const qy = Quat.fromAxisAngle(Vec3.UNIT_Y, ry);
+        const qz = Quat.fromAxisAngle(Vec3.UNIT_Z, rz);
+        const rotQuat = qz.multiply(qy).multiply(qx);
+        const rotMatrix = Mat4.fromQuaternion(rotQuat);
+        const invRotMatrix = rotMatrix.invert();
+
+        const unRot = invRotMatrix ? invRotMatrix.transformDirection(unDir) : unDir;
+        return {
+            x: unRot.x,
+            y: unRot.y,
+            z: unRot.z
+        };
+    }
+
+    /**
      * Obrót i odbicie wektora kierunkowego do układu WCS.
      * Wcześniej: 3× ręczne sin/cos z podatnością na Gimbal Lock (G8).
      * Teraz: delegacja do Mat4 — kaskadowe mnożenie macierzy.
@@ -151,4 +223,56 @@ export class WcsManager {
             z: rotated.z * dirs.z
         };
     }
+}
+
+/**
+ * Przelicza współrzędne wszystkich cech do nowego układu WCS
+ * na podstawie ich zachowanych pozycji lokalnych formatki (panelPosition / panelStartPoint).
+ */
+export function retransformFeaturesToWcs(features: CAMFeature[], wcsManager: WcsManager): CAMFeature[] {
+    return features.map(f => {
+        if ('position' in f) {
+            const hf = f as HoleFeature;
+            const basePos = hf.panelPosition || hf.position;
+            const basePositions = hf.panelPositions && hf.panelPositions.length > 0 
+                ? hf.panelPositions 
+                : (hf.positions || [basePos]);
+            const baseAxis = hf.panelAxis || hf.axis;
+            
+            return {
+                ...hf,
+                panelPosition: hf.panelPosition || { ...hf.position },
+                panelPositions: basePositions.map(p => ({ ...p })),
+                panelAxis: baseAxis ? { ...baseAxis } : undefined,
+                position: wcsManager.toWcsCoordinates(basePos),
+                positions: basePositions.map(p => wcsManager.toWcsCoordinates(p)),
+                axis: baseAxis ? wcsManager.transformVector(baseAxis) : undefined
+            };
+        }
+        if ('startPoint' in f && 'endPoint' in f) {
+            const gf = f as GrooveFeature;
+            const baseStart = gf.panelStartPoint || gf.startPoint;
+            const baseEnd = gf.panelEndPoint || gf.endPoint;
+            const baseNormal = gf.panelNormal || gf.normal;
+            return {
+                ...gf,
+                panelStartPoint: gf.panelStartPoint || { ...gf.startPoint },
+                panelEndPoint: gf.panelEndPoint || { ...gf.endPoint },
+                panelNormal: baseNormal ? { ...baseNormal } : undefined,
+                startPoint: wcsManager.toWcsCoordinates(baseStart),
+                endPoint: wcsManager.toWcsCoordinates(baseEnd),
+                normal: baseNormal ? wcsManager.transformVector(baseNormal) : undefined
+            };
+        }
+        if ('points' in f) {
+            const cf = f as ContourFeature;
+            const basePoints = cf.panelPoints && cf.panelPoints.length > 0 ? cf.panelPoints : cf.points;
+            return {
+                ...cf,
+                panelPoints: basePoints.map(p => ({ ...p })),
+                points: basePoints.map(p => wcsManager.toWcsCoordinates(p))
+            };
+        }
+        return f;
+    });
 }

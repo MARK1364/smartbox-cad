@@ -3,6 +3,11 @@
  * 
  * Strategia konturowania 2.5D: frezowanie po obwodzie/profilu z kompensacją promienia frezu (G41/G42),
  * łagodnym wejściem po łuku (Lead-in) oraz zejściem w wielokrotnych przejściach (Stepdown).
+ * 
+ * Założenie architektoniczne:
+ * Standard obróbki meblowej 2.5D na 3-osiowym centrum obróbczym — formatka leży płasko w płaszczyźnie XY
+ * (normalna formatki równoległa do globalnej osi ±Z: FACE_Z_PLUS lub FACE_Z_MINUS).
+ * Obróbka w obróconym przestrzennie WCS wymaga dedykowanej transformacji płaszczyzny pracy (np. G68.2 / PLANE SPATIAL).
  */
 
 import { CAMFeature, ContourFeature, Tool, Vector3D } from '../dto/cam-dto.js';
@@ -34,10 +39,23 @@ export class ProfilingStrategy implements MachiningStrategy {
 
         if ('points' in feature) {
             const contour = feature as ContourFeature;
+            if (contour.normal) {
+                const isUnitZ = Math.hypot(contour.normal.x, contour.normal.y) <= 1e-4 && Math.abs(Math.abs(contour.normal.z) - 1.0) <= 1e-4;
+                if (!isUnitZ) {
+                    throw new Error(`[ProfilingStrategy] Nieobsługiwana orientacja w WCS dla konturu: normalna [${contour.normal.x}, ${contour.normal.y}, ${contour.normal.z}] nie jest poprawnym wektorem jednostkowym w osi Z. Obróbka 2.5D wymaga ułożenia formatki w płaszczyźnie XY stołu.`);
+                }
+            }
+            if (contour.points && contour.points.length > 0) {
+                const z0 = contour.points[0].z;
+                const isPlanar = contour.points.every(p => Math.abs(p.z - z0) <= 1e-4);
+                if (!isPlanar) {
+                    throw new Error(`[ProfilingStrategy] Nieobsługiwana geometria w WCS: punkty konturu nie leżą w jednej płaszczyźnie poziomej Z stołu (brak stałego poziomu Z).`);
+                }
+            }
             points = contour.points;
             targetZ = typeof contour.depth === 'number' ? contour.depth : (points[0]?.z ?? 0);
             const startZ = points[0]?.z ?? targetZ;
-            totalDepth = Math.max(0, startZ - targetZ);
+            totalDepth = Math.abs(targetZ - startZ);
             if (contour.compensation === 'Left') compMode = 'LEFT';
             if (contour.compensation === 'Right') compMode = 'RIGHT';
             if (contour.leadIn !== undefined) leadIn = contour.leadIn;
@@ -45,6 +63,15 @@ export class ProfilingStrategy implements MachiningStrategy {
             if (contour.reverseDirection !== undefined) reverseDir = contour.reverseDirection;
         } else if ('startPoint' in feature) {
             const groove = feature as any;
+            if (groove.normal) {
+                const isUnitZ = Math.hypot(groove.normal.x, groove.normal.y) <= 1e-4 && Math.abs(Math.abs(groove.normal.z) - 1.0) <= 1e-4;
+                if (!isUnitZ) {
+                    throw new Error(`[ProfilingStrategy] Nieobsługiwana orientacja w WCS dla rowka: normalna [${groove.normal.x}, ${groove.normal.y}, ${groove.normal.z}] nie jest poprawnym wektorem jednostkowym w osi Z. Obróbka 2.5D wymaga ułożenia formatki w płaszczyźnie XY stołu.`);
+                }
+            }
+            if (groove.startPoint && groove.endPoint && Math.abs(groove.startPoint.z - groove.endPoint.z) > 1e-4) {
+                throw new Error(`[ProfilingStrategy] Nieobsługiwana geometria w WCS dla rowka: punkty startu (${groove.startPoint.z}) i końca (${groove.endPoint.z}) mają różne poziomy Z. Obróbka 2.5D wymaga rowków poziomych.`);
+            }
             points = [groove.startPoint, groove.endPoint];
             totalDepth = Math.abs(groove.depth || 10.0);
             targetZ = (groove.startPoint?.z || 0) - totalDepth;
@@ -55,7 +82,11 @@ export class ProfilingStrategy implements MachiningStrategy {
         const feed = customParams?.feedRate || tool.parameters.feedRate || 1200;
         const rpm = customParams?.spindleRpm || tool.parameters.spindleRpm || 18000;
         const toolRadius = tool.diameter / 2;
-        const stepdown = customParams?.stepdownMm && customParams.stepdownMm > 0 ? customParams.stepdownMm : (totalDepth > 0 ? totalDepth : 1);
+        const stepdown = customParams?.stepdownMm && customParams.stepdownMm > 0
+            ? customParams.stepdownMm
+            : ((tool.parameters?.stepDown && tool.parameters.stepDown > 0)
+                ? tool.parameters.stepDown
+                : (totalDepth > 0 ? totalDepth : 1));
 
         // Liczba przejść na głębokość
         const passesCount = totalDepth > 0 ? Math.ceil(totalDepth / stepdown) : 1;
@@ -104,7 +135,10 @@ export class ProfilingStrategy implements MachiningStrategy {
         }
 
         const startPt = effectivePts[0];
-        const safeZ = Math.max(startPt.z, targetZ) + 10.0;
+        // Kierunek ruchu na głębokość: +1 (w górę, np. FACE_Z_MINUS) lub -1 (w dół, np. FACE_Z_PLUS)
+        const dirZ = (targetZ >= startPt.z) ? 1 : -1;
+        // SafeZ leży na zewnątrz od strony powierzchni wejściowej (przeciwnie do kierunku cięcia)
+        const safeZ = startPt.z - dirZ * 10.0;
 
         // Najazd szybki nad punkt startowy
         commands.push({
@@ -115,7 +149,7 @@ export class ProfilingStrategy implements MachiningStrategy {
         // Wykonanie przejść na głębokość
         for (let pass = 1; pass <= passesCount; pass++) {
             const currentDepth = totalDepth > 0 ? Math.min(totalDepth, pass * stepdown) : 0;
-            const passZ = totalDepth > 0 ? (startPt.z - currentDepth) : targetZ;
+            const passZ = totalDepth > 0 ? (startPt.z + dirZ * currentDepth) : targetZ;
 
             // Zjazd w materiał na pozycję startową danej warstwy
             commands.push({

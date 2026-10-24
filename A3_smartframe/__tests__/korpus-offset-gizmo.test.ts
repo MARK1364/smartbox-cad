@@ -70,8 +70,9 @@ describe('offset gizmo roles', () => {
         expect(shift.cadAxis).toBe('Y');
     });
 
-    it('keeps shelf mapping in A2', () => {
-        expect(findOffsetGizmoHandler('SHELF_PANEL')!.id).toBe('A2_bloki');
+    it('keeps divider mapping in A2, while shelves have no carcass edge offsets', () => {
+        expect(findOffsetGizmoHandler('DIVIDER')!.id).toBe('A2_bloki');
+        expect(findOffsetGizmoHandler('SHELF_PANEL')).toBeNull();
         expect(findOffsetGizmoHandler('LEFT_SIDE_PANEL')!.id).toBe('A3_korpus');
     });
 
@@ -208,6 +209,72 @@ describe('offset gizmo roles', () => {
         const cadZRight2 = p2.loc!.z + p2.dim!.z / 2 - vRight2;
 
         expect(cadZRight2 - cadZRight1).toBeCloseTo(20, 1);
+    });
+
+    it('korpus_rogowy90 niebieskie gizmo pleców: domyślne cofnięcie 3 mm i edycja bezwzględna', async () => {
+        const handler = findOffsetGizmoHandler('BACK_PANEL')!;
+        const container = {
+            id: 'cnt_rogowy',
+            generatorParams: {
+                type: 'korpus_rogowy90'
+            }
+        };
+
+        // 1. Domyślna wartość wynosi 3 mm (tak jak w zwykłych korpusach)
+        expect(handler.readOffsetMm(container, 'B_PLECY_Y_shiftY', 'BACK_PANEL')).toBe(3);
+        expect(handler.readOffsetMm(container, 'B_PLECY_X_shiftX', 'BACK_PANEL')).toBe(3);
+
+        // 2. Jeśli kontener ma ustawione cofniecie_plecow_mm = 5, to domyślnie zwraca 5
+        const container5 = {
+            id: 'cnt_rogowy_5',
+            generatorParams: {
+                type: 'korpus_rogowy90',
+                cofniecie_plecow_mm: 5
+            }
+        };
+        expect(handler.readOffsetMm(container5, 'B_PLECY_Y_shiftY', 'BACK_PANEL')).toBe(5);
+
+        // 3. Po ustawieniu customowego offsetu w offsets (np. 15 mm)
+        const containerCustom = {
+            id: 'cnt_rogowy_custom',
+            generatorParams: {
+                type: 'korpus_rogowy90',
+                offsets: {
+                    B_PLECY_Y_shiftY: 15
+                }
+            }
+        };
+        expect(handler.readOffsetMm(containerCustom, 'B_PLECY_Y_shiftY', 'BACK_PANEL')).toBe(15);
+
+        // 4. Geometria planCabinet:
+        const { planCabinet } = await import('../smartframe-engine.js');
+        const planDefault = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            typ_korpusu: 'korpus_rogowy90'
+        });
+        const plecyYDef = planDefault.parts.find(p => p.name?.includes('Plecy_Y') || p.key?.includes('PLECY_Y'))!;
+        // D/2 + T/2 - 3 = 450 + 1.5 - 3 = 448.5
+        expect(plecyYDef.loc.y).toBeCloseTo(900 / 2 + 3 / 2 - 3, 2);
+
+        // Z customowym offsetem 15 mm
+        const planCustom = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            typ_korpusu: 'korpus_rogowy90',
+            offsets: {
+                B_PLECY_Y_shiftY: 15,
+                B_PLECY_X_shiftX: 10
+            }
+        });
+        const plecyYCustom = planCustom.parts.find(p => p.name?.includes('Plecy_Y') || p.key?.includes('PLECY_Y'))!;
+        const plecyXCustom = planCustom.parts.find(p => p.name?.includes('Plecy_X') || p.key?.includes('PLECY_X'))!;
+        // D/2 + T/2 - 15 = 450 + 1.5 - 15 = 436.5
+        expect(plecyYCustom.loc.y).toBeCloseTo(900 / 2 + 3 / 2 - 15, 2);
+        // -W/2 - T/2 + 10 = -450 - 1.5 + 10 = -441.5
+        expect(plecyXCustom.loc.x).toBeCloseTo(-900 / 2 - 3 / 2 + 10, 2);
     });
 });
 

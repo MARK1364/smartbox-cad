@@ -161,21 +161,26 @@ export class CAMVisualizer {
         }
 
         this.camRootNode = new BABYLON.TransformNode("CAM_Features_Root", this.scene);
-        if (parentNode) {
-            this.camRootNode.parent = parentNode;
-        }
         
         if (wcsManager) {
             this.renderWcsGizmo(wcsManager, parentNode);
-            
-            const dirs = wcsManager.getDirections();
+        } else if (this.wcsGizmoNode) {
+            this.wcsGizmoNode.dispose(false, true);
+        }
+
+        if (parentNode) {
+            this.camRootNode.parent = parentNode;
+            this.camRootNode.position = new BABYLON.Vector3(0, 0, 0);
+            this.camRootNode.rotation = new BABYLON.Vector3(0, 0, 0);
+            this.camRootNode.scaling = new BABYLON.Vector3(1, 1, 1);
+        } else if (this.wcsGizmoNode) {
             this.camRootNode.parent = this.wcsGizmoNode;
             this.camRootNode.position = new BABYLON.Vector3(0, 0, 0);
             this.camRootNode.rotation = new BABYLON.Vector3(0, 0, 0);
-            this.camRootNode.scaling = new BABYLON.Vector3(dirs.x, dirs.y, dirs.z);
+            this.camRootNode.scaling = new BABYLON.Vector3(1, 1, 1);
         } else {
             this.camRootNode.position = new BABYLON.Vector3(0, 0, 0);
-            if (this.wcsGizmoNode) this.wcsGizmoNode.dispose(false, true);
+            this.camRootNode.scaling = new BABYLON.Vector3(1, 1, 1);
         }
 
         const holeMat = new BABYLON.StandardMaterial("CAM_Hole_Mat", this.scene);
@@ -193,22 +198,59 @@ export class CAMVisualizer {
         profileMat.emissiveColor = new BABYLON.Color3(0.0, 0.4, 0.6); // Subtelny stały blask 3D
         profileMat.alpha = 0.85;
 
+        const useLocalPanel = Boolean(parentNode);
+
         for (const feature of features) {
             if ('position' in feature) {
                 // Otwór / Grupa otworów
                 const hole = feature as HoleFeature;
-                const positions = (hole.positions && hole.positions.length > 0) ? hole.positions : [hole.position];
+                const positions = (useLocalPanel && hole.panelPositions && hole.panelPositions.length > 0)
+                    ? hole.panelPositions
+                    : ((useLocalPanel && hole.panelPosition)
+                        ? [hole.panelPosition]
+                        : ((hole.positions && hole.positions.length > 0) ? hole.positions : [hole.position]));
                 
                 for (let pIdx = 0; pIdx < positions.length; pIdx++) {
                     const pt = positions[pIdx];
+                    const rawAxis = (useLocalPanel && hole.panelAxis) ? hole.panelAxis : (hole.axis || { x: 0, y: 0, z: -1 });
+                    const axisLen = Math.hypot(rawAxis.x, rawAxis.y, rawAxis.z) || 1.0;
+                    const dirX = rawAxis.x / axisLen;
+                    const dirY = rawAxis.y / axisLen;
+                    const dirZ = rawAxis.z / axisLen;
+                    const depth = Math.abs(hole.depth || 10);
+
                     const cyl = BABYLON.MeshBuilder.CreateCylinder(`Hole_${hole.featureId}_${pIdx}`, {
                         diameter: hole.diameter,
-                        height: hole.depth,
+                        height: depth,
                         tessellation: 24
                     }, this.scene);
-                    cyl.rotation.x = Math.PI / 2;
+
+                    cyl.position = new BABYLON.Vector3(
+                        pt.x + dirX * (depth / 2),
+                        pt.y + dirY * (depth / 2),
+                        pt.z + dirZ * (depth / 2)
+                    );
+
+                    // Orientacja cylindra (oś bazowa to Y)
+                    if (Math.abs(dirZ + 1) < 0.05) {
+                        cyl.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+                    } else if (Math.abs(dirZ - 1) < 0.05) {
+                        cyl.rotation = new BABYLON.Vector3(-Math.PI / 2, 0, 0);
+                    } else if (Math.abs(dirX - 1) < 0.05) {
+                        cyl.rotation = new BABYLON.Vector3(0, 0, -Math.PI / 2);
+                    } else if (Math.abs(dirX + 1) < 0.05) {
+                        cyl.rotation = new BABYLON.Vector3(0, 0, Math.PI / 2);
+                    } else if (Math.abs(dirY - 1) < 0.05) {
+                        cyl.rotation = new BABYLON.Vector3(0, 0, 0);
+                    } else if (Math.abs(dirY + 1) < 0.05) {
+                        cyl.rotation = new BABYLON.Vector3(Math.PI, 0, 0);
+                    } else {
+                        const defaultUp = new BABYLON.Vector3(0, 1, 0);
+                        const targetDir = new BABYLON.Vector3(dirX, dirY, dirZ);
+                        cyl.rotationQuaternion = BABYLON.Quaternion.FromUnitVectorsToRef(defaultUp, targetDir, new BABYLON.Quaternion());
+                    }
+
                     cyl.material = holeMat;
-                    cyl.position = new BABYLON.Vector3(pt.x, pt.y, pt.z - hole.depth / 2);
                     if (typeof cyl.enableEdgesRendering === 'function') {
                         cyl.enableEdgesRendering();
                         cyl.edgesWidth = 1.5;
@@ -220,8 +262,8 @@ export class CAMVisualizer {
             } else if ('startPoint' in feature) {
                 // Wpust
                 const groove = feature as GrooveFeature;
-                let s = { ...groove.startPoint };
-                let e = { ...groove.endPoint };
+                let s = (useLocalPanel && groove.panelStartPoint) ? { ...groove.panelStartPoint } : { ...groove.startPoint };
+                let e = (useLocalPanel && groove.panelEndPoint) ? { ...groove.panelEndPoint } : { ...groove.endPoint };
 
                 if (groove.reverseDirection) {
                     const temp = s;
@@ -262,20 +304,54 @@ export class CAMVisualizer {
                 }, this.scene);
                 box.material = grooveMat;
                 
+                const rawNorm = (useLocalPanel && groove.panelNormal) ? groove.panelNormal : (groove.normal || { x: 0, y: 0, z: 1 });
+                const normLen = Math.hypot(rawNorm.x, rawNorm.y, rawNorm.z) || 1.0;
+                const normX = rawNorm.x / normLen;
+                const normY = rawNorm.y / normLen;
+                const normZ = rawNorm.z / normLen;
+
+                const depthSign = groove.flipDepthDirection ? 1 : -1;
+                const cutDirX = normX * depthSign;
+                const cutDirY = normY * depthSign;
+                const cutDirZ = normZ * depthSign;
+
+                const grooveDepth = Math.abs(groove.depth || 8);
                 const center = BABYLON.Vector3.Center(p1, p2);
-                const isBottomFace = groove.face === 'FACE_Z_MINUS' || Boolean(groove.flipDepthDirection);
-                center.z += isBottomFace ? (groove.depth || 8) / 2 : -(groove.depth || 8) / 2;
-                box.position = center;
+                box.position = new BABYLON.Vector3(
+                    center.x + cutDirX * (grooveDepth / 2),
+                    center.y + cutDirY * (grooveDepth / 2),
+                    center.z + cutDirZ * (grooveDepth / 2)
+                );
                 
                 const dir = p2.subtract(p1);
-                box.rotation.z = Math.atan2(dir.y, dir.x);
+                const dirLen = dir.length();
+                if (dirLen > 0.001) {
+                    const axisX = dir.scale(1.0 / dirLen);
+                    const cutDir = new BABYLON.Vector3(cutDirX, cutDirY, cutDirZ);
+                    const cutDirLen = cutDir.length();
+                    const axisZ = cutDirLen > 0.001 ? cutDir.scale(1.0 / cutDirLen) : new BABYLON.Vector3(0, 0, 1);
+                    let axisY = BABYLON.Vector3.Cross(axisZ, axisX);
+                    if (axisY.lengthSquared() < 0.001) {
+                        axisY = BABYLON.Vector3.Cross(axisX, new BABYLON.Vector3(0, 1, 0));
+                        if (axisY.lengthSquared() < 0.001) {
+                            axisY = BABYLON.Vector3.Cross(axisX, new BABYLON.Vector3(0, 0, 1));
+                        }
+                    }
+                    axisY.normalize();
+                    const finalAxisZ = BABYLON.Vector3.Cross(axisX, axisY).normalize();
+
+                    box.rotation = BABYLON.Vector3.RotationFromAxis(axisX, axisY, finalAxisZ);
+                }
                 box.parent = this.camRootNode;
             } else if ('points' in feature && Array.isArray((feature as any).points) && (feature as any).points.length > 0) {
                 // Stała ścieżka profilu na formatce z uwzględnieniem Wejścia (Lead-In), Wyjścia (Lead-Out) oraz Kompensacji
                 const contour = feature as ContourFeature;
-                // Wartość Z jest dokładnie tą wyliczoną lub podaną przez użytkownika w oknie (np. 0 dla wierzchu, -18 dla spodu)
-                const targetZ = typeof contour.depth === 'number' ? contour.depth : (contour.points[0]?.z || 0);
-                const pointsWithZ = contour.points.map((p: any) => ({
+                const baseContourPoints = (useLocalPanel && contour.panelPoints && contour.panelPoints.length > 0)
+                    ? contour.panelPoints
+                    : contour.points;
+                // Wartość Z jest dokładnie tą wyliczoną lub podaną przez użytkownika w oknie
+                const targetZ = typeof contour.depth === 'number' ? contour.depth : (baseContourPoints[0]?.z || 0);
+                const pointsWithZ = baseContourPoints.map((p: any) => ({
                     ...p,
                     z: targetZ
                 }));
@@ -499,20 +575,38 @@ export class CAMVisualizer {
         this.toolpathsRootNode = new BABYLON.TransformNode("CAM_Toolpaths_Root", this.scene);
         if (parentNode) {
             this.toolpathsRootNode.parent = parentNode;
-        }
-
-        if (wcsManager) {
+            this.toolpathsRootNode.position = new BABYLON.Vector3(0, 0, 0);
+            this.toolpathsRootNode.rotation = new BABYLON.Vector3(0, 0, 0);
+            this.toolpathsRootNode.scaling = new BABYLON.Vector3(1, 1, 1);
+        } else if (wcsManager) {
             const origin = wcsManager.getOrigin();
             const rot = wcsManager.getRotation();
-            const dirs = wcsManager.getDirections();
             this.toolpathsRootNode.position = new BABYLON.Vector3(origin.x, origin.y, origin.z);
             this.toolpathsRootNode.rotation = new BABYLON.Vector3(
                 rot.x * Math.PI / 180,
                 rot.y * Math.PI / 180,
                 rot.z * Math.PI / 180
             );
-            this.toolpathsRootNode.scaling = new BABYLON.Vector3(dirs.x, dirs.y, dirs.z);
+            this.toolpathsRootNode.scaling = new BABYLON.Vector3(1, 1, 1);
         }
+
+        const toViewPt = (pt: any): any => {
+            if (parentNode && wcsManager && typeof wcsManager.toPanelCoordinates === 'function') {
+                const p = wcsManager.toPanelCoordinates(pt);
+                return new BABYLON.Vector3(p.x, p.y, p.z);
+            }
+            return new BABYLON.Vector3(pt.x, pt.y, pt.z);
+        };
+
+        const toViewVector = (vec: any): any => {
+            if (parentNode && wcsManager && typeof wcsManager.toPanelVector === 'function') {
+                const v = wcsManager.toPanelVector(vec);
+                const len = Math.hypot(v.x, v.y, v.z) || 1.0;
+                return { x: v.x / len, y: v.y / len, z: v.z / len };
+            }
+            const len = Math.hypot(vec.x, vec.y, vec.z) || 1.0;
+            return { x: vec.x / len, y: vec.y / len, z: vec.z / len };
+        };
 
         const safeZOffset = 25.0; // mm nad powierzchnią (SAFE_Z)
         const rapidLines: Array<any[]> = [];
@@ -521,16 +615,26 @@ export class CAMVisualizer {
         let currentCursor = new BABYLON.Vector3(0, 0, safeZOffset);
 
         for (const op of operations) {
-            const pos = op.position;
-            const opSafePos = new BABYLON.Vector3(pos.x, pos.y, pos.z + safeZOffset);
-
-            // 1. Przejazd szybki G0 do punktu bezpiecznego nad operacją
-            rapidLines.push([currentCursor, opSafePos]);
+            const pos = toViewPt(op.position);
+            const rawAxis = op.parameters?.axis || { x: 0, y: 0, z: -1 };
+            const axisVec = toViewVector(rawAxis);
+            const ax = axisVec.x;
+            const ay = axisVec.y;
+            const az = axisVec.z;
 
             if (op.type === 'drill') {
                 const depth = Math.abs(op.parameters?.depth || 10.0);
-                const bottomPos = new BABYLON.Vector3(pos.x, pos.y, pos.z - depth);
-                const surfacePos = new BABYLON.Vector3(pos.x, pos.y, pos.z);
+                const surfacePos = pos;
+                const opSafePos = new BABYLON.Vector3(
+                    surfacePos.x - ax * safeZOffset,
+                    surfacePos.y - ay * safeZOffset,
+                    surfacePos.z - az * safeZOffset
+                );
+
+                // 1. Przejazd szybki G0 do punktu bezpiecznego nad operacją
+                rapidLines.push([currentCursor, opSafePos]);
+
+                const bottomPos = new BABYLON.Vector3(surfacePos.x + ax * depth, surfacePos.y + ay * depth, surfacePos.z + az * depth);
 
                 // G0 najazd z wysokości bezpiecznej do powierzchni materiału
                 rapidLines.push([opSafePos, surfacePos]);
@@ -542,24 +646,48 @@ export class CAMVisualizer {
                 currentCursor = opSafePos;
             } else if (op.type === 'groove' || op.type === 'contour') {
                 const moves = op.parameters?.moves || [];
-                const depth = Math.abs(op.parameters?.depth || 0.0);
-                const cutStart = new BABYLON.Vector3(pos.x, pos.y, pos.z - depth);
+                const cutStart = pos;
+                const surfPt = op.parameters?.surfacePoint;
+                const surfacePos = surfPt ? toViewPt(surfPt) : cutStart;
+                const norm = op.parameters?.normal || { x: 0, y: 0, z: 1 };
+                const unitNorm = toViewVector(norm);
 
-                // Zanurzenie G1
-                rapidLines.push([opSafePos, new BABYLON.Vector3(pos.x, pos.y, pos.z)]);
-                cuttingLines.push([new BABYLON.Vector3(pos.x, pos.y, pos.z), cutStart]);
+                const strategyApproach = op.parameters?.approachPoint;
+                const approachPos = strategyApproach
+                    ? toViewPt(strategyApproach)
+                    : new BABYLON.Vector3(
+                        surfacePos.x + unitNorm.x * safeZOffset,
+                        surfacePos.y + unitNorm.y * safeZOffset,
+                        surfacePos.z + unitNorm.z * safeZOffset
+                    );
+
+                // Dojazd G0 z poprzedniej pozycji do punktu bezpiecznego
+                rapidLines.push([currentCursor, approachPos]);
+                if (strategyApproach) {
+                    cuttingLines.push([approachPos, cutStart]);
+                } else {
+                    // Standardowy pipeline dojeżdża do powierzchni, a następnie zagłębia narzędzie.
+                    rapidLines.push([approachPos, surfacePos]);
+                    cuttingLines.push([surfacePos, cutStart]);
+                }
 
                 let cutCursor = cutStart;
                 for (const m of moves) {
                     if (m.endPoint) {
-                        const mEnd = new BABYLON.Vector3(m.endPoint.x, m.endPoint.y, m.endPoint.z - depth);
+                        const mEnd = toViewPt(m.endPoint);
                         cuttingLines.push([cutCursor, mEnd]);
                         cutCursor = mEnd;
                     }
                 }
 
-                // Wycofanie do SafeZ po zakończeniu konturu
-                const cutRetract = new BABYLON.Vector3(cutCursor.x, cutCursor.y, cutCursor.z + safeZOffset);
+                // Wycofanie do punktu bezpiecznego po zakończeniu cięcia
+                const cutRetract = strategyApproach
+                    ? toViewPt(op.parameters?.retractPoint || strategyApproach)
+                    : new BABYLON.Vector3(
+                        cutCursor.x + unitNorm.x * safeZOffset,
+                        cutCursor.y + unitNorm.y * safeZOffset,
+                        cutCursor.z + unitNorm.z * safeZOffset
+                    );
                 rapidLines.push([cutCursor, cutRetract]);
                 currentCursor = cutRetract;
             }

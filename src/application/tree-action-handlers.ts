@@ -5,6 +5,7 @@
 
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
+import { HardwareModel } from '../../A1_core/hardware-model.js';
 import { RemoveNodeCommand } from '../../A1_core/commands/remove-node-command.js';
 import { collectNodeCleanupCommands } from '../../A1_core/node-cleanup-port.js';
 import { isManualPanel } from '../../A4_smartpanel/panel-model.js';
@@ -178,7 +179,11 @@ export function registerTreeActionHandlers(
       }
       const hwNodes = doc.getNodesByType ? doc.getNodesByType(NodeType.HARDWARE) : [];
       for (const hw of hwNodes) {
-        if (!hw.domainData) hw.domainData = {} as any;
+        if (!hw.domainData) {
+          hw.domainData = new HardwareModel({ id: hw.id, name: hw.name });
+        } else if (typeof (hw.domainData as any).toJSON !== 'function') {
+          hw.domainData = HardwareModel.fromJSON(hw.domainData);
+        }
         (hw.domainData as any).visible = keepIds.has(hw.id);
       }
 
@@ -196,7 +201,11 @@ export function registerTreeActionHandlers(
       }
       const hwNodes = doc.getNodesByType ? doc.getNodesByType(NodeType.HARDWARE) : [];
       for (const hw of hwNodes) {
-        if (!hw.domainData) hw.domainData = {} as any;
+        if (!hw.domainData) {
+          hw.domainData = new HardwareModel({ id: hw.id, name: hw.name });
+        } else if (typeof (hw.domainData as any).toJSON !== 'function') {
+          hw.domainData = HardwareModel.fromJSON(hw.domainData);
+        }
         (hw.domainData as any).visible = true;
       }
       rebuildGeometry();
@@ -254,8 +263,12 @@ export function registerTreeActionHandlers(
           ? doc.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === data.id)
           : null);
       if (hwNode) {
-        const curVis = (hwNode.domainData as any)?.visible !== false;
-        if (!hwNode.domainData) hwNode.domainData = {} as any;
+        if (!hwNode.domainData) {
+          hwNode.domainData = new HardwareModel({ id: hwNode.id, name: hwNode.name });
+        } else if (typeof (hwNode.domainData as any).toJSON !== 'function') {
+          hwNode.domainData = HardwareModel.fromJSON(hwNode.domainData);
+        }
+        const curVis = (hwNode.domainData as any).visible !== false;
         const nextVis = !curVis;
         (hwNode.domainData as any).visible = nextVis;
 
@@ -281,8 +294,12 @@ export function registerTreeActionHandlers(
           ? doc.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === data.id)
           : null);
       if (hwNode) {
-        const curFrozen = !!(hwNode.domainData as any)?.frozen;
-        if (!hwNode.domainData) hwNode.domainData = {} as any;
+        if (!hwNode.domainData) {
+          hwNode.domainData = new HardwareModel({ id: hwNode.id, name: hwNode.name });
+        } else if (typeof (hwNode.domainData as any).toJSON !== 'function') {
+          hwNode.domainData = HardwareModel.fromJSON(hwNode.domainData);
+        }
+        const curFrozen = !!(hwNode.domainData as any).frozen;
         const newFrozen = !curFrozen;
         (hwNode.domainData as any).frozen = newFrozen;
 

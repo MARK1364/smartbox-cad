@@ -6,6 +6,7 @@ import { type ModuleDims, toDimensionsMm } from './01_base-engine.js';
 import type { BlokiPlanResult } from './01_bloki-types.js';
 import type {
     CornerDoorsPlanParams,
+    CornerShelvesPlanParams,
     DividersPlanParams,
     DoorsPlanParams,
     DrawersPlanParams,
@@ -28,6 +29,7 @@ import {
     normalizeSkosneDoorsParams
 } from './06_skosne-doors-engine.js';
 import { calculateCornerDoorsPlan, normalizeCornerDoorsParams } from './07_corner-doors-engine.js';
+import { calculateCornerShelvesPlan, normalizeCornerShelvesParams } from './18_corner-shelves-engine.js';
 import { calculateTubesPlan, normalizeTubesParams } from './08_tubes-engine.js';
 import { calculateDrawersPlan, normalizeDrawersParams } from './09_drawers-engine.js';
 import { calculateDividersPlan, normalizeDividersParams } from './10_dividers-engine.js';
@@ -73,6 +75,12 @@ export function buildCornerDoorsPlan(params: CornerDoorsPlanParams, dims: Module
     const normalized = normalizeCornerDoorsParams(params, dims_mm);
     if (!normalized) return { parts: [], hardware: [] };
     return calculateCornerDoorsPlan(dims_mm, normalized);
+}
+
+export function buildCornerShelvesPlan(params: CornerShelvesPlanParams, dims: ModuleDims): BlokiPlanResult {
+    const dims_mm = toDimensionsMm(dims);
+    const normalized = normalizeCornerShelvesParams(params, dims_mm);
+    return calculateCornerShelvesPlan(dims_mm, normalized);
 }
 
 export function buildTubesPlan(params: TubesPlanParams, dims: ModuleDims): BlokiPlanResult {

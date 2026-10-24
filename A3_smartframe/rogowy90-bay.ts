@@ -159,8 +159,8 @@ export function probeRogowy90BayFromCADPoint(
     const W = nmToMm((cab.domainData as any).width || mmToNm(900));
     const D = nmToMm((cab.domainData as any).depth || mmToNm(900));
     const H = nmToMm((cab.domainData as any).height || mmToNm(720));
-    const bokLewy = Math.max(50, Number(gp.glebokosc_boku_lewego_mm ?? 600));
-    const bokPrawy = Math.max(50, Number(gp.glebokosc_boku_prawego_mm ?? bokLewy));
+    const bokLewy = Math.max(10, Number(gp.glebokosc_boku_lewego_mm ?? 600));
+    const bokPrawy = Math.max(10, Number(gp.glebokosc_boku_prawego_mm ?? bokLewy));
 
     const plecyX = findRogowyPanel(cab, 'PLECY_X');
     const plecyY = findRogowyPanel(cab, 'PLECY_Y');

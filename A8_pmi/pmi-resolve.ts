@@ -18,11 +18,14 @@ import {
     resolveAnchorMatrix,
     resolveAnchorWorld,
     resolveDirectionWorld,
+    resolveFaceHelperWorlds,
 } from './pmi-id-bridge';
 
 export interface ResolvedAnnotation {
     anchor1World: Vec3;
     anchor2World: Vec3;
+    helperAnchor1World: Vec3;
+    helperAnchor2World: Vec3;
     offsetWorld: Vec3;
     matrixWorld: number[] | null;
     edgeDir1World: Vec3 | null;
@@ -61,7 +64,11 @@ export function storeOffsetFromWorld(
  * Rozwiązuje wszystkie odniesienia adnotacji do bieżącego stanu sceny.
  * Zwraca `null`, gdy kotwice zdegenerowały się do jednego punktu.
  */
-export function resolveAnnotation(scene: any, ann: PMIAnnotation): ResolvedAnnotation | null {
+export function resolveAnnotation(
+    scene: any,
+    ann: PMIAnnotation,
+    offsetWorldOverride?: Vec3 | null,
+): ResolvedAnnotation | null {
     const anchor1World = resolveAnchorWorld(scene, ann.anchor1);
     const anchor2World = resolveAnchorWorld(scene, ann.anchor2);
     if (!anchor1World || !anchor2World) return null;
@@ -73,15 +80,31 @@ export function resolveAnnotation(scene: any, ann: PMIAnnotation): ResolvedAnnot
     );
     if (v3Len(delta) <= 1e-6) return null;
 
+    const offsetWorld = offsetWorldOverride ?? resolveOffsetWorld(scene, ann);
+    const faceNormal1World = resolveDirectionWorld(scene, ann.anchor1, ann.faceNormal1Local);
+    const faceNormal2World = resolveDirectionWorld(scene, ann.anchor2, ann.faceNormal2Local);
+    const helpers = resolveFaceHelperWorlds({
+        scene,
+        anchor1Ref: ann.anchor1,
+        anchor2Ref: ann.anchor2,
+        anchor1World,
+        anchor2World,
+        offsetWorld,
+        normal1World: faceNormal1World,
+        normal2World: faceNormal2World,
+    });
+
     return {
         anchor1World,
         anchor2World,
-        offsetWorld: resolveOffsetWorld(scene, ann),
+        helperAnchor1World: helpers.helper1World,
+        helperAnchor2World: helpers.helper2World,
+        offsetWorld,
         matrixWorld: resolveAnchorMatrix(scene, ann.anchor1),
         edgeDir1World: resolveDirectionWorld(scene, ann.anchor1, ann.edgeDir1Local),
         edgeDir2World: resolveDirectionWorld(scene, ann.anchor2, ann.edgeDir2Local),
-        faceNormal1World: resolveDirectionWorld(scene, ann.anchor1, ann.faceNormal1Local),
-        faceNormal2World: resolveDirectionWorld(scene, ann.anchor2, ann.faceNormal2Local),
+        faceNormal1World,
+        faceNormal2World,
     };
 }
 
@@ -97,10 +120,10 @@ export function buildAnnotationRenderData(
     store: PMIStore,
     offsetWorldOverride?: Vec3 | null,
 ): BridgeRenderData | null {
-    const resolved = resolveAnnotation(scene, ann);
+    const resolved = resolveAnnotation(scene, ann, offsetWorldOverride);
     if (!resolved) return null;
 
-    const offsetWorld = offsetWorldOverride ?? resolved.offsetWorld;
+    const offsetWorld = resolved.offsetWorld;
 
     const measure = resolveMeasureAxis({
         axisSpace: ann.axisSpace,
@@ -111,6 +134,8 @@ export function buildAnnotationRenderData(
         anchor2World: resolved.anchor2World,
         faceNormal1World: resolved.faceNormal1World,
         faceNormal2World: resolved.faceNormal2World,
+        isPlane1: ann.anchor1.kind === 'FACE',
+        isPlane2: ann.anchor2.kind === 'FACE',
     });
     if (!measure) return null;
 
@@ -124,10 +149,14 @@ export function buildAnnotationRenderData(
         offsetWorld,
         anchor1World: resolved.anchor1World,
         anchor2World: resolved.anchor2World,
+        helperAnchor1World: resolved.helperAnchor1World,
+        helperAnchor2World: resolved.helperAnchor2World,
         edgeDir1World: resolved.edgeDir1World,
         edgeDir2World: resolved.edgeDir2World,
         faceNormal1World: resolved.faceNormal1World,
         faceNormal2World: resolved.faceNormal2World,
+        isPlane1: ann.anchor1.kind === 'FACE',
+        isPlane2: ann.anchor2.kind === 'FACE',
         worldThickness: store.lineWidthMM,
         fontSizeWorld: store.textSizeMM,
         labelText: ann.text,

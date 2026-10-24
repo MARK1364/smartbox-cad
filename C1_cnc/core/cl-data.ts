@@ -41,6 +41,8 @@ export interface CLCommand {
         peckStep?: number;
         dwellTime?: number;
         type: 'STANDARD' | 'PECK' | 'DWELL';
+        axis?: Vector3D;
+        face?: string;
     };
     arcParams?: {
         center: Vector3D;

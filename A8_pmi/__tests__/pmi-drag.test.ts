@@ -37,6 +37,18 @@ describe('pmi-drag', () => {
         expect(offset.y).toBeCloseTo(25, 5);
     });
 
+    it('FREE drag filtruje kierunek osi rozwiązanej, nie skośny chord kliknięć', () => {
+        const p1 = v3(0, 0, 0);
+        const p2 = v3(100, 20, -15);
+        const mid = v3(50, 10, -7.5);
+        const bias = computeFreeDragBias(p1, p2, mid, v3(0, 0, 0), v3(1, 0, 0));
+        const filtered = perpendicularToDimension(v3(40, 12, 8), p1, p2, v3(1, 0, 0));
+        expect(filtered.x).toBeCloseTo(0, 5);
+        expect(filtered.y).toBeCloseTo(12, 5);
+        expect(filtered.z).toBeCloseTo(8, 5);
+        expect(bias.x).toBeCloseTo(0, 5);
+    });
+
     it('axisVectorWorld: CAD Y to Babylon Z (GLOBAL)', () => {
         const dir = axisVectorWorld('Y', 'GLOBAL', null);
         expect(dir?.x).toBeCloseTo(0, 5);

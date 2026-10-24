@@ -33,8 +33,13 @@ export interface TransformJSON {
     rot: [number, number, number];
 }
 
-export const SUPPORTED_FEATURE_TYPES = ['hole', 'groove'] as const;
+export const SUPPORTED_FEATURE_TYPES = ['hole', 'groove', 'pocket', 'cutout'] as const;
 export type SupportedFeatureType = typeof SUPPORTED_FEATURE_TYPES[number];
+export type PanelFeatureType = SupportedFeatureType;
+
+export function isSupportedFeatureType(type: string): type is SupportedFeatureType {
+    return SUPPORTED_FEATURE_TYPES.includes(type as any);
+}
 
 /**
  * Walidacja typu feature'a na granicy wejścia (wczytanie / import / edycja projektu).
@@ -60,10 +65,10 @@ export interface FeatureJSON {
     id: number;
     /**
      * Typ obróbki/cechy.
-     * Natywny silnik 2.5D wspiera w pełni: "hole" oraz "groove".
-     * Typy "fillet", "pocket", "slot" są zdefiniowane w schemacie pod przyszłe rozszerzenia (rzucają błąd przy walidacji wejściowej).
+     * Natywny silnik 2.5D wspiera w pełni: "hole", "groove", "pocket" oraz "cutout".
+     * Typy "fillet", "slot" są zdefiniowane w schemacie pod przyszłe rozszerzenia (rzucają błąd przy walidacji wejściowej).
      */
-    type: "hole" | "groove" | "fillet" | "pocket" | "slot" | string;
+    type: "hole" | "groove" | "pocket" | "cutout" | "fillet" | "slot" | string;
     name?: string;
     visible?: boolean;
     /** Nazwa ściany na której leży feature, np. "front", "back", "left", "right", "top", "bottom" */

@@ -82,6 +82,8 @@ export function FloatingKorpusEdit({
     const [blindSide, setBlindSide] = useState<BlindSide>('LEFT');
     const [bokLewy, setBokLewy] = useState(600);
     const [bokPrawy, setBokPrawy] = useState(600);
+    const [szerokoscListwy, setSzerokoscListwy] = useState(100);
+    const [typListwy, setTypListwy] = useState<'POJEDYNCZA' | 'KATOWA_90'>('POJEDYNCZA');
     const [heightLeft, setHeightLeft] = useState(1000);
     const [heightRight, setHeightRight] = useState(2200);
     const [heightFront, setHeightFront] = useState(2200);
@@ -108,6 +110,8 @@ export function FloatingKorpusEdit({
         if (p.strona_blendy) setBlindSide(p.strona_blendy);
         if (p.glebokosc_boku_lewego_mm !== undefined) setBokLewy(p.glebokosc_boku_lewego_mm);
         if (p.glebokosc_boku_prawego_mm !== undefined) setBokPrawy(p.glebokosc_boku_prawego_mm);
+        if (p.szerokosc_listwy_naroznej_mm !== undefined) setSzerokoscListwy(p.szerokosc_listwy_naroznej_mm);
+        if (p.typ_listwy_naroznej) setTypListwy(p.typ_listwy_naroznej);
         if (p.wysokosc_lewy_mm !== undefined) setHeightLeft(p.wysokosc_lewy_mm);
         if (p.wysokosc_prawy_mm !== undefined) setHeightRight(p.wysokosc_prawy_mm);
         if (p.wysokosc_przod_mm !== undefined) setHeightFront(p.wysokosc_przod_mm);
@@ -135,6 +139,8 @@ export function FloatingKorpusEdit({
         hR2: number = heightRight,
         hF: number = heightFront,
         hBk: number = heightBack,
+        sL: number = szerokoscListwy,
+        tL: 'POJEDYNCZA' | 'KATOWA_90' = typListwy,
     ) => {
         const corner = type === 'KORPUS_ROGOWY1' || type === 'KORPUS_ROGOWY90';
         const skosnyLrUc = type === 'KORPUS_SKOSNY_LR_UC';
@@ -154,6 +160,8 @@ export function FloatingKorpusEdit({
             strona_blendy: bs,
             glebokosc_boku_lewego_mm: bl,
             glebokosc_boku_prawego_mm: bp,
+            szerokosc_listwy_naroznej_mm: sL,
+            typ_listwy_naroznej: tL,
             wysokosc_lewy_mm: hL,
             wysokosc_prawy_mm: hR2,
             wysokosc_przod_mm: hF,
@@ -161,7 +169,7 @@ export function FloatingKorpusEdit({
         }, container);
     }, [
         projectModel, container, cabinetType, blindWidth, blindSide,
-        bokLewy, bokPrawy, heightLeft, heightRight, heightFront, heightBack,
+        bokLewy, bokPrawy, szerokoscListwy, typListwy, heightLeft, heightRight, heightFront, heightBack,
     ]);
 
     if (!container) return null;
@@ -233,12 +241,50 @@ export function FloatingKorpusEdit({
                     <InputRow label={tx(korpusTekst, 'corner90.side_left', TX_NS)} value={bokLewy} min={200} max={Math.max(200, width - 50)}
                         onChange={(v) => {
                             setBokLewy(v);
-                            triggerRealtime(width, height, depth, 1, height, 0, backOffset, 'KORPUS_ROGOWY90', blindWidth, blindSide, v, bokPrawy, heightLeft, heightRight, heightFront, heightBack);
+                            triggerRealtime(width, height, depth, 1, height, 0, backOffset, 'KORPUS_ROGOWY90', blindWidth, blindSide, v, bokPrawy, heightLeft, heightRight, heightFront, heightBack, szerokoscListwy, typListwy);
                         }} />
                     <InputRow label={tx(korpusTekst, 'corner90.side_right', TX_NS)} value={bokPrawy} min={200} max={Math.max(200, depth - 50)}
                         onChange={(v) => {
                             setBokPrawy(v);
-                            triggerRealtime(width, height, depth, 1, height, 0, backOffset, 'KORPUS_ROGOWY90', blindWidth, blindSide, bokLewy, v, heightLeft, heightRight, heightFront, heightBack);
+                            triggerRealtime(width, height, depth, 1, height, 0, backOffset, 'KORPUS_ROGOWY90', blindWidth, blindSide, bokLewy, v, heightLeft, heightRight, heightFront, heightBack, szerokoscListwy, typListwy);
+                        }} />
+                    <div style={{ fontSize: '10px', color: '#999', margin: '6px 0 2px' }}>
+                        {tx(korpusTekst, 'corner90.nailer_type', TX_NS)}
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                        {(['POJEDYNCZA', 'KATOWA_90'] as const).map((t) => {
+                            const labelKey = t === 'POJEDYNCZA' ? 'corner90.nailer_single' : 'corner90.nailer_corner90';
+                            const active = typListwy === t;
+                            return (
+                                <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => {
+                                        setTypListwy(t);
+                                        triggerRealtime(width, height, depth, 1, height, 0, backOffset, 'KORPUS_ROGOWY90', blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, heightFront, heightBack, szerokoscListwy, t);
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        padding: '4px 6px',
+                                        background: active ? 'rgba(59, 130, 246, 0.25)' : '#252528',
+                                        border: active ? '1px solid #3b82f6' : '1px solid #3a3a3e',
+                                        borderRadius: '4px',
+                                        color: '#ddd',
+                                        cursor: 'pointer',
+                                        fontSize: '10px',
+                                        fontWeight: active ? 700 : 500,
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {tx(korpusTekst, labelKey, TX_NS)}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <InputRow label={tx(korpusTekst, 'corner90.nailer_width', TX_NS)} value={szerokoscListwy} min={20} max={300}
+                        onChange={(v) => {
+                            setSzerokoscListwy(v);
+                            triggerRealtime(width, height, depth, 1, height, 0, backOffset, 'KORPUS_ROGOWY90', blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, heightFront, heightBack, v, typListwy);
                         }} />
                 </>
             )}

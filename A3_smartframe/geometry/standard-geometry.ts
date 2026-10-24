@@ -37,6 +37,10 @@ export interface CabinetPartGeometryContext {
     glebokosc_boku_lewego_mm?: number;
     /** Głębokość prawego boku / ramienia [mm] — korpus_rogowy90. */
     glebokosc_boku_prawego_mm?: number;
+    /** Szerokość listwy narożnej [mm] — korpus_rogowy90. */
+    szerokosc_listwy_naroznej_mm?: number;
+    /** Tryb listwy narożnej: POJEDYNCZA (płaska) | KATOWA_90 (dwie listwy w kąt) | BRAK */
+    typ_listwy_naroznej?: 'POJEDYNCZA' | 'KATOWA_90' | 'BRAK';
     typ_korpusu?: CabinetType;
     /** Wysokość przodu [mm] — korpus_skosny. */
     wysokosc_przod_mm?: number;
@@ -141,6 +145,8 @@ export function resolveCabinetPartGeometry(
             pXPlus, pXMinus, pYPlus, pYMinus,
             bok_lewy: ctx.glebokosc_boku_lewego_mm ?? fallbackArmMm,
             bok_prawy: ctx.glebokosc_boku_prawego_mm ?? fallbackArmMm,
+            szerokosc_listwy_naroznej_mm: ctx.szerokosc_listwy_naroznej_mm,
+            typ_listwy_naroznej: ctx.typ_listwy_naroznej,
             pfx,
             name,
             backGrooveDepth: ctx.wpuszczenie_plecow_mm ?? 11,
@@ -243,25 +249,56 @@ export function resolveCabinetPartGeometry(
         });
     }
 
+    const readBackShift = (): number => {
+        const candidates = [
+            `${ctx.zonePrefix || ''}Plecy_shiftY`,
+            `${ctx.zonePrefix || ''}BACK_PANEL_shiftY`,
+            'Dol_Plecy_shiftY',
+            'B_Plecy_shiftY',
+            'Plecy_shiftY',
+            'BACK_PANEL_shiftY'
+        ];
+        for (const k of candidates) {
+            const v = ctx.offsets?.[k];
+            if (v !== undefined && v !== null && Number.isFinite(Number(v))) return Number(v);
+        }
+        return 0;
+    };
+    const backShiftY = readBackShift();
+    const shortenedD = D - backOffset + backShiftY;
+    const shortenedLocY = (-backOffset + backShiftY) / 2;
+
     if (matchedKey === "BOK_L" || matchedKey === "SIDE_LEFT" || role === "LEFT_SIDE_PANEL") {
+        const overlapLeft = readBackEdgeOffset(ctx.offsets, 'Plecy', '-X', backEdgeDefault, pfx);
+        const isShortened = overlapLeft >= thickness - 0.05 && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: H + pYPlus + pYMinus, y: D + pXMinus + pXPlus, z: thickness },
-            loc: { x: -W / 2 + thickness / 2 + shiftX, y: (pXPlus - pXMinus) / 2 + shiftY, z: H / 2 + (pYPlus - pYMinus) / 2 + shiftZ }
+            dim: { x: H + pYPlus + pYMinus, y: targetD + pXMinus + pXPlus, z: thickness },
+            loc: { x: -W / 2 + thickness / 2 + shiftX, y: targetLocY + (pXPlus - pXMinus) / 2 + shiftY, z: H / 2 + (pYPlus - pYMinus) / 2 + shiftZ }
         };
     }
     if (matchedKey === "BOK_P" || matchedKey === "SIDE_RIGHT" || role === "RIGHT_SIDE_PANEL") {
+        const overlapRight = readBackEdgeOffset(ctx.offsets, 'Plecy', '+X', backEdgeDefault, pfx);
+        const isShortened = overlapRight >= thickness - 0.05 && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: H + pYPlus + pYMinus, y: D + pXMinus + pXPlus, z: thickness },
-            loc: { x: W / 2 - thickness / 2 + shiftX, y: (pXPlus - pXMinus) / 2 + shiftY, z: H / 2 + (pYPlus - pYMinus) / 2 + shiftZ }
+            dim: { x: H + pYPlus + pYMinus, y: targetD + pXMinus + pXPlus, z: thickness },
+            loc: { x: W / 2 - thickness / 2 + shiftX, y: targetLocY + (pXPlus - pXMinus) / 2 + shiftY, z: H / 2 + (pYPlus - pYMinus) / 2 + shiftZ }
         };
     }
     if (matchedKey === "WIENIEC_D" || matchedKey === "BOTTOM" || role === "BOTTOM_PANEL") {
+        const overlapBottom = readBackEdgeOffset(ctx.offsets, 'Plecy', '-Y', backEdgeDefault, pfx);
+        const isShortened = overlapBottom >= thickness - 0.05 && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: innerWidth + pYMinus + pYPlus, y: D + pXMinus + pXPlus, z: thickness },
-            loc: { x: midShift + (pYPlus - pYMinus) / 2, y: (pXPlus - pXMinus) / 2, z: thickness / 2 - shiftZ }
+            dim: { x: innerWidth + pYMinus + pYPlus, y: targetD + pXMinus + pXPlus, z: thickness },
+            loc: { x: midShift + (pYPlus - pYMinus) / 2, y: targetLocY + (pXPlus - pXMinus) / 2, z: thickness / 2 - shiftZ }
         };
     }
     if (matchedKey === "WIENIEC_S" || matchedKey === "SHELF" || role === "SHELF") {
@@ -310,10 +347,14 @@ export function resolveCabinetPartGeometry(
             };
         } else {
             if (isWieniecGT2) return null;
+            const overlapTop = readBackEdgeOffset(ctx.offsets, 'Plecy', '+Y', backEdgeDefault, pfx);
+            const isShortened = overlapTop >= thickness - 0.05 && shortenedD > 0;
+            const targetD = isShortened ? shortenedD : D;
+            const targetLocY = isShortened ? shortenedLocY : 0;
             return {
                 thickness,
-                dim: { x: innerWidth + pYMinus + pYPlus, y: D + pXMinus + pXPlus, z: thickness },
-                loc: { x: midShift + (pYPlus - pYMinus) / 2, y: (pXPlus - pXMinus) / 2, z: H - thickness / 2 + shiftZ }
+                dim: { x: innerWidth + pYMinus + pYPlus, y: targetD + pXMinus + pXPlus, z: thickness },
+                loc: { x: midShift + (pYPlus - pYMinus) / 2, y: targetLocY + (pXPlus - pXMinus) / 2, z: H - thickness / 2 + shiftZ }
             };
         }
     }

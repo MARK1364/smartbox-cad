@@ -23,6 +23,8 @@ import { SMARTPART_HANDLE_TYPE } from './handles/handle-types.js';
 import { HandleCatalogBrowser } from './handles/handle-catalog-browser.js';
 import { updateSmartPartHangersGroup } from './hangers/hanger-apply.js';
 import { customReferencesFromDetectedBay } from './hangers/smartpart-bay-placement.js';
+import { resolveDetectedBay } from './02_bloki-bay-detector.js';
+import { buildCornerDoorsAutoRefsPatch } from './07_corner-doors-refs.js';
 import './01_smartparts-ui.css';
 
 interface Props {
@@ -35,6 +37,7 @@ function boxTypeFromParams(p: any): string {
         blok_doors: 'DOORS',
         blok_skosne_drzwi: 'SKOSNE_DOORS',
         blok_corner_doors: 'CORNER_DOORS',
+        blok_corner_shelves: 'CORNER_SHELVES',
         blok_shelf: 'SHELF',
         blok_tubes: 'TUBES',
         blok_drawers: 'DRAWERS',
@@ -208,12 +211,19 @@ export function BlokiUI({ projectModel }: Props) {
                 const hangers = isHangersGroupContainer(active);
                 const handle = isHandleContainer(active);
                 // Migracja starych zawieszek bez customReferences (schemat Bloku)
-                if (hangers && !p.customReferences && p.detectedBay) {
-                    p.customReferences = customReferencesFromDetectedBay(p.detectedBay);
-                    p.disabledReferences = p.disabledReferences || {};
-                    p.offsets = p.offsets || { xMin: 0, xMax: 0, yMin: 0, yMax: 0, zMin: 0, zMax: 0 };
-                    p.side_references_bloki = p.side_references_bloki || 'INNER';
-                    active.generatorParams = { ...p };
+                if (hangers && !p.customReferences) {
+                    const resolvedBay = resolveDetectedBay(p, {
+                        width: active.width,
+                        height: active.height,
+                        depth: active.depth,
+                    });
+                    if (resolvedBay) {
+                        p.customReferences = customReferencesFromDetectedBay(resolvedBay);
+                        p.disabledReferences = p.disabledReferences || {};
+                        p.offsets = p.offsets || { xMin: 0, xMax: 0, yMin: 0, yMax: 0, zMin: 0, zMax: 0 };
+                        p.side_references_bloki = p.side_references_bloki || 'INNER';
+                        active.generatorParams = { ...p };
+                    }
                 }
                 const bType = hangers ? 'HANGERS' : handle ? 'HANDLES' : boxTypeFromParams(p);
                 setBoxType(bType);
@@ -235,8 +245,13 @@ export function BlokiUI({ projectModel }: Props) {
                 }
 
                 const scene = ContextManager.instance.viewport?.scene;
-                if (!hangers && bType === 'EMPTY' && p.detectedBay && scene) {
-                    highlightBayInScene(scene, p.detectedBay);
+                const resolvedBay = resolveDetectedBay(p, {
+                    width: active.width,
+                    height: active.height,
+                    depth: active.depth,
+                });
+                if (!hangers && bType === 'EMPTY' && resolvedBay && scene) {
+                    highlightBayInScene(scene, resolvedBay);
                 } else if (bType !== 'EMPTY') {
                     clearBayHighlight(scene);
                 }
@@ -339,12 +354,18 @@ export function BlokiUI({ projectModel }: Props) {
         const scene = ContextManager.instance.viewport?.scene;
         if (val !== 'EMPTY') {
             clearBayHighlight(scene);
-        } else if (container?.generatorParams?.detectedBay && scene) {
-            highlightBayInScene(scene, container.generatorParams.detectedBay);
+        } else if (container && scene) {
+            const resolvedBay = resolveDetectedBay(container.generatorParams, {
+                width: container.width,
+                height: container.height,
+                depth: container.depth,
+            });
+            if (resolvedBay) highlightBayInScene(scene, resolvedBay);
         }
         const typeMap: Record<'EMPTY' | BlokiModuleId, 'blok_empty' | BlokiModuleTypeById[BlokiModuleId]> = {
             'EMPTY': 'blok_empty',
             'SHELVES': 'blok_shelves',
+            'CORNER_SHELVES': 'blok_corner_shelves',
             'DOORS': 'blok_doors',
             'SKOSNE_DOORS': 'blok_skosne_drzwi',
             'CORNER_DOORS': 'blok_corner_doors',
@@ -360,13 +381,25 @@ export function BlokiUI({ projectModel }: Props) {
             'HANGERS': 'smartpart_hangers'
         };
         const selected = val in typeMap ? val as keyof typeof typeMap : 'EMPTY';
-        triggerUpdateEx({ 
+        const patch: BlokiGeneratorParamsPatch = {
             boxType: selected,
             type: typeMap[selected],
             ...(selected === 'PANELS' ? { targetZone: 'FULL' } : {}),
             ...(selected === 'DOORS' ? { rodzaj_drzwi: 'LEFT' } : {}),
             ...(selected === 'SKOSNE_DOORS' ? { rodzaj_drzwi: 'LEFT' } : {})
-        } as BlokiGeneratorParamsPatch, true);
+        } as BlokiGeneratorParamsPatch;
+
+        if (selected === 'CORNER_DOORS') {
+            const autoRefs = buildCornerDoorsAutoRefsPatch(container, ContextManager.instance.document);
+            if (autoRefs) {
+                patch.customReferences = autoRefs.customReferences as any;
+                patch.disabledReferences = autoRefs.disabledReferences as any;
+                setCustomRefs(autoRefs.customReferences);
+                setDisabledRefsState(autoRefs.disabledReferences);
+            }
+        }
+
+        triggerUpdateEx(patch, true);
     }, [container, triggerUpdateEx]);
 
     const handleDeleteEmptyBloki = useCallback(() => {

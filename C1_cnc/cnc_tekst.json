@@ -709,6 +709,16 @@
     "en": "Groove_{n}",
     "de": "Nut_{n}"
   },
+  "extractor.pocket_label": {
+    "pl": "Kieszeń_{n}",
+    "en": "Pocket_{n}",
+    "de": "Tasche_{n}"
+  },
+  "extractor.cutout_label": {
+    "pl": "Wycięcie_{n}",
+    "en": "Cutout_{n}",
+    "de": "Ausschnitt_{n}"
+  },
   "extractor.contour_label": {
     "pl": "Profil_{n}",
     "en": "Profile_{n}",

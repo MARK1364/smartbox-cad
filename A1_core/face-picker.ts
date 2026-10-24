@@ -66,7 +66,7 @@ function findGrooveFeatureAtUv(panel: any, faceName: string, uv: { u: number; v:
     if (!panel?.features || !uv) return null;
     const face = normalizeFaceName(faceName);
     for (const f of panel.features) {
-        if (!f || f.type !== 'groove') continue;
+        if (!f || (f.type !== 'groove' && f.type !== 'pocket' && f.type !== 'cutout')) continue;
         if (f.visible === false || f.params?.visible === false) continue;
         if (f.face !== face) continue;
         const gp = getGrooveParamsMm(f.params);

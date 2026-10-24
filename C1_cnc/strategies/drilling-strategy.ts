@@ -63,25 +63,41 @@ export class DrillingStrategy implements MachiningStrategy {
             feedRate: feed
         });
 
+        const rawDepth = Math.abs(hole.depth);
+        const rawAxis = hole.axis || { x: 0, y: 0, z: -1 };
+        const axisLen = Math.hypot(rawAxis.x, rawAxis.y, rawAxis.z) || 1.0;
+        const dir = { x: rawAxis.x / axisLen, y: rawAxis.y / axisLen, z: rawAxis.z / axisLen };
+
         // 3. Wykonaj cykle wiercenia dla wszystkich pozycji w grupie
         for (const pt of positions) {
-            const safeZ = pt.z + retractR;
+            const approachPoint = {
+                x: pt.x - dir.x * retractR,
+                y: pt.y - dir.y * retractR,
+                z: pt.z - dir.z * retractR
+            };
+            const bottomPoint = {
+                x: pt.x + dir.x * rawDepth,
+                y: pt.y + dir.y * rawDepth,
+                z: pt.z + dir.z * rawDepth
+            };
             
-            // Najazd nad otwór (wysokość bezpieczna R)
+            // Najazd przed otwór (odległość bezpieczna R)
             commands.push({
                 type: 'GOTO',
-                point: { x: pt.x, y: pt.y, z: safeZ }
+                point: approachPoint
             });
 
             // Wygenerowanie komendy cyklu wiercenia CLData
             commands.push({
                 type: 'CYCLE_DRILL',
-                point: { x: pt.x, y: pt.y, z: pt.z + depth },
+                point: bottomPoint,
                 drillParams: {
-                    depth: depth,
+                    depth: -rawDepth,
                     retractR: retractR,
                     peckStep: peckStep > 0 ? peckStep : undefined,
-                    type: peckStep > 0 ? 'PECK' : 'STANDARD'
+                    type: peckStep > 0 ? 'PECK' : 'STANDARD',
+                    axis: dir,
+                    face: hole.face
                 },
                 featureId: hole.featureId
             });
@@ -89,7 +105,7 @@ export class DrillingStrategy implements MachiningStrategy {
             // Powrót do punktu bezpiecznego
             commands.push({
                 type: 'GOTO',
-                point: { x: pt.x, y: pt.y, z: safeZ }
+                point: approachPoint
             });
         }
 

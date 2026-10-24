@@ -14,6 +14,7 @@ declare const BABYLON: any;
 import { SceneSyncAdapter } from '../A1_core/cad-node/scene-sync-adapter.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { unit } from '../A1_core/unit-system.js';
+import { resolveDetectedBay } from '../A2_bloki/02_bloki-bay-detector.js';
 
 export class ContainerView {
     scene: any;
@@ -148,9 +149,9 @@ export class ContainerView {
         const defaultHeight = unit.toBabylon(this.model.height);
 
         // 1. Sprawdzenie detectedBay (dla bloków wstawionych do wnęki)
-        const bay = gp.detectedBay;
+        const bay = resolveDetectedBay(gp);
         if (bay) {
-            const roofAngleDeg = bay.roofAngleDeg ?? bay.boundary?.top?.slopeAngleDeg;
+            const roofAngleDeg = bay.roofAngleDeg ?? bay.boundary?.top?.slopeAngleDeg ?? gp.boundary?.top?.slopeAngleDeg;
             const hasLRSlope = (roofAngleDeg !== undefined && Math.abs(roofAngleDeg) > 0.05)
                 || (bay.heightLeftMm !== undefined && bay.heightRightMm !== undefined && Math.abs(bay.heightLeftMm - bay.heightRightMm) > 1);
 

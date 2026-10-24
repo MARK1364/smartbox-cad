@@ -54,6 +54,8 @@ describe('Shelves Drilling Builder (buildShelvesDrillings)', () => {
         expect(rightIntents).toHaveLength(6);
 
         for (const intent of intents) {
+            expect(intent.feature.rule).toBe('shelf_pin');
+            expect(intent.feature.generatedBy).toBe('blok_shelves');
             expect(intent.feature.face).toBe('FACE_Z_PLUS');
             expect(intent.feature.params.diameter).toBe(5);
             expect(intent.feature.params.depth).toBe(12);
@@ -310,6 +312,17 @@ describe('Shelves Drilling Builder (buildShelvesDrillings)', () => {
             expect(leftIntents.some(i => i.feature.id === `sys32_left_back_${k}`)).toBe(true);
             expect(rightIntents.some(i => i.feature.id === `sys32_right_front_${k}`)).toBe(true);
             expect(rightIntents.some(i => i.feature.id === `sys32_right_back_${k}`)).toBe(true);
+        }
+
+        for (const intent of intents) {
+            expect(intent.feature.rule).toBe('shelf_pin');
+            expect(intent.feature.generatedBy).toBe('blok_shelves');
+            expect(intent.feature.drivenBy).toEqual({
+                nodeId: sb.id,
+                role: 'SYSTEM_HOLES',
+                partKey: 'System_32',
+                containerId: sb.id,
+            });
         }
     });
 });

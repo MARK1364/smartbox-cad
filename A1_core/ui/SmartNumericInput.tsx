@@ -58,6 +58,15 @@ export function SmartNumericInput({
 
     const [localVal, setLocalVal] = useState<string>(formatVal(value));
     const [isFocused, setIsFocused] = useState(false);
+    const debounceTimerRef = useRef<any>(null);
+
+    useEffect(() => {
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         if (!isFocused) {
@@ -91,10 +100,24 @@ export function SmartNumericInput({
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setLocalVal(e.target.value);
+        const val = e.target.value;
+        setLocalVal(val);
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+        if (debounceMs <= 0) {
+            flush(val);
+        } else {
+            debounceTimerRef.current = setTimeout(() => {
+                flush(val);
+            }, debounceMs);
+        }
     };
 
     const handleBlur = () => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
         setIsFocused(false);
         flush(localVal);
     };
@@ -103,11 +126,17 @@ export function SmartNumericInput({
         if (e.key === 'Enter') {
             e.preventDefault();
             e.stopPropagation();
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
             flush(localVal);
             (e.target as HTMLInputElement).blur();
         } else if (e.key === 'Escape') {
             e.preventDefault();
             e.stopPropagation();
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
             setLocalVal(formatVal(value));
             (e.target as HTMLInputElement).blur();
         }

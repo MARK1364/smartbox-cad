@@ -37,7 +37,7 @@ export class E3SceneEngine {
     public titleBlock: E3TitleBlock = {
         projectName: 'Projekt Mebla CAD',
         furnitureName: 'Korpus Meblowy',
-        author: 'Bloki CAD',
+        author: 'Crevo CAD',
         date: new Date().toISOString().split('T')[0],
         scale: '1:10',
         sheetNumber: '1/1',
@@ -475,7 +475,7 @@ export class E3SceneEngine {
                     <text x="4" y="${(18 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b">Wykonał: <tspan fill="#0f172a" font-weight="600">${this.titleBlock.author}</tspan></text>
                     <text x="${(82 * scale).toFixed(1)}" y="${(18 * scale).toFixed(1)}" font-size="${(1.3 * scale).toFixed(1)}" fill="#64748b">Data: <tspan fill="#0f172a" font-weight="600">${this.titleBlock.date}</tspan></text>
 
-                    <text x="${(tbW - 3).toFixed(1)}" y="${(tbH - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end">Bloki CAD E3</text>
+                    <text x="${(tbW - 3).toFixed(1)}" y="${(tbH - 2).toFixed(1)}" font-size="${(1.2 * scale).toFixed(1)}" fill="#94a3b8" text-anchor="end">Crevo CAD</text>
                 </g>
             </svg>
         `;
@@ -536,7 +536,7 @@ export class E3SceneEngine {
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>Drukuj Dokumentację CAD E3 - Bloki</title>
+                    <title>Drukuj Dokumentację CAD E3 - Crevo</title>
                     <style>
                         @page { size: ${dims.width}mm ${dims.height}mm; margin: 0; }
                         body { margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; background: #ffffff; }

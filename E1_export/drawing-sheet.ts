@@ -108,7 +108,7 @@ export class DrawingSheet {
         this.titleBlock = {
             projectName: '',
             furnitureName: '',
-            author: 'Bloki CAD',
+            author: 'Crevo CAD',
             date: today,
             scale: '1:10',
             sheetNumber: '1/1',
@@ -284,7 +284,7 @@ export class DrawingSheet {
         lines.push(svgText(tbX + col2Split + 2, curY + 6.5, formatLabel, 2.5, 'start', 'bold'));
 
         // Branding w rogu tabelki
-        lines.push(svgText(tbX + tbW - 2, tbY + tbH - 1.2, 'Bloki CAD Web', 1.4, 'end', 'normal', undefined, '#999999'));
+        lines.push(svgText(tbX + tbW - 2, tbY + tbH - 1.2, 'Crevo CAD', 1.4, 'end', 'normal', undefined, '#999999'));
 
         return lines.join('\n');
     }
@@ -508,7 +508,7 @@ export class DrawingSheet {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Drukuj Arkusz CAD - Bloki</title>
+                <title>Drukuj Arkusz CAD - Crevo</title>
                 <style>
                     @page {
                         size: ${this.paperW}mm ${this.paperH}mm;
@@ -606,7 +606,7 @@ export class DrawingSheet {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Dokumentacja Rysunkowa CAD — Bloki (${sheets.length} arkuszy)</title>
+                <title>Dokumentacja Rysunkowa CAD — Crevo (${sheets.length} arkuszy)</title>
                 <style>
                     @page {
                         size: auto;

@@ -325,6 +325,14 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                 face,
                 side: face,
                 template_id: 'SINGLE',
+                drivenBy: {
+                    nodeId: shelfNode.id,
+                    role: 'SHELF_PANEL',
+                    partKey: `Polka_${shelfIndex}`,
+                    containerId: sbNode.id,
+                },
+                rule: 'shelf_socket',
+                generatedBy: 'blok_shelves',
                 u: uCenter,
                 v: vPos,
                 diameter: holeDiameter,
@@ -361,6 +369,12 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
 
                 // Otwór bezpośrednio pod półką: od pozycji półki odjąć pół grubości półki oraz pół średnicy otworu
                 const shelfHoleZ = shelfWorldZ - (actualShelfThickness / 2) - radius;
+                const shelfDrivenBy = {
+                    nodeId: shelfNode ? shelfNode.id : sbNode.id,
+                    role: 'SHELF_PANEL',
+                    partKey: `Polka_${i}`,
+                    containerId: sbNode.id,
+                };
 
                 // Wysokości otworów w world Z (dla opcji potrójnej dodać na górze i dole otwory)
                 const worldZPositions = [shelfHoleZ];
@@ -391,6 +405,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                                 face,
                                 side: face,
                                 template_id: 'SINGLE',
+                                drivenBy: shelfDrivenBy,
+                                rule: 'shelf_pin',
+                                generatedBy: 'blok_shelves',
                                 u: uFront,
                                 v: vPos,
                                 diameter: holeDiameter,
@@ -408,6 +425,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                                 face,
                                 side: face,
                                 template_id: 'SINGLE',
+                                drivenBy: shelfDrivenBy,
+                                rule: 'shelf_pin',
+                                generatedBy: 'blok_shelves',
                                 u: uBack,
                                 v: vPos,
                                 diameter: holeDiameter,
@@ -438,6 +458,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                                 face,
                                 side: face,
                                 template_id: 'SINGLE',
+                                drivenBy: shelfDrivenBy,
+                                rule: 'shelf_pin',
+                                generatedBy: 'blok_shelves',
                                 u: uFront,
                                 v: vPos,
                                 diameter: holeDiameter,
@@ -455,6 +478,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                                 face,
                                 side: face,
                                 template_id: 'SINGLE',
+                                drivenBy: shelfDrivenBy,
+                                rule: 'shelf_pin',
+                                generatedBy: 'blok_shelves',
                                 u: uBack,
                                 v: vPos,
                                 diameter: holeDiameter,
@@ -515,6 +541,12 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
         // ─── B. WZORZEC SYSTEM 32 ───────────────────────────────────────────
         if (holePattern === 'SYSTEM_32' || holePattern === 'ROW') {
             const totalHoles = sys32HoleCount > 0 ? sys32HoleCount : 10;
+            const sys32DrivenBy = {
+                nodeId: sbNode.id,
+                role: 'SYSTEM_HOLES',
+                partKey: 'System_32',
+                containerId: sbNode.id,
+            };
 
             for (let k = 0; k < totalHoles; k++) {
                 const localZ = sys32StartOffset + k * sys32Spacing;
@@ -539,6 +571,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                             face,
                             side: face,
                             template_id: 'SINGLE',
+                            drivenBy: sys32DrivenBy,
+                            rule: 'shelf_pin',
+                            generatedBy: 'blok_shelves',
                             u: uFront,
                             v: vPos,
                             diameter: holeDiameter,
@@ -556,6 +591,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                             face,
                             side: face,
                             template_id: 'SINGLE',
+                            drivenBy: sys32DrivenBy,
+                            rule: 'shelf_pin',
+                            generatedBy: 'blok_shelves',
                             u: uBack,
                             v: vPos,
                             diameter: holeDiameter,
@@ -578,7 +616,6 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                     const uBack = calcFaceUFromBack(rightNode, face, rightFaceInfo.width, backInset, 'right');
                     const vPos = getVForPanel(rightNode, worldZ);
 
-
                     if (uFront > 0 && uFront < rightFaceInfo.width && vPos > 0 && vPos < rightFaceInfo.height) {
                         intents.push(buildHoleMachiningIntent({
                             targetNodeId: rightNode.id,
@@ -586,6 +623,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                             face,
                             side: face,
                             template_id: 'SINGLE',
+                            drivenBy: sys32DrivenBy,
+                            rule: 'shelf_pin',
+                            generatedBy: 'blok_shelves',
                             u: uFront,
                             v: vPos,
                             diameter: holeDiameter,
@@ -603,6 +643,9 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                             face,
                             side: face,
                             template_id: 'SINGLE',
+                            drivenBy: sys32DrivenBy,
+                            rule: 'shelf_pin',
+                            generatedBy: 'blok_shelves',
                             u: uBack,
                             v: vPos,
                             diameter: holeDiameter,
@@ -613,6 +656,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                         }));
                     }
                 }
+
             }
         }
     }

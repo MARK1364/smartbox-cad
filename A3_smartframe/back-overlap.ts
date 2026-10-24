@@ -87,11 +87,27 @@ export function readBackEdgeOffset(
 ): number {
     if (!offsets) return defaultMm;
 
+    const findInOffsets = (key: string): number | undefined => {
+        if (offsets[key] !== undefined && offsets[key] !== null && !Number.isNaN(Number(offsets[key]))) {
+            return Number(offsets[key]);
+        }
+        const keyUpper = key.toUpperCase();
+        for (const [k, v] of Object.entries(offsets)) {
+            if (k.toUpperCase() === keyUpper && v !== undefined && v !== null && !Number.isNaN(Number(v))) {
+                return Number(v);
+            }
+        }
+        return undefined;
+    };
+
     // 1. Dokładny klucz (np. "Dol_Plecy_-X", "Srodek_Plecy_-X", "Plecy_-X")
-    const directKey = `${panelName}_${suffix}`;
-    if (offsets[directKey] !== undefined && offsets[directKey] !== null && !Number.isNaN(Number(offsets[directKey]))) {
-        return Number(offsets[directKey]);
-    }
+    const val1 = findInOffsets(`${panelName}_${suffix}`);
+    if (val1 !== undefined) return val1;
+
+    // 1b. Klucz bez prefiksu strefy (np. "PLECY_Y_-X" dla "Dol_Plecy_Y" lub "B_PLECY_Y")
+    const cleanName = panelName.replace(/^(?:Dol_|Gora_|Srodek_|B_|M_|T_)/i, '');
+    const val1b = findInOffsets(`${cleanName}_${suffix}`);
+    if (val1b !== undefined) return val1b;
 
     const nameUpper = (panelName || '').toUpperCase();
     const pfxUpper = (zonePrefix || '').toUpperCase();
@@ -100,9 +116,8 @@ export function readBackEdgeOffset(
     if (pfxUpper.startsWith('M') || nameUpper.startsWith('M_') || nameUpper.startsWith('SRODEK')) {
         const candidates = [`Srodek_Plecy_${suffix}`, `M_Plecy_${suffix}`, `M_BACK_${suffix}`];
         for (const k of candidates) {
-            if (offsets[k] !== undefined && offsets[k] !== null && !Number.isNaN(Number(offsets[k]))) {
-                return Number(offsets[k]);
-            }
+            const v = findInOffsets(k);
+            if (v !== undefined) return v;
         }
         return defaultMm;
     }
@@ -111,9 +126,8 @@ export function readBackEdgeOffset(
     if (pfxUpper.startsWith('T') || nameUpper.startsWith('T_') || nameUpper.startsWith('GORA')) {
         const candidates = [`Gora_Plecy_${suffix}`, `T_Plecy_${suffix}`, `T_BACK_${suffix}`];
         for (const k of candidates) {
-            if (offsets[k] !== undefined && offsets[k] !== null && !Number.isNaN(Number(offsets[k]))) {
-                return Number(offsets[k]);
-            }
+            const v = findInOffsets(k);
+            if (v !== undefined) return v;
         }
         return defaultMm;
     }
@@ -121,17 +135,15 @@ export function readBackEdgeOffset(
     // 4. Strefa Dolna (B / Dol)
     const bCandidates = [`Dol_Plecy_${suffix}`, `B_Plecy_${suffix}`, `B_BACK_${suffix}`];
     for (const k of bCandidates) {
-        if (offsets[k] !== undefined && offsets[k] !== null && !Number.isNaN(Number(offsets[k]))) {
-            return Number(offsets[k]);
-        }
+        const v = findInOffsets(k);
+        if (v !== undefined) return v;
     }
 
     // 5. Ogólne aliasy dla 1-strefowego korpusu (np. "Plecy_-X", "BACK_PANEL_-X")
     const singleZoneAliases = [`Plecy_${suffix}`, `BACK_PANEL_${suffix}`, `BACK_${suffix}`];
     for (const k of singleZoneAliases) {
-        if (offsets[k] !== undefined && offsets[k] !== null && !Number.isNaN(Number(offsets[k]))) {
-            return Number(offsets[k]);
-        }
+        const v = findInOffsets(k);
+        if (v !== undefined) return v;
     }
 
     return defaultMm;

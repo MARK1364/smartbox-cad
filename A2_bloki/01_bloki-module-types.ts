@@ -206,6 +206,29 @@ export interface ShelvesPlanParams {
     podporka_id?: string;
 }
 
+export interface CornerShelvesPlanParams {
+    liczba_polek?: number;
+    grubosc_polki_mm?: number;
+    odsuniecie_przod_mm?: number;
+    luz_boczny_mm?: number;
+    bok_lewy_mm?: number;
+    bok_prawy_mm?: number;
+    wzor_nawiercen?: ShelfHolePattern;
+    odstep_otworow_przod_mm?: number;
+    odstep_otworow_tyl_mm?: number;
+    rozstaw_potrojny_z_mm?: number;
+    rozstaw_system32_mm?: number;
+    start_system32_z_mm?: number;
+    liczba_otworow_system32?: number;
+    plecy_odsuniecie_x_mm?: number;
+    plecy_odsuniecie_y_mm?: number;
+    podporka_id?: string;
+    wyciecie_listwa_narozna?: boolean;
+    listwa_narozna_szerokosc_mm?: number;
+    listwa_narozna_grubosc_mm?: number;
+    listwa_narozna_luz_mm?: number;
+}
+
 export interface ShelfPlanParams {
     grubosc_wienca_mm?: number;
     odsuniecie_przod_mm?: number;
@@ -303,6 +326,7 @@ export type BlokiModuleId =
     | 'DOORS'
     | 'SKOSNE_DOORS'
     | 'CORNER_DOORS'
+    | 'CORNER_SHELVES'
     | 'DRAWERS'
     | 'FLAPS'
     | 'DIVIDERS'
@@ -319,6 +343,7 @@ export interface BlokiModuleTypeById {
     DOORS: 'blok_doors';
     SKOSNE_DOORS: 'blok_skosne_drzwi';
     CORNER_DOORS: 'blok_corner_doors';
+    CORNER_SHELVES: 'blok_corner_shelves';
     DRAWERS: 'blok_drawers';
     FLAPS: 'blok_flaps';
     DIVIDERS: 'blok_dividers';
@@ -365,6 +390,7 @@ export interface BlokiModuleParamsById {
     DOORS: DoorsPlanParams;
     SKOSNE_DOORS: SkosneDoorsPlanParams;
     CORNER_DOORS: CornerDoorsPlanParams;
+    CORNER_SHELVES: CornerShelvesPlanParams;
     DRAWERS: DrawersPlanParams;
     FLAPS: FlapsPlanParams;
     DIVIDERS: DividersPlanParams;
@@ -401,6 +427,7 @@ const BLOKI_TYPE_BY_ID: BlokiModuleTypeById = {
     DOORS: 'blok_doors',
     SKOSNE_DOORS: 'blok_skosne_drzwi',
     CORNER_DOORS: 'blok_corner_doors',
+    CORNER_SHELVES: 'blok_corner_shelves',
     DRAWERS: 'blok_drawers',
     FLAPS: 'blok_flaps',
     DIVIDERS: 'blok_dividers',

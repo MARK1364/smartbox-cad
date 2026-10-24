@@ -96,25 +96,21 @@ export function pocketFromEdgeDims(
     const du = Math.max(0, place.uMm);
     const dv = Math.max(0, place.vMm);
     const zPlus = normalizeFaceName(opFace) === 'FACE_Z_PLUS';
-    const halfW = width / 2;
-    const halfH = length / 2;
 
-    let uCenter: number;
+    let u: number;
     if (uEdge === 'FACE_X_MINUS') {
-        uCenter = zPlus ? du : faceW - du;
+        u = zPlus ? du : faceW - width - du;
     } else {
-        uCenter = zPlus ? faceW - du : du;
+        u = zPlus ? faceW - width - du : du;
     }
 
-    let vCenter: number;
+    let v: number;
     if (vEdge === 'FACE_Y_MINUS') {
-        vCenter = dv;
+        v = dv;
     } else {
-        vCenter = faceH - dv;
+        v = faceH - length - dv;
     }
 
-    let u = uCenter - halfW;
-    let v = vCenter - halfH;
     u = Math.max(0, Math.min(u, faceW - width));
     v = Math.max(0, Math.min(v, faceH - length));
     return { u, v, width, length };
@@ -128,11 +124,10 @@ export function distanceToUEdge(
     faceW: number,
 ): number {
     const zPlus = normalizeFaceName(opFace) === 'FACE_Z_PLUS';
-    const uCenter = u + width / 2;
     if (uEdge === 'FACE_X_MINUS') {
-        return zPlus ? uCenter : faceW - uCenter;
+        return zPlus ? u : faceW - width - u;
     }
-    return zPlus ? faceW - uCenter : uCenter;
+    return zPlus ? faceW - width - u : u;
 }
 
 export function distanceToVEdge(
@@ -141,9 +136,8 @@ export function distanceToVEdge(
     length: number,
     faceH: number,
 ): number {
-    const vCenter = v + length / 2;
-    if (vEdge === 'FACE_Y_MINUS') return vCenter;
-    return faceH - vCenter;
+    if (vEdge === 'FACE_Y_MINUS') return v;
+    return faceH - length - v;
 }
 
 export function rebindUEdge(

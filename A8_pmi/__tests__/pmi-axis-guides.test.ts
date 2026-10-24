@@ -87,6 +87,18 @@ describe('buildOffsetGuideCandidates', () => {
         expect(candidates.find(c => c.id === 'GLOBAL_X')?.valid).toBe(false);
         expect(candidates.find(c => c.id === 'GLOBAL_Y')?.valid).toBe(true);
     });
+
+    it('dla rozstawu ścian blokuje X jako odsunięcie, zostawia Y i Z', () => {
+        const candidates = buildOffsetGuideCandidates({
+            origin,
+            length: 1000,
+            localMatrix: null,
+            measureDirWorld: v3(1, 0, 0),
+        });
+        expect(candidates.find(c => c.id === 'GLOBAL_X')?.valid).toBe(false);
+        expect(candidates.find(c => c.id === 'GLOBAL_Y')?.valid).toBe(true);
+        expect(candidates.find(c => c.id === 'GLOBAL_Z')?.valid).toBe(true);
+    });
 });
 
 describe('pickOffsetGuide', () => {

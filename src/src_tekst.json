@@ -245,9 +245,9 @@
     "de": "Projekte aus Cloud laden..."
   },
   "gdrive.no_files": {
-    "pl": "Brak zapisanych projektów w folderze \"SmartPanel CAD Projects\".",
-    "en": "No saved projects in \"SmartPanel CAD Projects\" folder.",
-    "de": "Keine gespeicherten Projekte im Ordner „SmartPanel CAD Projects“."
+    "pl": "Brak zapisanych projektów w folderze \"Crevo CAD Projects\".",
+    "en": "No saved projects in \"Crevo CAD Projects\" folder.",
+    "de": "Keine gespeicherten Projekte im Ordner „Crevo CAD Projects“."
   },
   "gdrive.save_current": {
     "pl": "Zapisz bieżący projekt",
@@ -275,9 +275,9 @@
     "de": "Cloud-Projektname:"
   },
   "gdrive.save_note": {
-    "pl": "Plik zostanie zapisany w formacie JSON w folderze \"SmartPanel CAD Projects\" na Twoim Dysku Google.",
-    "en": "File will be saved as JSON in \"SmartPanel CAD Projects\" on your Google Drive.",
-    "de": "Datei wird als JSON im Ordner „SmartPanel CAD Projects“ auf Google Drive gespeichert."
+    "pl": "Plik zostanie zapisany w formacie JSON w folderze \"Crevo CAD Projects\" na Twoim Dysku Google.",
+    "en": "File will be saved as JSON in \"Crevo CAD Projects\" on your Google Drive.",
+    "de": "Datei wird als JSON im Ordner „Crevo CAD Projects“ auf Google Drive gespeichert."
   },
   "gdrive.overwrite_hint": {
     "pl": "Lub wybierz istniejący projekt do nadpisania:",
@@ -1230,9 +1230,9 @@
     "de": "Google-Anmeldefehler."
   },
   "saas.login_title": {
-    "pl": "Zaloguj się do SmartPanel Cloud",
-    "en": "Sign in to SmartPanel Cloud",
-    "de": "Bei SmartPanel Cloud anmelden"
+    "pl": "Zaloguj się do Crevo Cloud",
+    "en": "Sign in to Crevo Cloud",
+    "de": "Bei Crevo Cloud anmelden"
   },
   "saas.register_title": {
     "pl": "Utwórz konto w chmurze",
@@ -1328,6 +1328,46 @@
     "pl": "Wyloguj się",
     "en": "Sign out",
     "de": "Abmelden"
+  },
+  "saas.license_upload": {
+    "pl": "Wgraj plik licencji (.lic)",
+    "en": "Load license file (.lic)",
+    "de": "Lizenzdatei laden (.lic)"
+  },
+  "saas.license_hint": {
+    "pl": "Masz już licencję? Wgraj plik, aby odblokować wersję pełną. Działa w pełni offline.",
+    "en": "Already have a license? Load the file to unlock the full version. Works fully offline.",
+    "de": "Schon eine Lizenz? Datei laden, um die Vollversion freizuschalten. Funktioniert komplett offline."
+  },
+  "saas.license_buy": {
+    "pl": "Nie masz licencji? Kup / zamów",
+    "en": "No license yet? Buy / order",
+    "de": "Noch keine Lizenz? Kaufen / bestellen"
+  },
+  "saas.license_ok": {
+    "pl": "Licencja aktywna — dziękujemy!",
+    "en": "License active — thank you!",
+    "de": "Lizenz aktiv — danke!"
+  },
+  "saas.license_err_invalid_format": {
+    "pl": "Nieprawidłowy format pliku licencji.",
+    "en": "Invalid license file format.",
+    "de": "Ungültiges Lizenzdatei-Format."
+  },
+  "saas.license_err_invalid_signature": {
+    "pl": "Nieprawidłowy podpis — plik nie pochodzi od wydawcy.",
+    "en": "Invalid signature — file is not from the publisher.",
+    "de": "Ungültige Signatur — Datei stammt nicht vom Herausgeber."
+  },
+  "saas.license_err_expired": {
+    "pl": "Ta licencja wygasła.",
+    "en": "This license has expired.",
+    "de": "Diese Lizenz ist abgelaufen."
+  },
+  "saas.trial_note": {
+    "pl": "Wersja darmowa: projektujesz bez ograniczeń i masz 1 eksport próbny G-code z widocznym znakiem wodnym.",
+    "en": "Free version: design without limits and get 1 trial G-code export with a visible watermark.",
+    "de": "Gratisversion: uneingeschränkt konstruieren und 1 Test-G-Code-Export mit sichtbarem Wasserzeichen."
   },
   "app.status_zoom": {
     "pl": "Zoom - Zaznacz ramką obszar do powiększenia.",
@@ -1520,9 +1560,9 @@
     "de": "Preisliste (Preis-Editor)..."
   },
   "app.menu.brand": {
-    "pl": "Bloki CAD",
-    "en": "Bloki CAD",
-    "de": "Bloki CAD"
+    "pl": "Crevo",
+    "en": "Crevo",
+    "de": "Crevo"
   },
   "app.menu.undo": {
     "pl": "Cofnij (Ctrl+Z)",

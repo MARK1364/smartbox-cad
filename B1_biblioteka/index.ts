@@ -30,6 +30,7 @@ export interface MachiningHole {
     y_offset?: number;
     front_dist?: number;
     z_offset?: number;
+    z_from_bottom?: number;
     object?: string;
 }
 
@@ -120,6 +121,18 @@ for (const raw of Object.values(drawerFileModules)) {
     if (!raw) continue;
     if (Array.isArray(raw.variants)) {
         for (const v of raw.variants) {
+            const frontHolesArr: MachiningHole[] = Array.isArray(v.machining?.front_holes)
+                ? v.machining.front_holes
+                : [];
+            const frontHoles = frontHolesArr.length
+                ? {
+                    x_offset: Number(frontHolesArr[0]?.edge_dist ?? 31),
+                    z_positions: frontHolesArr
+                        .map((h) => Number(h.z_from_bottom))
+                        .filter((z) => Number.isFinite(z)),
+                    depth: Number(frontHolesArr[0]?.depth ?? 10)
+                }
+                : undefined;
             const item: HardwareItem = {
                 id: v.id,
                 type: 'RAIL',
@@ -135,6 +148,7 @@ for (const raw of Object.values(drawerFileModules)) {
                     width: v.width ?? 27.0
                 },
                 machining: v.machining,
+                ...(frontHoles ? { front_holes: frontHoles } : {}),
                 lengths: v.lengths
             };
             DRAWER_ITEMS.push(item);

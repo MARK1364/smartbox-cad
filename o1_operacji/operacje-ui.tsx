@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { nmToMm } from '../A1_core/cad-math/units.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { isPanelModel } from '../A4_smartpanel/panel-model.js';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
@@ -148,15 +149,15 @@ export function OperacjeUI() {
         const r = recipes.find((item) => item.id === selectedId);
         if (feat) {
             if (feat.face) setEditFace(feat.face);
-            setInsetLMm(Number(feat.params.insets?.l) || 60);
-            setInsetRMm(Number(feat.params.insets?.r) || 60);
-            setInsetTMm(Number(feat.params.insets?.t) || 60);
-            setInsetBMm(Number(feat.params.insets?.b) || 60);
-            setDepthMm(Number(feat.params.depth) || 3);
-            setWidthMm(Number(feat.params.width) || 120);
-            setHeightMm(Number(feat.params.length) || 80);
-            setUMm(Number(feat.params.u_ref) || 100);
-            setVMm(Number(feat.params.v_ref) || 80);
+            setInsetLMm(feat.params.insets?.l !== undefined ? Number(feat.params.insets.l) : 60);
+            setInsetRMm(feat.params.insets?.r !== undefined ? Number(feat.params.insets.r) : 60);
+            setInsetTMm(feat.params.insets?.t !== undefined ? Number(feat.params.insets.t) : 60);
+            setInsetBMm(feat.params.insets?.b !== undefined ? Number(feat.params.insets.b) : 60);
+            setDepthMm(feat.params.depth !== undefined ? Number(feat.params.depth) : 3);
+            setWidthMm(feat.params.width !== undefined ? Number(feat.params.width) : 120);
+            setHeightMm(feat.params.length !== undefined ? Number(feat.params.length) : 80);
+            setUMm(feat.params.u_ref !== undefined ? Number(feat.params.u_ref) : 100);
+            setVMm(feat.params.v_ref !== undefined ? Number(feat.params.v_ref) : 80);
             return;
         }
         if (r) {
@@ -164,7 +165,7 @@ export function OperacjeUI() {
             setInsetRMm(r.insets.r);
             setInsetTMm(r.insets.t);
             setInsetBMm(r.insets.b);
-            setDepthMm(r.depthMm || 3);
+            setDepthMm(r.through ? (target ? nmToMm(target.thickness) : 18) : (r.depthMm || 3));
             setWidthMm(r.sizeMm.w);
             setHeightMm(r.sizeMm.h);
             setUMm(r.edge.uMm);
@@ -174,7 +175,10 @@ export function OperacjeUI() {
 
     const getOverrides = (targetRecipe: OperationRecipe) => {
         if (targetRecipe.placement === 'edge_dims') {
-            return { widthMm, heightMm, uMm, vMm, depthMm, through: true, fill: 'none' as const };
+            const resolvedDepth = targetRecipe.through
+                ? (panel ? nmToMm(panel.thickness) : depthMm)
+                : depthMm;
+            return { widthMm, heightMm, uMm, vMm, depthMm: resolvedDepth, through: true, fill: 'none' as const };
         }
         return {
             insetLMm,
@@ -272,7 +276,7 @@ export function OperacjeUI() {
                     {currentRecipe.placement === 'edge_dims' ? (
                         <>
                             <label className="o1-field">
-                                <span>Szerokość (W)</span>
+                                <span>Szerokość W</span>
                                 <SmartNumericInput
                                     value={widthMm}
                                     min={1}
@@ -282,12 +286,13 @@ export function OperacjeUI() {
                                     style={inputStyle}
                                     onChange={(val) => {
                                         setWidthMm(val);
-                                        commit({ widthMm: val, heightMm, uMm, vMm, depthMm, through: true, fill: 'none' }, currentRecipe.id);
+                                        const resolvedDepth = currentRecipe.through && panel ? nmToMm(panel.thickness) : depthMm;
+                                        commit({ widthMm: val, heightMm, uMm, vMm, depthMm: resolvedDepth, through: true, fill: 'none' }, currentRecipe.id);
                                     }}
                                 />
                             </label>
                             <label className="o1-field">
-                                <span>Wysokość (H)</span>
+                                <span>Wysokość H</span>
                                 <SmartNumericInput
                                     value={heightMm}
                                     min={1}
@@ -297,12 +302,13 @@ export function OperacjeUI() {
                                     style={inputStyle}
                                     onChange={(val) => {
                                         setHeightMm(val);
-                                        commit({ widthMm, heightMm: val, uMm, vMm, depthMm, through: true, fill: 'none' }, currentRecipe.id);
+                                        const resolvedDepth = currentRecipe.through && panel ? nmToMm(panel.thickness) : depthMm;
+                                        commit({ widthMm, heightMm: val, uMm, vMm, depthMm: resolvedDepth, through: true, fill: 'none' }, currentRecipe.id);
                                     }}
                                 />
                             </label>
                             <label className="o1-field">
-                                <span>Od {edgeShortLabel(instance?.params.u_edge || currentRecipe.edge.uEdge)}</span>
+                                <span>Dystans X</span>
                                 <SmartNumericInput
                                     value={uMm}
                                     min={0}
@@ -312,12 +318,13 @@ export function OperacjeUI() {
                                     style={inputStyle}
                                     onChange={(val) => {
                                         setUMm(val);
-                                        commit({ widthMm, heightMm, uMm: val, vMm, depthMm, through: true, fill: 'none' }, currentRecipe.id);
+                                        const resolvedDepth = currentRecipe.through && panel ? nmToMm(panel.thickness) : depthMm;
+                                        commit({ widthMm, heightMm, uMm: val, vMm, depthMm: resolvedDepth, through: true, fill: 'none' }, currentRecipe.id);
                                     }}
                                 />
                             </label>
                             <label className="o1-field">
-                                <span>Od {edgeShortLabel(instance?.params.v_edge || currentRecipe.edge.vEdge)}</span>
+                                <span>Dystans Y</span>
                                 <SmartNumericInput
                                     value={vMm}
                                     min={0}
@@ -327,7 +334,8 @@ export function OperacjeUI() {
                                     style={inputStyle}
                                     onChange={(val) => {
                                         setVMm(val);
-                                        commit({ widthMm, heightMm, uMm, vMm: val, depthMm, through: true, fill: 'none' }, currentRecipe.id);
+                                        const resolvedDepth = currentRecipe.through && panel ? nmToMm(panel.thickness) : depthMm;
+                                        commit({ widthMm, heightMm, uMm, vMm: val, depthMm: resolvedDepth, through: true, fill: 'none' }, currentRecipe.id);
                                     }}
                                 />
                             </label>

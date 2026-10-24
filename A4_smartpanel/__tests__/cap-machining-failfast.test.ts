@@ -10,13 +10,24 @@ describe('walidacja wejściowa typów feature oraz graceful degradation w geomet
         }).toThrow(/Nieobsługiwany typ feature: "fillet"/);
     });
 
-    it('validatePanelFeatures rzuca czytelny błąd przy próbie wczytania nieznanego typu pocket', () => {
+    it('validatePanelFeatures rzuca czytelny błąd przy próbie wczytania nieznanego typu chamfer', () => {
         expect(() => {
             validatePanelFeatures([
                 { id: 1, type: 'hole' },
-                { id: 2, type: 'pocket' }
+                { id: 2, type: 'chamfer' }
             ]);
-        }).toThrow(/Nieobsługiwany typ feature: "pocket"/);
+        }).toThrow(/Nieobsługiwany typ feature: "chamfer"/);
+    });
+
+    it('validatePanelFeatures akceptuje typy z nowej taksonomii (pocket i cutout)', () => {
+        expect(() => {
+            validatePanelFeatures([
+                { id: 1, type: 'hole' },
+                { id: 2, type: 'groove' },
+                { id: 3, type: 'pocket' },
+                { id: 4, type: 'cutout' }
+            ]);
+        }).not.toThrow();
     });
 
     it('buildMeshFromPanel stosuje graceful degradation: ostrzega w konsoli, ale nie wysadza viewportu', () => {

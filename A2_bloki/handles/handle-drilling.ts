@@ -101,6 +101,15 @@ export function generateHandleDrillingFeatures(
             face: faceName,
             side: faceName,
             name: `Otwór uchwytu fi ${dia}mm`,
+            drivenBy: {
+                nodeId: `hw_${containerId}`,
+                role: 'HARDWARE',
+                hardwareType: 'HANDLE',
+                partKey: 'Handle',
+                containerId: containerId,
+            },
+            rule: 'handle_hole',
+            generatedBy: 'blok_handles',
             params: {
                 u: Math.round(u * 10) / 10,
                 v: Math.round(v * 10) / 10,

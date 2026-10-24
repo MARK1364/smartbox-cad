@@ -4,8 +4,12 @@
  */
 
 import { ContextManager } from '../A1_core/context-manager.js';
+import { CADNode } from '../A1_core/cad-node/cad-node.js';
+import { NodeType } from '../A1_core/cad-node/node-type.js';
+import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
+import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { NativePanelBuilder } from '../A4_smartpanel/native-panel-builder.js';
-import { isPanelModel, normalizeFaceName, type FaceName, type PanelModel } from '../A4_smartpanel/panel-model.js';
+import { isPanelModel, normalizeFaceName, PanelModel, type FaceName } from '../A4_smartpanel/panel-model.js';
 import { getOperation } from './operacje-catalog.js';
 import { buildOperationFeature, faceHintToFace, recipeWithOverrides } from './operacje-builder.js';
 import type { OperationApplyOverrides } from './operacje-builder.js';
@@ -196,6 +200,122 @@ export function resolveOperationFace(
     return faceHintToFace(recipe.face_hint);
 }
 
+/**
+ * Synchronizacja powiązanej tafli szkła (PART o roli GLASS_PANEL) dla wycięcia witrynowego z fill: 'glass'.
+ */
+export function syncGlassPanelForCutout(
+    panel: PanelModel,
+    feature: OperationFeature | null,
+    doc?: any
+): any | null {
+    const document = doc || ContextManager.instance?.document;
+    const parentNode = document?.findNode?.(panel.id);
+    const cutoutId = feature?.id;
+
+    // Szukamy istniejącej tafli szkła powiązanej z panelem i tym wycięciem
+    let existingGlassNode: any = null;
+    if (parentNode && Array.isArray(parentNode.children)) {
+        existingGlassNode = parentNode.children.find((ch: any) =>
+            ch.role === 'GLASS_PANEL' && (ch.domainData?.sourceCutoutId === cutoutId || ch.domainData?.parentCutoutId === cutoutId)
+        );
+    }
+
+    const needsGlass = feature?.type === 'cutout' && feature?.params?.fill === 'glass';
+
+    if (!needsGlass) {
+        if (existingGlassNode && document) {
+            document.removeNode(existingGlassNode.id);
+        }
+        if ((panel as any)._associatedGlassPanel?.sourceCutoutId === cutoutId) {
+            delete (panel as any)._associatedGlassPanel;
+        }
+        return null;
+    }
+
+    const widthMm = Number(feature!.params.width || 0);
+    const heightMm = Number(feature!.params.length || (feature!.params as any).height || 0);
+    const uMm = Number(feature!.params.u || 0);
+    const vMm = Number(feature!.params.v || 0);
+    const ucMm = uMm + widthMm / 2;
+    const vcMm = vMm + heightMm / 2;
+
+    const faceName = feature?.face || 'FACE_Z_PLUS';
+    const faceData = typeof panel.getFace === 'function' ? panel.getFace(faceName) : null;
+    let posX = 0;
+    let posY = 0;
+    let posZ = 0;
+
+    if (faceData) {
+        const tMm = nmToMm(panel.thickness);
+        posX = faceData.origin[0] + ucMm * faceData.uAxis[0] + vcMm * faceData.vAxis[0] - faceData.normal[0] * (tMm / 2);
+        posY = faceData.origin[1] + ucMm * faceData.uAxis[1] + vcMm * faceData.vAxis[1] - faceData.normal[1] * (tMm / 2);
+        posZ = faceData.origin[2] + ucMm * faceData.uAxis[2] + vcMm * faceData.vAxis[2] - faceData.normal[2] * (tMm / 2);
+    }
+
+    const posNm = new Vec3(mmToNm(posX), mmToNm(posY), mmToNm(posZ));
+
+    if (existingGlassNode) {
+        const glassData = existingGlassNode.domainData;
+        if (glassData) {
+            glassData.width = mmToNm(widthMm);
+            glassData.height = mmToNm(heightMm);
+            glassData.thickness = mmToNm(4);
+            (glassData as any).position = { x: posX, y: posY, z: posZ };
+        }
+        if (typeof existingGlassNode.setTranslation === 'function') {
+            existingGlassNode.setTranslation(posNm);
+        }
+        (existingGlassNode as any).loc = {
+            x: mmToNm(posX),
+            y: mmToNm(posY),
+            z: mmToNm(posZ)
+        };
+        return existingGlassNode;
+    }
+
+    const glassPanel = new PanelModel({
+        name: `Szkło_${panel.name || 'Witryna'}`,
+        width: mmToNm(widthMm),
+        height: mmToNm(heightMm),
+        thickness: mmToNm(4),
+        position: { x: posX, y: posY, z: posZ },
+        role: 'GLASS_PANEL',
+        materialId: 'SZKLO_FLOAT_4MM',
+        materialName: 'Szkło Float 4mm',
+    });
+    (glassPanel as any).position = { x: posX, y: posY, z: posZ };
+    (glassPanel as any).materialCategory = 'GLASS';
+    (glassPanel as any).category = 'GLASS';
+    (glassPanel as any).custom_properties = {
+        ...(glassPanel as any).custom_properties,
+        category: 'GLASS',
+        materialCategory: 'GLASS',
+    };
+    (glassPanel as any).sourceCutoutId = cutoutId;
+    (glassPanel as any).parentCutoutId = cutoutId;
+    (glassPanel as any).parentPanelId = panel.id;
+    (panel as any)._associatedGlassPanel = glassPanel;
+
+    if (document && parentNode) {
+        const glassNode = new CADNode(glassPanel.id, glassPanel.name, NodeType.PART);
+        glassNode.domainData = glassPanel;
+        if (typeof glassNode.setTranslation === 'function') {
+            glassNode.setTranslation(posNm);
+        }
+        (glassNode as any).loc = {
+            x: mmToNm(posX),
+            y: mmToNm(posY),
+            z: mmToNm(posZ)
+        };
+        (glassNode as any).role = 'GLASS_PANEL';
+        (glassNode as any).materialCategory = 'GLASS';
+        document.addNode(parentNode.id, glassNode);
+        return glassNode;
+    }
+
+    return glassPanel;
+}
+
 export function applyLibraryOperation(
     panel: PanelModel | null | undefined,
     libraryId: string,
@@ -219,6 +339,7 @@ export function applyLibraryOperation(
     ));
     writeFeatures(panel, [...rest, built]);
     const doc = ContextManager.instance?.document;
+    syncGlassPanelForCutout(panel, built, doc);
     doc?.emitChange?.('features', [panel.id]);
     notifyPanelGeometry(panel);
     return built;

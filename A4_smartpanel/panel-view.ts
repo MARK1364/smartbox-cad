@@ -18,9 +18,49 @@ const FACE_COLORS: Record<string, { r: number, g: number, b: number }> = {
     feature: { r: 0.2, g: 0.2, b: 0.2 }
 };
 
+interface MeshPlaneBasis {
+    origin: { x: number; y: number; z: number };
+    normal: { x: number; y: number; z: number };
+}
+
+/**
+ * Wyznacza plaszczyzne sciany z dokladnych wierzcholkow B-rep (double),
+ * zanim trafia one do buforow Float32 Babylona.
+ */
+function computePlaneFromMeshData(
+    positions: ArrayLike<number> | null | undefined,
+    indices: ArrayLike<number> | null | undefined,
+): MeshPlaneBasis | null {
+    if (!positions || !indices || typeof positions.length !== 'number' || typeof indices.length !== 'number' || positions.length < 9 || indices.length < 3) {
+        return null;
+    }
+    for (let i = 0; i + 2 < indices.length; i += 3) {
+        const ia = indices[i] * 3;
+        const ib = indices[i + 1] * 3;
+        const ic = indices[i + 2] * 3;
+        if (ia + 2 >= positions.length || ib + 2 >= positions.length || ic + 2 >= positions.length) continue;
+
+        const ax = positions[ia], ay = positions[ia + 1], az = positions[ia + 2];
+        const ux = positions[ib] - ax, uy = positions[ib + 1] - ay, uz = positions[ib + 2] - az;
+        const vx = positions[ic] - ax, vy = positions[ic + 1] - ay, vz = positions[ic + 2] - az;
+        const nx = uy * vz - uz * vy;
+        const ny = uz * vx - ux * vz;
+        const nz = ux * vy - uy * vx;
+        const len = Math.hypot(nx, ny, nz);
+        if (len > 1e-12) {
+            return {
+                origin: { x: ax, y: ay, z: az },
+                normal: { x: nx / len, y: ny / len, z: nz / len },
+            };
+        }
+    }
+    return null;
+}
+
 declare const BABYLON: any;
 
 import { nmToMm } from '../A1_core/cad-math/units.js';
+import { Vec3, v3 } from '../A8_pmi/dimension-solver.js';
 import { IDManager, EntityType } from '../A1_core/id-manager.js';
 import { isCylindricalPart, isTubeRodPart } from '../A1_core/cad-node/part-shape.js';
 import { SceneSyncAdapter } from '../A1_core/cad-node/scene-sync-adapter.js';
@@ -36,7 +76,7 @@ const smartpanelTekst = smartpanelTekstRaw as unknown as ModuleTexts;
 import { hasFeatureParamsUV, readFeatureUV } from './native_core/feature-uv.js';
 import { bindOperationEdge } from '../o1_operacji/operacje-apply.js';
 import { validatePanelDimensionsNm } from './native_core/panel-dimensions.js';
-import { dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound } from '../o1_operacji/operacje-placement.js';
+import { dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound, uvOnUEdge, uvOnVEdge, isUEdge, isVEdge } from '../o1_operacji/operacje-placement.js';
 import { HardwareLoader } from '../B1_biblioteka/hardware-loader.js';
 import { parseFeatureFaceKey, featureIdFromBrepEdgeKey } from './native_core/cap-machining.js';
 
@@ -108,6 +148,14 @@ export class PanelView {
     lastThickness: number = 0;
     lastFeaturesFingerprint: string = '';
     _dimHandleDragging: boolean = false;
+
+    // === B-rep geometry (SSOT) ===
+    // Dane B-rep przechowywane w milimetrach (mm) — zgodnie z kontraktem PMI
+    _brepFacePositions: Map<string, Float64Array> = new Map();
+    _brepFaceIndices: Map<string, Uint32Array> = new Map();
+    _brepVertexLocal: Vec3[] = [];
+    _brepFaceOriginLocal: Map<string, Vec3> = new Map();
+    _brepFaceNormalLocal: Map<string, Vec3> = new Map();
 
     constructor(scene: any, model: any) {
         this.scene = scene;
@@ -319,10 +367,13 @@ export class PanelView {
             // Zapewniamy działanie hover'a
             if (!isFeature) {
                 const outlineEdgeKey = data.edgeKey as string | null | undefined;
+                const posForPlane = data.brepPositions || data.positions;
+                const planeBasis = computePlaneFromMeshData(posForPlane, data.indices);
                 mesh.metadata = {
                     faceName: faceName,
                     smartId: smartId,
                     panelModel: this.model,
+                    ...(planeBasis ? { planeOriginLocal: planeBasis.origin, planeNormalLocal: planeBasis.normal } : {}),
                     ...(outlineEdgeKey !== undefined && outlineEdgeKey !== null ? { outlineEdgeKey } : {})
                 };
             }
@@ -342,7 +393,20 @@ export class PanelView {
             
             // ZAWSZE resetujemy kolor bazowy do czystego stanu (zapobiega utrwaleniu koloru zaznaczenia/hovera po rebuildzie)
             if (isFeature) {
-                mat.diffuseColor = new BABYLON.Color3(baseAlpineWhite.r * 0.94, baseAlpineWhite.g * 0.94, baseAlpineWhite.b * 0.94);
+                const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
+                const isArchWall =
+                    String(this.model?.role || '').toUpperCase() === 'WALL' ||
+                    String(this.model?.role || '').toUpperCase() === 'WALL_PILLAR' ||
+                    this.model?.custom_properties?.domain === 'wall_segment';
+                const matId = this.model.materialId || this.model.material || this.model.custom_properties?.material;
+                const matData = matId ? materialDatabase.getMaterialById(matId) : null;
+                if (isCnc || isArchWall || matData?.isTransparent) {
+                    mat.diffuseColor = new BABYLON.Color3(baseAlpineWhite.r * 0.94, baseAlpineWhite.g * 0.94, baseAlpineWhite.b * 0.94);
+                } else {
+                    // Wpusty, kieszenie, wiercenia w trybie meblowym CAD — frezowanie odsłania surowy rdzeń wiórowy / MDF (brązowy)
+                    mat.diffuseColor = new BABYLON.Color3(0.32, 0.20, 0.12);
+                    mat.specularPower = 4;
+                }
             } else {
                 const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
                 const vp = ContextManager.instance?.viewport;
@@ -510,6 +574,84 @@ export class PanelView {
         (this as any).lastWidth = this.model?.width;
         (this as any).lastHeight = this.model?.height;
         (this as any).lastThickness = this.model?.thickness;
+
+        // === Zapisz dane B-rep (SSOT dla PMI) ===
+        this._storeBrepGeometry(meshData);
+    }
+
+    /**
+     * Przechowuje dane B-rep w milimetrach (mm) — zgodnie z kontraktem PMI.
+     * NativePanelBuilder zwraca w nm, więc konwertujemy.
+     */
+    private _storeBrepGeometry(meshData: any) {
+        this._brepFacePositions.clear();
+        this._brepFaceIndices.clear();
+        this._brepFaceOriginLocal.clear();
+        this._brepFaceNormalLocal.clear();
+        this._brepVertexLocal = [];
+
+        // NativePanelBuilder zwraca geometrię w mm; zachowujemy wartości double B-rep.
+        for (const [faceName, dataRaw] of Object.entries(meshData)) {
+            const data = dataRaw as any;
+            if (faceName === 'edges' || faceName === 'vertices') continue;
+            if (!data || !data.positions || data.positions.length === 0) continue;
+
+            const rawPositions = data.brepPositions || data.positions;
+            const positionsMM = Array.from(rawPositions as ArrayLike<number>);
+            this._brepFacePositions.set(faceName, new Float64Array(positionsMM));
+
+            if (data.indices && data.indices.length > 0) {
+                this._brepFaceIndices.set(faceName, new Uint32Array(data.indices));
+            }
+
+            // Oblicz płaszczyznę dla ścian (używane przez PMI)
+            const planeBasis = computePlaneFromMeshData(rawPositions, data.indices || []);
+            if (planeBasis) {
+                this._brepFaceOriginLocal.set(faceName, v3(planeBasis.origin.x, planeBasis.origin.y, planeBasis.origin.z));
+                this._brepFaceNormalLocal.set(faceName, v3(planeBasis.normal.x, planeBasis.normal.y, planeBasis.normal.z));
+            }
+        }
+
+        // Wierzchołki są w mm, tak jak pozycje ścian.
+        if (meshData.vertices && meshData.vertices.length > 0) {
+            this._brepVertexLocal = meshData.vertices.map((v: number[]) => {
+                const [x, y, z] = v;
+                return v3(x, y, z);
+            });
+        }
+
+        // Siatki profili i tafli ramy alu są już zapisane powyżej; tutaj uzupełniamy
+        // tylko sześć nominalnych płaszczyzn ograniczających, w centrowanym układzie ramy.
+        if (typeof this.model?.isAluFrame === 'function' && this.model.isAluFrame()) {
+            const dims = validatePanelDimensionsNm(this.model, 'PanelView._storeBrepGeometry');
+            const W = dims.widthMm;
+            const H = dims.heightMm;
+            const T = dims.thicknessMm;
+
+            // FACE_X_MINUS (lewa krawędź)
+            this._brepFaceOriginLocal.set('FACE_X_MINUS', v3(-W / 2, 0, 0));
+            this._brepFaceNormalLocal.set('FACE_X_MINUS', v3(-1, 0, 0));
+
+            // FACE_X_PLUS (prawa krawędź)
+            this._brepFaceOriginLocal.set('FACE_X_PLUS', v3(W / 2, 0, 0));
+            this._brepFaceNormalLocal.set('FACE_X_PLUS', v3(1, 0, 0));
+
+            // FACE_Y_MINUS (dół)
+            this._brepFaceOriginLocal.set('FACE_Y_MINUS', v3(0, -H / 2, 0));
+            this._brepFaceNormalLocal.set('FACE_Y_MINUS', v3(0, -1, 0));
+
+            // FACE_Y_PLUS (góra)
+            this._brepFaceOriginLocal.set('FACE_Y_PLUS', v3(0, H / 2, 0));
+            this._brepFaceNormalLocal.set('FACE_Y_PLUS', v3(0, 1, 0));
+
+            // FACE_Z_MINUS (tył)
+            this._brepFaceOriginLocal.set('FACE_Z_MINUS', v3(0, 0, -T / 2));
+            this._brepFaceNormalLocal.set('FACE_Z_MINUS', v3(0, 0, -1));
+
+            // FACE_Z_PLUS (przód/szkło)
+            this._brepFaceOriginLocal.set('FACE_Z_PLUS', v3(0, 0, T / 2));
+            this._brepFaceNormalLocal.set('FACE_Z_PLUS', v3(0, 0, 1));
+        }
     }
 
     _disposeVertexSpheres() {
@@ -586,9 +728,16 @@ export class PanelView {
             const isEdgeFace = !!edgeKey || isOutlineEdgeFace;
 
             if (isFeature) {
-                mat.diffuseColor = new BABYLON.Color3(baseColor.r * 0.94, baseColor.g * 0.94, baseColor.b * 0.94);
-                mat.alpha = alpha;
-                mat.specularPower = specularPower;
+                if (isCnc || isArchWall || matData?.isTransparent) {
+                    mat.diffuseColor = new BABYLON.Color3(baseColor.r * 0.94, baseColor.g * 0.94, baseColor.b * 0.94);
+                    mat.alpha = alpha;
+                    mat.specularPower = specularPower;
+                } else {
+                    // Wpusty, kieszenie, wiercenia w trybie meblowym CAD — brak laminatu, surowy rdzeń płyty
+                    mat.diffuseColor = new BABYLON.Color3(0.32, 0.20, 0.12);
+                    mat.alpha = 1.0;
+                    mat.specularPower = 4;
+                }
                 mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                 mesh.edgesWidth = 1.5;
                 if (mat.diffuseTexture) mat.diffuseTexture = null;
@@ -873,6 +1022,7 @@ export class PanelView {
         }
 
         this.renderFeatures();
+        this._storeBrepGeometry(meshData);
     }
 
     /**
@@ -895,6 +1045,54 @@ export class PanelView {
     getBaseColor(faceName) {
         const c = FACE_COLORS[faceName];
         return c ? new BABYLON.Color3(c.r, c.g, c.b) : null;
+    }
+
+    // === B-rep geometry access (SSOT for PMI) ===
+
+    /**
+     * Zwraca pozycje wierzchołków ściany (Float64Array w mm).
+     * Zwraca null gdy brak danych B-rep dla ściany.
+     */
+    getBrepFacePositions(faceName: string): Float64Array | null {
+        return this._brepFacePositions.get(faceName) ?? null;
+    }
+
+    /**
+     * Zwraca indeksy ściany (Uint32Array).
+     * Zwraca null gdy brak danych B-rep dla ściany.
+     */
+    getBrepFaceIndices(faceName: string): Uint32Array | null {
+        return this._brepFaceIndices.get(faceName) ?? null;
+    }
+
+    /**
+     * Zwraca listę lokalnych pozycji narożników B-rep (w mm).
+     */
+    getBrepVertexLocal(): Vec3[] {
+        return this._brepVertexLocal;
+    }
+
+    /**
+     * Zwraca początkową punkt płaszczyzny ściany w układzie lokalnym (w mm).
+     * Zwraca null gdy brak danych B-rep dla ściany.
+     */
+    getBrepFaceOriginLocal(faceName: string): Vec3 | null {
+        return this._brepFaceOriginLocal.get(faceName) ?? null;
+    }
+
+    /**
+     * Zwraca wektor normalny płaszczyzny ściany w układzie lokalnym.
+     * Zwraca null gdy brak danych B-rep dla ściany.
+     */
+    getBrepFaceNormalLocal(faceName: string): Vec3 | null {
+        return this._brepFaceNormalLocal.get(faceName) ?? null;
+    }
+
+    /**
+     * Zwraca listę krawędzi B-rep (punkty w mm).
+     */
+    getBrepEdgePoints(): number[][][] {
+        return this._edgeMeshes?.map(m => m?.metadata?.brepPoints || []) || [];
     }
 
     /**
@@ -1067,6 +1265,9 @@ export class PanelView {
                     break;
                 case 'pocket':
                     this._renderPocket(feature);
+                    break;
+                case 'cutout':
+                    this._renderCutout(feature);
                     break;
                 case 'groove':
                     this._renderGroove(feature);
@@ -1272,8 +1473,28 @@ export class PanelView {
         this._featureMarkers.push(cross);
     }
 
-    _renderPocket(_feature) {
-        // Pocket biblioteczny — edycja przez PPM (scena / drzewo / belka hierarchii), bez gizmo 3D.
+    _renderPocket(feature) {
+        const params = feature.params || {};
+        if (params.placement === 'edge_dims') {
+            const faceData = this.model.getFace(feature.face || 'FACE_Z_PLUS');
+            const u = params.u || 0;
+            const v = params.v || 0;
+            const w = params.width || 3;
+            const len = params.length || params.height || 600;
+            this._renderEdgeDimLines(feature, faceData, u, v, w, len, null);
+        }
+    }
+
+    _renderCutout(feature) {
+        const params = feature.params || {};
+        if (params.placement === 'edge_dims') {
+            const faceData = this.model.getFace(feature.face || 'FACE_Z_PLUS');
+            const u = params.u || 0;
+            const v = params.v || 0;
+            const w = params.width || 3;
+            const len = params.length || params.height || 600;
+            this._renderEdgeDimLines(feature, faceData, u, v, w, len, null);
+        }
     }
 
     _renderEdgeDimLines(feature, faceData, u, v, w, len, grooveMesh) {
@@ -1288,12 +1509,17 @@ export class PanelView {
         const uEnd = dimHandleUv(feature.face, 'u', rect, uEdge, vEdge, faceW, faceH);
         const vEnd = dimHandleUv(feature.face, 'v', rect, uEdge, vEdge, faceW, faceH);
         const offset = 0.6;
-        const centerPos = this._facePoint(faceData, midU, midV, offset);
+        const uEdgePos = uvOnUEdge(feature.face, isUEdge(uEdge) ? uEdge : 'FACE_X_MINUS', faceW);
+        const uStartU = (uEdgePos === 0) ? u : (u + w);
+        const vEdgePos = uvOnVEdge(isVEdge(vEdge) ? vEdge : 'FACE_Y_MINUS', faceH);
+        const vStartV = (vEdgePos === 0) ? v : (v + len);
+        const uStartPos = this._facePoint(faceData, uStartU, midV, offset);
+        const vStartPos = this._facePoint(faceData, midU, vStartV, offset);
         const uEndPos = this._facePoint(faceData, uEnd.u, uEnd.v, offset);
         const vEndPos = this._facePoint(faceData, vEnd.u, vEnd.v, offset);
 
-        const lineU = this._createDimLine(`op_dim_u_${feature.id}`, centerPos, uEndPos);
-        const lineV = this._createDimLine(`op_dim_v_${feature.id}`, centerPos, vEndPos);
+        const lineU = this._createDimLine(`op_dim_u_${feature.id}`, uStartPos, uEndPos);
+        const lineV = this._createDimLine(`op_dim_v_${feature.id}`, vStartPos, vEndPos);
         const lines = { u: lineU, v: lineV };
 
         const live = { u: { ...uEnd }, v: { ...vEnd } };
@@ -1344,7 +1570,51 @@ export class PanelView {
             face: feature.face,
             panelModel: this.model,
         };
+
+        const labelText = slot === 'u' ? 'X' : 'Y';
+        const labelPlane = BABYLON.MeshBuilder.CreatePlane(`groove_dim_handle_lbl_${feature.id}_${slot}`, {
+            size: 14,
+        }, this.scene);
+        labelPlane.parent = handle;
+        labelPlane.position.set(0, 0, 0);
+        labelPlane.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+        labelPlane.renderingGroupId = 2;
+        labelPlane.isPickable = false;
+
+        const dt = new BABYLON.DynamicTexture(`groove_dim_handle_dt_${feature.id}_${slot}`, { width: 64, height: 64 }, this.scene, false);
+        dt.hasAlpha = true;
+        dt.drawText(labelText, null, 46, 'bold 44px Arial', '#ffffff', 'transparent', true);
+
+        const lblMat = new BABYLON.StandardMaterial(`groove_dim_handle_lbl_mat_${feature.id}_${slot}`, this.scene);
+        lblMat.diffuseTexture = dt;
+        lblMat.emissiveColor = new BABYLON.Color3(1, 1, 1);
+        lblMat.disableLighting = true;
+        lblMat.disableDepthWrite = true;
+        lblMat.backFaceCulling = false;
+        labelPlane.material = lblMat;
+        this._featureMarkers.push(labelPlane);
+
+        const triggerOpen = () => {
+            const doc = ContextManager.instance?.document;
+            if (this.model) {
+                doc?.setActiveEntity?.(this.model);
+            }
+            window.dispatchEvent(new CustomEvent('cad-open-floating-operation', {
+                detail: {
+                    library_id: feature.params?.library_id,
+                    featureId: feature.id,
+                    panelId: this.model.id,
+                    face: feature.face,
+                    focusSlot: slot,
+                },
+            }));
+        };
+
         handle.actionManager = new BABYLON.ActionManager(this.scene);
+        handle.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+            BABYLON.ActionManager.OnDoublePickTrigger,
+            () => triggerOpen(),
+        ));
         handle.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
             BABYLON.ActionManager.OnPointerOverTrigger,
             () => {
@@ -1460,7 +1730,25 @@ export class PanelView {
             handle.material.emissiveColor = pendingEdge !== originalEdge ? hotColor : idleColor;
         };
 
+        let lastDragStartTime = 0;
         drag.onDragStartObservable.add(() => {
+            const now = performance.now();
+            if (now - lastDragStartTime < 350) {
+                const doc = ContextManager.instance?.document;
+                if (this.model) {
+                    doc?.setActiveEntity?.(this.model);
+                }
+                window.dispatchEvent(new CustomEvent('cad-open-floating-operation', {
+                    detail: {
+                        library_id: feature.params?.library_id,
+                        featureId: feature.id,
+                        panelId: this.model.id,
+                        face: feature.face,
+                        focusSlot: slot,
+                    },
+                }));
+            }
+            lastDragStartTime = now;
             this._dimHandleDragging = true;
             pendingEdge = originalEdge;
             handle.scaling.setAll(1.28);

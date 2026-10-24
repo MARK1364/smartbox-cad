@@ -28,6 +28,48 @@ export type MachiningFace =
     | 'FACE_Z_PLUS'
     | 'FACE_Z_MINUS';
 
+/**
+ * Wskaźnik asocjacyjny na element napędzający (rodzica parametrycznego obróbki).
+ * Identyfikuje relację z węzłem CADNode i jego rolą w systemie.
+ */
+export interface MachiningDrivenBy {
+    /** Unikalne ID węzła źródłowego w drzewie CADNode (np. "panel_11", "hw_hinge_123") */
+    nodeId: string;
+    /** Kod taksonomii roli bryły sterującej (np. 'SHELF_PANEL', 'FRONT', 'HARDWARE') */
+    role: string;
+    /** Typ okucia, jeśli bryłą sterującą jest okucie (np. 'HINGE', 'SHELF_PIN', 'DRAWER_SLIDE', 'HANDLE') */
+    hardwareType?: string;
+    /** Logiczny klucz części w planie bloku (np. 'Polka_1', 'Hinge_L6') */
+    partKey?: string;
+    /** ID nadrzędnego kontenera bloku generującego */
+    containerId?: string;
+}
+
+/** Kanoniczny identyfikator modułu emitującego cechę obróbczą. */
+export type MachiningGeneratorId =
+    | 'blok_doors'
+    | 'blok_shelves'
+    | 'blok_corner_shelves'
+    | 'blok_drawers'
+    | 'blok_flaps'
+    | 'blok_handles'
+    | 'blok_led';
+
+/**
+ * Znormalizowany katalog reguł obróbczych w systemie.
+ */
+export type MachiningRule =
+    | 'shelf_pin'        // Otwory w boku korpusu pod podpórkę półki
+    | 'shelf_socket'     // Otwory montażowe w samej półce
+    | 'mount_plate'      // Otwory w boku korpusu pod prowadnik zawiasu
+    | 'cup'              // Puszka zawiasu fi35 we froncie
+    | 'screw'            // Wkręty montażowe puszki zawiasu we froncie
+    | 'drawer_runner'    // Otwory pod prowadnicę szuflady
+    | 'flap_bracket'     // Otwory podnośnika klapy
+    | 'handle_hole'      // Otwory przelotowe pod uchwyt meblowy
+    | 'back_groove'      // Wpust pod plecy szafki
+    | 'led_channel';     // Rowek pod profil LED
+
 /** Oznaczenie systemu-emitera wpustu (CNC: geometry-extractor → purpose 'LED_CHANNEL'). */
 export type MachiningGrooveSource = 'BLOKI_LED' | 'assembly_led_channel';
 
@@ -53,6 +95,12 @@ export interface MachiningGrooveFeature {
     type: 'groove';
     face: MachiningFace;
     name?: string;
+    /** Relacja asocjacyjna */
+    drivenBy?: MachiningDrivenBy;
+    /** Reguła semantyczna */
+    rule?: MachiningRule;
+    /** Identyfikator modułu/generatora źródłowego (np. 'blok_shelves', 'blok_doors') */
+    generatedBy?: MachiningGeneratorId;
     params: MachiningGrooveParams;
 }
 
@@ -100,6 +148,7 @@ export interface MachiningHoleParams {
     sourceContainerId?: string;
     /** Właściciel części (np. Hinge_L0 / HINGE_TL). */
     sourcePartId?: string;
+    [key: string]: any;
 }
 
 export interface MachiningHoleFeature {
@@ -109,6 +158,12 @@ export interface MachiningHoleFeature {
     /** Duplikat face (klucz serializacji doors/flaps — utrzymywany razem z face). */
     side?: MachiningFace;
     name?: string;
+    /** Relacja asocjacyjna */
+    drivenBy?: MachiningDrivenBy;
+    /** Reguła semantyczna */
+    rule?: MachiningRule;
+    /** Identyfikator modułu/generatora źródłowego (np. 'blok_shelves', 'blok_doors') */
+    generatedBy?: MachiningGeneratorId;
     params: MachiningHoleParams;
 }
 
@@ -128,6 +183,9 @@ export interface GrooveMachiningIntentOptions {
     sourceContainerId?: string;
     face?: MachiningFace;
     name?: string;
+    drivenBy?: MachiningDrivenBy;
+    rule?: MachiningRule;
+    generatedBy?: MachiningGeneratorId;
     u: number;
     v: number;
     width: number;
@@ -149,6 +207,9 @@ export function buildGrooveMachiningIntent(
             type: 'groove',
             face: opts.face || 'FACE_Z_PLUS',
             ...(opts.name ? { name: opts.name } : {}),
+            ...(opts.drivenBy ? { drivenBy: opts.drivenBy } : {}),
+            ...(opts.rule ? { rule: opts.rule } : {}),
+            ...(opts.generatedBy ? { generatedBy: opts.generatedBy } : {}),
             params: {
                 source: opts.source,
                 channel_id: opts.channelId,
@@ -176,22 +237,32 @@ export function isOwnedGroove(feature: any, source: MachiningGrooveSource, chann
 }
 
 export interface HoleMachiningIntentOptions {
-    targetNodeId: string;
+    targetNodeId?: string;
     /** Pełne id cechy (np. hinge_plate_l_0_h) — stabilne przy re-sync (idempotencja). */
     id: string;
     face: MachiningFace;
     /** Duplikat face (doors/flaps piszą side = face). */
     side?: MachiningFace;
     template_id?: string;
-    u: number;
-    v: number;
-    diameter: number;
-    depth: number;
+    name?: string;
+    drivenBy?: MachiningDrivenBy;
+    rule?: MachiningRule;
+    generatedBy?: MachiningGeneratorId;
+    u?: number;
+    v?: number;
+    u_mm?: number;
+    v_mm?: number;
+    diameter?: number;
+    diameter_mm?: number;
+    depth?: number;
+    depth_mm?: number;
     clearance?: number;
-    /** Tag własności (params[ownerTag] = true). */
-    ownerTag: MachiningHoleOwnerTag;
+    /** Tag własności (params[ownerTag] = true) — używany przez buildery nawierceń korpusu do synchronizacji. */
+    ownerTag?: MachiningHoleOwnerTag;
     sourceContainerId?: string;
     sourcePartId?: string;
+    /** Dodatkowe parametry cechy w params */
+    extraParams?: Record<string, any>;
 }
 
 /**
@@ -202,27 +273,37 @@ export interface HoleMachiningIntentOptions {
 export function buildHoleMachiningIntent(
     opts: HoleMachiningIntentOptions,
 ): MachiningIntent<MachiningHoleFeature> {
+    const u = opts.u_mm ?? opts.u ?? 0;
+    const v = opts.v_mm ?? opts.v ?? 0;
+    const diameter = opts.diameter_mm ?? opts.diameter ?? 0;
+    const depth = opts.depth_mm ?? opts.depth ?? 0;
+
     return {
-        targetNodeId: opts.targetNodeId,
+        targetNodeId: opts.targetNodeId ?? '',
         feature: {
             id: opts.id,
             type: 'hole',
             face: opts.face,
-            ...(opts.side ? { side: opts.side } : {}),
+            side: opts.side ?? opts.face,
+            ...(opts.name ? { name: opts.name } : {}),
+            ...(opts.drivenBy ? { drivenBy: opts.drivenBy } : {}),
+            ...(opts.rule ? { rule: opts.rule } : {}),
+            ...(opts.generatedBy ? { generatedBy: opts.generatedBy } : {}),
             params: {
                 ...(opts.template_id !== undefined ? { template_id: opts.template_id } : {}),
-                u: opts.u,
-                v: opts.v,
-                u_mm: opts.u,
-                v_mm: opts.v,
-                diameter: opts.diameter,
-                diameter_mm: opts.diameter,
-                depth: opts.depth,
-                depth_mm: opts.depth,
+                u,
+                v,
+                u_mm: u,
+                v_mm: v,
+                diameter,
+                diameter_mm: diameter,
+                depth,
+                depth_mm: depth,
                 ...(opts.clearance !== undefined ? { clearance: opts.clearance } : {}),
-                [opts.ownerTag]: true,
+                ...(opts.ownerTag ? { [opts.ownerTag]: true } : {}),
                 ...(opts.sourceContainerId !== undefined ? { sourceContainerId: opts.sourceContainerId } : {}),
                 ...(opts.sourcePartId !== undefined ? { sourcePartId: opts.sourcePartId } : {}),
+                ...(opts.extraParams ? opts.extraParams : {}),
             },
         },
     };

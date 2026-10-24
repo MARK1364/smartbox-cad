@@ -5,3 +5,14 @@ dist
 S1_sketcher/webcad-2d-mobile/
 R1_reports/prices.backup.json
 
+# Licencje — klucz prywatny wydawcy i wygenerowane pliki .lic
+license-private.key
+licenses/
+*.lic
+*.tsbuildinfo
+scratch/
+*.tap
+*.nc
+*.mpr
+blad.PNG
+

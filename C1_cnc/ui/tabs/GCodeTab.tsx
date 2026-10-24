@@ -8,6 +8,9 @@ import { WoodWOPPostprocessor } from '../../postprocessors/woodwop-postprocessor
 import { SCMPostprocessor } from '../../postprocessors/scm-postprocessor.js';
 
 import { MachiningRuleEngine } from '../../rules/machining-rule-engine.js';
+import { checkExportGate, consumeTrialExport } from '../../../src/saas/saas-gate.js';
+import { watermarkGCode } from '../../../src/saas/watermark.js';
+import { SaaSUpgradeBus } from '../../../src/saas/saas-upgrade-bus.js';
 import { tx } from '../../../T1_tlumaczenia/core.js';
 import { useLocale } from '../../../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../../../T1_tlumaczenia/types.js';
@@ -71,6 +74,8 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
             features: preparedFeatures,
             toolAssignments: program.toolAssignments || {},
             postprocessor: program.postprocessor || 'Mach3',
+            strategyId: program.strategyId,
+            strategyParams: program.strategyParams,
             workpieceDimensions: dims
         });
 
@@ -120,8 +125,19 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
             generateCode();
             return;
         }
-        const content = gcodeText || generateCode();
+
+        const gate = checkExportGate();
+        if (!gate.allowed) {
+            SaaSUpgradeBus.requestUpgrade(tx(cncTekst, 'gcode.title', TX_NS));
+            return;
+        }
+
+        let content = gcodeText || generateCode();
         if (!content) return;
+        if (gate.watermark) {
+            content = watermarkGCode(content, program.postprocessor || 'Mach3', gate.watermarkText);
+        }
+        if (gate.reason === 'trial') consumeTrialExport();
 
         const filename = getFilename();
 
@@ -160,8 +176,21 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
     const handleCopyCode = async () => {
         // Strict: jak wyżej — decyzja po danych, nie po tekście.
         if ((program.features || []).length === 0 || !gcodeText) return;
+
+        const gate = checkExportGate();
+        if (!gate.allowed) {
+            SaaSUpgradeBus.requestUpgrade(tx(cncTekst, 'gcode.title', TX_NS));
+            return;
+        }
+
+        let content = gcodeText;
+        if (gate.watermark) {
+            content = watermarkGCode(content, program.postprocessor || 'Mach3', gate.watermarkText);
+        }
+        if (gate.reason === 'trial') consumeTrialExport();
+
         try {
-            await navigator.clipboard.writeText(gcodeText);
+            await navigator.clipboard.writeText(content);
             setStatusMsg(tx(cncTekst, 'gcode.copied', TX_NS));
             setTimeout(() => setStatusMsg(''), 2500);
         } catch (err) {

@@ -73,6 +73,8 @@ describe('Flaps Drilling Builder (buildFlapsDrillings)', () => {
 
         expect(leftIntents).toHaveLength(2);
         expect(rightIntents).toHaveLength(2);
+        expect(leftIntents[0].feature.drivenBy.nodeId).toBe(`${flapNode.id}_hinge_hinge_bl`);
+        expect(rightIntents[0].feature.drivenBy.nodeId).toBe(`${flapNode.id}_hinge_hinge_br`);
 
         // Środek zawiasu lewego to 80 mm, otwory leżą w 80 - 16 = 64 oraz 80 + 16 = 96 mm
         const leftUs = leftIntents.map(i => i.feature.params.u).sort((a, b) => a - b);

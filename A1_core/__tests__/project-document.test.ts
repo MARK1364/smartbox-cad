@@ -9,6 +9,7 @@ import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { ProjectFileIO, suggestedProjectFileName, stampProjectFileMetadata } from '../project-file-io.js';
 import appPackage from '../../package.json';
 import { ContainerModel } from '../container-model.js';
+import { HardwareModel } from '../hardware-model.js';
 
 describe('ProjectDocument', () => {
     let doc: ProjectDocument;
@@ -473,6 +474,62 @@ describe('ProjectDocument', () => {
             throw new Error('broken-hydrate');
         });
         expect(() => doc.load(json)).toThrow(/błąd hydratacji "PART"/);
+    });
+
+    it('serializes and hydrates NodeType.HARDWARE nodes (e.g. shelf pins, handles)', () => {
+        const container = doc.createAssembly({ name: 'Szafka_Polki' }) as ContainerModel;
+        const hwNode = CADNode.create(NodeType.HARDWARE, 'Podpórka 1 (Lewy Przód)', 'shelf_1_pin_LF');
+        hwNode.domainData = HardwareModel.fromJSON({
+            id: 'shelf_1_pin_LF',
+            name: 'Podpórka 1 (Lewy Przód)',
+            role: 'HARDWARE',
+            hardwareType: 'SHELF_PIN',
+            hardwareId: 'PODPORKA_FI5',
+            side: 'left',
+            loc: { x: -250, y: 100, z: 200 },
+            params: { shelfIndex: 1, position: 'LF', side: 'left' },
+            visible: true,
+        });
+        doc.addNode(container.id, hwNode);
+
+        const serialized = JSON.parse(JSON.stringify(doc.serialize()));
+        expect(serialized.rootNode).toBeDefined();
+
+        const restored = new ProjectDocument();
+        restored.load(serialized);
+
+        const restoredHw = restored.findNode('shelf_1_pin_LF');
+        expect(restoredHw).toBeDefined();
+        expect(restoredHw!.nodeType).toBe(NodeType.HARDWARE);
+        expect(restoredHw!.domainData).toBeInstanceOf(HardwareModel);
+        expect((restoredHw!.domainData as HardwareModel).hardwareId).toBe('PODPORKA_FI5');
+        expect((restoredHw!.domainData as HardwareModel).hardwareType).toBe('SHELF_PIN');
+        expect((restoredHw!.domainData as HardwareModel).side).toBe('left');
+    });
+
+    it('auto-promotes plain object domainData on NodeType.HARDWARE during serialize', () => {
+        const container = doc.createAssembly({ name: 'Szafka_Polki' }) as ContainerModel;
+        const hwNode = CADNode.create(NodeType.HARDWARE, 'Podpórka 1 (Prawy Tył)', 'shelf_1_pin_RB');
+        // Surowy obiekt bez metody toJSON()
+        hwNode.domainData = {
+            id: 'shelf_1_pin_RB',
+            name: 'Podpórka 1 (Prawy Tył)',
+            role: 'HARDWARE',
+            hardwareType: 'SHELF_PIN',
+            hardwareId: 'PODPORKA_FI5',
+        } as any;
+        doc.addNode(container.id, hwNode);
+
+        // Nie powinno rzucić błędu "domainData bez toJSON()"
+        const serialized = JSON.parse(JSON.stringify(doc.serialize()));
+
+        const restored = new ProjectDocument();
+        restored.load(serialized);
+
+        const restoredHw = restored.findNode('shelf_1_pin_RB');
+        expect(restoredHw).toBeDefined();
+        expect(restoredHw!.domainData).toBeInstanceOf(HardwareModel);
+        expect((restoredHw!.domainData as HardwareModel).hardwareId).toBe('PODPORKA_FI5');
     });
 });
 

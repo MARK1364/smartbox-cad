@@ -7,6 +7,8 @@ import {
     measureDeltaSegments,
     measureTwoEdges,
     pathLength,
+    PLANE_PARALLEL_ANGLE_RAD,
+    planesAreParallel,
     projectMeasureElements,
     projectPointOnPlane,
     shouldShowDeltas,
@@ -19,8 +21,10 @@ import {
     measureLineWidth,
     measurePointDiameter,
 } from '../pmi-renderer.js';
-import { findMeasureElementPick } from '../pmi-measure-pick.js';
+import { findMeasureElementPick, findPlaneHit } from '../pmi-measure-pick.js';
+import { planeNormalWorldFromMesh } from '../pmi-id-bridge.js';
 import { GeometryType } from '../../A1_core/geometry-detector.js';
+import { ContextManager } from '../../A1_core/context-manager.js';
 
 describe('cadDeltasFromRender', () => {
     it('mapuje osie Babylon na CAD (Y↔Z)', () => {
@@ -347,8 +351,19 @@ describe('rozmiary wizualne miarki (linia i sfery punktów)', () => {
 });
 
 describe('priorytet snapowania w findMeasureElementPick', () => {
+    it('odrzuca płaszczyznę bez dokładnej normalnej B-rep', () => {
+        const result = findPlaneHit({
+            hit: true,
+            geometryType: GeometryType.PLANE,
+            pickedPoint: { x: 1, y: 2, z: 3 },
+            mesh: { metadata: { faceName: 'FACE_Z_PLUS' } },
+            normal: { x: 0, y: 1, z: 0 },
+        });
+        expect(result).toBeNull();
+    });
+
     it('zwraca narożnik z detekcji zarówno bez Ctrl jak i z Ctrl', () => {
-        const dummyMesh = { id: 'test_mesh', metadata: { panelModel: { id: 'p1' } } };
+        const dummyMesh = { id: 'test_mesh', metadata: {} };
         const detection = {
             hit: true,
             geometryType: GeometryType.VERTEX,
@@ -385,6 +400,213 @@ describe('priorytet snapowania w findMeasureElementPick', () => {
         expect(pickWithCtrl!.kind).toBe('vertex');
         expect(pickWithCtrl!.edge).toBeNull();
         expect(pickWithCtrl!.worldPos).toEqual(v3(10, 20, 30));
+    });
+
+    it('podświetlona płaszczyzna nie jest podmieniana przez krawędź obrysu (przypadek wąskiej ścianki ABS)', () => {
+        const planeMesh = {
+            metadata: { faceName: 'left', nodeId: 'p1', planeNormalLocal: { x: 0, y: 0, z: 1 } },
+            parent: {},
+            getWorldMatrix: () => ({ m: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }),
+        };
+        const detection = {
+            hit: true,
+            geometryType: GeometryType.PLANE,
+            pickedPoint: { x: 1, y: 2, z: 3 },
+            mesh: planeMesh,
+            normal: { x: 0, y: 0, z: 1 },
+        };
+        const hoveredSegment = {
+            mesh: { metadata: {} },
+            p1World: v3(0, 0, 0),
+            p2World: v3(10, 0, 0),
+            p1Local: v3(0, 0, 0),
+            p2Local: v3(10, 0, 0),
+            index1: 0,
+            index2: 1,
+            closestWorld: v3(5, 0, 0),
+            distPx: 1,
+            depth: 0,
+        };
+
+        const pick = findMeasureElementPick({
+            scene: { meshes: [] },
+            pointerX: 100,
+            pointerY: 100,
+            ctrl: false,
+            vertexSnapPx: 12,
+            edgeSnapPx: 22,
+            lastDetection: detection,
+            hoveredSegment,
+        });
+
+        expect(pick).not.toBeNull();
+        expect(pick!.kind).toBe('plane');
+        expect(pick!.anchor.kind).toBe('FACE');
+        expect(pick!.edge).toBeNull();
+    });
+
+    it('nie przesuwa punktu płaszczyzny do pobliskiego narożnika', () => {
+        const planeMesh = {
+            metadata: { faceName: 'left', nodeId: 'p1', planeNormalLocal: { x: 0, y: 0, z: 1 } },
+            parent: {},
+            getWorldMatrix: () => ({ m: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }),
+        };
+        const detection = {
+            hit: true,
+            geometryType: GeometryType.PLANE,
+            pickedPoint: { x: 5, y: 6, z: 7 },
+            mesh: planeMesh,
+            normal: { x: 0, y: 0, z: 1 },
+        };
+
+        const pick = findMeasureElementPick({
+            scene: { meshes: [] },
+            pointerX: 100,
+            pointerY: 100,
+            ctrl: false,
+            vertexSnapPx: 12,
+            edgeSnapPx: 22,
+            lastDetection: detection,
+        });
+
+        expect(pick).not.toBeNull();
+        expect(pick!.kind).toBe('plane');
+        expect(pick!.worldPos).toEqual(v3(5, 6, 7));
+        expect(pick!.anchor.kind).toBe('FACE');
+    });
+
+    it('bez podświetlenia nie wybiera niczego (brak cichego fallbacku)', () => {
+        class V3 {
+            x: number; y: number; z: number;
+            constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
+            static TransformCoordinates(v: any) { return new V3(v.x, v.y, v.z); }
+            static Project() { return { x: 400, y: 300, z: 0.5 }; }
+        }
+        (globalThis as any).BABYLON = {
+            Matrix: { Identity: () => ({}) },
+            Vector3: V3,
+        };
+
+        const vertexMesh = {
+            metadata: { type: 'vertex', cornerIndex: 0 },
+            isEnabled: () => true,
+            isDisposed: () => false,
+            getAbsolutePosition: () => ({ x: 0, y: 0, z: 100 }),
+        };
+        const planeMesh = {
+            metadata: { faceName: 'front' },
+            isEnabled: () => true,
+            isPickable: true,
+        };
+        const scene = {
+            activeCamera: { viewport: { toGlobal: () => ({}) } },
+            getEngine: () => ({ getRenderWidth: () => 800, getRenderHeight: () => 600 }),
+            getTransformMatrix: () => ({}),
+            meshes: [vertexMesh, planeMesh],
+            pick: () => ({ hit: true, pickedMesh: planeMesh, pickedPoint: { x: 5, y: 6, z: 7 } }),
+            multiPick: () => [{ hit: true, pickedMesh: planeMesh, pickedPoint: { x: 5, y: 6, z: 7 }, distance: 1 }],
+        };
+
+        try {
+            const pick = findMeasureElementPick({
+                scene,
+                pointerX: 400,
+                pointerY: 300,
+                ctrl: false,
+                vertexSnapPx: 12,
+                edgeSnapPx: 22,
+                lastDetection: null,
+            });
+
+            expect(pick).toBeNull();
+        } finally {
+            delete (globalThis as any).BABYLON;
+        }
+    });
+
+    it('liczy normalną świata z dokładnej normalnej B-rep i macierzy meshu', () => {
+        const c = Math.cos(Math.PI / 2);
+        const s = Math.sin(Math.PI / 2);
+        const planeMesh = {
+            metadata: {
+                planeNormalLocal: { x: 1, y: 0, z: 0 },
+            },
+            getWorldMatrix: () => ({ m: [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }),
+        };
+
+        const normal = planeNormalWorldFromMesh(planeMesh);
+
+        expect(normal).not.toBeNull();
+        expect(normal!.x).toBeCloseTo(0, 12);
+        expect(normal!.y).toBeCloseTo(1, 12);
+        expect(normal!.z).toBeCloseTo(0, 12);
+    });
+
+    it('stosuje odwrotną transponowaną przy niejednorodnej skali (macierz meshu)', () => {
+        const invSqrt2 = 1 / Math.sqrt(2);
+        const planeMesh = {
+            metadata: {
+                planeNormalLocal: { x: invSqrt2, y: invSqrt2, z: 0 },
+            },
+            getWorldMatrix: () => ({ m: [2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }),
+        };
+
+        const normal = planeNormalWorldFromMesh(planeMesh);
+
+        expect(normal).not.toBeNull();
+        expect(normal!.x).toBeCloseTo(1 / Math.sqrt(5), 12);
+        expect(normal!.y).toBeCloseTo(2 / Math.sqrt(5), 12);
+        expect(normal!.z).toBeCloseTo(0, 12);
+    });
+
+    it('stosuje odwrotną transponowaną przy niejednorodnej skali (macierz CADNode)', () => {
+        const cm = ContextManager.instance;
+        const prevDocument = cm.document;
+        const invSqrt2 = 1 / Math.sqrt(2);
+        cm.document = {
+            findNode: (id: string) => id === 'p1'
+                ? {
+                    getWorldMatrix: () => ({
+                        data: new Float64Array([2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
+                    }),
+                }
+                : null,
+        } as any;
+
+        try {
+            const planeMesh = {
+                metadata: {
+                    panelModel: { id: 'p1' },
+                    planeNormalLocal: { x: invSqrt2, y: invSqrt2, z: 0 },
+                },
+                getWorldMatrix: () => ({ m: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }),
+            };
+
+            const normal = planeNormalWorldFromMesh(planeMesh);
+
+            expect(normal).not.toBeNull();
+            expect(normal!.x).toBeCloseTo(1 / Math.sqrt(5), 12);
+            expect(normal!.y).toBeCloseTo(2 / Math.sqrt(5), 12);
+            expect(normal!.z).toBeCloseTo(0, 12);
+        } finally {
+            cm.document = prevDocument;
+        }
+    });
+});
+
+describe('równoległość płaszczyzn (parity z FreeCAD)', () => {
+    it('domyślna tolerancja to 1e-12 rad', () => {
+        expect(PLANE_PARALLEL_ANGLE_RAD).toBe(1e-12);
+    });
+
+    it('normalne różniące się o 1e-13 rad są równoległe', () => {
+        const a = 1e-13;
+        expect(planesAreParallel(v3(0, 0, 1), v3(Math.sin(a), 0, Math.cos(a)))).toBe(true);
+    });
+
+    it('normalne różniące się o 1e-11 rad nie są równoległe', () => {
+        const a = 1e-11;
+        expect(planesAreParallel(v3(0, 0, 1), v3(Math.sin(a), 0, Math.cos(a)))).toBe(false);
     });
 });
 

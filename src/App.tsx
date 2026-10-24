@@ -13,6 +13,8 @@ import { SaaSUserBadge } from './saas/ui/SaaSUserBadge';
 import { SaaSAuthModal } from './saas/ui/SaaSAuthModal';
 import { SaaSProjectsDashboardModal } from './saas/ui/SaaSProjectsDashboardModal';
 import { SaaSPaywallModal } from './saas/ui/SaaSPaywallModal';
+import { SaaSUpgradeBus } from './saas/saas-upgrade-bus';
+import { restoreLicense } from './saas/license-loader';
 import { NewProjectModal } from './NewProjectModal';
 import { PropertiesPanel } from './PropertiesPanel';
 import { FloatingOperationDialog, CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
@@ -230,6 +232,18 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     return () => {
       ContextManager.instance.requestNewProjectDialog = null;
     };
+  }, []);
+
+  // Brama licencyjna: zagnieżdżone komponenty (np. GCodeTab) proszą o paywall.
+  useEffect(() => {
+    return SaaSUpgradeBus.setHandler((feature) => {
+      setSaasPaywallFeature(feature || tx(srcTekst, 'saas.pro_feature_locked', TX_NS, { name: 'PRO' }));
+    });
+  }, []);
+
+  // Przywróć zapisaną licencję przy starcie (weryfikacja podpisu + expiry).
+  useEffect(() => {
+    void restoreLicense();
   }, []);
 
   const handleNewProjectClick = () => {
@@ -679,11 +693,15 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     const uninstallBridge = installCadModuleBridge();
     const uninstallRefresh = installModuleRefreshBridge();
 
-    import('./application/cad-app.ts').then(() => {
-      console.log('Core app loaded successfully in React');
-    }).catch(err => {
-      console.error('Failed to load cad-app.ts:', err);
-    });
+    if (!(window as any).__cadAppLoading && !(window as any).__cadAppStarted) {
+      (window as any).__cadAppLoading = true;
+      import('./application/cad-app.ts').then(() => {
+        console.log('Core app loaded successfully in React');
+      }).catch(err => {
+        (window as any).__cadAppLoading = false;
+        console.error('Failed to load cad-app.ts:', err);
+      });
+    }
 
     return () => {
       uninstallRefresh();
@@ -2162,7 +2180,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       <div 
         id="statusBar" 
         className={`status-bar ${uiState?.statusBarActive ? 'active' : ''} ${
-          uiState?.statusKind === 'error' ? 'status-bar--error' : ''
+          uiState?.statusKind === 'error' ? 'status-bar--error' : uiState?.statusKind === 'warning' ? 'status-bar--warning' : ''
         }`}
       >
         <span className="status-dot"></span>

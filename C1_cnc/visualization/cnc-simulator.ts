@@ -48,6 +48,7 @@ export class CNCSimulator {
     private currentPos: any = null; // Vector3
     private startPos: any = null;   // Vector3
     private endPos: any = null;     // Vector3
+    private approachPos: any = null; // Vector3
     private safeZOffset: number = 25.0; // mm nad powierzchnią (SAFE_Z)
     private initialMoveDist: number = 1.0;
     private currentMoveTotalDist: number = 1.0;
@@ -68,7 +69,13 @@ export class CNCSimulator {
         this.toolLibrary = toolLibrary || new ToolLibrary();
     }
 
+    private wcsManager: any = null;
+    private parentNode: any = null;
+
     public setWcsTransform(wcsManager: any, parentNode: any): void {
+        this.wcsManager = wcsManager;
+        this.parentNode = parentNode;
+
         if (this.wcsRootNode) {
             this.wcsRootNode.dispose();
             this.wcsRootNode = null;
@@ -78,19 +85,40 @@ export class CNCSimulator {
         this.wcsRootNode = new BABYLON.TransformNode("Simulator_WCS_Root", this.scene);
         if (parentNode) {
             this.wcsRootNode.parent = parentNode;
+            this.wcsRootNode.position = new BABYLON.Vector3(0, 0, 0);
+            this.wcsRootNode.rotation = new BABYLON.Vector3(0, 0, 0);
+            this.wcsRootNode.scaling = new BABYLON.Vector3(1, 1, 1);
+        } else {
+            const origin = wcsManager.getOrigin();
+            const rot = wcsManager.getRotation();
+            this.wcsRootNode.position = new BABYLON.Vector3(origin.x, origin.y, origin.z);
+            this.wcsRootNode.rotation = new BABYLON.Vector3(
+                rot.x * Math.PI / 180,
+                rot.y * Math.PI / 180,
+                rot.z * Math.PI / 180
+            );
+            this.wcsRootNode.scaling = new BABYLON.Vector3(1, 1, 1);
         }
+    }
 
-        const origin = wcsManager.getOrigin();
-        const rot = wcsManager.getRotation();
-        const dirs = wcsManager.getDirections();
-        
-        this.wcsRootNode.position = new BABYLON.Vector3(origin.x, origin.y, origin.z);
-        this.wcsRootNode.rotation = new BABYLON.Vector3(
-            rot.x * Math.PI / 180,
-            rot.y * Math.PI / 180,
-            rot.z * Math.PI / 180
-        );
-        this.wcsRootNode.scaling = new BABYLON.Vector3(dirs.x, dirs.y, dirs.z);
+    private currentUnitNorm: any = new BABYLON.Vector3(0, 0, 1);
+
+    private toSimPoint(pt: any): any {
+        if (this.parentNode && this.wcsManager && typeof this.wcsManager.toPanelCoordinates === 'function') {
+            const p = this.wcsManager.toPanelCoordinates(pt);
+            return new BABYLON.Vector3(p.x, p.y, p.z);
+        }
+        return new BABYLON.Vector3(pt.x, pt.y, pt.z);
+    }
+
+    private toSimVector(vec: any): any {
+        if (this.parentNode && this.wcsManager && typeof this.wcsManager.toPanelVector === 'function') {
+            const v = this.wcsManager.toPanelVector(vec);
+            const len = Math.hypot(v.x, v.y, v.z) || 1.0;
+            return { x: v.x / len, y: v.y / len, z: v.z / len };
+        }
+        const len = Math.hypot(vec.x, vec.y, vec.z) || 1.0;
+        return { x: vec.x / len, y: vec.y / len, z: vec.z / len };
     }
 
     public loadOperations(operations: CNCOperation[]): void {
@@ -222,19 +250,33 @@ export class CNCSimulator {
         }
 
         this.currentMoveIndex = 0;
-        const pos = op.position;
+        const pos = this.toSimPoint(op.position);
 
         if (op.type === 'groove' || op.type === 'contour') {
-            const depth = Math.abs(op.parameters?.depth || 0.0);
             const moves = op.parameters?.moves;
             if (moves && moves.length > 0) {
-                const endP = moves[0].endPoint;
-                this.startPos = new BABYLON.Vector3(pos.x, pos.y, pos.z - depth);
-                this.endPos = new BABYLON.Vector3(endP.x, endP.y, endP.z - depth);
+                const endP = this.toSimPoint(moves[0].endPoint);
+                this.startPos = pos;
+                this.endPos = endP;
             } else {
-                this.startPos = new BABYLON.Vector3(pos.x, pos.y, pos.z - depth);
-                this.endPos = new BABYLON.Vector3(pos.x + 50, pos.y, pos.z - depth);
+                this.startPos = pos;
+                this.endPos = new BABYLON.Vector3(pos.x + 50, pos.y, pos.z);
             }
+
+            const surfPt = op.parameters?.surfacePoint;
+            const surfacePos = surfPt ? this.toSimPoint(surfPt) : pos;
+            const norm = op.parameters?.normal || { x: 0, y: 0, z: 1 };
+            const unitNorm = this.toSimVector(norm);
+            this.currentUnitNorm = unitNorm;
+
+            const strategyApproach = op.parameters?.approachPoint;
+            this.approachPos = strategyApproach
+                ? this.toSimPoint(strategyApproach)
+                : new BABYLON.Vector3(
+                    surfacePos.x + unitNorm.x * this.safeZOffset,
+                    surfacePos.y + unitNorm.y * this.safeZOffset,
+                    surfacePos.z + unitNorm.z * this.safeZOffset
+                );
 
             // Dopasowanie orientacji piły/frezu do kierunku pierwszego odcinka cięcia
             if (this.toolMesh && op.type === 'groove') {
@@ -245,25 +287,73 @@ export class CNCSimulator {
                 this.toolMesh.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0); // Frez palcowy (Z-up)
             }
         } else {
-            // Otwór / Wiercenie
+            // Otwór / Wiercenie (uwzględnia pełny wektor osi 3D: pionowe i poziome)
             const depth = Math.abs(op.parameters?.depth || 10.0);
-            this.startPos = new BABYLON.Vector3(pos.x, pos.y, pos.z);
-            this.endPos = new BABYLON.Vector3(pos.x, pos.y, pos.z - depth);
+            const rawAxis = op.parameters?.axis || { x: 0, y: 0, z: -1 };
+            const dir = this.toSimVector(rawAxis);
+            this.currentUnitNorm = dir;
+            const dirX = dir.x;
+            const dirY = dir.y;
+            const dirZ = dir.z;
+
+            this.startPos = pos;
+            this.endPos = new BABYLON.Vector3(
+                pos.x + dirX * depth,
+                pos.y + dirY * depth,
+                pos.z + dirZ * depth
+            );
+
+            // Punkt bezpiecznego najazdu w osi przeciwnej do wiercenia
+            this.approachPos = new BABYLON.Vector3(
+                pos.x - dirX * this.safeZOffset,
+                pos.y - dirY * this.safeZOffset,
+                pos.z - dirZ * this.safeZOffset
+            );
+
             if (this.toolMesh) {
-                this.toolMesh.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0); // Wiertło (Z-up)
+                this.toolMesh.rotation = this.getToolRotationForAxis(dirX, dirY, dirZ);
             }
         }
 
-        const targetPosXY = new BABYLON.Vector3(this.startPos.x, this.startPos.y, this.startPos.z + this.safeZOffset);
         if (this.currentPos) {
-            this.initialMoveDist = Math.max(0.001, BABYLON.Vector3.Distance(this.currentPos, targetPosXY));
+            this.initialMoveDist = Math.max(0.001, BABYLON.Vector3.Distance(this.currentPos, this.approachPos));
         } else {
-            this.currentPos = targetPosXY.clone();
+            this.currentPos = this.approachPos.clone();
             this.initialMoveDist = 1.0;
         }
         if (op.type === 'groove' || op.type === 'contour') {
             this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.startPos, this.endPos));
         }
+    }
+
+    private getToolRotationForAxis(dirX: number, dirY: number, dirZ: number): any {
+        // Standardowe wiercenie pionowe Z- (z góry na dół, wektor 0, 0, -1)
+        if (Math.abs(dirZ + 1) < 0.05) {
+            return new BABYLON.Vector3(Math.PI / 2, 0, 0);
+        }
+        // Wiercenie od spodu Z+ (wektor 0, 0, 1)
+        if (Math.abs(dirZ - 1) < 0.05) {
+            return new BABYLON.Vector3(-Math.PI / 2, 0, 0);
+        }
+        // Wiercenie w lewo X- (wektor -1, 0, 0)
+        if (Math.abs(dirX + 1) < 0.05) {
+            return new BABYLON.Vector3(0, 0, -Math.PI / 2);
+        }
+        // Wiercenie w prawo X+ (wektor 1, 0, 0)
+        if (Math.abs(dirX - 1) < 0.05) {
+            return new BABYLON.Vector3(0, 0, Math.PI / 2);
+        }
+        // Wiercenie w przód Y- (wektor 0, -1, 0)
+        if (Math.abs(dirY + 1) < 0.05) {
+            return new BABYLON.Vector3(0, 0, 0);
+        }
+        // Wiercenie w tył Y+ (wektor 0, 1, 0)
+        if (Math.abs(dirY - 1) < 0.05) {
+            return new BABYLON.Vector3(Math.PI, 0, 0);
+        }
+        const pitch = -Math.asin(Math.max(-1, Math.min(1, dirZ)));
+        const yaw = Math.atan2(dirX, dirY);
+        return new BABYLON.Vector3(pitch, yaw, 0);
     }
 
     private updateSimulationFrame(): void {
@@ -275,54 +365,48 @@ export class CNCSimulator {
         const dt = (this.scene.getEngine().getDeltaTime() / 1000.0) * this.speedMultiplier; // sekundy
         const targetOp = this.operations[this.currentOpIndex];
         const isHole = targetOp.type === 'drill';
-        const depth = Math.abs(targetOp.parameters?.depth || 10.0);
 
         let statusText = "";
 
         if (this.currentState === 'MOVE') {
-            // --- STAN 1: DOJAZD RAPID (G0) na wysokości bezpiecznej SAFE_Z ---
+            // --- STAN 1: DOJAZD RAPID (G0) na pozycji bezpiecznej APPROACH ---
             statusText = `Dojazd (G0): Operacja ${this.currentOpIndex + 1}/${this.operations.length}`;
-            const targetPosXY = new BABYLON.Vector3(this.startPos.x, this.startPos.y, this.startPos.z + this.safeZOffset);
-            const dist = BABYLON.Vector3.Distance(this.currentPos, targetPosXY);
+            const dist = BABYLON.Vector3.Distance(this.currentPos, this.approachPos);
 
             const moveSpeed = 200.0; // mm/s
             const step = moveSpeed * dt;
 
             if (dist <= step) {
-                this.currentPos = targetPosXY;
+                this.currentPos = this.approachPos.clone();
                 this.currentState = 'DOWN';
                 this.stateProgress = 0.0;
             } else {
-                const dir = targetPosXY.subtract(this.currentPos).normalize();
+                const dir = this.approachPos.subtract(this.currentPos).normalize();
                 this.currentPos = this.currentPos.add(dir.scale(step));
             }
 
         } else if (this.currentState === 'DOWN') {
-            // --- STAN 2: WJAZD Z-IN (G1) w głąb materiału na głębokość cięcia ---
+            // --- STAN 2: WJAZD ROBOCZY (G1) w głąb materiału na głębokość cięcia/dna otworu ---
             const opTypeLabel = targetOp.type === 'contour' ? 'Frezowanie' : (targetOp.type === 'groove' ? 'Cięcie' : 'Wiercenie');
             statusText = `${opTypeLabel} (Zanurzanie): ${this.currentOpIndex + 1}/${this.operations.length}`;
             const plungeSpeed = 40.0; // mm/s
-            const targetZ = isHole ? this.endPos.z : this.startPos.z;
-            const startZ = this.startPos.z + this.safeZOffset;
-            const totalZDist = startZ - targetZ;
+            const plungeTarget = isHole ? this.endPos : this.startPos;
+            const totalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.approachPos, plungeTarget));
             
-            this.stateProgress += (plungeSpeed * dt) / totalZDist;
+            this.stateProgress += (plungeSpeed * dt) / totalDist;
 
             if (this.stateProgress >= 1.0) {
                 this.stateProgress = 1.0;
+                this.currentPos = plungeTarget.clone();
                 if (!isHole) {
                     this.currentState = 'CUT';
-                    const cutTargetPos = new BABYLON.Vector3(this.endPos.x, this.endPos.y, this.endPos.z);
-                    this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.currentPos, cutTargetPos));
+                    this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.startPos, this.endPos));
                 } else {
                     this.currentState = 'UP';
                 }
+            } else {
+                this.currentPos = BABYLON.Vector3.Lerp(this.approachPos, plungeTarget, this.stateProgress);
             }
-
-            const currentZ = startZ - (totalZDist * this.stateProgress);
-            this.currentPos.x = this.startPos.x;
-            this.currentPos.y = this.startPos.y;
-            this.currentPos.z = currentZ;
 
         } else if (this.currentState === 'CUT') {
             // --- STAN 3: PRZEJAZD ROBOCZY FREZEM / PIŁĄ (G1) wzdłuż odcinków ścieżki ---
@@ -344,8 +428,7 @@ export class CNCSimulator {
                     this.currentMoveIndex++;
                     this.startPos = this.endPos.clone();
                     const nextMove = moves[this.currentMoveIndex];
-                    const cutDepth = Math.abs(targetOp.parameters?.depth || 0);
-                    this.endPos = new BABYLON.Vector3(nextMove.endPoint.x, nextMove.endPoint.y, nextMove.endPoint.z - cutDepth);
+                    this.endPos = this.toSimPoint(nextMove.endPoint);
                     this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.startPos, this.endPos));
 
                     // Obrót tarczy/frezu dla nowego odcinka
@@ -366,17 +449,29 @@ export class CNCSimulator {
             }
 
         } else if (this.currentState === 'UP') {
-            // --- STAN 4: WYCOFANIE RETRACT (G0) do SAFE_Z po zakończeniu całej ścieżki ---
+            // --- STAN 4: WYCOFANIE RETRACT (G0) do pozycji bezpiecznej po zakończeniu całej ścieżki ---
             statusText = `Wycofanie (G0): Operacja ${this.currentOpIndex + 1}/${this.operations.length}`;
             const retractSpeed = 150.0; // mm/s
-            const baseZ = this.endPos.z;
-            const retractZ = (isHole ? this.startPos.z : this.endPos.z) + this.safeZOffset;
-            const totalZDist = retractZ - baseZ;
+            const retractStart = isHole ? this.endPos : this.currentPos;
+            const normX = this.currentUnitNorm?.x ?? 0;
+            const normY = this.currentUnitNorm?.y ?? 0;
+            const normZ = this.currentUnitNorm?.z ?? 1;
+            const strategyApproach = targetOp.parameters?.approachPoint;
+            const strategyRetract = targetOp.parameters?.retractPoint;
+            const retractTarget = isHole || strategyApproach
+                ? (strategyRetract ? this.toSimPoint(strategyRetract) : this.approachPos)
+                : new BABYLON.Vector3(
+                    this.currentPos.x + normX * this.safeZOffset,
+                    this.currentPos.y + normY * this.safeZOffset,
+                    this.currentPos.z + normZ * this.safeZOffset
+                );
+            const totalDist = Math.max(0.001, BABYLON.Vector3.Distance(retractStart, retractTarget));
 
-            this.stateProgress -= (retractSpeed * dt) / totalZDist;
+            this.stateProgress -= (retractSpeed * dt) / totalDist;
 
             if (this.stateProgress <= 0.0) {
                 this.stateProgress = 0.0;
+                this.currentPos = retractTarget.clone();
                 this.currentOpIndex++;
 
                 if (this.currentOpIndex >= this.operations.length) {
@@ -397,13 +492,7 @@ export class CNCSimulator {
                     this.setupCurrentOperation();
                 }
             } else {
-                const currentZ = retractZ - (totalZDist * this.stateProgress);
-                const baseX = !isHole ? this.endPos.x : this.startPos.x;
-                const baseY = !isHole ? this.endPos.y : this.startPos.y;
-
-                this.currentPos.x = baseX;
-                this.currentPos.y = baseY;
-                this.currentPos.z = currentZ;
+                this.currentPos = BABYLON.Vector3.Lerp(retractTarget, retractStart, this.stateProgress);
             }
         }
 

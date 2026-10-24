@@ -485,6 +485,16 @@ body, html {
     background: #ef4444;
 }
 
+.status-bar--warning {
+    color: #fef08a !important;
+    border-color: rgba(234, 179, 8, 0.65);
+    background: rgba(113, 63, 18, 0.92);
+}
+
+.status-bar--warning .status-dot {
+    background: #eab308;
+}
+
 .status-bar .status-dot {
     width: 6px;
     height: 6px;

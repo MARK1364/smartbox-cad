@@ -12,6 +12,7 @@
  *   front wnęki              → y = −depth/2
  */
 import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
+import { buildHoleMachiningIntent } from './01_machining-intent.js';
 import type { CornerDoorsPlanParams } from './01_bloki-module-types.js';
 
 const EDGE_BANDING = {
@@ -313,30 +314,39 @@ export function calculateCornerDoorsPlan(
             const vCenter = hinge.localZ + nalozenie_dol_mm;
             for (const hole of frontHoles) {
                 const u = side === 'left' ? hole.edgeDist : doorWidth_mm - hole.edgeDist;
-                features.push({
-                    id: `hinge_${hole.isCup ? 'cup' : 'screw'}_${side}_${hinge.index}${hole.isCup ? '' : `_${hole.name || 's'}`}`,
-                    type: 'hole',
-                    side: 'FACE_Z_PLUS',
+                const kind = hole.isCup ? 'cup' : 'screw';
+                const suffix = hole.isCup ? '' : `_${hole.name || 's'}`;
+                const hwSide = side === 'left' ? 'lewe' : 'prawe';
+                const intent = buildHoleMachiningIntent({
+                    targetNodeId: side === 'left' ? 'Drzwi_Lewe' : 'Drzwi_Prawe',
+                    id: `hinge_${kind}_${side}_${hinge.index}${suffix}`,
                     face: 'FACE_Z_PLUS',
-                    params: {
-                        template_id: templateId,
+                    side: 'FACE_Z_PLUS',
+                    template_id: templateId,
+                    drivenBy: {
+                        nodeId: `hinge_gap_${hwSide}_${hinge.index}`,
+                        role: 'HARDWARE',
+                        hardwareType: 'HINGE',
+                        partKey: `Hinge_${side === 'left' ? 'L' : 'R'}${hinge.index}`,
+                    },
+                    rule: hole.isCup ? 'cup' : 'screw',
+                    generatedBy: 'blok_doors',
+                    u,
+                    v: vCenter + hole.yOffset,
+                    diameter: hole.dia,
+                    depth: hole.depth,
+                    sourcePartId: `Hinge_${side === 'left' ? 'L' : 'R'}${hinge.index}`,
+                    extraParams: {
                         hinge_id: hingeId,
-                        u,
-                        v: vCenter + hole.yOffset,
-                        diameter: hole.dia,
-                        depth: hole.depth,
-                        u_mm: u,
-                        v_mm: vCenter + hole.yOffset,
-                        diameter_mm: hole.dia,
-                        depth_mm: hole.depth,
                         isDoorCup: hole.isCup,
                         isDoorScrew: !hole.isCup,
                         hingeIndex: hinge.index,
                         side,
                         hingeInGap: true,
-                        hardwareId: `hinge_gap_${side}_${hinge.index}`
-                    }
+                        hardwareId: `hinge_gap_${side}_${hinge.index}`,
+                    },
                 });
+                features.push(intent.feature);
             }
         }
         return features;

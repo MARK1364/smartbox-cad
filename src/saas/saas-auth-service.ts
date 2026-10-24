@@ -11,6 +11,9 @@ const TX_NS = 'src';
 const STORAGE_KEY_USER = 'smartpanel_saas_user';
 const STORAGE_KEY_TOKEN = 'smartpanel_saas_token';
 
+/** Symulatory planów działają wyłącznie w trybie developerskim (vite dev). */
+const IS_DEV = (import.meta as any).env?.DEV === true;
+
 export class SaaSAuthService {
   private static _instance: SaaSAuthService | null = null;
   private _currentUser: UserProfile | null = null;
@@ -92,9 +95,11 @@ export class SaaSAuthService {
       }
     }
 
-    // Tryb lokalny / Standalone SaaS Simulator
-    const isPro = email.toLowerCase().includes('pro') || email.toLowerCase().includes('admin');
-    const isEnterprise = email.toLowerCase().includes('enterprise') || email.toLowerCase().includes('fabryka');
+    // Tryb lokalny / Standalone SaaS Simulator.
+    // UWAGA: poza trybem DEV mock nigdy nie przyznaje planu płatnego — jedyną
+    // drogą do PRO jest zweryfikowana licencja (license-loader).
+    const isPro = IS_DEV && (email.toLowerCase().includes('pro') || email.toLowerCase().includes('admin'));
+    const isEnterprise = IS_DEV && (email.toLowerCase().includes('enterprise') || email.toLowerCase().includes('fabryka'));
 
     const tier: SubscriptionTier = isEnterprise ? 'ENTERPRISE' : isPro ? 'PRO' : 'FREE';
 
@@ -135,7 +140,7 @@ export class SaaSAuthService {
       id: `usr_google_${Date.now()}`,
       email,
       fullName: googleName || tx(srcTekst, 'saas_svc.google_user', TX_NS),
-      tier: 'PRO', // Na start dla kont Google
+      tier: IS_DEV ? 'PRO' : 'FREE', // PRO tylko w DEV; produkcyjnie wymaga licencji
       createdAt: new Date().toISOString(),
     };
 
@@ -148,6 +153,11 @@ export class SaaSAuthService {
    */
   public setTier(tier: SubscriptionTier): void {
     if (!this._currentUser) return;
+    // Podniesienie planu bez licencji jest zablokowane poza trybem DEV.
+    if (tier !== 'FREE' && !IS_DEV && !SaaSLicenseManager.instance.isLicensed()) {
+      console.warn('[SaaSAuth] Odblokowanie planu bez licencji zostało zablokowane.');
+      return;
+    }
     this._currentUser = {
       ...this._currentUser,
       tier,

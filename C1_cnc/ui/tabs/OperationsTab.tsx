@@ -377,8 +377,12 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
                 <h4 className="font-semibold text-purple-400">{tx(cncTekst, 'operations.strategy_title', TX_NS)}</h4>
                 <select
                     className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white text-xs"
-                    value={selectedStrategyId}
-                    onChange={(e) => setSelectedStrategyId(e.target.value)}
+                    value={program.strategyId || selectedStrategyId}
+                    onChange={(e) => {
+                        const newStrategy = e.target.value;
+                        setSelectedStrategyId(newStrategy);
+                        onUpdateProgram(p => ({ ...p, strategyId: newStrategy }));
+                    }}
                 >
                     {strategies.map(s => (
                         <option key={s.id} value={s.id}>

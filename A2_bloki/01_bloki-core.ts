@@ -86,6 +86,7 @@ export function ensure_bloki_name(container: any, docTarget?: any) {
     const typeToName: Record<string, string> = {
         'blok_empty': 'blok_',
         'blok_shelves': 'blok_polki',
+        'blok_corner_shelves': 'blok_polki_narozne',
         'blok_drawers': 'blok_szuflady',
         'blok_doors': 'blok_drzwi',
         'blok_skosne_drzwi': 'blok_drzwi_skosne',
@@ -483,6 +484,12 @@ function panelOriginInCabinetMm(panelNode: any, cabinetNode: any): { x: number; 
     return { x: 0, y: 0, z: 0 };
 }
 
+function outlineUvFlips(panel: any): { flipU: boolean; flipV: boolean } {
+    const rotY = Number(panel?.lcs?.rotation?.[1]);
+    const flipU = Math.abs(Number.isFinite(rotY) ? rotY : 0) > 90;
+    return { flipU, flipV: outlineRotXDeg(panel) > 0 && !flipU };
+}
+
 /**
  * UV obrysu L → CAD XY korpusu (jak worldL w silniku).
  * Nie przez Rx(90) węzła: ta rotacja stawia grubość w CAD Y i zwraca środek płyty zamiast ściany wcięcia.
@@ -497,10 +504,10 @@ function outlineUvToCabinetMm(
     const sizeX = nmToMm(panel.width || 0);
     const sizeY = nmToMm(panel.height || 0);
     const c = panelOriginInCabinetMm(panelNode, cabinetNode);
-    const rotX = outlineRotXDeg(panel);
+    const { flipU, flipV } = outlineUvFlips(panel);
     return {
-        x: c.x + (u - sizeX / 2),
-        y: rotX > 0 ? c.y - (v - sizeY / 2) : c.y + (v - sizeY / 2),
+        x: flipU ? c.x - (u - sizeX / 2) : c.x + (u - sizeX / 2),
+        y: flipV ? c.y - (v - sizeY / 2) : c.y + (v - sizeY / 2),
         z: c.z
     };
 }
@@ -1092,6 +1099,7 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
     const typeToBox: Record<string, string> = {
         blok_doors: 'DOORS',
         blok_corner_doors: 'CORNER_DOORS',
+        blok_corner_shelves: 'CORNER_SHELVES',
         blok_skosne_drzwi: 'SKOSNE_DOORS',
         blok_shelf: 'SHELF',
         blok_tubes: 'TUBES',
@@ -1322,8 +1330,23 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         return warnMissingRef('zMax', 'nieprawidłowa wysokość po rozwiązaniu odniesień');
     }
 
-    const sbWidth = Math.max(10, Math.abs(xMaxVal - xMinVal));
-    const sbDepth = Math.max(10, Math.abs(yMaxVal - yMinVal));
+    let sbWidth = Math.max(10, Math.abs(xMaxVal - xMinVal));
+    let sbDepth = Math.max(10, Math.abs(yMaxVal - yMinVal));
+
+    if (boxType === 'CORNER_SHELVES' && foundCabinetNode) {
+        const dd = foundCabinetNode.domainData as any;
+        const cabGp = dd?.generatorParams;
+        const cabW = (dd?.width !== undefined && dd.width > 0)
+            ? nmToMm(dd.width)
+            : (cabGp?.szerokosc_mm ? Number(cabGp.szerokosc_mm) : 0);
+        const cabD = (dd?.depth !== undefined && dd.depth > 0)
+            ? nmToMm(dd.depth)
+            : (cabGp?.glebokosc_mm ? Number(cabGp.glebokosc_mm) : 0);
+        if (cabW > 0 && cabD > 0) {
+            sbWidth = cabW;
+            sbDepth = cabD;
+        }
+    }
 
     if (isNaN(sbWidth) || isNaN(sbDepth) || isNaN(sbHeight)) {
         console.error(`[Bloki] NaN w wymiarach: W=${sbWidth}, H=${sbHeight}, D=${sbDepth}. Przerywam.`);
@@ -1344,7 +1367,11 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         let sbPosZ = zMinVal;
         let rotQuat = Quat.IDENTITY;
 
-        if (sidesAxis === 'y') {
+        if (boxType === 'CORNER_SHELVES') {
+            // Położenie półek narożnych w 100% zgodne ze środkiem szafki (0, 0) jak wieniec dolny
+            sbPosX = 0;
+            sbPosY = 0;
+        } else if (sidesAxis === 'y') {
             sbPosX = (yMinVal + yMaxVal) / 2;
             sbPosY = (xMinVal + xMaxVal) / 2;
             const rotZ = (yMinVal >= yMaxVal) ? -Math.PI / 2 : Math.PI / 2;
@@ -1376,6 +1403,95 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         const rotZ = (topPanel?.domainData as any)?.lcs?.rotation?.[2];
         if (rotZ !== undefined && Number.isFinite(Number(rotZ))) {
             params.dach_kat_deg = -Number(rotZ);
+        }
+    }
+
+    if (boxType === 'CORNER_SHELVES' && foundCabinetNode) {
+        const cabGp = (foundCabinetNode.domainData as any)?.generatorParams;
+        if (cabGp) {
+            if (cabGp.glebokosc_boku_lewego_mm !== undefined) {
+                params.bok_lewy_mm = Number(cabGp.glebokosc_boku_lewego_mm);
+            }
+            if (cabGp.glebokosc_boku_prawego_mm !== undefined) {
+                params.bok_prawy_mm = Number(cabGp.glebokosc_boku_prawego_mm);
+            }
+        }
+
+        const plecyXNode = foundCabinetNode.children.find((c: any) => {
+            const r = String(c.domainData?.role || '').toUpperCase();
+            const k = String(c.domainData?.key || '').toUpperCase();
+            return (r === 'BACK_PANEL' || r === 'PLECY') && (k.includes('PLECY_X') || k.includes('BACK_X') || k.endsWith('_X'));
+        });
+        const plecyYNode = foundCabinetNode.children.find((c: any) => {
+            const r = String(c.domainData?.role || '').toUpperCase();
+            const k = String(c.domainData?.key || '').toUpperCase();
+            return (r === 'BACK_PANEL' || r === 'PLECY') && (k.includes('PLECY_Y') || k.includes('BACK_Y') || k.endsWith('_Y'));
+        });
+
+        if (plecyXNode?.domainData) {
+            const pxData = plecyXNode.domainData as any;
+            const locX = pxData.loc?.x ?? (plecyXNode.localMatrix ? nmToMm(plecyXNode.localMatrix.decompose().translation.x) : -sbWidth / 2);
+            const th = pxData.thickness ? nmToMm(pxData.thickness) : (pxData.dim?.z || 3);
+            const innerFaceX = locX + th / 2;
+            const insetX = innerFaceX - (-sbWidth / 2);
+            if (insetX >= 0 && insetX < sbWidth / 2) {
+                params.plecy_odsuniecie_x_mm = Math.round(insetX * 10) / 10;
+                container.generatorParams.plecy_odsuniecie_x_mm = params.plecy_odsuniecie_x_mm;
+            }
+        }
+
+        if (plecyYNode?.domainData) {
+            const pyData = plecyYNode.domainData as any;
+            const locY = pyData.loc?.y ?? (plecyYNode.localMatrix ? nmToMm(plecyYNode.localMatrix.decompose().translation.y) : sbDepth / 2);
+            const th = pyData.thickness ? nmToMm(pyData.thickness) : (pyData.dim?.y || 3);
+            const innerFaceY = locY - th / 2;
+            const insetY = (sbDepth / 2) - innerFaceY;
+            if (insetY >= 0 && insetY < sbDepth / 2) {
+                params.plecy_odsuniecie_y_mm = Math.round(insetY * 10) / 10;
+                container.generatorParams.plecy_odsuniecie_y_mm = params.plecy_odsuniecie_y_mm;
+            }
+        }
+
+        const isKatowaNailer = cabGp?.typ_listwy_naroznej === 'KATOWA_90';
+
+        if (isKatowaNailer) {
+            const nailerW = Number(cabGp?.szerokosc_listwy_naroznej_mm ?? 100);
+            params.listwa_narozna_szerokosc_mm = nailerW;
+            params.listwa_narozna_grubosc_mm = nailerW;
+            container.generatorParams.listwa_narozna_szerokosc_mm = nailerW;
+            container.generatorParams.listwa_narozna_grubosc_mm = nailerW;
+            if (params.wyciecie_listwa_narozna === undefined) {
+                params.wyciecie_listwa_narozna = true;
+                container.generatorParams.wyciecie_listwa_narozna = true;
+            }
+        } else {
+            if (cabGp?.szerokosc_listwy_naroznej_mm !== undefined) {
+                params.listwa_narozna_szerokosc_mm = Number(cabGp.szerokosc_listwy_naroznej_mm);
+                container.generatorParams.listwa_narozna_szerokosc_mm = params.listwa_narozna_szerokosc_mm;
+            }
+
+            const nailerNode = foundCabinetNode.children.find((c: any) => {
+                const r = String(c.domainData?.role || '').toUpperCase();
+                const k = String(c.domainData?.key || '').toUpperCase();
+                return k === 'LISTWA_NAROZNA' || k === 'KOTWICA_ROG' || k === 'CORNER_NAILER' || (r === 'VERTICAL_DIVIDER' && k.includes('NAROZ'));
+            });
+            if (nailerNode?.domainData) {
+                const nData = nailerNode.domainData as any;
+                const w = nData.dim?.y ?? (nData.width ? nmToMm(nData.width) : undefined);
+                const th = nData.dim?.z ?? (nData.thickness ? nmToMm(nData.thickness) : undefined);
+                if (params.listwa_narozna_szerokosc_mm === undefined && w !== undefined && Number.isFinite(Number(w))) {
+                    params.listwa_narozna_szerokosc_mm = Math.round(Number(w) * 10) / 10;
+                    container.generatorParams.listwa_narozna_szerokosc_mm = params.listwa_narozna_szerokosc_mm;
+                }
+                if (th !== undefined && Number.isFinite(Number(th))) {
+                    params.listwa_narozna_grubosc_mm = Math.round(Number(th) * 10) / 10;
+                    container.generatorParams.listwa_narozna_grubosc_mm = params.listwa_narozna_grubosc_mm;
+                }
+                if (params.wyciecie_listwa_narozna === undefined) {
+                    params.wyciecie_listwa_narozna = true;
+                    container.generatorParams.wyciecie_listwa_narozna = true;
+                }
+            }
         }
     }
 

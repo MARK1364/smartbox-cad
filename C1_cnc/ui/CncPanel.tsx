@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { WcsManager } from '../wcs/wcs-manager.js';
+import { WcsManager, retransformFeaturesToWcs } from '../wcs/wcs-manager.js';
 import { ToolLibrary } from '../processor/tool-library.js';
 import { CAMProcessor } from '../processor/cam-processor.js';
 import { GeometryDataExtractor } from '../geometry/geometry-detector.js';
@@ -26,11 +26,12 @@ import { SCMPostprocessor } from '../postprocessors/scm-postprocessor.js';
 import { CAMFeature, ContourFeature, Tool } from '../dto/cam-dto.js';
 import { CAMVisualizer } from '../visualization/cam-visualizer.js';
 import { CNCSimulator } from '../visualization/cnc-simulator.js';
-import { WcsRulesMapper } from '../wcs/wcs-rules-mapper.js';
+import { WcsRulesMapper, cornerIndexToOriginCorner } from '../wcs/wcs-rules-mapper.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
 
 import { CAMStateStore, CNCProgramState } from '../core/cam-state-store.js';
 import { CNCEngine } from '../core/cnc-engine.js';
+import { buildDefaultCncProgramForPanel, ensurePanelHasCncProgram } from '../core/cam-auto-program.js';
 import { DrillingStrategy } from '../strategies/drilling-strategy.js';
 import { ProfilingStrategy } from '../strategies/profiling-strategy.js';
 import { PocketingStrategy } from '../strategies/pocketing-strategy.js';
@@ -168,6 +169,7 @@ interface CNCProgram {
     wcsRotY?: number;
     wcsRotZ?: number;
     postprocessor: string;
+    strategyId?: string;
     features?: CAMFeature[];
     projectName?: string;
     isActive: boolean;
@@ -262,6 +264,44 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         if (!activeProgIdRef.current) return;
         store.updateActiveProgram(p => {
             const updated = typeof updaterOrUpdates === 'function' ? updaterOrUpdates(p) : { ...p, ...updaterOrUpdates };
+
+            // Rekalkulacja współrzędnych cech przy zmianie bazy WCS (naroża lub manualnych offsetów/rotacji)
+            const wcsChanged = updated.cornerIndex !== p.cornerIndex ||
+                updated.wcsOffsetX !== p.wcsOffsetX ||
+                updated.wcsOffsetY !== p.wcsOffsetY ||
+                updated.wcsOffsetZ !== p.wcsOffsetZ ||
+                updated.wcsRotX !== p.wcsRotX ||
+                updated.wcsRotY !== p.wcsRotY ||
+                updated.wcsRotZ !== p.wcsRotZ ||
+                updated.wcsName !== p.wcsName;
+
+            if (wcsChanged && lockedPanel && updated.features && updated.features.length > 0) {
+                try {
+                    const engine = CNCEngine.getInstance();
+                    const dims = getPanelDimensionsMM(lockedPanel);
+                    const panelRole = lockedPanel.role;
+                    const roleRule = WcsRulesMapper.getRuleForRole(panelRole);
+                    const rule = roleRule
+                        ? { ...roleRule, origin_corner: { ...roleRule.origin_corner }, directions: { ...roleRule.directions }, rotation: { ...roleRule.rotation } }
+                        : {
+                            origin_corner: { X: '-', Y: '-', Z: '-' },
+                            directions: { X: '+', Y: '+', Z: '+' },
+                            rotation: { X: 0, Y: 0, Z: 0 },
+                        };
+                    if (typeof updated.cornerIndex === 'number' && updated.cornerIndex >= 0) {
+                        rule.origin_corner = cornerIndexToOriginCorner(updated.cornerIndex);
+                    }
+                    engine.wcsManager.setRule(rule);
+                    engine.wcsManager.setWcsName(updated.wcsName || 'G55');
+                    engine.wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
+                    engine.wcsManager.setManualRotation({ x: updated.wcsRotX || 0, y: updated.wcsRotY || 0, z: updated.wcsRotZ || 0 });
+                    engine.wcsManager.setManualOffset({ x: updated.wcsOffsetX || 0, y: updated.wcsOffsetY || 0, z: updated.wcsOffsetZ || 0 });
+                    updated.features = retransformFeaturesToWcs(updated.features, engine.wcsManager);
+                } catch {
+                    // ignoruj błąd przeliczania jeśli panel jest w trakcie inicjalizacji
+                }
+            }
+
             if (effectiveActivePanel) {
                 if (!effectiveActivePanel.cncPrograms) effectiveActivePanel.cncPrograms = [];
                 const idx = effectiveActivePanel.cncPrograms.findIndex((x: any) => x.id === updated.id);
@@ -274,7 +314,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         if (ContextManager.instance.document) {
             ContextManager.instance.document.notifyDocumentChanged();
         }
-    }, [effectiveActivePanel]);
+    }, [effectiveActivePanel, lockedPanel]);
 
     // ─── INICJALIZACJA GLOBALNEGO SILNIKA 3D ─────────────────────────
     useEffect(() => {
@@ -291,6 +331,10 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         if (!effectiveActivePanel || effectiveActivePanel.type === 'container') return;
         if (!effectiveActivePanel.cncPrograms) {
             effectiveActivePanel.cncPrograms = [];
+        }
+        // Jeśli formatka posiada cechy obróbcze (otwory/wpusty), a nie ma jeszcze programu, utwórz go automatycznie!
+        if (effectiveActivePanel.cncPrograms.length === 0 && effectiveActivePanel.features && effectiveActivePanel.features.length > 0) {
+            ensurePanelHasCncProgram(effectiveActivePanel);
         }
         const panelProgs = effectiveActivePanel.cncPrograms;
         store.setPrograms(panelProgs);
@@ -338,6 +382,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             featureId: `contour_${Date.now()}`,
             name: tx(cncTekst, 'feature.default_profile', TX_NS, { n: features.length + 1 }),
             points: wcsPoints,
+            panelPoints: chainedPoints.map(p => ({ ...p })),
             depth: initialZ,
             objectName: panelName || 'Formatka',
             compensation: 'Center',
@@ -633,6 +678,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         const tName = targetPanel.name || tx(cncTekst, 'extractor.panel_default', TX_NS);
         const progName = `Program_${tName}_${targetPanel.cncPrograms.length + 1}`;
         const newId = `prog_${Date.now()}`;
+        const defaultProg = buildDefaultCncProgramForPanel(targetPanel);
         const newProg: CNCProgramState = {
             id: newId,
             name: progName,
@@ -644,8 +690,8 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             cornerIndex: -1,
             postprocessor: 'Mach3',
             isActive: true,
-            features: [],
-            toolAssignments: {}
+            features: defaultProg?.features || [],
+            toolAssignments: defaultProg?.toolAssignments || {}
         };
 
         targetPanel.cncPrograms.push(newProg);
@@ -716,6 +762,8 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             features: features,
             toolAssignments: {},
             postprocessor: postprocessorName,
+            strategyId: currentProgram?.strategyId,
+            strategyParams: currentProgram?.strategyParams,
             workpieceDimensions: dims
         });
 
@@ -768,7 +816,9 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             wcsName: wcsName,
             features: features,
             toolAssignments: {},
-            postprocessor: postprocessorName
+            postprocessor: postprocessorName,
+            strategyId: currentProgram?.strategyId,
+            strategyParams: currentProgram?.strategyParams
         });
 
         CNCEngine.getInstance().simulator.setSpeed(storeState.simulationSpeed);

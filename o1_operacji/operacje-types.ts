@@ -72,7 +72,7 @@ export interface OperationFeatureParams {
 
 export interface OperationFeature {
     id: string;
-    type: 'groove';
+    type: 'pocket' | 'cutout' | 'groove';
     name: string;
     face: FaceName;
     params: OperationFeatureParams;

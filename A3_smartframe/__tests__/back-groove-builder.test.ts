@@ -228,5 +228,72 @@ describe('buildBackGrooves overlap depth', () => {
         expect(mGroove!.depth_nm).toBeCloseTo(mmToNm(11));
         expect(tGroove!.depth_nm).toBeCloseTo(mmToNm(11));
     });
+
+    it('opcja 3: gdy margines pleców na wieńcu dolnym wynosi 18 mm (pełna grubość), wieniec jest skracany do lica pleców i nie ma wpustu', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 600,
+            wysokosc_mm: 720,
+            glebokosc_mm: 560,
+            liczba_stref: 1,
+            cofniecie_plecow_mm: 15,
+            offsets: {
+                'Plecy_-Y': 18
+            }
+        });
+
+        const botPart = plan.parts.find((p) => p.role === 'BOTTOM_PANEL')!;
+        const leftPart = plan.parts.find((p) => p.role === 'LEFT_SIDE_PANEL')!;
+
+        // Wieniec dolny został skrócony o cofnięcie pleców (560 - 15 = 545 mm):
+        expect(botPart.dim.y).toBeCloseTo(545, 0);
+        // Bok lewy zachowuje pełną głębokość 560 mm:
+        expect(leftPart.dim.y).toBeCloseTo(560, 0);
+
+        const panels = panelStatesFromPlan(plan, {
+            'Plecy_-Y': 18
+        });
+        const intents = buildBackGrooves(panels);
+
+        const botGroove = intents.find((i) => i.targetNodeId === botPart.key || i.targetNodeId === botPart.name);
+        const leftGroove = intents.find((i) => i.targetNodeId === leftPart.key || i.targetNodeId === leftPart.name);
+
+        // Brak wpustu na wieńcu (plecy nakładane na odciętą krawędź):
+        expect(botGroove).toBeUndefined();
+
+        // Bok lewy nadal ma klasyczny wpust:
+        expect(leftGroove).toBeDefined();
+    });
+
+    it('gdy przeciągamy plecy w bok czerwonym gizmem (Plecy_+X = 18 mm), bok prawy jest odcinany', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 600,
+            wysokosc_mm: 720,
+            glebokosc_mm: 560,
+            liczba_stref: 1,
+            cofniecie_plecow_mm: 15,
+            offsets: {
+                'Plecy_+X': 18
+            }
+        });
+
+        const botPart = plan.parts.find((p) => p.role === 'BOTTOM_PANEL')!;
+        const rightPart = plan.parts.find((p) => p.role === 'RIGHT_SIDE_PANEL')!;
+        const backPart = plan.parts.find((p) => p.role === 'BACK_PANEL')!;
+
+        // Bok prawy skrócony o 15 mm:
+        expect(rightPart.dim.y).toBeCloseTo(545, 0);
+
+        const panels = panelStatesFromPlan(plan, {
+            'Plecy_+X': 18
+        });
+        const intents = buildBackGrooves(panels);
+        const botGroove = intents.find((i) => i.targetNodeId === botPart.key || i.targetNodeId === botPart.name);
+        const rightGroove = intents.find((i) => i.targetNodeId === rightPart.key || i.targetNodeId === rightPart.name);
+
+        expect(botGroove).toBeDefined();
+        // Bok prawy skrócony — brak wpustu na boku prawym (plecy nakładane):
+        expect(rightGroove).toBeUndefined();
+    });
 });
+
 

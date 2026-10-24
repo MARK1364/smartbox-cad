@@ -3,6 +3,7 @@ import { applyAllAssociativeDims } from '../A4_smartpanel/associative-dim.js';
 import { isManualPanel, PanelModel } from '../A4_smartpanel/panel-model.js';
 import { mergeEngineAndLibraryFeatures, refreshLibraryOperationsOnPanel } from '../o1_operacji/operacje-apply.js';
 import { ContainerModel } from '../A1_core/container-model.js';
+import { HardwareModel } from '../A1_core/hardware-model.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { SyncBackGroovesCommand } from './commands/sync-back-grooves-command.js';
 import { notifyKorpusRebuilt } from '../A1_core/cabinet-port.js';
@@ -154,9 +155,24 @@ function rebuildPanelView(panel: any) {
     if (view && typeof view.rebuildGeometry === 'function') view.rebuildGeometry();
 }
 
-function assignPlanFeatures(panel: any, engineFeatures: any[], preserveLibrary: boolean) {
+function assignPlanFeatures(panel: any, engineFeatures: any[], preserveLibrary: boolean, containerId?: string) {
+    const preparedFeatures = (engineFeatures || []).map((feat: any) => {
+        if (!containerId || !feat?.drivenBy) return feat;
+        const drivenBy = { ...feat.drivenBy };
+        if (drivenBy.nodeId && !drivenBy.nodeId.startsWith(`${containerId}_`)) {
+            drivenBy.nodeId = `${containerId}_${drivenBy.nodeId}`;
+        }
+        if (!drivenBy.containerId) {
+            drivenBy.containerId = containerId;
+        }
+        return {
+            ...feat,
+            drivenBy
+        };
+    });
+
     const existing = preserveLibrary ? (panel.features || []) : [];
-    const merged = mergeEngineAndLibraryFeatures(existing, engineFeatures || []);
+    const merged = mergeEngineAndLibraryFeatures(existing, preparedFeatures);
     if (typeof panel.setFeatures === 'function') {
         panel.setFeatures(merged);
     } else {
@@ -355,7 +371,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
                     if (changed) panel.setEdgeBanding(merged);
                 }
             }
-            assignPlanFeatures(panel, part.features || [], true);
+            assignPlanFeatures(panel, part.features || [], true, container.id);
             // Zawsze przebuduj mesh — przy skosnym LR zmiana heightLeft musi odświeżyć bok
             // (setDimensions emituje event, ale outline/custom też wymaga jawnego rebuildu).
             rebuildPanelView(panel);
@@ -396,7 +412,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
                 };
             }
             applyPartClassification(panel, part);
-            assignPlanFeatures(panel, part.features || [], false);
+            assignPlanFeatures(panel, part.features || [], false, container.id);
 
             panelNode = CADNode.create(NodeType.PART, panel.name, panel.id);
             panelNode.domainData = panel;
@@ -422,7 +438,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             let hwNode = cntNode.children.find((c: any) => c.nodeType === NodeType.HARDWARE && (c.id === hwFullId || c.id === hw.id));
             if (!hwNode) {
                 hwNode = CADNode.create(NodeType.HARDWARE, hw.name, hwFullId);
-                hwNode.domainData = {
+                hwNode.domainData = HardwareModel.fromJSON({
                     type: 'hardware',
                     id: hwFullId,
                     name: hw.name,
@@ -431,18 +447,23 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
                     hardwareId: hw.hardwareId,
                     side: hw.side,
                     loc: hw.loc,
+                    rotation: hw.rotation,
                     params: hw.params,
                     custom_properties: hw.customProperties || hw.custom_properties,
                     visible: true
-                } as any;
+                });
                 if (doc) doc.addNode(container.id, hwNode);
                 else cntNode.addChild(hwNode);
             } else {
                 hwNode.name = hw.name;
                 if (hwNode.domainData) {
+                    if (typeof (hwNode.domainData as any).toJSON !== 'function') {
+                        hwNode.domainData = HardwareModel.fromJSON(hwNode.domainData);
+                    }
                     (hwNode.domainData as any).hardwareId = hw.hardwareId;
                     (hwNode.domainData as any).name = hw.name;
                     (hwNode.domainData as any).loc = hw.loc;
+                    (hwNode.domainData as any).rotation = hw.rotation;
                     (hwNode.domainData as any).params = hw.params;
                     if (hw.role) (hwNode.domainData as any).role = hw.role;
                     if (hw.customProperties) (hwNode.domainData as any).custom_properties = hw.customProperties;
@@ -553,6 +574,8 @@ export function runEngineAndApply(
         strona_blendy: gp.strona_blendy,
         glebokosc_boku_lewego_mm: gp.glebokosc_boku_lewego_mm,
         glebokosc_boku_prawego_mm: gp.glebokosc_boku_prawego_mm,
+        szerokosc_listwy_naroznej_mm: gp.szerokosc_listwy_naroznej_mm,
+        typ_listwy_naroznej: gp.typ_listwy_naroznej,
         wysokosc_przod_mm: gp.wysokosc_przod_mm,
         wysokosc_tyl_mm: gp.wysokosc_tyl_mm,
         wysokosc_lewy_mm: gp.wysokosc_lewy_mm,
@@ -644,6 +667,8 @@ export interface KorpusParams {
     // Ramiona / boki (tylko korpus_rogowy90) [mm].
     glebokosc_boku_lewego_mm?: number;
     glebokosc_boku_prawego_mm?: number;
+    szerokosc_listwy_naroznej_mm?: number;
+    typ_listwy_naroznej?: 'POJEDYNCZA' | 'KATOWA_90';
     // Wysokości skosu [mm] — korpus_skosny / korpus_skosny_lr.
     wysokosc_przod_mm?: number;
     wysokosc_tyl_mm?: number;
@@ -680,6 +705,8 @@ function buildCabinetGeneratorParams(input: {
     strona_blendy?: 'LEFT' | 'RIGHT';
     glebokosc_boku_lewego_mm?: number;
     glebokosc_boku_prawego_mm?: number;
+    szerokosc_listwy_naroznej_mm?: number;
+    typ_listwy_naroznej?: 'POJEDYNCZA' | 'KATOWA_90';
 }): Record<string, any> {
     const gp: Record<string, any> = {
         type: input.type,
@@ -701,6 +728,8 @@ function buildCabinetGeneratorParams(input: {
     if (input.strona_blendy !== undefined) gp.strona_blendy = input.strona_blendy;
     if (input.glebokosc_boku_lewego_mm !== undefined) gp.glebokosc_boku_lewego_mm = input.glebokosc_boku_lewego_mm;
     if (input.glebokosc_boku_prawego_mm !== undefined) gp.glebokosc_boku_prawego_mm = input.glebokosc_boku_prawego_mm;
+    if (input.szerokosc_listwy_naroznej_mm !== undefined) gp.szerokosc_listwy_naroznej_mm = input.szerokosc_listwy_naroznej_mm;
+    if (input.typ_listwy_naroznej !== undefined) gp.typ_listwy_naroznej = input.typ_listwy_naroznej;
     return gp;
 }
 
@@ -752,6 +781,8 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
     const blindSide = params.strona_blendy ?? gp.strona_blendy ?? 'LEFT';
     const bokLewy = params.glebokosc_boku_lewego_mm ?? gp.glebokosc_boku_lewego_mm ?? 600;
     const bokPrawy = params.glebokosc_boku_prawego_mm ?? gp.glebokosc_boku_prawego_mm ?? 600;
+    const szerokoscListwy = params.szerokosc_listwy_naroznej_mm ?? gp.szerokosc_listwy_naroznej_mm ?? 100;
+    const typListwy = params.typ_listwy_naroznej ?? gp.typ_listwy_naroznej;
     // Wyjątek gizmo: A1_core/gizmo-controller zapisuje tu `backOffset`.
     const bOffset = params.cofniecie_plecow_mm ?? gp.cofniecie_plecow_mm ?? gp.backOffset ?? 3;
 
@@ -773,7 +804,12 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
         ...(isSkosny && !isSkosnyLr ? { wysokosc_przod_mm: skos_hF_mm, wysokosc_tyl_mm: skos_hB_mm } : {}),
         ...(isSkosnyLr ? { wysokosc_lewy_mm: skos_hL_mm, wysokosc_prawy_mm: skos_hR_mm } : {}),
         ...(isRogowy1 ? { szerokosc_blendy_mm: blindWidth, strona_blendy: blindSide } : {}),
-        ...(isRogowy90 ? { glebokosc_boku_lewego_mm: bokLewy, glebokosc_boku_prawego_mm: bokPrawy } : {})
+        ...(isRogowy90 ? {
+            glebokosc_boku_lewego_mm: bokLewy,
+            glebokosc_boku_prawego_mm: bokPrawy,
+            szerokosc_listwy_naroznej_mm: szerokoscListwy,
+            ...(typListwy ? { typ_listwy_naroznej: typListwy } : {})
+        } : {})
     }));
     runEngineAndApply(
         container,
@@ -783,7 +819,16 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
         (isCorner || isSkosny) ? 0 : middleHeight,
         bOffset, { ...(params.offsets || {}) }
     );
-    document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+    const rebuild = (typeof window !== 'undefined') ? (window as any).__rebuildGeometry : null;
+    if (typeof rebuild === 'function') {
+        try { rebuild('SmartFrame realtime update'); } catch {}
+    }
+    if (typeof window !== 'undefined' && window.document) {
+        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+    }
+    if (doc) {
+        doc.notifyDocumentChanged();
+    }
 }
 
 /** Synchronizuje pozycję kontenera w modelu z pozycją w scenie bez regeneracji płyt */

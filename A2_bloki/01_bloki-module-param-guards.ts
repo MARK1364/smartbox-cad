@@ -169,6 +169,31 @@ export const LEGACY_SHELVES_PARAM_ALIASES: Readonly<Record<string, string>> = {
     system_32_hole_count: 'liczba_otworow_system32',
 };
 
+export const LEGACY_CORNER_SHELVES_PARAM_ALIASES: Readonly<Record<string, string>> = {
+    shelfCount: 'liczba_polek',
+    shelf_count: 'liczba_polek',
+    thickness: 'grubosc_polki_mm',
+    shelf_thickness: 'grubosc_polki_mm',
+    shelfOffsetFront: 'odsuniecie_przod_mm',
+    shelfOffsetFrontMm: 'odsuniecie_przod_mm',
+    shelf_offset_front_mm: 'odsuniecie_przod_mm',
+    offset_front: 'odsuniecie_przod_mm',
+    front_offset: 'odsuniecie_przod_mm',
+    shelfOffsetSide: 'luz_boczny_mm',
+    offset_side: 'luz_boczny_mm',
+    side_clearance: 'luz_boczny_mm',
+    holePattern: 'wzor_nawiercen',
+    hole_pattern: 'wzor_nawiercen',
+    cutoutNailer: 'wyciecie_listwa_narozna',
+    cutout_nailer: 'wyciecie_listwa_narozna',
+    nailerWidth: 'listwa_narozna_szerokosc_mm',
+    nailer_width: 'listwa_narozna_szerokosc_mm',
+    nailerThickness: 'listwa_narozna_grubosc_mm',
+    nailer_thickness: 'listwa_narozna_grubosc_mm',
+    nailerClearance: 'listwa_narozna_luz_mm',
+    nailer_clearance: 'listwa_narozna_luz_mm',
+};
+
 export const LEGACY_SHELF_PARAM_ALIASES: Readonly<Record<string, string>> = {
     thickness: 'grubosc_wienca_mm',
     offsetFront: 'odsuniecie_przod_mm',
@@ -297,6 +322,10 @@ export function assertCanonicalFlapsParams(raw: object | null | undefined): void
 
 export function assertCanonicalShelvesParams(raw: object | null | undefined): void {
     assertNoLegacyKeys(raw, LEGACY_SHELVES_PARAM_ALIASES, 'shelves');
+}
+
+export function assertCanonicalCornerShelvesParams(raw: object | null | undefined): void {
+    assertNoLegacyKeys(raw, LEGACY_CORNER_SHELVES_PARAM_ALIASES, 'corner_shelves');
 }
 
 export function assertCanonicalShelfParams(raw: object | null | undefined): void {

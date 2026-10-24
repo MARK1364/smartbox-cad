@@ -17,6 +17,7 @@ import { ContextManager } from '../../A1_core/context-manager.js';
 import { UIController } from '../../A1_core/ui-controller.js';
 import { SetBlokiParamsCommand } from '../commands/set-blok-params-command.js';
 import { ShelvesSubModule } from '../04_shelves-adapter.js';
+import { CornerShelvesSubModule } from '../18_corner-shelves-adapter.js';
 import { ShelfSubModule } from '../03_shelf-adapter.js';
 import { DoorsSubModule } from '../05_doors-adapter.js';
 import { SkosneDoorsSubModule } from '../06_skosne-doors-adapter.js';
@@ -36,10 +37,13 @@ import {
     type BlokiRefSideKey,
 } from '../02_bloki-ref-plane-hint.js';
 import { HEIGHT_H_LOCKED_HINT, isBlokiHeightHLocked } from '../01_bloki-height-h.js';
+import { resolveDetectedBay } from '../02_bloki-bay-detector.js';
+import { buildCornerDoorsAutoRefsPatch } from '../07_corner-doors-refs.js';
 
 export const MODULE_TYPES: Record<string, { type: string; label: string; category?: 'internal' | 'external' | 'panel' }> = {
     'EMPTY': { type: 'blok_empty', label: 'Wybierz moduł...' },
     'SHELVES': { type: 'blok_shelves', label: 'Półki', category: 'internal' },
+    'CORNER_SHELVES': { type: 'blok_corner_shelves', label: 'Półki narożne', category: 'internal' },
     'DOORS': { type: 'blok_doors', label: 'Drzwi', category: 'internal' },
     'SKOSNE_DOORS': { type: 'blok_skosne_drzwi', label: 'Drzwi skośne', category: 'internal' },
     'CORNER_DOORS': { type: 'blok_corner_doors', label: 'Drzwi narożne', category: 'internal' },
@@ -212,7 +216,9 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
         update_bloki_core(container, doc);
         isPreviewingRef.current = false;
 
-        if (typeof doc?._notify === 'function') {
+        if (typeof (window as any).__rebuildGeometry === 'function') {
+            (window as any).__rebuildGeometry('Bloki update');
+        } else if (typeof doc?._notify === 'function') {
             doc._notify();
         } else if (doc?.emitChange) {
             doc.emitChange('all');
@@ -735,14 +741,33 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                                         const scene = ContextManager.instance.viewport?.scene;
                                         if (val !== 'EMPTY') {
                                             clearBayHighlight(scene);
-                                        } else if (container?.generatorParams?.detectedBay && scene) {
-                                            highlightBayInScene(scene, container.generatorParams.detectedBay);
+                                        } else if (container && scene) {
+                                            const resolvedBay = resolveDetectedBay(container.generatorParams, {
+                                                width: container.width,
+                                                height: container.height,
+                                                depth: container.depth,
+                                            });
+                                            if (resolvedBay) highlightBayInScene(scene, resolvedBay);
                                         }
                                         const mapping = MODULE_TYPES[val] || MODULE_TYPES['SHELVES'];
-                                        triggerUpdateEx({
+                                        const patch: Record<string, any> = {
                                             boxType: val,
                                             type: mapping.type
-                                        }, true);
+                                        };
+                                        if (val === 'CORNER_DOORS') {
+                                            const autoRefs = buildCornerDoorsAutoRefsPatch(
+                                                container,
+                                                ContextManager.instance.document
+                                            );
+                                            if (autoRefs) {
+                                                patch.customReferences = autoRefs.customReferences;
+                                                patch.disabledReferences = autoRefs.disabledReferences;
+                                                setCustomRefs(autoRefs.customReferences);
+                                                setDisabledRefsState(autoRefs.disabledReferences);
+                                            }
+                                            setActiveTab('references');
+                                        }
+                                        triggerUpdateEx(patch, true);
                                     }}
                                     style={{
                                         flex: 1,
@@ -780,6 +805,7 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                                     </div>
                                 )}
                                 {boxType === 'SHELVES' && <ShelvesSubModule container={container} triggerUpdate={triggerUpdateEx} />}
+                                {boxType === 'CORNER_SHELVES' && <CornerShelvesSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'DOORS' && <DoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'SKOSNE_DOORS' && <SkosneDoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'CORNER_DOORS' && <CornerDoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}

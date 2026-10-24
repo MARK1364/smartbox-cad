@@ -43,10 +43,10 @@
         "WIERCENIE_CNC_SZT": { "indeks": "", "kategoria": "Obróbka", "price": 1.5, "unit": "szt", "name": "Odwiert CNC (cena za sztukę)" }
     },
     "prices_hardware": {
-        "RAMKA_ALU_Z1_BLACK": { "indeks": "", "kategoria": "Fronty", "price": 300.0, "unit": "m2", "name": "Front ramka aluminiowa Z-1 ze szkłem (300 zł/m2)" },
-        "RAMKA_ALU_Z9_WIDE_BLACK": { "indeks": "", "kategoria": "Fronty", "price": 340.0, "unit": "m2", "name": "Front ramka aluminiowa Z-9 ze szkłem (340 zł/m2)" },
-        "RAMKA_ALU_Z11_FLUTED": { "indeks": "", "kategoria": "Fronty", "price": 350.0, "unit": "m2", "name": "Front ramka aluminiowa Z-11 ze szkłem (350 zł/m2)" },
-        "RAMKA_ALU_DEFAULT": { "indeks": "", "kategoria": "Fronty", "price": 300.0, "unit": "m2", "name": "Front ramka aluminiowa ze szkłem (300 zł/m2)" },
+        "RAMKA_ALU_Z1_BLACK": { "indeks": "", "kategoria": "Fronty", "price": 300.0, "unit": "m2", "name": "Front ramka aluminiowa Z-1 ze szkłem " },
+        "RAMKA_ALU_Z9_WIDE_BLACK": { "indeks": "", "kategoria": "Fronty", "price": 340.0, "unit": "m2", "name": "Front ramka aluminiowa Z-9 ze szkłem " },
+        "RAMKA_ALU_Z11_FLUTED": { "indeks": "", "kategoria": "Fronty", "price": 350.0, "unit": "m2", "name": "Front ramka aluminiowa Z-11 ze szkłem (" },
+        "RAMKA_ALU_DEFAULT": { "indeks": "", "kategoria": "Fronty", "price": 300.0, "unit": "m2", "name": "Front ramka aluminiowa ze szkłem " },
         "HINGE_BLUM_71B3550": { "indeks": "", "kategoria": "Zawiasy", "brand": "Blum", "price": 12.0, "unit": "szt", "name": "Zawias Clip Top 110st", "opis": "zintegrowany hamulec" },
         "HINGE_BLUM_71T3550": { "indeks": "", "kategoria": "Zawiasy", "brand": "Blum", "price": 6.0, "unit": "szt", "name": "Zawias Clip Top 110st", "opis": "bez hamulca" },
         "BLUM_71T3550": { "indeks": "", "kategoria": "Zawiasy", "brand": "Blum", "price": 6.0, "unit": "szt", "name": "Zawias Clip Top 110st", "opis": "bez hamulca" },
@@ -57,7 +57,6 @@
         "HINGE_GTV_STD": { "indeks": "", "kategoria": "Zawiasy", "brand": "GTV", "price": 5.0, "unit": "szt", "name": "Zawias Standardowy 110st", "opis": "bez hamulca" },
         "HINGE_HETTICH_8645I": { "indeks": "", "kategoria": "Zawiasy", "brand": "Hettich", "price": 13.5, "unit": "szt", "name": "Zawias Sensys 8645i 110st", "opis": "z hamulcem" },
         "HINGE_HETTICH_8645": { "indeks": "", "kategoria": "Zawiasy", "brand": "Hettich", "price": 12.0, "unit": "szt", "name": "Zawias Sensys 8645 110st", "opis": "bez hamulca" },
-        "PODPORKA_POLKI": { "indeks": "", "kategoria": "Akcesoria", "price": 0.5, "unit": "szt", "name": "Podpórka fi5" },
         "PODPORKA_FI5": { "indeks": "", "kategoria": "Akcesoria", "price": 0.1, "unit": "szt", "name": "Podpórka fi 5" },
         "ROZETA_FI25": { "indeks": "", "kategoria": "Akcesoria", "price": 8.5, "unit": "szt", "name": "Rozeta rury fi25 uchwyt" },
         "BLUM_ANTARO_M_300": { "indeks": "", "kategoria": "Szuflady", "brand": "Blum", "price": 350.0, "unit": "kpl", "name": "Szuflada Antaro M", "opis": "300mm" },

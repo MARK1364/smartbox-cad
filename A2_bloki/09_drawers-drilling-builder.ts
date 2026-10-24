@@ -165,13 +165,22 @@ export function buildDrawersDrillings(document: ProjectDocument, cabinetContaine
                             face: leftFaceInfo.face,
                             side: leftFaceInfo.face,
                             template_id: drillTemplate.id || 'STANDARD_DRAWER_DRILL',
+                            drivenBy: {
+                                nodeId: `${sbNode.id}_drawer_${slot.index}_rail_L`,
+                                role: 'HARDWARE',
+                                hardwareType: 'DRAWER_SLIDE',
+                                partKey: `drawer_${slot.index}_rail_L`,
+                                containerId: sbNode.id,
+                            },
+                            rule: 'drawer_runner',
+                            generatedBy: 'blok_drawers',
                             u,
                             v,
                             diameter: holeDiameter,
                             depth: holeDepth,
                             ownerTag: 'isDrawerDrilling',
                             sourceContainerId: sbNode.id,
-                            sourcePartId: `Prowadnica_${slot.index}L`,
+                            sourcePartId: `drawer_${slot.index}_rail_L`,
                         }));
                     }
                 }
@@ -189,13 +198,22 @@ export function buildDrawersDrillings(document: ProjectDocument, cabinetContaine
                             face: rightFaceInfo.face,
                             side: rightFaceInfo.face,
                             template_id: drillTemplate.id || 'STANDARD_DRAWER_DRILL',
+                            drivenBy: {
+                                nodeId: `${sbNode.id}_drawer_${slot.index}_rail_R`,
+                                role: 'HARDWARE',
+                                hardwareType: 'DRAWER_SLIDE',
+                                partKey: `drawer_${slot.index}_rail_R`,
+                                containerId: sbNode.id,
+                            },
+                            rule: 'drawer_runner',
+                            generatedBy: 'blok_drawers',
                             u,
                             v,
                             diameter: holeDiameter,
                             depth: holeDepth,
                             ownerTag: 'isDrawerDrilling',
                             sourceContainerId: sbNode.id,
-                            sourcePartId: `Prowadnica_${slot.index}P`,
+                            sourcePartId: `drawer_${slot.index}_rail_R`,
                         }));
                     }
                 }

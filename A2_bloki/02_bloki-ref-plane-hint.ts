@@ -5,6 +5,7 @@
 import { ContextManager } from '../A1_core/context-manager.js';
 import { canonicalizeRefFaceName } from './01_bloki-core.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
+import { resolveDetectedBay } from './02_bloki-bay-detector.js';
 
 declare const BABYLON: any;
 
@@ -220,8 +221,13 @@ export function highlightBlokiRefSide(
     const d = Math.max(1, nmToMm(container.depth || 0));
 
     const gp = container.generatorParams || {};
-    let slopeAxis: 'X' | 'Y' | undefined = gp.slopeAxis || gp.detectedBay?.slopeAxis;
-    let slopeAngleDepthDeg: number | undefined = gp.roofAngleDepthDeg ?? gp.detectedBay?.roofAngleDepthDeg;
+    const resolvedBay = resolveDetectedBay(gp, {
+        width: container.width,
+        height: container.height,
+        depth: container.depth,
+    });
+    let slopeAxis: 'X' | 'Y' | undefined = gp.slopeAxis || resolvedBay?.slopeAxis;
+    let slopeAngleDepthDeg: number | undefined = gp.roofAngleDepthDeg ?? resolvedBay?.roofAngleDepthDeg;
     if (slopeAxis === undefined && slopeAngleDepthDeg !== undefined && Math.abs(slopeAngleDepthDeg) > 0.05) {
         slopeAxis = 'Y';
     }
@@ -230,8 +236,8 @@ export function highlightBlokiRefSide(
     if (sideKey === 'zMax' || sideKey === 'xMin' || sideKey === 'xMax') {
         if (gp.dach_kat_deg != null && Number.isFinite(Number(gp.dach_kat_deg)) && Math.abs(Number(gp.dach_kat_deg)) > 0.05) {
             slopeAngleDeg = Number(gp.dach_kat_deg);
-        } else if (gp.detectedBay?.roofAngleDeg != null && Math.abs(Number(gp.detectedBay.roofAngleDeg)) > 0.05) {
-            slopeAngleDeg = Number(gp.detectedBay.roofAngleDeg);
+        } else if (resolvedBay?.roofAngleDeg != null && Math.abs(Number(resolvedBay.roofAngleDeg)) > 0.05) {
+            slopeAngleDeg = Number(resolvedBay.roofAngleDeg);
         } else {
             const doc = ContextManager.instance.document;
             const ref = resolveRefForSide(sideKey, options?.customRefs, options?.references);

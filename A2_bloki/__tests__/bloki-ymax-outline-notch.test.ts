@@ -50,20 +50,62 @@ describe('bloki yMax na wciÄ™ciu L wieĹ„ca', () => {
         const outline = panel.custom_properties.outline2d as number[][];
         const plateW = nmToMm(panel.width);
         const plateD = nmToMm(panel.height);
-        let yFace = '';
-        let xFace = '';
-        for (let i = 0; i < outline.length; i++) {
-            const [u0, v0] = outline[i];
-            const [u1, v1] = outline[(i + 1) % outline.length];
-            if (classifyOutlineSegmentEdge(u0, v0, u1, v1, plateW, plateD) !== 'NOTCH') continue;
-            const face = `OUTLINE_SIDE_${i}`;
-            const axis = getPanelFaceDominantAxis(panel, wieniecNode, doc.findNode(cabinet.id), face);
-            if (axis === 'y') yFace = face;
-            if (axis === 'x') xFace = face;
+        const n = outline.length;
+
+        let area2 = 0;
+        for (let i = 0; i < n; i++) {
+            const [x0, y0] = outline[i];
+            const [x1, y1] = outline[(i + 1) % n];
+            area2 += x0 * y1 - x1 * y0;
         }
-        expect(yFace).toBeTruthy();
-        expect(xFace).toBeTruthy();
-        return { yFace, xFace };
+        const ccw = area2 > 0;
+
+        const reflex: number[] = [];
+        for (let i = 0; i < n; i++) {
+            const prev = outline[(i - 1 + n) % n];
+            const curr = outline[i];
+            const next = outline[(i + 1) % n];
+            const cross =
+                (curr[0] - prev[0]) * (next[1] - curr[1]) -
+                (curr[1] - prev[1]) * (next[0] - curr[0]);
+            if ((ccw && cross < 0) || (!ccw && cross > 0)) reflex.push(i);
+        }
+        expect(reflex).toHaveLength(1);
+        const corner = reflex[0];
+
+        const prevIdx = (corner - 1 + n) % n;
+        const isVertical = ([[u0, v0], [u1, v1]]: number[][]) =>
+            Math.abs(u1 - u0) <= 1e-9 && Math.abs(v1 - v0) > 1e-9;
+        const prevVertical = isVertical([outline[prevIdx], outline[corner]]);
+        const nextVertical = isVertical([outline[corner], outline[(corner + 1) % n]]);
+        expect(prevVertical).not.toBe(nextVertical);
+
+        const xIdx = prevVertical ? prevIdx : corner;
+        const yIdx = prevVertical ? corner : prevIdx;
+        const cabNode = doc.findNode(cabinet.id);
+        const expectNotch = (idx: number, axis: 'x' | 'y') => {
+            const [u0, v0] = outline[idx];
+            const [u1, v1] = outline[(idx + 1) % n];
+            expect(classifyOutlineSegmentEdge(u0, v0, u1, v1, plateW, plateD)).toBe('NOTCH');
+            const face = `OUTLINE_SIDE_${idx}`;
+            expect(getPanelFaceDominantAxis(panel, wieniecNode, cabNode, face)).toBe(axis);
+        };
+        expectNotch(xIdx, 'x');
+        expectNotch(yIdx, 'y');
+        return { yFace: `OUTLINE_SIDE_${yIdx}`, xFace: `OUTLINE_SIDE_${xIdx}` };
+    }
+
+    function expectedNotchY(wieniecNode: CADNode, yFace: string): number {
+        const panel = wieniecNode.domainData as any;
+        const outline = panel.custom_properties.outline2d as number[][];
+        const idx = Number(yFace.replace('OUTLINE_SIDE_', ''));
+        const vm = (outline[idx][1] + outline[(idx + 1) % outline.length][1]) / 2;
+        const locY = nmToMm(wieniecNode.localMatrix.decompose().translation.y);
+        const plateD = nmToMm(panel.height);
+        const rotY = Number(panel.lcs?.rotation?.[1]);
+        const flipU = Math.abs(Number.isFinite(rotY) ? rotY : 0) > 90;
+        const flipV = (Number(panel.lcs?.rotation?.[0]) || 0) > 0 && !flipU;
+        return flipV ? locY - (vm - plateD / 2) : locY + (vm - plateD / 2);
     }
 
     const SB_DIMS = { width_mm: 400, height_mm: 700, depth_mm: 500 };
@@ -125,18 +167,9 @@ describe('bloki yMax na wciÄ™ciu L wieĹ„ca', () => {
 
         const pos = sbNode.localMatrix.decompose().translation;
         const backY = nmToMm(pos.y) + nmToMm(sb.depth) / 2;
-        const panel = wieniec.domainData as any;
-        const outline = panel.custom_properties.outline2d as number[][];
-        const idx = parseInt(yFace.replace('OUTLINE_SIDE_', ''), 10);
-        const [u0, v0] = outline[idx];
-        const [u1, v1] = outline[(idx + 1) % outline.length];
-        const vm = (v0 + v1) / 2;
         const locY = nmToMm(wieniec.localMatrix.decompose().translation.y);
-        const plateD = nmToMm(panel.height);
-        const rotX = Number(panel.lcs?.rotation?.[0]) || 0;
-        const expectedY = rotX > 0 ? locY - (vm - plateD / 2) : locY + (vm - plateD / 2);
 
-        expect(backY).toBeCloseTo(expectedY, 0);
+        expect(backY).toBeCloseTo(expectedNotchY(wieniec, yFace), 0);
         expect(Math.abs(backY - locY)).toBeGreaterThan(20);
     });
 
@@ -183,16 +216,6 @@ describe('bloki yMax na wciÄ™ciu L wieĹ„ca', () => {
         expect(update_bloki_core(sb, doc)).toBe(true);
         const pos = sbNode.localMatrix.decompose().translation;
         const backY = nmToMm(pos.y) + nmToMm(sb.depth) / 2;
-        const panel = wieniec.domainData as any;
-        const outline = panel.custom_properties.outline2d as number[][];
-        const idx = parseInt(yFace.replace('OUTLINE_SIDE_', ''), 10);
-        const [, v0] = outline[idx];
-        const [, v1] = outline[(idx + 1) % outline.length];
-        const vm = (v0 + v1) / 2;
-        const locY = nmToMm(wieniec.localMatrix.decompose().translation.y);
-        const plateD = nmToMm(panel.height);
-        const rotX = Number(panel.lcs?.rotation?.[0]) || 0;
-        const expectedY = rotX > 0 ? locY - (vm - plateD / 2) : locY + (vm - plateD / 2);
-        expect(backY).toBeCloseTo(expectedY, 0);
+        expect(backY).toBeCloseTo(expectedNotchY(wieniec, yFace), 0);
     });
 });

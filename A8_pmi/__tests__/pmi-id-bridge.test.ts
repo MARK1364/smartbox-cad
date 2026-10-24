@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { buildAnchorRef, meshLocalToRootLocal, resolveAnchorWorld, snapWorldPointToPanelGeometry, SNAP_RADIUS_MM } from '../pmi-id-bridge.js';
+import { buildAnchorRef, freeAnchorRef, localToWorldFromBrep, meshLocalToRootLocal, resolveAnchorWorld, resolveBrepGeometryPick, resolveFaceHelperWorld, resolveFaceHelperWorlds, snapWorldPointToPanelGeometry, SNAP_RADIUS_MM, FACE_HELPER_SNAP_RADIUS_MM } from '../pmi-id-bridge.js';
 import { v3 } from '../dimension-solver.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
+import { Mat4 } from '../../A1_core/cad-math/mat4.js';
 
 const BabylonVector3 = class {
     x: number; y: number; z: number;
@@ -186,6 +187,50 @@ describe('pmi-id-bridge anchor resolution', () => {
         expect(worldAfter?.x).toBeCloseTo(-newHw, 0);
     });
 
+    it('B-rep EDGE zachowuje osie, skalę CAD i translację dla obróconego węzła', () => {
+        const nodeId = 'panel_rotated_scaled';
+        const transform = new Mat4(new Float64Array([
+            0, 2, 0, 0,
+            -3, 0, 0, 0,
+            0, 0, 4, 0,
+            100_000_000, 200_000_000, 300_000_000, 1,
+        ]));
+        const points = [[10, 20, 30], [20, 20, 30]];
+        const edgeMesh = {
+            metadata: { type: 'edge', edgeKey: 'angled_edge', panelModel: { id: nodeId }, brepPoints: points },
+        };
+        const root = { getChildMeshes: () => [edgeMesh] };
+        const view = {
+            model: { id: nodeId }, root, _edgeMeshes: [edgeMesh],
+            getBrepFacePositions: () => null,
+            getBrepVertexLocal: () => [v3(10, 20, 30), v3(20, 20, 30)],
+            getBrepEdgePoints: () => [points],
+        };
+        ContextManager.instance.panelViews = new Map([[nodeId, view]]);
+        const previousDocument = ContextManager.instance.document;
+        ContextManager.instance.document = {
+            findNode: (id: string) => id === nodeId ? { getWorldMatrix: () => transform } : null,
+        } as any;
+
+        try {
+            const pick = resolveBrepGeometryPick(
+                { meshes: [root, edgeMesh] },
+                { pickedMesh: edgeMesh, pickedPoint: { x: 10, y: 380, z: 230 } },
+                view,
+            );
+            expect(pick?.kind).toBe('EDGE');
+            expect(pick?.localPos.x).toBeCloseTo(15, 8);
+            expect(pick?.localPos.y).toBeCloseTo(20, 8);
+            expect(pick?.localPos.z).toBeCloseTo(30, 8);
+            expect(pick?.worldPos.x).toBeCloseTo(10, 8);
+            expect(pick?.worldPos.y).toBeCloseTo(380, 8);
+            expect(pick?.worldPos.z).toBeCloseTo(230, 8);
+            expect(pick?.anchorRef.pointWorldFallback).toEqual(v3(10, 380, 220));
+        } finally {
+            ContextManager.instance.document = previousDocument;
+        }
+    });
+
     it('snapWorldPointToPanelGeometry przyciąga do wierzchołka, gdy kliknięcie jest < 30 mm od narożnika', () => {
         const data = mockPanelScene({ nodeId: 'panel_1' });
         ContextManager.instance.panelViews = data.panelViews;
@@ -211,6 +256,137 @@ describe('pmi-id-bridge anchor resolution', () => {
         const result = snapWorldPointToPanelGeometry(data.scene, data.faceMesh, clickFar, SNAP_RADIUS_MM);
 
         expect(result).toBeNull();
+    });
+
+    it('resolveFaceHelperWorld przyciaga punkt rysunkowy FACE do naroznika, nie zmieniajac kotwicy', () => {
+        const data = mockPanelScene({ nodeId: 'panel_1' });
+        ContextManager.instance.panelViews = data.panelViews;
+
+        const faceAnchor = buildAnchorRef(data.faceMesh, v3(-300, 0, 0));
+        const clickNear = v3(data.v000[0] + 15, data.v000[1], data.v000[2]);
+        const helper = resolveFaceHelperWorld(data.scene, faceAnchor, clickNear);
+
+        expect(faceAnchor.kind).toBe('FACE');
+        expect(helper).not.toBeNull();
+        expect(helper?.x).toBeCloseTo(data.v000[0], 0);
+        expect(helper?.y).toBeCloseTo(data.v000[1], 0);
+    });
+
+    it('resolveFaceHelperWorld prowadzi linie do naroznika takze przy kliknieciu w srodek plyty', () => {
+        const data = mockPanelScene({ nodeId: 'panel_1' });
+        ContextManager.instance.panelViews = data.panelViews;
+
+        // Środek ściany lewej jest ~360 mm od narożnika — poza promieniem 30 mm.
+        const faceAnchor = buildAnchorRef(data.faceMesh, v3(-300, 0, 0));
+        const clickCenter = v3(-300, 0, 0);
+        const helper = resolveFaceHelperWorld(data.scene, faceAnchor, clickCenter);
+
+        expect(FACE_HELPER_SNAP_RADIUS_MM).toBe(Number.POSITIVE_INFINITY);
+        expect(helper).not.toBeNull();
+        expect(helper?.x).toBeCloseTo(data.v000[0], 0);
+        expect(helper?.y).toBeCloseTo(data.v000[1], 0);
+    });
+
+    it('wybiera naroznik na plaszczyznie najblizej wymiaru, a nie najblizej klikniecia', () => {
+        const data = mockPanelScene({ nodeId: 'panel_1' });
+        ContextManager.instance.panelViews = data.panelViews;
+
+        const faceAnchor = buildAnchorRef(data.faceMesh, v3(-300, 0, 0));
+        // Klik przy dolnym narożniku (v000), wymiar położony przy górnym (v0H0).
+        const clickNearV000 = v3(data.v000[0], data.v000[1] + 15, data.v000[2]);
+        const dimensionNearV0H0 = v3(data.v0H0[0], data.v0H0[1], data.v0H0[2]);
+        const helper = resolveFaceHelperWorld(
+            data.scene,
+            faceAnchor,
+            clickNearV000,
+            dimensionNearV0H0,
+            v3(-1, 0, 0),
+        );
+
+        expect(helper).not.toBeNull();
+        expect(helper?.y).toBeCloseTo(data.v0H0[1], 0);
+    });
+
+    it('resolveFaceHelperWorlds wybiera naroznik najblizej linii wymiarowej (offset)', () => {
+        const data = mockPanelScene({ nodeId: 'panel_1' });
+        ContextManager.instance.panelViews = data.panelViews;
+
+        const faceAnchor = buildAnchorRef(data.faceMesh, v3(-300, 0, 0));
+        const otherWorld = v3(-300, 0, 500);
+        const helpers = resolveFaceHelperWorlds({
+            scene: data.scene,
+            anchor1Ref: faceAnchor,
+            anchor2Ref: freeAnchorRef(otherWorld),
+            anchor1World: v3(-300, 0, 0),
+            anchor2World: otherWorld,
+            offsetWorld: v3(0, 400, 0),
+            normal1World: v3(-1, 0, 0),
+        });
+
+        expect(helpers.helper1World.y).toBeCloseTo(data.v0H0[1], 0);
+        expect(helpers.helper2World).toEqual(otherWorld);
+    });
+
+    it('rozwiązuje trafienie FACE z metadanych płaszczyzny, gdy bufor pozycji B-rep chwilowo nie istnieje', () => {
+        const data = mockPanelScene({ nodeId: 'panel_face_plane_only' });
+        ContextManager.instance.panelViews = data.panelViews;
+        const panelView: any = data.panelViews.get('panel_face_plane_only');
+        panelView.getBrepFacePositions = () => null;
+        panelView.getBrepFaceIndices = () => new Uint32Array(0);
+        panelView.getBrepVertexLocal = () => [];
+        panelView.getBrepEdgePoints = () => [];
+        data.faceMesh.metadata.planeOriginLocal = v3(-data.hw, 0, 0);
+        data.faceMesh.metadata.planeNormalLocal = v3(-1, 0, 0);
+
+        const pick = resolveBrepGeometryPick(data.scene, {
+            hit: true,
+            pickedMesh: data.faceMesh,
+            pickedPoint: { x: -data.hw, y: 100, z: 0 },
+        }, panelView);
+
+        expect(pick?.kind).toBe('FACE');
+        expect(pick?.anchorRef.subKey).toBe('left');
+        expect(pick?.worldPos.x).toBeCloseTo(-data.hw, 5);
+    });
+
+    it('dla dwóch równoległych ścian wybiera naroża o wspólnych Y i Z', () => {
+        const nodeId = 'parallel_faces';
+        const identity = mockMatrix([
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        ]);
+        const vertices = [-100, 100].flatMap(y => [-100, 100].flatMap(z => [-10, 10].map(x => ({
+            metadata: { type: 'vertex', panelModel: { id: nodeId } },
+            getAbsolutePosition: () => ({ x, y, z }),
+        }))));
+        const leftFace = { metadata: { faceName: 'FACE_X_MINUS', panelModel: { id: nodeId } } };
+        const rightFace = { metadata: { faceName: 'FACE_X_PLUS', panelModel: { id: nodeId } } };
+        const root = {
+            getWorldMatrix: () => identity,
+            getChildMeshes: () => [leftFace, rightFace, ...vertices],
+        };
+        (leftFace as any).parent = root;
+        (rightFace as any).parent = root;
+        const scene = { meshes: [root, leftFace, rightFace, ...vertices] };
+        ContextManager.instance.panelViews = new Map([[nodeId, { model: { id: nodeId }, root }]]);
+
+        const helpers = resolveFaceHelperWorlds({
+            scene,
+            anchor1Ref: buildAnchorRef(leftFace, v3(-10, -70, -60)),
+            anchor2Ref: buildAnchorRef(rightFace, v3(10, 80, 70)),
+            anchor1World: v3(-10, -70, -60),
+            anchor2World: v3(10, 80, 70),
+            offsetWorld: v3(0, 0, 80),
+            normal1World: v3(-1, 0, 0),
+            normal2World: v3(1, 0, 0),
+        });
+
+        expect(helpers.helper1World.x).toBeCloseTo(-10, 5);
+        expect(helpers.helper2World.x).toBeCloseTo(10, 5);
+        expect(helpers.helper1World.y).toBeCloseTo(helpers.helper2World.y, 5);
+        expect(helpers.helper1World.z).toBeCloseTo(helpers.helper2World.z, 5);
     });
 
     it('stała SNAP_RADIUS_MM wynosi dokładnie 30 mm i jest używana domyślnie', () => {
