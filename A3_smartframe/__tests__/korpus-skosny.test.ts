@@ -109,7 +109,8 @@ describe('KORPUS_SKOSNY prototyp', () => {
         expect(back.thickness).toBeCloseTo(3, 0);
         expect(back.material).toBe('HDF_BIALY_3');
         expect(bottomEdge).toBeCloseTo(18 - 11, 0);
-        expect(top).toBeCloseTo(1000 - 18 * Math.cos(roofAngle) + 11, 0);
+        const zCeilAtPlecy = 2200 - 18 / Math.cos(roofAngle) + (700 - 3) * Math.tan(roofAngle);
+        expect(top).toBeCloseTo(zCeilAtPlecy + 11, 0);
         expect((back.customProperties as any)?.outline2d).toBeUndefined();
         const bottom = plan.parts.find((p) => p.role === 'BOTTOM_PANEL')!;
         expect(bottom.loc.z).toBeCloseTo(9, 0);

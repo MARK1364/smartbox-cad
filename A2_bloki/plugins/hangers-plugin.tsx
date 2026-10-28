@@ -17,7 +17,7 @@ export const hangersPlugin: SmartModulePlugin<HangersPlanParams> = {
         label: 'Zawieszki',
         labelKey: 'bloki.hangers',
         description: 'Zawieszki meblowe korpusu szafki ze Studia',
-        category: 'panel',
+        category: 'internal',
         subCategory: 'ACCESSORY',
         order: 95,
         renderIcon: (c = 'currentColor') => (
@@ -35,7 +35,7 @@ export const hangersPlugin: SmartModulePlugin<HangersPlanParams> = {
         new SyncHangersDrillingsCommand(cabinetId).execute(doc);
     },
     getDefaultParams: () => ({
-        szablon_id: 'TT2',
+        szablon_id: 'zawieszka_camaro',
         zestaw_id: '',
         odsuniecie_bok_mm: 0,
         odsuniecie_tyl_mm: 0,

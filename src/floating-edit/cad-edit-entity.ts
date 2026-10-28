@@ -12,7 +12,8 @@ export type CadEditEntityKind =
     | 'panel'
     | 'agd'
     | 'smartpart'
-    | 'operation';
+    | 'operation'
+    | 'wall';
 
 export interface CadEditEntityDetail {
     entityId: string;

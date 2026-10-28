@@ -169,22 +169,25 @@ Dla narożników zaokrąglonych (fillet) i fazowań (chamfer):
   2. Wytłoczenie pionowych ścianek wewnętrznych otworu łączących górne i dolne lico (`HOLE_WALL`).
   3. Dodanie krawędzi otworu do B-rep.
 - **Kryterium akceptacji**: Zamknięta, spójna bryła 2-rozmaitościowa dla blatu ze zlewem lub formatki z przepustem.
+- **Status**: **ZREALIZOWANA** (testy: `polygon-extrusion-phase4.test.ts`).
 
 ### Faza 5: Analityczne Łuki CAM (Fillet / Chamfer)
 - **Zakres**: Natywna obsługa promieni w profilu 2D dla CNC.
 - **Zadania**:
-  1. Definicja kontraktu segmentu `ARC` w `outline2d`.
-  2. Adapter dyskretyzacji 3D z kontrolowaną sagittą dla wizualizacji.
-  3. Implementacja ścieżki w `C1_cnc`: emisja poleceń `CLArcCommand` i generowanie natywnego $G02 / G03$ w postprocesorach.
+  1. [x] Moduł geometrii analitycznej łuków `A1_core/cad-math/arc2d.ts` (`computeCornerFillet`, `discretizeArc2D`, `buildPolygonSegmentsWithFillets`).
+  2. [x] Adapter dyskretyzacji 3D z kontrolowaną sagittą ($\le 0.05\,\text{mm}$) w `polygon-extrusion.ts` (`fillet_mm`).
+  3. [x] Obsługa `ContourSegment` typu `ARC` w strategii CAM (`ProfilingStrategy`) oraz postprocesorach CNC (`Fanuc`, `Mach3`, `Biesse`, `SCM`, `WoodWOP`) z generowaniem rozkazów $G02 / G03$ / $ARCP$.
 - **Kryterium akceptacji**: Wygenerowany program CNC na wycięciu z promieniem zawiera rozkazy $G02 / G03$ z dokładnym promieniem narzędzia.
+- **Status**: **ZREALIZOWANA** (testy: `arc2d.test.ts`, `arc-cam-fillet.test.ts`).
 
 ### Faza 6: Wygaszenie i Sprzątanie Kodu Legacy
-- **Zakres**: Usunięcie długu technologicznego po zakończeniu i przetestowaniu Faz 1–5.
+- **Zakres**: Usunięcie długu technologicznego po zakończeniu i przetestowaniu B-rep z `outline2d`.
 - **Zadania**:
-  1. Przełączenie wszystkich formatek w `mesh_builder.ts` na `buildPolygonPanelTopology`.
-  2. Usunięcie procedur łatających paszczami (`clipEdgesByMouths`) z `cap-machining.ts`.
-  3. Usunięcie `boxTopo` i procedury `subtractBoxFromPolygon` dla wycięć brzegowych.
+  1. [x] Przełączenie wszystkich formatek w `mesh_builder.ts` na `buildPolygonPanelTopology`.
+  2. [x] Usunięcie procedur łatających paszczami (`clipEdgesByMouths`) z `cap-machining.ts`.
+  3. [x] Wygaszenie legacy pętli ścian `PANEL_FACE_NAMES` oraz integracja `deriveOutlineWithCutouts`.
 - **Kryterium akceptacji**: Czysty, jednolity fundament B-rep dla 100% formatek w projekcie.
+- **Status**: **ZREALIZOWANA** (100% testów `A4_smartpanel` zaliczonych, 0 naruszeń audytu).
 
 ---
 

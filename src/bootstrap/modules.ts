@@ -90,7 +90,10 @@ const blokiModule: CadModule = {
         unregisterBlokiGeometryHandler = registerGeometryUpdateHandler({
             updateBeforeRebuild(doc, containers) {
                 for (const container of containers) {
-                    if (container.generatorParams?.type === SMARTPART_HANGERS_GROUP_TYPE) {
+                    const isLegacyHangerGroup =
+                        container.generatorParams?.type === SMARTPART_HANGERS_GROUP_TYPE &&
+                        !container.generatorParams?.boxType;
+                    if (isLegacyHangerGroup) {
                         syncHangerDefinitionFromParams(container);
                         const node = doc.findNode?.(container.id);
                         if (node) {

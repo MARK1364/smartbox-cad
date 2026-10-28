@@ -565,7 +565,7 @@ export function runEngineAndApply(
         wysokosc_strefy_dolnej_mm,
         wysokosc_strefy_srodkowej_mm,
         cofniecie_plecow_mm: bOffset,
-        offsets,
+        offsets: offsets ?? gp.offsets,
         container: cntNode || container,
         tryb_wienca_gornego,
         szerokosc_trawersu_mm,

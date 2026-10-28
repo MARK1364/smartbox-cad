@@ -44,6 +44,9 @@ export class ContextMenu {
 
     show(x: number, y: number, items: CtxMenuItem[], title?: string) {
         this.hide();
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('cad-close-floating-edit'));
+        }
 
         const menu = document.createElement('div');
         menu.className = 'ctx-menu';

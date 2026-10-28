@@ -160,8 +160,7 @@ export class UIController {
     }
 
     setConsole(msg: string) {
-        this.state.consoleText = msg;
-        if (this.onStateChange) this.onStateChange();
+        this.setStatus(msg);
     }
 
     showSelectedFace(faceName: string | null, faceData: any | null, smartId: any | null = null, kind: 'face' | 'edge' | 'corner' | 'feature' = 'face') {

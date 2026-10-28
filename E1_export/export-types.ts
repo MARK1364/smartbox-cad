@@ -75,6 +75,11 @@ export interface SavedExportView {
     nodePoses?: ExportNodePose[];
     /** Widoczność paneli / korpusów / okuć w chwili kadru. */
     nodeVisibility?: ExportNodeVisibility[];
+    /** Instrukcja montażu (asm_*): powiązanie kadru z korpusami projektu + fingerprint zawartości. */
+    assembly?: {
+        scopeContainerIds: string[];
+        partsHash: string;
+    } | null;
 }
 
 export interface BOMRow {

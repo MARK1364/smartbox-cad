@@ -28,12 +28,11 @@ describe('B1 zawieszki Camaro', () => {
         expect(items[0].visual.glb).toBe('Zawieszka_Camaro_806.glb');
     });
 
-    it('loads real Camaro.json into library', () => {
+    it('loads real zawieszka_camaro.json into library', () => {
         const hangers = listHangers();
-        expect(hangers.map((h) => h.id)).toContain('CAMARO_806');
-        const hw = getHardware('CAMARO_806');
+        expect(hangers.map((h) => h.id)).toContain('zawieszka_camaro');
+        const hw = getHardware('zawieszka_camaro');
         expect(hw?.type).toBe('HANGER');
-        expect(hw?.visual?.glb).toBe('Zawieszka_Camaro_806.glb');
     });
 
     it('loads custom SmartPart JSON from zawieszki directory into listHangers', () => {

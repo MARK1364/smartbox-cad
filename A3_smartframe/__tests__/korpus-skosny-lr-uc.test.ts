@@ -64,6 +64,7 @@ describe('KORPUS_SKOSNY_LR_UC (ucięty)', () => {
 
         const betaRad = Math.atan(tanBeta);
         const roofThickVert = 18 / Math.cos(betaRad);
+        const overlapGoraVert = overlap_gora / Math.cos(betaRad);
 
         // Absolutna wysokość dachu i sufitu wnęki na rozszerzonych krawędziach (LR_UC z uciosem):
         const rightRoofAbsExt = 2200 - uskok_prawy + overlap_prawy * tanBeta;
@@ -73,7 +74,7 @@ describe('KORPUS_SKOSNY_LR_UC (ucięty)', () => {
         const rightRoofRel = rightRoofInnerExt - z_bottom;  // prawy (wysoki)
         const leftRoofRel  = leftRoofInnerExt  - z_bottom;  // lewy (niski)
         const maxRoofRel = Math.max(rightRoofRel, leftRoofRel);
-        const backH = maxRoofRel + overlap_gora;
+        const backH = maxRoofRel + overlapGoraVert;
 
         // v_dach: szczyt dachu leży na v=0
         const v_right_roof = maxRoofRel - rightRoofRel;
@@ -313,6 +314,7 @@ describe('KORPUS_SKOSNY_LR', () => {
         const tanBeta = (2200 - 1000) / 1200;
         const betaRad = Math.atan(tanBeta);
         const roofThickVert = 18 / Math.cos(betaRad);
+        const overlapGoraVert = overlap / Math.cos(betaRad);
 
         const z_bottom = 18 - overlap;
         const uskokPrawy = 18 * tanBeta;
@@ -326,7 +328,7 @@ describe('KORPUS_SKOSNY_LR', () => {
         const rightRoofRel = rightRoofInnerExt - z_bottom;
         const leftRoofRel  = leftRoofInnerExt  - z_bottom;
         const maxRoofRel = Math.max(rightRoofRel, leftRoofRel);
-        const backH = maxRoofRel + overlap;
+        const backH = maxRoofRel + overlapGoraVert;
 
         const v_right_roof = maxRoofRel - rightRoofRel;
         const v_left_roof  = maxRoofRel - leftRoofRel;
@@ -345,8 +347,8 @@ describe('KORPUS_SKOSNY_LR', () => {
         // Szczyty pleców nie przekraczają zewnętrznej linii dachu szafki
         expect(cadZRight).toBeLessThan(rightRoofAbsExt);
         expect(cadZLeft).toBeLessThan(leftRoofAbsExt);
-        expect(cadZRight).toBeCloseTo(rightRoofInnerExt + overlap, 1);
-        expect(cadZLeft).toBeCloseTo(leftRoofInnerExt + overlap, 1);
+        expect(cadZRight).toBeCloseTo(rightRoofInnerExt + overlapGoraVert, 1);
+        expect(cadZLeft).toBeCloseTo(leftRoofInnerExt + overlapGoraVert, 1);
     });
 
     it('obsługuje minimalną wysokość lewą 1 mm oraz domyślną prawą wysokość równą wysokości szafki', () => {
@@ -368,5 +370,41 @@ describe('KORPUS_SKOSNY_LR', () => {
         expect(leftSide.dim.x).toBeCloseTo(1 + rise, 1);
         // Bok prawy domyślnie przyjmuje wysokość szafki = 2200 mm
         expect(rightSide.dim.x).toBeCloseTo(2200, 0);
+    });
+
+    it('docina formatki (BOK_L, BOK_P, WIENIEC_D, WIENIEC_G) do pleców gdy overlap >= thickness', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 1200,
+            wysokosc_mm: 2200,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_skosny_lr_uc',
+            wysokosc_lewy_mm: 1000,
+            wysokosc_prawy_mm: 2200,
+            cofniecie_plecow_mm: 18,
+            offsets: {
+                'Plecy_-X': 18,
+                'Plecy_+X': 18,
+                'Plecy_-Y': 18,
+                'Plecy_+Y': 18
+            }
+        });
+
+        const leftSide = plan.parts.find((p) => p.role === 'LEFT_SIDE_PANEL')!;
+        const rightSide = plan.parts.find((p) => p.role === 'RIGHT_SIDE_PANEL')!;
+        const bottom = plan.parts.find((p) => p.role === 'BOTTOM_PANEL')!;
+        const top = plan.parts.find((p) => p.role === 'TOP_PANEL')!;
+
+        expect(leftSide.dim.y).toBeCloseTo(582, 0);
+        expect(leftSide.loc.y).toBeCloseTo(-9, 0);
+
+        expect(rightSide.dim.y).toBeCloseTo(582, 0);
+        expect(rightSide.loc.y).toBeCloseTo(-9, 0);
+
+        expect(bottom.dim.y).toBeCloseTo(582, 0);
+        expect(bottom.loc.y).toBeCloseTo(-9, 0);
+
+        expect(top.dim.y).toBeCloseTo(582, 0);
+        expect(top.loc.y).toBeCloseTo(-9, 0);
     });
 });

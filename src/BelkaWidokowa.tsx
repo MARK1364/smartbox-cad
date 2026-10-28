@@ -28,6 +28,8 @@ export interface BelkaWidokowaProps {
   lcsVisible: boolean;
   isPanActive: boolean;
   isZoomWindowActive: boolean;
+  hidePanZoom?: boolean;
+  hideInfo?: boolean;
   activeTab: string;
   displayMenuOpen: boolean;
   viewMenuOpen: boolean;
@@ -56,6 +58,8 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
     lcsVisible,
     isPanActive,
     isZoomWindowActive,
+    hidePanZoom,
+    hideInfo,
     activeTab,
     displayMenuOpen,
     viewMenuOpen,
@@ -204,24 +208,30 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
           callAPI('toggleProjection');
         }}
       />
-      <button
-        className={`tool-btn ${isPanActive ? 'active' : ''}`}
-        id="toolPan"
-        onClick={onTogglePan}
-        title={tx(srcTekst, 'app.view.pan', TX_NS)}
-      >
-        {tx(srcTekst, 'app.view.pan_btn', TX_NS)}
-      </button>
-      <button
-        className={`tool-btn ${isZoomWindowActive ? 'active' : ''}`}
-        id="toolZoomWindow"
-        onClick={onToggleZoomWindow}
-        title={tx(srcTekst, 'app.view.zoom', TX_NS)}
-      >
-        🔍 Zoom
-      </button>
-      <span className="tool-separator"></span>
-      <BelkaInfoMenu
+      {!hidePanZoom && (
+        <>
+          <button
+            className={`tool-btn ${isPanActive ? 'active' : ''}`}
+            id="toolPan"
+            onClick={onTogglePan}
+            title={tx(srcTekst, 'app.view.pan', TX_NS)}
+          >
+            {tx(srcTekst, 'app.view.pan_btn', TX_NS)}
+          </button>
+          <button
+            className={`tool-btn ${isZoomWindowActive ? 'active' : ''}`}
+            id="toolZoomWindow"
+            onClick={onToggleZoomWindow}
+            title={tx(srcTekst, 'app.view.zoom', TX_NS)}
+          >
+            🔍 Zoom
+          </button>
+        </>
+      )}
+      {!hideInfo && (
+        <>
+          <span className="tool-separator"></span>
+          <BelkaInfoMenu
         open={infoMenuOpen}
         onOpenChange={(next) => {
           onInfoMenuOpenChange(next);
@@ -244,7 +254,9 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
           alert(tx(srcTekst, 'app.tree_dump', TX_NS) + (res ? res.substring(0, 400) + '...' : 'OK'));
         }}
         onOpenSSOT={onOpenSSOT}
-      />
+          />
+        </>
+      )}
 
       {activeTab === 'tab-e1-export' && (
         <>

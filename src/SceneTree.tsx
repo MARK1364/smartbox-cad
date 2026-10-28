@@ -28,6 +28,7 @@ import { ConnectorTreeRow } from '../C2_connectors/connector-tree-row';
 import { canReparentManualPanel, reparentManualPanel } from './application/cad-app-commands';
 import { CAD_EDIT_LIBRARY_OPERATION } from '../o1_operacji';
 import { CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
+import { openCadEditEntity } from './floating-edit/cad-edit-entity.js';
 import { LedChannelStore, type LedChannelDefinition } from '../A2_bloki';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
@@ -151,6 +152,16 @@ export const isHandleTreeItem = (node: CADTreeNode): boolean => {
     (node as any).type === 'smartpart_handle' ||
     (node as any).generatorParams?.type === 'smartpart_handle' ||
     (node as any).generatorParams?.partType === 'HANDLE'
+  );
+};
+
+export const isSinkTreeItem = (node: CADTreeNode): boolean => {
+  return (
+    (node as any).role === 'SMARTPART_SINK' ||
+    (node as any).type === 'smartpart_sink' ||
+    (node as any).generatorParams?.type === 'smartpart_sink' ||
+    (node as any).generatorParams?.partType === 'SINK' ||
+    (node as any).generatorParams?.boxType === 'SINKS'
   );
 };
 
@@ -519,6 +530,18 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                     }
                   }
                 }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  if (h.id) {
+                    openCadEditEntity({
+                      entityId: panel.id,
+                      panelId: panel.id,
+                      featureId: h.id,
+                      kind: 'operation',
+                      face: h.face,
+                    });
+                  }
+                }}
               >
                 <span style={{ width: '10px', display: 'inline-block', flexShrink: 0 }} />
                 {TREE_ICONS.tool}
@@ -591,6 +614,17 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               <div
                 className="tree-node-content"
                 onClick={() => selectGrooveInTree(panel, g)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  openCadEditEntity({
+                    entityId: panel.id,
+                    panelId: panel.id,
+                    featureId: g.id,
+                    kind: 'operation',
+                    libraryId: g.libraryId,
+                    face: g.face,
+                  });
+                }}
               >
                 <span style={{ width: '10px', display: 'inline-block', flexShrink: 0 }} />
                 {TREE_ICONS.tool}
@@ -639,7 +673,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   };
 
   const renderPanelNode = (panel: CADTreeNode) => {
-    const isPanelCollapsed = isNodeCollapsed(panel.id, true);
+    const hasChildren = Boolean(panel.children && panel.children.length > 0);
+    const isPanelCollapsed = isNodeCollapsed(panel.id, !hasChildren);
     const isEditing = editingNode?.type === 'part' && editingNode?.id === panel.id;
     const isSelected = selectedNodeId === panel.id ? 'selected' : '';
     const isManual = panel.isManual === true;
@@ -1030,17 +1065,21 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
   const renderContainerNode = (container: CADTreeNode) => {
     const isHandle = isHandleTreeItem(container);
+    const isSink = isSinkTreeItem(container);
     const isCustomSp = isCustomSmartPartTreeItem(container);
-    const isSmartPartLike = isHandle || isCustomSp;
+    const isSmartPartLike = isHandle || isCustomSp || isSink;
     const isAgd = isApplianceTreeItem(container);
-    // SmartWall domyślnie rozwinięty — widać ściany-dzieci; uchwyt / custom SP domyślnie zwinięty
+    const isBlok = isBlokiTreeItem(container);
+    // SmartWall domyślnie rozwinięty — widać ściany-dzieci; uchwyt / zlew / custom SP domyślnie zwinięty
     const defaultCollapsed = isSmartPartLike ? true : !isSmartWallTreeItem(container);
     const isContainerCollapsed = isNodeCollapsed(container.id, defaultCollapsed);
     const isSelected = selectedNodeId === container.id ? 'selected' : '';
     const isEditing = editingNode?.type === 'container' && editingNode?.id === container.id;
-    const treeTypeLabel = isHandle
-      ? 'Uchwyt'
-      : (isCustomSp ? 'SmartPart' : (isAgd ? 'AGD' : (isBlokiTreeItem(container) ? 'Bloki' : 'Korpus')));
+    const treeTypeLabel = isSink
+      ? 'Zlew'
+      : (isHandle
+        ? 'Uchwyt'
+        : (isCustomSp ? 'SmartPart' : (isAgd ? 'AGD' : (isBlok ? 'Bloki' : 'Korpus'))));
 
     return (
       <div key={container.id} className="tree-children">
@@ -1054,9 +1093,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
           draggable={!editingNode}
           onDragStart={(e) => {
             e.stopPropagation();
-            const isBlok = isBlokiTreeItem(container);
             const payload = {
-              type: isHandle ? 'HANDLE' : (isAgd ? 'AGD' : (isBlok ? 'BLOKI' : 'CONTAINER')),
+              type: isSink ? 'SINK' : (isHandle ? 'HANDLE' : (isAgd ? 'AGD' : (isBlok ? 'BLOKI' : 'CONTAINER'))),
               id: container.id,
               name: container.name || treeTypeLabel,
               raw: container,
@@ -1085,8 +1123,15 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               setSelectedNodeId(container.id);
               onSelectNode?.(container);
               if (!isDrawMode) {
-                UIController.instance?.emitTree('select-container', { id: container.id });
-                // SmartPart: edycja tylko przez PPM „Edytuj” (bez auto-skoku zakładki).
+                if (isSink) {
+                  UIController.instance?.emitTree('select-blok', { id: container.id });
+                } else if (isAgd) {
+                  UIController.instance?.emitTree('select-agd', { id: container.id });
+                } else if (isBlok) {
+                  UIController.instance?.emitTree('select-blok', { id: container.id });
+                } else {
+                  UIController.instance?.emitTree('select-container', { id: container.id });
+                }
               }
             }}
             onContextMenu={(e) => {
@@ -1094,11 +1139,8 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.preventDefault();
               e.stopPropagation();
               UIController.instance?.emitTree('select-container', { id: container.id });
-              const isBlok = isBlokiTreeItem(container);
-              // handle = PPM „Edytuj” → floating SmartPart dialog (uchwyt LUB CUSTOM)
-              // agd = PPM „Edytuj AGD” → zakładka AGD
               UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: isSmartPartLike ? 'handle' : (isAgd ? 'agd' : (isBlok ? 'bloki' : 'container')),
+                type: isSink ? 'smartpart' : (isSmartPartLike ? 'handle' : (isAgd ? 'agd' : (isBlok ? 'bloki' : 'container'))),
                 id: container.id,
                 name: container.name || treeTypeLabel,
                 clientX: e.clientX,
@@ -1114,7 +1156,11 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             <span className="tree-chevron" onClick={(e) => toggleCollapse(container.id, e, defaultCollapsed)}>
               {isContainerCollapsed ? TREE_ICONS.chevronRight : TREE_ICONS.chevronDown}
             </span>
-            {isSmartPartLike ? (
+            {isSink ? (
+              <span style={{ color: '#38bdf8', display: 'inline-flex', alignItems: 'center', marginRight: '4px', fontSize: '13px' }}>
+                🥣
+              </span>
+            ) : isSmartPartLike ? (
               <span style={{ color: '#38bdf8', display: 'inline-flex', alignItems: 'center', marginRight: '4px' }}>
                 {TREE_ICONS.handle}
               </span>
@@ -1137,7 +1183,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               />
             ) : (
               <strong className="node-name-text" style={{ color: isSmartPartLike ? '#38bdf8' : undefined }}>
-                {container.name || (isHandle ? 'Uchwyt' : (isCustomSp ? 'SmartPart' : 'Kontener'))}
+                {container.name || (isSink ? 'Zlew' : (isHandle ? 'Uchwyt' : (isCustomSp ? 'SmartPart' : 'Kontener')))}
               </strong>
             )}
             <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>

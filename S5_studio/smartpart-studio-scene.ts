@@ -20,7 +20,7 @@ import {
     SmartPartHoleCut,
     SmartPartPocketCut,
 } from './smartpart-studio-types.js';
-import { cutOrientFromRefs, findPartForCut } from './smartpart-studio-types.js';
+import { cutOrientFromRefs, findPartForCut, partDimsAsMain, pocketBoxDimsCad, resolveCutProfileLoop2D } from './smartpart-studio-types.js';
 import { namedCameraView, type CameraUp } from '../S3_scena/named-camera-view.js';
 
 declare const BABYLON: any;
@@ -60,11 +60,23 @@ function cadPosToBabylon(xMm: number, yMm: number, zMm: number): { x: number; y:
 export type CameraViewPreset = 'ISO' | 'TOP' | 'FRONT' | 'SIDE';
 export type TransformToolMode = 'select' | 'translate' | 'rotate';
 
+export interface DimensionLineProjected {
+    axis: 'X' | 'Y' | 'Z';
+    screenX: number;
+    screenY: number;
+    valueMm: number;
+    refWall: string;
+    cutId: string;
+}
+
 export interface TransformUpdateEvent {
     xMm: number;
     yMm: number;
     zMm: number;
     axis?: 'X' | 'Y' | 'Z';
+    direction?: 1 | -1;
+    swapProfileDims?: boolean;
+    rotationDegrees?: { x: number; y: number; z: number };
 }
 
 export class SmartPartStudioScene {
@@ -72,6 +84,9 @@ export class SmartPartStudioScene {
     private engine: any = null;
     private scene: any = null;
     private camera: any = null;
+    private _orthoZoomObserver: any = null;
+    private _lastOrthoRadius: number = -1;
+    private _lastOrthoAspect: number = -1;
 
     // Gizmo przesuwania / obrotu (jak główna aplikacja CAD — G i R)
     private cadTranslateGizmo: CadTranslateGizmo | null = null;
@@ -117,6 +132,10 @@ export class SmartPartStudioScene {
     private edgeFrameMat: any = null;
     /** Materiał podświetlenia krawędzi aktywnego komponentu. */
     private edgeFrameSelectedMat: any = null;
+    /** Dynamiczne linie wymiarowe wybranego otworu/cięcia. */
+    private dimLinesMesh: any = null;
+    private onDimensionLinesProjected?: (dims: DimensionLineProjected[]) => void;
+    private onCutContextMenuCallback?: (cutId: string, screenX: number, screenY: number) => void;
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -193,6 +212,9 @@ export class SmartPartStudioScene {
                 this.backlight.direction = dir.negate();
             }
             this._syncViewCube();
+            if (this.dimLinesMesh) {
+                this.updateDimensionLines();
+            }
         });
 
         // Gizmo G (przesuń) + R (obróć) — jak główna aplikacja
@@ -309,6 +331,20 @@ export class SmartPartStudioScene {
                     if (isRmbPanning) {
                         this._suppressContextMenuUntil = Date.now() + 200;
                         evt.preventDefault();
+                    } else if (isRmbPending) {
+                        // Kliknięcie PPM w miejscu (bez przeciągania) — sprawdź czy trafiono w otwór/cięcie
+                        const picks: any[] = this.scene.multiPick(this.scene.pointerX, this.scene.pointerY) || [];
+                        const hitCut = picks.find((p) => p?.hit && (p.pickedMesh?.metadata?.type === 'HOLE' || p.pickedMesh?.metadata?.type === 'POCKET'));
+                        const cutId = hitCut?.pickedMesh?.metadata?.id;
+                        if (cutId && this.onCutContextMenuCallback) {
+                            this._suppressContextMenuUntil = Date.now() + 500;
+                            const rect = this.canvas.getBoundingClientRect();
+                            const screenX = rect.left + this.scene.pointerX;
+                            const screenY = rect.top + this.scene.pointerY;
+                            this.onCutContextMenuCallback(cutId, screenX, screenY);
+                            evt.preventDefault();
+                            evt.stopPropagation();
+                        }
                     }
                     isRmbPending = false;
                     isRmbPanning = false;
@@ -357,6 +393,7 @@ export class SmartPartStudioScene {
                 if (newRadius < this.camera.lowerRadiusLimit) newRadius = this.camera.lowerRadiusLimit;
                 if (newRadius > this.camera.upperRadiusLimit) newRadius = this.camera.upperRadiusLimit;
                 this.camera.radius = newRadius;
+                this.updateOrthographicBounds();
                 wheelEvt.preventDefault?.();
             }
         });
@@ -397,16 +434,45 @@ export class SmartPartStudioScene {
 
         try {
             if (BABYLON.RotationGizmo) {
-                this.rotationGizmo = new BABYLON.RotationGizmo();
+                const utilLayer = this.cadTranslateGizmo?.utilityLayer || new BABYLON.UtilityLayerRenderer(this.scene);
+                this.rotationGizmo = new BABYLON.RotationGizmo(utilLayer);
+                this.rotationGizmo.scaleRatio = 1.4;
                 this.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = false;
-                this.rotationGizmo.attachedNode = null;
-                const bindRot = (obs: any, fn: () => void) => {
-                    obs?.add?.(fn);
-                };
-                for (const g of [this.rotationGizmo.xGizmo, this.rotationGizmo.yGizmo, this.rotationGizmo.zGizmo]) {
-                    bindRot(g?.dragBehavior?.onDragStartObservable, () => { this._gizmoDragging = true; });
-                    bindRot(g?.dragBehavior?.onDragEndObservable, () => { this._gizmoDragging = false; });
+                this.rotationGizmo.snapDistance = Math.PI / 2; // Dokładny skok co 90°
+
+                if (this.rotationGizmo.xGizmo) {
+                    this.rotationGizmo.xGizmo.color = new BABYLON.Color3(0.92, 0.12, 0.12);
+                    this.rotationGizmo.xGizmo.snapDistance = Math.PI / 2;
                 }
+                if (this.rotationGizmo.yGizmo) {
+                    this.rotationGizmo.yGizmo.color = new BABYLON.Color3(0.1, 0.45, 0.95); // obrót CAD Z (oś pionowa)
+                    this.rotationGizmo.yGizmo.snapDistance = Math.PI / 2;
+                }
+                if (this.rotationGizmo.zGizmo) {
+                    this.rotationGizmo.zGizmo.color = new BABYLON.Color3(0.12, 0.82, 0.18); // obrót CAD Y (głęb)
+                    this.rotationGizmo.zGizmo.snapDistance = Math.PI / 2;
+                }
+
+                const onRotDragStart = () => {
+                    this._gizmoDragging = true;
+                    if (this.camera) this.camera.detachControl();
+                };
+
+                const onRotDragEnd = () => {
+                    this._gizmoDragging = false;
+                    if (this.camera) this.camera.attachControl(this.canvas, true);
+                    this.emitRotationFromGizmo();
+                };
+
+                for (const g of [this.rotationGizmo.xGizmo, this.rotationGizmo.yGizmo, this.rotationGizmo.zGizmo]) {
+                    if (g && g.dragBehavior) {
+                        g.dragBehavior.onDragStartObservable.add(onRotDragStart);
+                        g.dragBehavior.onDragEndObservable.add(onRotDragEnd);
+                    }
+                }
+
+                this.rotationGizmo.attachedNode = null;
+                this.rotationGizmo.attachedMesh = null;
             }
         } catch (e) {
             console.warn('[SmartPartStudioScene] RotationGizmo:', e);
@@ -427,6 +493,101 @@ export class SmartPartStudioScene {
             yMm: Math.round(cad.y),
             zMm: Math.round(cad.z),
         });
+    }
+
+    private emitRotationFromGizmo(): void {
+        if (!this.selectedId || !this.onTransformCallback) return;
+        const targetMesh = this.getSelectedMesh();
+        if (!targetMesh) return;
+
+        const cut = this.currentDef?.cuts?.find((c) => c.id === this.selectedId);
+        const currentOrient = cut ? cutOrientFromRefs(cut) : { axis: 'Z' as const, direction: 1 as (1 | -1) };
+
+        // Aktualny wektor kierunku otworu w przestrzeni Babylona przed obrotem
+        let initialBabylonVec: any;
+        if (currentOrient.axis === 'X') {
+            initialBabylonVec = new BABYLON.Vector3(currentOrient.direction, 0, 0);
+        } else if (currentOrient.axis === 'Y') {
+            // CAD Y -> Babylon Z
+            initialBabylonVec = new BABYLON.Vector3(0, 0, currentOrient.direction);
+        } else {
+            // CAD Z -> Babylon Y
+            initialBabylonVec = new BABYLON.Vector3(0, currentOrient.direction, 0);
+        }
+
+        let rotMatrix = BABYLON.Matrix.Identity();
+        if (targetMesh.rotationQuaternion) {
+            targetMesh.rotationQuaternion.toRotationMatrix(rotMatrix);
+        } else if (targetMesh.rotation) {
+            BABYLON.Matrix.RotationYawPitchRollToRef(
+                targetMesh.rotation.y,
+                targetMesh.rotation.x,
+                targetMesh.rotation.z,
+                rotMatrix
+            );
+        }
+
+        // Nowy wektor w Babylonie po obrocie (z dokładnym ograniczeniem 90°)
+        const newBabylonVec = BABYLON.Vector3.TransformNormal(initialBabylonVec, rotMatrix);
+
+        // Konwersja wektora Babylon na CAD (Bab X -> CAD X, Bab Z -> CAD Y, Bab Y -> CAD Z)
+        const vCadX = newBabylonVec.x;
+        const vCadY = newBabylonVec.z;
+        const vCadZ = newBabylonVec.y;
+
+        const absX = Math.abs(vCadX);
+        const absY = Math.abs(vCadY);
+        const absZ = Math.abs(vCadZ);
+
+        let axis: 'X' | 'Y' | 'Z' = 'X';
+        let direction: 1 | -1 = 1;
+
+        if (absX >= absY && absX >= absZ) {
+            axis = 'X';
+            direction = vCadX >= 0 ? 1 : -1;
+        } else if (absY >= absX && absY >= absZ) {
+            axis = 'Y';
+            direction = vCadY >= 0 ? 1 : -1;
+        } else {
+            axis = 'Z';
+            direction = vCadZ >= 0 ? 1 : -1;
+        }
+
+        const localPos = targetMesh.position;
+        const cad = renderToCAD(new Vec3(localPos.x, localPos.y, localPos.z));
+
+        // Sprawdź, czy wykonano obrót o ~90° wokół samej osi natarcia narzędzia (in-plane rotation dla POCKET)
+        let swapProfileDims = false;
+        if (cut?.type === 'POCKET' && axis === currentOrient.axis) {
+            // Wektor szerokości profilu w przestrzeni Babylona przed obrotem:
+            // Dla axis='X' profil szerokości leży wzdłuż CAD Y (Babylon Z)
+            // Dla axis='Y' lub 'Z' profil szerokości leży wzdłuż CAD X (Babylon X)
+            const initialWidthBabylon = currentOrient.axis === 'X'
+                ? new BABYLON.Vector3(0, 0, 1)
+                : new BABYLON.Vector3(1, 0, 0);
+            const rotatedWidthBabylon = BABYLON.Vector3.TransformNormal(initialWidthBabylon, rotMatrix);
+            const dot = Math.abs(BABYLON.Vector3.Dot(initialWidthBabylon, rotatedWidthBabylon));
+            if (dot < 0.5) {
+                swapProfileDims = true;
+            }
+        }
+
+        this.onTransformCallback(this.selectedId, {
+            xMm: Math.round(cad.x),
+            yMm: Math.round(cad.y),
+            zMm: Math.round(cad.z),
+            axis,
+            direction,
+            ...(swapProfileDims ? { swapProfileDims: true } : {}),
+        });
+
+        // Reset rotacji węzła, ponieważ orientację trzymamy w SSOT (axis/direction)
+        if (targetMesh.rotationQuaternion) {
+            targetMesh.rotationQuaternion = BABYLON.Quaternion.Identity();
+        }
+        if (targetMesh.rotation) {
+            targetMesh.rotation.set(0, 0, 0);
+        }
     }
 
     /**
@@ -457,7 +618,21 @@ export class SmartPartStudioScene {
         }
         if (this.rotationGizmo) {
             this.rotationGizmo.attachedNode = null;
+            this.rotationGizmo.attachedMesh = null;
         }
+    }
+
+    private isAssociativeMirrored(id: string | null): boolean {
+        if (!id || !this.currentDef) return false;
+        const part = this.currentDef.parts.find((p) => p.id === id);
+        if (part?.mirroredFrom) return true;
+        const cut = this.currentDef.cuts.find((c) => c.id === id);
+        if (cut?.mirroredFrom) return true;
+        if (cut?.partId) {
+            const parent = this.currentDef.parts.find((p) => p.id === cut.partId);
+            if (parent?.mirroredFrom) return true;
+        }
+        return false;
     }
 
     private updateGizmoAttachment(): void {
@@ -465,6 +640,7 @@ export class SmartPartStudioScene {
         const canTransform =
             !!targetMesh
             && this.selectedId !== 'main_container'
+            && !this.isAssociativeMirrored(this.selectedId)
             && (this.currentTool === 'translate' || this.currentTool === 'rotate');
 
         if (!canTransform) {
@@ -473,7 +649,10 @@ export class SmartPartStudioScene {
         }
 
         if (this.currentTool === 'translate' && this.cadTranslateGizmo) {
-            if (this.rotationGizmo) this.rotationGizmo.attachedNode = null;
+            if (this.rotationGizmo) {
+                this.rotationGizmo.attachedNode = null;
+                this.rotationGizmo.attachedMesh = null;
+            }
             this.cadTranslateGizmo.attachedNode = targetMesh;
             this.cadTranslateGizmo.setEnabled(true);
             return;
@@ -485,6 +664,9 @@ export class SmartPartStudioScene {
                 this.cadTranslateGizmo.setEnabled(false);
             }
             this.rotationGizmo.attachedNode = targetMesh;
+            if (targetMesh instanceof BABYLON.AbstractMesh) {
+                this.rotationGizmo.attachedMesh = targetMesh;
+            }
             return;
         }
 
@@ -703,6 +885,7 @@ export class SmartPartStudioScene {
         this.renderParts(def);
         this.renderCuts(def);
         this.updateGizmoAttachment();
+        this.updateDimensionLines();
     }
 
     /**
@@ -1147,6 +1330,7 @@ export class SmartPartStudioScene {
         namePrefix: string,
         axesLength: number,
         orient: { axis: 'X' | 'Y' | 'Z'; direction: 1 | -1 },
+        extrudeDepth?: number,
     ): any {
         if (!this.scene || !pivot || typeof BABYLON === 'undefined') return null;
 
@@ -1160,7 +1344,9 @@ export class SmartPartStudioScene {
         const thickness = Math.max(0.45, Math.min(1.2, axesLength * 0.028));
         const headH = Math.max(2.5, axesLength * 0.09);
         const labelSize = Math.max(5, axesLength * 0.10);
-        const zLen = axesLength * 1.15;
+        const zLen = extrudeDepth && extrudeDepth > 0
+            ? Math.max(axesLength * 1.15, Math.min(extrudeDepth, axesLength * 2.8))
+            : axesLength * 1.15;
         const d = orient.direction >= 0 ? 1 : -1;
         // Z = oś wysuwu (walec/sześcian), Bab: X=CAD_X, Y=CAD_Z, Z=CAD_Y
         const zDir =
@@ -1299,7 +1485,7 @@ export class SmartPartStudioScene {
 
             const orient = cutOrientFromRefs(hole);
             const axisLen = this.lcsAxisLengthMm(dia, len, dia, 0.35, 8, 22);
-            const lcs = this.buildHoleCadLcs(pivot, `cut_lcs_${cut.id}`, axisLen, orient);
+            const lcs = this.buildHoleCadLcs(pivot, `cut_lcs_${cut.id}`, axisLen, orient, len);
             if (lcs) {
                 lcs.position = new BABYLON.Vector3(0, 0, 0);
                 this.cutLcsNodes.set(cut.id, lcs);
@@ -1311,11 +1497,11 @@ export class SmartPartStudioScene {
         const w = Math.max(1, pocket.widthMm);
         const h = Math.max(1, pocket.heightMm);
         const d = Math.max(1, pocket.depthMm);
-        const orient = cutOrientFromRefs(pocket);
         const axisLen = this.lcsAxisLengthMm(w, h, d, 0.35, 8, 22);
         pivot.rotation.set(0, 0, 0);
         if (pivot.rotationQuaternion) pivot.rotationQuaternion = null;
-        const lcs = this.buildHoleCadLcs(pivot, `cut_lcs_${cut.id}`, axisLen, orient);
+        const orient = cutOrientFromRefs(pocket);
+        const lcs = this.buildHoleCadLcs(pivot, `cut_lcs_${cut.id}`, axisLen, orient, d);
         if (lcs) {
             lcs.position = new BABYLON.Vector3(0, 0, 0);
             this.cutLcsNodes.set(cut.id, lcs);
@@ -1354,10 +1540,12 @@ export class SmartPartStudioScene {
         const dia = Math.max(1, hole.diameterMm);
         const len = Math.max(1, hole.lengthMm);
         const isSelected = this.selectedId === hole.id;
+        const { axis: holeAxis } = cutOrientFromRefs(hole);
 
         // xMm/yMm/zMm = początek (LCS / utwierdzenie) — pivot tu, nie w połowie długości
         const centerOff = this.holeCenterOffsetFromOriginBabylon(hole);
-        const pivot = new BABYLON.TransformNode(`cut_pivot_${hole.id}`, this.scene);
+        const pivot = new BABYLON.Mesh(`cut_pivot_${hole.id}`, this.scene);
+        pivot.isVisible = false;
         const origin = cadPosToBabylon(hole.xMm, hole.yMm, hole.zMm);
         if (parentMesh) {
             pivot.parent = parentMesh;
@@ -1372,16 +1560,17 @@ export class SmartPartStudioScene {
             kind: 'utwierdzenie',
         };
 
+        // Otwarta foremka walcowa bez ścian +-Z (cap: NO_CAP) — widać wzdłuż osi Z na wylot
         const cylinder = BABYLON.MeshBuilder.CreateCylinder(`cut_${hole.id}`, {
             diameter: dia,
             height: len,
-            tessellation: 32,
+            tessellation: 36,
+            cap: BABYLON.Mesh.NO_CAP,
+            sideOrientation: BABYLON.Mesh.DOUBLESIDE,
         }, this.scene);
         cylinder.parent = pivot;
-        // Bryła: środek odsunięty od początku wzdłuż osi
         cylinder.position = new BABYLON.Vector3(centerOff.x, centerOff.y, centerOff.z);
 
-        const { axis: holeAxis } = cutOrientFromRefs(hole);
         if (holeAxis === 'X') {
             cylinder.rotation.z = Math.PI / 2;
         } else if (holeAxis === 'Y') {
@@ -1393,36 +1582,26 @@ export class SmartPartStudioScene {
         const mat = new BABYLON.StandardMaterial(`mat_cut_${hole.id}`, this.scene);
         mat.diffuseColor = new BABYLON.Color3(0.22, 0.74, 0.97);
         mat.emissiveColor = isSelected ? new BABYLON.Color3(0.2, 0.6, 0.9) : new BABYLON.Color3(0.08, 0.35, 0.55);
-        mat.alpha = 0.9;
+        mat.alpha = 0.45;
+        mat.backFaceCulling = false;
         cylinder.material = mat;
         cylinder.metadata = { id: hole.id, type: 'HOLE' };
         cylinder.isPickable = true;
-        if (isSelected) {
-            this.attachCylinderEdgeFrame(cylinder, `hole_edges_${hole.id}`, dia, len, true);
-        }
+        this.attachCylinderEdgeFrame(cylinder, `hole_edges_${hole.id}`, dia, len, isSelected);
         pivot.setEnabled(hole.visible !== false);
 
         this.cutMeshes.set(hole.id, pivot);
     }
 
     private renderPocketCut(pocket: SmartPartPocketCut, parentMesh: any | null): void {
-        const w = Math.max(1, pocket.widthMm);
-        const h = Math.max(1, pocket.heightMm);
-        const d = Math.max(1, pocket.depthMm);
         const isSelected = this.selectedId === pocket.id;
         const { axis, direction } = cutOrientFromRefs(pocket);
-        const half =
-            axis === 'X' ? w / 2
-            : axis === 'Y' ? d / 2
-            : h / 2;
-        // Babylon: X=X, Y=CAD_Z, Z=CAD_Y — offset środka od LCS
-        const centerOff =
-            axis === 'X' ? { x: direction * half, y: 0, z: 0 }
-            : axis === 'Y' ? { x: 0, y: 0, z: direction * half }
-            : { x: 0, y: direction * half, z: 0 };
+        const depthMm = Math.max(1, Number(pocket.depthMm) || 1);
+        const alongZ = direction * depthMm;
 
         // xMm/yMm/zMm = początek (LCS / utwierdzenie)
-        const pivot = new BABYLON.TransformNode(`cut_pivot_${pocket.id}`, this.scene);
+        const pivot = new BABYLON.Mesh(`cut_pivot_${pocket.id}`, this.scene);
+        pivot.isVisible = false;
         const origin = cadPosToBabylon(pocket.xMm, pocket.yMm, pocket.zMm);
         if (parentMesh) {
             pivot.parent = parentMesh;
@@ -1433,24 +1612,67 @@ export class SmartPartStudioScene {
         pivot.rotation.set(0, 0, 0);
         pivot.metadata = { id: pocket.id, type: 'POCKET', kind: 'utwierdzenie' };
 
-        const box = BABYLON.MeshBuilder.CreateBox(`cut_${pocket.id}`, {
-            width: w,
-            height: h,
-            depth: d,
+        // Pętla profilu 2D (w lokalnej płaszczyźnie XY narzędzia)
+        const loop = resolveCutProfileLoop2D(pocket);
+
+        // Mapowanie punktów lokalnych narzędzia (px, py, pz) na układ współrzędnych Babylona pivota
+        const toBabylon = (px: number, py: number, pz: number) => {
+            if (axis === 'X') return new BABYLON.Vector3(pz, py, px);
+            if (axis === 'Y') return new BABYLON.Vector3(px, py, pz);
+            return new BABYLON.Vector3(px, pz, py);
+        };
+
+        const pathStart: any[] = loop.map(([px, py]) => toBabylon(px, py, 0));
+        pathStart.push(pathStart[0].clone());
+        const pathEnd: any[] = loop.map(([px, py]) => toBabylon(px, py, alongZ));
+        pathEnd.push(pathEnd[0].clone());
+
+        // Otwarta foremka wyciągnięcia ścian bocznych z pętli (bez ścian w kierunku +-Z)
+        const cutterMesh = BABYLON.MeshBuilder.CreateRibbon(`cut_${pocket.id}`, {
+            pathArray: [pathStart, pathEnd],
+            closeArray: false,
+            closePath: false,
+            sideOrientation: BABYLON.Mesh.DOUBLESIDE,
         }, this.scene);
-        box.parent = pivot;
-        box.position = new BABYLON.Vector3(centerOff.x, centerOff.y, centerOff.z);
+        cutterMesh.parent = pivot;
+        cutterMesh.position.set(0, 0, 0);
+        cutterMesh.rotation.set(0, 0, 0);
 
         const mat = new BABYLON.StandardMaterial(`mat_cut_${pocket.id}`, this.scene);
         mat.diffuseColor = new BABYLON.Color3(0.96, 0.62, 0.04);
-        mat.emissiveColor = isSelected ? new BABYLON.Color3(0.6, 0.4, 0.05) : new BABYLON.Color3(0.4, 0.22, 0.02);
-        mat.alpha = 0.9;
-        box.material = mat;
-        box.metadata = { id: pocket.id, type: 'POCKET' };
-        box.isPickable = true;
-        if (isSelected) {
-            this.attachBoxEdgeFrame(box, `pocket_edges_${pocket.id}`, w, h, d, true);
+        mat.emissiveColor = isSelected ? new BABYLON.Color3(0.55, 0.32, 0.04) : new BABYLON.Color3(0.25, 0.12, 0.01);
+        mat.alpha = 0.45;
+        mat.backFaceCulling = false;
+        cutterMesh.material = mat;
+        cutterMesh.metadata = { id: pocket.id, type: 'POCKET' };
+        cutterMesh.isPickable = true;
+
+        // Wyraziste krawędzie foremki: obrys wejścia (szkicu), obrys wyjścia i naroża wzdłuż osi Z
+        const entryRim = BABYLON.MeshBuilder.CreateLines(`cut_rim_entry_${pocket.id}`, {
+            points: pathStart,
+        }, this.scene);
+        entryRim.parent = pivot;
+        entryRim.color = isSelected ? new BABYLON.Color3(1.0, 0.95, 0.2) : new BABYLON.Color3(1.0, 0.75, 0.12);
+        entryRim.isPickable = false;
+
+        const exitRim = BABYLON.MeshBuilder.CreateLines(`cut_rim_exit_${pocket.id}`, {
+            points: pathEnd,
+        }, this.scene);
+        exitRim.parent = pivot;
+        exitRim.color = isSelected ? new BABYLON.Color3(1.0, 0.8, 0.15) : new BABYLON.Color3(0.96, 0.55, 0.04);
+        exitRim.isPickable = false;
+
+        const sideLines: any[] = [];
+        for (let i = 0; i < loop.length; i++) {
+            sideLines.push([pathStart[i], pathEnd[i]]);
         }
+        const cornerRims = BABYLON.MeshBuilder.CreateLineSystem(`cut_rim_sides_${pocket.id}`, {
+            lines: sideLines,
+        }, this.scene);
+        cornerRims.parent = pivot;
+        cornerRims.color = isSelected ? new BABYLON.Color3(1.0, 0.85, 0.2) : new BABYLON.Color3(0.96, 0.55, 0.04);
+        cornerRims.isPickable = false;
+
         pivot.setEnabled(pocket.visible !== false);
 
         this.cutMeshes.set(pocket.id, pivot);
@@ -1470,6 +1692,7 @@ export class SmartPartStudioScene {
                 }
                 if (this.rotationGizmo) {
                     this.rotationGizmo.attachedNode = null;
+                    this.rotationGizmo.attachedMesh = null;
                 }
                 const lcsWas = this.lcsVisible;
                 if (lcsWas) this.setLcsVisible(false);
@@ -1595,21 +1818,41 @@ export class SmartPartStudioScene {
         }
     }
 
+        public updateOrthographicBounds(): void {
+        if (!this.camera || typeof BABYLON === 'undefined') return;
+        if (this.camera.mode !== BABYLON.Camera.ORTHOGRAPHIC_CAMERA) return;
+        const aspect = (this.canvas?.width || 800) / (this.canvas?.height || 600);
+        const orthoSize = (this.camera.radius || 160) * 0.45;
+        if (this._lastOrthoRadius === this.camera.radius && Math.abs(this._lastOrthoAspect - aspect) < 0.0001) {
+            return;
+        }
+        this._lastOrthoRadius = this.camera.radius;
+        this._lastOrthoAspect = aspect;
+        this.camera.orthoLeft = -orthoSize * aspect;
+        this.camera.orthoRight = orthoSize * aspect;
+        this.camera.orthoTop = orthoSize;
+        this.camera.orthoBottom = -orthoSize;
+    }
+
     public toggleProjection(): boolean {
         if (!this.camera || typeof BABYLON === 'undefined') return false;
 
         const isCurrentlyPersp = this.camera.mode === BABYLON.Camera.PERSPECTIVE_CAMERA;
         if (isCurrentlyPersp) {
             this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-            const aspect = (this.canvas.width || 800) / (this.canvas.height || 600);
-            const orthoSize = (this.camera.radius || 160) * 0.45;
-            this.camera.orthoLeft = -orthoSize * aspect;
-            this.camera.orthoRight = orthoSize * aspect;
-            this.camera.orthoTop = orthoSize;
-            this.camera.orthoBottom = -orthoSize;
+            this.updateOrthographicBounds();
+            if (!this._orthoZoomObserver && this.camera.onViewMatrixChangedObservable) {
+                this._orthoZoomObserver = this.camera.onViewMatrixChangedObservable.add(() => {
+                    this.updateOrthographicBounds();
+                });
+            }
             return true;
         } else {
             this.camera.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
+            if (this._orthoZoomObserver && this.camera.onViewMatrixChangedObservable) {
+                this.camera.onViewMatrixChangedObservable.remove(this._orthoZoomObserver);
+                this._orthoZoomObserver = null;
+            }
             return false;
         }
     }
@@ -1696,6 +1939,176 @@ export class SmartPartStudioScene {
         }
     }
 
+    public setOnDimensionLinesProjected(cb?: (dims: DimensionLineProjected[]) => void): void {
+        this.onDimensionLinesProjected = cb;
+    }
+
+    public setOnCutContextMenu(cb?: (cutId: string, screenX: number, screenY: number) => void): void {
+        this.onCutContextMenuCallback = cb;
+    }
+
+    private disposeDimLines(): void {
+        if (this.dimLinesMesh) {
+            try { this.dimLinesMesh.dispose(); } catch { /* */ }
+            this.dimLinesMesh = null;
+        }
+    }
+
+    public updateDimensionLines(): void {
+        this.disposeDimLines();
+        if (!this.scene || !this.currentDef || !this.selectedId) {
+            if (this.onDimensionLinesProjected) this.onDimensionLinesProjected([]);
+            return;
+        }
+
+        const selectedCut = this.currentDef.cuts.find((c) => c.id === this.selectedId);
+        if (!selectedCut) {
+            if (this.onDimensionLinesProjected) this.onDimensionLinesProjected([]);
+            return;
+        }
+
+        const part = findPartForCut(this.currentDef, selectedCut);
+        const dims = part ? partDimsAsMain(part) : this.currentDef.mainContainer;
+        const halfW = dims.widthMm / 2;
+        const halfD = dims.depthMm / 2;
+        const halfH = dims.heightMm / 2;
+
+        const cutPivot = this.cutMeshes.get(selectedCut.id);
+        if (!cutPivot) {
+            if (this.onDimensionLinesProjected) this.onDimensionLinesProjected([]);
+            return;
+        }
+
+        const cutWorldPos = cutPivot.getAbsolutePosition ? cutPivot.getAbsolutePosition() : cutPivot.position;
+        const partMesh = part ? this.partMeshes.get(part.id) : null;
+        const partWorldPos = partMesh ? (partMesh.getAbsolutePosition ? partMesh.getAbsolutePosition() : partMesh.position) : (this.mainContainerMesh?.position || new BABYLON.Vector3(0, 0, 0));
+
+        const refX = selectedCut.refX || 'CENTER';
+        const refY = selectedCut.refY || 'CENTER';
+        const refZ = selectedCut.refZ || 'CENTER';
+
+        const lines: any[][] = [];
+        const colors: any[][] = [];
+        const projectedList: DimensionLineProjected[] = [];
+
+        const colX = new BABYLON.Color4(0.92, 0.22, 0.22, 0.85);
+        const colY = new BABYLON.Color4(0.15, 0.75, 0.25, 0.85);
+        const colZ = new BABYLON.Color4(0.20, 0.50, 0.95, 0.85);
+
+        // OŚ X (Czerwona) - od wybranej ściany referencyjnej do środka otworu
+        let wallX = partWorldPos.x;
+        if (refX === 'LEFT') wallX = partWorldPos.x - halfW;
+        else if (refX === 'RIGHT') wallX = partWorldPos.x + halfW;
+
+        if (refX !== 'CENTER' || Math.abs(cutWorldPos.x - partWorldPos.x) > 0.5) {
+            const pStart = new BABYLON.Vector3(wallX, cutWorldPos.y, cutWorldPos.z);
+            const pEnd = new BABYLON.Vector3(cutWorldPos.x, cutWorldPos.y, cutWorldPos.z);
+            lines.push([pStart, pEnd]);
+            colors.push([colX, colX]);
+
+            const pMid = new BABYLON.Vector3((pStart.x + pEnd.x) / 2, pStart.y, pStart.z);
+            const screen = this.projectWorldToScreen(pMid);
+            if (screen) {
+                projectedList.push({
+                    axis: 'X',
+                    screenX: screen.x,
+                    screenY: screen.y,
+                    valueMm: selectedCut.offsetX_mm ?? selectedCut.xMm,
+                    refWall: refX,
+                    cutId: selectedCut.id,
+                });
+            }
+        }
+
+        // OŚ Y (CAD głębokość -> Babylon Z, Zielona)
+        let wallZ = partWorldPos.z;
+        if (refY === 'FRONT') wallZ = partWorldPos.z - halfD;
+        else if (refY === 'BACK') wallZ = partWorldPos.z + halfD;
+
+        if (refY !== 'CENTER' || Math.abs(cutWorldPos.z - partWorldPos.z) > 0.5) {
+            const pStart = new BABYLON.Vector3(cutWorldPos.x, cutWorldPos.y, wallZ);
+            const pEnd = new BABYLON.Vector3(cutWorldPos.x, cutWorldPos.y, cutWorldPos.z);
+            lines.push([pStart, pEnd]);
+            colors.push([colY, colY]);
+
+            const pMid = new BABYLON.Vector3(pStart.x, pStart.y, (pStart.z + pEnd.z) / 2);
+            const screen = this.projectWorldToScreen(pMid);
+            if (screen) {
+                projectedList.push({
+                    axis: 'Y',
+                    screenX: screen.x,
+                    screenY: screen.y,
+                    valueMm: selectedCut.offsetY_mm ?? selectedCut.yMm,
+                    refWall: refY,
+                    cutId: selectedCut.id,
+                });
+            }
+        }
+
+        // OŚ Z (CAD wysokość -> Babylon Y, Niebieska)
+        let wallY = partWorldPos.y;
+        if (refZ === 'BOTTOM') wallY = partWorldPos.y - halfH;
+        else if (refZ === 'TOP') wallY = partWorldPos.y + halfH;
+
+        if (refZ !== 'CENTER' || Math.abs(cutWorldPos.y - partWorldPos.y) > 0.5) {
+            const pStart = new BABYLON.Vector3(cutWorldPos.x, wallY, cutWorldPos.z);
+            const pEnd = new BABYLON.Vector3(cutWorldPos.x, cutWorldPos.y, cutWorldPos.z);
+            lines.push([pStart, pEnd]);
+            colors.push([colZ, colZ]);
+
+            const pMid = new BABYLON.Vector3(pStart.x, (pStart.y + pEnd.y) / 2, pStart.z);
+            const screen = this.projectWorldToScreen(pMid);
+            if (screen) {
+                projectedList.push({
+                    axis: 'Z',
+                    screenX: screen.x,
+                    screenY: screen.y,
+                    valueMm: selectedCut.offsetZ_mm ?? selectedCut.zMm,
+                    refWall: refZ,
+                    cutId: selectedCut.id,
+                });
+            }
+        }
+
+        if (lines.length > 0) {
+            const lineSys = BABYLON.MeshBuilder.CreateLineSystem('dim_lines', {
+                lines,
+                colors,
+                useVertexAlpha: true,
+            }, this.scene);
+            lineSys.isPickable = false;
+            lineSys.renderingGroupId = 2;
+            this.dimLinesMesh = lineSys;
+        }
+
+        if (this.onDimensionLinesProjected) {
+            this.onDimensionLinesProjected(projectedList);
+        }
+    }
+
+    private projectWorldToScreen(worldPos: any): { x: number; y: number } | null {
+        if (!this.scene || !this.camera || !this.canvas) return null;
+        try {
+            const screenPos = BABYLON.Vector3.Project(
+                worldPos,
+                BABYLON.Matrix.Identity(),
+                this.scene.getTransformMatrix(),
+                this.camera.viewport.toGlobal(
+                    this.engine.getRenderWidth(),
+                    this.engine.getRenderHeight()
+                )
+            );
+            if (screenPos.z < 0 || screenPos.z > 1) return null;
+            const rect = this.canvas.getBoundingClientRect();
+            // Przeliczenie na współrzędne wewnątrz canvasu
+            const x = (screenPos.x / this.engine.getRenderWidth()) * rect.width;
+            const y = (screenPos.y / this.engine.getRenderHeight()) * rect.height;
+            return { x, y };
+        } catch {
+            return null;
+        }
+    }
+
     public dispose(): void {
         window.removeEventListener('resize', this.onResize);
         this.canvas.removeEventListener('contextmenu', this._onCanvasContextMenu);
@@ -1726,6 +2139,7 @@ export class SmartPartStudioScene {
             this.backlight = null;
         }
         this.disposeRefFaceMeshes();
+        this.disposeDimLines();
         if (this.cadTranslateGizmo) {
             this.cadTranslateGizmo.dispose();
             this.cadTranslateGizmo = null;

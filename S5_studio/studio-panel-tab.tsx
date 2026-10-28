@@ -440,15 +440,14 @@ export function StudioPanelTab({
                                 {p.type === 'number' ? (
                                     <label className="sp-form-row-value" title="Wartość parametru [mm]">
                                         <input
-                                            type="number"
+                                            type="text"
                                             className="cad-prop-input sp-form-row-value-input"
-                                            min={p.min_mm}
-                                            max={p.max_mm}
-                                            step={1}
-                                            value={Number(previewValues[p.key] ?? p.default_mm)}
+                                            value={previewValues[p.key] !== undefined ? String(previewValues[p.key]) : String(p.default_mm)}
                                             onClick={(e) => e.stopPropagation()}
                                             onChange={(e) => {
-                                                const raw = parseFloat(e.target.value);
+                                                const val = e.target.value;
+                                                if (val === '' || val === '-' || val === '-.' || val === '.') return;
+                                                const raw = parseFloat(val);
                                                 let v = Number.isFinite(raw) ? raw : p.default_mm;
                                                 if (p.min_mm !== undefined) v = Math.max(p.min_mm, v);
                                                 if (p.max_mm !== undefined) v = Math.min(p.max_mm, v);
@@ -564,28 +563,43 @@ export function StudioPanelTab({
                         <div className="cad-prop-row">
                             <label className="cad-prop-label">Domyślna [mm]</label>
                             <input
-                                type="number"
+                                type="text"
                                 className="cad-prop-input"
                                 value={selected.default_mm}
-                                onChange={(e) => patchSelected({ default_mm: Number(e.target.value) || 0 })}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || val === '-' || val === '-.' || val === '.') return;
+                                    const num = parseFloat(val);
+                                    if (!isNaN(num)) patchSelected({ default_mm: num });
+                                }}
                             />
                         </div>
                         <div className="cad-prop-row">
                             <label className="cad-prop-label">Min</label>
                             <input
-                                type="number"
+                                type="text"
                                 className="cad-prop-input"
                                 value={selected.min_mm ?? 0}
-                                onChange={(e) => patchSelected({ min_mm: Number(e.target.value) || 0 })}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || val === '-' || val === '-.' || val === '.') return;
+                                    const num = parseFloat(val);
+                                    if (!isNaN(num)) patchSelected({ min_mm: num });
+                                }}
                             />
                         </div>
                         <div className="cad-prop-row">
                             <label className="cad-prop-label">Max</label>
                             <input
-                                type="number"
+                                type="text"
                                 className="cad-prop-input"
                                 value={selected.max_mm ?? 300}
-                                onChange={(e) => patchSelected({ max_mm: Number(e.target.value) || 0 })}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || val === '-' || val === '-.' || val === '.') return;
+                                    const num = parseFloat(val);
+                                    if (!isNaN(num)) patchSelected({ max_mm: num });
+                                }}
                             />
                         </div>
                     </div>

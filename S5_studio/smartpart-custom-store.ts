@@ -317,10 +317,12 @@ export function exportSmartPartPackageJson(def: SmartPartPackageDefinition): voi
         // 1:1 z drzewem Studio — bez orphan cuts (zły/brak partId)
         const exportDef: SmartPartPackageDefinition = normalizeSmartPartToCadCoords({
             ...def,
+            cutsFrame: 'PART',
             cuts: cutsOwnedByLiveParts(def),
             id: def.name && (!def.id || !def.id.includes(safeName)) ? allocSmartPartPackageId(safeName) : (def.id || safeName),
             name: def.name || safeName,
         });
+        exportDef.cutsFrame = 'PART';
         const jsonStr = JSON.stringify(exportDef, null, 2);
         const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -396,6 +398,10 @@ export function importSmartPartPackageJson(jsonStr: string): SmartPartPackageDef
         units: 'mm',
         version: '1.0',
         type: parsed.type || 'CUSTOM',
+        coordSystem: parsed.coordSystem,
+        cutsFrame: parsed.cutsFrame || undefined,
+        parameters: Array.isArray(parsed.parameters) ? parsed.parameters : undefined,
+        bindings: Array.isArray(parsed.bindings) ? parsed.bindings : undefined,
         mainContainer: {
             widthMm: Number(parsed.mainContainer.widthMm) || 20,
             heightMm: Number(parsed.mainContainer.heightMm) || 40,
@@ -421,6 +427,8 @@ export function importSmartPartPackageJson(jsonStr: string): SmartPartPackageDef
                 offsetZ_mm: p.offsetZ_mm != null ? Number(p.offsetZ_mm) : undefined,
                 colorHex: p.colorHex || '#38bdf8',
                 glbPath: p.glbPath,
+                mirroredFrom: p.mirroredFrom,
+                mirrorAxis: p.mirrorAxis,
             }))
             : [
                 {

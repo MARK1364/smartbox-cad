@@ -7,7 +7,7 @@
 
 import { rulesMToMm } from '../../A1_core/cad-math/units.js';
 import { readBackEdgeOffset } from '../back-overlap.js';
-import { CabinetType, CabinetGeometryPart } from '../smartframe-types.js';
+import { CabinetType, CabinetGeometryPart, BACK_OVERLAP_EPS_MM } from '../smartframe-types.js';
 import {
     resolveCabinetPartThickness,
     requireCabinetPartThickness,
@@ -132,6 +132,8 @@ export function resolveCabinetPartGeometry(
 
     const leftThick  = requireCabinetPartThickness("LEFT_SIDE_PANEL", pfx, ctx.thicknessLookup, ["BOK_L", "SIDE_LEFT"]);
     const rightThick = requireCabinetPartThickness("RIGHT_SIDE_PANEL", pfx, ctx.thicknessLookup, ["BOK_P", "SIDE_RIGHT"]);
+    const grubosc_plecow_mm = requireCabinetPartThickness("BACK_PANEL", pfx, ctx.thicknessLookup, ["PLECY", "BACK"]);
+    const margines_gorny_plecow_mm = readBackEdgeOffset(ctx.offsets, "PLECY", "+Y", backEdgeDefault, ctx.zonePrefix);
     const innerWidth = W - leftThick - rightThick;
     const midShift   = (leftThick - rightThick) / 2;
 
@@ -163,6 +165,34 @@ export function resolveCabinetPartGeometry(
         });
     }
 
+
+
+
+
+    const readBackShift = (): number => {
+        const candidates = [
+            `${ctx.zonePrefix || ''}Plecy_shiftY`,
+            `${ctx.zonePrefix || ''}BACK_PANEL_shiftY`,
+            'Dol_Plecy_shiftY',
+            'B_Plecy_shiftY',
+            'Plecy_shiftY',
+            'BACK_PANEL_shiftY'
+        ];
+        for (const k of candidates) {
+            const v = ctx.offsets?.[k];
+            if (v !== undefined && v !== null && Number.isFinite(Number(v))) return Number(v);
+        }
+        return 0;
+    };
+    const backShiftY = readBackShift();
+    const shortenedD = D - backOffset + backShiftY;
+    const shortenedLocY = (-backOffset + backShiftY) / 2;
+
+    const overlapLeft   = readBackEdgeOffset(ctx.offsets, 'Plecy', '-X', backEdgeDefault, pfx);
+    const overlapRight  = readBackEdgeOffset(ctx.offsets, 'Plecy', '+X', backEdgeDefault, pfx);
+    const overlapBottom = readBackEdgeOffset(ctx.offsets, 'Plecy', '-Y', backEdgeDefault, pfx);
+    const overlapTop    = readBackEdgeOffset(ctx.offsets, 'Plecy', '+Y', backEdgeDefault, pfx);
+
     // Korpus skośny pod dach — boki L=P (symetria), skos do tyłu, wieniec pochylony w głąb
     if (ctx.typ_korpusu === 'korpus_skosny_dach') {
         const hF = Math.max(100, ctx.wysokosc_przod_mm ?? 1000);
@@ -172,7 +202,8 @@ export function resolveCabinetPartGeometry(
             hF, hB, maxH: Math.max(hF, hB),
             thickness, backOffset, shiftX, shiftY, shiftZ,
             pXPlus, pXMinus, pYPlus, pYMinus,
-            leftThick, rightThick, innerWidth, midShift
+            leftThick, rightThick, innerWidth, midShift, grubosc_plecow_mm, margines_gorny_plecow_mm,
+            overlapLeft, overlapRight, overlapBottom, overlapTop, backShiftY
         });
     }
 
@@ -185,7 +216,8 @@ export function resolveCabinetPartGeometry(
             hF, hB, maxH: Math.max(hF, hB),
             thickness, backOffset, shiftX, shiftY, shiftZ,
             pXPlus, pXMinus, pYPlus, pYMinus,
-            leftThick, rightThick, innerWidth, midShift
+            leftThick, rightThick, innerWidth, midShift, grubosc_plecow_mm, margines_gorny_plecow_mm,
+            overlapLeft, overlapRight, overlapBottom, overlapTop, backShiftY
         });
     }
 
@@ -215,7 +247,12 @@ export function resolveCabinetPartGeometry(
             grubosc_lewy_mm: leftThick,
             grubosc_prawy_mm: rightThick,
             szerokosc_wewnetrzna_mm: innerWidth,
-            przesuniecie_srodka_mm: midShift
+            przesuniecie_srodka_mm: midShift,
+            overlapLeft,
+            overlapRight,
+            overlapBottom,
+            overlapTop,
+            backShiftY,
         });
     }
 
@@ -245,32 +282,20 @@ export function resolveCabinetPartGeometry(
             grubosc_lewy_mm: leftThick,
             grubosc_prawy_mm: rightThick,
             szerokosc_wewnetrzna_mm: innerWidth,
-            przesuniecie_srodka_mm: midShift
+            przesuniecie_srodka_mm: midShift,
+            overlapLeft,
+            overlapRight,
+            overlapBottom,
+            overlapTop,
+            backShiftY
         });
     }
 
-    const readBackShift = (): number => {
-        const candidates = [
-            `${ctx.zonePrefix || ''}Plecy_shiftY`,
-            `${ctx.zonePrefix || ''}BACK_PANEL_shiftY`,
-            'Dol_Plecy_shiftY',
-            'B_Plecy_shiftY',
-            'Plecy_shiftY',
-            'BACK_PANEL_shiftY'
-        ];
-        for (const k of candidates) {
-            const v = ctx.offsets?.[k];
-            if (v !== undefined && v !== null && Number.isFinite(Number(v))) return Number(v);
-        }
-        return 0;
-    };
-    const backShiftY = readBackShift();
-    const shortenedD = D - backOffset + backShiftY;
-    const shortenedLocY = (-backOffset + backShiftY) / 2;
+
 
     if (matchedKey === "BOK_L" || matchedKey === "SIDE_LEFT" || role === "LEFT_SIDE_PANEL") {
-        const overlapLeft = readBackEdgeOffset(ctx.offsets, 'Plecy', '-X', backEdgeDefault, pfx);
-        const isShortened = overlapLeft >= thickness - 0.05 && shortenedD > 0;
+        // overlapLeft
+        const isShortened = overlapLeft >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
         const targetD = isShortened ? shortenedD : D;
         const targetLocY = isShortened ? shortenedLocY : 0;
         return {
@@ -280,8 +305,8 @@ export function resolveCabinetPartGeometry(
         };
     }
     if (matchedKey === "BOK_P" || matchedKey === "SIDE_RIGHT" || role === "RIGHT_SIDE_PANEL") {
-        const overlapRight = readBackEdgeOffset(ctx.offsets, 'Plecy', '+X', backEdgeDefault, pfx);
-        const isShortened = overlapRight >= thickness - 0.05 && shortenedD > 0;
+        // overlapRight
+        const isShortened = overlapRight >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
         const targetD = isShortened ? shortenedD : D;
         const targetLocY = isShortened ? shortenedLocY : 0;
         return {
@@ -292,7 +317,7 @@ export function resolveCabinetPartGeometry(
     }
     if (matchedKey === "WIENIEC_D" || matchedKey === "BOTTOM" || role === "BOTTOM_PANEL") {
         const overlapBottom = readBackEdgeOffset(ctx.offsets, 'Plecy', '-Y', backEdgeDefault, pfx);
-        const isShortened = overlapBottom >= thickness - 0.05 && shortenedD > 0;
+        const isShortened = overlapBottom >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
         const targetD = isShortened ? shortenedD : D;
         const targetLocY = isShortened ? shortenedLocY : 0;
         return {
@@ -347,8 +372,8 @@ export function resolveCabinetPartGeometry(
             };
         } else {
             if (isWieniecGT2) return null;
-            const overlapTop = readBackEdgeOffset(ctx.offsets, 'Plecy', '+Y', backEdgeDefault, pfx);
-            const isShortened = overlapTop >= thickness - 0.05 && shortenedD > 0;
+            // overlapTop
+            const isShortened = overlapTop >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
             const targetD = isShortened ? shortenedD : D;
             const targetLocY = isShortened ? shortenedLocY : 0;
             return {

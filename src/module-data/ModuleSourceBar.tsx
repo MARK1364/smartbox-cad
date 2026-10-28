@@ -28,6 +28,7 @@ const TITLE_KEYS: Record<ModuleId, string> = {
     draw: 'modbar.title_draw',
     dag: 'modbar.title_dag',
     smartparts: 'modbar.title_smartparts',
+    instrukcja: 'modbar.title_instrukcja',
 };
 
 export function ModuleSourceBar({

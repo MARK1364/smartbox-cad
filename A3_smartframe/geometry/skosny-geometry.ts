@@ -8,7 +8,7 @@
  *  - resolveSkosnyLrUcGeometry: skos LR z uciosem (cutAngle i kotwice Z_PLUS / Z_MINUS na styku z wieńcem)
  */
 
-import { CabinetGeometryPart } from '../smartframe-types.js';
+import { CabinetGeometryPart, BACK_OVERLAP_EPS_MM } from '../smartframe-types.js';
 
 export interface SkosnyFbGeometryContext {
     W: number;
@@ -29,6 +29,13 @@ export interface SkosnyFbGeometryContext {
     rightThick: number;
     innerWidth: number;
     midShift: number;
+    grubosc_plecow_mm?: number;
+    margines_gorny_plecow_mm?: number;
+    overlapLeft?: number;
+    overlapRight?: number;
+    overlapBottom?: number;
+    overlapTop?: number;
+    backShiftY?: number;
 }
 
 export interface SkosnyLrGeometryContext {
@@ -54,6 +61,11 @@ export interface SkosnyLrGeometryContext {
     grubosc_prawy_mm?: number;
     szerokosc_wewnetrzna_mm?: number;
     przesuniecie_srodka_mm?: number;
+    overlapLeft?: number;
+    overlapRight?: number;
+    overlapBottom?: number;
+    overlapTop?: number;
+    backShiftY?: number;
 }
 
 /**
@@ -66,54 +78,75 @@ export function resolveSkosnyGeometry(
     o: SkosnyFbGeometryContext
 ): Partial<CabinetGeometryPart> | null {
     const { W, D, hF, hB, maxH, thickness, backOffset } = o;
-    // Prawy bok: u=0 na froncie (niski), u=D na tyle (wysoki).
+    const backShiftY = o.backShiftY ?? 0;
+    const shortenedD = D - backOffset + backShiftY;
+    const shortenedLocY = (-backOffset + backShiftY) / 2;
+
+    const isShortenedL = (o.overlapLeft ?? 0) >= o.leftThick - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+    const targetD_L = isShortenedL ? shortenedD : D;
+    const targetLocY_L = isShortenedL ? shortenedLocY : 0;
+    const hCut_L = hB + targetD_L * (hF - hB) / D;
+
+    const isShortenedP = (o.overlapRight ?? 0) >= o.rightThick - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+    const targetD_P = isShortenedP ? shortenedD : D;
+    const targetLocY_P = isShortenedP ? shortenedLocY : 0;
+    const hCut_P = hF + targetD_P * (hB - hF) / D;
+
+    // Prawy bok: u=0 na froncie (niski), u=targetD na tyle (wysoki).
     const outlineR: [number, number][] = [
         [0, 0],
-        [D, 0],
-        [D, hB],
+        [targetD_P, 0],
+        [targetD_P, hCut_P],
         [0, hF]
     ];
-    // Lewy bok: u=0 na tyle (wysoki), u=D na froncie (niski) — lustro.
+    // Lewy bok: u=0 na tyle (wysoki), u=targetD na froncie (niski) — lustro.
     const outlineL: [number, number][] = [
         [0, 0],
-        [D, 0],
-        [D, hF],
+        [targetD_L, 0],
+        [targetD_L, hCut_L],
         [0, hB]
     ];
 
     if (matchedKey === 'BOK_L' || matchedKey === 'SIDE_LEFT' || role === 'LEFT_SIDE_PANEL') {
         return {
             thickness,
-            dim: { x: maxH, y: D, z: thickness },
-            loc: { x: -W / 2 + thickness / 2, y: 0, z: maxH / 2 },
+            dim: { x: maxH, y: targetD_L, z: thickness },
+            loc: { x: -W / 2 + thickness / 2 + o.shiftX, y: targetLocY_L + o.shiftY, z: maxH / 2 + o.shiftZ },
             customProperties: { outline2d: outlineL, shape: 'skos_side' }
         };
     }
     if (matchedKey === 'BOK_P' || matchedKey === 'SIDE_RIGHT' || role === 'RIGHT_SIDE_PANEL') {
         return {
             thickness,
-            dim: { x: maxH, y: D, z: thickness },
-            loc: { x: W / 2 - thickness / 2, y: 0, z: maxH / 2 },
+            dim: { x: maxH, y: targetD_P, z: thickness },
+            loc: { x: W / 2 - thickness / 2 + o.shiftX, y: targetLocY_P + o.shiftY, z: maxH / 2 + o.shiftZ },
             customProperties: { outline2d: outlineR, shape: 'skos_side' }
         };
     }
     if (matchedKey === 'WIENIEC_D' || matchedKey === 'BOTTOM' || role === 'BOTTOM_PANEL') {
+        const isShortenedD = (o.overlapBottom ?? 0) >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD_D = isShortenedD ? shortenedD : D;
+        const targetLocY_D = isShortenedD ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: o.innerWidth, y: D, z: thickness },
-            loc: { x: o.midShift, y: 0, z: thickness / 2 }
+            dim: { x: o.innerWidth, y: targetD_D, z: thickness },
+            loc: { x: o.midShift, y: targetLocY_D, z: thickness / 2 }
         };
     }
     if (matchedKey === 'WIENIEC_G' || matchedKey === 'TOP' || role === 'TOP_PANEL') {
+        const isShortenedG = (o.overlapTop ?? 0) >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD_G = isShortenedG ? shortenedD : D;
+        const targetLocY_G = isShortenedG ? shortenedLocY : 0;
         const betaDeg = Math.atan2(hB - hF, D) * 180 / Math.PI;
         const beta = betaDeg * Math.PI / 180;
-        const slopeLen_mm = Math.hypot(D, hB - hF);
+        const hCut_G = hF + targetD_G * (hB - hF) / D;
+        const slopeLen_mm = Math.hypot(targetD_G, hCut_G - hF);
         const cut_angle_deg = Math.abs(Math.atan2(hF - hB, D) * 180 / Math.PI);
         const topEndCut = Math.abs(cut_angle_deg) < 0.05 ? 0 : cut_angle_deg;
 
         const topEndBandFront = topEndCut
-            ? { active: false, type_id: 'none', cutAngle: topEndCut, cutAnchor: 'Z_MINUS' as const }
-            : { active: false, type_id: 'none' };
+            ? { active: true, type_id: '0.008x0.022', cutAngle: topEndCut, cutAnchor: 'Z_MINUS' as const }
+            : { active: true, type_id: '0.008x0.022' };
         const topEndBandBack = topEndCut
             ? { active: false, type_id: 'none', cutAngle: -topEndCut, cutAnchor: 'Z_MINUS' as const }
             : { active: false, type_id: 'none' };
@@ -123,8 +156,8 @@ export function resolveSkosnyGeometry(
             dim: { x: o.innerWidth, y: slopeLen_mm, z: thickness },
             loc: {
                 x: o.midShift,
-                y: Math.sin(beta) * thickness / 2,
-                z: (hF + hB) / 2 - Math.cos(beta) * thickness / 2
+                y: targetLocY_G + Math.sin(beta) * thickness / 2,
+                z: (hF + hCut_G) / 2 - Math.cos(beta) * thickness / 2
             },
             lcs: {
                 mapping: { X: 'x', Y: 'y', Z: 'z' },
@@ -135,18 +168,41 @@ export function resolveSkosnyGeometry(
                 '-X': { active: false, type_id: 'none' },
                 '-Y': topEndBandFront,
                 '+Y': topEndBandBack
-            }
+            },
+            customProperties: (() => {
+                if (isShortenedG) return {};
+                const effOverlap = (o.margines_gorny_plecow_mm ?? o.pYPlus ?? 11) + (o.shiftZ ?? 0);
+                if (effOverlap <= BACK_OVERLAP_EPS_MM) return {};
+                return {
+                    backGrooveTrapezoid: {
+                        hF,
+                        hB,
+                        D,
+                        thickness,
+                        backOffset,
+                        shiftY: o.shiftY ?? 0,
+                        grubosc_plecow_mm: o.grubosc_plecow_mm ?? 3,
+                        margines_gorny_plecow_mm: effOverlap
+                    }
+                };
+            })()
         };
     }
     if (matchedKey === 'PLECY' || matchedKey === 'BACK' || role === 'BACK_PANEL') {
         const bottomThick = o.leftThick;
         const topThick = o.leftThick;
         const roofAngle = Math.atan2(hB - hF, D);
+        const cosRoof = Math.abs(Math.cos(roofAngle)) > 1e-6 ? Math.cos(roofAngle) : 1;
+        const tanRoof = Math.tan(roofAngle);
+        const yPlecyFront = D - backOffset + (o.shiftY ?? 0);
+        const zCeilAtPlecy = hF - topThick / cosRoof + yPlecyFront * tanRoof;
         const bottom = o.pYMinus;
         const top = o.pYPlus;
         const left = o.pXMinus;
         const right = o.pXPlus;
-        const backH = hB - topThick * Math.cos(roofAngle) - bottomThick + bottom + top;
+        const zTop = zCeilAtPlecy + top;
+        const zBottom = bottomThick - bottom;
+        const backH = Math.max(10, zTop - zBottom);
         const backW = o.innerWidth + left + right;
         return {
             thickness,
@@ -154,7 +210,7 @@ export function resolveSkosnyGeometry(
             loc: {
                 x: o.midShift + (right - left) / 2 + o.shiftX,
                 y: D / 2 + thickness / 2 - backOffset + o.shiftY,
-                z: (bottomThick - bottom + hB - topThick * Math.cos(roofAngle) + top) / 2 + o.shiftZ
+                z: (zBottom + zTop) / 2 + o.shiftZ
             }
         };
     }
@@ -172,52 +228,73 @@ export function resolveSkosnyDachGeometry(
     o: SkosnyFbGeometryContext
 ): Partial<CabinetGeometryPart> | null {
     const { W, D, hF, hB, maxH, thickness, backOffset } = o;
+    const backShiftY = o.backShiftY ?? 0;
+    const shortenedD = D - backOffset + backShiftY;
+    const shortenedLocY = (-backOffset + backShiftY) / 2;
+
+    const isShortenedL = (o.overlapLeft ?? 0) >= o.leftThick - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+    const targetD_L = isShortenedL ? shortenedD : D;
+    const targetLocY_L = isShortenedL ? shortenedLocY : 0;
+    const hCut_L = hB + targetD_L * (hF - hB) / D;
+
+    const isShortenedP = (o.overlapRight ?? 0) >= o.rightThick - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+    const targetD_P = isShortenedP ? shortenedD : D;
+    const targetLocY_P = isShortenedP ? shortenedLocY : 0;
+    const hCut_P = hF + targetD_P * (hB - hF) / D;
+
     const outlineR: [number, number][] = [
         [0, 0],
-        [D, 0],
-        [D, hB],
+        [targetD_P, 0],
+        [targetD_P, hCut_P],
         [0, hF]
     ];
     const outlineL: [number, number][] = [
         [0, 0],
-        [D, 0],
-        [D, hF],
+        [targetD_L, 0],
+        [targetD_L, hCut_L],
         [0, hB]
     ];
 
     if (matchedKey === 'BOK_L' || matchedKey === 'SIDE_LEFT' || role === 'LEFT_SIDE_PANEL') {
         return {
             thickness,
-            dim: { x: maxH, y: D, z: thickness },
-            loc: { x: -W / 2 + thickness / 2, y: 0, z: maxH / 2 },
+            dim: { x: maxH, y: targetD_L, z: thickness },
+            loc: { x: -W / 2 + thickness / 2 + o.shiftX, y: targetLocY_L + o.shiftY, z: maxH / 2 + o.shiftZ },
             customProperties: { outline2d: outlineL, shape: 'skos_dach_side' }
         };
     }
     if (matchedKey === 'BOK_P' || matchedKey === 'SIDE_RIGHT' || role === 'RIGHT_SIDE_PANEL') {
         return {
             thickness,
-            dim: { x: maxH, y: D, z: thickness },
-            loc: { x: W / 2 - thickness / 2, y: 0, z: maxH / 2 },
+            dim: { x: maxH, y: targetD_P, z: thickness },
+            loc: { x: W / 2 - thickness / 2 + o.shiftX, y: targetLocY_P + o.shiftY, z: maxH / 2 + o.shiftZ },
             customProperties: { outline2d: outlineR, shape: 'skos_dach_side' }
         };
     }
     if (matchedKey === 'WIENIEC_D' || matchedKey === 'BOTTOM' || role === 'BOTTOM_PANEL') {
+        const isShortenedD = (o.overlapBottom ?? 0) >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD_D = isShortenedD ? shortenedD : D;
+        const targetLocY_D = isShortenedD ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: o.innerWidth, y: D, z: thickness },
-            loc: { x: o.midShift, y: 0, z: thickness / 2 }
+            dim: { x: o.innerWidth, y: targetD_D, z: thickness },
+            loc: { x: o.midShift, y: targetLocY_D, z: thickness / 2 }
         };
     }
     if (matchedKey === 'WIENIEC_G' || matchedKey === 'TOP' || role === 'TOP_PANEL') {
+        const isShortenedG = (o.overlapTop ?? 0) >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD_G = isShortenedG ? shortenedD : D;
+        const targetLocY_G = isShortenedG ? shortenedLocY : 0;
         const betaDeg = Math.atan2(hB - hF, D) * 180 / Math.PI;
         const beta = betaDeg * Math.PI / 180;
-        const slopeLen_mm = Math.hypot(D, hB - hF);
+        const hCut_G = hF + targetD_G * (hB - hF) / D;
+        const slopeLen_mm = Math.hypot(targetD_G, hCut_G - hF);
         const cut_angle_deg = Math.abs(Math.atan2(hF - hB, D) * 180 / Math.PI);
         const topEndCut = Math.abs(cut_angle_deg) < 0.05 ? 0 : cut_angle_deg;
 
         const topEndBandFront = topEndCut
-            ? { active: false, type_id: 'none', cutAngle: topEndCut, cutAnchor: 'Z_MINUS' as const }
-            : { active: false, type_id: 'none' };
+            ? { active: true, type_id: '0.008x0.022', cutAngle: topEndCut, cutAnchor: 'Z_MINUS' as const }
+            : { active: true, type_id: '0.008x0.022' };
         const topEndBandBack = topEndCut
             ? { active: false, type_id: 'none', cutAngle: -topEndCut, cutAnchor: 'Z_MINUS' as const }
             : { active: false, type_id: 'none' };
@@ -227,8 +304,8 @@ export function resolveSkosnyDachGeometry(
             dim: { x: o.innerWidth, y: slopeLen_mm, z: thickness },
             loc: {
                 x: o.midShift,
-                y: Math.sin(beta) * thickness / 2,
-                z: (hF + hB) / 2 - Math.cos(beta) * thickness / 2
+                y: targetLocY_G + Math.sin(beta) * thickness / 2,
+                z: (hF + hCut_G) / 2 - Math.cos(beta) * thickness / 2
             },
             lcs: {
                 mapping: { X: 'x', Y: 'y', Z: 'z' },
@@ -239,18 +316,41 @@ export function resolveSkosnyDachGeometry(
                 '-X': { active: false, type_id: 'none' },
                 '-Y': topEndBandFront,
                 '+Y': topEndBandBack
-            }
+            },
+            customProperties: (() => {
+                if (isShortenedG) return {};
+                const effOverlap = (o.margines_gorny_plecow_mm ?? o.pYPlus ?? 11) + (o.shiftZ ?? 0);
+                if (effOverlap <= BACK_OVERLAP_EPS_MM) return {};
+                return {
+                    backGrooveTrapezoid: {
+                        hF,
+                        hB,
+                        D,
+                        thickness,
+                        backOffset,
+                        shiftY: o.shiftY ?? 0,
+                        grubosc_plecow_mm: o.grubosc_plecow_mm ?? 3,
+                        margines_gorny_plecow_mm: effOverlap
+                    }
+                };
+            })()
         };
     }
     if (matchedKey === 'PLECY' || matchedKey === 'BACK' || role === 'BACK_PANEL') {
         const bottomThick = o.leftThick;
         const topThick = o.leftThick;
         const roofAngle = Math.atan2(hB - hF, D);
+        const cosRoof = Math.abs(Math.cos(roofAngle)) > 1e-6 ? Math.cos(roofAngle) : 1;
+        const tanRoof = Math.tan(roofAngle);
+        const yPlecyFront = D - backOffset + (o.shiftY ?? 0);
+        const zCeilAtPlecy = hF - topThick / cosRoof + yPlecyFront * tanRoof;
         const bottom = o.pYMinus;
         const top = o.pYPlus;
         const left = o.pXMinus;
         const right = o.pXPlus;
-        const backH = hB - topThick * Math.cos(roofAngle) - bottomThick + bottom + top;
+        const zTop = zCeilAtPlecy + top;
+        const zBottom = bottomThick - bottom;
+        const backH = Math.max(10, zTop - zBottom);
         const backW = o.innerWidth + left + right;
         return {
             thickness,
@@ -258,7 +358,7 @@ export function resolveSkosnyDachGeometry(
             loc: {
                 x: o.midShift + (right - left) / 2 + o.shiftX,
                 y: D / 2 + thickness / 2 - backOffset + o.shiftY,
-                z: (bottomThick - bottom + hB - topThick * Math.cos(roofAngle) + top) / 2 + o.shiftZ
+                z: (zBottom + zTop) / 2 + o.shiftZ
             }
         };
     }
@@ -302,27 +402,42 @@ export function resolveSkosnyLrGeometry(
     const beta_rad = Math.atan2(h_prawy_mm - h_lewy_mm, szerokosc_wewnetrzna_mm);
     const beta_deg = beta_rad * 180 / Math.PI;
 
+    const backShiftY = o.backShiftY ?? 0;
+    const shortenedD = D_mm - odsuniecie_plecow_mm + backShiftY;
+    const shortenedLocY = (-odsuniecie_plecow_mm + backShiftY) / 2;
+
+    const overlapLeft = o.overlapLeft ?? wpuszczenie_lewe_mm ?? 0;
+    const overlapRight = o.overlapRight ?? wpuszczenie_prawe_mm ?? 0;
+    const overlapBottom = o.overlapBottom ?? margines_dolny_mm ?? 0;
+    const overlapTop = o.overlapTop ?? margines_gorny_mm ?? 0;
+
     // ── BOKI ─────────────────────────────────────────────────────────────────
     // identycznie jak korpus3: dim i loc z offsetami krawędzi i przesunięciami
     if (matchedKey === 'BOK_L' || matchedKey === 'SIDE_LEFT' || role === 'LEFT_SIDE_PANEL') {
+        const isShortened = overlapLeft >= grubosc_lewy_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D_mm;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         const pY = margines_gorny_mm + margines_dolny_mm;
         const pX = wpuszczenie_lewe_mm + wpuszczenie_prawe_mm;
         return {
             thickness: grubosc_lewy_mm,
-            dim: { x: h_lewy_mm + pY, y: D_mm + pX, z: grubosc_lewy_mm },
+            dim: { x: h_lewy_mm + pY, y: targetD + pX, z: grubosc_lewy_mm },
             loc: { x: -W_mm / 2 + grubosc_lewy_mm / 2 + przesuniecie_x_mm,
-                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + przesuniecie_y_mm,
+                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + targetLocY + przesuniecie_y_mm,
                    z: h_lewy_mm / 2 + (margines_gorny_mm - margines_dolny_mm) / 2 + przesuniecie_z_mm }
         };
     }
     if (matchedKey === 'BOK_P' || matchedKey === 'SIDE_RIGHT' || role === 'RIGHT_SIDE_PANEL') {
+        const isShortened = overlapRight >= grubosc_prawy_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D_mm;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         const pY = margines_gorny_mm + margines_dolny_mm;
         const pX = wpuszczenie_lewe_mm + wpuszczenie_prawe_mm;
         return {
             thickness: grubosc_prawy_mm,
-            dim: { x: h_prawy_mm + pY, y: D_mm + pX, z: grubosc_prawy_mm },
+            dim: { x: h_prawy_mm + pY, y: targetD + pX, z: grubosc_prawy_mm },
             loc: { x: W_mm / 2 - grubosc_prawy_mm / 2 + przesuniecie_x_mm,
-                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + przesuniecie_y_mm,
+                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + targetLocY + przesuniecie_y_mm,
                    z: h_prawy_mm / 2 + (margines_gorny_mm - margines_dolny_mm) / 2 + przesuniecie_z_mm }
         };
     }
@@ -330,13 +445,16 @@ export function resolveSkosnyLrGeometry(
     // ── WIENIEC DOLNY ────────────────────────────────────────────────────────
     // identycznie jak korpus3 (dim, loc — z offsetami)
     if (matchedKey === 'WIENIEC_D' || matchedKey === 'BOTTOM' || role === 'BOTTOM_PANEL') {
+        const isShortened = overlapBottom >= grubosc_dolny_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D_mm;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         const pY = margines_dolny_mm + margines_gorny_mm;
         const pX = wpuszczenie_lewe_mm + wpuszczenie_prawe_mm;
         return {
             thickness: grubosc_mm,
-            dim: { x: szerokosc_wewnetrzna_mm + pY, y: D_mm + pX, z: grubosc_mm },
+            dim: { x: szerokosc_wewnetrzna_mm + pY, y: targetD + pX, z: grubosc_mm },
             loc: { x: przesuniecie_srodka_mm + (margines_gorny_mm - margines_dolny_mm) / 2,
-                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2,
+                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + targetLocY,
                    z: grubosc_mm / 2 - przesuniecie_z_mm }
         };
     }
@@ -344,13 +462,16 @@ export function resolveSkosnyLrGeometry(
     // ── WIENIEC GÓRNY (skośny) ───────────────────────────────────────────────
     // wyjątek: geometria pochylona (lcs rotation) — reszta identyczna z korpus3
     if (matchedKey === 'WIENIEC_G' || matchedKey === 'TOP' || role === 'TOP_PANEL') {
+        const isShortened = overlapTop >= grubosc_gorny_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D_mm;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         const slopeLen_mm = Math.hypot(szerokosc_wewnetrzna_mm, h_prawy_mm - h_lewy_mm);
         return {
             thickness: grubosc_mm,
-            dim: { x: slopeLen_mm, y: D_mm, z: grubosc_mm },
+            dim: { x: slopeLen_mm, y: targetD, z: grubosc_mm },
             loc: {
                 x: przesuniecie_srodka_mm + (grubosc_mm / 2) * Math.sin(beta_rad),
-                y: 0,
+                y: targetLocY,
                 z: (h_lewy_mm + h_prawy_mm) / 2 - (grubosc_mm / 2) * Math.cos(beta_rad)
             },
             lcs: {
@@ -497,15 +618,27 @@ export function resolveSkosnyLrUcGeometry(
         ...(cut_angle_deg ? { cutAngle: cut_angle_deg,  cutAnchor: 'Z_MINUS' as const } : {})
     };
 
+    const backShiftY = o.backShiftY ?? 0;
+    const shortenedD = D_mm - odsuniecie_plecow_mm + backShiftY;
+    const shortenedLocY = (-odsuniecie_plecow_mm + backShiftY) / 2;
+
+    const overlapLeft = o.overlapLeft ?? wpuszczenie_lewe_mm ?? 0;
+    const overlapRight = o.overlapRight ?? wpuszczenie_prawe_mm ?? 0;
+    const overlapBottom = o.overlapBottom ?? margines_dolny_mm ?? 0;
+    const overlapTop = o.overlapTop ?? margines_gorny_mm ?? 0;
+
     // ── BOKI — identycznie jak korpus3: dim i loc z offsetami krawędzi ───────
     if (matchedKey === 'BOK_L' || matchedKey === 'SIDE_LEFT' || role === 'LEFT_SIDE_PANEL') {
+        const isShortened = overlapLeft >= grubosc_lewy_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D_mm;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         const pY = margines_gorny_mm + margines_dolny_mm;
         const pX = wpuszczenie_lewe_mm + wpuszczenie_prawe_mm;
         return {
             thickness: grubosc_lewy_mm,
-            dim: { x: wysokosc_formatki_lewej_mm + pY, y: D_mm + pX, z: grubosc_lewy_mm },
+            dim: { x: wysokosc_formatki_lewej_mm + pY, y: targetD + pX, z: grubosc_lewy_mm },
             loc: { x: -W_mm / 2 + grubosc_lewy_mm / 2 + przesuniecie_x_mm,
-                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + przesuniecie_y_mm,
+                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + targetLocY + przesuniecie_y_mm,
                    z: wysokosc_formatki_lewej_mm / 2 + (margines_gorny_mm - margines_dolny_mm) / 2 + przesuniecie_z_mm },
             edge_banding: {
                 '+X': { active: true, type_id: '0.008x0.022' },
@@ -516,13 +649,16 @@ export function resolveSkosnyLrUcGeometry(
         };
     }
     if (matchedKey === 'BOK_P' || matchedKey === 'SIDE_RIGHT' || role === 'RIGHT_SIDE_PANEL') {
+        const isShortened = overlapRight >= grubosc_prawy_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D_mm;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         const pY = margines_gorny_mm + margines_dolny_mm;
         const pX = wpuszczenie_lewe_mm + wpuszczenie_prawe_mm;
         return {
             thickness: grubosc_prawy_mm,
-            dim: { x: wysokosc_formatki_prawej_mm + pY, y: D_mm + pX, z: grubosc_prawy_mm },
+            dim: { x: wysokosc_formatki_prawej_mm + pY, y: targetD + pX, z: grubosc_prawy_mm },
             loc: { x: W_mm / 2 - grubosc_prawy_mm / 2 + przesuniecie_x_mm,
-                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + przesuniecie_y_mm,
+                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + targetLocY + przesuniecie_y_mm,
                    z: wysokosc_formatki_prawej_mm / 2 + (margines_gorny_mm - margines_dolny_mm) / 2 + przesuniecie_z_mm },
             edge_banding: {
                 '+X': { active: false, type_id: 'none' },
@@ -535,25 +671,31 @@ export function resolveSkosnyLrUcGeometry(
 
     // ── WIENIEC DOLNY — identycznie jak korpus3 ──────────────────────────────
     if (matchedKey === 'WIENIEC_D' || matchedKey === 'BOTTOM' || role === 'BOTTOM_PANEL') {
+        const isShortened = overlapBottom >= grubosc_dolny_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D_mm;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         const pY = margines_dolny_mm + margines_gorny_mm;
         const pX = wpuszczenie_lewe_mm + wpuszczenie_prawe_mm;
         return {
             thickness: grubosc_mm,
-            dim: { x: szerokosc_wewnetrzna_mm + pY, y: D_mm + pX, z: grubosc_mm },
+            dim: { x: szerokosc_wewnetrzna_mm + pY, y: targetD + pX, z: grubosc_mm },
             loc: { x: przesuniecie_srodka_mm + (margines_gorny_mm - margines_dolny_mm) / 2,
-                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2,
+                   y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + targetLocY,
                    z: grubosc_mm / 2 - przesuniecie_z_mm }
         };
     }
 
     // ── WIENIEC GÓRNY (skośny) — wyjątek: lcs rotation ──────────────────────
     if (matchedKey === 'WIENIEC_G' || matchedKey === 'TOP' || role === 'TOP_PANEL') {
+        const isShortened = overlapTop >= grubosc_gorny_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D_mm;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         return {
             thickness: grubosc_mm,
-            dim: { x: dlugosc_skosu_mm, y: D_mm, z: grubosc_mm },
+            dim: { x: dlugosc_skosu_mm, y: targetD, z: grubosc_mm },
             loc: {
                 x: przesuniecie_srodka_mm + (grubosc_mm / 2) * Math.sin(kat_skosu_rad),
-                y: 0,
+                y: targetLocY,
                 z: z_top_center_mm - (grubosc_mm / 2) * Math.cos(kat_skosu_rad)
             },
             lcs: {
@@ -601,6 +743,7 @@ export function resolveSkosnyLrUcGeometry(
         // leży o tę wartość poniżej zewnętrznej linii dachu.
         const cos_beta = Math.cos(kat_skosu_rad);
         const roofThickVertical_mm = Math.abs(cos_beta) > 1e-6 ? grubosc_gorny_mm / cos_beta : grubosc_gorny_mm;
+        const marginTopVertical_mm = Math.abs(cos_beta) > 1e-6 ? margines_gorny_mm / cos_beta : margines_gorny_mm;
 
         const rightRoofInnerExt_mm = rightRoofAbsExt_mm - roofThickVertical_mm;
         const leftRoofInnerExt_mm  = leftRoofAbsExt_mm  - roofThickVertical_mm;
@@ -609,8 +752,8 @@ export function resolveSkosnyLrUcGeometry(
         const leftRoofRel_mm  = leftRoofInnerExt_mm  - z_bottom_mm;  // lewy (niski)
 
         const maxRoofRel_mm = Math.max(rightRoofRel_mm, leftRoofRel_mm);
-        // backH: sufit wnęki (wyższy szczyt) + margines_gorny (wpuszczenie w wieniec górny od środka wnęki)
-        const backH_mm = maxRoofRel_mm + margines_gorny_mm;
+        // backH: sufit wnęki (wyższy szczyt) + marginTopVertical (wpuszczenie margines_gorny prostopadle w skośny wieniec górny)
+        const backH_mm = maxRoofRel_mm + marginTopVertical_mm;
 
         // Obrys w LCS: v=backH = podłoga CAD (z_bottom), v=małe = dach CAD
         // Szczyt dachu leży na v=0, niższy szczyt na v = maxRoofRel_mm - roofRel_mm.

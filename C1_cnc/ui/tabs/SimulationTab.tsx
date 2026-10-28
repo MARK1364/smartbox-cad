@@ -104,16 +104,7 @@ export const SimulationTab: React.FC<SimulationTabProps> = ({
                     />
                 </div>
 
-                {/* Przełącznik Pokazywania Ścieżek Narzędzia */}
-                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer pt-1">
-                    <input
-                        type="checkbox"
-                        checked={CAMStateStore.getInstance().getState().showToolpaths}
-                        onChange={(e) => CAMStateStore.getInstance().setShowToolpaths(e.target.checked)}
-                        className="rounded bg-gray-700 border-gray-600 text-blue-500 focus:ring-0 cursor-pointer"
-                    />
-                    <span>🗺️ {tx(cncTekst, 'simulation.show_toolpaths', TX_NS)}</span>
-                </label>
+
             </div>
         </div>
     );

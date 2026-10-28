@@ -8,6 +8,7 @@ describe('korpusDefaultsForTypeMm', () => {
         expect(d.wysokosc_mm).toBe(2200);
         expect(d.glebokosc_mm).toBe(600);
         expect(d.liczba_stref).toBe(3);
+        expect(d.cofniecie_plecow_mm).toBe(3);
     });
 
     it('korpus_rogowy90: nie dziedziczy gabarytu korpus3 (H≠2200)', () => {
@@ -18,6 +19,7 @@ describe('korpusDefaultsForTypeMm', () => {
         expect(d.liczba_stref).toBe(1);
         expect(d.glebokosc_boku_lewego_mm).toBe(510);
         expect(d.glebokosc_boku_prawego_mm).toBe(510);
+        expect(d.cofniecie_plecow_mm).toBe(3);
     });
 
     it('korpus_rogowy1: własne defaults z JSON', () => {
@@ -28,5 +30,6 @@ describe('korpusDefaultsForTypeMm', () => {
         expect(d.szerokosc_blendy_mm).toBe(400);
         expect(d.strona_blendy).toBe('LEFT');
         expect(d.liczba_stref).toBe(1);
+        expect(d.cofniecie_plecow_mm).toBe(3);
     });
 });

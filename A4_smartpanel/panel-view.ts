@@ -148,6 +148,7 @@ export class PanelView {
     lastThickness: number = 0;
     lastFeaturesFingerprint: string = '';
     _dimHandleDragging: boolean = false;
+    _isSelected: boolean = false;
 
     // === B-rep geometry (SSOT) ===
     // Dane B-rep przechowywane w milimetrach (mm) — zgodnie z kontraktem PMI
@@ -362,6 +363,9 @@ export class PanelView {
                 mesh.enableEdgesRendering();
                 mesh.edgesWidth = 1.5;
                 mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                if (mesh.edgesRenderer?.lineShader) {
+                    mesh.edgesRenderer.lineShader.zOffset = 0.0;
+                }
             }
 
             // Zapewniamy działanie hover'a
@@ -387,7 +391,7 @@ export class PanelView {
                 mat.specularPower = 64;
                 mat.backFaceCulling = false;
                 mat.twoSidedLighting = true;
-                mat.zOffset = 1.0;
+                mat.zOffset = 0.0;
                 this.faceMaterials[faceName] = mat;
             }
             
@@ -414,7 +418,7 @@ export class PanelView {
                 const defaultCncGray = { r: 0.70, g: 0.72, b: 0.75 };
                 const defaultFastCadGray = { r: 0.90, g: 0.90, b: 0.91 };
                 const rawCol = this.model?.color || FACE_COLORS[faceName] || baseAlpineWhite;
-                const col = isCnc ? defaultCncGray : (isMaterialMode ? rawCol : defaultFastCadGray);
+                const col = isCnc ? defaultCncGray : (isMaterialMode || !!this.model?.color || String(this.model?.role || '').toUpperCase().startsWith('APPLIANCE') || this.model?.custom_properties?.domain === 'appliance_part' ? rawCol : defaultFastCadGray);
                 mat.diffuseColor = new BABYLON.Color3(col.r, col.g, col.b);
             }
             mat.emissiveColor = BABYLON.Color3.Black();
@@ -470,7 +474,12 @@ export class PanelView {
                 const edgeMesh = BABYLON.MeshBuilder.CreateLines(`edge_${i}`, { 
                     points: points
                 }, this.scene);
-                edgeMesh.color = this.model?.frozen ? new BABYLON.Color3(0.2, 0.65, 0.95) : new BABYLON.Color3(0.1, 0.1, 0.1);
+                edgeMesh.color = this._isSelected
+                    ? new BABYLON.Color3(0.2, 1.0, 0.4)
+                    : (this.model?.frozen ? new BABYLON.Color3(0.2, 0.65, 0.95) : new BABYLON.Color3(0.1, 0.1, 0.1));
+                if (edgeMesh.material) {
+                    edgeMesh.material.zOffset = this._isSelected ? -2.0 : 0.0;
+                }
                 edgeMesh.intersectionThreshold = 1.5; // Fizyczny margines 1.5mm (zostawia 15mm luzu na formatce 18mm)
 
                 
@@ -478,6 +487,9 @@ export class PanelView {
                 
                 const idMgr = IDManager.getInstance();
                 const smartId = idMgr.register(EntityType.EDGE, this.model.smartId.fullPath, edgeKey);
+                if (edgeData.alias && edgeData.alias !== edgeKey) {
+                    idMgr.register(EntityType.EDGE, this.model.smartId.fullPath, edgeData.alias, { canonicalKey: edgeKey });
+                }
                 
                 edgeMesh.isPickable = true;
                 // Obrys dołu kapu = ten sam XY co góra → na rzucie z góry/dołu podwójna krawędź.
@@ -491,6 +503,7 @@ export class PanelView {
                     smartId: smartId, 
                     panelModel: this.model,
                     edgeKey: edgeKey,
+                    alias: edgeData.alias || null,
                     brepPoints: pts, // Dokładne matematyczne punkty B-rep z modelu CAD
                     ...(featureId ? { featureId } : {}),
                     baseColor: new BABYLON.Color3(0.1, 0.1, 0.1),
@@ -560,6 +573,11 @@ export class PanelView {
 
         // Automatyczne odświeżenie materiałów, dekoru i obrzeży krawędzi
         this._updateMaterialAppearance();
+        if (this._isSelected) {
+            this.setSelected(true);
+        }
+
+        
 
         const vp = ContextManager.instance.viewport;
         if (vp && typeof vp.applyRenderModeToMeshes === 'function') {
@@ -702,7 +720,7 @@ export class PanelView {
         const rawPanelColor = this.model.color || (matData ? matData.color : baseAlpineWhite);
         const baseColor = isCnc
             ? defaultCncGray
-            : (isMaterialMode || isArchWall || matData?.isTransparent ? rawPanelColor : defaultFastCadGray);
+            : (isMaterialMode || isArchWall || !!this.model?.color || String(this.model?.role || '').toUpperCase().startsWith('APPLIANCE') || this.model?.custom_properties?.domain === 'appliance_part' || matData?.isTransparent ? rawPanelColor : defaultFastCadGray);
 
         const alpha = matData?.isTransparent ? (matData.opacity || 0.45) : 1.0;
         const specularPower = isCnc ? 32 : (matData?.roughness ? Math.round((1.0 - matData.roughness) * 64) : 48);
@@ -748,7 +766,7 @@ export class PanelView {
                     (edgeSlot?.active !== false && edgeSlot?.type_id && edgeSlot.type_id !== 'none')
                 );
                 
-                if (isCnc || isArchWall) {
+                if (isCnc || isArchWall || String(this.model?.role || '').toUpperCase().startsWith('APPLIANCE') || this.model?.custom_properties?.domain === 'appliance_part') {
                     // CNC / ściany architektoniczne: jednolity kolor (bez ciemnego rdzenia)
                     mat.diffuseColor = new BABYLON.Color3(baseColor.r, baseColor.g, baseColor.b);
                     mat.alpha = alpha;
@@ -910,6 +928,7 @@ export class PanelView {
         const meshData = builder.build(this.model);
 
         const partMapping: Record<string, { faceKey: string; mat: any }> = {
+            alu_frame: { faceKey: 'FACE_Z_PLUS', mat: profMat },
             alu_prof_left: { faceKey: 'FACE_X_MINUS', mat: profMat },
             alu_prof_right: { faceKey: 'FACE_X_PLUS', mat: profMat },
             alu_prof_top: { faceKey: 'FACE_Y_PLUS', mat: profMat },
@@ -1243,6 +1262,20 @@ export class PanelView {
 
     // ─── Feature visualization ───────────────────────
 
+    _getSharedHoleMaterial(isCnc: boolean): any {
+        const key = isCnc ? '__sharedHoleMatCnc' : '__sharedHoleMatNormal';
+        let mat = this.scene?.getMaterialByName ? this.scene.getMaterialByName(key) : null;
+        if (!mat) {
+            mat = new BABYLON.StandardMaterial(key, this.scene);
+            mat.diffuseColor = isCnc ? new BABYLON.Color3(0.12, 0.12, 0.12) : new BABYLON.Color3(0.2, 0.2, 0.25);
+            mat.emissiveColor = BABYLON.Color3.Black();
+            mat.alpha = 0.95;
+            mat.backFaceCulling = false;
+            mat.isSharedMaterial = true;
+        }
+        return mat;
+    }
+
     /**
      * Renderuje wszystkie features z modelu na powierzchni płyty.
      */
@@ -1255,13 +1288,15 @@ export class PanelView {
             this._featureMarkers = [];
         }
 
+        const allCrossLines: any[][] = [];
+
         for (const feature of (this.model.features || [])) {
             const isVisible = feature.visible !== false && feature.params?.visible !== false;
             if (!isVisible) continue;
             if (feature.is_assembly_drilling || feature.params?.is_assembly_drilling) continue;
             switch (feature.type) {
                 case 'hole':
-                    this._renderHole(feature);
+                    this._renderHole(feature, allCrossLines);
                     break;
                 case 'pocket':
                     this._renderPocket(feature);
@@ -1278,6 +1313,15 @@ export class PanelView {
             }
         }
 
+        if (allCrossLines.length > 0) {
+            const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
+            const cross = BABYLON.MeshBuilder.CreateLineSystem(`hole_crosses_${this.model.id}`, { lines: allCrossLines }, this.scene);
+            cross.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(1, 0.5, 0.1);
+            cross.isPickable = false;
+            cross.parent = this.root;
+            this._featureMarkers.push(cross);
+        }
+
         const vp = ContextManager.instance.viewport;
         if (vp && typeof vp.applyRenderModeToMesh === 'function' && Array.isArray(this._featureMarkers)) {
             for (const marker of this._featureMarkers) {
@@ -1286,7 +1330,7 @@ export class PanelView {
         }
     }
 
-    _renderHole(feature) {
+    _renderHole(feature: any, allCrossLines?: any[][]) {
         // Feature.face jest kanoniczny; brak → lico tylne (FACE_Z_MINUS).
         const faceName = feature.face || feature.side || 'FACE_Z_MINUS';
         let faceData;
@@ -1405,7 +1449,7 @@ export class PanelView {
 
         // Okrąg — cienka, czysta linia wektorowa CAD (CreateLines) zamiast grubej bryły 3D Torus
         const circlePts: any[] = [];
-        const segCount = 48;
+        const segCount = 24;
         for (let i = 0; i <= segCount; i++) {
             const angle = (i / segCount) * Math.PI * 2;
             const uPt = u + Math.cos(angle) * radius;
@@ -1425,7 +1469,7 @@ export class PanelView {
         const cyl = BABYLON.MeshBuilder.CreateCylinder(`hole_cyl_${feature.id}`, {
             diameter: holeDia,
             height: holeDepth,
-            tessellation: 32
+            tessellation: 16
         }, this.scene);
         
         if (hasFeatureParamsUV(feature.params)) {
@@ -1437,40 +1481,32 @@ export class PanelView {
             cyl.position = pos;
         }
 
-        const cylMat = new BABYLON.StandardMaterial(`hole_cyl_mat_${feature.id}`, this.scene);
-        cylMat.diffuseColor = isCnc ? new BABYLON.Color3(0.12, 0.12, 0.12) : new BABYLON.Color3(0.2, 0.2, 0.25);
-        cylMat.emissiveColor = BABYLON.Color3.Black();
-        cylMat.alpha = 0.95;
-        cylMat.backFaceCulling = false;
-        cyl.material = cylMat;
+        cyl.material = this._getSharedHoleMaterial(isCnc);
+        cyl.metadata = { ...holeMeta, isSharedMaterial: true };
         cyl.isPickable = true;
-        if (typeof cyl.enableEdgesRendering === 'function') {
-            cyl.enableEdgesRendering();
-            cyl.edgesWidth = 1.0;
-            cyl.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
-        }
         cyl.parent = this.root;
-        cyl.metadata = holeMeta;
         this._featureMarkers.push(cyl);
 
         // Krzyżyk w środku otworu — cienkie linie wektorowe CAD
         const crossSize = Math.max(1, radius * 0.7);
-        const crossLines = [
-            [
-                this._facePoint(faceData, u - crossSize, v, 0.15 + clearance),
-                this._facePoint(faceData, u + crossSize, v, 0.15 + clearance)
-            ],
-            [
-                this._facePoint(faceData, u, v - crossSize, 0.15 + clearance),
-                this._facePoint(faceData, u, v + crossSize, 0.15 + clearance)
-            ]
+        const l1 = [
+            this._facePoint(faceData, u - crossSize, v, 0.15 + clearance),
+            this._facePoint(faceData, u + crossSize, v, 0.15 + clearance)
         ];
-        const cross = BABYLON.MeshBuilder.CreateLineSystem(`hole_cross_${feature.id}`, { lines: crossLines }, this.scene);
-        cross.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(1, 0.5, 0.1);
-        cross.isPickable = false;
-        cross.parent = this.root;
-        cross.metadata = holeMeta;
-        this._featureMarkers.push(cross);
+        const l2 = [
+            this._facePoint(faceData, u, v - crossSize, 0.15 + clearance),
+            this._facePoint(faceData, u, v + crossSize, 0.15 + clearance)
+        ];
+        if (allCrossLines) {
+            allCrossLines.push(l1, l2);
+        } else {
+            const cross = BABYLON.MeshBuilder.CreateLineSystem(`hole_cross_${feature.id}`, { lines: [l1, l2] }, this.scene);
+            cross.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(1, 0.5, 0.1);
+            cross.isPickable = false;
+            cross.parent = this.root;
+            cross.metadata = holeMeta;
+            this._featureMarkers.push(cross);
+        }
     }
 
     _renderPocket(feature) {
@@ -1868,7 +1904,9 @@ export class PanelView {
     _disposeFeatureMarkers() {
         if (this._featureMarkers) {
             for (const m of this._featureMarkers) {
-                if (m.material) m.material.dispose();
+                if (m.material && !m.metadata?.isSharedMaterial && !m.material.isSharedMaterial) {
+                    m.material.dispose();
+                }
                 m.dispose();
             }
             this._featureMarkers = [];
@@ -1981,16 +2019,60 @@ export class PanelView {
      * Aktywuje lub dezaktywuje wizualne podświetlenie (np. z drzewa obiektów).
      */
     setSelected(isSelected: boolean) {
+        this._isSelected = isSelected;
         if (!this.faceMeshes) return;
-        for (const faceName in this.faceMeshes) {
-            const mesh = this.faceMeshes[faceName];
-            if (isSelected) {
-                mesh.renderOutline = true;
-                mesh.outlineColor = new BABYLON.Color3(0.2, 1.0, 0.4);
-                mesh.outlineWidth = 1.5;
-            } else {
-                mesh.renderOutline = false;
+
+        const selColor4 = new BABYLON.Color4(0.2, 1.0, 0.4, 1.0);
+        const selColor3 = new BABYLON.Color3(0.2, 1.0, 0.4);
+
+        // 1. Krawędzie B-rep (CreateLines)
+        if (this._edgeMeshes && this._edgeMeshes.length > 0) {
+            const defaultLineColor = this.model?.frozen
+                ? new BABYLON.Color3(0.2, 0.65, 0.95)
+                : new BABYLON.Color3(0.1, 0.1, 0.1);
+            for (const em of this._edgeMeshes) {
+                if (!em || em.isDisposed()) continue;
+                em.color = isSelected ? selColor3 : defaultLineColor;
+                if (em.material) {
+                    em.material.zOffset = isSelected ? -2.0 : 0.0;
+                }
             }
+        }
+
+        // 2. Krawędzie pod-siatek (enableEdgesRendering) oraz bezwzględne wyłączenie renderOutline
+        const seen = new Set();
+        for (const faceName in this.faceMeshes) {
+            if (faceName.startsWith('feature_')) continue;
+            const mesh = this.faceMeshes[faceName];
+            if (!mesh || seen.has(mesh)) continue;
+            seen.add(mesh);
+
+            mesh.renderOutline = false;
+
+            if (isSelected) {
+                if (typeof mesh.enableEdgesRendering === 'function') {
+                    mesh.enableEdgesRendering();
+                    mesh.edgesColor = selColor4;
+                    mesh.edgesWidth = 2.5;
+                    if (mesh.edgesRenderer?.lineShader) {
+                        mesh.edgesRenderer.lineShader.zOffset = -2.0;
+                    }
+                }
+            } else {
+                mesh.edgesWidth = 1.5;
+                if (mesh.edgesRenderer?.lineShader) {
+                    mesh.edgesRenderer.lineShader.zOffset = 0.0;
+                }
+            }
+        }
+
+        if (!isSelected) {
+            this._updateMaterialAppearance();
+        }
+
+        const vp = (ContextManager.instance as any)?.viewport;
+        if (vp && typeof vp.requestRender === 'function') {
+            vp.requestRender(3);
         }
     }
 

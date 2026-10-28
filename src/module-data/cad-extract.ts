@@ -27,6 +27,7 @@ import type {
     DagModulePayload,
     DagNode,
     DagEdge,
+    InstrukcjaModulePayload,
 } from './types';
 
 function nowIso(): string {
@@ -427,5 +428,22 @@ export function extractDagPayload(scope: ModuleScope, document?: any): DagModule
             constraintCount,
             conflictCount,
         },
+    };
+}
+/**
+ * Instrukcja montazu (I1): lekki payload — podstrona jest kopia shella CAD,
+ * laduje projekt ze snapshotu i liczy plan na zywo (`assemblyPlanFromScene`).
+ */
+export function extractInstrukcjaPayload(scope: ModuleScope, document?: any): InstrukcjaModulePayload {
+    const doc = getDocument(document);
+    persistProjectSnapshot(doc);
+    return {
+        meta: {
+            module: 'instrukcja',
+            sourceId: 'cad',
+            loadedAt: nowIso(),
+            originLabel: scope.name || tx(srcTekst, 'moddata.instrukcja_origin', TX_NS),
+        },
+        scope,
     };
 }

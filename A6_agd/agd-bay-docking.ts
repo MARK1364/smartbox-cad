@@ -20,6 +20,7 @@ import {
     SMART_APPLIANCE_TYPE,
     DEFAULT_MICROWAVE_PARAMS,
     DEFAULT_OVEN_PARAMS,
+    DEFAULT_FRIDGE_PARAMS,
     type ApplianceKind,
     type MicrowaveParamsMm,
     type ApplianceTemplateItem,
@@ -41,11 +42,15 @@ export function createSmartApplianceInDetectedBay(
     if (!document || !bay) return null;
 
     const kind: ApplianceKind = options.kind || options.template?.kind || 'MICROWAVE';
-    const defaultName = kind === 'MICROWAVE' ? 'Mikrofala' : 'Piekarnik';
+    const defaultName = kind === 'FRIDGE' ? 'Lodówka do zabudowy' : (kind === 'MICROWAVE' ? 'Mikrofala' : 'Piekarnik');
     const name = options.name || options.template?.name || defaultName;
 
-    const defaults = kind === 'MICROWAVE' ? DEFAULT_MICROWAVE_PARAMS : DEFAULT_OVEN_PARAMS;
-    const mergedParams: MicrowaveParamsMm = {
+    const defaults = kind === 'FRIDGE'
+        ? DEFAULT_FRIDGE_PARAMS
+        : kind === 'MICROWAVE'
+            ? DEFAULT_MICROWAVE_PARAMS
+            : DEFAULT_OVEN_PARAMS;
+    const mergedParams: any = {
         ...DEFAULT_MICROWAVE_PARAMS,
         ...defaults,
         ...(options.template?.defaultParams || {}),

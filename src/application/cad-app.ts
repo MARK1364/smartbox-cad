@@ -68,6 +68,25 @@ async function main() {
     // ─── Start modułów CAD (PMI, Solver, CNC, Rozszerzenia, A2, A3, A4) ───
     await startModules(ctx, stateMachine);
 
+    // Opcjonalny, lokalny podgląd demonstracyjny bez systemowego okna wyboru pliku.
+    // Aktywuje się wyłącznie dla /?demo=kuchnia i pobiera plik z tego samego localhost.
+    if (new URLSearchParams(window.location.search).get('demo') === 'kuchnia') {
+        try {
+            const response = await fetch('/__demo/kuchnia', { cache: 'no-store' });
+            if (!response.ok) throw new Error(`Nie udało się pobrać projektu kuchni (${response.status}).`);
+            const project = await response.json();
+            if (project?.format !== 'smartpanel-project' || !project?.rootNode) {
+                throw new Error('Plik demonstracyjny ma nieprawidłowy format projektu.');
+            }
+            ctx.document.load(project);
+            rebuildGeometry('Wczytano demonstracyjną kuchnię');
+            ctx.viewport.zoomToFit();
+        } catch (error) {
+            console.error('[Crevo] Nie udało się wczytać demonstracyjnej kuchni:', error);
+            ctx.ui.setStatus('Nie udało się wczytać demonstracyjnej kuchni', true, 'error');
+        }
+    }
+
     stateMachine.changeState('SELECTION_TOOL');
 
     ContextManager.instance.stateMachine = stateMachine;
@@ -142,7 +161,10 @@ async function main() {
             ctx.ui.showSelectedFace(data.face, data.faceData, data.smartId, 'face');
             if (data.panelModel && shouldPromoteSubgeometryToEntity(ContextManager.instance.activeTab)) {
                 ctx.document.setActiveEntity(data.panelModel);
-                ctx.propertiesManager.inspectPanel(data.panelModel, ctx.panelViews, false);
+                ctx.propertiesManager.inspectPanel(data.panelModel, ctx.panelViews, true);
+            }
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('cad-close-floating-operation'));
             }
             if (gizmoCtrl) gizmoCtrl.updateFaceGizmo();
         } else if (type === 'select-edge') {

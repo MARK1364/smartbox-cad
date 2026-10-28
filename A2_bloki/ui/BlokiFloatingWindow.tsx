@@ -29,6 +29,7 @@ import { PanelsSubModule } from '../11_panels-adapter.js';
 import { FlapsSubModule } from '../12_flaps-adapter.js';
 import { LedInternalSubModule } from '../13_led-internal-adapter.js';
 import { LedExternalSubModule } from '../14_led-external-adapter.js';
+import { SinkEditPanel } from '../sinks/sink-edit-panel.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
 import { highlightBayInScene, clearBayHighlight } from '../02_bloki-bay-visualizer.js';
 import {
@@ -56,7 +57,8 @@ export const MODULE_TYPES: Record<string, { type: string; label: string; categor
     'PANELS': { type: 'blok_panels', label: 'Blendy', category: 'external' },
     'LED_EXTERNAL': { type: 'blok_led_external', label: 'LED zewnętrzny (kanał)', category: 'external' },
     'HANDLES': { type: 'blok_handle', label: 'Uchwyty', category: 'panel' },
-    'HANGERS': { type: 'smartpart_hangers', label: 'Zawieszki', category: 'panel' }
+    'SINKS': { type: 'blok_sink', label: 'Zlew', category: 'panel' },
+    'HANGERS': { type: 'smartpart_hangers', label: 'Zawieszki', category: 'internal' }
 };
 
 export const INTERNAL_MODULE_TYPES = Object.entries(MODULE_TYPES).filter(([_, v]) => v.category === 'internal');
@@ -817,6 +819,7 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                                 {boxType === 'PANELS' && <PanelsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'LED_INTERNAL' && <LedInternalSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'LED_EXTERNAL' && <LedExternalSubModule container={container} triggerUpdate={triggerUpdateEx} />}
+                                {boxType === 'SINKS' && <SinkEditPanel container={container} />}
                                 {boxType === 'EMPTY' && (
                                     <div style={{ padding: '16px', textAlign: 'center', color: '#8c93a0', fontSize: '12px' }}>
                                         Wybierz powyżej moduł, aby wstawić elementy do wnęki.

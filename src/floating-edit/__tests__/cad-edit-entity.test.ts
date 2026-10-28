@@ -25,10 +25,10 @@ describe('cad-edit-entity', () => {
         expect(detail).toEqual({ entityId: 'c1', kind: 'blok' });
     });
 
-    it('closeCadFloatingEdit dispatches close only', () => {
-        closeCadFloatingEdit();
-        expect(window.dispatchEvent).toHaveBeenCalledWith(
-            expect.objectContaining({ type: CAD_CLOSE_FLOATING_EDIT })
-        );
+    it('openCadEditEntity handles kind: wall and openWallEditOnScene', async () => {
+        const { openWallEditOnScene } = await import('../FloatingEditHost.js');
+        openWallEditOnScene('wall_1');
+        const detail = (window.dispatchEvent as any).mock.calls[1][0].detail;
+        expect(detail).toEqual({ entityId: 'wall_1', kind: 'wall' });
     });
 });

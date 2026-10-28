@@ -17,7 +17,7 @@ export function normalizeHangersParams(
     _dims_mm: BlokiDimensions_mm
 ): Required<HangersPlanParams> {
     return {
-        szablon_id: String(raw?.szablon_id || 'TT2'),
+        szablon_id: String(raw?.szablon_id || 'zawieszka_camaro'),
         zestaw_id: String(raw?.zestaw_id || ''),
         odsuniecie_bok_mm: Number.isFinite(Number(raw?.odsuniecie_bok_mm)) ? Number(raw!.odsuniecie_bok_mm) : 0,
         odsuniecie_tyl_mm: Number.isFinite(Number(raw?.odsuniecie_tyl_mm)) ? Number(raw!.odsuniecie_tyl_mm) : 0,

@@ -17,6 +17,8 @@ import {
 import { SMARTPART_HANGERS_GROUP_TYPE } from '../../A2_bloki/hangers/hanger-types.js';
 import { SMARTPART_HANDLE_TYPE } from '../../A2_bloki/handles/handle-types.js';
 import { HandleEditPanel } from '../../A2_bloki/handles/handle-edit-panel.js';
+import { SMARTPART_SINK_TYPE } from '../../A2_bloki/sinks/sink-types.js';
+import { SinkEditPanel } from '../../A2_bloki/sinks/sink-edit-panel.js';
 
 function isHangersGroup(model: any): boolean {
     if (!model) return false;
@@ -33,9 +35,18 @@ function isHandleContainer(model: any): boolean {
         || role === 'SMARTPART_HANDLE' || gp.boxType === 'HANDLES';
 }
 
+function isSinkContainer(model: any): boolean {
+    if (!model) return false;
+    const gp = model.generatorParams || {};
+    const role = String(model.role || '');
+    return gp.type === SMARTPART_SINK_TYPE || gp.type === 'blok_sink'
+        || role === 'SMARTPART_SINK' || gp.boxType === 'SINKS';
+}
+
 function resolveBoxType(container: any): string {
     if (isHangersGroup(container)) return 'HANGERS';
     if (isHandleContainer(container)) return 'HANDLES';
+    if (isSinkContainer(container)) return 'SINKS';
     const p = container?.generatorParams || {};
     if (p.boxType) return String(p.boxType);
     const t = String(p.type || '');
@@ -89,8 +100,8 @@ export function FloatingBlokEdit({ container }: { container: any }): React.JSX.E
             update_bloki_core(container, doc);
             if (typeof (window as any).__rebuildGeometry === 'function') {
                 (window as any).__rebuildGeometry('Bloki update');
-            } else if (typeof doc?._notify === 'function') {
-                doc._notify();
+            } else if (typeof (doc as any)?._notify === 'function') {
+                (doc as any)._notify();
             } else if (doc?.emitChange) {
                 doc.emitChange('all');
             }
@@ -120,6 +131,10 @@ export function FloatingBlokEdit({ container }: { container: any }): React.JSX.E
 
     if (isHandleContainer(container)) {
         return <HandleEditPanel container={container} />;
+    }
+
+    if (isSinkContainer(container)) {
+        return <SinkEditPanel container={container} />;
     }
 
     const plugin = boxType !== 'EMPTY' && boxType !== 'HANGERS'

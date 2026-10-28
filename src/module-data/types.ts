@@ -10,7 +10,7 @@ import type { NestingPart, ContainerScopeInfo, SheetConfig } from '../../n1_nest
 import type { CAMFeature } from '../../C1_cnc/dto/cam-dto';
 import type { CADTreeNode } from '../../R2_rys/drawing-types';
 
-export type ModuleId = 'report' | 'nesting' | 'cnc' | 'draw' | 'dag' | 'smartparts';
+export type ModuleId = 'report' | 'nesting' | 'cnc' | 'draw' | 'dag' | 'smartparts' | 'instrukcja';
 
 export type ModuleSourceId = 'cad' | 'json' | 'csv' | 'session' | 'dxf';
 
@@ -130,13 +130,37 @@ export interface SmartPartsModulePayload {
     packageId?: string;
 }
 
+/** Plan instrukcji montażu (I1_instrukcja): silniki w pliku assembly-sequence-engine.ts. */
+export interface InstrukcjaPlanPayload {
+    steps: unknown[];
+    inventoryStep?: unknown;
+    partsTotal: number;
+    totalHardwareCounts?: Record<string, number>;
+    meta?: { scopeContainerIds: string[]; partsHash: string; partsCount: number } | null;
+    [key: string]: unknown;
+}
+
+/**
+ * Payload podstrony Instrukcja montażu (I1).
+ *
+ * Podstrona jest kopią shella CAD: ładuje żywy projekt ze snapshotu i liczy plan
+ * lokalnie (`assemblyPlanFromScene`) — payload niesie tylko scope (korpus/blok/projekt).
+ */
+export interface InstrukcjaModulePayload {
+    meta: ModuleSessionMeta;
+    scope: ModuleScope;
+    /** Opcjonalny plan z chwili otwarcia (diagnostyka); podstrona liczy go na żywo. */
+    plan?: InstrukcjaPlanPayload;
+}
+
 export type AnyModulePayload =
     | ReportModulePayload
     | NestingModulePayload
     | CncModulePayload
     | DrawModulePayload
     | DagModulePayload
-    | SmartPartsModulePayload;
+    | SmartPartsModulePayload
+    | InstrukcjaModulePayload;
 
 export interface ModuleDataSource<T> {
     id: ModuleSourceId;

@@ -23,11 +23,14 @@ import {
     SMART_APPLIANCE_TYPE,
     DEFAULT_MICROWAVE_PARAMS,
     DEFAULT_OVEN_PARAMS,
+    DEFAULT_FRIDGE_PARAMS,
     type MicrowaveParamsMm,
+    type FridgeParamsMm,
     type ApplianceKind,
     isSmartApplianceContainer,
 } from './smart-appliance-types.js';
 import { planMicrowave, type AppliancePartPlanMm } from './microwave-engine.js';
+import { planFridge } from './fridge-engine.js';
 import { resolveHangersReferenceBoxMm } from '../A2_bloki/hangers/hanger-apply.js';
 
 export function ensureSmartApplianceGeneratorParams(container: ContainerModel, kind: ApplianceKind = 'MICROWAVE'): void {
@@ -38,7 +41,11 @@ export function ensureSmartApplianceGeneratorParams(container: ContainerModel, k
     if (!container.generatorParams.kind) {
         container.generatorParams.kind = kind;
     }
-    const defaults = kind === 'MICROWAVE' ? DEFAULT_MICROWAVE_PARAMS : DEFAULT_OVEN_PARAMS;
+    const defaults = kind === 'FRIDGE'
+        ? DEFAULT_FRIDGE_PARAMS
+        : kind === 'MICROWAVE'
+            ? DEFAULT_MICROWAVE_PARAMS
+            : DEFAULT_OVEN_PARAMS;
     for (const [key, val] of Object.entries(defaults)) {
         if (container.generatorParams[key] === undefined) {
             container.generatorParams[key] = val;
@@ -46,7 +53,7 @@ export function ensureSmartApplianceGeneratorParams(container: ContainerModel, k
     }
 }
 
-export function getApplianceParamsMm(container: ContainerModel): MicrowaveParamsMm {
+export function getApplianceParamsMm(container: ContainerModel): MicrowaveParamsMm | FridgeParamsMm {
     const gp = container.generatorParams || {};
     // Kanoniczne pola `*Mm` są w mm; pola bez sufiksu w gp trzymają nm (tak je zapisuje
     // agd-bay-docking). Jawnie, bez progu heurystyki.
@@ -62,6 +69,32 @@ export function getApplianceParamsMm(container: ContainerModel): MicrowaveParams
     const isBayDocked = Boolean(gp.detectedBay || gp.boundary || gp.parentContainerId);
     const bayDepthVal = gp.bayDepthMm != null ? gp.bayDepthMm : (gp.bayDepth != null ? nmVal(gp.bayDepth, 0) : undefined);
     const parsedBayDepth = (isBayDocked && bayDepthVal != null) ? mmVal(bayDepthVal, 0) : undefined;
+
+    if (gp.kind === 'FRIDGE') {
+        const plinthHeight = mmVal(gp.plinthHeight, DEFAULT_FRIDGE_PARAMS.plinthHeight ?? 40);
+        const frontBottomHeight = mmVal(gp.frontBottomHeight, DEFAULT_FRIDGE_PARAMS.frontBottomHeight);
+        const doorGap = mmVal(gp.doorGap, DEFAULT_FRIDGE_PARAMS.doorGap);
+        const totalHeight = mmVal(gp.totalHeight, DEFAULT_FRIDGE_PARAMS.totalHeight ?? 1775);
+        const frontTopHeight = Math.max(50, totalHeight - plinthHeight - frontBottomHeight - doorGap);
+        return {
+            totalHeight,
+            doorLayout: (gp.doorLayout || 'TOP_BOTTOM') as any,
+            isFreestanding: Boolean(gp.isFreestanding),
+            frontBottomHeight,
+            frontTopHeight,
+            doorGap,
+            doorDepth: mmVal(gp.doorDepth ?? gp.frontDepth, DEFAULT_FRIDGE_PARAMS.doorDepth ?? 45),
+            plinthHeight,
+            finish: (gp.finish || DEFAULT_FRIDGE_PARAMS.finish || 'WHITE') as 'WHITE' | 'INOX' | 'BLACK',
+            corpusWidth: mmVal(gp.corpusWidth, DEFAULT_FRIDGE_PARAMS.corpusWidth),
+            corpusDepth: mmVal(gp.corpusDepth, DEFAULT_FRIDGE_PARAMS.corpusDepth),
+            frontWidth: mmVal(gp.corpusWidth, DEFAULT_FRIDGE_PARAMS.corpusWidth),
+            frontDepth: mmVal(gp.doorDepth ?? gp.frontDepth, DEFAULT_FRIDGE_PARAMS.doorDepth ?? 45),
+            nalGora: mmVal(gp.nalGora, 0),
+            nalDolne: mmVal(gp.nalDolne, 0),
+            bayDepth: parsedBayDepth && parsedBayDepth > 0 ? parsedBayDepth : undefined,
+        };
+    }
 
     return {
         // rebuildSmartAppliance zapisuje te pola prosto z mm (patrz niżej).
@@ -90,29 +123,63 @@ export function rebuildSmartAppliance(container: ContainerModel, docTarget?: any
     if (!cntNode) return false;
 
     const p = getApplianceParamsMm(container);
-    const { parts, corpusHeight } = planMicrowave(p);
+    const kind = (container.generatorParams?.kind || 'MICROWAVE') as ApplianceKind;
+    const isFridge = kind === 'FRIDGE';
+    const planResult = isFridge
+        ? planFridge(p as FridgeParamsMm)
+        : planMicrowave(p as MicrowaveParamsMm);
+
+    const parts = planResult.parts;
+    const corpusHeight = planResult.corpusHeight;
+    const frontTopHeight = (planResult as any).frontTopHeight;
+
+    const fp = isFridge ? (p as FridgeParamsMm) : null;
+    const totalApplianceH = isFridge
+        ? corpusHeight
+        : (p as MicrowaveParamsMm).frontHeight;
+
+    const totalApplianceD = isFridge
+        ? (p.corpusDepth + (fp?.doorDepth ?? 45))
+        : (p.corpusDepth + p.frontDepth);
 
     // Zaktualizuj gabaryty kontenera w domenowych jednostkach (nm)
     const isBayDocked = Boolean(container.generatorParams?.detectedBay || container.generatorParams?.boundary || container.generatorParams?.parentContainerId);
     if (isBayDocked && container.generatorParams?.bayWidthMm) {
         container.width = mmToNm(container.generatorParams.bayWidthMm);
-        container.height = mmToNm(container.generatorParams.bayHeightMm || p.frontHeight);
-        container.depth = mmToNm(container.generatorParams.bayDepthMm || (p.corpusDepth + p.frontDepth));
+        container.height = mmToNm(container.generatorParams.bayHeightMm || totalApplianceH);
+        container.depth = mmToNm(container.generatorParams.bayDepthMm || totalApplianceD);
     } else {
-        container.width = mmToNm(Math.max(p.frontWidth, p.corpusWidth));
-        container.height = mmToNm(p.frontHeight);
-        container.depth = mmToNm(p.corpusDepth + p.frontDepth);
+        container.width = mmToNm(Math.max(p.frontWidth || p.corpusWidth, p.corpusWidth));
+        container.height = mmToNm(totalApplianceH);
+        container.depth = mmToNm(totalApplianceD);
     }
 
     if (container.generatorParams) {
         container.generatorParams.corpusHeight = corpusHeight;
-        container.generatorParams.frontHeight = p.frontHeight;
-        container.generatorParams.nalGoraMicro = p.nalGoraMicro;
-        container.generatorParams.nalDolneMicro = p.nalDolneMicro;
-        container.generatorParams.frontWidth = p.frontWidth;
-        container.generatorParams.frontDepth = p.frontDepth;
-        container.generatorParams.corpusWidth = p.corpusWidth;
-        container.generatorParams.corpusDepth = p.corpusDepth;
+        if (isFridge && fp) {
+            container.generatorParams.totalHeight = corpusHeight;
+            container.generatorParams.doorLayout = fp.doorLayout || 'TOP_BOTTOM';
+            container.generatorParams.isFreestanding = Boolean(fp.isFreestanding);
+            container.generatorParams.frontBottomHeight = fp.frontBottomHeight;
+            container.generatorParams.frontTopHeight = frontTopHeight ?? fp.frontTopHeight;
+            container.generatorParams.doorGap = fp.doorGap;
+            container.generatorParams.doorDepth = fp.doorDepth ?? 45;
+            container.generatorParams.plinthHeight = fp.plinthHeight ?? 40;
+            container.generatorParams.finish = fp.finish ?? 'WHITE';
+            container.generatorParams.corpusWidth = fp.corpusWidth;
+            container.generatorParams.corpusDepth = fp.corpusDepth;
+            container.generatorParams.frontWidth = fp.corpusWidth;
+            container.generatorParams.frontDepth = fp.doorDepth ?? 45;
+        } else {
+            const mp = p as MicrowaveParamsMm;
+            container.generatorParams.frontHeight = mp.frontHeight;
+            container.generatorParams.nalGoraMicro = mp.nalGoraMicro;
+            container.generatorParams.nalDolneMicro = mp.nalDolneMicro;
+            container.generatorParams.frontWidth = p.frontWidth;
+            container.generatorParams.frontDepth = p.frontDepth;
+            container.generatorParams.corpusWidth = p.corpusWidth;
+            container.generatorParams.corpusDepth = p.corpusDepth;
+        }
     }
 
     const activeIds = new Set<string>();
@@ -201,7 +268,7 @@ export interface CreateApplianceOptions {
     kind?: ApplianceKind;
     name?: string;
     position?: { x: number; y: number; z?: number };
-    params?: Partial<MicrowaveParamsMm>;
+    params?: Partial<MicrowaveParamsMm & FridgeParamsMm>;
     targetCabinetId?: string;
 }
 
@@ -216,21 +283,36 @@ export function createSmartAppliance(
     if (!doc) return null;
 
     const kind = options.kind || 'MICROWAVE';
-    const name = options.name || (kind === 'MICROWAVE' ? 'Mikrofala' : 'Piekarnik');
+    const name = options.name || (kind === 'FRIDGE' ? 'Lodówka do zabudowy' : kind === 'MICROWAVE' ? 'Mikrofala' : 'Piekarnik');
 
-    const mergedParams: MicrowaveParamsMm = {
-        ...DEFAULT_MICROWAVE_PARAMS,
+    const defaultParams = kind === 'FRIDGE'
+        ? DEFAULT_FRIDGE_PARAMS
+        : kind === 'OVEN'
+            ? DEFAULT_OVEN_PARAMS
+            : DEFAULT_MICROWAVE_PARAMS;
+
+    const mergedParams: any = {
+        ...defaultParams,
         ...(options.params || {}),
     };
 
+    const totalApplianceH = kind === 'FRIDGE'
+        ? ((mergedParams.plinthHeight ?? 40) + mergedParams.frontBottomHeight + mergedParams.doorGap + mergedParams.frontTopHeight)
+        : mergedParams.frontHeight;
+
+    const totalApplianceD = kind === 'FRIDGE'
+        ? (mergedParams.corpusDepth + (mergedParams.doorDepth ?? 45))
+        : (mergedParams.corpusDepth + mergedParams.frontDepth);
+
     const container = new ContainerModel({
         name,
-        width: mmToNm(mergedParams.frontWidth),
-        height: mmToNm(mergedParams.frontHeight),
-        depth: mmToNm(mergedParams.corpusDepth + mergedParams.frontDepth),
+        width: mmToNm(mergedParams.corpusWidth || mergedParams.frontWidth),
+        height: mmToNm(totalApplianceH),
+        depth: mmToNm(totalApplianceD),
     });
 
     (container as any).role = 'APPLIANCE';
+    (container as any).is_smartframe = true;
     container.generatorParams = {
         type: SMART_APPLIANCE_TYPE,
         kind,

@@ -296,11 +296,12 @@ export class CAMSyncService {
         let prog: CNCProgramState;
         if (!program) {
             const pName = panel.name || tx(cncTekst, 'extractor.panel_default', TX_NS);
+            const targetPanelId = String(panel.id || 'panel');
             prog = {
-                id: `prog_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                id: `prog_${targetPanelId}`,
                 name: `Program_${pName}`,
                 targetPanel: panel,
-                targetPanelId: String(panel.id || ''),
+                targetPanelId,
                 targetPanelLabel: pName,
                 wcsName: 'G55',
                 cornerIndex: -1,

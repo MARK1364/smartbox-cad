@@ -929,22 +929,37 @@ select.sp-form-row-value-input {
 }
 
 .cad-axis-frame {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    background: rgba(0, 0, 0, 0.22);
-    padding: 5px 7px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 3px 6px;
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
 }
 
 .cad-axis-frame-title {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    padding-bottom: 2px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: none;
+}
+
+.cad-axis-badge {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    flex: 0 0 16px;
+    text-align: center;
+}
+
+.cad-axis-badge--x { color: #fca5a5; }
+.cad-axis-badge--y { color: #86efac; }
+.cad-axis-badge--z { color: #93c5fd; }
+
+.cad-axis-frame-body {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
 }
 
 .cad-axis-frame--x {
@@ -981,3 +996,154 @@ select.sp-form-row-value-input {
     border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* Przyciski Flip / Odbicie lustrzane osi */
+.sp-axis-flip-btn {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.sp-axis-flip-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #fff;
+}
+
+/* Etykiety i wymiary na scenie 3D (Wymiarówki) */
+.sp-scene-dim-badge {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: monospace;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    pointer-events: auto;
+    z-index: 50;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.sp-scene-dim-badge:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
+}
+
+.sp-scene-dim-badge--x {
+    background: #ef4444;
+    color: #ffffff;
+    border: 1px solid #fca5a5;
+}
+
+.sp-scene-dim-badge--y {
+    background: #16a34a;
+    color: #ffffff;
+    border: 1px solid #86efac;
+}
+
+.sp-scene-dim-badge--z {
+    background: #2563eb;
+    color: #ffffff;
+    border: 1px solid #93c5fd;
+}
+
+/* Okienko szybkiej edycji wymiaru (PPM na wymiarze / otworze) */
+.sp-quick-dim-modal {
+    position: absolute;
+    background: #1e293b;
+    border: 1px solid #3b82f6;
+    border-radius: 6px;
+    padding: 8px 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 160px;
+    pointer-events: auto;
+}
+
+.sp-quick-dim-modal-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+.sp-quick-dim-modal-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-quick-dim-modal-input {
+    background: #0f172a;
+    border: 1px solid #475569;
+    color: #f8fafc;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    width: 80px;
+    outline: none;
+}
+
+.sp-quick-dim-modal-input:focus {
+    border-color: #38bdf8;
+}
+
+.sp-quick-dim-modal-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+
+
+/* Wiersz odniesienia: [Label Odniesienie] [Select Strona] [Input Odsunięcie mm] [Flip] */
+.cad-axis-ref-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+}
+.cad-axis-ref-label {
+    font-size: 10px;
+    color: var(--cad-muted);
+    flex: 0 0 auto;
+    white-space: nowrap;
+    letter-spacing: -0.02em;
+}
+.cad-axis-ref-select {
+    flex: 0 1 82px;
+    min-width: 72px;
+    max-width: 90px;
+    padding: 2px 3px;
+    font-size: 11px;
+}
+.cad-axis-ref-val {
+    flex: 1 1 auto;
+    min-width: 80px;
+}
+.cad-axis-ref-val .cad-prop-input {
+    min-width: 46px;
+    max-width: none;
+    width: 100%;
+    padding: 2px 4px;
+    font-size: 12px;
+    font-weight: 600;
+}

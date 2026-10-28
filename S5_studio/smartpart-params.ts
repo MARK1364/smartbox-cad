@@ -9,6 +9,7 @@
  */
 
 import type {
+    MainContainerDims,
     SmartPartBinding,
     SmartPartBindingField,
     SmartPartBodyItem,
@@ -16,9 +17,11 @@ import type {
     SmartPartPackageDefinition,
     SmartPartParameter,
     SmartPartTargetType,
+    XRefWall,
 } from './smartpart-studio-types.js';
 import {
     computeAbsoluteFromReference,
+    cutOrientFromRefs,
     partDimsAsMain,
 } from './smartpart-studio-types.js';
 
@@ -560,4 +563,405 @@ export function removeParameter(def: SmartPartPackageDefinition, paramKey: strin
         parameters: parameters.length > 0 ? parameters : undefined,
         bindings: bindings.length > 0 ? bindings : undefined,
     };
+}
+
+/**
+ * Odwraca (lustrzanie / flip) położenie i orientację cięcia (HOLE / POCKET) względem zadanej osi CAD.
+ * Jeśli odniesienie do ściany jest ustawione (np. LEFT <-> RIGHT, FRONT <-> BACK, BOTTOM <-> TOP),
+ * zamienia ścianę referencyjną z zachowaniem offsetu od przeciwległej ściany.
+ * Jeśli odniesieniem jest CENTER, inwertuje znak offsetu (lub xMm/yMm/zMm).
+ * Dla osi cięcia odwraca również kierunek (direction).
+ */
+export function flipSmartPartCut<T extends SmartPartCut>(
+    cut: T,
+    axis: 'X' | 'Y' | 'Z',
+    partDims: { widthMm: number; heightMm: number; depthMm: number }
+): T {
+    const cloned = { ...cut };
+    let refX = cloned.refX || 'CENTER';
+    let refY = cloned.refY || 'CENTER';
+    let refZ = cloned.refZ || 'CENTER';
+    let offX = cloned.offsetX_mm ?? cloned.xMm;
+    let offY = cloned.offsetY_mm ?? cloned.yMm;
+    let offZ = cloned.offsetZ_mm ?? cloned.zMm;
+
+    if (axis === 'X') {
+        if (refX === 'LEFT') {
+            refX = 'RIGHT';
+        } else if (refX === 'RIGHT') {
+            refX = 'LEFT';
+        } else {
+            offX = -offX;
+        }
+    } else if (axis === 'Y') {
+        if (refY === 'FRONT') {
+            refY = 'BACK';
+        } else if (refY === 'BACK') {
+            refY = 'FRONT';
+        } else {
+            offY = -offY;
+        }
+    } else if (axis === 'Z') {
+        if (refZ === 'BOTTOM') {
+            refZ = 'TOP';
+        } else if (refZ === 'TOP') {
+            refZ = 'BOTTOM';
+        } else {
+            offZ = -offZ;
+        }
+    }
+
+    const abs = computeAbsoluteFromReference(partDims, refX, offX, refY, offY, refZ, offZ);
+    cloned.refX = refX;
+    cloned.refY = refY;
+    cloned.refZ = refZ;
+    cloned.offsetX_mm = offX;
+    cloned.offsetY_mm = offY;
+    cloned.offsetZ_mm = offZ;
+    cloned.xMm = abs.xMm;
+    cloned.yMm = abs.yMm;
+    cloned.zMm = abs.zMm;
+
+    // Przeliczenie orientacji
+    let orient = cutOrientFromRefs(cloned);
+    if (orient.axis === axis) {
+        // Jeśli cięcie było wiercone/wypuszczane wzdłuż tej samej osi, odwróć kierunek wysuwu
+        orient = { axis: orient.axis, direction: (orient.direction === 1 ? -1 : 1) as 1 | -1 };
+    }
+    cloned.axis = orient.axis;
+    cloned.direction = orient.direction;
+
+    return cloned;
+}
+
+/**
+ * Zamienia oznaczenie strony w nazwie (Lewy <-> Prawy, (L) <-> (P)).
+ */
+export function mirrorName(name: string): string {
+    if (name.includes('(L)')) return name.replace('(L)', '(P)');
+    if (name.includes('(P)')) return name.replace('(P)', '(L)');
+    if (/lew([yae])/i.test(name)) {
+        return name.replace(/lew([yae])/gi, (m, ending) => {
+            const isUpper = m[0] === 'L';
+            return (isUpper ? 'Praw' : 'praw') + ending;
+        });
+    }
+    if (/praw([yae])/i.test(name)) {
+        return name.replace(/praw([yae])/gi, (m, ending) => {
+            const isUpper = m[0] === 'P';
+            return (isUpper ? 'Lew' : 'lew') + ending;
+        });
+    }
+    return `${name} (P)`;
+}
+
+/**
+ * Duplikuje Part z symetrycznym odbiciem w osi X korpusu (Lewy <-> Prawy)
+ * wraz ze wszystkimi jego otworami i wycięciami (odwrócony zwrot wiercenia w boki).
+ */
+export function mirrorClonePart(
+    part: SmartPartBodyItem,
+    mainContainer: MainContainerDims,
+    cuts: SmartPartCut[],
+    newPartId: string,
+    allocCutId: (index: number) => string
+): { mirroredPart: SmartPartBodyItem; mirroredCuts: SmartPartCut[] } {
+    let refX: XRefWall = part.refX || 'CENTER';
+    let offX = part.offsetX_mm ?? part.xMm;
+    if (refX === 'LEFT') {
+        refX = 'RIGHT';
+    } else if (refX === 'RIGHT') {
+        refX = 'LEFT';
+    } else {
+        offX = -offX;
+    }
+
+    const abs = computeAbsoluteFromReference(
+        mainContainer,
+        refX,
+        offX,
+        part.refY || 'CENTER',
+        part.offsetY_mm ?? part.yMm,
+        part.refZ || 'CENTER',
+        part.offsetZ_mm ?? part.zMm
+    );
+
+    const mirroredPart: SmartPartBodyItem = {
+        ...part,
+        id: newPartId,
+        name: mirrorName(part.name || 'Part'),
+        refX,
+        offsetX_mm: offX,
+        xMm: abs.xMm,
+        yMm: abs.yMm,
+        zMm: abs.zMm,
+        mirroredFrom: part.id,
+        mirrorAxis: 'X',
+    };
+
+    const partDims = {
+        widthMm: mirroredPart.widthMm,
+        heightMm: mirroredPart.heightMm,
+        depthMm: mirroredPart.depthMm,
+    };
+
+    const mirroredCuts = cuts
+        .filter((c) => c.partId === part.id)
+        .map((c, idx) => {
+            const flipped = flipSmartPartCut(c, 'X', partDims);
+            return {
+                ...flipped,
+                id: allocCutId(idx),
+                partId: newPartId,
+                name: mirrorName(c.name || 'Cut'),
+                mirroredFrom: c.id,
+                mirrorAxis: 'X',
+            } as SmartPartCut;
+        });
+
+    return { mirroredPart, mirroredCuts };
+}
+
+/**
+ * Automatyczna synchronizacja asocjacyjnych bliźniaków lustrzanych (SSOT).
+ * Wszystkie części i wycięcia z `mirroredFrom` aktualizują swoje wymiary, położenie i otwory
+ * zgodnie ze stanem części źródłowej.
+ */
+export function syncAssociativeMirrors(def: SmartPartPackageDefinition): SmartPartPackageDefinition {
+    if (!def.parts || def.parts.length === 0) return def;
+
+    const hasMirrored = def.parts.some((p) => !!p.mirroredFrom) || def.cuts.some((c) => !!c.mirroredFrom);
+    if (!hasMirrored) return def;
+
+    const updatedParts = def.parts.map((part) => {
+        if (!part.mirroredFrom) return part;
+        const sourcePart = def.parts.find((p) => p.id === part.mirroredFrom);
+        if (!sourcePart) {
+            const detached = { ...part };
+            delete detached.mirroredFrom;
+            delete detached.mirrorAxis;
+            return detached;
+        }
+
+        const axis = part.mirrorAxis || 'X';
+        let refX: XRefWall = sourcePart.refX || 'CENTER';
+        let offX = sourcePart.offsetX_mm ?? sourcePart.xMm;
+
+        if (axis === 'X') {
+            if (refX === 'LEFT') refX = 'RIGHT';
+            else if (refX === 'RIGHT') refX = 'LEFT';
+            else offX = -offX;
+        }
+
+        let refY = sourcePart.refY || 'CENTER';
+        let offY = sourcePart.offsetY_mm ?? sourcePart.yMm;
+        if (axis === 'Y') {
+            if (refY === 'FRONT') refY = 'BACK';
+            else if (refY === 'BACK') refY = 'FRONT';
+            else offY = -offY;
+        }
+
+        let refZ = sourcePart.refZ || 'CENTER';
+        let offZ = sourcePart.offsetZ_mm ?? sourcePart.zMm;
+        if (axis === 'Z') {
+            if (refZ === 'BOTTOM') refZ = 'TOP';
+            else if (refZ === 'TOP') refZ = 'BOTTOM';
+            else offZ = -offZ;
+        }
+
+        const abs = computeAbsoluteFromReference(
+            def.mainContainer,
+            refX,
+            offX,
+            refY,
+            offY,
+            refZ,
+            offZ
+        );
+
+        return {
+            ...part,
+            widthMm: sourcePart.widthMm,
+            heightMm: sourcePart.heightMm,
+            depthMm: sourcePart.depthMm,
+            colorHex: sourcePart.colorHex,
+            glbPath: sourcePart.glbPath,
+            frozen: sourcePart.frozen,
+            refX,
+            offsetX_mm: offX,
+            refY,
+            offsetY_mm: offY,
+            refZ,
+            offsetZ_mm: offZ,
+            xMm: abs.xMm,
+            yMm: abs.yMm,
+            zMm: abs.zMm,
+        };
+    });
+
+    // 1. Zbieramy cięcia niezależne (niebędące asocjacyjnymi klonami z mirroredFrom)
+    const independentCuts = def.cuts.filter((c) => {
+        const parentPart = updatedParts.find((p) => p.id === c.partId);
+        return !parentPart?.mirroredFrom && !c.mirroredFrom;
+    });
+
+    const newMirroredCuts: SmartPartCut[] = [];
+
+    updatedParts.forEach((mirroredPart) => {
+        if (!mirroredPart.mirroredFrom) return;
+        const sourcePart = updatedParts.find((p) => p.id === mirroredPart.mirroredFrom);
+        if (!sourcePart) return;
+
+        const axis = mirroredPart.mirrorAxis || 'X';
+        const sourceCuts = independentCuts.filter((c) => c.partId === sourcePart.id);
+        const existingForThis = def.cuts.filter((c) => c.partId === mirroredPart.id);
+
+        const partDims = {
+            widthMm: mirroredPart.widthMm,
+            heightMm: mirroredPart.heightMm,
+            depthMm: mirroredPart.depthMm,
+        };
+
+        sourceCuts.forEach((sCut, idx) => {
+            const existing = existingForThis.find((c) => c.mirroredFrom === sCut.id);
+            const cutId = existing ? existing.id : `cut_${mirroredPart.id}_${sCut.id || idx}`;
+            const flipped = flipSmartPartCut(sCut, axis, partDims);
+            newMirroredCuts.push({
+                ...flipped,
+                id: cutId,
+                partId: mirroredPart.id,
+                mirroredFrom: sCut.id,
+                mirrorAxis: axis,
+                name: mirrorName(sCut.name || 'Cut'),
+            } as SmartPartCut);
+        });
+    });
+
+    // 2. Standalone mirrored cuts (samodzielne wycięcie odbite na tym samym module)
+    const standaloneMirroredCuts = def.cuts
+        .filter((c) => {
+            const parentPart = updatedParts.find((p) => p.id === c.partId);
+            return !parentPart?.mirroredFrom && !!c.mirroredFrom;
+        })
+        .map((c) => {
+            const sourceCut = independentCuts.find((sc) => sc.id === c.mirroredFrom);
+            if (!sourceCut) {
+                const detached = { ...c };
+                delete detached.mirroredFrom;
+                delete detached.mirrorAxis;
+                return detached;
+            }
+            const parentPart = updatedParts.find((p) => p.id === c.partId);
+            const partDims = parentPart
+                ? { widthMm: parentPart.widthMm, heightMm: parentPart.heightMm, depthMm: parentPart.depthMm }
+                : def.mainContainer;
+            const axis = c.mirrorAxis || 'X';
+            const flipped = flipSmartPartCut(sourceCut, axis, partDims);
+            return {
+                ...flipped,
+                id: c.id,
+                partId: c.partId,
+                mirroredFrom: c.mirroredFrom,
+                mirrorAxis: axis,
+                name: c.name || mirrorName(sourceCut.name || 'Cut'),
+            } as SmartPartCut;
+        });
+
+    return {
+        ...def,
+        parts: updatedParts,
+        cuts: [...independentCuts, ...standaloneMirroredCuts, ...newMirroredCuts],
+    };
+}
+
+/**
+ * Odłącza asocjacyjność wybranego Parta, przekształcając go w niezależną kopię.
+ */
+export function detachMirror(def: SmartPartPackageDefinition, partId: string): SmartPartPackageDefinition {
+    const updatedParts = def.parts.map((p) => {
+        if (p.id !== partId) return p;
+        const copy = { ...p };
+        delete copy.mirroredFrom;
+        delete copy.mirrorAxis;
+        return copy;
+    });
+    const updatedCuts = def.cuts.map((c) => {
+        if (c.partId !== partId) return c;
+        const copy = { ...c };
+        delete copy.mirroredFrom;
+        delete copy.mirrorAxis;
+        return copy;
+    });
+    return {
+        ...def,
+        parts: updatedParts,
+        cuts: updatedCuts,
+    };
+}
+
+/**
+ * Odłącza asocjacyjność wybranego wycięcia.
+ */
+export function detachCutMirror(def: SmartPartPackageDefinition, cutId: string): SmartPartPackageDefinition {
+    const updatedCuts = def.cuts.map((c) => {
+        if (c.id !== cutId) return c;
+        const copy = { ...c };
+        delete copy.mirroredFrom;
+        delete copy.mirrorAxis;
+        return copy;
+    });
+    return {
+        ...def,
+        cuts: updatedCuts,
+    };
+}
+
+/**
+ * Duplikuje pojedyncze wycięcie z odbiciem w osi X.
+ */
+export function mirrorCloneCut(
+    cut: SmartPartCut,
+    partDims: { widthMm: number; heightMm: number; depthMm: number },
+    newCutId: string
+): SmartPartCut {
+    const flipped = flipSmartPartCut(cut, 'X', partDims);
+    return {
+        ...flipped,
+        id: newCutId,
+        name: mirrorName(cut.name || 'Cut'),
+        mirroredFrom: cut.id,
+        mirrorAxis: 'X',
+    } as SmartPartCut;
+    return {
+        ...flipped,
+        id: newCutId,
+        name: mirrorName(cut.name || 'Cut'),
+    } as SmartPartCut;
+}
+
+/**
+ * Duplikuje wszystkie części i otwory w pakiecie z odbiciem w osi X (tworzy kompletną parę L+P).
+ */
+export function mirrorCloneAllParts(
+    def: SmartPartPackageDefinition,
+    allocBodyId: (index: number) => string,
+    allocCutId: (partIdx: number, cutIdx: number) => string
+): { newParts: SmartPartBodyItem[]; newCuts: SmartPartCut[] } {
+    const newParts: SmartPartBodyItem[] = [];
+    const newCuts: SmartPartCut[] = [];
+
+    def.parts.forEach((p, pIdx) => {
+        const newPartId = allocBodyId(pIdx);
+        const res = mirrorClonePart(
+            p,
+            def.mainContainer,
+            def.cuts,
+            newPartId,
+            (cIdx) => allocCutId(pIdx, cIdx)
+        );
+        newParts.push(res.mirroredPart);
+        newCuts.push(...res.mirroredCuts);
+    });
+
+    return { newParts, newCuts };
 }

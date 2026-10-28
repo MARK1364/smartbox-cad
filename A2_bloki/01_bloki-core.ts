@@ -1110,7 +1110,9 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         blok_empty: 'EMPTY',
         blok_shelves: 'SHELVES',
         blok_led_external: 'LED_EXTERNAL',
-        blok_led_internal: 'LED_INTERNAL'
+        blok_led_internal: 'LED_INTERNAL',
+        blok_hangers: 'HANGERS',
+        smartpart_hangers: 'HANGERS'
     };
     const boxType = params.boxType || typeToBox[params.type] || 'SHELVES';
 

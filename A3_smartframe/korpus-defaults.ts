@@ -23,6 +23,8 @@ export interface KorpusDefaultsMm {
     liczba_stref: 1 | 2 | 3;
     wysokosc_strefy_dolnej_mm: number;
     wysokosc_strefy_srodkowej_mm: number;
+    /** Odsunięcie lica płyty pleców od tylnej krawędzi [mm]. */
+    cofniecie_plecow_mm: number;
     /** Szerokość blendy [mm] — tylko korpus_rogowy1. */
     szerokosc_blendy_mm?: number;
     strona_blendy?: 'LEFT' | 'RIGHT';
@@ -47,13 +49,16 @@ function rulesForType(type: KorpusDefaultsCabinetType): any {
 /** Bazowe defaulty gabarytu z reguł typu `korpus3`. */
 export function korpusDefaultDimsMm(rules: any = korpus3Rules): KorpusDefaultsMm {
     const d = rules?.parameters?.defaults || {};
+    const ccr = rules?.cabinet_construction_rules?.defaults || {};
+    const rawInset = ccr.back_inset !== undefined ? rulesMToMm(ccr.back_inset) : 3;
     return {
         szerokosc_mm: rulesMToMm(d.width, 1000),
         wysokosc_mm: rulesMToMm(d.height, 2200),
         glebokosc_mm: rulesMToMm(d.depth, 600),
         liczba_stref: 3,
         wysokosc_strefy_dolnej_mm: rulesMToMm(d.bottom_height, 500),
-        wysokosc_strefy_srodkowej_mm: rulesMToMm(d.middle_height, 1200)
+        wysokosc_strefy_srodkowej_mm: rulesMToMm(d.middle_height, 1200),
+        cofniecie_plecow_mm: rawInset
     };
 }
 

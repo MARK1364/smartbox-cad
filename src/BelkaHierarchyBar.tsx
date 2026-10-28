@@ -12,9 +12,12 @@ import type { ProjectDocument } from '../A1_core/project-document';
 import { buildSelectionChain, resolveFeatureId } from '../A1_core/selection-path';
 import { featureOperationLabel } from '../o1_operacji';
 import { CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
+import { openCadEditEntity } from './floating-edit/cad-edit-entity.js';
+import { PropertiesManager } from '../A1_core/properties.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
+import { isSmartWallContainer } from '../S4_sciany/smartwall-types.js';
 import srcTekstRaw from './src_tekst.json';
 
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
@@ -158,13 +161,27 @@ function selectCrumb(crumb: Crumb, clearFeature?: () => void) {
     if (crumb.kind === 'assembly') {
         clearFeature?.();
         ui.emitTree('select-container', { id: crumb.id });
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cad-close-floating-operation'));
+        }
     } else if (crumb.kind === 'panel') {
         clearFeature?.();
+        const panelNode = doc?.findNode(crumb.id);
+        const panel = panelNode?.domainData;
+        if (panel) {
+            PropertiesManager.instance.inspectPanel(panel, ContextManager.instance.panelViews, true);
+        }
         ui.emitTree('select-part', { id: crumb.id, uuid: crumb.id });
-        window.dispatchEvent(new CustomEvent('cad-switch-tab', { detail: { tabId: 'tab-a4-smartpanel' } }));
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cad-close-floating-operation'));
+            window.dispatchEvent(new CustomEvent('cad-switch-tab', { detail: { tabId: 'tab-a4-smartpanel' } }));
+        }
     } else if (crumb.kind === 'hardware') {
         clearFeature?.();
         ui.emitTree('select-hardware', { id: crumb.id });
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cad-close-floating-operation'));
+        }
     } else if (crumb.kind === 'feature' && crumb.panelId) {
         ui.emitTree('select-feature', { id: crumb.id, panelId: crumb.panelId, openProperties: false });
     }
@@ -232,9 +249,10 @@ function openCrumbContextMenu(crumb: Crumb, clientX: number, clientY: number) {
         const isHandle = isSmartPartHandle(data);
         const isAgd = isApplianceDomain(data);
         const isBlok = isBlokiDomain(data);
+        const isWall = isSmartWallContainer(data);
         ui.emitTree('select-container', { id: crumb.id });
         ui.emitTree('contextmenu-tree-node', {
-            type: isHandle ? 'handle' : (isAgd ? 'agd' : (isBlok ? 'bloki' : 'container')),
+            type: isHandle ? 'handle' : (isAgd ? 'agd' : (isWall ? 'wall' : (isBlok ? 'bloki' : 'container'))),
             id: crumb.id,
             name: crumb.label,
             clientX,
@@ -345,6 +363,22 @@ export const BelkaHierarchyBar: React.FC<BelkaHierarchyBarProps> = ({ projectMod
                             className={`belka-hierarchia-btn ${isLast ? 'is-current' : ''}`}
                             title={crumbTooltip(crumb)}
                             onClick={() => selectCrumb(crumb, clearFeature)}
+                            onDoubleClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (crumb.kind === 'feature' && crumb.panelId) {
+                                    openCadEditEntity({
+                                        entityId: crumb.panelId,
+                                        panelId: crumb.panelId,
+                                        featureId: crumb.id,
+                                        kind: 'operation',
+                                    });
+                                } else if (crumb.kind === 'panel') {
+                                    openCadEditEntity({ entityId: crumb.id, kind: 'panel' });
+                                } else if (crumb.kind === 'assembly') {
+                                    openCadEditEntity({ entityId: crumb.id, kind: 'korpus' });
+                                }
+                            }}
                             onContextMenu={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();

@@ -11,6 +11,7 @@ import { isCylindricalPart } from '../../A1_core/cad-node/part-shape.js';
 import { syncSelectionHighlights } from '../../A1_core/selection-highlight.js';
 import { HardwareLoader } from '../../B1_biblioteka/hardware-loader.js';
 import { syncHangerMeshesFromDocument } from '../../A2_bloki/hangers/hanger-mesh.js';
+import { syncSinkMeshesFromDocument } from '../../A2_bloki/sinks/sink-mesh.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
@@ -105,12 +106,24 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
 
         const f = panel.features;
         const fCount = f?.length || 0;
-        const fp = fCount === 0 ? '0' : `${fCount}_${f[0]?.id}_${f[fCount - 1]?.id}`;
+        const fp = fCount === 0
+          ? '0'
+          : `${fCount}_` + f.map((feat: any) => {
+              const p = feat.params;
+              return p
+                ? `${feat.id}_${p.u ?? p.x}_${p.v ?? p.y}_${p.width}_${p.length ?? p.height}_${p.depth}_${p.diameter}`
+                : feat.id;
+            }).join(';');
         const isDimsDirty =
           view.lastWidth !== panel.width ||
           view.lastHeight !== panel.height ||
           view.lastThickness !== panel.thickness;
         const isFeaturesDirty = view.lastFeaturesFingerprint !== fp;
+
+        const colorKey = panel.color
+          ? `${panel.color.r.toFixed(3)}_${panel.color.g.toFixed(3)}_${panel.color.b.toFixed(3)}`
+          : (panel.materialId || panel.material || '');
+        const isColorDirty = (view as any).lastColorKey !== colorKey;
 
         if (isNewView || isDimsDirty || isFeaturesDirty) {
           anyGeometryRebuilt = true;
@@ -122,8 +135,14 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           view.lastHeight = panel.height;
           view.lastThickness = panel.thickness;
           view.lastFeaturesFingerprint = fp;
+          (view as any).lastColorKey = colorKey;
 
           if (typeof (view as any).renderFeatures === 'function') (view as any).renderFeatures();
+        } else if (isColorDirty) {
+          (view as any).lastColorKey = colorKey;
+          if (typeof (view as any)._updateMaterialAppearance === 'function') {
+            (view as any)._updateMaterialAppearance();
+          }
         }
 
         if (view._updateTransform) view._updateTransform();
@@ -294,6 +313,13 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
         syncHangerMeshesFromDocument(document);
       } catch (err) {
         console.warn('[rebuildGeometry] syncHangerMeshes:', err);
+      }
+
+      // Zlewy SmartPart — kołnierz + komora
+      try {
+        syncSinkMeshesFromDocument(document);
+      } catch (err) {
+        console.warn('[rebuildGeometry] syncSinkMeshes:', err);
       }
 
       syncSelectionHighlights(ctx);

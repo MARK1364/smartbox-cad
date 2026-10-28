@@ -21,6 +21,8 @@ import { ContainerModel } from '../A1_core/container-model.js';
 import { SMARTPART_HANGERS_GROUP_TYPE } from './hangers/hanger-types.js';
 import { SMARTPART_HANDLE_TYPE } from './handles/handle-types.js';
 import { HandleCatalogBrowser } from './handles/handle-catalog-browser.js';
+import { SMARTPART_SINK_TYPE } from './sinks/sink-types.js';
+import { SinkEditPanel } from './sinks/sink-edit-panel.js';
 import { updateSmartPartHangersGroup } from './hangers/hanger-apply.js';
 import { customReferencesFromDetectedBay } from './hangers/smartpart-bay-placement.js';
 import { resolveDetectedBay } from './02_bloki-bay-detector.js';
@@ -49,7 +51,9 @@ function boxTypeFromParams(p: any): string {
         blok_led_external: 'LED_EXTERNAL',
         blok_led_internal: 'LED_INTERNAL',
         blok_handle: 'HANDLES',
-        smartpart_handle: 'HANDLES'
+        smartpart_handle: 'HANDLES',
+        blok_sink: 'SINKS',
+        smartpart_sink: 'SINKS'
     };
     return typeToBox[p?.type] || 'SHELVES';
 }
@@ -62,7 +66,7 @@ function isApplianceContainer(model: any): boolean {
     return role === 'APPLIANCE' || gp.type === 'smart_appliance' || gp.boxType === 'APPLIANCE';
 }
 
-/** Kontener Bloku LUB grupy zawieszek/uchwytów — spójna obsługa w BlokiUI. */
+/** Kontener Bloku LUB grupy zawieszek/uchwytów/zlewu — spójna obsługa w BlokiUI. */
 function isBlokiOrHangersContainer(model: any): boolean {
     if (!model || model.type !== 'container') return false;
     if (isApplianceContainer(model)) return false;
@@ -71,7 +75,15 @@ function isBlokiOrHangersContainer(model: any): boolean {
     if (gp.type?.startsWith('blok_') || gp.boxType) return true;
     if (gp.type === SMARTPART_HANGERS_GROUP_TYPE || role === 'SMARTPART_HANGERS') return true;
     if (gp.type === SMARTPART_HANDLE_TYPE || role === 'SMARTPART_HANDLE') return true;
+    if (gp.type === SMARTPART_SINK_TYPE || role === 'SMARTPART_SINK') return true;
     return false;
+}
+
+function isSinkContainer(model: any): boolean {
+    if (!model) return false;
+    const gp = model.generatorParams || {};
+    const role = String(model.role || '');
+    return gp.type === SMARTPART_SINK_TYPE || gp.type === 'blok_sink' || role === 'SMARTPART_SINK' || gp.boxType === 'SINKS';
 }
 
 function isHangersGroupContainer(model: any): boolean {
@@ -103,7 +115,7 @@ export function BlokiUI({ projectModel }: Props) {
     const [pickerMode, setPickerMode] = useState<'internal' | 'external' | 'panel'>('internal');
     const [pendingPickType, setPendingPickType] = useState<string | null>(null);
     /** Katalog SmartParts (uchwyty/zawieszki) w panelu Bloki — niezależny od stanu pickera 3D. */
-    const [panelTool, setPanelTool] = useState<'HANDLES' | 'HANGERS' | null>(null);
+    const [panelTool, setPanelTool] = useState<'HANDLES' | null>(null);
     const [uiMode, setUiMode] = useState<'internal' | 'external' | 'panel'>('internal');
 
     useEffect(() => {
@@ -378,7 +390,8 @@ export function BlokiUI({ projectModel }: Props) {
             'LED_EXTERNAL': 'blok_led_external',
             'LED_INTERNAL': 'blok_led_internal',
             'HANDLES': 'blok_handle',
-            'HANGERS': 'smartpart_hangers'
+            'HANGERS': 'smartpart_hangers',
+            'SINKS': 'blok_sink'
         };
         const selected = val in typeMap ? val as keyof typeof typeMap : 'EMPTY';
         const patch: BlokiGeneratorParamsPatch = {
@@ -940,7 +953,7 @@ export function BlokiUI({ projectModel }: Props) {
                 }}>
                     {modules.map((mod) => {
                         const isCurrentActive = container && boxType === mod.id;
-                        const isPanelSmartTool = mod.id === 'HANDLES' || mod.id === 'HANGERS';
+                        const isPanelSmartTool = mod.id === 'HANDLES';
                         const isToolOpen = isPanelSmartTool && panelTool === mod.id;
                         const isCurrentPicking = isPickerActive && (pendingPickType === mod.id || panelTool === mod.id);
 
@@ -982,7 +995,7 @@ export function BlokiUI({ projectModel }: Props) {
                                 }}
                                 onClick={() => {
                                     // Uchwyty / zawieszki = katalog SmartParts w panelu edycji (nie przełączaj typu Bloku)
-                                    if (mod.id === 'HANDLES' || mod.id === 'HANGERS') {
+                                    if (mod.id === 'HANDLES') {
                                         setUiMode('panel');
                                         const ctrl = ContextManager.instance.blokiBayController;
                                         if (panelTool === mod.id) {
@@ -992,6 +1005,19 @@ export function BlokiUI({ projectModel }: Props) {
                                             return;
                                         }
                                         setPanelTool(mod.id);
+                                        setPendingPickType(mod.id);
+                                        ctrl?.startPicker(mod.id, 'panel');
+                                        return;
+                                    }
+                                    if (mod.id === 'SINKS') {
+                                        setUiMode('panel');
+                                        setPanelTool(null);
+                                        const ctrl = ContextManager.instance.blokiBayController;
+                                        if (isPickerActive && pendingPickType === mod.id) {
+                                            ctrl?.stopPicker();
+                                            setPendingPickType(null);
+                                            return;
+                                        }
                                         setPendingPickType(mod.id);
                                         ctrl?.startPicker(mod.id, 'panel');
                                         return;
@@ -1019,7 +1045,9 @@ export function BlokiUI({ projectModel }: Props) {
                                     } else if (uiMode === 'panel') {
                                         text = mod.id === 'HANDLES'
                                             ? 'Kliknij, aby otworzyć katalog uchwytów i wskazać formatkę w 3D.'
-                                            : 'Kliknij, aby otworzyć zawieszki i wskazać pozycję w 3D.';
+                                            : mod.id === 'SINKS'
+                                                ? 'Kliknij, aby wskazać formatkę (np. blat) w 3D i wstawić zlew.'
+                                                : 'Kliknij, aby otworzyć zawieszki i wskazać pozycję w 3D.';
                                     }
                                     TooltipManager.instance.setActiveHint({
                                         id: `blok_mod_${mod.id}`,
@@ -1059,7 +1087,7 @@ export function BlokiUI({ projectModel }: Props) {
                                     {mod.icon((isToolOpen || isCurrentPicking) ? (isPanelSmartTool ? '#93c5fd' : '#4ade80') : (isCurrentActive ? '#fff' : '#93c5fd'))}
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', marginTop: '2px' }}>
-                                    {mod.id !== 'HANDLES' && mod.id !== 'HANGERS' && (
+                                    {mod.id !== 'HANDLES' && mod.id !== 'SINKS' && (
                                         <span className="hand-icon" title="Chwyć i przeciągnij na scenę 3D" style={{ opacity: 0.9, display: 'inline-flex', alignItems: 'center', color: '#38bdf8' }}>
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                 <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
@@ -1080,7 +1108,7 @@ export function BlokiUI({ projectModel }: Props) {
                                 )}
                                 {(isToolOpen || isCurrentPicking) && (
                                     <span style={{ fontSize: '8px', color: isPanelSmartTool ? '#93c5fd' : '#4ade80', marginTop: '1px', fontWeight: 'bold' }}>
-                                        {isPanelSmartTool ? 'Katalog' : 'Wskaż 3D'}
+                                        {isPanelSmartTool ? 'Wskaż 3D' : 'Wskaż 3D'}
                                     </span>
                                 )}
                             </div>
@@ -1102,26 +1130,6 @@ export function BlokiUI({ projectModel }: Props) {
                     </div>
                 )}
 
-                {/* Podpowiedź / widok dla modułu ZAWIESZKI */}
-                {panelTool === 'HANGERS' && (
-                    <div style={{
-                        marginTop: '4px',
-                        padding: '10px',
-                        background: '#18181b',
-                        border: '1px solid #27272a',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        color: '#d4d4d8'
-                    }}>
-                        <div style={{ fontWeight: 'bold', color: '#38bdf8', marginBottom: '4px' }}>
-                            Zawieszki meblowe (SmartPart)
-                        </div>
-                        <div style={{ opacity: 0.8, fontSize: '11px', lineHeight: 1.4 }}>
-                            Przeciągnij zawieszki na szafkę lub wskaż pozycję montażową, aby dodać okucia i nawierty.
-                        </div>
-                    </div>
-                )}
-
                 {/* Podpowiedź domyślna dla trybu FORMATKA gdy żaden katalog nie jest otwarty */}
                 {uiMode === 'panel' && !panelTool && (
                     <div style={{
@@ -1134,7 +1142,7 @@ export function BlokiUI({ projectModel }: Props) {
                         color: '#71717a',
                         fontSize: '11px'
                     }}>
-                        Kliknij <strong>Uchwyty</strong>, aby otworzyć filtry i katalog w panelu edycji, potem wskaż formatkę w 3D.
+                        Wybierz <strong>Uchwyty</strong> lub <strong>Zlew</strong>, a następnie kliknij formatkę (np. blat) w widoku 3D.
                     </div>
                 )}
             </div>

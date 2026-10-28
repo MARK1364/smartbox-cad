@@ -1466,15 +1466,7 @@ title={tx(cncTekst, 'panel.delete', TX_NS)}
                                 <div style={{ background: '#4f80bd', height: '100%', width: `${Math.min(100, Math.max(0, storeState.simProgressPercent))}%`, transition: 'width 0.15s ease' }} />
                             </div>
 
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#bbb', cursor: 'pointer', marginTop: '6px' }}>
-                                <input 
-                                    type="checkbox" 
-                                    checked={storeState.showToolpaths} 
-                                    onChange={(e) => store.setShowToolpaths(e.target.checked)}
-                                    style={{ accentColor: '#4f80bd', cursor: 'pointer' }}
-                                />
-                                <span>🗺️ {tx(cncTekst, 'simulation.show_toolpaths', TX_NS) || 'Pokaż ścieżki narzędzia (G0/G1)'}</span>
-                            </label>
+
                         </div>
                     )}
 

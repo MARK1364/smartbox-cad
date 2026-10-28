@@ -122,16 +122,16 @@ export function SmartFrameUI({ projectModel }: Props) {
             glebokosc_mm: defs.glebokosc_mm,
             wysokosc_strefy_dolnej_mm: (isDragCorner || isDragSkosny) ? defs.wysokosc_mm : bH,
             wysokosc_strefy_srodkowej_mm: (isDragCorner || isDragSkosny) ? 0 : mH,
-            cofniecie_plecow_mm: backOffset,
+            cofniecie_plecow_mm: defs.cofniecie_plecow_mm ?? 3,
             typ_korpusu: engineType,
-            szerokosc_blendy_mm: defs.szerokosc_blendy_mm ?? blindWidth,
-            strona_blendy: defs.strona_blendy ?? blindSide,
-            glebokosc_boku_lewego_mm: defs.glebokosc_boku_lewego_mm ?? bokLewy,
-            glebokosc_boku_prawego_mm: defs.glebokosc_boku_prawego_mm ?? bokPrawy,
-            wysokosc_lewy_mm: defs.wysokosc_lewy_mm ?? heightLeft,
-            wysokosc_prawy_mm: defs.wysokosc_prawy_mm ?? heightRight,
-            wysokosc_przod_mm: defs.wysokosc_przod_mm ?? heightFront,
-            wysokosc_tyl_mm: defs.wysokosc_tyl_mm ?? heightBack
+            szerokosc_blendy_mm: defs.szerokosc_blendy_mm,
+            strona_blendy: defs.strona_blendy,
+            glebokosc_boku_lewego_mm: defs.glebokosc_boku_lewego_mm,
+            glebokosc_boku_prawego_mm: defs.glebokosc_boku_prawego_mm,
+            wysokosc_lewy_mm: defs.wysokosc_lewy_mm,
+            wysokosc_prawy_mm: defs.wysokosc_prawy_mm,
+            wysokosc_przod_mm: defs.wysokosc_przod_mm,
+            wysokosc_tyl_mm: defs.wysokosc_tyl_mm
         });
         try {
             // Kanoniczny payload drag&drop — spójny z CabinetPlanParams.
@@ -303,6 +303,7 @@ export function SmartFrameUI({ projectModel }: Props) {
             setDepth(defs.glebokosc_mm);
             setBottomHeight(defs.wysokosc_mm);
             setMiddleHeight(0);
+            setBackOffset(defs.cofniecie_plecow_mm ?? 3);
             if (defs.wysokosc_przod_mm !== undefined) setHeightFront(defs.wysokosc_przod_mm);
             if (defs.wysokosc_tyl_mm !== undefined) setHeightBack(defs.wysokosc_tyl_mm);
         } else if (cardType === 'KORPUS_SKOSNY_LR_UC') {
@@ -313,6 +314,7 @@ export function SmartFrameUI({ projectModel }: Props) {
             setDepth(defs.glebokosc_mm);
             setBottomHeight(defs.wysokosc_mm);
             setMiddleHeight(0);
+            setBackOffset(defs.cofniecie_plecow_mm ?? 3);
             if (defs.wysokosc_lewy_mm !== undefined) setHeightLeft(defs.wysokosc_lewy_mm);
             if (defs.wysokosc_prawy_mm !== undefined) setHeightRight(defs.wysokosc_prawy_mm);
         } else if (cardType === 'KORPUS_ROGOWY1') {
@@ -323,6 +325,9 @@ export function SmartFrameUI({ projectModel }: Props) {
             setDepth(defs.glebokosc_mm);
             setBottomHeight(defs.wysokosc_mm);
             setMiddleHeight(0);
+            setBackOffset(defs.cofniecie_plecow_mm ?? 3);
+            if (defs.szerokosc_blendy_mm !== undefined) setBlindWidth(defs.szerokosc_blendy_mm);
+            if (defs.strona_blendy !== undefined) setBlindSide(defs.strona_blendy);
         } else if (cardType === 'KORPUS_ROGOWY90') {
             const defs = korpusDefaultsForTypeMm('korpus_rogowy90');
             setZoneCount(1);
@@ -331,6 +336,9 @@ export function SmartFrameUI({ projectModel }: Props) {
             setDepth(defs.glebokosc_mm);
             setBottomHeight(defs.wysokosc_mm);
             setMiddleHeight(0);
+            setBackOffset(defs.cofniecie_plecow_mm ?? 3);
+            if (defs.glebokosc_boku_lewego_mm !== undefined) setBokLewy(defs.glebokosc_boku_lewego_mm);
+            if (defs.glebokosc_boku_prawego_mm !== undefined) setBokPrawy(defs.glebokosc_boku_prawego_mm);
         } else {
             const defs = korpusDefaultsForTypeMm('korpus3');
             const { bH, mH } = getSensibleHeights(zc, defs.wysokosc_mm, defs.wysokosc_strefy_dolnej_mm, defs.wysokosc_strefy_srodkowej_mm);
@@ -340,6 +348,7 @@ export function SmartFrameUI({ projectModel }: Props) {
             setDepth(defs.glebokosc_mm);
             setBottomHeight(bH);
             setMiddleHeight(mH);
+            setBackOffset(defs.cofniecie_plecow_mm ?? 3);
         }
     };
 

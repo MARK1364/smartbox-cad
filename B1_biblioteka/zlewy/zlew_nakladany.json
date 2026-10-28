@@ -1,0 +1,85 @@
+{
+  "id": "sp:zlew_nakladany",
+  "name": "Zlew nakładany jednokomorowy",
+  "units": "mm",
+  "version": "1.0",
+  "type": "CUSTOM",
+  "cutsFrame": "PART",
+  "mainContainer": {
+    "widthMm": 600,
+    "heightMm": 230,
+    "depthMm": 500
+  },
+  "sets": [
+    {
+      "id": "set_1",
+      "name": "Zestaw Zlew",
+      "visible": true
+    }
+  ],
+  "parts": [
+    {
+      "id": "sp:zlew_nakladany/part:kolnierz",
+      "setId": "set_1",
+      "name": "Kołnierz zewnętrzny",
+      "widthMm": 600,
+      "heightMm": 30,
+      "depthMm": 500,
+      "xMm": 0,
+      "yMm": 0,
+      "zMm": 15,
+      "refX": "CENTER",
+      "offsetX_mm": 0,
+      "refY": "CENTER",
+      "offsetY_mm": 0,
+      "refZ": "BOTTOM",
+      "offsetZ_mm": 0,
+      "colorHex": "#94a3b8"
+    },
+    {
+      "id": "sp:zlew_nakladany/part:komora",
+      "setId": "set_1",
+      "name": "Komora zlewu",
+      "widthMm": 580,
+      "heightMm": 200,
+      "depthMm": 480,
+      "xMm": 0,
+      "yMm": 0,
+      "zMm": -100,
+      "refX": "CENTER",
+      "offsetX_mm": 0,
+      "refY": "CENTER",
+      "offsetY_mm": 0,
+      "refZ": "BOTTOM",
+      "offsetZ_mm": 0,
+      "colorHex": "#64748b"
+    }
+  ],
+  "cuts": [
+    {
+      "id": "sp:zlew_nakladany/cut:wyciecie_blatu",
+      "name": "Wycięcie pod komorę zlewu",
+      "type": "POCKET",
+      "widthMm": 580,
+      "heightMm": 480,
+      "depthMm": 40,
+      "xMm": 0,
+      "yMm": 0,
+      "zMm": 0,
+      "refX": "CENTER",
+      "offsetX_mm": 0,
+      "refY": "CENTER",
+      "offsetY_mm": 0,
+      "refZ": "BOTTOM",
+      "offsetZ_mm": 0,
+      "axis": "Z",
+      "direction": -1,
+      "partId": "sp:zlew_nakladany/part:komora",
+      "profile": {
+        "type": "RECT",
+        "widthMm": 580,
+        "heightMm": 480
+      }
+    }
+  ]
+}

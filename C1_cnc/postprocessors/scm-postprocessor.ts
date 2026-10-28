@@ -29,6 +29,11 @@ export class SCMPostprocessor extends Postprocessor {
             } else if (cmd.type === 'GOTO' && cmd.point) {
                 const pt = cmd.point;
                 lines.push(`ROUT X=${pt.x.toFixed(3)} Y=${pt.y.toFixed(3)} Z=${Math.abs(pt.z).toFixed(3)} T=${currentTool} V=1200`);
+            } else if (cmd.type === 'ARC' && cmd.point && cmd.arcParams) {
+                const pt = cmd.point;
+                const dir = cmd.arcParams.direction === 'CW' ? 1 : 2;
+                const r = cmd.arcParams.radius;
+                lines.push(`ARCP X=${pt.x.toFixed(3)} Y=${pt.y.toFixed(3)} Z=${Math.abs(pt.z).toFixed(3)} R=${r.toFixed(3)} D=${dir} T=${currentTool} V=1200`);
             }
         }
 

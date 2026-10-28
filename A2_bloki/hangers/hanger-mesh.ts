@@ -11,7 +11,7 @@ import { HardwareLoader } from '../../B1_biblioteka/hardware-loader.js';
 import { hangerGlbTemplateId } from '../../B1_biblioteka/zawieszki/hangers-from-catalog.js';
 import type { HangerParamsMm } from './hanger-types.js';
 import { resolveCutPlacementInPartLcsMm } from './smartpart-bay-placement.js';
-import { cutOrientFromRefs } from '../../S5_studio/smartpart-studio-types.js';
+import { cutOrientFromRefs, resolveCutProfileLoop2D } from '../../S5_studio/smartpart-studio-types.js';
 
 function disposeHangerVisual(scene: any, cntNodeId: string): void {
     if (!scene || !cntNodeId) return;
@@ -293,83 +293,123 @@ function addCutMesh(
     partAbs?: any,
 ): void {
     if (!cut) return;
-    let mesh: any;
     const cutId = cut.id || 'cut';
+
+    // Utwórz pivot cięcia (w układzie lokalnym parta/zawieszki)
+    const pivot = new BABYLON.Mesh(`mesh_cut_pivot_${cntNodeId}_${cutId}`, scene);
+    pivot.isVisible = false;
+    pivot.parent = parent;
+
+    let originCadX = 0;
+    let originCadY = 0;
+    let originCadZ = 0;
+
+    if (cutChild && typeof cutChild.localMatrix?.decompose === 'function') {
+        const { translation } = cutChild.localMatrix.decompose();
+        originCadX = nmToMm(translation.x);
+        originCadY = nmToMm(translation.y);
+        originCadZ = nmToMm(translation.z);
+    } else if (partAbs) {
+        const cutLcs = resolveCutPlacementInPartLcsMm(partAbs, cut);
+        originCadX = cutLcs.xMm;
+        originCadY = cutLcs.yMm;
+        originCadZ = cutLcs.zMm;
+    }
+
+    // CAD mm → Babylon mm: cadPosToBabylon (X, Y, Z CAD -> X, Z, Y Babylon)
+    pivot.position.set(originCadX, originCadZ, originCadY);
+    pivot.rotation.set(0, 0, 0);
+
+    let cutterMesh: any;
 
     if (cut.type === 'HOLE') {
         const dia = Math.max(1, Number(cut.diameterMm) || 8);
         const len = Math.max(1, Number(cut.lengthMm) || 24);
-        mesh = BABYLON.MeshBuilder.CreateCylinder(`mesh_cut_${cntNodeId}_${cutId}`, {
+        const { axis: holeAxis, direction: holeDir } = cutOrientFromRefs(cut);
+        const half = len / 2;
+        const along = (holeDir ?? 1) * half;
+
+        // Otwarta foremka walcowa bez ścian +-Z (cap: NO_CAP)
+        cutterMesh = BABYLON.MeshBuilder.CreateCylinder(`mesh_cut_${cntNodeId}_${cutId}`, {
             diameter: dia,
             height: len,
-            tessellation: 24,
+            tessellation: 32,
+            cap: BABYLON.Mesh.NO_CAP,
+            sideOrientation: BABYLON.Mesh.DOUBLESIDE,
         }, scene);
-        const { axis: holeAxis } = cutOrientFromRefs(cut);
-        // Cylinder Babylon wzdłuż Y (= CAD Z)
+        cutterMesh.parent = pivot;
+
         if (holeAxis === 'X') {
-            mesh.rotation.z = Math.PI / 2;
+            cutterMesh.position.set(along, 0, 0);
+            cutterMesh.rotation.z = Math.PI / 2;
         } else if (holeAxis === 'Y') {
-            mesh.rotation.x = Math.PI / 2; // CAD Y (głęb.) → Babylon Z
+            cutterMesh.position.set(0, 0, along);
+            cutterMesh.rotation.x = Math.PI / 2;
+        } else {
+            cutterMesh.position.set(0, along, 0);
+            cutterMesh.rotation.set(0, 0, 0);
         }
-        // axis Z (CAD wys.) — domyślna oś cylindra (Babylon Y)
+
+        const mat = new BABYLON.StandardMaterial(`mat_cut_${cntNodeId}_${cutId}`, scene);
+        mat.diffuseColor = new BABYLON.Color3(0.22, 0.74, 0.97);
+        mat.emissiveColor = new BABYLON.Color3(0.08, 0.35, 0.55);
+        mat.alpha = 0.45;
+        mat.backFaceCulling = false;
+        cutterMesh.material = mat;
     } else {
-        mesh = BABYLON.MeshBuilder.CreateBox(`mesh_cut_${cntNodeId}_${cutId}`, {
-            width: Math.max(1, Number(cut.widthMm) || 16),
-            height: Math.max(1, Number(cut.heightMm) || 32),
-            depth: Math.max(1, Number(cut.depthMm) || 15),
+        const { axis, direction } = cutOrientFromRefs(cut);
+        const depthMm = Math.max(1, Number(cut.depthMm) || 10);
+        const alongZ = (direction ?? 1) * depthMm;
+
+        const loop = resolveCutProfileLoop2D(cut);
+        const toBabylon = (px: number, py: number, pz: number) => {
+            if (axis === 'X') return new BABYLON.Vector3(pz, py, px);
+            if (axis === 'Y') return new BABYLON.Vector3(px, py, pz);
+            return new BABYLON.Vector3(px, pz, py);
+        };
+
+        const pathStart: any[] = loop.map(([px, py]) => toBabylon(px, py, 0));
+        pathStart.push(pathStart[0].clone());
+        const pathEnd: any[] = loop.map(([px, py]) => toBabylon(px, py, alongZ));
+        pathEnd.push(pathEnd[0].clone());
+
+        // Otwarta foremka wyciągnięcia ścian bocznych z pętli (bez ścian w kierunku +-Z)
+        cutterMesh = BABYLON.MeshBuilder.CreateRibbon(`mesh_cut_${cntNodeId}_${cutId}`, {
+            pathArray: [pathStart, pathEnd],
+            closeArray: false,
+            closePath: false,
+            sideOrientation: BABYLON.Mesh.DOUBLESIDE,
         }, scene);
-    }
+        cutterMesh.parent = pivot;
+        cutterMesh.position.set(0, 0, 0);
+        cutterMesh.rotation.set(0, 0, 0);
 
-    mesh.parent = parent;
-    if (cutChild && typeof cutChild.localMatrix?.decompose === 'function') {
-        const { translation } = cutChild.localMatrix.decompose();
-        // lokal CAD nm → Babylon mm
-        mesh.position.set(
-            nmToMm(translation.x),
-            nmToMm(translation.z),
-            nmToMm(translation.y),
-        );
-    } else if (partAbs) {
-        const cutLcs = resolveCutPlacementInPartLcsMm(partAbs, cut);
-        // HOLE / POCKET: xMm/yMm/zMm = początek (LCS) → mesh w środku bryły
-        let x = cutLcs.xMm;
-        let y = cutLcs.yMm;
-        let z = cutLcs.zMm;
-        if (cut.type === 'HOLE' || cut.type === 'POCKET') {
-            const { axis, direction: dir } = cutOrientFromRefs(cut);
-            const half = cut.type === 'HOLE'
-                ? Math.max(1, Number(cut.lengthMm) || 0) / 2
-                : axis === 'X' ? Math.max(1, Number(cut.widthMm) || 0) / 2
-                : axis === 'Y' ? Math.max(1, Number(cut.depthMm) || 0) / 2
-                : Math.max(1, Number(cut.heightMm) || 0) / 2;
-            if (axis === 'X') x += dir * half;
-            else if (axis === 'Y') y += dir * half;
-            else z += dir * half;
+        const mat = new BABYLON.StandardMaterial(`mat_cut_${cntNodeId}_${cutId}`, scene);
+        mat.diffuseColor = new BABYLON.Color3(0.96, 0.62, 0.04);
+        mat.emissiveColor = new BABYLON.Color3(0.35, 0.18, 0.02);
+        mat.alpha = 0.45;
+        mat.backFaceCulling = false;
+        cutterMesh.material = mat;
+
+        // Obrysy krawędzi wejścia i wyjścia foremki
+        if (typeof BABYLON.MeshBuilder.CreateLines === 'function') {
+            const entryRim = BABYLON.MeshBuilder.CreateLines(`mesh_cut_rim_${cntNodeId}_${cutId}`, {
+                points: pathStart,
+            }, scene);
+            entryRim.parent = pivot;
+            entryRim.color = new BABYLON.Color3(1.0, 0.75, 0.12);
         }
-        mesh.position.set(x, z, y); // CAD → Babylon
-    } else {
-        mesh.position.set(0, 0, 0);
     }
 
-    if (typeof mesh.enableEdgesRendering === 'function') {
-        mesh.enableEdgesRendering();
-        mesh.edgesWidth = 1.8;
-        mesh.edgesColor = cut.type === 'HOLE'
+    if (typeof cutterMesh.enableEdgesRendering === 'function') {
+        cutterMesh.enableEdgesRendering();
+        cutterMesh.edgesWidth = 1.8;
+        cutterMesh.edgesColor = cut.type === 'HOLE'
             ? new BABYLON.Color4(0.22, 0.74, 0.97, 1.0)
             : new BABYLON.Color4(0.96, 0.62, 0.04, 1.0);
     }
 
-    const mat = new BABYLON.StandardMaterial(`mat_cut_${cntNodeId}_${cutId}`, scene);
-    if (cut.type === 'HOLE') {
-        mat.diffuseColor = new BABYLON.Color3(0.22, 0.74, 0.97);
-        mat.emissiveColor = new BABYLON.Color3(0.08, 0.35, 0.55);
-    } else {
-        mat.diffuseColor = new BABYLON.Color3(0.96, 0.62, 0.04);
-        mat.emissiveColor = new BABYLON.Color3(0.4, 0.22, 0.02);
-    }
-    mat.alpha = 0.85;
-    mesh.material = mat;
-    mesh.metadata = { type: 'smartpart_cut', nodeId: cntNodeId, cutId };
+    cutterMesh.metadata = { type: 'smartpart_cut', nodeId: cntNodeId, cutId };
 }
 
 /**

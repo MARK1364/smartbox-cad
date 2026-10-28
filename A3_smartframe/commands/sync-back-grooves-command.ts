@@ -133,7 +133,7 @@ export class SyncBackGroovesCommand implements Command {
                     const p = intent.feature.params;
                     const isNotch = !!p.isEdgeNotch;
                     data.features.push({
-                        id: `feat_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+                        id: `feat_back_groove_${node.id}`,
                         type: 'groove',
                         name: isNotch ? 'Wcięcie' : 'Wpust',
                         face: ({

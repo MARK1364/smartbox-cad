@@ -11,7 +11,7 @@
 
 import { readBackEdgeOffset } from '../back-overlap.js';
 import { rulesMToMm } from '../../A1_core/cad-math/units.js';
-import { CabinetGeometryPart } from '../smartframe-types.js';
+import { CabinetGeometryPart, BACK_OVERLAP_EPS_MM } from '../smartframe-types.js';
 import {
     resolveCabinetPartThickness,
     requireCabinetPartThickness,
@@ -243,7 +243,7 @@ export function resolveCorner90Geometry(
     // —— BOK_P (przy +X, prostopadły do osi X — grubość w X, głębokość ramienia w Y) ——
     if (matchedKey === "BOK_P" || matchedKey === "BOK_X" || role === "RIGHT_SIDE_PANEL") {
         const overlapRightY = readBackEdgeOffset(offsets, 'PLECY_Y', '+X', defOverlap, pfx);
-        const cutY = (overlapRightY >= thickness - 0.05) ? insetY_mm : 0;
+        const cutY = (overlapRightY >= thickness - BACK_OVERLAP_EPS_MM) ? insetY_mm : 0;
         const effBokP = bok_prawy - cutY;
         return {
             thickness,
@@ -259,7 +259,7 @@ export function resolveCorner90Geometry(
     // —— BOK_L (przy −Y, prostopadły do osi Y — grubość w Y, szerokość ramienia w X) ——
     if (matchedKey === "BOK_L" || matchedKey === "BOK_Y" || role === "LEFT_SIDE_PANEL") {
         const overlapFrontX = readBackEdgeOffset(offsets, 'PLECY_X', '-X', defOverlap, pfx);
-        const cutX = (overlapFrontX >= thickness - 0.05) ? insetX_mm : 0;
+        const cutX = (overlapFrontX >= thickness - BACK_OVERLAP_EPS_MM) ? insetX_mm : 0;
         const effBokL = bok_lewy - cutX;
         return {
             thickness,
@@ -295,8 +295,8 @@ export function resolveCorner90Geometry(
         const overlapY = readBackEdgeOffset(offsets, 'PLECY_Y', edgeSuf, defOverlap, pfx);
         const overlapX = readBackEdgeOffset(offsets, 'PLECY_X', edgeSuf, defOverlap, pfx);
 
-        let cutY = (overlapY >= thickness - 0.05) ? insetY_mm : 0;
-        let cutX = (overlapX >= thickness - 0.05) ? insetX_mm : 0;
+        let cutY = (overlapY >= thickness - BACK_OVERLAP_EPS_MM) ? insetY_mm : 0;
+        let cutX = (overlapX >= thickness - BACK_OVERLAP_EPS_MM) ? insetX_mm : 0;
 
         // Jeśli choć jedne plecy mają odcięcie wieńca (margines >= grubość),
         // automatycznie odcinamy oba ramiona w narożniku do lica drugich pleców,

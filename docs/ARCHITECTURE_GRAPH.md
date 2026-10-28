@@ -126,7 +126,12 @@ sequenceDiagram
 | **Geometria bryły szafki narożnej 90° (wieńce L, boki)** | `A3_smartframe/geometry/corner90-geometry.ts` | `npx vitest run A3_smartframe/__tests__/korpus-rogowy90.test.ts` |
 | **Geometria szafek standardowych (Korpus3)** | `A3_smartframe/geometry/standard-geometry.ts` | `npx vitest run A3_smartframe/__tests__/back-groove-builder.test.ts` |
 | **Geometria szafek skośnych (dach / LR / UC)** | `A3_smartframe/geometry/skosny-geometry.ts` | `npx vitest run A3_smartframe/__tests__/korpus-skosny-lr-uc.test.ts` |
-| **Extruzja siatki płyty z wpustem/otworem (3D Mesh)** | `A4_smartpanel/native_core/cap-machining.ts` | `npx vitest run A4_smartpanel/__tests__/polygon-extrusion-groove.test.ts` |
+| **Extruzja siatki płyty z wpustem/otworem (3D Mesh) — orkiestrator** | `A4_smartpanel/native_core/cap-machining.ts` | `npx vitest run A4_smartpanel/__tests__/polygon-extrusion-groove.test.ts` |
+| **Operacje 2D, docinanie wielokątów cech do obrysu płyty (EarCut, polygon clipping)** | `A4_smartpanel/native_core/planar-features.ts` | `npx vitest run A4_smartpanel/__tests__/planar-feature-clipping.test.ts` |
+| **Siatki 3D wpustów / kieszeni / wycięć (dno, ścianki w0..w3, L-union, krawędzie B-rep)** | `A4_smartpanel/native_core/planar-feature-mesh.ts` | `npx vitest run A4_smartpanel/__tests__/polygon-extrusion-groove.test.ts` |
+| **Otwory walcowe (SINGLE / TRIPLE / SYSTEM_32)** | `A4_smartpanel/native_core/hole-generator.ts` | `npx vitest run A4_smartpanel/__tests__/cap-hole-clipping.test.ts` |
+| **Triangulacja lica (earcut) z otworami i wycięciami brzegowymi** | `A4_smartpanel/native_core/cap-triangulation.ts` | `npx vitest run A4_smartpanel/__tests__/cutout-groove-interaction.test.ts` |
+| **Krawędzie-widma na zlicowanych płaszczyznach (Co-planar Edge Dissolver)** | `A4_smartpanel/native_core/brep-topology.ts` | `npx vitest run A4_smartpanel/__tests__/brep-coplanar-dissolver.test.ts` |
 | **Rozcinanie krawędzi obrysu płyty przez wpusty** | `A4_smartpanel/native_core/polygon-extrusion.ts` | `npx vitest run A4_smartpanel/__tests__/groove-boundary-edge-clipping.test.ts` |
 | **Wykrywanie wnęk w korpusie (bays)** | `A2_bloki/02_bloki-bay-detector.ts` | `npx vitest run A2_bloki/__tests__/bloki-bay-detector.test.ts` |
 | **Półki i nawierty pod podpórki** | `A2_bloki/04_shelves-drilling-builder.ts` | `npx vitest run A2_bloki/__tests__/shelves-drilling-builder.test.ts` |

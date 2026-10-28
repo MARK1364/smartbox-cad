@@ -59,6 +59,26 @@ function serveEggerTexturesPlugin() {
   };
 }
 
+function serveKitchenDemoPlugin() {
+  return {
+    name: 'serve-kitchen-demo',
+    configureServer(server: any) {
+      server.middlewares.use((req: any, res: any, next: () => void) => {
+        if (req.url?.split('?')[0] !== '/__demo/kuchnia') return next();
+        const filePath = path.resolve(process.cwd(), 'Kuchnia_liniowa_demo.spp.json');
+        if (!fs.existsSync(filePath)) {
+          res.statusCode = 404;
+          res.end('Brak pliku demonstracyjnego kuchni.');
+          return;
+        }
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        fs.createReadStream(filePath).pipe(res);
+      });
+    }
+  };
+}
+
 import { fileURLToPath } from 'node:url';
 import { b1ZawieszkiPlugin } from './vite-plugin-b1-zawieszki.ts';
 import { pricesApiPlugin } from './vite-plugin-prices-api.ts';
@@ -67,7 +87,7 @@ import { pricesApiPlugin } from './vite-plugin-prices-api.ts';
 export default defineConfig({
   base: './',
   assetsInclude: ['**/*.glb'],
-  plugins: [react(), serveEggerTexturesPlugin(), b1ZawieszkiPlugin(), pricesApiPlugin()],
+  plugins: [react(), serveEggerTexturesPlugin(), serveKitchenDemoPlugin(), b1ZawieszkiPlugin(), pricesApiPlugin()],
   server: {
     port: 8085
   },
@@ -83,7 +103,8 @@ export default defineConfig({
         cnc: fileURLToPath(new URL('cnc.html', import.meta.url)),
         dag: fileURLToPath(new URL('dag.html', import.meta.url)),
         studio: fileURLToPath(new URL('studio.html', import.meta.url)),
-        cennik: fileURLToPath(new URL('cennik.html', import.meta.url))
+        cennik: fileURLToPath(new URL('cennik.html', import.meta.url)),
+        instrukcja: fileURLToPath(new URL('instrukcja.html', import.meta.url))
       }
     }
   },

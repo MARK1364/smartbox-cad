@@ -136,7 +136,8 @@ export class ConnectorVisualizer {
                 : 0;
             if (faceThick <= 0) continue;
 
-            for (const conn of group.connectors) {
+            for (let ci = 0; ci < group.connectors.length; ci++) {
+                const conn = group.connectors[ci];
                 const segs = getSymbolSegments(conn.type, conn.lengthMm, faceThick);
                 const worldPos = localMmToWorldMm(parent, conn.positionLocalMm);
                 const { rotation } = parent.getWorldMatrix().decompose();
@@ -150,9 +151,15 @@ export class ConnectorVisualizer {
                 const intoOther = nOut;
                 const faceDir = parentIsFace ? intoParent : intoOther;
                 const edgeDir = parentIsFace ? intoOther : intoParent;
+                const connMeta = {
+                    groupId: group.id,
+                    instanceIndex: ci,
+                    // Światowa normalna styku (CAD mm) — animacja montażu wpatruje się wzdłuż niej.
+                    normalMm: [nOut.x, nOut.y, nOut.z] as [number, number, number],
+                };
 
-                this._drawSegment(scene, worldPos, faceDir, segs.faceMm, segs.faceDiaMm, conn.type);
-                this._drawSegment(scene, worldPos, edgeDir, segs.edgeMm, segs.edgeDiaMm, conn.type);
+                this._drawSegment(scene, worldPos, faceDir, segs.faceMm, segs.faceDiaMm, conn.type, { ...connMeta, segment: 'face' });
+                this._drawSegment(scene, worldPos, edgeDir, segs.edgeMm, segs.edgeDiaMm, conn.type, { ...connMeta, segment: 'edge' });
             }
         }
         ContextManager.instance.viewport?.requestRender(2);
@@ -287,6 +294,7 @@ export class ConnectorVisualizer {
         lengthMm: number,
         diameterMm: number,
         type: string,
+        meta?: { groupId: string; instanceIndex: number; segment?: 'face' | 'edge' },
     ): void {
         if (!(lengthMm > 0.5) || !(diameterMm > 0)) return;
         const dirN = dirCad.lengthSquared() > 1e-12 ? dirCad.normalize() : new Vec3(0, 1, 0);
@@ -301,7 +309,17 @@ export class ConnectorVisualizer {
         inst.rotationQuaternion = quatAlignY(new BABYLON.Vector3(nBab.x, nBab.y, nBab.z));
         inst.isPickable = false;
         inst.renderingGroupId = 0;
-        inst.metadata = { type: 'c2_connector_symbol' };
+        inst.metadata = {
+            type: 'c2_connector_symbol',
+            // Tag dla instrukcji montażu (E1): animacja mieści instancję po groupId.
+            c2Connector: meta ? {
+                groupId: meta.groupId,
+                instanceIndex: meta.instanceIndex,
+                segment: meta.segment || 'face',
+                connectorType: type,
+                normalMm: [dirN.x, dirN.y, dirN.z],
+            } : null,
+        };
 
         const vp = ContextManager.instance.viewport;
         if (vp) {

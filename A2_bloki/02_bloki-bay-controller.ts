@@ -10,6 +10,7 @@ import { type DetectedBay, probeBayFromSceneRay } from './02_bloki-bay-detector.
 import { highlightBayInScene, clearBayHighlight } from './02_bloki-bay-visualizer.js';
 import { probePanelSurfaceFromRay, type DetectedPanelSurface } from './handles/handle-detector.js';
 import { highlightPanelSurface, clearPanelHighlight } from './handles/handle-visualizer.js';
+import { highlightSinkSurface, clearSinkHighlight } from './sinks/sink-visualizer.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
 import { PerformanceConfigManager } from '../A1_core/performance-config.js';
@@ -76,7 +77,7 @@ export class BlokiBayController {
         this._isPickerActive = true;
         if (mode) {
             this._pickerMode = mode;
-        } else if (pendingType === 'HANDLES') {
+        } else if (pendingType === 'HANDLES' || pendingType === 'SINKS') {
             this._pickerMode = 'panel';
         } else if (pendingType === 'PANELS') {
             this._pickerMode = 'external';
@@ -98,7 +99,10 @@ export class BlokiBayController {
         if (!keepHighlight) {
             clearBayHighlight();
             const scene = ContextManager.instance?.viewport?.scene;
-            if (scene) clearPanelHighlight(scene);
+            if (scene) {
+                clearPanelHighlight(scene);
+                clearSinkHighlight(scene);
+            }
         }
         this._notifyPickerState();
     }
@@ -149,7 +153,7 @@ export class BlokiBayController {
         this._draggedBlokType = blokType;
         if (mode) {
             this._pickerMode = mode;
-        } else if (blokType === 'HANDLES') {
+        } else if (blokType === 'HANDLES' || blokType === 'SINKS') {
             this._pickerMode = 'panel';
         } else if (blokType === 'PANELS') {
             this._pickerMode = 'external';
@@ -163,7 +167,10 @@ export class BlokiBayController {
         if (!keepHighlight) {
             clearBayHighlight();
             const scene = ContextManager.instance?.viewport?.scene;
-            if (scene) clearPanelHighlight(scene);
+            if (scene) {
+                clearPanelHighlight(scene);
+                clearSinkHighlight(scene);
+            }
         }
         this._lastDetectedSurface = null;
     }
@@ -187,26 +194,34 @@ export class BlokiBayController {
         }
         this._lastPointerMoveTime = now;
 
-        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._pickerMode === 'panel';
+        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS' || this._pickerMode === 'panel';
 
         if (isPanelMode) {
             const pick = scene.pick(pointerX, pointerY, (m: any) => {
                 if (!m?.isPickable || !m.isVisible) return false;
                 const name = String(m.name || '');
-                if (name.includes('ground') || name.includes('grid') || name.includes('__handle') || name.includes('blok_bay') || name.includes('blok_plane')) return false;
-                if (name.startsWith('handle_mesh_') || m.metadata?.type === 'smartpart_handle') return false;
+                if (name.includes('ground') || name.includes('grid') || name.includes('__handle') || name.includes('blok_bay') || name.includes('blok_plane') || name.startsWith('__sink')) return false;
+                if (name.startsWith('handle_mesh_') || m.metadata?.type === 'smartpart_handle' || m.metadata?.isSink) return false;
                 return true;
             });
             if (pick && pick.hit && pick.pickedMesh) {
                 const surface = probePanelSurfaceFromRay(scene, pick, doc);
                 if (surface) {
-                    highlightPanelSurface(scene, surface, this._activeHandleTemplate || {});
+                    const isSink = this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS';
+                    if (isSink) {
+                        clearPanelHighlight(scene);
+                        highlightSinkSurface(scene, surface);
+                    } else {
+                        clearSinkHighlight(scene);
+                        highlightPanelSurface(scene, surface, this._activeHandleTemplate || {});
+                    }
                     this._lastDetectedSurface = surface;
                     return null;
                 }
             }
             if (this._lastDetectedSurface) {
                 clearPanelHighlight(scene);
+                clearSinkHighlight(scene);
                 this._lastDetectedSurface = null;
             }
             return null;
@@ -229,9 +244,11 @@ export class BlokiBayController {
     }
 
     onDropOnScene(): void {
-        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._pickerMode === 'panel';
-        if (isPanelMode && this._lastDetectedSurface) {
-            this.notifyPanelDetected(this._lastDetectedSurface);
+        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS' || this._pickerMode === 'panel';
+        if (isPanelMode) {
+            if (this._lastDetectedSurface) {
+                this.notifyPanelDetected(this._lastDetectedSurface);
+            }
             this.endDrag();
             this._lastDetectedSurface = null;
             return;

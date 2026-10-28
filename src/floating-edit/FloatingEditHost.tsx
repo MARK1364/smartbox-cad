@@ -13,6 +13,9 @@ import {
 } from '../../A2_bloki/handles/handle-types.js';
 import { HandleEditPanel } from '../../A2_bloki/handles/handle-edit-panel.js';
 import { HandleDimGizmo } from '../../A2_bloki/handles/handle-dim-gizmo.js';
+import { SinkDimGizmo } from '../../A2_bloki/sinks/sink-dim-gizmo.js';
+import { SinkEditPanel } from '../../A2_bloki/sinks/sink-edit-panel.js';
+import { SMARTPART_SINK_TYPE } from '../../A2_bloki/sinks/sink-types.js';
 import {
     isCustomSmartPartModel,
     SmartPartEditPanel,
@@ -24,6 +27,7 @@ import {
     CAD_CLOSE_FLOATING_OPERATION,
 } from '../FloatingOperationDialog.js';
 import { isSmartApplianceContainer, isAppliancePart } from '../../A6_agd/smart-appliance-types.js';
+import { isSmartWallContainer } from '../../S4_sciany/smartwall-types.js';
 import {
     CAD_CLOSE_FLOATING_EDIT,
     CAD_EDIT_ENTITY,
@@ -36,6 +40,7 @@ import { FloatingEditShell } from './FloatingEditShell.js';
 import { FloatingBlokEdit } from './FloatingBlokEdit.js';
 import { FloatingAgdEdit } from './FloatingAgdEdit.js';
 import { FloatingKorpusEdit } from './FloatingKorpusEdit.js';
+import { FloatingWallEdit } from './FloatingWallEdit.js';
 import {
     DIMENSION_TOOL_STATE,
     MEASURE_TOOL_STATE,
@@ -61,8 +66,19 @@ function isSmartPartHandle(model: any): boolean {
     );
 }
 
+function isSmartPartSink(model: any): boolean {
+    if (!model) return false;
+    const genType = String(model.generatorParams?.type || '');
+    return (
+        model.role === 'SMARTPART_SINK'
+        || genType === SMARTPART_SINK_TYPE
+        || model.generatorParams?.partType === 'SINK'
+        || model.generatorParams?.boxType === 'SINKS'
+    );
+}
+
 function canEditSmartPart(model: any): boolean {
-    return isSmartPartHandle(model) || isCustomSmartPartModel(model);
+    return isSmartPartHandle(model) || isSmartPartSink(model) || isCustomSmartPartModel(model);
 }
 
 function resolveSmartPartModel(doc: any, containerId: string): { id: string; model: any } | null {
@@ -98,12 +114,23 @@ function resolveKorpusContainer(doc: any, entityId: string): any | null {
     if (node?.domainData?.type === 'container') {
         const gp = node.domainData.generatorParams || {};
         const t = String(gp.type || gp.typ_korpusu || '');
-        if (t.startsWith('blok_') || t.startsWith('smartpart') || t === 'smart_appliance') return null;
-        if (isSmartApplianceContainer(node.domainData)) return null;
+        if (t.startsWith('blok_') || t.startsWith('smartpart') || t === 'smart_appliance' || t === 'smartwall') return null;
+        if (isSmartApplianceContainer(node.domainData) || isSmartWallContainer(node.domainData)) return null;
         return node.domainData;
     }
     if (node?.parent?.domainData?.type === 'container') {
         return resolveKorpusContainer(doc, node.parent.id);
+    }
+    return null;
+}
+
+function resolveWallContainer(doc: any, entityId: string): any | null {
+    const node = doc.findNode(entityId);
+    if (!node) return null;
+    const model = node.domainData;
+    if (isSmartWallContainer(model)) return model;
+    if (node.parent && isSmartWallContainer(node.parent.domainData)) {
+        return node.parent.domainData;
     }
     return null;
 }
@@ -137,6 +164,7 @@ function titleFor(session: HostSession): string {
     switch (session.kind) {
         case 'smartpart':
             if (isSmartPartHandle(session.model)) return 'Uchwyty';
+            if (isSmartPartSink(session.model)) return 'Zlew (SmartPart)';
             return name || session.model?.generatorParams?.smartPartName || 'SmartPart';
         case 'blok':
             return name ? `Blok: ${name}` : 'Edycja Bloku';
@@ -144,6 +172,12 @@ function titleFor(session: HostSession): string {
             return name ? `Korpus: ${name}` : 'Edycja korpusu';
         case 'agd':
             return name ? `AGD: ${name}` : 'Edycja AGD';
+        case 'wall': {
+            const preset = session.model?.generatorParams?.preset;
+            if (preset === 'skos') return name ? `Skos: ${name}` : 'Edycja skosu';
+            if (preset === 'single') return name ? `Ściana: ${name}` : 'Edycja ściany';
+            return name ? `Ściany: ${name}` : 'Edycja ścian';
+        }
         default:
             return name || 'Edycja';
     }
@@ -156,8 +190,8 @@ export function shouldKeepSessionForTarget(
 ): boolean {
     if (!targetId) return false;
     if (targetId === session.modelId) return true;
-    // Dla edycji korpusu: aktywacja pojedynczej formatki (nawet należącej do tego korpusu) zamyka okno korpusu
-    if (session.kind === 'korpus') {
+    // Dla edycji korpusu lub bloku: aktywacja pojedynczej formatki (nawet należącej do tego korpusu/bloku) zamyka okno kontenera
+    if (session.kind === 'korpus' || session.kind === 'blok') {
         const targetNode = doc?.findNode?.(targetId);
         const targetModel = targetNode?.domainData;
         const isSinglePanel = isPanelModel(targetModel)
@@ -186,6 +220,7 @@ export function shouldKeepSessionForTab(sessionKind: HostKind, newTab: string | 
     if (sessionKind === 'agd' && newTab === 'tab-agd') return true;
     if (sessionKind === 'smartpart' && newTab === 'tab-a5-smartparts') return true;
     if (sessionKind === 'korpus' && (newTab === 'tab-a3-smartframe' || newTab === 'tab-b1-biblioteka')) return true;
+    if (sessionKind === 'wall' && newTab === 'tab-s4-sciany') return true;
     return false;
 }
 
@@ -195,6 +230,7 @@ export function FloatingEditHost({ projectModel }: { projectModel?: any }): Reac
     const close = useCallback(() => {
         setSession(null);
         HandleDimGizmo.instance.detach();
+        SinkDimGizmo.instance.detach();
     }, []);
 
     const openHost = useCallback((kind: HostKind, entityId: string) => {
@@ -219,15 +255,22 @@ export function FloatingEditHost({ projectModel }: { projectModel?: any }): Reac
             model = resolveKorpusContainer(doc, entityId);
         } else if (kind === 'blok') {
             model = resolveBlokContainer(doc, entityId);
+        } else if (kind === 'wall') {
+            model = resolveWallContainer(doc, entityId);
         }
 
         if (!model) return;
         doc.setActiveEntity?.(model);
         setSession({ kind, entityId: resolvedId, model });
         if (kind === 'smartpart' && isSmartPartHandle(model)) {
+            SinkDimGizmo.instance.detach();
             // HandleEditPanel sam podpina gizmo
+        } else if (kind === 'smartpart' && isSmartPartSink(model)) {
+            HandleDimGizmo.instance.detach();
+            SinkDimGizmo.instance.attach(model);
         } else {
             HandleDimGizmo.instance.detach();
+            SinkDimGizmo.instance.detach();
         }
     }, [projectModel]);
 
@@ -354,29 +397,43 @@ export function FloatingEditHost({ projectModel }: { projectModel?: any }): Reac
             }
         });
 
+        // Gdy użytkownik kliknie PPM poza oknem edycji (w canvas, scenę 3D lub drzewo) — natychmiast zamknij okno edycji
+        const onContextMenu = (e: MouseEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (target && target.closest('.floating-edit-shell')) {
+                return;
+            }
+            close();
+        };
+        window.addEventListener('contextmenu', onContextMenu);
+
         return () => {
             unsub?.();
             unsubSm?.();
             document.removeEventListener('bloki-properties-update', onProps);
             window.removeEventListener('cad-tab-switched', onTabSwitched);
             window.removeEventListener('cad-switch-tab', onTabSwitched);
+            window.removeEventListener('contextmenu', onContextMenu);
         };
     }, [session, projectModel, close]);
 
     if (!session) return null;
 
     const isHandle = session.kind === 'smartpart' && isSmartPartHandle(session.model);
+    const isSink = session.kind === 'smartpart' && isSmartPartSink(session.model);
 
     return (
         <FloatingEditShell
             key={`${session.kind}:${session.entityId}`}
             title={titleFor(session)}
-            width={session.kind === 'blok' || session.kind === 'agd' ? 320 : isHandle ? 260 : 300}
+            width={session.kind === 'blok' || session.kind === 'agd' || session.kind === 'wall' ? 320 : isHandle ? 260 : isSink ? 280 : 300}
             onClose={close}
         >
             {session.kind === 'smartpart' && (
                 isHandle
                     ? <HandleEditPanel container={session.model} />
+                    : isSink
+                    ? <SinkEditPanel container={session.model} />
                     : <SmartPartEditPanel container={session.model} />
             )}
             {session.kind === 'blok' && <FloatingBlokEdit container={session.model} />}
@@ -385,6 +442,9 @@ export function FloatingEditHost({ projectModel }: { projectModel?: any }): Reac
             )}
             {session.kind === 'agd' && (
                 <FloatingAgdEdit container={session.model as ContainerModel} />
+            )}
+            {session.kind === 'wall' && (
+                <FloatingWallEdit container={session.model} />
             )}
         </FloatingEditShell>
     );
@@ -403,4 +463,9 @@ export function openAgdEditOnScene(entityId: string): void {
 /** Publiczny helper — otwórz edycję korpusu na scenie. */
 export function openKorpusEditOnScene(entityId: string): void {
     openCadEditEntity({ entityId, kind: 'korpus' });
+}
+
+/** Publiczny helper — otwórz edycję ściany / skosu na scenie. */
+export function openWallEditOnScene(entityId: string): void {
+    openCadEditEntity({ entityId, kind: 'wall' });
 }

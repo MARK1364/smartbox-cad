@@ -12,4 +12,8 @@ export {
     openBlokEditOnScene,
     openAgdEditOnScene,
     openKorpusEditOnScene,
+    openWallEditOnScene,
 } from './FloatingEditHost.js';
+
+export { FloatingWallEdit } from './FloatingWallEdit.js';
+

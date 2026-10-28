@@ -99,12 +99,28 @@ export interface GrooveFeature {
     flipDepthDirection?: boolean;
 }
 
+export type ContourSegment =
+    | { type: 'LINE'; start: Vector3D; end: Vector3D }
+    | {
+          type: 'ARC';
+          start: Vector3D;
+          end: Vector3D;
+          center: Vector3D;
+          radius: number;
+          direction: 'CW' | 'CCW';
+          plane?: 'XY' | 'XZ' | 'YZ';
+      };
+
 export interface ContourFeature {
     name?: string;
     /** Punkty konturu frezowania (mm) */
     points: Vector3D[];
+    /** Opcjonalne analityczne segmenty konturu (odcinki proste i łuki kołowe dla G02/G03) */
+    segments?: ContourSegment[];
     /** Punkty konturu w układzie lokalnym formatki (przed WCS) */
     panelPoints?: Vector3D[];
+    /** Segmenty konturu w układzie lokalnym formatki (przed WCS) */
+    panelSegments?: ContourSegment[];
     /** Głębokość cięcia (mm) */
     depth: number;
     /** Nazwa/ID obiektu źródłowego */

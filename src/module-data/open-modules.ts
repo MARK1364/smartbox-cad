@@ -6,9 +6,11 @@ import {
     writeModuleSession,
     openModulePage,
     persistProjectSnapshot,
+    readProjectSnapshot,
     readModuleSession,
     CAD_BRIDGE_CHANNEL,
     MODULE_REFRESH_MSG,
+    MODULE_SYNC_MSG,
     MODULE_SESSION_UPDATED_MSG,
 } from './session';
 import {
@@ -17,6 +19,7 @@ import {
     extractCncPayload,
     extractDrawPayload,
     extractDagPayload,
+    extractInstrukcjaPayload,
 } from './cad-extract';
 import type { ModuleId, ModuleScope, SmartPartsModulePayload } from './types';
 import { tx } from '../../T1_tlumaczenia/core.js';
@@ -60,6 +63,8 @@ export function refreshModuleSessionFromCad(module: ModuleId, scope: ModuleScope
             writeModuleSession('draw', extractDrawPayload(scope, doc));
         } else if (module === 'dag') {
             writeModuleSession('dag', extractDagPayload(scope, doc));
+        } else if (module === 'instrukcja') {
+            writeModuleSession('instrukcja', extractInstrukcjaPayload(scope, doc));
         } else if (module === 'smartparts') {
             // Studio nie ekstrahuje geometrii projektu — sesja to tylko meta + opcjonalne packageId
             const prev = readModuleSession<any>('smartparts');
@@ -85,11 +90,25 @@ export function refreshModuleSessionFromCad(module: ModuleId, scope: ModuleScope
 }
 
 /**
- * CAD: nasłuchuje próśb o odświeżenie danych z podstron (raport / nesting / …).
+ * CAD: nasłuchuje próśb o odświeżenie danych z podstron (raport / nesting / …)
+ * oraz synchronizacji projektu z podstrony Instrukcja (PMI/kamera).
  */
 export function installModuleRefreshBridge(): () => void {
+    const syncProjectFromSnapshot = (data: any): void => {
+        if (!data || data.type !== MODULE_SYNC_MSG || data.module !== 'instrukcja') return;
+        const snap = readProjectSnapshot();
+        const doc = ContextManager.instance?.document;
+        if (!snap || !doc) return;
+        try {
+            doc.load(snap);
+            (window as any).__rebuildGeometry?.('Projekt zsynchronizowany z Instrukcją montażu');
+        } catch (e) {
+            console.warn('[module] Sync projektu z instrukcji nieudany:', e);
+        }
+    };
     const onMessage = (ev: MessageEvent) => {
         const data = ev.data;
+        syncProjectFromSnapshot(data);
         if (!data || data.type !== MODULE_REFRESH_MSG || !data.module || !data.scope) return;
         refreshModuleSessionFromCad(data.module as ModuleId, data.scope as ModuleScope);
     };
@@ -100,6 +119,7 @@ export function installModuleRefreshBridge(): () => void {
         channel = new BroadcastChannel(CAD_BRIDGE_CHANNEL);
         channel.onmessage = (ev) => {
             const data = ev.data;
+            syncProjectFromSnapshot(data);
             if (!data || data.type !== MODULE_REFRESH_MSG || !data.module || !data.scope) return;
             refreshModuleSessionFromCad(data.module as ModuleId, data.scope as ModuleScope);
         };
@@ -160,6 +180,19 @@ export function openDagFromCad(scope: ModuleScope): void {
     const payload = extractDagPayload(scope, doc);
     writeModuleSession('dag', payload);
     openModulePage('dag');
+}
+
+/** Instrukcja montażu (I1) — podstrona jak CNC, plan liczony z żywego dokumentu. */
+export function openInstrukcjaFromCad(scope: ModuleScope): void {
+    try {
+        const doc = getDoc();
+        persistProjectSnapshot(doc);
+        const payload = extractInstrukcjaPayload(scope, doc);
+        writeModuleSession('instrukcja', payload);
+        openModulePage('instrukcja');
+    } catch (e: any) {
+        alert(e?.message || tx(srcTekst, 'moddata.instrukcja_origin', TX_NS));
+    }
 }
 
 /**

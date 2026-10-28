@@ -48,10 +48,10 @@ function modelNmToMm(val: any, defaultVal: number = 0): number {
     return Math.round(num / 1_000_000);
 }
 
-function mapGrooveFeature(f: any, fallbackHeight: number): GrooveFeature2D {
+function mapGrooveFeature(f: any, fallbackHeight: number, fallbackIdx = 0): GrooveFeature2D {
     const library = f?.params?.source === 'library' && !!f?.params?.library_id;
     return {
-        id: String(f.id || `g_${Math.random().toString(36).slice(2, 8)}`),
+        id: String(f.id || `g_${fallbackIdx}`),
         x: mmVal(f.params?.u ?? f.params?.x ?? f.x, 0),
         y: mmVal(f.params?.v ?? f.params?.y ?? f.y, 0),
         width: mmVal(f.params?.width ?? f.width, 4),
@@ -269,11 +269,11 @@ export class DrawingProjectExtractor {
             if (domainData.role) role = domainData.role;
 
             const rawFeatures = domainData.features || [];
-            for (const f of rawFeatures) {
+            rawFeatures.forEach((f: any, idx: number) => {
                 const isHole = f.type?.toLowerCase() === 'hole' || f.type === 'drill';
                 if (isHole) {
                     holes.push({
-                        id: f.id || `h_${Math.random()}`,
+                        id: f.id || `h_${idx}`,
                         x: mmVal(f.params?.x ?? f.x, 0),
                         y: mmVal(f.params?.y ?? f.y, 0),
                         diameter: mmVal(f.params?.diameter ?? f.diameter, 5),
@@ -282,9 +282,9 @@ export class DrawingProjectExtractor {
                         frozen: !!(f.frozen || f.params?.frozen),
                     });
                 } else if (f.type?.toLowerCase() === 'groove' || f.type?.toLowerCase() === 'pocket' || f.type?.toLowerCase() === 'cutout') {
-                    grooves.push(mapGrooveFeature(f, height || 720));
+                    grooves.push(mapGrooveFeature(f, height || 720, idx));
                 }
-            }
+            });
 
             if (domainData.holes && Array.isArray(domainData.holes)) {
                 for (const h of domainData.holes) {
@@ -340,6 +340,14 @@ export class DrawingProjectExtractor {
             domainData?.generatorParams?.partType === 'HANDLE'
         ) {
             icon = '🪝';
+            type = 'CONTAINER';
+        } else if (
+            domainData?.role === 'SMARTPART_SINK' ||
+            domainData?.generatorParams?.type === 'smartpart_sink' ||
+            domainData?.generatorParams?.partType === 'SINK' ||
+            domainData?.generatorParams?.boxType === 'SINKS'
+        ) {
+            icon = '🥣';
             type = 'CONTAINER';
         } else if (
             isGroup ||
@@ -494,11 +502,11 @@ export class DrawingProjectExtractor {
         const holes: HoleFeature2D[] = [];
         const grooves: GrooveFeature2D[] = [];
         const rawFeatures = pModel.features || [];
-        for (const f of rawFeatures) {
+        rawFeatures.forEach((f: any, idx: number) => {
             const isHole = f.type?.toLowerCase() === 'hole' || f.type === 'drill';
             if (isHole) {
                 holes.push({
-                    id: f.id || `h_${Math.random()}`,
+                    id: f.id || `h_${idx}`,
                     x: mmVal(f.params?.x ?? f.x, 0),
                     y: mmVal(f.params?.y ?? f.y, 0),
                     diameter: mmVal(f.params?.diameter ?? f.diameter, 5),
@@ -507,9 +515,9 @@ export class DrawingProjectExtractor {
                     frozen: !!(f.frozen || f.params?.frozen),
                 });
             } else if (f.type?.toLowerCase() === 'groove' || f.type?.toLowerCase() === 'pocket' || f.type?.toLowerCase() === 'cutout') {
-                grooves.push(mapGrooveFeature(f, height));
+                grooves.push(mapGrooveFeature(f, height, idx));
             }
-        }
+        });
         if (pModel.holes && Array.isArray(pModel.holes)) {
             for (const h of pModel.holes) {
                 if (!holes.some((ex) => ex.id === h.id)) {

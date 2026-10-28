@@ -139,20 +139,22 @@ export class DimensionTool extends BaseState {
     // ========================================================================
 
     private handleWindowKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Control' || e.ctrlKey) {
+        if (e.key === 'Control' || e.ctrlKey || e.metaKey || e.key === 'Meta') {
             this.isCtrlPressed = true;
             if (this.phase === 'PICK_P2') {
                 this.updateHint();
             }
+            this.onPointerMove();
         }
     };
 
     private handleWindowKeyUp = (e: KeyboardEvent) => {
-        if (!e.ctrlKey) {
+        if (!e.ctrlKey && !e.metaKey) {
             this.isCtrlPressed = false;
             if (this.phase === 'PICK_P2') {
                 this.updateHint();
             }
+            this.onPointerMove();
         }
     };
 
@@ -161,6 +163,7 @@ export class DimensionTool extends BaseState {
         if (this.phase === 'PICK_P2') {
             this.updateHint();
         }
+        this.onPointerMove();
     };
 
     public onEnter(): void {
@@ -171,7 +174,7 @@ export class DimensionTool extends BaseState {
         this.resetPicks();
 
         this.updateHint();
-        this.setUIStatus(tx(pmiTekst, 'hints.step1_desc', 'pmi'));
+        this.setUIStatus('Wymiarowanie (PMI)');
 
         const scene = this.ctx.viewport.scene;
         this.geometryHighlighter = new PMIGeometryHighlighter(scene);
@@ -187,13 +190,13 @@ export class DimensionTool extends BaseState {
         this.pointerObserver = scene.onPointerObservable.add((pointerInfo: any) => {
             if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
                 if (pointerInfo.event) {
-                    this.isCtrlPressed = !!pointerInfo.event.ctrlKey;
+                    this.isCtrlPressed = !!(pointerInfo.event.ctrlKey || pointerInfo.event.metaKey);
                 }
                 this.onPointerMove();
             }
             if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
                 if (pointerInfo.event) {
-                    this.isCtrlPressed = !!pointerInfo.event.ctrlKey;
+                    this.isCtrlPressed = !!(pointerInfo.event.ctrlKey || pointerInfo.event.metaKey);
                 }
             }
         });
@@ -201,10 +204,10 @@ export class DimensionTool extends BaseState {
         this.keyboardObserver = scene.onKeyboardObservable.add((keyboardInfo: any) => {
             const event = keyboardInfo.event as KeyboardEvent;
             if (keyboardInfo.type === BABYLON.KeyboardEventTypes.KEYDOWN) {
-                this.isCtrlPressed = !!event.ctrlKey;
+                this.isCtrlPressed = !!(event.ctrlKey || event.metaKey);
                 this.onKeyDown(event);
             } else if (keyboardInfo.type === BABYLON.KeyboardEventTypes.KEYUP) {
-                this.isCtrlPressed = !!event.ctrlKey;
+                this.isCtrlPressed = !!(event.ctrlKey || event.metaKey);
             }
         });
 
@@ -292,7 +295,7 @@ export class DimensionTool extends BaseState {
 
     public onSelect(intent: Intent): void {
         if (intent.pointerInfo?.event) {
-            this.isCtrlPressed = !!intent.pointerInfo.event.ctrlKey;
+            this.isCtrlPressed = !!(intent.pointerInfo.event.ctrlKey || intent.pointerInfo.event.metaKey);
         }
         this.onLeftClick();
     }
@@ -415,7 +418,7 @@ export class DimensionTool extends BaseState {
 
         if (this.phase === 'DRAG_OFFSET' || this.phase === 'PICK_P2') {
             this.resetPicks();
-            this.setUIStatus(tx(pmiTekst, 'hints.step1_desc', 'pmi'));
+            this.setUIStatus('Wymiarowanie (PMI)');
         } else {
             this.clearHint();
             this.stateMachine.changeState('SELECTION_TOOL');
@@ -569,7 +572,7 @@ export class DimensionTool extends BaseState {
                         this.phase = 'PICK_P2';
                         this.syncToolLiveState();
                         this.updateHint();
-                        this.setUIStatus('Krawędź 1 wybrana. Wskaż punkt 2 lub drugą krawędź docelową (LPM).');
+                        this.setUIStatus('Krawędź 1 wybrana. Wskaż punkt 2 lub drugą krawędź docelową (trzymaj CTRL).');
                     } else {
                         // Bez Ctrl: od razu P1+P2 z krawędzi i drag offset
                         this.pick1 = detectedEdge.p1;
@@ -580,23 +583,44 @@ export class DimensionTool extends BaseState {
                 }
             }
 
-            const snap = this.isCtrlPressed
-                ? this.findStructuredSnapPoint()
-                : this.findSnapPoint();
+            if (!this.isCtrlPressed) {
+                // Multi-wybór dwóch punktów/elementów wymaga przytrzymania CTRL.
+                // Bez CTRL dopuszczalny jest tylko wybór pojedynczego elementu (np. całej krawędzi powyżej).
+                this.setUIStatus('Aby wybrać dwa punkty/elementy, przytrzymaj CTRL.');
+                return;
+            }
+
+            const snap = this.findStructuredSnapPoint() ?? this.findSnapPoint();
             if (snap) {
                 this.pick1 = snap;
                 this.phase = 'PICK_P2';
                 this.syncToolLiveState();
                 this.updateHint();
-                this.setUIStatus('Punkt 1 wybrany. Wskaż punkt 2 lub drugą krawędź formatki (LPM).');
+                this.setUIStatus('Punkt 1 wybrany. Wskaż punkt 2 lub drugą krawędź docelową (trzymaj CTRL).');
                 return;
             }
 
-            this.setUIStatus(tx(pmiTekst, 'hints.step1_desc', 'pmi'));
+            this.setUIStatus('');
             return;
         }
 
         if (this.phase === 'PICK_P2') {
+            if (!this.isCtrlPressed) {
+                // Bez Ctrl: jeśli kliknięto krawędź, traktujemy to jako nowy wybór pojedynczej krawędzi
+                if (!this.isVertexUnderCursor()) {
+                    const detectedEdge = this.findDetectedEdge();
+                    if (detectedEdge) {
+                        this.pick1 = detectedEdge.p1;
+                        this.pick2 = detectedEdge.p2;
+                        this.disposeLiveGuideLine();
+                        this.beginOffsetDrag();
+                        return;
+                    }
+                }
+                this.setUIStatus('Wskaż drugi element (trzymaj CTRL).');
+                return;
+            }
+
             // Krawędź pod kursorem — użyj jej bliższego końca jako P2
             if (!this.isVertexUnderCursor()) {
                 const detectedEdge = this.findDetectedEdge();
@@ -607,15 +631,13 @@ export class DimensionTool extends BaseState {
                     return;
                 }
             }
-            const snap = this.isCtrlPressed
-                ? this.findStructuredSnapPoint()
-                : this.findSnapPoint();
+            const snap = this.findStructuredSnapPoint() ?? this.findSnapPoint();
             if (snap) {
                 this.pick2 = snap;
                 this.disposeLiveGuideLine();
                 this.beginOffsetDrag();
             } else {
-                this.setUIStatus('Wskaż punkt 2 lub krawędź docelową (LPM).');
+                this.setUIStatus('Wskaż punkt 2 lub drugą krawędź docelową (trzymaj CTRL).');
             }
         }
     }
@@ -664,12 +686,18 @@ export class DimensionTool extends BaseState {
             }
         }
 
-        // 1. Podgląd linii od P1 do kursora w fazie PICK_P2
+        // 1. Podgląd linii od P1 do kursora w fazie PICK_P2 (tylko przy trzymanym Ctrl)
         if (this.phase === 'PICK_P2' && this.pick1) {
-            const snap = this.isCtrlPressed
-                ? this.findStructuredSnapPoint()
-                : this.findSnapPoint();
-            if (snap) this.updateLiveGuideLine(this.pick1.worldPos, snap.worldPos);
+            if (this.isCtrlPressed) {
+                const snap = this.findStructuredSnapPoint() ?? this.findSnapPoint();
+                if (snap) {
+                    this.updateLiveGuideLine(this.pick1.worldPos, snap.worldPos);
+                } else {
+                    this.disposeLiveGuideLine();
+                }
+            } else {
+                this.disposeLiveGuideLine();
+            }
         }
 
         // 2. Dynamiczne wyciąganie wymiaru w fazie DRAG_OFFSET
@@ -695,11 +723,7 @@ export class DimensionTool extends BaseState {
         }
 
         if (!detection.hit) {
-            if (this.phase === 'PICK_P1') {
-                this.setUIStatus(`${tx(pmiTekst, 'hints.step1_desc', 'pmi')}. Esc: wyjście.`);
-            } else if (this.phase === 'PICK_P2') {
-                this.setUIStatus('Wskaż 2. punkt lub drugą krawędź (LPM). Esc: cofnij do punktu 1.');
-            }
+            this.setUIStatus('');
             return;
         }
 
@@ -1429,24 +1453,10 @@ export class DimensionTool extends BaseState {
                 confirmKey: 'LPM',
                 cancelKey: 'Esc',
             });
-        } else if (this.phase === 'PICK_P2') {
-            tm.setActiveHint({
-                id: 'pmi_dimension_p2',
-                title: tx(pmiTekst, 'hints.step1_title', 'pmi'),
-                description: this.isCtrlPressed
-                    ? tx(pmiTekst, 'hints.step2_ctrl_desc', 'pmi')
-                    : tx(pmiTekst, 'hints.step1_p2_desc', 'pmi'),
-                confirmKey: 'LPM',
-                cancelKey: 'Esc',
-            });
-        } else if (this.phase === 'DRAG_OFFSET') {
-            tm.setActiveHint({
-                id: 'pmi_dimension_drag',
-                title: tx(pmiTekst, 'hints.step2_title', 'pmi'),
-                description: tx(pmiTekst, 'hints.step2_desc', 'pmi'),
-                confirmKey: 'LPM',
-                cancelKey: 'Esc',
-            });
+        } else {
+            // W kolejnych fazach (PICK_P2, DRAG_OFFSET) sterowanie i status wyświetlane są
+            // bezpośrednio na pasku statusu — bez nakładania podpowiedzi "KROK 2".
+            tm.clearActiveHint();
         }
     }
 

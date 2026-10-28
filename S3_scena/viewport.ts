@@ -9,7 +9,10 @@ import { PerformanceConfigManager } from '../A1_core/performance-config.js';
 import { probeBayFromCADPoint, probeBayFromSceneRay } from '../A2_bloki/02_bloki-bay-detector.js';
 import { probeRogowy90BayFromCADPoint } from '../A3_smartframe/rogowy90-bay.js';
 import { highlightBayInScene, clearBayHighlight } from '../A2_bloki/02_bloki-bay-visualizer.js';
+import { probePanelSurfaceFromRay } from '../A2_bloki/handles/handle-detector.js';
 import { WORLD_Y_UP, type CameraUp } from './named-camera-view.js';
+import { parseFeatureFaceKey } from '../A4_smartpanel/native_core/cap-machining.js';
+import { openCadEditEntity } from '../src/floating-edit/cad-edit-entity.js';
 
 declare const BABYLON: any;
 
@@ -172,6 +175,7 @@ export class Viewport {
         this.scene = new BABYLON.Scene(this.engine);
         this.scene.clearColor = new BABYLON.Color4(0.92, 0.93, 0.95, 1);
         this.scene.ambientColor = new BABYLON.Color3(0.15, 0.15, 0.15);
+        this.scene.doubleClickDelay = 450;
 
         // ─── Camera ──────────────────────────────────
         this.camera = new BABYLON.ArcRotateCamera(
@@ -260,13 +264,26 @@ export class Viewport {
                     const bayCtrl = ContextManager.instance.blokiBayController;
                     if (bayCtrl?.isPickerActive && !ContextManager.instance.activeReferencePicker) {
                         if (bayCtrl.pickerMode === 'panel') {
-                            const surface = bayCtrl.lastDetectedSurface;
+                            let surface = bayCtrl.lastDetectedSurface;
+                            if (!surface) {
+                                const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => {
+                                    if (!m?.isPickable || !m.isVisible) return false;
+                                    const name = String(m.name || '');
+                                    if (name.includes('ground') || name.includes('grid') || name.includes('__handle') || name.includes('blok_bay') || name.includes('blok_plane') || name.startsWith('__sink')) return false;
+                                    if (name.startsWith('handle_mesh_') || m.metadata?.type === 'smartpart_handle' || m.metadata?.isSink) return false;
+                                    return true;
+                                });
+                                if (pick && pick.hit && pick.pickedMesh) {
+                                    const doc = ContextManager.instance.document;
+                                    if (doc) surface = probePanelSurfaceFromRay(this.scene, pick, doc);
+                                }
+                            }
                             if (surface) {
                                 bayCtrl.notifyPanelDetected(surface);
-                                evt.preventDefault();
-                                evt.stopPropagation();
-                                return;
                             }
+                            evt.preventDefault();
+                            evt.stopPropagation();
+                            return;
                         } else {
                             const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_bay') && !m.name?.includes('blok_plane'));
                             if (pick && pick.hit && pick.pickedPoint) {
@@ -467,16 +484,70 @@ export class Viewport {
                 this.camera.radius = newRadius;
             } else if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOUBLETAP) {
                 if (this.suppressDoubleTapZoom) return;
-                // Podwójne kliknięcie na naroże lub formatkę centruje widok na wskazanym punkcie
                 const ray = this.scene.createPickingRay(this.scene.pointerX, this.scene.pointerY, BABYLON.Matrix.Identity(), this.camera);
                 const pickInfo = this.scene.pickWithRay(ray, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid'));
-                if (pickInfo && pickInfo.hit && pickInfo.pickedPoint) {
-                    this.animateCameraTo(
-                        this.camera.alpha,
-                        this.camera.beta,
-                        Math.max(this.camera.radius * 0.5, 100),
-                        pickInfo.pickedPoint
-                    );
+                if (pickInfo && pickInfo.hit && pickInfo.pickedMesh) {
+                    const mesh = pickInfo.pickedMesh;
+                    const meta = mesh.metadata || {};
+                    const name = String(mesh.name || '');
+
+                    // 1. Operacja (kieszeń, rewizja, wpust, otwór)
+                    const parsed = parseFeatureFaceKey(name);
+                    const featureId = meta.featureId || parsed?.featureId || (name.startsWith('feature_') ? name.substring(8) : null);
+                    let panelModel = meta.panelModel;
+                    if (!panelModel && featureId) {
+                        const doc = ContextManager.instance.document;
+                        const panels = typeof (doc as any)?.getPanels === 'function' ? (doc as any).getPanels() : [];
+                        const found = panels.find((p: any) => (p.domainData as any)?.features?.some((f: any) => f.id === featureId));
+                        if (found) panelModel = found.domainData || found;
+                    }
+
+                    if (featureId) {
+                        const pId = panelModel?.id || meta.panelId;
+                        openCadEditEntity({
+                            entityId: pId || featureId,
+                            panelId: pId,
+                            featureId,
+                            kind: 'operation',
+                            screenX: (evt as any)?.clientX ?? this.scene.pointerX,
+                            screenY: (evt as any)?.clientY ?? this.scene.pointerY,
+                        });
+                        return;
+                    }
+
+                    // 2. Formatka / Płyta
+                    if (panelModel) {
+                        openCadEditEntity({
+                            entityId: panelModel.id,
+                            kind: 'panel',
+                            screenX: (evt as any)?.clientX ?? this.scene.pointerX,
+                            screenY: (evt as any)?.clientY ?? this.scene.pointerY,
+                        });
+                        return;
+                    }
+
+                    // 3. Okucie / SmartPart / Blok / Korpus
+                    const containerId = meta.nodeId || meta.model?.id || meta.containerId;
+                    if (containerId) {
+                        const isHandle = meta.type === 'smartpart_handle';
+                        openCadEditEntity({
+                            entityId: containerId,
+                            kind: isHandle ? 'smartpart' : 'korpus',
+                            screenX: (evt as any)?.clientX ?? this.scene.pointerX,
+                            screenY: (evt as any)?.clientY ?? this.scene.pointerY,
+                        });
+                        return;
+                    }
+
+                    // 4. Jeśli kliknięto w inny punkt — centrowanie kamery
+                    if (pickInfo.pickedPoint) {
+                        this.animateCameraTo(
+                            this.camera.alpha,
+                            this.camera.beta,
+                            Math.max(this.camera.radius * 0.5, 100),
+                            pickInfo.pickedPoint
+                        );
+                    }
                 }
             }
         });
@@ -498,9 +569,9 @@ export class Viewport {
             (window as any).logCamera = (window as any).getCamera;
         }
 
-        // Zapobieganie ucinaniu formatek (brak clippingu w rzucie orto, a w perspektywie minZ = 0.1 mm)
-        this.camera.minZ = this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA ? -50000 : 0.1;
-        this.camera.maxZ = 50000;
+        // Precyzja bufora głębokości (Z-Buffer): minZ = 10mm zapobiega przebijaniu krawędzi przez plecy 3mm z daleka
+        this.camera.minZ = this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA ? -5000 : 20.0;
+        this.camera.maxZ = 15000;
         this.camera.lowerRadiusLimit = 0.5;
         this.camera.upperRadiusLimit = 20000;
         this.camera.inertia = 0; // CAD 1:1 - brak opóźnienia i bezwładności (SolidWorks style)
@@ -839,7 +910,8 @@ export class Viewport {
     toggleCameraProjection() {
         if (this.camera.mode === BABYLON.Camera.PERSPECTIVE_CAMERA) {
             this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-            this.camera.minZ = -50000;
+            this.camera.minZ = -5000;
+            this.camera.maxZ = 15000;
             this._updateOrthographicBounds();
 
             this._orthoZoomObserver = this.camera.onViewMatrixChangedObservable.add(() => {
@@ -848,7 +920,8 @@ export class Viewport {
             return 'ortho';
         } else {
             this.camera.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
-            this.camera.minZ = 0.1;
+            this.camera.minZ = 20.0;
+            this.camera.maxZ = 15000;
             if (this._orthoZoomObserver) {
                 this.camera.onViewMatrixChangedObservable.remove(this._orthoZoomObserver);
                 this._orthoZoomObserver = null;

@@ -336,7 +336,8 @@ export type BlokiModuleId =
     | 'PANELS'
     | 'LED_EXTERNAL'
     | 'HANDLES'
-    | 'HANGERS';
+    | 'HANGERS'
+    | 'SINKS';
 
 export interface BlokiModuleTypeById {
     SHELVES: 'blok_shelves';
@@ -354,6 +355,7 @@ export interface BlokiModuleTypeById {
     LED_EXTERNAL: 'blok_led_external';
     HANDLES: 'blok_handle';
     HANGERS: 'smartpart_hangers';
+    SINKS: 'blok_sink';
 }
 
 export interface BlokiPanelReference {
@@ -401,6 +403,7 @@ export interface BlokiModuleParamsById {
     LED_EXTERNAL: LedExternalPlanParams;
     HANDLES: HandlePlanParams;
     HANGERS: Record<string, unknown>;
+    SINKS: Record<string, unknown>;
 }
 
 export type BlokiGeneratorParams = BlokiGeneratorMetadata &
@@ -437,7 +440,8 @@ const BLOKI_TYPE_BY_ID: BlokiModuleTypeById = {
     PANELS: 'blok_panels',
     LED_EXTERNAL: 'blok_led_external',
     HANDLES: 'blok_handle',
-    HANGERS: 'smartpart_hangers'
+    HANGERS: 'smartpart_hangers',
+    SINKS: 'blok_sink'
 };
 
 export function isBlokiGeneratorParams(raw: unknown): raw is BlokiGeneratorParams {

@@ -198,6 +198,26 @@ describe('HangersEngine & HangersTypes', () => {
         expect(partL?.loc.x).toBe(-385);
     });
 
+    it('poprawnie przetwarza zawieszka_camaro.json wygenerowany ze Studio', async () => {
+        const { default: camaroJson } = await import('../../B1_biblioteka/zawieszki/zawieszka_camaro.json');
+        const sets = extractHangerSets(camaroJson);
+        expect(sets).toHaveLength(1);
+        expect(sets[0].parts).toHaveLength(2);
+        expect(sets[0].cuts).toHaveLength(8);
+
+        const dims = { width_mm: 600, height_mm: 720, depth_mm: 300 };
+        const plan = calculateHangersPlan(dims, { szablon_id: 'zawieszka_camaro' }, camaroJson);
+        expect(plan.hardware).toHaveLength(2);
+
+        // Lewa zawieszka (refX: LEFT, offsetX: 10): -300 + 10 = -290
+        const partL = plan.hardware?.find((h) => h.name.includes('Part 1') && !h.name.includes('(P)'));
+        expect(partL?.loc.x).toBe(-290);
+
+        // Prawa zawieszka (refX: RIGHT, offsetX: 10): +300 - 10 = 290
+        const partR = plan.hardware?.find((h) => h.name.includes('(P)'));
+        expect(partR?.loc.x).toBe(290);
+    });
+
     it('hangersPlugin jest poprawnie zarejestrowany w SmartModuleRegistry', () => {
         registerAllBlokiModules();
         const plugin = SmartModuleRegistry.get('HANGERS');

@@ -65,6 +65,18 @@ export class Mach3Postprocessor extends Postprocessor {
                         lines.push(`${this.getN()} G1 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)}`);
                     }
                     break;
+                case 'ARC':
+                    cancelDrill();
+                    if (cmd.point && cmd.arcParams) {
+                        const pt = cmd.point;
+                        const gCode = cmd.arcParams.direction === 'CW' ? 'G2' : 'G3';
+                        if (pt.i !== undefined && pt.j !== undefined) {
+                            lines.push(`${this.getN()} ${gCode} X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)} I${pt.i.toFixed(3)} J${pt.j.toFixed(3)}`);
+                        } else if (cmd.arcParams.radius !== undefined) {
+                            lines.push(`${this.getN()} ${gCode} X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)} R${cmd.arcParams.radius.toFixed(3)}`);
+                        }
+                    }
+                    break;
                 case 'CYCLE_DRILL':
                     if (cmd.point && cmd.drillParams) {
                         const pt = cmd.point;

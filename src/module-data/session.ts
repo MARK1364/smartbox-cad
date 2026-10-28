@@ -8,6 +8,7 @@ export const MODULE_SESSION_KEYS: Record<ModuleId, string> = {
     draw: 'CAD_MODULE_DRAW',
     dag: 'CAD_MODULE_DAG',
     smartparts: 'CAD_MODULE_SMARTPARTS',
+    instrukcja: 'CAD_MODULE_INSTRUKCJA',
 };
 
 export const MODULE_PAGES: Record<ModuleId, string> = {
@@ -17,6 +18,7 @@ export const MODULE_PAGES: Record<ModuleId, string> = {
     draw: './draw.html',
     dag: './dag.html',
     smartparts: './studio.html',
+    instrukcja: './instrukcja.html',
 };
 
 /** Nazwa okna CAD — powrót z CAM/modułów fokusuje tę kartę, bez nowego pustego projektu. */
@@ -29,6 +31,7 @@ export const MODULE_WINDOW_NAMES: Record<ModuleId, string> = {
     draw: 'SmartPanelDraw',
     dag: 'SmartPanelDAG',
     smartparts: 'SmartPanelSmartParts',
+    instrukcja: 'SmartPanelInstrukcja',
 };
 
 export const PROJECT_SNAPSHOT_KEY = 'smartpanel_project_current_v3';
@@ -42,10 +45,15 @@ export const CAD_BRIDGE_CHANNEL = 'smartpanel-cad-bridge';
 export const MODULE_REFRESH_MSG = 'smartpanel:refresh-module';
 /** CAD zapisał świeżą sesję modułu — podstrona ma przeładować payload. */
 export const MODULE_SESSION_UPDATED_MSG = 'smartpanel:module-session-updated';
+/** Podstrona instrukcji prosi CAD o odtworzenie animacji na żywej scenie.
+ *  Payload: { module: 'instrukcja', scope: ModuleScope } — CAD buduje plan od nowa (żywa scena). */
+export const MODULE_PLAY_MSG = 'smartpanel:play-instruction';
+/** Podstrona instrukcji zapisała projekt (PMI/kamera) — CAD ma wczytać świeży snapshot. */
+export const MODULE_SYNC_MSG = 'smartpanel:sync-project-snapshot';
 /** CAD się odświeża / zamyka — wszystkie podstrony mają się zamknąć. */
 export const CAD_SHUTDOWN_MSG = 'smartpanel:cad-shutdown';
 
-const ALL_MODULES: ModuleId[] = ['report', 'nesting', 'cnc', 'draw', 'dag', 'smartparts'];
+const ALL_MODULES: ModuleId[] = ['report', 'nesting', 'cnc', 'draw', 'dag', 'smartparts', 'instrukcja'];
 
 const LEGACY_NESTING_KEY = 'NESTING_SESSION_DATA';
 
@@ -201,9 +209,13 @@ export function installModulePageLifecycle(module: ModuleId): () => void {
         window.name = MODULE_WINDOW_NAMES[module];
     } catch { /* ignore */ }
 
+    // Instrukcja to kopia shella CAD (własna scena) — jak CNC pracuje niezależnie,
+    // żeby odświeżenie CAD nie zamykało pracy nad instrukcją.
     const isStandalone = typeof window !== 'undefined' && (
         new URLSearchParams(window.location.search).has('standalone') ||
-        module === 'cnc'
+        module === 'cnc' ||
+        module === 'smartparts' ||
+        module === 'instrukcja'
     );
     // CNC oraz tryb standalone pracują w pełni niezależnie — nie nasłuchują na shutdown z CAD
     if (isStandalone) {

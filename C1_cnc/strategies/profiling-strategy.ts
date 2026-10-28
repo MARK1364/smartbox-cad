@@ -157,13 +157,48 @@ export class ProfilingStrategy implements MachiningStrategy {
                 point: { x: startPt.x, y: startPt.y, z: passZ }
             });
 
-            // Ruch po kolejnych punktach konturu
-            for (let i = 1; i < effectivePts.length; i++) {
-                const pt = effectivePts[i];
-                commands.push({
-                    type: 'GOTO',
-                    point: { x: pt.x, y: pt.y, z: passZ }
-                });
+            const segments = ('segments' in feature && Array.isArray((feature as ContourFeature).segments) && (feature as ContourFeature).segments!.length > 0)
+                ? (feature as ContourFeature).segments!
+                : null;
+
+            if (segments) {
+                // Ruch po analitycznych segmentach (proste LINE + łuki ARC z G02/G03)
+                for (const seg of segments) {
+                    if (seg.type === 'LINE') {
+                        commands.push({
+                            type: 'GOTO',
+                            point: { x: seg.end.x, y: seg.end.y, z: passZ }
+                        });
+                    } else if (seg.type === 'ARC') {
+                        const iVec = seg.center.x - seg.start.x;
+                        const jVec = seg.center.y - seg.start.y;
+                        commands.push({
+                            type: 'ARC',
+                            point: {
+                                x: seg.end.x,
+                                y: seg.end.y,
+                                z: passZ,
+                                i: iVec,
+                                j: jVec
+                            },
+                            arcParams: {
+                                center: seg.center,
+                                radius: seg.radius,
+                                plane: seg.plane || 'XY',
+                                direction: seg.direction
+                            }
+                        });
+                    }
+                }
+            } else {
+                // Ruch po kolejnych punktach konturu
+                for (let i = 1; i < effectivePts.length; i++) {
+                    const pt = effectivePts[i];
+                    commands.push({
+                        type: 'GOTO',
+                        point: { x: pt.x, y: pt.y, z: passZ }
+                    });
+                }
             }
         }
 

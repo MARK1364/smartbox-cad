@@ -48,19 +48,48 @@ export function extractHangerSets(definition: any, fallbackId = 'default'): Hang
 
     // Format wielozestawowy: tablica sets: [...]
     if (Array.isArray(definition.sets) && definition.sets.length > 0) {
-        return definition.sets.map((s: any, idx: number) => ({
-            id: String(s.id || `set_${idx + 1}`),
-            name: String(s.name || s.id || `Zestaw ${idx + 1}`),
-            description: s.description,
-            brand: s.brand || definition.brand,
-            mainContainer: s.mainContainer || definition.mainContainer,
-            parts: Array.isArray(s.parts) ? s.parts : (s.partBody ? [s.partBody] : []),
-            cuts: Array.isArray(s.cuts) ? s.cuts : [],
-            parameters: Array.isArray(s.parameters) ? s.parameters : [],
-            bindings: Array.isArray(s.bindings) ? s.bindings : [],
-            iconDataUrl: s.iconDataUrl || definition.iconDataUrl,
-            visual: s.visual || definition.visual,
-        }));
+        return definition.sets.map((s: any, idx: number) => {
+            const setId = String(s.id || `set_${idx + 1}`);
+            // Części: albo z s.parts, albo z definition.parts powiązanych przez setId (lub wszystkie jeśli pojedynczy zestaw)
+            let setParts: any[] = [];
+            if (Array.isArray(s.parts) && s.parts.length > 0) {
+                setParts = s.parts;
+            } else if (Array.isArray(definition.parts) && definition.parts.length > 0) {
+                setParts = definition.parts.filter((p: any) => !p.setId || p.setId === setId);
+                if (setParts.length === 0 && definition.sets.length === 1) {
+                    setParts = definition.parts;
+                }
+            } else if (s.partBody) {
+                setParts = [s.partBody];
+            } else if (definition.partBody) {
+                setParts = [definition.partBody];
+            }
+
+            const partIds = new Set(setParts.map((p) => p.id));
+            let setCuts: any[] = [];
+            if (Array.isArray(s.cuts) && s.cuts.length > 0) {
+                setCuts = s.cuts;
+            } else if (Array.isArray(definition.cuts) && definition.cuts.length > 0) {
+                setCuts = definition.cuts.filter((c: any) => !c.partId || partIds.has(c.partId));
+                if (setCuts.length === 0 && definition.sets.length === 1) {
+                    setCuts = definition.cuts;
+                }
+            }
+
+            return {
+                id: setId,
+                name: String(s.name || s.id || `Zestaw ${idx + 1}`),
+                description: s.description || definition.description,
+                brand: s.brand || definition.brand,
+                mainContainer: s.mainContainer || definition.mainContainer,
+                parts: setParts,
+                cuts: setCuts,
+                parameters: Array.isArray(s.parameters) ? s.parameters : (Array.isArray(definition.parameters) ? definition.parameters : []),
+                bindings: Array.isArray(s.bindings) ? s.bindings : (Array.isArray(definition.bindings) ? definition.bindings : []),
+                iconDataUrl: s.iconDataUrl || definition.iconDataUrl,
+                visual: s.visual || definition.visual,
+            };
+        });
     }
 
     // Format pojedynczy: parts i cuts bezpośrednio w obiekcie (np. TT2.json)

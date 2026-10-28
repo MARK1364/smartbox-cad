@@ -53,6 +53,16 @@ export class WoodWOPPostprocessor extends Postprocessor {
                 lines.push(`Z=${Math.abs(pt.z).toFixed(2)}`);
                 lines.push(`TOOL=${currentTool}`);
                 lines.push("");
+            } else if (cmd.type === 'ARC' && cmd.point && cmd.arcParams) {
+                const pt = cmd.point;
+                lines.push("<102 \\RoutingArc");
+                lines.push(`X=${pt.x.toFixed(2)}`);
+                lines.push(`Y=${pt.y.toFixed(2)}`);
+                lines.push(`Z=${Math.abs(pt.z).toFixed(2)}`);
+                lines.push(`R=${cmd.arcParams.radius.toFixed(2)}`);
+                lines.push(`DIR=${cmd.arcParams.direction === 'CW' ? '0' : '1'}`);
+                lines.push(`TOOL=${currentTool}`);
+                lines.push("");
             }
         }
 

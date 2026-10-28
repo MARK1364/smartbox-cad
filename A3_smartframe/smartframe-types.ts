@@ -8,6 +8,12 @@
  *  - formatki w milimetrach na poziomie planowania korpusu
  */
 
+/**
+ * Tolerancja numeryczna (w mm) dla porównań marginesów i zachodzenia pleców (1 µm).
+ * Chroni przed błędami zmiennoprzecinkowymi bez połykania celowych mikroszczelin.
+ */
+export const BACK_OVERLAP_EPS_MM = 0.001;
+
 export type CabinetType =
     | 'korpus3'
     | 'korpus_rogowy1'

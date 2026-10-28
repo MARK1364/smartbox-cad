@@ -21,6 +21,7 @@ export const EntityType = {
     SMARTPART:   "sp",
     CUT:         "cut",
     SET:         "set",
+    CNC_PROGRAM: "cnc_prog",
 };
 
 export class SmartID {
@@ -100,8 +101,9 @@ export class IDManager {
         let smartId = new SmartID(entityType, uid, parentId);
         
         let counter = 2;
+        const base = uid;
         while (this._registry.has(smartId.fullPath)) {
-            uid = `${role}_${counter}`;
+            uid = `${base}_${counter}`;
             smartId = new SmartID(entityType, uid, parentId);
             counter++;
         }
@@ -112,6 +114,13 @@ export class IDManager {
         });
 
         return smartId;
+    }
+
+    /**
+     * Rejestruje cechę obróbczą (FEATURE) formatki w centralnym rejestrze SmartID.
+     */
+    registerFeature(parentId = "", roleOrId = "", metadata = {}): SmartID {
+        return this.register(EntityType.FEATURE, parentId, roleOrId, metadata);
     }
 
     /**

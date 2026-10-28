@@ -18,7 +18,36 @@ import {
     applySmartPartCutIntents,
 } from '../hangers/smartpart-bay-placement.js';
 import type { DetectedBay } from '../02_bloki-bay-detector.js';
-import p40 from '../../B1_biblioteka/zawieszki/p40.json';
+const p40 = {
+    id: 'sp:p40',
+    parts: [{
+        id: 'part_1',
+        widthMm: 20,
+        heightMm: 40,
+        depthMm: 70,
+        refX: 'LEFT' as const,
+        offsetX_mm: 10,
+        refY: 'FRONT' as const,
+        offsetY_mm: 30,
+        refZ: 'TOP' as const,
+        offsetZ_mm: 50,
+    }],
+    cuts: [{
+        id: 'cut_1',
+        type: 'HOLE',
+        diameterMm: 8,
+        lengthMm: 24,
+        refX: 'LEFT' as const,
+        offsetX_mm: 0,
+        refY: 'CENTER' as const,
+        offsetY_mm: 0,
+        refZ: 'CENTER' as const,
+        offsetZ_mm: 0,
+        axis: 'X' as const,
+        direction: -1,
+        partId: 'part_1',
+    }],
+};
 
 describe('A5_smartparts / smartpart-bay-placement — Parametryczne wpasowanie we wnękę', () => {
     const mockBay: DetectedBay = {

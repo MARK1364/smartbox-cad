@@ -19,8 +19,6 @@ const FACE_MAPPING: Record<string, Record<string, string>> = {
     SIDE_LEFT: { FACE_Y_PLUS: '+Y', FACE_Y_MINUS: '-Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
     RIGHT_SIDE_PANEL: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
     SIDE_RIGHT: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
-    VERTICAL_DIVIDER: { FACE_Y_PLUS: '+Y', FACE_Y_MINUS: '-Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
-    DIVIDER: { FACE_Y_PLUS: '+Y', FACE_Y_MINUS: '-Y', FACE_X_MINUS: '+X', FACE_X_PLUS: '-X' },
     // [90,180,0]: Ry=180 lustrzy lokalne ±X względem starego [90,0,0]
     BOTTOM_PANEL: { FACE_Y_MINUS: '-X', FACE_Y_PLUS: '+X', FACE_X_MINUS: '-Y', FACE_X_PLUS: '+Y' },
     TOP_PANEL: { FACE_Y_MINUS: '-X', FACE_Y_PLUS: '+X', FACE_X_MINUS: '-Y', FACE_X_PLUS: '+Y' },
@@ -49,8 +47,6 @@ const SHIFT: Record<string, OffsetShiftSpec> = {
     SIDE_LEFT: { paramSuffix: 'shiftX', cadAxis: 'X', sign: -1 },
     RIGHT_SIDE_PANEL: { paramSuffix: 'shiftX', cadAxis: 'X', sign: 1 },
     SIDE_RIGHT: { paramSuffix: 'shiftX', cadAxis: 'X', sign: 1 },
-    VERTICAL_DIVIDER: { paramSuffix: 'shiftX', cadAxis: 'X', sign: 1 },
-    DIVIDER: { paramSuffix: 'shiftX', cadAxis: 'X', sign: 1 },
     BOTTOM_PANEL: { paramSuffix: 'shiftZ', cadAxis: 'Z', sign: -1 },
     TOP_PANEL: { paramSuffix: 'shiftZ', cadAxis: 'Z', sign: 1 },
     BACK_PANEL: { paramSuffix: 'shiftY', cadAxis: 'Y', sign: 1 }

@@ -52,9 +52,16 @@ export interface LedChannelDefinition {
     detectedWidthMm?: number;
 }
 
+let _ledChannelSeq = 0;
+
+function allocLedChannelId(): string {
+    _ledChannelSeq += 1;
+    return `led_channel_${_ledChannelSeq}`;
+}
+
 export function createDefaultLedChannel(id?: string): LedChannelDefinition {
     return {
-        id: id || `led_channel_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        id: id || allocLedChannelId(),
         name: 'LED zewnętrzny (kanał)',
         enabled: true,
         visible: true,

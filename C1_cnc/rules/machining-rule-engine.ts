@@ -141,14 +141,20 @@ export class MachiningRuleEngine {
         if (width <= 4.5 && !isLedChannel) {
             const saw = allTools.find(t => t.type === 'groove');
             if (saw) {
-                return {
-                    tool: saw,
-                    strategyId: 'profiling_25d',
-                    parameters: {
-                        isSawing: true,
-                        cutWidth: width
-                    }
-                };
+                const sawAllowed = saw.allowedAxes || ['X'];
+                // Agregat piłowy maszyny idzie po osi X — nie przypisuj piły dla wpustu poprzecznego w osi Y, chyba że piła zezwala na Y
+                const isAlongY = groove.startPoint && groove.endPoint &&
+                    Math.abs(groove.endPoint.y - groove.startPoint.y) > Math.abs(groove.endPoint.x - groove.startPoint.x) + 0.1;
+                if (!isAlongY || sawAllowed.includes('Y')) {
+                    return {
+                        tool: saw,
+                        strategyId: 'profiling_25d',
+                        parameters: {
+                            isSawing: true,
+                            cutWidth: width
+                        }
+                    };
+                }
             }
         }
 

@@ -52,6 +52,7 @@ import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOpera
 import { HandleDragController } from '../A2_bloki/handles/handle-controller.js';
 import { HangerDragController } from '../A2_bloki/hangers/hanger-controller.js';
 import { createSmartPartHandle } from '../A2_bloki/handles/handle-engine.js';
+import { createSmartPartSink } from '../A2_bloki/sinks/sink-apply.js';
 import { FloatingEditHost, openCadEditEntity, closeCadFloatingEdit } from './floating-edit';
 import { AgdPanel } from './agd/AgdPanel';
 import { createSmartAppliance, createSmartApplianceInDetectedBay } from '../A6_agd';
@@ -66,6 +67,8 @@ import { CADNode } from '../A1_core/cad-node/cad-node';
 import { NodeType } from '../A1_core/cad-node/node-type';
 import { AddNodeCommand } from '../A1_core/commands/add-node-command';
 import { openCncFromCad, installModuleRefreshBridge } from './module-data/open-modules';
+import { installInstructionPlaybackBridge } from '../I1_instrukcja/instruction-playback';
+import { InstructionPanel } from '../I1_instrukcja/InstructionPanel';
 import { CAD_WINDOW_NAME, installCadModuleBridge } from './module-data/session';
 import { BlokiBayController } from '../A2_bloki/02_bloki-bay-controller';
 import { SmartFrameDragController } from '../A3_smartframe/smartframe-drag-controller';
@@ -85,7 +88,11 @@ import { BelkaWidokowa } from './BelkaWidokowa';
 import { DrzewoObiektow } from './DrzewoObiektow';
 import { PanelEdycji } from './PanelEdycji';
 
-export default function App({ initialTab }: { initialTab?: string } = {}) {
+export default function App({
+  initialTab,
+  mode = 'cad',
+}: { initialTab?: string; mode?: 'cad' | 'instrukcja' } = {}) {
+  const isInstruction = mode === 'instrukcja';
   const projectModel = useProjectDocument();
   const uiState = useUIState();
   useLocale();
@@ -100,7 +107,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
     startResizeEdit,
     expandEditPanelIfCollapsed,
   } = usePanelWidths();
-  const [activeTab, setActiveTabRaw] = useState(initialTab || 'tab-a3-smartframe');
+  const [activeTab, setActiveTabRaw] = useState(initialTab || (isInstruction ? 'tab-i1-instrukcja' : 'tab-a3-smartframe'));
 
   /**
    * Wszystkie przełączenia zakładek idą przez tę funkcję.
@@ -684,14 +691,19 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
   const [heightVal, setHeightVal] = useState('720');
   const [thicknessVal, setThicknessVal] = useState('18');
 
-  // Load app.ts once mounted; nazwij okno CAD + mostek zamykania kart CNC/modułów
+  // Load app.ts once mounted; nazwij okno CAD + mostek zamykania kart CNC/modułów.
+  // Podstrona Instrukcji jest KOPIĄ shella CAD — nie przejmuje nazwy okna CAD
+  // (inaczej kolejne otwarcie instrukcji trafiłoby w okno CAD) ani mostków CAD.
   useEffect(() => {
-    try {
-      window.name = CAD_WINDOW_NAME;
-    } catch { /* ignore */ }
+    if (!isInstruction) {
+      try {
+        window.name = CAD_WINDOW_NAME;
+      } catch { /* ignore */ }
+    }
 
-    const uninstallBridge = installCadModuleBridge();
-    const uninstallRefresh = installModuleRefreshBridge();
+    const uninstallBridge = isInstruction ? () => { } : installCadModuleBridge();
+    const uninstallRefresh = isInstruction ? () => { } : installModuleRefreshBridge();
+    const uninstallInstrukcja = isInstruction ? () => { } : installInstructionPlaybackBridge();
 
     if (!(window as any).__cadAppLoading && !(window as any).__cadAppStarted) {
       (window as any).__cadAppLoading = true;
@@ -705,9 +717,18 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
 
     return () => {
       uninstallRefresh();
+      uninstallInstrukcja();
       uninstallBridge();
     };
-  }, []);
+  }, [isInstruction]);
+
+  // Tryb Instrukcja: ukryj zakładki modułów kreślących (ramka/bloki/ściany/…),
+  // zostaw PMI + Instrukcję, drzewo, belkę hierarchii i panel edycji.
+  useEffect(() => {
+    if (!isInstruction) return;
+    document.body.classList.add('instrukcja-mode');
+    return () => document.body.classList.remove('instrukcja-mode');
+  }, [isInstruction]);
 
   // Sync inputs with uiState / activeEntity dimensions
   useEffect(() => {
@@ -856,6 +877,9 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       if (!bay) return;
       const ctrl = ContextManager.instance.blokiBayController;
       const optId = ctrl?.pendingBlokType || ctrl?.draggedBlokType || 'EMPTY';
+      if (optId === 'SINKS' || optId === 'SINK') {
+        return;
+      }
       const doc = ContextManager.instance.document || projectModel;
       if (doc) {
         const scene = ContextManager.instance.viewport?.scene;
@@ -900,7 +924,8 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
           'FLAPS': { type: 'blok_flaps', label: 'klapy' },
           'PANELS': { type: 'blok_panels', label: 'blendy' },
           'LED_EXTERNAL': { type: 'blok_led_external', label: 'led_podszafkowy' },
-          'LED_INTERNAL': { type: 'blok_led_internal', label: 'led_szafowy' }
+          'LED_INTERNAL': { type: 'blok_led_internal', label: 'led_szafowy' },
+          'HANGERS': { type: 'smartpart_hangers', label: 'zawieszki' }
         };
         const opt = typeMap[optId] || { type: `blok_${optId.toLowerCase()}`, label: optId.toLowerCase() };
 
@@ -945,7 +970,28 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
             const id = model?.id || handleNode.id;
             if (id) openCadEditEntity({ entityId: id, kind: 'smartpart' });
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-            window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
+            window.document.dispatchEvent(new CustomEvent('bloki-properties-update', {
+              detail: { kind: 'container', containerId: id }
+            }));
+            ContextManager.instance.viewport?.requestRender(2);
+          }
+        } else if (optId === 'SINKS' || optId === 'SINK') {
+          const customParams = evt?.detail?.sinkParams || {};
+          const sinkNode = createSmartPartSink(doc, surface.panelNode, customParams, surface);
+          if (sinkNode) {
+            if (ctrl) {
+              ctrl.setPendingBlokType(null);
+              ctrl.endDrag();
+              ctrl.stopPicker();
+            }
+            const model = sinkNode.domainData || sinkNode;
+            doc.setActiveEntity(model);
+            const id = model?.id || sinkNode.id;
+            if (id) openCadEditEntity({ entityId: id, kind: 'blok' });
+            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+            window.document.dispatchEvent(new CustomEvent('bloki-properties-update', {
+              detail: { kind: 'container', containerId: id }
+            }));
             ContextManager.instance.viewport?.requestRender(2);
           }
         }
@@ -1226,6 +1272,22 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
               onTabChange={setActiveTab}
             />
 
+            {isInstruction && (
+              <button
+                id="tab-btn-instrukcja"
+                data-tab="tab-i1-instrukcja"
+                className={`topbar-tool-btn ${activeTab === 'tab-i1-instrukcja' ? 'active' : ''}`}
+                onClick={() => setActiveTab('tab-i1-instrukcja')}
+                title="Instrukcja montażu — kroki, animacja, TTS"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+                <span>Instrukcja</span>
+              </button>
+            )}
+
             <button 
               id="tab-btn-export"
               data-tab="tab-e1-export"
@@ -1487,6 +1549,23 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         <div className={`tab-content ${activeTab === 'tab-e1-export' ? 'active' : ''}`} id="tab-e1-export" style={{ height: 'auto', display: activeTab === 'tab-e1-export' ? 'flex' : 'none', flexDirection: 'column' }}>
           <ExportUI />
         </div>
+
+        {/* Tab: I1 Instrukcja montażu (tylko tryb instrukcja) */}
+        {isInstruction && (
+          <div
+            className={`tab-content ${activeTab === 'tab-i1-instrukcja' ? 'active' : ''}`}
+            id="tab-i1-instrukcja"
+            style={{
+              height: 'auto',
+              maxHeight: 'calc(100vh - 120px)',
+              display: activeTab === 'tab-i1-instrukcja' ? 'flex' : 'none',
+              flexDirection: 'column',
+              overflowY: 'auto',
+            }}
+          >
+            <InstructionPanel />
+          </div>
+        )}
       </PanelEdycji>
 
       {/* ─── 3D Canvas ─────────────────────────────────── */}
@@ -2176,57 +2255,56 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
       {/* ─── Panel właściwości (overlay, nie panel edycji) ─── */}
       <PropertiesPanel />
 
-      {/* ─── Status bar ────────────────────────────────── */}
+      {/* ─── Status bar / Tool Hint (Jednolity pasek) ────── */}
       <div 
         id="statusBar" 
-        className={`status-bar ${uiState?.statusBarActive ? 'active' : ''} ${
+        className={`status-bar ${activeHint || uiState?.statusBarActive ? 'active' : ''} ${
           uiState?.statusKind === 'error' ? 'status-bar--error' : uiState?.statusKind === 'warning' ? 'status-bar--warning' : ''
         }`}
+        style={{
+          position: 'absolute',
+          bottom: '16px',
+          left: '16px',
+          zIndex: 10000,
+          maxWidth: 'min(700px, calc(100vw - 32px))'
+        }}
       >
         <span className="status-dot"></span>
-        <span id="statusText">{uiState?.statusText || tx(srcTekst, 'app.status_default', TX_NS)}</span>
+        <span id="statusText" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {activeHint ? (
+            <>
+              {activeHint.title && (
+                <span style={{ fontWeight: 700, color: '#38bdf8', whiteSpace: 'nowrap' }}>
+                  {activeHint.title}
+                </span>
+              )}
+              {activeHint.title && <span style={{ opacity: 0.4 }}>•</span>}
+              <span style={{ color: '#f1f5f9' }}>
+                {uiState?.statusText &&
+                !uiState.statusText.includes('Wymiarowanie (PMI)') &&
+                !uiState.statusText.includes('Miarka (PMI)') &&
+                !uiState.statusText.includes(activeHint.description) &&
+                uiState.statusText !== 'Gotowy' &&
+                uiState.statusText !== 'Gotowe'
+                  ? uiState.statusText
+                  : activeHint.description}
+              </span>
+              {activeHint.confirmKey && (
+                <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)', color: '#fff', padding: '1px 6px', borderRadius: '3px', fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                  [{activeHint.confirmKey}] {tx(srcTekst, 'app.hint_confirm', TX_NS)}
+                </span>
+              )}
+              {activeHint.cancelKey && (
+                <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#94a3af', padding: '1px 6px', borderRadius: '3px', fontWeight: 600, fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                  [{activeHint.cancelKey}] Anuluj
+                </span>
+              )}
+            </>
+          ) : (
+            uiState?.statusText || tx(srcTekst, 'app.status_default', TX_NS)
+          )}
+        </span>
       </div>
-
-      {/* ─── Podpowiedzi na dole z lewej (nad paskiem stanu) ─── */}
-      {activeHint && (
-        <div style={{
-          position: 'absolute',
-          bottom: '56px',
-          left: '16px',
-          maxWidth: '560px',
-          backgroundColor: 'var(--bg-panel, rgba(20, 20, 24, 0.95))',
-          border: '1px solid var(--border-light, rgba(255, 255, 255, 0.12))',
-          boxShadow: 'var(--shadow-sm, 0 4px 12px rgba(0,0,0,0.4))',
-          color: 'var(--text-main, #e4e4e7)',
-          padding: '8px 16px',
-          borderRadius: 'var(--radius-sm, 6px)',
-          zIndex: 10000,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          fontSize: '0.92rem',
-          fontFamily: 'Inter, Segoe UI, sans-serif',
-          pointerEvents: 'none',
-          backdropFilter: 'blur(12px)'
-        }}>
-          {activeHint.title && (
-            <span style={{ fontWeight: 600, color: '#ffffff', whiteSpace: 'nowrap' }}>
-              {activeHint.title} -
-            </span>
-          )}
-          <span style={{ color: '#d4d4d8', lineHeight: 1.35 }}>{activeHint.description}</span>
-          {activeHint.confirmKey && (
-            <span style={{ backgroundColor: '#374151', color: '#fff', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-              [{activeHint.confirmKey}] {tx(srcTekst, 'app.hint_confirm', TX_NS)}
-            </span>
-          )}
-          {activeHint.cancelKey && (
-            <span style={{ backgroundColor: '#374151', color: '#9ca3af', padding: '2px 8px', borderRadius: '4px', fontWeight: 600, fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-              [{activeHint.cancelKey}] Anuluj
-            </span>
-          )}
-        </div>
-      )}
 
       {/* ─── Modal Podglądu JSON SSOT ───────────────────── */}
       {ssotModalOpen && (
@@ -2353,13 +2431,7 @@ export default function App({ initialTab }: { initialTab?: string } = {}) {
         projectModel={projectModel}
       />
 
-      {/* ─── Bottom Console (Hover Info) ───────────────── */}
-      <div id="bottomConsole" className="bottom-console">
-        <span className="console-prefix">&gt;</span>
-        <span id="consoleText" className="console-text">
-          {uiState?.consoleText || tx(srcTekst, 'app.console_default', TX_NS)}
-        </span>
-      </div>
+
 
       {/* Okno edycji operacji (pływające, swobodne okno nad sceną 3D) */}
       <FloatingOperationDialog />

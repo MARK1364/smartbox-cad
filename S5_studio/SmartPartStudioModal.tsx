@@ -23,6 +23,7 @@ import {
     computeAbsoluteFromReference,
     computeReferenceFromAbsolute,
     cutOrientFromRefs,
+    ensureCutProfile,
     findPartForCut,
     holeOutwardDirectionForRef,
     partDimsAsMain,
@@ -146,8 +147,10 @@ export function SmartPartStudioModal({
             const cutIdx = prev.cuts.findIndex((c) => c.id === targetId);
             if (cutIdx >= 0) {
                 const c = prev.cuts[cutIdx];
+                const part = findPartForCut(prev, c);
+                const dims = part ? partDimsAsMain(part) : prev.mainContainer;
                 const rel = computeReferenceFromAbsolute(
-                    prev.mainContainer,
+                    dims,
                     transform.xMm,
                     transform.yMm,
                     transform.zMm,
@@ -156,7 +159,7 @@ export function SmartPartStudioModal({
                     c.refZ || 'CENTER'
                 );
                 const updatedCuts = [...prev.cuts];
-                updatedCuts[cutIdx] = {
+                const nextCut: any = {
                     ...c,
                     xMm: transform.xMm,
                     yMm: transform.yMm,
@@ -164,8 +167,16 @@ export function SmartPartStudioModal({
                     offsetX_mm: rel.offsetX_mm,
                     offsetY_mm: rel.offsetY_mm,
                     offsetZ_mm: rel.offsetZ_mm,
+                    ...(transform.axis ? { axis: transform.axis } : {}),
+                    ...(transform.direction !== undefined ? { direction: transform.direction } : {}),
                 };
-                return { ...prev, cuts: updatedCuts };
+                if (transform.swapProfileDims && nextCut.type === 'POCKET') {
+                    const oldW = nextCut.widthMm;
+                    nextCut.widthMm = nextCut.heightMm;
+                    nextCut.heightMm = oldW;
+                }
+                updatedCuts[cutIdx] = nextCut;
+                return { ...prev, cuts: updatedCuts, cutsFrame: 'PART' };
             }
 
             return prev;
@@ -385,7 +396,7 @@ export function SmartPartStudioModal({
         const refs = {
             refX: 'CENTER' as const,
             offsetX_mm: 0,
-            refY: 'BACK' as const,
+            refY: 'FRONT' as const,
             offsetY_mm: 0,
             refZ: 'CENTER' as const,
             offsetZ_mm: 0,
@@ -398,8 +409,8 @@ export function SmartPartStudioModal({
             heightMm: 32,
             depthMm: 15,
             xMm: 0,
-            yMm: 0,
-            zMm: -def.mainContainer.depthMm / 2,
+            yMm: -def.mainContainer.depthMm / 2,
+            zMm: 0,
             ...refs,
             ...cutOrientFromRefs(refs),
         };
@@ -450,16 +461,7 @@ export function SmartPartStudioModal({
             yMm = local.yMm;
             zMm = local.zMm;
 
-            let orientPatch: { axis: CutAxis; direction: 1 | -1 } | Record<string, never> = {};
-            if (newOffset === undefined) {
-                if (newRef !== 'CENTER') {
-                    const outward = holeOutwardDirectionForRef(axis, refX, refY, refZ);
-                    if (outward !== null) orientPatch = { axis, direction: outward };
-                } else {
-                    orientPatch = cutOrientFromRefs({ refX, refY, refZ });
-                }
-            }
-
+            // Orientacja / Rotacja (axis, direction) jest niezależna od ścian odniesienia położenia (SSOT: sekcja Rotacja)
             return {
                 ...prev,
                 cutsFrame: 'PART',
@@ -476,7 +478,6 @@ export function SmartPartStudioModal({
                               xMm,
                               yMm,
                               zMm,
-                              ...orientPatch,
                           }
                         : c
                 ),
@@ -487,7 +488,29 @@ export function SmartPartStudioModal({
     const handleUpdateCutProp = (id: string, field: string, val: any) => {
         setDef({
             ...def,
-            cuts: def.cuts.map((c) => (c.id === id ? { ...c, [field]: val } : c)),
+            cuts: def.cuts.map((c) => {
+                if (c.id !== id) return c;
+                const updated: any = { ...c, [field]: val };
+                if (field === 'widthMm' || field === 'heightMm' || field === 'cornerRadiusMm') {
+                    updated.profile = {
+                        ...(updated.profile || {}),
+                        type: updated.profile?.type || 'RECT',
+                        widthMm: updated.widthMm,
+                        heightMm: updated.heightMm,
+                        ...(updated.cornerRadiusMm !== undefined ? { cornerRadiusMm: updated.cornerRadiusMm } : {}),
+                    };
+                } else if (field === 'diameterMm') {
+                    updated.profile = {
+                        ...(updated.profile || {}),
+                        type: 'CIRCLE',
+                        diameterMm: updated.diameterMm,
+                    };
+                }
+                return {
+                    ...updated,
+                    profile: ensureCutProfile(updated),
+                };
+            }),
         });
     };
 

@@ -52,6 +52,8 @@ describe('KORPUS_SKOSNY_DACH (pod skośny dach)', () => {
         const expectedCutAngle = Math.abs(betaDeg);
         expect(top.edge_banding?.['-Y']?.cutAngle).toBeCloseTo(expectedCutAngle, 2);
         expect(top.edge_banding?.['-Y']?.cutAnchor).toBe('Z_MINUS');
+        expect(top.edge_banding?.['-Y']?.active).toBe(true);
+        expect(top.edge_banding?.['+Y']?.active).toBe(false);
         expect(top.edge_banding?.['+Y']?.cutAngle).toBeCloseTo(-expectedCutAngle, 2);
         expect(top.edge_banding?.['+Y']?.cutAnchor).toBe('Z_MINUS');
     });

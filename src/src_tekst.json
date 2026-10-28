@@ -2244,6 +2244,11 @@
     "en": "SmartParts Studio",
     "de": "SmartParts Studio"
   },
+  "modbar.title_instrukcja": {
+    "pl": "Instrukcja montażu",
+    "en": "Assembly instructions",
+    "de": "Montageanleitung"
+  },
   "modbar.refresh_title": {
     "pl": "Pobierz aktualne dane z ProjectDocument w CAD (SSOT)",
     "en": "Fetch current data from CAD ProjectDocument (SSOT)",
@@ -2753,6 +2758,21 @@
     "pl": "Nie udało się otworzyć CNC. Zaznacz formatkę.",
     "en": "Failed to open CNC. Select a panel.",
     "de": "CNC konnte nicht geöffnet werden. Platte wählen."
+  },
+  "moddata.instrukcja_origin": {
+    "pl": "Instrukcja montażu",
+    "en": "Assembly instructions",
+    "de": "Montageanleitung"
+  },
+  "instrukcja.no_parts_container": {
+    "pl": "Brak formatek w tym korpusie — instrukcja niemożliwa.",
+    "en": "No panels in this corpus — instructions not possible.",
+    "de": "Keine Platten in diesem Korpus — Anleitung nicht möglich."
+  },
+  "instrukcja.no_parts_project": {
+    "pl": "Scena nie zawiera korpusów — instrukcja niemożliwa.",
+    "en": "Scene has no corpora — instructions not possible.",
+    "de": "Szene enthält keine Körpers — Anleitung nicht möglich."
   },
   "moddata.cnc_scene": {
     "pl": "CNC — formatka na scenie. Utwórz program, potem wskaż cechy.",

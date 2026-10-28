@@ -215,23 +215,19 @@ export class CNCEngine {
         // Renderowanie 3D z aktualnego stanu features
         this.visualizer.renderFeatures(activeProg.features || [], this.wcsManager, targetViewRoot);
 
-        // Renderowanie ścieżek narzędzia 3D (G0 Rapid Travel / G1 Cutting)
-        if (state.showToolpaths) {
-            const operations = this.camProcessor.processProject({
-                projectName: activeProg.projectName || 'Program',
-                wcsOrigin: this.wcsManager.getOrigin(),
-                wcsName: this.wcsManager.getWcsName(),
-                features: activeProg.features || [],
-                toolAssignments: activeProg.toolAssignments || {},
-                postprocessor: activeProg.postprocessor || 'Mach3',
-                strategyId: activeProg.strategyId,
-                strategyParams: activeProg.strategyParams,
-                workpieceDimensions: dims
-            });
-            this.visualizer.renderToolpaths(operations, this.wcsManager, targetViewRoot);
-        } else {
-            this.visualizer.clearToolpaths();
-        }
+        // Renderowanie ścieżek narzędzia 3D (zawsze widoczne, zielone i przerywane)
+        const operations = this.camProcessor.processProject({
+            projectName: activeProg.projectName || 'Program',
+            wcsOrigin: this.wcsManager.getOrigin(),
+            wcsName: this.wcsManager.getWcsName(),
+            features: activeProg.features || [],
+            toolAssignments: activeProg.toolAssignments || {},
+            postprocessor: activeProg.postprocessor || 'Mach3',
+            strategyId: activeProg.strategyId,
+            strategyParams: activeProg.strategyParams,
+            workpieceDimensions: dims
+        });
+        this.visualizer.renderToolpaths(operations, this.wcsManager, targetViewRoot);
     }
 
     public getDimensionsMM(panel: any): { width: number; height: number; thickness: number } {

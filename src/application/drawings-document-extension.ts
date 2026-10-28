@@ -10,6 +10,7 @@ import type { DocumentExtension, ProjectDocument } from '../../A1_core/project-d
 import { clearLegacyExportStorage } from '../../A1_core/export-session-storage.js';
 import { ExportEngine } from '../../E1_export/export-engine.js';
 import type { SavedExportView } from '../../E1_export/export-types.js';
+import { pruneAssemblyViews } from '../../I1_instrukcja/assembly-scene-adapter.js';
 import { ExportEngineV3 } from '../../R2_rys/export-engine.js';
 
 export const DRAWINGS_DOCUMENT_SECTION = 'drawings';
@@ -58,7 +59,10 @@ function serializeDrawings(): DrawingsExtensionJSON {
     };
 }
 
-function loadDrawings(data: DrawingsExtensionJSON | null | undefined): void {
+function loadDrawings(
+    data: DrawingsExtensionJSON | null | undefined,
+    document: ProjectDocument | null,
+): void {
     const e1 = ExportEngine.instance;
     const e3 = ExportEngineV3.instance;
 
@@ -68,7 +72,9 @@ function loadDrawings(data: DrawingsExtensionJSON | null | undefined): void {
         return;
     }
 
-    e1.replaceSavedViews(data.e1?.sheets ?? []);
+    // Kadry instrukcji montażu (asm_*) są przypięte do szafek + fingerprintu projektu:
+    // usunięty/zmodyfikowany korpus martwe asm_* kadry wypada już przy otwarciu.
+    e1.replaceSavedViews(pruneAssemblyViews(data.e1?.sheets ?? [], document));
     e3.replaceSavedViews(data.e3?.sheets ?? []);
 }
 
@@ -76,7 +82,7 @@ export function attachDrawingsExtension(document: ProjectDocument): () => void {
     clearLegacyExportStorage();
     const extension: DocumentExtension = {
         serialize: () => serializeDrawings(),
-        load: (data) => loadDrawings(data),
+        load: (data) => loadDrawings(data, document),
         includeInSnapshots: false,
     };
     return document.registerExtension(DRAWINGS_DOCUMENT_SECTION, extension);

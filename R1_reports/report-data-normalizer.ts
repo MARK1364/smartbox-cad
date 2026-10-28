@@ -418,7 +418,7 @@ export class ReportDataNormalizer {
                         if (!seenDrawerSlots.has(ledSlotKey)) {
                             seenDrawerSlots.add(ledSlotKey);
                             accessories.push({
-                                id: node.id || domain?.id || String(Math.random()),
+                                id: node.id || domain?.id || `acc_${accessories.length + 1}`,
                                 name: 'Zestaw Profil LED wpuszczany',
                                 role: 'LED',
                                 library_id: 'LED_PROFILE_WPUSZCZANY',
@@ -430,7 +430,7 @@ export class ReportDataNormalizer {
                         }
                     } else {
                         accessories.push({
-                            id: node.id || domain?.id || String(Math.random()),
+                            id: node.id || domain?.id || `acc_${accessories.length + 1}`,
                             name: node.name ?? domain?.name ?? roleUpper,
                             role: roleUpper || 'AKCESORIUM',
                             library_id,

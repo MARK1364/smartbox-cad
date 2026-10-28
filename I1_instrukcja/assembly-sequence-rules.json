@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "inventory": {
+    "enabled": true,
+    "label_key": "phase.wyposazenie"
+  },
+  "phases": [
+    {
+      "id": "korpus_dno",
+      "label_key": "phase.korpus_dno",
+      "roles": ["BOTTOM_PANEL"],
+      "mode": "joint"
+    },
+    {
+      "id": "korpus_boki",
+      "label_key": "phase.korpus_boki",
+      "roles": ["LEFT_SIDE_PANEL", "RIGHT_SIDE_PANEL"],
+      "mode": "single"
+    },
+    {
+      "id": "korpus_wieniec_gora",
+      "label_key": "phase.korpus_wieniec_gora",
+      "roles": ["TOP_PANEL"],
+      "mode": "joint"
+    },
+    {
+      "id": "korpus_dzialki",
+      "label_key": "phase.korpus_dzialki",
+      "roles": ["VERTICAL_DIVIDER", "DIVIDER_PLATE", "SPACER", "BLIND_PANEL"],
+      "mode": "single"
+    },
+    {
+      "id": "korpus_plecy",
+      "label_key": "phase.korpus_plecy",
+      "roles": ["BACK_PANEL"],
+      "mode": "joint"
+    },
+    {
+      "id": "bloki_polki",
+      "label_key": "phase.bloki_polki",
+      "roles": ["SHELF_PANEL", "SHELF", "SHELF_BOARD", "SHELF_PANEL_SHELF"],
+      "mode": "single"
+    },
+    {
+      "id": "bloki_fronty",
+      "label_key": "phase.bloki_fronty",
+      "roles": ["FRONT", "FRONT_PANEL", "FLAP"],
+      "mode": "single"
+    },
+    {
+      "id": "pozostale",
+      "label_key": "phase.pozostale",
+      "roles": ["*"],
+      "mode": "single"
+    }
+  ]
+}

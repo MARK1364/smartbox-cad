@@ -80,7 +80,7 @@ export class MeasureTool extends BaseState {
 
     public onEnter(): void {
         this.resetPicks();
-        this.setUIStatus(tx(pmiTekst, 'hints.measure_step1_desc', 'pmi'));
+        this.setUIStatus('Miarka (PMI)');
 
         const scene = this.ctx.viewport.scene;
         this.geometryHighlighter = new PMIGeometryHighlighter(scene);
@@ -195,13 +195,8 @@ export class MeasureTool extends BaseState {
                 cancelKey: 'Esc',
             });
         } else {
-            tm.setActiveHint({
-                id: 'pmi_measure_step2',
-                title: tx(pmiTekst, 'hints.measure_step2_title', 'pmi'),
-                description: tx(pmiTekst, 'hints.measure_step2_desc', 'pmi'),
-                confirmKey: 'LPM',
-                cancelKey: 'Esc',
-            });
+            // W kolejnej fazie sterowanie i informacje wyświetlane są bezpośrednio na pasku statusu
+            tm.clearActiveHint();
         }
     }
 
@@ -280,6 +275,10 @@ export class MeasureTool extends BaseState {
         }
 
         if (this.phase === 'PICK_P1') {
+            if (!this.isCtrlPressed) {
+                this.setUIStatus('Aby wybrać dwa punkty/elementy, przytrzymaj CTRL.');
+                return;
+            }
             this.pick1 = snap;
             this.phase = 'PICK_P2';
             this.updateHint();
@@ -310,18 +309,8 @@ export class MeasureTool extends BaseState {
             return;
         }
 
-        // Dwa wierzchołki bez Ctrl również domykają odcinek punkt-punkt
-        if (this.pick1?.kind === 'vertex' && snap.kind === 'vertex') {
-            this.commitElements(this.pick1, snap);
-            return;
-        }
-
-        // W przeciwnym razie zmiana pierwszego elementu
-        this.pick1 = snap;
-        this.phase = 'PICK_P2';
-        this.updateHint();
-        this.renderer.clearMeasurePreview();
-        this.setUIStatus(this.statusForSecondPick(snap));
+        // Kliknięcie wierzchołka/elementu bez Ctrl w fazie PICK_P2 nie domyka pomiaru:
+        this.setUIStatus('Wskaż drugi element (trzymaj CTRL).');
     }
 
     private findElementPick(updateHighlighter = false): MeasureElementPick | null {
@@ -352,7 +341,7 @@ export class MeasureTool extends BaseState {
             edge: 'krawędź',
             plane: 'płaszczyzna',
         };
-        return `Wskaż drugi element (${names[first.kind]} → …). Kliknij LPM lub przytrzymaj Ctrl.`;
+        return `Wskaż drugi element (${names[first.kind]} → …). Trzymaj CTRL i kliknij LPM.`;
     }
 
     private commitEdge(edge: NonNullable<MeasureElementPick['edge']>): void {

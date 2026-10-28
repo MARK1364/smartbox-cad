@@ -278,11 +278,9 @@ export class CNCSimulator {
                     surfacePos.z + unitNorm.z * this.safeZOffset
                 );
 
-            // Dopasowanie orientacji piły/frezu do kierunku pierwszego odcinka cięcia
+            // Dopasowanie orientacji piły/frezu: piła nutująca idzie po X (tarcza równoległa do X, oś obrotu w Y)
             if (this.toolMesh && op.type === 'groove') {
-                const cutDir = this.endPos.subtract(this.startPos).normalize();
-                const angle = Math.atan2(cutDir.y, cutDir.x); // Ścieżka XY
-                this.toolMesh.rotation = new BABYLON.Vector3(Math.PI / 2, angle, 0);
+                this.toolMesh.rotation = new BABYLON.Vector3(0, 0, 0);
             } else if (this.toolMesh) {
                 this.toolMesh.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0); // Frez palcowy (Z-up)
             }
@@ -431,11 +429,9 @@ export class CNCSimulator {
                     this.endPos = this.toSimPoint(nextMove.endPoint);
                     this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.startPos, this.endPos));
 
-                    // Obrót tarczy/frezu dla nowego odcinka
+                    // Orientacja tarczy/frezu dla nowego odcinka
                     if (this.toolMesh && targetOp.type === 'groove') {
-                        const cutDir = this.endPos.subtract(this.startPos).normalize();
-                        const angle = Math.atan2(cutDir.y, cutDir.x);
-                        this.toolMesh.rotation = new BABYLON.Vector3(Math.PI / 2, angle, 0);
+                        this.toolMesh.rotation = new BABYLON.Vector3(0, 0, 0);
                     }
                     // Pozostajemy w stanie 'CUT' bez wycofywania narzędzia!
                 } else {

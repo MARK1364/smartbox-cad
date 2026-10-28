@@ -1,5 +1,12 @@
 # Projektowe zasady agenta
 
+## 0. KROK ZERO: Wczytanie Mapy Aplikacji i Szybka Nawigacja (BEZWZGLĘDNY PIERWSZY PUNKT)
+
+Przed przystąpieniem do jakichkolwiek prac, czytania plików czy przeszukiwania repozytorium **AGENT MA BEZWZGLĘDNY OBOWIĄZEK** skorzystać z map architektury jako pierwszego punktu wyjścia:
+1. **SSOT Mapy Architektury**: [`docs/ARCHITECTURE_GRAPH.md`](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/docs/ARCHITECTURE_GRAPH.md) — zawiera tabelę szybkiego namierzania (*"Gdy problem dotyczy... → Plik z logiką źródłową → Powiązany test"*), diagramy przepływu danych i powiązania modułów.
+2. **Indeks Symboli AST**: [`docs/REPO_MAP.md`](file:///c:/Users/ADM/AppData/Roaming/Blender%20Foundation/Blender/5.0/scripts/addons/CAD/web/docs/REPO_MAP.md) — pozwala natychmiast zlokalizować dokładny plik, sygnaturę, typ i numer linii bez przeszukiwania kodu na ślepo.
+- **Twardy zakaz marnowania czasu**: BEZWZGLĘDNY ZAKAZ czytania dużych plików na raty po 100–150 linii i zgadywania struktury. Używaj mapy repozytorium, precyzyjnego `grep` oraz bezpośredniej edycji w jednym podejściu, aby zadania trwały 1–2 minuty, a nie kilkanaście.
+
 ## Jednostki (SSOT) — NIE ZGADUJ, NIE ZMIENIAJ
 
 Źródło prawdy: `A1_core/cad-math/units.ts` (`mmToNm`, `nmToMm`, `rulesMToNm`, `rulesMToMm`).

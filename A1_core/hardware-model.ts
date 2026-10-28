@@ -29,6 +29,11 @@ export interface HardwareModelOptions {
 
 let _hwIdSeq = 0;
 
+function allocHardwareId(): string {
+    _hwIdSeq += 1;
+    return `hw_${_hwIdSeq}`;
+}
+
 export class HardwareModel {
     type: string;
     id: string;
@@ -51,7 +56,7 @@ export class HardwareModel {
 
     constructor(options: HardwareModelOptions = {}) {
         this.type = 'hardware';
-        this.id = options.id || `hw_${Date.now()}_${++_hwIdSeq}_${Math.floor(Math.random() * 1_000_000)}`;
+        this.id = options.id || allocHardwareId();
         this.name = options.name || 'Okucie';
         this.role = options.role || 'HARDWARE';
         this.nodeType = NodeType.HARDWARE;

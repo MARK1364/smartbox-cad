@@ -29,9 +29,7 @@ export class CNCToolMeshFactory {
      * Tworzy kompozytową siatkę (TransformNode z podpiętymi częściami) reprezentującą aktywne narzędzie.
      */
     public static createToolMesh(tool: Tool, scene: any): any {
-        if (!scene) return null;
-
-        const toolNode = new BABYLON.TransformNode(`Tool_Node_${tool.id}_${Math.random()}`, scene);
+        const toolNode = new BABYLON.TransformNode(`Tool_Node_${tool.id || 'default'}`, scene);
 
         if (tool.type === 'groove') {
             // --- PIŁA NUTUJĄCA ---
@@ -44,15 +42,15 @@ export class CNCToolMeshFactory {
             sawMat.specularColor = new BABYLON.Color3(1, 1, 1);
             sawMat.alpha = 0.9;
 
-            // Dysk tarczy tnącej
+            // Dysk tarczy tnącej (oś obrotu skierowana wzdłuż osi Y maszyny, tarcza równoległa do osi X maszyny)
             const blade = BABYLON.MeshBuilder.CreateCylinder("Saw_Blade", {
                 diameter: diameter,
                 height: thickness,
                 tessellation: 48
             }, scene);
             blade.material = sawMat;
-            blade.rotation.x = Math.PI / 2;
-            blade.position.y = diameter / 2;
+            blade.rotation.z = Math.PI / 2;
+            blade.position.z = diameter / 2; // Środek tarczy na wysokości R nad punktem cięcia w osi Z
             blade.parent = toolNode;
 
             // Kołnierz mocujący (flange)
@@ -65,8 +63,8 @@ export class CNCToolMeshFactory {
                 tessellation: 24
             }, scene);
             flange.material = flangeMat;
-            flange.rotation.x = Math.PI / 2;
-            flange.position.y = diameter / 2;
+            flange.rotation.z = Math.PI / 2;
+            flange.position.z = diameter / 2;
             flange.parent = toolNode;
 
             // Oś mocowania piły (Arbor)
@@ -76,9 +74,9 @@ export class CNCToolMeshFactory {
                 tessellation: 16
             }, scene);
             arbor.material = flangeMat;
-            arbor.rotation.x = Math.PI / 2;
-            arbor.position.y = diameter / 2;
-            arbor.position.z = 25;
+            arbor.rotation.z = Math.PI / 2;
+            arbor.position.z = diameter / 2;
+            arbor.position.x = 25; // Odsunięcie wałka wrzeciona wzdłuż osi obrotu (Y maszyny)
             arbor.parent = toolNode;
 
         } else if (tool.type === 'mill') {

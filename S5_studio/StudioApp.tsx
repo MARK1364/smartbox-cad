@@ -24,9 +24,11 @@ import {
     computeReferenceFromAbsolute,
     cutOrientFromRefs,
     cutsOwnedByLiveParts,
+    ensureCutProfile,
     ensurePackageSets,
     findPartForCut,
     holeOutwardDirectionForRef,
+    normalizeSmartPartToCadCoords,
     orphanSmartPartCuts,
     partDimsAsMain,
 } from './smartpart-studio-types.js';
@@ -34,9 +36,9 @@ import {
     SmartPartStudioScene,
     TransformToolMode,
     TransformUpdateEvent,
+    DimensionLineProjected,
 } from './smartpart-studio-scene.js';
 import { ContextMenu } from '../A1_core/context-menu.js';
-import { copyObjectLink } from './smartpart-object-link-clipboard.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src/src_tekst.json';
@@ -61,6 +63,13 @@ import {
     applyFrozenBindings,
     removeBinding,
     removePartFieldBinding,
+    flipSmartPartCut,
+    mirrorClonePart,
+    mirrorCloneCut,
+    mirrorCloneAllParts,
+    syncAssociativeMirrors,
+    detachMirror,
+    detachCutMirror,
     type SmartPartParamValues,
 } from './smartpart-params.js';
 import type { SmartPartBindingField } from './smartpart-studio-types.js';
@@ -95,11 +104,83 @@ const CTX_ICONS = {
     link: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
     add: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
     clone: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+    flip: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16l-4-4m0 0l4-4m-4 4h18"/><path d="M17 8l4 4m0 0l-4 4"/></svg>',
 };
 
+/** Komponent inputu liczbowego pozwalający na swobodne wpisywanie minusa (-) i liczb ujemnych */
+function StudioNumericInput(props: {
+    value: number;
+    onChange: (val: number) => void;
+    className?: string;
+    style?: React.CSSProperties;
+    disabled?: boolean;
+    title?: string;
+}) {
+    const [localStr, setLocalStr] = useState<string>(String(props.value ?? 0));
+    const [isFocused, setIsFocused] = useState(false);
+
+    useEffect(() => {
+        if (!isFocused) {
+            setLocalStr(String(props.value ?? 0));
+        }
+    }, [props.value, isFocused]);
+
+    return (
+        <input
+            type="text"
+            className={props.className || 'cad-prop-input'}
+            style={props.style}
+            disabled={props.disabled}
+            title={props.title}
+            value={isFocused ? localStr : String(props.value ?? 0)}
+            onFocus={() => {
+                setIsFocused(true);
+                setLocalStr(String(props.value ?? 0));
+            }}
+            onChange={(e) => {
+                const text = e.target.value;
+                setLocalStr(text);
+                if (text === '' || text === '-' || text === '-.' || text === '.') {
+                    return;
+                }
+                const num = parseFloat(text);
+                if (!isNaN(num)) {
+                    props.onChange(num);
+                }
+            }}
+            onBlur={() => {
+                setIsFocused(false);
+                const num = parseFloat(localStr);
+                const finalVal = !isNaN(num) ? num : 0;
+                setLocalStr(String(finalVal));
+                props.onChange(finalVal);
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                }
+            }}
+        />
+    );
+}
+
 const studioTreeMenu = new ContextMenu();
+const STUDIO_DRAFT_STORAGE_KEY = 'cad_studio_active_draft_v1';
 
 function resolveInitialDefinition(): SmartPartPackageDefinition {
+    if (typeof window !== 'undefined') {
+        try {
+            const rawDraft = window.localStorage.getItem(STUDIO_DRAFT_STORAGE_KEY);
+            if (rawDraft) {
+                const parsed = JSON.parse(rawDraft);
+                if (parsed && typeof parsed === 'object' && parsed.mainContainer) {
+                    return ensurePackageSets(normalizeSmartPartToCadCoords(parsed));
+                }
+            }
+        } catch (err) {
+            console.warn('[Studio] Błąd odczytu roboczego szkicu z localStorage:', err);
+        }
+    }
     return ensurePackageSets(createEmptySmartPartPackage('SmartPart Kontener 1'));
 }
 
@@ -166,6 +247,12 @@ const TREE_ICONS = {
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
     ),
+    mirror: (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+            <path d="M17 8l4 4m0 0l-4 4" />
+        </svg>
+    ),
 };
 
 type SelectionTarget = 'main_container' | string;
@@ -180,7 +267,24 @@ export function StudioApp(): React.JSX.Element {
         startResizeTree,
         startResizeEdit,
     } = usePanelWidths();
-    const [currentDef, setCurrentDef] = useState<SmartPartPackageDefinition>(() => resolveInitialDefinition());
+    const [currentDefState, setCurrentDefState] = useState<SmartPartPackageDefinition>(() =>
+        syncAssociativeMirrors(resolveInitialDefinition())
+    );
+    const currentDef = currentDefState;
+    const setCurrentDef = useCallback((updater: React.SetStateAction<SmartPartPackageDefinition>) => {
+        setCurrentDefState((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            const synced = syncAssociativeMirrors(next);
+            if (typeof window !== 'undefined') {
+                try {
+                    window.localStorage.setItem(STUDIO_DRAFT_STORAGE_KEY, JSON.stringify(synced));
+                } catch {
+                    // ignore quota errors
+                }
+            }
+            return synced;
+        });
+    }, []);
 
     const [selectedId, setSelectedId] = useState<SelectionTarget>('main_container');
     const [studioTab, setStudioTab] = useState<'props' | 'panel'>('props');
@@ -201,6 +305,14 @@ export function StudioApp(): React.JSX.Element {
     const [lcsVisible, setLcsVisible] = useState(true);
     const [isPanActive, setIsPanActive] = useState(false);
     const [isZoomWindowActive, setIsZoomWindowActive] = useState(false);
+    const [dimensionBadges, setDimensionBadges] = useState<DimensionLineProjected[]>([]);
+    const [quickDimModal, setQuickDimModal] = useState<{
+        cutId: string;
+        axis: 'X' | 'Y' | 'Z';
+        screenX: number;
+        screenY: number;
+        valueMm: number;
+    } | null>(null);
     const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
     const [viewMenuOpen, setViewMenuOpen] = useState(false);
     const [projMenuOpen, setProjMenuOpen] = useState(false);
@@ -250,15 +362,6 @@ export function StudioApp(): React.JSX.Element {
         }
         setEditingNode(null);
         setEditValue('');
-    };
-
-    const copyParamId = (type: 'part' | 'cut', id: string, name: string) => {
-        copyObjectLink({
-            targetType: type === 'part' ? 'PART' : 'CUT',
-            targetId: id,
-            label: name,
-        });
-        setStudioTab('panel');
     };
 
     // ─── Operacje na Zestawach (Sets) ───
@@ -445,6 +548,96 @@ export function StudioApp(): React.JSX.Element {
         }));
     };
 
+    const handleCloneCut = (cutId: string) => {
+        const sourceCut = currentDef.cuts.find((c) => c.id === cutId);
+        if (!sourceCut) return;
+        const num = currentDef.cuts.length + 1;
+        const newCutId = allocSmartPartCutId(currentDef.id, `cut_${num}`);
+        const clonedCut: SmartPartCut = {
+            ...sourceCut,
+            id: newCutId,
+            name: `${sourceCut.name} (Kopia)`,
+        } as any;
+        setCurrentDef((prev) => ({
+            ...prev,
+            cuts: [...prev.cuts, clonedCut],
+        }));
+        setSelectedId(newCutId);
+    };
+
+    const handleMirrorClonePart = (partId: string) => {
+        const sourcePart = currentDef.parts.find((p) => p.id === partId);
+        if (!sourcePart) return;
+        const newPartId = allocSmartPartBodyId(currentDef.id, `part_${currentDef.parts.length + 1}`);
+        const { mirroredPart, mirroredCuts } = mirrorClonePart(
+            sourcePart,
+            currentDef.mainContainer,
+            currentDef.cuts,
+            newPartId,
+            (idx) => allocSmartPartCutId(currentDef.id, `cut_${Date.now()}_${idx}`)
+        );
+        setCurrentDef((prev) => ({
+            ...prev,
+            parts: [...prev.parts, mirroredPart],
+            cuts: [...prev.cuts, ...mirroredCuts],
+        }));
+        setSelectedId(newPartId);
+    };
+
+    const handleMirrorCloneCut = (cutId: string) => {
+        const sourceCut = currentDef.cuts.find((c) => c.id === cutId);
+        if (!sourceCut) return;
+        const part = findPartForCut(currentDef, sourceCut);
+        const dims = part ? partDimsAsMain(part) : currentDef.mainContainer;
+        const newCutId = allocSmartPartCutId(currentDef.id, `cut_${Date.now()}`);
+        const mirroredCut = mirrorCloneCut(sourceCut, dims, newCutId);
+        setCurrentDef((prev) => ({
+            ...prev,
+            cuts: [...prev.cuts, mirroredCut],
+        }));
+        setSelectedId(newCutId);
+    };
+
+    const handleMirrorCloneAll = () => {
+        const { newParts, newCuts } = mirrorCloneAllParts(
+            currentDef,
+            (pIdx) => allocSmartPartBodyId(currentDef.id, `part_${currentDef.parts.length + pIdx + 1}`),
+            (pIdx, cIdx) => allocSmartPartCutId(currentDef.id, `cut_${Date.now()}_${pIdx}_${cIdx}`)
+        );
+        setCurrentDef((prev) => ({
+            ...prev,
+            parts: [...prev.parts, ...newParts],
+            cuts: [...prev.cuts, ...newCuts],
+        }));
+        if (newParts.length > 0) {
+            setSelectedId(newParts[0].id);
+        }
+    };
+
+    const handleDetachMirror = (partId: string) => {
+        setCurrentDef((prev) => detachMirror(prev, partId));
+    };
+
+    const handleDetachCutMirror = (cutId: string) => {
+        setCurrentDef((prev) => detachCutMirror(prev, cutId));
+    };
+
+    const handleFlipCut = (cutId: string, axis: 'X' | 'Y' | 'Z') => {
+        setCurrentDef((prev) => {
+            const targetCut = prev.cuts.find((c) => c.id === cutId);
+            if (!targetCut) return prev;
+            const effectiveId = targetCut.mirroredFrom || cutId;
+            const cut = prev.cuts.find((c) => c.id === effectiveId) || targetCut;
+            const part = findPartForCut(prev, cut);
+            const dims = part ? partDimsAsMain(part) : prev.mainContainer;
+            const flipped = flipSmartPartCut(cut, axis, dims);
+            return {
+                ...prev,
+                cuts: prev.cuts.map((c) => (c.id === effectiveId ? flipped : c)),
+            };
+        });
+    };
+
     const handleDeleteCut = (id: string, e?: React.MouseEvent) => {
         e?.stopPropagation();
         setCurrentDef((prev) => ({
@@ -486,20 +679,15 @@ export function StudioApp(): React.JSX.Element {
 
         if (opts.type === 'package') {
             items.push({
-                label: 'Dodaj zestaw',
-                icon: CTX_ICONS.add,
-                action: 'add-set',
+                label: 'Duplikuj lustrzanie X (Para L/R — wszystkie części)',
+                icon: CTX_ICONS.flip,
+                action: 'mirror-clone-all',
             });
         } else if (opts.type === 'set') {
             items.push({
                 label: 'Dodaj część (Part)',
                 icon: CTX_ICONS.add,
                 action: 'add-part',
-            });
-            items.push({
-                label: 'Klonuj zestaw',
-                icon: CTX_ICONS.clone,
-                action: 'clone-set',
             });
         } else if (opts.type === 'part') {
             items.push({
@@ -508,15 +696,23 @@ export function StudioApp(): React.JSX.Element {
                 action: 'clone-part',
             });
             items.push({
-                label: 'Kopiuj parametr ID',
-                icon: CTX_ICONS.link,
-                action: 'copy-param-id',
+                label: 'Duplikuj lustrzanie (Lustro)',
+                icon: CTX_ICONS.flip,
+                action: 'mirror-clone-part',
             });
-        } else if (opts.type === 'cut') {
+        }
+
+        const isPartMirrored = opts.type === 'part' && !!currentDef.parts.find((p) => p.id === opts.id)?.mirroredFrom;
+        const targetCut = opts.type === 'cut' ? currentDef.cuts.find((c) => c.id === opts.id) : undefined;
+        const parentOfCut = targetCut?.partId ? currentDef.parts.find((p) => p.id === targetCut.partId) : undefined;
+        const isCutMirrored = opts.type === 'cut' && (!!targetCut?.mirroredFrom || !!parentOfCut?.mirroredFrom);
+
+        if (isPartMirrored || isCutMirrored) {
+            items.push({ separator: true });
             items.push({
-                label: 'Kopiuj parametr ID',
-                icon: CTX_ICONS.link,
-                action: 'copy-param-id',
+                label: 'Odłącz powiązanie',
+                icon: '⛓',
+                action: 'detach-mirror',
             });
         }
 
@@ -532,6 +728,16 @@ export function StudioApp(): React.JSX.Element {
         studioTreeMenu.onAction((action: string) => {
             if (action === 'rename') {
                 startRename(opts.type, opts.id, opts.name);
+            } else if (action === 'detach-mirror') {
+                if (opts.type === 'part') {
+                    handleDetachMirror(opts.id);
+                } else if (opts.type === 'cut') {
+                    if (parentOfCut?.mirroredFrom) {
+                        handleDetachMirror(parentOfCut.id);
+                    } else {
+                        handleDetachCutMirror(opts.id);
+                    }
+                }
             } else if (action === 'add-set') {
                 handleAddSet();
             } else if (action === 'add-part') {
@@ -540,10 +746,8 @@ export function StudioApp(): React.JSX.Element {
                 handleCloneSet(opts.id);
             } else if (action === 'clone-part') {
                 handleClonePart(opts.id);
-            } else if (action === 'copy-param-id') {
-                if (opts.type === 'part' || opts.type === 'cut') {
-                    copyParamId(opts.type, opts.id, opts.name);
-                }
+            } else if (action === 'mirror-clone-part') {
+                handleMirrorClonePart(opts.id);
             } else if (action === 'delete') {
                 if (opts.type === 'set') handleDeleteSet(opts.id);
                 else if (opts.type === 'part') handleDeletePart(opts.id);
@@ -648,6 +852,35 @@ export function StudioApp(): React.JSX.Element {
             const cutIdx = prev.cuts.findIndex((c) => c.id === targetId);
             if (cutIdx >= 0) {
                 const c = prev.cuts[cutIdx];
+                // Jeśli użytkownik obraca w scenie 3D wycięcie lustrzane (z mirroredFrom),
+                // przekieruj zmianę orientacji i wymiarów profilu do wycięcia źródłowego, aby syncAssociativeMirrors nie cofnął obrotu
+                if (c.mirroredFrom && (transform.axis || transform.direction !== undefined || transform.swapProfileDims)) {
+                    const srcIdx = prev.cuts.findIndex((sc) => sc.id === c.mirroredFrom);
+                    if (srcIdx >= 0) {
+                        const sc = prev.cuts[srcIdx];
+                        const mirrorAxis = c.mirrorAxis || 'X';
+                        const nextAxis = transform.axis ?? sc.axis;
+                        let nextDir = transform.direction ?? sc.direction;
+                        if (nextAxis === mirrorAxis && nextDir !== undefined) {
+                            nextDir = (nextDir === 1 ? -1 : 1) as 1 | -1;
+                        }
+                        const updatedCuts = [...prev.cuts];
+                        const nextSc: any = {
+                            ...sc,
+                            ...(nextAxis ? { axis: nextAxis } : {}),
+                            ...(nextDir !== undefined ? { direction: nextDir } : {}),
+                        };
+                        if (transform.swapProfileDims && nextSc.type === 'POCKET') {
+                            const oldW = nextSc.widthMm;
+                            nextSc.widthMm = nextSc.heightMm;
+                            nextSc.heightMm = oldW;
+                        }
+                        nextSc.profile = ensureCutProfile(nextSc);
+                        updatedCuts[srcIdx] = nextSc;
+                        return { ...prev, cuts: updatedCuts, cutsFrame: 'PART' };
+                    }
+                }
+
                 const part = findPartForCut(prev, c);
                 const dims = part ? partDimsAsMain(part) : prev.mainContainer;
                 const rel = computeReferenceFromAbsolute(
@@ -660,7 +893,7 @@ export function StudioApp(): React.JSX.Element {
                     c.refZ || 'CENTER'
                 );
                 const updatedCuts = [...prev.cuts];
-                updatedCuts[cutIdx] = {
+                const nextCut: any = {
                     ...c,
                     xMm: transform.xMm,
                     yMm: transform.yMm,
@@ -668,7 +901,16 @@ export function StudioApp(): React.JSX.Element {
                     offsetX_mm: rel.offsetX_mm,
                     offsetY_mm: rel.offsetY_mm,
                     offsetZ_mm: rel.offsetZ_mm,
+                    ...(transform.axis ? { axis: transform.axis } : {}),
+                    ...(transform.direction !== undefined ? { direction: transform.direction } : {}),
                 };
+                if (transform.swapProfileDims && nextCut.type === 'POCKET') {
+                    const oldW = nextCut.widthMm;
+                    nextCut.widthMm = nextCut.heightMm;
+                    nextCut.heightMm = oldW;
+                }
+                nextCut.profile = ensureCutProfile(nextCut);
+                updatedCuts[cutIdx] = nextCut;
                 return { ...prev, cuts: updatedCuts, cutsFrame: 'PART' };
             }
 
@@ -684,9 +926,27 @@ export function StudioApp(): React.JSX.Element {
             canvasRef.current,
             (clickedId) => {
                 setSelectedId(clickedId);
+                setQuickDimModal(null);
             },
             handleGizmoTransform
         );
+
+        studioScene.setOnDimensionLinesProjected((dims) => {
+            setDimensionBadges(dims);
+        });
+
+        studioScene.setOnCutContextMenu((cutId, screenX, screenY) => {
+            setSelectedId(cutId);
+            const cut = currentDef.cuts.find((c) => c.id === cutId);
+            const val = cut?.offsetX_mm ?? cut?.xMm ?? 0;
+            setQuickDimModal({
+                cutId,
+                axis: 'X',
+                screenX,
+                screenY,
+                valueMm: val,
+            });
+        });
 
         sceneRef.current = studioScene;
         studioScene.updateDefinition(currentDef, selectedId);
@@ -738,13 +998,17 @@ export function StudioApp(): React.JSX.Element {
             const key = e.key.toLowerCase();
             if (key === 'g') {
                 handleChangeTransformTool(
-                    sceneRef.current?.getTransformTool() === 'translate' ? 'select' : 'translate'
+                    transformTool === 'translate' ? 'select' : 'translate'
                 );
             }
             if (key === 'r') {
                 handleChangeTransformTool(
-                    sceneRef.current?.getTransformTool() === 'rotate' ? 'select' : 'rotate'
+                    transformTool === 'rotate' ? 'select' : 'rotate'
                 );
+            }
+            if (e.key === 'Escape') {
+                handleChangeTransformTool('select');
+                setQuickDimModal(null);
             }
             if (key === '1') sceneRef.current?.setViewPreset('ISO');
             if (key === '2') sceneRef.current?.setViewPreset('TOP');
@@ -753,7 +1017,7 @@ export function StudioApp(): React.JSX.Element {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isPanActive]);
+    }, [isPanActive, transformTool]);
 
     // Zmiana wymiarów Kontenera Głównego — zachowujemy stałe odległości od ścian referencyjnych!
     const handleUpdateMainContainer = (field: 'widthMm' | 'heightMm' | 'depthMm', val: number) => {
@@ -972,6 +1236,10 @@ export function StudioApp(): React.JSX.Element {
             type: 'HOLE',
             diameterMm: 8,
             lengthMm: 24,
+            profile: {
+                type: 'CIRCLE',
+                diameterMm: 8,
+            },
             xMm: local.xMm,
             yMm: local.yMm,
             zMm: local.zMm,
@@ -1000,7 +1268,7 @@ export function StudioApp(): React.JSX.Element {
             ownerPart ? partDimsAsMain(ownerPart) : currentDef.mainContainer,
             'CENTER',
             0,
-            'BACK',
+            'FRONT',
             0,
             'CENTER',
             0,
@@ -1008,7 +1276,7 @@ export function StudioApp(): React.JSX.Element {
         const refs = {
             refX: 'CENTER' as const,
             offsetX_mm: 0,
-            refY: 'BACK' as const,
+            refY: 'FRONT' as const,
             offsetY_mm: 0,
             refZ: 'CENTER' as const,
             offsetZ_mm: 0,
@@ -1021,6 +1289,12 @@ export function StudioApp(): React.JSX.Element {
             widthMm: 16,
             heightMm: 32,
             depthMm: 15,
+            profile: {
+                type: 'RECT',
+                widthMm: 16,
+                heightMm: 32,
+                cornerRadiusMm: 0,
+            },
             xMm: local.xMm,
             yMm: local.yMm,
             zMm: local.zMm,
@@ -1046,51 +1320,50 @@ export function StudioApp(): React.JSX.Element {
         newOffset?: number
     ) => {
         setCurrentDef((prev) => {
-            const cut = prev.cuts.find((c) => c.id === id);
-            if (!cut) return prev;
+            const targetCut = prev.cuts.find((c) => c.id === id);
+            if (!targetCut) return prev;
+
+            const effectiveId = targetCut.mirroredFrom || id;
+            const cut = prev.cuts.find((c) => c.id === effectiveId) || targetCut;
 
             const part = findPartForCut(prev, cut);
             const dims = part ? partDimsAsMain(part) : prev.mainContainer;
 
-            const refX = axis === 'X' ? (newRef as XRefWall) : (cut.refX || 'CENTER');
-            const refY = axis === 'Y' ? (newRef as YRefWall) : (cut.refY || 'CENTER');
-            const refZ = axis === 'Z' ? (newRef as ZRefWall) : (cut.refZ || 'CENTER');
+            let refX = cut.refX || 'CENTER';
+            let refY = cut.refY || 'CENTER';
+            let refZ = cut.refZ || 'CENTER';
+
+            if (axis === 'X') {
+                if (targetCut.mirroredFrom) {
+                    refX = newRef === 'LEFT' ? 'RIGHT' : (newRef === 'RIGHT' ? 'LEFT' : (newRef as XRefWall));
+                } else {
+                    refX = newRef as XRefWall;
+                }
+            } else if (axis === 'Y') {
+                refY = newRef as YRefWall;
+            } else if (axis === 'Z') {
+                refZ = newRef as ZRefWall;
+            }
 
             let offX = cut.offsetX_mm ?? cut.xMm ?? 0;
             let offY = cut.offsetY_mm ?? cut.yMm ?? 0;
             let offZ = cut.offsetZ_mm ?? cut.zMm ?? 0;
-            let xMm = cut.xMm ?? 0;
-            let yMm = cut.yMm ?? 0;
-            let zMm = cut.zMm ?? 0;
 
             if (newOffset !== undefined) {
-                // Użytkownik ręcznie wpisał nowy offset w inpucie
-                if (axis === 'X') offX = newOffset;
+                if (axis === 'X') {
+                    offX = targetCut.mirroredFrom && refX === 'CENTER' ? -newOffset : newOffset;
+                }
                 if (axis === 'Y') offY = newOffset;
                 if (axis === 'Z') offZ = newOffset;
             }
-            // Zmiana ściany referencyjnej (lub offsetu) natychmiast przelicza pozycję w LCS parta
-            const local = computeAbsoluteFromReference(dims, refX, offX, refY, offY, refZ, offZ);
-            xMm = local.xMm;
-            yMm = local.yMm;
-            zMm = local.zMm;
 
-            // Oś/zwrot tylko z odniesienia (bez osobnych parametrów w UI)
-            let orientPatch: { axis: CutAxis; direction: 1 | -1 } | Record<string, never> = {};
-            if (newOffset === undefined) {
-                if (newRef !== 'CENTER') {
-                    const outward = holeOutwardDirectionForRef(axis, refX, refY, refZ);
-                    if (outward !== null) orientPatch = { axis, direction: outward };
-                } else {
-                    orientPatch = cutOrientFromRefs({ refX, refY, refZ });
-                }
-            }
+            const local = computeAbsoluteFromReference(dims, refX, offX, refY, offY, refZ, offZ);
 
             return {
                 ...prev,
                 cutsFrame: 'PART',
                 cuts: prev.cuts.map((c) =>
-                    c.id === id
+                    c.id === effectiveId
                         ? {
                               ...c,
                               refX,
@@ -1099,10 +1372,9 @@ export function StudioApp(): React.JSX.Element {
                               offsetY_mm: offY,
                               refZ,
                               offsetZ_mm: offZ,
-                              xMm,
-                              yMm,
-                              zMm,
-                              ...orientPatch,
+                              xMm: local.xMm,
+                              yMm: local.yMm,
+                              zMm: local.zMm,
                           }
                         : c
                 ),
@@ -1110,25 +1382,62 @@ export function StudioApp(): React.JSX.Element {
         });
     };
 
-    const handleUpdateCutProp = (id: string, field: string, val: any) => {
-        setCurrentDef({
-            ...currentDef,
-            cuts: currentDef.cuts.map((c) => (c.id === id ? { ...c, [field]: val } : c)),
+    const handleUpdateCutProp = (id: string, fieldOrPatch: string | Record<string, any>, val?: any) => {
+        setCurrentDef((prev) => {
+            const targetCut = prev.cuts.find((c) => c.id === id);
+            const effectiveId = targetCut?.mirroredFrom || id;
+            const patch = typeof fieldOrPatch === 'string'
+                ? { [fieldOrPatch]: val }
+                : fieldOrPatch;
+
+            return {
+                ...prev,
+                cuts: prev.cuts.map((c) => {
+                    if (c.id !== effectiveId) return c;
+                    const updated: any = { ...c, ...patch };
+
+                    // Synchronizacja obiektu profilu 2D przy zmianie wymiarów
+                    if ('widthMm' in patch || 'heightMm' in patch || 'cornerRadiusMm' in patch) {
+                        updated.profile = {
+                            ...(updated.profile || {}),
+                            type: updated.profile?.type || 'RECT',
+                            widthMm: updated.widthMm,
+                            heightMm: updated.heightMm,
+                            ...(updated.cornerRadiusMm !== undefined ? { cornerRadiusMm: updated.cornerRadiusMm } : {}),
+                        };
+                    } else if ('diameterMm' in patch) {
+                        updated.profile = {
+                            ...(updated.profile || {}),
+                            type: 'CIRCLE',
+                            diameterMm: updated.diameterMm,
+                        };
+                    }
+
+                    return {
+                        ...updated,
+                        profile: ensureCutProfile(updated),
+                    };
+                }),
+            };
         });
     };
 
     const selectedPart = displayDef.parts.find((p) => p.id === selectedId);
     const selectedCut = displayDef.cuts.find((c) => c.id === selectedId);
 
-    /** Jedna ramka HTML na oś (X/Y/Z) — ref + odstęp (+ opcjonalnie wymiar). */
+    /** Jeden kompaktowy wiersz na oś (X/Y/Z) z etykietą osi przed kolorowym nawiasem. */
     const renderAxisFrame = (
         axis: 'X' | 'Y' | 'Z',
-        title: string,
+        _title: string,
         children: React.ReactNode,
     ) => (
-        <div className={`cad-axis-frame cad-axis-frame--${axis.toLowerCase()}`}>
-            <div className="cad-axis-frame-title">{title}</div>
-            <div className="cad-axis-frame-body">{children}</div>
+        <div className="cad-axis-frame-row" style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+            <span className={`cad-axis-badge cad-axis-badge--${axis.toLowerCase()}`}>
+                {axis}:
+            </span>
+            <div className={`cad-axis-frame cad-axis-frame--${axis.toLowerCase()}`} style={{ flex: 1, minWidth: 0 }}>
+                <div className="cad-axis-frame-body" style={{ width: '100%' }}>{children}</div>
+            </div>
         </div>
     );
 
@@ -1156,6 +1465,8 @@ export function StudioApp(): React.JSX.Element {
         label: string;
         valueMm: number;
         onManualChange: (v: number) => void;
+        hideLabel?: boolean;
+        compactInRow?: boolean;
     }) => {
         const targetType = opts.targetType || (opts.partId ? 'PART' : 'MAIN');
         const targetId = opts.targetId || opts.partId || 'main_container';
@@ -1169,16 +1480,15 @@ export function StudioApp(): React.JSX.Element {
             drivingClipboard?.targetId === targetId &&
             drivingClipboard?.field === opts.field;
         return (
-            <div className="cad-prop-row cad-prop-row--compact">
-                <label className="cad-prop-label">{opts.label}</label>
-                <div className="cad-prop-value-group">
-                    <input
-                        type="number"
+            <div className={`cad-prop-row cad-prop-row--compact ${opts.compactInRow ? 'cad-prop-row--inline' : ''}`} style={opts.compactInRow ? { flex: 1, minWidth: 0, margin: 0 } : undefined}>
+                {!opts.hideLabel && <label className="cad-prop-label">{opts.label}</label>}
+                <div className="cad-prop-value-group" style={opts.compactInRow ? { width: '100%' } : undefined}>
+                    <StudioNumericInput
                         className="cad-prop-input"
                         style={{ opacity: linked ? 0.55 : 1 }}
                         disabled={!!linked}
                         value={opts.valueMm}
-                        onChange={(e) => opts.onManualChange(Number(e.target.value) || 0)}
+                        onChange={(v) => opts.onManualChange(v)}
                         title={linked ? `Sterowane: ${linkedParam?.label || linked}` : 'Wartość stała'}
                     />
                     <button
@@ -1230,6 +1540,8 @@ export function StudioApp(): React.JSX.Element {
         label: string,
         valueMm: number,
         onManualChange: (v: number) => void,
+        hideLabel?: boolean,
+        compactInRow?: boolean,
     ) => renderDrivingParamControl({
         targetType: 'PART',
         targetId: partId,
@@ -1238,6 +1550,8 @@ export function StudioApp(): React.JSX.Element {
         label,
         valueMm,
         onManualChange,
+        hideLabel,
+        compactInRow,
     });
 
     const renderCutParamBind = (
@@ -1246,6 +1560,8 @@ export function StudioApp(): React.JSX.Element {
         label: string,
         valueMm: number,
         onManualChange: (v: number) => void,
+        hideLabel?: boolean,
+        compactInRow?: boolean,
     ) => renderDrivingParamControl({
         targetType: 'CUT',
         targetId: cutId,
@@ -1253,6 +1569,8 @@ export function StudioApp(): React.JSX.Element {
         label,
         valueMm,
         onManualChange,
+        hideLabel,
+        compactInRow,
     });
 
     return (
@@ -1362,6 +1680,8 @@ export function StudioApp(): React.JSX.Element {
                 lcsVisible={lcsVisible}
                 isPanActive={isPanActive}
                 isZoomWindowActive={isZoomWindowActive}
+                hidePanZoom={true}
+                hideInfo={true}
                 activeTab="tab-a5-smartparts"
                 displayMenuOpen={displayMenuOpen}
                 viewMenuOpen={viewMenuOpen}
@@ -1449,19 +1769,7 @@ export function StudioApp(): React.JSX.Element {
                                             ({currentDef.mainContainer.widthMm}x{currentDef.mainContainer.heightMm}x{currentDef.mainContainer.depthMm})
                                         </span>
                                     </div>
-                                    <div className="tree-node-actions">
-                                        <button
-                                            type="button"
-                                            className="tree-action-btn"
-                                            title="Dodaj zestaw okuć"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAddSet();
-                                            }}
-                                        >
-                                            {TREE_ICONS.packageSet}
-                                        </button>
-                                    </div>
+
                                 </div>
 
                                 {!isCollapsed('main_container', false) &&
@@ -1543,16 +1851,7 @@ export function StudioApp(): React.JSX.Element {
                                                         >
                                                             {setItem.visible === false ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
                                                         </button>
-                                                        {(currentDef.sets || []).length > 1 && (
-                                                            <button
-                                                                type="button"
-                                                                className="tree-action-btn btn-delete"
-                                                                title="Usuń zestaw"
-                                                                onClick={(e) => handleDeleteSet(setItem.id, e)}
-                                                            >
-                                                                {TREE_ICONS.trash}
-                                                            </button>
-                                                        )}
+
                                                     </div>
                                                 </div>
 
@@ -1561,11 +1860,14 @@ export function StudioApp(): React.JSX.Element {
                                         const partCuts = cutsForPart(p.id, idx);
                                         const partCollapsed = isCollapsed(p.id, false);
                                         const partFrozen = displayDef.parts.find((x) => x.id === p.id)?.frozen === true;
+                                        const isMirroredPart = !!p.mirroredFrom;
                                         return (
                                             <div key={p.id} className="tree-children" style={{ marginLeft: '12px' }}>
                                                 <div
                                                     className={`tree-node ${selectedId === p.id ? 'selected' : ''}`}
-                                                    style={{ opacity: p.visible === false || partFrozen ? 0.45 : 1 }}
+                                                    style={{
+                                                        opacity: p.visible === false || partFrozen ? 0.45 : isMirroredPart ? 0.6 : 1,
+                                                    }}
                                                     title={partFrozen ? 'Zamrożony (panel Zamroź) — bez wycięć CNC' : undefined}
                                                 >
                                                     <div
@@ -1575,7 +1877,7 @@ export function StudioApp(): React.JSX.Element {
                                                             type: 'part',
                                                             id: p.id,
                                                             name: p.name || `Part ${idx + 1}`,
-                                                            canDelete: currentDef.parts.length > 1,
+                                                            canDelete: true,
                                                         })}
                                                         onDoubleClick={(e) => {
                                                             e.stopPropagation();
@@ -1631,25 +1933,12 @@ export function StudioApp(): React.JSX.Element {
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            className="tree-action-btn"
-                                                            title="Kopiuj parametr ID — potem Wklej parametr ID na Zamroź w Panelu"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                copyParamId('part', p.id, p.name || `Part ${idx + 1}`);
-                                                            }}
+                                                            className="tree-action-btn btn-delete"
+                                                            title="Usuń część"
+                                                            onClick={(e) => handleDeletePart(p.id, e)}
                                                         >
-                                                            {TREE_ICONS.link}
+                                                            {TREE_ICONS.trash}
                                                         </button>
-                                                        {currentDef.parts.length > 1 && (
-                                                            <button
-                                                                type="button"
-                                                                className="tree-action-btn btn-delete"
-                                                                title="Usuń część"
-                                                                onClick={(e) => handleDeletePart(p.id, e)}
-                                                            >
-                                                                {TREE_ICONS.trash}
-                                                            </button>
-                                                        )}
                                                     </div>
                                                 </div>
 
@@ -1671,6 +1960,7 @@ export function StudioApp(): React.JSX.Element {
                                                         const cutFrozen =
                                                             partFrozen
                                                             || displayDef.cuts.find((x) => x.id === cut.id)?.frozen === true;
+                                                        const isMirroredCut = !!cut.mirroredFrom || isMirroredPart;
                                                         return (
                                                             <div
                                                                 key={cut.id}
@@ -1685,7 +1975,9 @@ export function StudioApp(): React.JSX.Element {
                                                                             || p.visible === false
                                                                             || cutFrozen
                                                                                 ? 0.45
-                                                                                : 1,
+                                                                                : isMirroredCut
+                                                                                  ? 0.6
+                                                                                  : 1,
                                                                     }}
                                                                     title={cutFrozen ? 'Zamrożone — niewidoczne w Studio / bez CNC' : undefined}
                                                                 >
@@ -1760,17 +2052,6 @@ export function StudioApp(): React.JSX.Element {
                                                                             onClick={(e) => handleToggleCutVisibility(cut.id, e)}
                                                                         >
                                                                             {cut.visible === false ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
-                                                                        </button>
-                                                                        <button
-                                                                            type="button"
-                                                                            className="tree-action-btn"
-                                                                            title="Kopiuj parametr ID — potem Wklej parametr ID na Zamroź w Panelu"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                copyParamId('cut', cut.id, cut.name || 'Cut');
-                                                                            }}
-                                                                        >
-                                                                            {TREE_ICONS.link}
                                                                         </button>
                                                                         <button
                                                                             type="button"
@@ -1913,12 +2194,9 @@ export function StudioApp(): React.JSX.Element {
                                 Biblioteka obiektów
                             </h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                                    <button type="button" className="cad-add-btn" style={{ borderColor: '#38bdf8', color: '#38bdf8' }} onClick={handleAddSet}>
-                                        <span>+ Dodaj Zestaw</span>
-                                    </button>
-                                    <button type="button" className="cad-add-btn" onClick={() => handleAddPart()}>
-                                        <span>+ Dodaj Część</span>
+                                <div>
+                                    <button type="button" className="cad-add-btn" style={{ width: '100%' }} onClick={() => handleAddPart()}>
+                                        <span>+ Dodaj Część (Part)</span>
                                     </button>
                                 </div>
 
@@ -1973,82 +2251,115 @@ export function StudioApp(): React.JSX.Element {
                         {/* Wariant B: Wybrany Part */}
                         {selectedPart && (
                             <>
-                                <h3 style={{ margin: '0 0 6px', fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Część (Part)</h3>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 0 6px' }}>
+                                    <h3 style={{ margin: 0, fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Część (Part)</h3>
+                                    {selectedPart.mirroredFrom && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, height: 22 }}
+                                            title="Odłącz powiązanie"
+                                            onClick={() => handleDetachMirror(selectedPart.id)}
+                                        >
+                                            <span>⛓ Odłącz powiązanie</span>
+                                        </button>
+                                    )}
+                                </div>
 
-                                <div className="cad-prop-grid">
+                                <div
+                                    className="cad-prop-grid"
+                                    style={{
+                                        opacity: selectedPart.mirroredFrom ? 0.6 : 1,
+                                        pointerEvents: selectedPart.mirroredFrom ? 'none' : 'auto',
+                                    }}
+                                >
                                     {renderPropCategory('Położenie', (
                                         <>
                                             {renderAxisFrame('X', 'Oś X', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedPart.refX || 'CENTER'}
-                                                            onChange={(e) => handleUpdatePartRef(selectedPart.id, 'X', e.target.value)}
-                                                        >
-                                                            <option value="LEFT">Bok lewy (−X)</option>
-                                                            <option value="RIGHT">Bok prawy (+X)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedPart.refX || 'CENTER'}
+                                                        onChange={(e) => handleUpdatePartRef(selectedPart.id, 'X', e.target.value)}
+                                                        title="Ściana odniesienia"
+                                                    >
+                                                        <option value="LEFT">Lewy (−X)</option>
+                                                        <option value="RIGHT">Prawy (+X)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderOffsetBind(
+                                                            selectedPart.id,
+                                                            'offsetX_mm',
+                                                            'Odsunięcie [mm]',
+                                                            selectedPart.offsetX_mm ?? selectedPart.xMm,
+                                                            (v) => handleUpdatePartRef(selectedPart.id, 'X', selectedPart.refX || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderOffsetBind(
-                                                        selectedPart.id,
-                                                        'offsetX_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedPart.offsetX_mm ?? selectedPart.xMm,
-                                                        (v) => handleUpdatePartRef(selectedPart.id, 'X', selectedPart.refX || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                </div>
                                             ))}
                                             {renderAxisFrame('Y', 'Oś Y', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedPart.refY || 'CENTER'}
-                                                            onChange={(e) => handleUpdatePartRef(selectedPart.id, 'Y', e.target.value)}
-                                                        >
-                                                            <option value="FRONT">Przód (−Y)</option>
-                                                            <option value="BACK">Tył (+Y)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedPart.refY || 'CENTER'}
+                                                        onChange={(e) => handleUpdatePartRef(selectedPart.id, 'Y', e.target.value)}
+                                                        title="Ściana odniesienia"
+                                                    >
+                                                        <option value="FRONT">Przód (−Y)</option>
+                                                        <option value="BACK">Tył (+Y)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderOffsetBind(
+                                                            selectedPart.id,
+                                                            'offsetY_mm',
+                                                            'Odsunięcie [mm]',
+                                                            selectedPart.offsetY_mm ?? selectedPart.yMm,
+                                                            (v) => handleUpdatePartRef(selectedPart.id, 'Y', selectedPart.refY || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderOffsetBind(
-                                                        selectedPart.id,
-                                                        'offsetY_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedPart.offsetY_mm ?? selectedPart.yMm,
-                                                        (v) => handleUpdatePartRef(selectedPart.id, 'Y', selectedPart.refY || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                </div>
                                             ))}
                                             {renderAxisFrame('Z', 'Oś Z', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedPart.refZ || 'CENTER'}
-                                                            onChange={(e) => handleUpdatePartRef(selectedPart.id, 'Z', e.target.value)}
-                                                        >
-                                                            <option value="BOTTOM">Dół (−Z)</option>
-                                                            <option value="TOP">Góra (+Z)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedPart.refZ || 'CENTER'}
+                                                        onChange={(e) => handleUpdatePartRef(selectedPart.id, 'Z', e.target.value)}
+                                                        title="Ściana odniesienia"
+                                                    >
+                                                        <option value="BOTTOM">Dół (−Z)</option>
+                                                        <option value="TOP">Góra (+Z)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderOffsetBind(
+                                                            selectedPart.id,
+                                                            'offsetZ_mm',
+                                                            'Odsunięcie [mm]',
+                                                            selectedPart.offsetZ_mm ?? selectedPart.zMm,
+                                                            (v) => handleUpdatePartRef(selectedPart.id, 'Z', selectedPart.refZ || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderOffsetBind(
-                                                        selectedPart.id,
-                                                        'offsetZ_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedPart.offsetZ_mm ?? selectedPart.zMm,
-                                                        (v) => handleUpdatePartRef(selectedPart.id, 'Z', selectedPart.refZ || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                </div>
                                             ))}
                                         </>
                                     ), 'location')}
+
+                                                                                                            
 
                                     {renderPropCategory('Rozmiar', (
                                         <>
@@ -2135,84 +2446,210 @@ export function StudioApp(): React.JSX.Element {
                         )}
 
                         {/* Wariant C: Otwór okrągły (HOLE) */}
-                        {selectedCut && selectedCut.type === 'HOLE' && (
-                            <>
-                                <h3 style={{ margin: '0 0 6px', fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Otwór okrągły</h3>
+                        {selectedCut && selectedCut.type === 'HOLE' && (() => {
+                            const parentPart = currentDef.parts.find((p) => p.id === selectedCut.partId);
+                            const isParentMirrored = !!parentPart?.mirroredFrom;
+                            const isMirroredCut = !!selectedCut.mirroredFrom || isParentMirrored;
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 0 6px' }}>
+                                        <h3 style={{ margin: 0, fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Otwór okrągły</h3>
+                                        {isMirroredCut && (
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, height: 22 }}
+                                                title="Odłącz powiązanie"
+                                                onClick={() => {
+                                                    if (parentPart?.mirroredFrom) {
+                                                        handleDetachMirror(parentPart.id);
+                                                    } else {
+                                                        handleDetachCutMirror(selectedCut.id);
+                                                    }
+                                                }}
+                                            >
+                                                <span>⛓ Odłącz powiązanie</span>
+                                            </button>
+                                        )}
+                                    </div>
 
-                                <div className="cad-prop-grid">
+                                    {isMirroredCut && (
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            background: 'rgba(59, 130, 246, 0.12)',
+                                            border: '1px solid rgba(59, 130, 246, 0.35)',
+                                            borderRadius: 4,
+                                            padding: '5px 8px',
+                                            fontSize: 11,
+                                            color: '#93c5fd',
+                                            marginBottom: 8,
+                                        }}>
+                                            <span style={{ fontSize: 13 }}>⛓</span>
+                                            <span style={{ flex: 1, minWidth: 0 }}>
+                                                Asocjacyjny bliźniak — edycja średnicy/długości aktualizuje oba elementy.
+                                            </span>
+                                            {selectedCut.mirroredFrom && (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-secondary"
+                                                    style={{ fontSize: 10, padding: '2px 6px', height: 20 }}
+                                                    onClick={() => setSelectedId(selectedCut.mirroredFrom!)}
+                                                    title="Zaznacz otwór źródłowy"
+                                                >
+                                                    Do źródła
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div className="cad-prop-grid">
                                     {renderPropCategory('Położenie', (
                                         <>
                                             {renderAxisFrame('X', 'Oś X', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedCut.refX || 'CENTER'}
-                                                            onChange={(e) => handleUpdateCutRef(selectedCut.id, 'X', e.target.value)}
-                                                        >
-                                                            <option value="LEFT">Bok lewy (−X)</option>
-                                                            <option value="RIGHT">Bok prawy (+X)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedCut.refX || 'CENTER'}
+                                                        onChange={(e) => handleUpdateCutRef(selectedCut.id, 'X', e.target.value)}
+                                                        title="Strona / Ściana odniesienia"
+                                                    >
+                                                        <option value="LEFT">Lewy (−X)</option>
+                                                        <option value="RIGHT">Prawy (+X)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderCutParamBind(
+                                                            selectedCut.id,
+                                                            'offsetX_mm',
+                                                            'Wartość odsunięcia [mm]',
+                                                            selectedCut.offsetX_mm ?? selectedCut.xMm,
+                                                            (v) => handleUpdateCutRef(selectedCut.id, 'X', selectedCut.refX || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderCutParamBind(
-                                                        selectedCut.id,
-                                                        'offsetX_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedCut.offsetX_mm ?? selectedCut.xMm,
-                                                        (v) => handleUpdateCutRef(selectedCut.id, 'X', selectedCut.refX || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                    <button
+                                                        type="button"
+                                                        className="sp-axis-flip-btn"
+                                                        title="Odwróć położenie (Flip X)"
+                                                        onClick={() => handleFlipCut(selectedCut.id, 'X')}
+                                                    >
+                                                        ⇄
+                                                    </button>
+                                                </div>
                                             ))}
                                             {renderAxisFrame('Y', 'Oś Y', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedCut.refY || 'CENTER'}
-                                                            onChange={(e) => handleUpdateCutRef(selectedCut.id, 'Y', e.target.value)}
-                                                        >
-                                                            <option value="FRONT">Przód (−Y)</option>
-                                                            <option value="BACK">Tył (+Y)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedCut.refY || 'CENTER'}
+                                                        onChange={(e) => handleUpdateCutRef(selectedCut.id, 'Y', e.target.value)}
+                                                        title="Strona / Ściana odniesienia"
+                                                    >
+                                                        <option value="FRONT">Przód (−Y)</option>
+                                                        <option value="BACK">Tył (+Y)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderCutParamBind(
+                                                            selectedCut.id,
+                                                            'offsetY_mm',
+                                                            'Wartość odsunięcia [mm]',
+                                                            selectedCut.offsetY_mm ?? selectedCut.yMm,
+                                                            (v) => handleUpdateCutRef(selectedCut.id, 'Y', selectedCut.refY || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderCutParamBind(
-                                                        selectedCut.id,
-                                                        'offsetY_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedCut.offsetY_mm ?? selectedCut.yMm,
-                                                        (v) => handleUpdateCutRef(selectedCut.id, 'Y', selectedCut.refY || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                    <button
+                                                        type="button"
+                                                        className="sp-axis-flip-btn"
+                                                        title="Odwróć położenie (Flip Y)"
+                                                        onClick={() => handleFlipCut(selectedCut.id, 'Y')}
+                                                    >
+                                                        ⇄
+                                                    </button>
+                                                </div>
                                             ))}
                                             {renderAxisFrame('Z', 'Oś Z', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedCut.refZ || 'CENTER'}
-                                                            onChange={(e) => handleUpdateCutRef(selectedCut.id, 'Z', e.target.value)}
-                                                        >
-                                                            <option value="BOTTOM">Dół (−Z)</option>
-                                                            <option value="TOP">Góra (+Z)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedCut.refZ || 'CENTER'}
+                                                        onChange={(e) => handleUpdateCutRef(selectedCut.id, 'Z', e.target.value)}
+                                                        title="Strona / Ściana odniesienia"
+                                                    >
+                                                        <option value="BOTTOM">Dół (−Z)</option>
+                                                        <option value="TOP">Góra (+Z)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderCutParamBind(
+                                                            selectedCut.id,
+                                                            'offsetZ_mm',
+                                                            'Wartość odsunięcia [mm]',
+                                                            selectedCut.offsetZ_mm ?? selectedCut.zMm,
+                                                            (v) => handleUpdateCutRef(selectedCut.id, 'Z', selectedCut.refZ || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderCutParamBind(
-                                                        selectedCut.id,
-                                                        'offsetZ_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedCut.offsetZ_mm ?? selectedCut.zMm,
-                                                        (v) => handleUpdateCutRef(selectedCut.id, 'Z', selectedCut.refZ || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                    <button
+                                                        type="button"
+                                                        className="sp-axis-flip-btn"
+                                                        title="Odwróć położenie (Flip Z)"
+                                                        onClick={() => handleFlipCut(selectedCut.id, 'Z')}
+                                                    >
+                                                        ⇄
+                                                    </button>
+                                                </div>
                                             ))}
                                         </>
                                     ), 'location')}
+
+                                                                        {renderPropCategory('Rotacja / Kierunek', (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            <div className="cad-axis-ref-row">
+                                                <span className="cad-axis-ref-label">Oś Z otworu:</span>
+                                                <select
+                                                    className="cad-prop-select"
+                                                    style={{ flex: 1 }}
+                                                    value={`${(selectedCut as SmartPartHoleCut)?.axis || 'X'}_${(selectedCut as SmartPartHoleCut)?.direction || -1}`}
+                                                    onChange={(e) => {
+                                                        const [ax, dir] = e.target.value.split('_');
+                                                        handleUpdateCutProp(selectedCut.id, { axis: ax, direction: Number(dir) });
+                                                    }}
+                                                    title="Wybierz oś komponentu, z którą pokrywa się oś Z otworu"
+                                                >
+                                                    <option value="X_1">Oś +X komponentu</option>
+                                                    <option value="X_-1">Oś −X komponentu</option>
+                                                    <option value="Y_1">Oś +Y komponentu</option>
+                                                    <option value="Y_-1">Oś −Y komponentu</option>
+                                                    <option value="Z_1">Oś +Z komponentu</option>
+                                                    <option value="Z_-1">Oś −Z komponentu</option>
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    className="sp-axis-flip-btn"
+                                                    title="Odwróć zwrot osi Z o 180°"
+                                                    onClick={() => {
+                                                        const curDir = (selectedCut as SmartPartHoleCut)?.direction || -1;
+                                                        handleUpdateCutProp(selectedCut.id, 'direction', curDir === 1 ? -1 : 1);
+                                                    }}
+                                                >
+                                                    ⇄ Zwrot
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ), 'rotation')}
 
                                     {renderPropCategory('Rozmiar', (
                                         <>
@@ -2234,116 +2671,260 @@ export function StudioApp(): React.JSX.Element {
                                     ), 'size')}
                                 </div>
                             </>
-                        )}
+                        );
+                    })()}
 
                         {/* Wariant D: Wcięcie prostokątne (POCKET) */}
-                        {selectedCut && selectedCut.type === 'POCKET' && (
-                            <>
-                                <h3 style={{ margin: '0 0 6px', fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Wcięcie prostokątne</h3>
+                        {selectedCut && selectedCut.type === 'POCKET' && (() => {
+                            const parentPart = currentDef.parts.find((p) => p.id === selectedCut.partId);
+                            const isParentMirrored = !!parentPart?.mirroredFrom;
+                            const isMirroredCut = !!selectedCut.mirroredFrom || isParentMirrored;
+                            return (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 0 6px' }}>
+                                        <h3 style={{ margin: 0, fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Wcięcie prostokątne</h3>
+                                        {isMirroredCut && (
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4, height: 22 }}
+                                                title="Odłącz powiązanie"
+                                                onClick={() => {
+                                                    if (parentPart?.mirroredFrom) {
+                                                        handleDetachMirror(parentPart.id);
+                                                    } else {
+                                                        handleDetachCutMirror(selectedCut.id);
+                                                    }
+                                                }}
+                                            >
+                                                <span>⛓ Odłącz powiązanie</span>
+                                            </button>
+                                        )}
+                                    </div>
 
-                                <div className="cad-prop-grid">
+                                    {isMirroredCut && (
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            background: 'rgba(59, 130, 246, 0.12)',
+                                            border: '1px solid rgba(59, 130, 246, 0.35)',
+                                            borderRadius: 4,
+                                            padding: '5px 8px',
+                                            fontSize: 11,
+                                            color: '#93c5fd',
+                                            marginBottom: 8,
+                                        }}>
+                                            <span style={{ fontSize: 13 }}>⛓</span>
+                                            <span style={{ flex: 1, minWidth: 0 }}>
+                                                Asocjacyjny bliźniak — edycja rozmiaru profilu aktualizuje oba elementy.
+                                            </span>
+                                            {selectedCut.mirroredFrom && (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-secondary"
+                                                    style={{ fontSize: 10, padding: '2px 6px', height: 20 }}
+                                                    onClick={() => setSelectedId(selectedCut.mirroredFrom!)}
+                                                    title="Zaznacz wycięcie źródłowe"
+                                                >
+                                                    Do źródła
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div className="cad-prop-grid">
                                     {renderPropCategory('Położenie', (
                                         <>
                                             {renderAxisFrame('X', 'Oś X', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedCut.refX || 'CENTER'}
-                                                            onChange={(e) => handleUpdateCutRef(selectedCut.id, 'X', e.target.value)}
-                                                        >
-                                                            <option value="LEFT">Bok lewy (−X)</option>
-                                                            <option value="RIGHT">Bok prawy (+X)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedCut.refX || 'CENTER'}
+                                                        onChange={(e) => handleUpdateCutRef(selectedCut.id, 'X', e.target.value)}
+                                                        title="Strona / Ściana odniesienia"
+                                                    >
+                                                        <option value="LEFT">Lewy (−X)</option>
+                                                        <option value="RIGHT">Prawy (+X)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderCutParamBind(
+                                                            selectedCut.id,
+                                                            'offsetX_mm',
+                                                            'Wartość odsunięcia [mm]',
+                                                            selectedCut.offsetX_mm ?? selectedCut.xMm,
+                                                            (v) => handleUpdateCutRef(selectedCut.id, 'X', selectedCut.refX || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderCutParamBind(
-                                                        selectedCut.id,
-                                                        'offsetX_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedCut.offsetX_mm ?? selectedCut.xMm,
-                                                        (v) => handleUpdateCutRef(selectedCut.id, 'X', selectedCut.refX || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                    <button
+                                                        type="button"
+                                                        className="sp-axis-flip-btn"
+                                                        title="Odwróć położenie (Flip X)"
+                                                        onClick={() => handleFlipCut(selectedCut.id, 'X')}
+                                                    >
+                                                        ⇄
+                                                    </button>
+                                                </div>
                                             ))}
                                             {renderAxisFrame('Y', 'Oś Y', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedCut.refY || 'CENTER'}
-                                                            onChange={(e) => handleUpdateCutRef(selectedCut.id, 'Y', e.target.value)}
-                                                        >
-                                                            <option value="FRONT">Przód (−Y)</option>
-                                                            <option value="BACK">Tył (+Y)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedCut.refY || 'CENTER'}
+                                                        onChange={(e) => handleUpdateCutRef(selectedCut.id, 'Y', e.target.value)}
+                                                        title="Strona / Ściana odniesienia"
+                                                    >
+                                                        <option value="FRONT">Przód (−Y)</option>
+                                                        <option value="BACK">Tył (+Y)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderCutParamBind(
+                                                            selectedCut.id,
+                                                            'offsetY_mm',
+                                                            'Wartość odsunięcia [mm]',
+                                                            selectedCut.offsetY_mm ?? selectedCut.yMm,
+                                                            (v) => handleUpdateCutRef(selectedCut.id, 'Y', selectedCut.refY || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderCutParamBind(
-                                                        selectedCut.id,
-                                                        'offsetY_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedCut.offsetY_mm ?? selectedCut.yMm,
-                                                        (v) => handleUpdateCutRef(selectedCut.id, 'Y', selectedCut.refY || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                    <button
+                                                        type="button"
+                                                        className="sp-axis-flip-btn"
+                                                        title="Odwróć położenie (Flip Y)"
+                                                        onClick={() => handleFlipCut(selectedCut.id, 'Y')}
+                                                    >
+                                                        ⇄
+                                                    </button>
+                                                </div>
                                             ))}
                                             {renderAxisFrame('Z', 'Oś Z', (
-                                                <>
-                                                    <div className="cad-prop-row">
-                                                        <label className="cad-prop-label">Odniesienie</label>
-                                                        <select
-                                                            className="cad-prop-select"
-                                                            value={selectedCut.refZ || 'CENTER'}
-                                                            onChange={(e) => handleUpdateCutRef(selectedCut.id, 'Z', e.target.value)}
-                                                        >
-                                                            <option value="BOTTOM">Dół (−Z)</option>
-                                                            <option value="TOP">Góra (+Z)</option>
-                                                            <option value="CENTER">Środek</option>
-                                                        </select>
+                                                <div className="cad-axis-ref-row">
+                                                    <span className="cad-axis-ref-label">Odniesienie:</span>
+                                                    <select
+                                                        className="cad-prop-select cad-axis-ref-select"
+                                                        value={selectedCut.refZ || 'CENTER'}
+                                                        onChange={(e) => handleUpdateCutRef(selectedCut.id, 'Z', e.target.value)}
+                                                        title="Strona / Ściana odniesienia"
+                                                    >
+                                                        <option value="BOTTOM">Dół (−Z)</option>
+                                                        <option value="TOP">Góra (+Z)</option>
+                                                        <option value="CENTER">Środek</option>
+                                                    </select>
+                                                    <div className="cad-axis-ref-val" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                        <span className="cad-axis-ref-label">Korekta:</span>
+                                                        {renderCutParamBind(
+                                                            selectedCut.id,
+                                                            'offsetZ_mm',
+                                                            'Wartość odsunięcia [mm]',
+                                                            selectedCut.offsetZ_mm ?? selectedCut.zMm,
+                                                            (v) => handleUpdateCutRef(selectedCut.id, 'Z', selectedCut.refZ || 'CENTER', v),
+                                                            true,
+                                                            true,
+                                                        )}
                                                     </div>
-                                                    {renderCutParamBind(
-                                                        selectedCut.id,
-                                                        'offsetZ_mm',
-                                                        'Odstęp [mm]',
-                                                        selectedCut.offsetZ_mm ?? selectedCut.zMm,
-                                                        (v) => handleUpdateCutRef(selectedCut.id, 'Z', selectedCut.refZ || 'CENTER', v),
-                                                    )}
-                                                </>
+                                                    <button
+                                                        type="button"
+                                                        className="sp-axis-flip-btn"
+                                                        title="Odwróć położenie (Flip Z)"
+                                                        onClick={() => handleFlipCut(selectedCut.id, 'Z')}
+                                                    >
+                                                        ⇄
+                                                    </button>
+                                                </div>
                                             ))}
                                         </>
                                     ), 'location')}
+
+                                    {renderPropCategory('Rotacja / Kierunek', (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            <div className="cad-axis-ref-row">
+                                                <span className="cad-axis-ref-label">Oś Z wcięcia:</span>
+                                                <select
+                                                    className="cad-prop-select"
+                                                    style={{ flex: 1 }}
+                                                    value={`${(selectedCut as SmartPartPocketCut)?.axis || 'Y'}_${(selectedCut as SmartPartPocketCut)?.direction || -1}`}
+                                                    onChange={(e) => {
+                                                        const [ax, dir] = e.target.value.split('_');
+                                                        handleUpdateCutProp(selectedCut.id, { axis: ax, direction: Number(dir) });
+                                                    }}
+                                                    title="Wybierz oś komponentu, z którą pokrywa się oś Z wcięcia"
+                                                >
+                                                    <option value="X_1">Oś +X komponentu</option>
+                                                    <option value="X_-1">Oś −X komponentu</option>
+                                                    <option value="Y_1">Oś +Y komponentu</option>
+                                                    <option value="Y_-1">Oś −Y komponentu</option>
+                                                    <option value="Z_1">Oś +Z komponentu</option>
+                                                    <option value="Z_-1">Oś −Z komponentu</option>
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    className="sp-axis-flip-btn"
+                                                    title="Odwróć zwrot osi Z o 180°"
+                                                    onClick={() => {
+                                                        const curDir = (selectedCut as SmartPartPocketCut)?.direction || -1;
+                                                        handleUpdateCutProp(selectedCut.id, 'direction', curDir === 1 ? -1 : 1);
+                                                    }}
+                                                >
+                                                    ⇄ Zwrot
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ), 'rotation')}
 
                                     {renderPropCategory('Rozmiar', (
                                         <>
                                             {renderDimRow('X', renderCutParamBind(
                                                 selectedCut.id,
                                                 'widthMm',
-                                                'Szerokość [mm]',
-                                                (selectedCut as SmartPartPocketCut).widthMm,
+                                                'Szerokość profilu [mm]',
+                                                Number((selectedCut as SmartPartPocketCut).widthMm ?? (selectedCut as any).profile?.widthMm) || 16,
                                                 (v) => handleUpdateCutProp(selectedCut.id, 'widthMm', v || 1),
                                             ))}
                                             {renderDimRow('Y', renderCutParamBind(
                                                 selectedCut.id,
                                                 'depthMm',
-                                                'Głębokość [mm]',
-                                                (selectedCut as SmartPartPocketCut).depthMm,
+                                                'Głębokość cięcia (+Z) [mm]',
+                                                Number((selectedCut as SmartPartPocketCut).depthMm) || 16,
                                                 (v) => handleUpdateCutProp(selectedCut.id, 'depthMm', v || 1),
                                             ))}
                                             {renderDimRow('Z', renderCutParamBind(
                                                 selectedCut.id,
                                                 'heightMm',
-                                                'Wysokość [mm]',
-                                                (selectedCut as SmartPartPocketCut).heightMm,
+                                                'Wysokość profilu [mm]',
+                                                Number((selectedCut as SmartPartPocketCut).heightMm ?? (selectedCut as any).profile?.heightMm) || 32,
                                                 (v) => handleUpdateCutProp(selectedCut.id, 'heightMm', v || 1),
+                                            ))}
+                                            {renderDimRow('R', renderCutParamBind(
+                                                selectedCut.id,
+                                                'cornerRadiusMm',
+                                                'Promień narożników R [mm]',
+                                                (selectedCut as SmartPartPocketCut).profile?.cornerRadiusMm ?? 0,
+                                                (v) => {
+                                                    const curProf = (selectedCut as SmartPartPocketCut).profile;
+                                                    handleUpdateCutProp(selectedCut.id, {
+                                                        profile: {
+                                                            ...curProf,
+                                                            type: (v && v > 0) ? 'ROUNDED_RECT' : 'RECT',
+                                                            cornerRadiusMm: Math.max(0, v || 0),
+                                                        },
+                                                    });
+                                                },
                                             ))}
                                         </>
                                     ), 'size')}
                                 </div>
                             </>
-                        )}
+                        );
+                    })()}
 
                         </div>
                         </>
@@ -2359,11 +2940,7 @@ export function StudioApp(): React.JSX.Element {
                 style={{ width: '100%', height: '100%', display: 'block', background: '#ebeff2' }}
             />
 
-            {uiRegionHint && (
-                <div className="scene-ui-region-hint" role="status">
-                    {uiRegionHint}
-                </div>
-            )}
+            
         </div>
     );
 }

@@ -29,6 +29,8 @@ import type { DetectedBay } from '../../A2_bloki/02_bloki-bay-detector.js';
 import {
     computeAbsoluteFromReference,
     cutOrientFromRefs,
+    pocketBoxDimsCad,
+    resolveCutProfileLoop2D,
 } from '../../S5_studio/smartpart-studio-types.js';
 
 export type BaySide = 'left' | 'right' | 'bottom' | 'top' | 'back' | 'front';
@@ -147,6 +149,31 @@ export function panelFacePlaneCoordMm(node: any, face: string, axis: 'x' | 'y' |
     const w = nmToMm(Number(dd.width ?? dd.length));
     const h = nmToMm(Number(dd.height ?? dd.depth));
     const t = nmToMm(Number(dd.thickness));
+    const role = String(dd.role || '').toUpperCase();
+    const c = panelWorldCenterMm(node);
+    if (c) {
+        const normFace = String(face || '').toUpperCase();
+        const isInner = normFace.includes('Z_PLUS');
+        if (axis === 'x') {
+            if (role === 'LEFT_SIDE_PANEL' || role === 'SIDE_LEFT' || role === 'BOK_L' || (role === 'MANUAL_PANEL' && c.x < 0)) {
+                return isInner ? c.x + t / 2 : c.x - t / 2;
+            }
+            if (role === 'RIGHT_SIDE_PANEL' || role === 'SIDE_RIGHT' || role === 'BOK_P' || (role === 'MANUAL_PANEL' && c.x > 0)) {
+                return isInner ? c.x - t / 2 : c.x + t / 2;
+            }
+        } else if (axis === 'z') {
+            if (role === 'BOTTOM_PANEL' || role === 'WIENIEC_D' || role === 'SHELF' || role === 'POLKA') {
+                return isInner ? c.z + t / 2 : c.z - t / 2;
+            }
+            if (role === 'TOP_PANEL' || role === 'WIENIEC_G') {
+                return isInner ? c.z - t / 2 : c.z + t / 2;
+            }
+        } else if (axis === 'y') {
+            if (role === 'BACK_PANEL' || role === 'PLECY') {
+                return isInner ? c.y - t / 2 : c.y + t / 2;
+            }
+        }
+    }
     let fd: ReturnType<typeof computeFaceData>;
     try {
         fd = computeFaceData(face, w, h, t);
@@ -623,9 +650,7 @@ export function resolveCutCenterLocalMm(
     const { axis, direction: dir } = cutOrientFromRefs(cut);
     const half = cut.type === 'HOLE'
         ? Math.max(1, Number(cut.lengthMm) || 0) / 2
-        : axis === 'X' ? Math.max(1, Number(cut.widthMm) || 0) / 2
-        : axis === 'Y' ? Math.max(1, Number(cut.depthMm) || 0) / 2
-        : Math.max(1, Number(cut.heightMm) || 0) / 2;
+        : Math.max(1, Number(cut.depthMm) || 0) / 2;
     if (axis === 'X') return { ...p, x: p.x + dir * half };
     // CAD +Y → bay −d (ten sam znak co w resolveCutPlacementLocalMm)
     if (axis === 'Y') return { ...p, d: p.d - dir * half };
@@ -646,10 +671,10 @@ function cutHalfExtentsStudio(cut: any): { x: number; y: number; z: number } | n
         return { x: r, y: r, z: l };
     }
     if (cut?.type === 'POCKET') {
-        // width→X, depth→Y, height→Z
-        const x = Number(cut.widthMm) / 2;
-        const y = Number(cut.depthMm) / 2;
-        const z = Number(cut.heightMm) / 2;
+        const dims = pocketBoxDimsCad(cut);
+        const x = dims.xMm / 2;
+        const y = dims.yMm / 2;
+        const z = dims.zMm / 2;
         if (!(x > 0) || !(y > 0) || !(z > 0)) return null;
         return { x, y, z };
     }
@@ -836,9 +861,8 @@ export function computeSmartPartCutIntents(
         // Środek bryły — spójnie z protruzją (nie początek LCS)
         const local = resolveCutCenterLocalMm(frame, part, cut);
         const { axis: cutAxis } = cutOrientFromRefs(cut);
-        const allowed: BaySide[] = cut.type === 'HOLE'
-            ? (HOLE_AXIS_SIDES[cutAxis] || [])
-            : [...BAY_SIDES];
+        // Zgodnie z zasadą CAD: narzędzie tnie wyłącznie wzdłuż swojej osi roboczej (wektor natarcia w materiał)
+        const allowed: BaySide[] = HOLE_AXIS_SIDES[cutAxis] || [...BAY_SIDES];
 
         for (const side of allowed) {
             const depthMm = prot[side];
@@ -885,22 +909,26 @@ export function computeSmartPartCutIntents(
                     },
                 });
             } else {
-                // Rewizja: rzut 4 narożników przekroju na lico → prostokąt UV
-                const corners = sectionCornersLocal(local, e, side).map((c) =>
+                // Rewizja / wybranie materiału: rzut pętli profilu 2D na lico formatki
+                const profileLoop = resolveCutProfileLoop2D(cut);
+                const loopPts = profileLoopToBayLocal(local, profileLoop, side);
+                const corners = loopPts.map((c) =>
                     bayLocalToWorldMm(frame, projectOntoSide(frame, c, side)));
                 const uvs = corners
                     .map((c) => holeUvOnPanel(node, faceName, c, side))
                     .filter(Boolean) as Array<{ u: number; v: number }>;
-                if (uvs.length !== 4) continue;
+                if (uvs.length < 3) continue;
                 const u0 = Math.min(...uvs.map((p) => p.u));
                 const u1 = Math.max(...uvs.map((p) => p.u));
                 const v0 = Math.min(...uvs.map((p) => p.v));
                 const v1 = Math.max(...uvs.map((p) => p.v));
+                const isThrough = (side === 'back' || side === 'front') || depthMm >= 3;
+                const featType = isThrough ? 'cutout' : 'pocket';
                 intents.push({
                     targetNodeId: node.id,
                     feature: {
                         id: featureId,
-                        type: 'groove',
+                        type: featType,
                         face: faceName,
                         name: cut.name,
                         params: {
@@ -908,6 +936,9 @@ export function computeSmartPartCutIntents(
                             v: round3(v0),
                             width: round3(u1 - u0),
                             length: round3(v1 - v0),
+                            depth: round3(depthMm),
+                            through: isThrough,
+                            polygon: uvs.map((p) => [round3(p.u), round3(p.v)]),
                             ...baseParams,
                         },
                     },
@@ -932,6 +963,32 @@ function projectOntoSide(frame: SmartPartBayFrameMm, p: BayLocalMm, side: BaySid
         case 'back': return { ...p, d: 0 };
         case 'front': return { ...p, d: frame.depthMm };
     }
+}
+
+/** Rzutuje punkty pętli profilu 2D narzędzia na układ wnęki (BayLocalMm). */
+function profileLoopToBayLocal(p: BayLocalMm, loop: Array<[number, number]>, side: BaySide): BayLocalMm[] {
+    if (side === 'left' || side === 'right') {
+        // ściana YZ: loop[k][0] -> d (CAD Y), loop[k][1] -> h (CAD Z)
+        return loop.map(([a, b]) => ({
+            x: p.x,
+            d: p.d + a,
+            h: p.h + b,
+        }));
+    }
+    if (side === 'bottom' || side === 'top') {
+        // ściana XY: loop[k][0] -> x (CAD X), loop[k][1] -> d (CAD Y)
+        return loop.map(([a, b]) => ({
+            x: p.x + a,
+            d: p.d + b,
+            h: p.h,
+        }));
+    }
+    // back / front — ściana XZ: loop[k][0] -> x (CAD X), loop[k][1] -> h (CAD Z)
+    return loop.map(([a, b]) => ({
+        x: p.x + a,
+        h: p.h + b,
+        d: p.d,
+    }));
 }
 
 /** 4 narożniki przekroju prostopadłościanu w płaszczyźnie równoległej do ściany `side`.

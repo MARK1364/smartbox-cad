@@ -335,7 +335,7 @@ function currentLocalPoint(scene: any, ref: PMIAnchorRef): Vec3 | null {
     if (ref.kind === 'EDGE') {
         if (ref.subIndex !== 0 && ref.subIndex !== 1) return null;
 
-        const mesh = entry.meshes.find(m => m?.metadata?.type === 'edge' && String(m.metadata.edgeKey) === ref.subKey);
+        const mesh = entry.meshes.find(m => m?.metadata?.type === 'edge' && (String(m.metadata.edgeKey) === ref.subKey || String(m.metadata.alias) === ref.subKey));
         const points = mesh?.metadata?.brepPoints;
         if (!points || points.length < 2) return null;
 
@@ -942,7 +942,7 @@ function resolveLocalToBrepPick(
     // Budujemy anchor ref z B-rep danych
     const anchorRef = buildAnchorRefForBrep(nodeId, kind, subKey, localPos, worldPos);
     if (kind === 'EDGE' && hitPointWorld) {
-        const edgePoints = panelView?._edgeMeshes?.find((mesh: any) => mesh?.metadata?.edgeKey === subKey)?.metadata?.brepPoints;
+        const edgePoints = panelView?._edgeMeshes?.find((mesh: any) => mesh?.metadata?.edgeKey === subKey || mesh?.metadata?.alias === subKey)?.metadata?.brepPoints;
         if (Array.isArray(edgePoints) && edgePoints.length >= 2) {
             const p0 = v3(edgePoints[0][0], edgePoints[0][1], edgePoints[0][2]);
             const p1 = v3(edgePoints[1][0], edgePoints[1][1], edgePoints[1][2]);

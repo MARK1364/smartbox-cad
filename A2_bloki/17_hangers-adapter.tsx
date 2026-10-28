@@ -31,7 +31,7 @@ export function HangersSubModule({
     }, []);
 
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
-        p.szablon_id || p.hardwareId || (availableHangers[0]?.id ?? 'TT2')
+        p.szablon_id || p.hardwareId || (availableHangers[0]?.id ?? 'zawieszka_camaro')
     );
     const [selectedSetId, setSelectedSetId] = useState<string>(p.zestaw_id || '');
     const [offsetSide, setOffsetSide] = useState<string | number>(p.odsuniecie_bok_mm ?? 0);
@@ -56,7 +56,7 @@ export function HangersSubModule({
     }, [activeDefinition, selectedSetId, selectedTemplateId]);
 
     useEffect(() => {
-        setSelectedTemplateId(p.szablon_id || p.hardwareId || (availableHangers[0]?.id ?? 'TT2'));
+        setSelectedTemplateId(p.szablon_id || p.hardwareId || (availableHangers[0]?.id ?? 'zawieszka_camaro'));
         setSelectedSetId(p.zestaw_id || '');
         setOffsetSide(p.odsuniecie_bok_mm ?? 0);
         setOffsetBack(p.odsuniecie_tyl_mm ?? 0);

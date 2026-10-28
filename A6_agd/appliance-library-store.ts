@@ -4,7 +4,11 @@
  * Magazyn biblioteki urządzeń AGD (modele parametryczne B-rep oraz modele GLB).
  */
 
-import type { ApplianceTemplateItem } from './smart-appliance-types.js';
+import {
+    type ApplianceTemplateItem,
+    DEFAULT_FRIDGE_PARAMS,
+    DEFAULT_FREESTANDING_FRIDGE_PARAMS,
+} from './smart-appliance-types.js';
 import { createSmartAppliance } from './smart-appliance-core.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 
@@ -38,6 +42,20 @@ export const DEFAULT_APPLIANCE_TEMPLATES: ApplianceTemplateItem[] = [
             corpusWidth: 560,
             corpusDepth: 550,
         },
+    },
+    {
+        id: 'param_fridge_standard_178',
+        name: 'Lodówka do zabudowy',
+        kind: 'FRIDGE',
+        source: 'PARAMETRIC',
+        defaultParams: DEFAULT_FRIDGE_PARAMS,
+    },
+    {
+        id: 'param_fridge_freestanding_side_by_side',
+        name: 'Lodówka wolnostojąca (Side-by-Side)',
+        kind: 'FRIDGE',
+        source: 'PARAMETRIC',
+        defaultParams: DEFAULT_FREESTANDING_FRIDGE_PARAMS,
     },
 ];
 

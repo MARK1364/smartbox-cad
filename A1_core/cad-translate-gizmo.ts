@@ -53,6 +53,10 @@ export class CadTranslateGizmo {
         }
     }
 
+    get utilityLayer(): any {
+        return this._utilityLayer;
+    }
+
     get attachedNode(): any {
         return this.xGizmo?.attachedNode ?? null;
     }

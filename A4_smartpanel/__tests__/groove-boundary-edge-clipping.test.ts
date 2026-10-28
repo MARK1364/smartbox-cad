@@ -50,32 +50,43 @@ describe('groove boundary edge clipping (wycinanie linii krawędzi na wlocie/wyl
         expect(edgeKeys).toContain('e_groove_g_wieniec_v3');
         expect(edgeKeys).toContain('e_groove_g_wieniec_v4');
 
-        // 3. Krawędź obrysu boku przod_lewo (lewa strona wieńca) musi być rozcięta na 2 odcinki
-        const leftEdges = (mesh.edges as Array<{ key: string; points: number[][] }>).filter(
-            e => e.key === 'przod_lewo' || e.key.startsWith('przod_lewo_')
+        // 3. Krawędź obrysu boku przod_lewo (lewa strona wieńca) na poziomie lica Z+ jest przerwana przez wpust na 2 odcinki
+        const leftEdges = (mesh.edges as Array<{ key: string; alias?: string; points: number[][] }>).filter(
+            e => (e.alias === 'przod_lewo' || e.key === 'przod_lewo' || e.key.startsWith('przod_lewo_')) &&
+                 Math.abs(e.points[0][2] - thicknessMm / 2) < 0.1
         );
         expect(leftEdges.length).toBe(2);
 
+        // Sortujemy wzdłuż osi Y
+        leftEdges.sort((a, b) => a.points[0][1] - b.points[0][1]);
+
         // Pierwszy odcinek: od przodu (v=0 -> y = -250) do wlotu wpustu (v=470 -> y = +220)
         const seg1 = leftEdges[0];
-        expect(seg1.points[0][1]).toBeCloseTo(-250, 1);
-        expect(seg1.points[1][1]).toBeCloseTo(-250 + grooveVMm, 1);
+        const seg1MinY = Math.min(seg1.points[0][1], seg1.points[1][1]);
+        const seg1MaxY = Math.max(seg1.points[0][1], seg1.points[1][1]);
+        expect(seg1MinY).toBeCloseTo(-250, 1);
+        expect(seg1MaxY).toBeCloseTo(-250 + grooveVMm, 1);
 
         // Drugi odcinek: od wylotu wpustu (v=473 -> y = +223) do tyłu formatki (v=500 -> y = +250)
         const seg2 = leftEdges[1];
-        expect(seg2.points[0][1]).toBeCloseTo(-250 + grooveVMm + grooveThMm, 1);
-        expect(seg2.points[1][1]).toBeCloseTo(+250, 1);
+        const seg2MinY = Math.min(seg2.points[0][1], seg2.points[1][1]);
+        const seg2MaxY = Math.max(seg2.points[0][1], seg2.points[1][1]);
+        expect(seg2MinY).toBeCloseTo(-250 + grooveVMm + grooveThMm, 1);
+        expect(seg2MaxY).toBeCloseTo(+250, 1);
 
         // Przerwa między segmentami wynosi dokładnie szerokość wpustu (3mm)
-        const gap = seg2.points[0][1] - seg1.points[1][1];
+        const gap = seg2MinY - seg1MaxY;
         expect(gap).toBeCloseTo(grooveThMm, 1);
 
-        // 4. Krawędź prawa przod_prawo również musi być rozcięta na 2 odcinki
-        const rightEdges = (mesh.edges as Array<{ key: string; points: number[][] }>).filter(
-            e => e.key === 'przod_prawo' || e.key.startsWith('przod_prawo_')
+        // 4. Krawędź prawa przod_prawo również na poziomie lica Z+ składa się z 2 odcinków
+        const rightEdges = (mesh.edges as Array<{ key: string; alias?: string; points: number[][] }>).filter(
+            e => (e.alias === 'przod_prawo' || e.key === 'przod_prawo' || e.key.startsWith('przod_prawo_')) &&
+                 Math.abs(e.points[0][2] - thicknessMm / 2) < 0.1
         );
         expect(rightEdges.length).toBe(2);
-        const rightGap = rightEdges[1].points[0][1] - rightEdges[0].points[1][1];
+        rightEdges.sort((a, b) => a.points[0][1] - b.points[0][1]);
+        const rightGap = Math.min(rightEdges[1].points[0][1], rightEdges[1].points[1][1]) -
+                         Math.max(rightEdges[0].points[0][1], rightEdges[0].points[1][1]);
         expect(rightGap).toBeCloseTo(grooveThMm, 1);
     });
 
@@ -142,8 +153,9 @@ describe('groove boundary edge clipping (wycinanie linii krawędzi na wlocie/wyl
         expect(edgeKeys).toContain('e_groove_g_pocket_t3');
         expect(edgeKeys).toContain('e_groove_g_pocket_t4');
 
-        const leftEdges = (mesh.edges as Array<{ key: string }>).filter(
-            e => e.key === 'przod_lewo' || e.key.startsWith('przod_lewo_')
+        const leftEdges = (mesh.edges as Array<{ key: string; alias?: string; points: number[][] }>).filter(
+            e => (e.alias === 'przod_lewo' || e.key === 'przod_lewo' || e.key.startsWith('przod_lewo_')) &&
+                 Math.abs(e.points[0][2] - 18 / 2) < 0.1
         );
         expect(leftEdges.length).toBe(1);
     });

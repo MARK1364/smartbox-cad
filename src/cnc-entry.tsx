@@ -71,7 +71,6 @@ function CncStandaloneApp() {
     const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
     const [projMenuOpen, setProjMenuOpen] = useState(false);
     const [projection, setProjection] = useState<'ortho' | 'perspective'>('ortho');
-    const [isPanActive, setIsPanActive] = useState(false);
     const [statusText, setStatusText] = useState('CNC — gotowy');
     const [isDragging, setIsDragging] = useState(false);
     const [pendingDxf, setPendingDxf] = useState<{ text: string; fileName: string; summary: DxfMetadataSummary } | null>(null);
@@ -505,18 +504,6 @@ function CncStandaloneApp() {
                         callAPI('toggleProjection');
                     }}
                 />
-                <button
-                    type="button"
-                    className={`tool-btn ${isPanActive ? 'active' : ''}`}
-                    onClick={() => {
-                        const vp = ctxRef.current?.viewport;
-                        const next = vp?.togglePanTool?.() ?? !isPanActive;
-                        setIsPanActive(!!next);
-                    }}
-                    title="Przesuwanie widoku (Pan)"
-                >
-                    ✋ Przesuń
-                </button>
             </div>
 
             <div id="view-cube-container" className="view-cube-container">

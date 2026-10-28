@@ -14,6 +14,7 @@ import { openQuickPick } from './quick-pick/quick-pick-events.js';
 import type { QuickPickCandidate } from './quick-pick/quick-pick-types.js';
 import { getGrooveParamsMm } from './groove-params.js';
 import { normalizeFaceName } from './face-name.js';
+import { PropertiesManager } from './properties.js';
 
 declare const BABYLON: any;
 
@@ -508,7 +509,13 @@ export class FacePicker {
                     this._clearSelectionExcept(null);
                     this.selectedFace = null;
                     this.selectedFaces.clear();
+                    this.selectedFeature = null;
+                    this.selectedFeatures.clear();
                     this.document.setActiveEntity(targetModel);
+                    PropertiesManager.instance.inspectPanel(targetModel, this.panelViews, true);
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('cad-close-floating-operation'));
+                    }
                 }
                 return;
             }

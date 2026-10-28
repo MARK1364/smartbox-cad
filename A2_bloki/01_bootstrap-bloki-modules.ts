@@ -21,6 +21,7 @@ import { ledInternalPlugin } from './plugins/led-internal-plugin.js';
 import { ledExternalPlugin } from './plugins/led-external-plugin.js';
 import { handlePlugin } from './plugins/handle-plugin.js';
 import { hangersPlugin } from './plugins/hangers-plugin.js';
+import { sinkPlugin } from './plugins/sink-plugin.js';
 
 export function registerAllBlokiModules(): void {
     SmartModuleRegistry.register(shelvesPlugin);
@@ -38,5 +39,6 @@ export function registerAllBlokiModules(): void {
     SmartModuleRegistry.register(ledExternalPlugin);
     SmartModuleRegistry.register(handlePlugin);
     SmartModuleRegistry.register(hangersPlugin);
+    SmartModuleRegistry.register(sinkPlugin);
 }
 

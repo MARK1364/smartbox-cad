@@ -101,6 +101,7 @@ function applyPartToPanel(panel: PanelModel, part: SmartWallPartPlanMm): void {
         domain: part.custom_properties?.domain || 'wall_segment',
     };
     (panel as any).custom_properties = cp;
+    (panel as any)._emit?.('dimensions', { width: panel.width, height: panel.height, thickness: panel.thickness });
 }
 
 function resolvePanelDimsMm(part: SmartWallPartPlanMm): { bbWidth: number; bbHeight: number; bbThickness: number } {

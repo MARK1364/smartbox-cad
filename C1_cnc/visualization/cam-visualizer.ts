@@ -368,7 +368,8 @@ export class CAMVisualizer {
 
                 const pts = effectivePts.map((p: any) => new BABYLON.Vector3(p.x, p.y, p.z));
                 if (pts.length >= 2) {
-                    const tube = BABYLON.MeshBuilder.CreateTube(`Profile_${(feature as any).featureId || Math.random()}`, {
+                    const featKey = (feature as any).featureId || 'path';
+                    const tube = BABYLON.MeshBuilder.CreateTube(`Profile_${featKey}`, {
                         path: pts,
                         radius: 1.2,
                         tessellation: 8,
@@ -380,7 +381,7 @@ export class CAMVisualizer {
                     this.worldMeshes.push(tube);
 
                     // Mała jaskrawozielona sfera w punkcie startowym wejścia narzędzia (Start / Lead-In)
-                    const startSphere = BABYLON.MeshBuilder.CreateSphere(`ProfileStart_${(feature as any).featureId || Math.random()}`, {
+                    const startSphere = BABYLON.MeshBuilder.CreateSphere(`ProfileStart_${featKey}`, {
                         diameter: 5.0,
                         segments: 16
                     }, this.scene);
@@ -536,7 +537,11 @@ export class CAMVisualizer {
             if (parentNode) {
                 this.previewToolNode.parent = parentNode;
             }
-            this.previewToolNode.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+            if (tool.type === 'groove') {
+                this.previewToolNode.rotation = new BABYLON.Vector3(0, 0, 0);
+            } else {
+                this.previewToolNode.rotation = new BABYLON.Vector3(Math.PI / 2, 0, 0);
+            }
             
             if (position) {
                 this.previewToolNode.position = new BABYLON.Vector3(position.x, position.y, position.z + 15);
@@ -693,24 +698,52 @@ export class CAMVisualizer {
             }
         }
 
-        // Linie G0 (szybkie, SafeZ) - złocisto-żółte
-        if (rapidLines.length > 0) {
+        // Konwersja ciągłych linii na odcinki przerywane (dashed lines)
+        const toDashedLines = (rawLines: Array<any[]>, dashLen = 8, gapLen = 5): Array<any[]> => {
+            const out: Array<any[]> = [];
+            for (const seg of rawLines) {
+                if (!seg || seg.length < 2) continue;
+                for (let i = 0; i < seg.length - 1; i++) {
+                    const p1 = seg[i];
+                    const p2 = seg[i + 1];
+                    const dist = BABYLON.Vector3.Distance(p1, p2);
+                    if (dist <= 0.001) continue;
+                    if (dist <= dashLen) {
+                        out.push([p1, p2]);
+                        continue;
+                    }
+                    const dir = p2.subtract(p1).scale(1 / dist);
+                    let curr = 0;
+                    while (curr < dist) {
+                        const endD = Math.min(curr + dashLen, dist);
+                        out.push([p1.add(dir.scale(curr)), p1.add(dir.scale(endD))]);
+                        curr += dashLen + gapLen;
+                    }
+                }
+            }
+            return out;
+        };
+
+        // Linie G0 (szybkie, SafeZ) - zielone przerywane
+        const dashedRapid = toDashedLines(rapidLines, 8, 5);
+        if (dashedRapid.length > 0) {
             const rapidMesh = BABYLON.MeshBuilder.CreateLineSystem("CAM_Toolpath_Rapid_G0", {
-                lines: rapidLines,
+                lines: dashedRapid,
                 updatable: false
             }, this.scene);
-            rapidMesh.color = new BABYLON.Color3(0.98, 0.75, 0.15); // Złocisto-żółty
+            rapidMesh.color = new BABYLON.Color3(0.25, 0.85, 0.4); // Jasna zieleń
             rapidMesh.parent = this.toolpathsRootNode;
             rapidMesh.isPickable = false;
         }
 
-        // Linie G1 (robocze) - seledynowo-zielone
-        if (cuttingLines.length > 0) {
+        // Linie G1 (robocze) - intensywna zieleń, przerywane
+        const dashedCutting = toDashedLines(cuttingLines, 8, 5);
+        if (dashedCutting.length > 0) {
             const cuttingMesh = BABYLON.MeshBuilder.CreateLineSystem("CAM_Toolpath_Cutting_G1", {
-                lines: cuttingLines,
+                lines: dashedCutting,
                 updatable: false
             }, this.scene);
-            cuttingMesh.color = new BABYLON.Color3(0.1, 0.9, 0.45); // Jasny seledyn
+            cuttingMesh.color = new BABYLON.Color3(0.1, 0.95, 0.3); // Soczysta zieleń
             cuttingMesh.parent = this.toolpathsRootNode;
             cuttingMesh.isPickable = false;
         }

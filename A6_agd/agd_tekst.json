@@ -24,6 +24,11 @@
     "en": "Oven",
     "de": "Backofen"
   },
+  "item.fridge": {
+    "pl": "Lodówka do zabudowy",
+    "en": "Built-in refrigerator",
+    "de": "Einbaukühlschrank"
+  },
   "docking.docked": {
     "pl": "Zadokowano AGD we wnęce",
     "en": "Docked appliance in bay",

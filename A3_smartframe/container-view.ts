@@ -54,6 +54,10 @@ export class ContainerView {
         return this.model?.role === 'APPLIANCE' || this.model?.generatorParams?.type === 'smart_appliance';
     }
 
+    _isSinkContainer(): boolean {
+        return this.model?.role === 'SMARTPART_SINK' || this.model?.generatorParams?.type === 'smartpart_sink' || this.model?.generatorParams?.boxType === 'SINKS';
+    }
+
     _isHandleContainer(): boolean {
         return this.model?.role === 'SMARTPART_HANDLE' || this.model?.generatorParams?.type === 'smartpart_handle';
     }
@@ -80,6 +84,7 @@ export class ContainerView {
 
     _meshMetadataType(): string {
         if (this._isApplianceContainer()) return 'appliance';
+        if (this._isSinkContainer()) return 'smartpart_sink';
         if (this._isHandleContainer()) return 'smartpart_handle';
         if (this._isHangerContainer()) return 'smartpart_hanger';
         if (this._isHangersGroupContainer()) return 'smartpart_hangers';
@@ -90,32 +95,23 @@ export class ContainerView {
     _defaultEdgeColor() {
         const B = typeof BABYLON !== 'undefined' ? BABYLON : (globalThis as any).BABYLON;
         if (!B) return null;
-        if (this._isApplianceContainer()) {
-            return new B.Color4(0.22, 0.74, 0.97, 0.75);
-        }
-        if (this._isHandleContainer() || this._isHangerContainer()) {
-            if (this._isStudioSmartPartGhost()) {
-                const hex = this.model?.generatorParams?.part?.colorHex;
-                if (hex) {
-                    try {
-                        const c = B.Color3.FromHexString(hex);
-                        return new B.Color4(c.r, c.g, c.b, 0.9);
-                    } catch { /* ignore */ }
-                }
-                return new B.Color4(0.22, 0.74, 0.97, 0.9);
+        if (this._isStudioSmartPartGhost()) {
+            const hex = this.model?.generatorParams?.part?.colorHex;
+            if (hex) {
+                try {
+                    const c = B.Color3.FromHexString(hex);
+                    return new B.Color4(c.r, c.g, c.b, 0.9);
+                } catch { /* ignore */ }
             }
-            return new B.Color4(0.2, 0.7, 1.0, 0.45);
+            return new B.Color4(0.22, 0.74, 0.97, 0.9);
         }
-        if (this._isBlokiContainer() || this._isHangersGroupContainer()) {
-            return new B.Color4(0.15, 0.78, 1.0, 0.85);
-        }
-        return new B.Color4(0.2, 0.5, 1.0, 0.55);
+        return new B.Color4(0, 0, 0, 0);
     }
 
     _defaultEmissiveColor() {
         const B = typeof BABYLON !== 'undefined' ? BABYLON : (globalThis as any).BABYLON;
         if (!B) return null;
-        if (this._isApplianceContainer()) {
+        if (this._isApplianceContainer() || this._isSinkContainer()) {
             return new B.Color3(0.22, 0.74, 0.97);
         }
         if (this._isHandleContainer() || this._isHangerContainer()) {
@@ -362,6 +358,13 @@ export class ContainerView {
                 const oz = -depth / 2;
                 this.mesh.bakeTransformIntoVertices(B.Matrix.Translation(ox, oy, oz));
             }
+        } else if (this._isSinkContainer()) {
+            const gp = this.model?.generatorParams || {};
+            const normalZ = gp.normalZ ?? 1;
+            const kolnierzHeightMm = gp.kolnierzHeightMm ?? 30;
+            const komoraHeightMm = gp.komoraHeightMm ?? 180;
+            const oz = normalZ * (kolnierzHeightMm - komoraHeightMm) / 2;
+            this.mesh.bakeTransformIntoVertices(B.Matrix.Translation(0, 0, oz));
         } else {
             this.mesh.bakeTransformIntoVertices(B.Matrix.Translation(0, height / 2, 0));
         }
@@ -380,11 +383,12 @@ export class ContainerView {
             model: this.model,
         };
         this.mesh.enableEdgesRendering(0.9999);
-        this.mesh.edgesWidth = (this._isBlokiContainer() || this._isHangersGroupContainer()) ? 2.5 : 2.0;
 
         if (this._isSelected) {
             this.setSelected(true);
         } else {
+            const isGhost = this._isStudioSmartPartGhost();
+            this.mesh.edgesWidth = isGhost ? 2.0 : 0.0;
             this.mesh.edgesColor = this._defaultEdgeColor();
         }
 
@@ -411,11 +415,13 @@ export class ContainerView {
         const slopeKey = slopeInfo
             ? `${slopeInfo.yTopLeft}_${slopeInfo.yTopRight}_${slopeInfo.yTopFront ?? ''}_${slopeInfo.yTopBack ?? ''}`
             : '';
+        const sinkKey = this._isSinkContainer() ? `${gp.kolnierzHeightMm}_${gp.komoraHeightMm}` : '';
 
         if (
             c._cachedWidth !== width || c._cachedHeight !== height || c._cachedDepth !== depth
             || c._cachedNalDolne !== nalDolne || c._cachedOrientation !== orientation
             || c._cachedHangerSide !== hangerSide || c._cachedSlopeKey !== slopeKey
+            || c._cachedSinkKey !== sinkKey
         ) {
             this._buildWireframe();
             c._cachedWidth  = width;
@@ -425,6 +431,7 @@ export class ContainerView {
             c._cachedOrientation = orientation;
             c._cachedHangerSide = hangerSide;
             c._cachedSlopeKey = slopeKey;
+            c._cachedSinkKey = sinkKey;
         }
 
         // Zawsze wymuszamy synchronizację adaptera pozycji i rotacji (zarówno przy zmianie geometrii jak i pozycji)
@@ -441,30 +448,34 @@ export class ContainerView {
         const isSb = this._isBlokiContainer() || this._isHangersGroupContainer();
         const isHandle = this._isHandleContainer() || this._isHangerContainer();
         if (isSelected) {
+            const edgeWidth = isHandle ? 3.0 : 3.5;
+            this.mesh.edgesWidth = edgeWidth;
+            this.mesh.edgesColor = new BABYLON.Color4(0.2, 0.9, 1.0, 1.0);
+            if (this.mesh.edgesRenderer?.lineShader) {
+                this.mesh.edgesRenderer.lineShader.zOffset = -2.5;
+            }
             if (isHandle) {
                 // Uchwyty / pojedyncze SP — ten sam niebieski akcent co Bloki
                 this.material.emissiveColor = new BABYLON.Color3(0.15, 0.85, 1.0);
                 this.material.alpha = 0.08;
-                this.mesh.edgesWidth = 3.0;
-                this.mesh.edgesColor = new BABYLON.Color4(0.2, 0.9, 1.0, 1.0);
             } else if (isSb) {
                 this.material.emissiveColor = new BABYLON.Color3(0.15, 0.85, 1.0);
                 this.material.alpha = 0.12;
-                this.mesh.edgesWidth = 4.0;
-                this.mesh.edgesColor = new BABYLON.Color4(0.2, 0.9, 1.0, 1.0);
             } else {
                 this.material.emissiveColor = new BABYLON.Color3(0.15, 0.85, 1.0);
                 this.material.alpha = 0.1;
-                this.mesh.edgesWidth = 4.0;
-                this.mesh.edgesColor = new BABYLON.Color4(0.2, 0.9, 1.0, 1.0);
             }
         } else {
             this.material.emissiveColor = this._defaultEmissiveColor();
-            this.material.alpha = this._isStudioSmartPartGhost()
+            const isGhost = this._isStudioSmartPartGhost();
+            this.material.alpha = isGhost
                 ? (this._isHangersGroupContainer() ? 0.10 : 0.22)
                 : 0.0;
-            this.mesh.edgesWidth = isSb ? 2.5 : 2.0;
+            this.mesh.edgesWidth = isGhost ? 2.0 : 0.0;
             this.mesh.edgesColor = this._defaultEdgeColor();
+            if (this.mesh.edgesRenderer?.lineShader) {
+                this.mesh.edgesRenderer.lineShader.zOffset = 0.0;
+            }
         }
     }
 

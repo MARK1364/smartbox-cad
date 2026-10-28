@@ -61,7 +61,8 @@ export const BLOKI_INTERNAL_OPTIONS: BlokiOption[] = [
     { id: 'DIVIDERS', type: 'blok_dividers', label: 'Przegrody', category: 'internal' },
     { id: 'TUBES', type: 'blok_tubes', label: 'Drążek', category: 'internal' },
     { id: 'SHELF', type: 'blok_shelf', label: 'Wieniec', category: 'internal' },
-    { id: 'LED_INTERNAL', type: 'blok_led_internal', label: 'LED wewnętrzny', category: 'internal' }
+    { id: 'LED_INTERNAL', type: 'blok_led_internal', label: 'LED wewnętrzny', category: 'internal' },
+    { id: 'HANGERS', type: 'smartpart_hangers', label: 'Zawieszki', category: 'internal' }
 ];
 
 export const BLOKI_EXTERNAL_OPTIONS: BlokiOption[] = [
@@ -70,8 +71,7 @@ export const BLOKI_EXTERNAL_OPTIONS: BlokiOption[] = [
 ];
 
 export const BLOKI_PANEL_OPTIONS: BlokiOption[] = [
-    { id: 'HANDLES', type: 'blok_handle', label: 'Uchwyty', category: 'panel' },
-    { id: 'HANGERS', type: 'smartpart_hangers', label: 'Zawieszki', category: 'panel' }
+    { id: 'HANDLES', type: 'blok_handle', label: 'Uchwyty', category: 'panel' }
 ];
 
 export const BLOKI_ALL_OPTIONS: BlokiOption[] = [
@@ -210,7 +210,17 @@ function createBlokiGeneratorParams(
         case 'HANDLES':
             throw new Error('[Bloki] HANDLES nie posiada generatorParams wnęki — montowane są na formatce (tryb panel)');
         case 'HANGERS':
-            throw new Error('[Bloki] HANGERS montowane są przez dedykowany mechanizm SmartParts/Bloki');
+            return {
+                ...metadata,
+                boxType: id,
+                type: 'smartpart_hangers',
+                szablon_id: (params as any)?.szablon_id || 'zawieszka_camaro',
+                zestaw_id: (params as any)?.zestaw_id || '',
+                odsuniecie_bok_mm: (params as any)?.odsuniecie_bok_mm ?? 0,
+                odsuniecie_tyl_mm: (params as any)?.odsuniecie_tyl_mm ?? 0,
+                odsuniecie_gora_mm: (params as any)?.odsuniecie_gora_mm ?? 0,
+                parametry_zestawu: (params as any)?.parametry_zestawu || {},
+            } as any;
     }
 }
 
@@ -310,7 +320,8 @@ export const BLOKI_CATEGORY_NAMES: Record<string, string> = {
     'PANELS': 'blok_blendy',
     'LED_INTERNAL': 'blok_led_szafowy',
     'LED_EXTERNAL': 'blok_led_podszafkowy',
-    'HANDLES': 'blok_uchwyty'
+    'HANDLES': 'blok_uchwyty',
+    'HANGERS': 'blok_zawieszki'
 };
 
 import { Command } from '../A1_core/commands/command.js';
@@ -371,8 +382,8 @@ export function createBlokInDetectedBay(
     params?: BlokiModalParams
 ): CADNode | null {
     if (!document || !bay) return null;
-    if (option.id === 'HANDLES' || option.id === 'HANGERS') {
-        throw new Error(`[Bloki] ${option.label || option.id} montowane są na formatce / dedykowanym mechanizmem, a nie przez createBlokInDetectedBay.`);
+    if (option.id === 'HANDLES') {
+        throw new Error(`[Bloki] ${option.label || option.id} montowane są na formatce (tryb panel), a nie bezpośrednio we wnęce.`);
     }
 
     const sbName = BLOKI_CATEGORY_NAMES[option.id] || (option.id === 'EMPTY' ? 'blok_' : `blok_${(option.label || option.id).toLowerCase()}`);

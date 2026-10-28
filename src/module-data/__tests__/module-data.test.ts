@@ -245,6 +245,122 @@ describe('tree-context-menu', () => {
         }
     });
 
+    it('shows "Edytuj skos" for SmartWall skos container and part in tree context menu', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const { CADNode } = await import('../../../A1_core/cad-node/cad-node.js');
+        const { NodeType } = await import('../../../A1_core/cad-node/node-type.js');
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        const wall = doc.createAssembly({ name: 'Skos 1' }) as any;
+        wall.generatorParams = { type: 'smartwall', preset: 'skos' };
+        const partModel = { id: 'skos_p1', name: 'Skos', role: 'SKOS' };
+        const partNode = CADNode.create(NodeType.PART, 'Skos', 'skos_p1');
+        partNode.domainData = partModel;
+        doc.addNode(wall.id, partNode);
+        ContextManager.instance.document = doc;
+
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            // Kontener skosu
+            showCadTreeContextMenu({
+                type: 'container',
+                id: wall.id,
+                name: wall.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            let labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj skos');
+            expect(labels).not.toContain('Edytuj korpus');
+
+            // Formatka skosu
+            showCadTreeContextMenu({
+                type: 'part',
+                id: partModel.id,
+                name: partModel.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj skos');
+            expect(labels).not.toContain('Edytuj korpus');
+            expect(labels).not.toContain('Edytuj formatkę');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('shows "Edytuj korpus" for a panel node belonging to a korpus (unified 3D and tree context menu)', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const { CADNode } = await import('../../../A1_core/cad-node/cad-node.js');
+        const { NodeType } = await import('../../../A1_core/cad-node/node-type.js');
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        const korpus = doc.createAssembly({ name: 'Szafka_Dolna' }) as any;
+        korpus.generatorParams = { type: 'korpus_standard' };
+        korpus.type = 'container';
+
+        const panelModel = { id: 'bok_l_1', name: 'Bok_L', role: 'PART', engineManaged: true };
+        const panelNode = CADNode.create(NodeType.PART, 'Bok_L', 'bok_l_1');
+        panelNode.domainData = panelModel;
+        doc.addNode(korpus.id, panelNode);
+        ContextManager.instance.document = doc;
+
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'part',
+                id: 'bok_l_1',
+                name: 'Bok_L',
+                isManual: false,
+                clientX: 20,
+                clientY: 20,
+            });
+            const labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj korpus');
+            expect(labels).not.toContain('Edytuj formatkę');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('renders "Wybór 3D" with "Wybierz zakrytą" when quickPickCandidates are present', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'part',
+                id: 'p1',
+                name: 'Front',
+                clientX: 30,
+                clientY: 30,
+                quickPickCandidates: [{ id: 'f1' }, { id: 'f2' }],
+            });
+            const labels = labelsOf(shownItems);
+            expect(labels.some(l => l.includes('Wybierz zakrytą'))).toBe(true);
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
     it('shows "Edytuj" for smart library operations and excludes "Usuń" and "Ukryj / Pokaż" in tree context menu', async () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
         const { ContextMenu } = await import('../../../A1_core/context-menu.js');

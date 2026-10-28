@@ -8,6 +8,9 @@ import {
     addNumberParameter,
     upsertPartFieldBinding,
     getPartFieldBinding,
+    syncAssociativeMirrors,
+    detachMirror,
+    detachCutMirror,
     type SmartPartPackageDefinition,
 } from '../index.js';
 
@@ -197,6 +200,181 @@ describe('A5_smartparts / studio — parametry SmartParta', () => {
         // Pozycja partu lp (LEFT, offsetX 50): -400 + 50 = -350
         const lp = out.parts.find((p) => p.id === 'lp')!;
         expect(lp.xMm).toBe(-350);
+    });
+
+    it('mirrorClonePart tworzy symetryczny prawy part i odwraca kierunki nawierceń w boki', async () => {
+        const { mirrorClonePart } = await import('../smartpart-params.js');
+        const main = { widthMm: 600, heightMm: 720, depthMm: 560 };
+        const leftHanger = {
+            id: 'hanger_L',
+            name: 'Zawieszka (Lewa)',
+            widthMm: 20,
+            heightMm: 50,
+            depthMm: 40,
+            xMm: -280,
+            yMm: -240,
+            zMm: 310,
+            refX: 'LEFT' as const,
+            offsetX_mm: 20,
+            refY: 'BACK' as const,
+            offsetY_mm: 40,
+            refZ: 'TOP' as const,
+            offsetZ_mm: 50,
+        };
+        const leftHole = {
+            id: 'hole_L_1',
+            partId: 'hanger_L',
+            name: 'Otwór boczny (L)',
+            type: 'HOLE' as const,
+            diameterMm: 5,
+            lengthMm: 12,
+            refX: 'LEFT' as const,
+            offsetX_mm: 0,
+            refY: 'FRONT' as const,
+            offsetY_mm: 20,
+            refZ: 'TOP' as const,
+            offsetZ_mm: 25,
+            axis: 'X' as const,
+            direction: -1 as const, // wiercenie w lewy bok
+            xMm: -10,
+            yMm: 0,
+            zMm: 0,
+        };
+
+        const res = mirrorClonePart(leftHanger, main, [leftHole], 'hanger_R', (i) => `hole_R_${i}`);
+        expect(res.mirroredPart.id).toBe('hanger_R');
+        expect(res.mirroredPart.name).toContain('Prawa');
+        expect(res.mirroredPart.refX).toBe('RIGHT');
+        expect(res.mirroredPart.offsetX_mm).toBe(20); // Stały offset od przeciwległej ściany!
+        expect(res.mirroredPart.xMm).toBe(280); // Symetryczna pozycja
+
+        expect(res.mirroredCuts).toHaveLength(1);
+        const rightHole = res.mirroredCuts[0];
+        expect(rightHole.partId).toBe('hanger_R');
+        expect(rightHole.refX).toBe('RIGHT');
+        expect(rightHole.axis).toBe('X');
+        expect(rightHole.direction).toBe(1); // Odwrócony zwrot wiercenia w prawy bok!
+    });
+
+    it('syncAssociativeMirrors zachowuje asocjacyjność: aktualizacja wymiarów i dodanie otworu do lewego elementu synchronizuje prawy element', () => {
+        const pkg: SmartPartPackageDefinition = {
+            id: 'sp:Zawieszka',
+            name: 'Zawieszka',
+            units: 'mm',
+            version: '1.0',
+            type: 'CUSTOM',
+            mainContainer: { widthMm: 600, depthMm: 500, heightMm: 720 },
+            parts: [
+                {
+                    id: 'hanger_L',
+                    name: 'Zawieszka Lewa',
+                    widthMm: 20,
+                    heightMm: 50,
+                    depthMm: 40,
+                    xMm: -280,
+                    yMm: -240,
+                    zMm: 310,
+                    refX: 'LEFT',
+                    offsetX_mm: 20,
+                    refY: 'BACK',
+                    offsetY_mm: 40,
+                    refZ: 'TOP',
+                    offsetZ_mm: 50,
+                },
+                {
+                    id: 'hanger_R',
+                    name: 'Zawieszka Prawa',
+                    widthMm: 20,
+                    heightMm: 50,
+                    depthMm: 40,
+                    xMm: 280,
+                    yMm: -240,
+                    zMm: 310,
+                    refX: 'RIGHT',
+                    offsetX_mm: 20,
+                    refY: 'BACK',
+                    offsetY_mm: 40,
+                    refZ: 'TOP',
+                    offsetZ_mm: 50,
+                    mirroredFrom: 'hanger_L',
+                    mirrorAxis: 'X',
+                },
+            ],
+            cuts: [
+                {
+                    id: 'cut_L_1',
+                    partId: 'hanger_L',
+                    name: 'Otwór L1',
+                    type: 'HOLE',
+                    diameterMm: 5,
+                    lengthMm: 12,
+                    refX: 'LEFT',
+                    offsetX_mm: 0,
+                    refY: 'FRONT',
+                    offsetY_mm: 15,
+                    refZ: 'TOP',
+                    offsetZ_mm: 20,
+                    axis: 'X',
+                    direction: -1,
+                    xMm: 0,
+                    yMm: 0,
+                    zMm: 0,
+                },
+            ],
+            updatedAt: 0,
+        };
+
+        // Krok 1: sync synchronizuje prawą część i automatycznie generuje otwór dla prawej części
+        const synced1 = syncAssociativeMirrors(pkg);
+        expect(synced1.cuts).toHaveLength(2);
+        const cutR = synced1.cuts.find((c) => c.partId === 'hanger_R');
+        expect(cutR).toBeDefined();
+        expect(cutR?.mirroredFrom).toBe('cut_L_1');
+        expect(cutR?.refX).toBe('RIGHT');
+        expect(cutR?.name).toContain('(P)');
+
+        // Krok 2: Modyfikujemy lewy element (zmiana wymiaru i offsetu) oraz dodajemy drugi otwór
+        const modifiedPkg: SmartPartPackageDefinition = {
+            ...synced1,
+            parts: synced1.parts.map((p) =>
+                p.id === 'hanger_L' ? { ...p, widthMm: 35, offsetX_mm: 25 } : p
+            ),
+            cuts: [
+                ...synced1.cuts.filter((c) => c.partId === 'hanger_L'),
+                {
+                    id: 'cut_L_2',
+                    partId: 'hanger_L',
+                    name: 'Otwór L2',
+                    type: 'HOLE',
+                    diameterMm: 8,
+                    lengthMm: 15,
+                    refX: 'LEFT',
+                    offsetX_mm: 0,
+                    refY: 'FRONT',
+                    offsetY_mm: 35,
+                    refZ: 'TOP',
+                    offsetZ_mm: 40,
+                    axis: 'X',
+                    direction: -1,
+                    xMm: 0,
+                    yMm: 0,
+                    zMm: 0,
+                },
+            ],
+        };
+
+        const synced2 = syncAssociativeMirrors(modifiedPkg);
+        const partR = synced2.parts.find((p) => p.id === 'hanger_R');
+        expect(partR?.widthMm).toBe(35); // Automatycznie zaktualizowana szerokość
+        expect(partR?.offsetX_mm).toBe(25); // Automatycznie zaktualizowany offset
+        expect(synced2.cuts.filter((c) => c.partId === 'hanger_R')).toHaveLength(2); // 2 otwory na prawej zawieszce!
+
+        // Krok 3: Odłączenie asocjacji (detachMirror)
+        const detached = detachMirror(synced2, 'hanger_R');
+        const detachedPartR = detached.parts.find((p) => p.id === 'hanger_R');
+        expect(detachedPartR?.mirroredFrom).toBeUndefined();
+        const detachedCutsR = detached.cuts.filter((c) => c.partId === 'hanger_R');
+        expect(detachedCutsR[0].mirroredFrom).toBeUndefined();
     });
 });
 

@@ -74,6 +74,12 @@ export interface SmartPartHoleCut {
     visible?: boolean;
     /** Wyłącz z przeliczania / CNC (panel aplikacji → check → frozen) */
     frozen?: boolean;
+    /** Asocjacyjność: ID wycięcia źródłowego, z którego to wycięcie jest symetrycznym odbiciem */
+    mirroredFrom?: string;
+    /** Oś odbicia asocjacyjnego: domyślnie 'X' */
+    mirrorAxis?: 'X' | 'Y' | 'Z';
+    /** Opcjonalna definicja profilu / szkicu przekroju 2D narzędzia */
+    profile?: CutProfileDefinition;
 }
 
 export interface SmartPartPocketCut {
@@ -117,6 +123,54 @@ export interface SmartPartPocketCut {
     visible?: boolean;
     /** Wyłącz z przeliczania / CNC (panel aplikacji → check → frozen) */
     frozen?: boolean;
+    /** Asocjacyjność: ID wycięcia źródłowego, z którego to wycięcie jest symetrycznym odbiciem */
+    mirroredFrom?: string;
+    /** Oś odbicia asocjacyjnego: domyślnie 'X' */
+    mirrorAxis?: 'X' | 'Y' | 'Z';
+    /** Opcjonalna definicja profilu / pętli przekroju 2D narzędzia */
+    profile?: CutProfileDefinition;
+}
+
+export type CutProfileType = 'CIRCLE' | 'RECT' | 'ROUNDED_RECT' | 'SLOT' | 'POLYGON';
+
+export interface CutProfileDefinition {
+    type?: CutProfileType;
+    diameterMm?: number;
+    widthMm?: number;
+    heightMm?: number;
+    cornerRadiusMm?: number;
+    points?: Array<[number, number]>;
+}
+
+/**
+ * Zwraca znormalizowaną definicję profilu/szkicu przekroju poprzecznego dla cięcia.
+ * Gwarantuje czytelność reprezentacji CAD (operacja wycięcia z profilu 2D).
+ */
+export function ensureCutProfile(cut: any): CutProfileDefinition {
+    if (!cut) return { type: 'RECT', widthMm: 10, heightMm: 10 };
+    if (cut.type === 'HOLE') {
+        const diam = Number(cut.diameterMm ?? cut.profile?.diameterMm) || 8;
+        return {
+            type: 'CIRCLE',
+            diameterMm: diam,
+        };
+    }
+    const prof = cut.profile as CutProfileDefinition | undefined;
+    const w = Number(cut.widthMm ?? prof?.widthMm) || 16;
+    const h = Number(cut.heightMm ?? prof?.heightMm) || 32;
+    const cr = Number(cut.cornerRadiusMm ?? prof?.cornerRadiusMm) || 0;
+    const type: CutProfileType = prof?.points && prof.points.length >= 3
+        ? 'POLYGON'
+        : cr > 0
+            ? 'ROUNDED_RECT'
+            : (prof?.type === 'SLOT' ? 'SLOT' : 'RECT');
+    return {
+        type,
+        widthMm: w,
+        heightMm: h,
+        ...(cr > 0 ? { cornerRadiusMm: cr } : {}),
+        ...(prof?.points ? { points: prof.points } : {}),
+    };
 }
 
 export type SmartPartCut = SmartPartHoleCut | SmartPartPocketCut;
@@ -160,6 +214,10 @@ export interface SmartPartBodyItem {
     visible?: boolean;
     /** Wyłącz z przeliczania / CNC (panel aplikacji → check → frozen) */
     frozen?: boolean;
+    /** Asocjacyjność: ID Parta źródłowego, z którego ten Part jest symetrycznym odbiciem */
+    mirroredFrom?: string;
+    /** Oś odbicia asocjacyjnego: domyślnie 'X' */
+    mirrorAxis?: 'X' | 'Y' | 'Z';
 }
 
 /** Alias kompatybilności wstecznej */
@@ -196,9 +254,9 @@ export function computeAbsoluteFromReference(
     else if (refZ === 'TOP') zMm = halfH - offsetZ;
 
     return {
-        xMm: Math.round(xMm),
-        yMm: Math.round(yMm),
-        zMm: Math.round(zMm),
+        xMm: Math.round(xMm * 100) / 100,
+        yMm: Math.round(yMm * 100) / 100,
+        zMm: Math.round(zMm * 100) / 100,
     };
 }
 
@@ -218,17 +276,17 @@ export function computeReferenceFromAbsolute(
     const halfH = main.heightMm / 2;
     const halfD = main.depthMm / 2;
 
-    let offsetX_mm = Math.round(xMm);
-    if (refX === 'LEFT') offsetX_mm = Math.round(xMm + halfW);
-    else if (refX === 'RIGHT') offsetX_mm = Math.round(halfW - xMm);
+    let offsetX_mm = Math.round(xMm * 100) / 100;
+    if (refX === 'LEFT') offsetX_mm = Math.round((xMm + halfW) * 100) / 100;
+    else if (refX === 'RIGHT') offsetX_mm = Math.round((halfW - xMm) * 100) / 100;
 
-    let offsetY_mm = Math.round(yMm);
-    if (refY === 'FRONT') offsetY_mm = Math.round(yMm + halfD);
-    else if (refY === 'BACK') offsetY_mm = Math.round(halfD - yMm);
+    let offsetY_mm = Math.round(yMm * 100) / 100;
+    if (refY === 'FRONT') offsetY_mm = Math.round((yMm + halfD) * 100) / 100;
+    else if (refY === 'BACK') offsetY_mm = Math.round((halfD - yMm) * 100) / 100;
 
-    let offsetZ_mm = Math.round(zMm);
-    if (refZ === 'BOTTOM') offsetZ_mm = Math.round(zMm + halfH);
-    else if (refZ === 'TOP') offsetZ_mm = Math.round(halfH - zMm);
+    let offsetZ_mm = Math.round(zMm * 100) / 100;
+    if (refZ === 'BOTTOM') offsetZ_mm = Math.round((zMm + halfH) * 100) / 100;
+    else if (refZ === 'TOP') offsetZ_mm = Math.round((halfH - zMm) * 100) / 100;
 
     return { offsetX_mm, offsetY_mm, offsetZ_mm };
 }
@@ -409,25 +467,108 @@ export function cutOrientFromRefs(cut: {
     refY?: string;
     refZ?: string;
 }): { axis: CutAxis; direction: 1 | -1 } {
+    // Jawna oś i zwrot (zgodnie z sekcją Rotacji / Orientacji) mają pierwszeństwo przed odniesieniami pozycyjnymi
+    if (cut.axis === 'X' || cut.axis === 'Y' || cut.axis === 'Z') {
+        const direction: 1 | -1 = cut.direction === 1 || cut.direction === -1 ? cut.direction : -1;
+        return { axis: cut.axis, direction };
+    }
+    // Fallback: jeśli brak jawnej osi, odgadnij z preferencją dla boku X
     const sides: { axis: CutAxis; direction: 1 | -1 }[] = [];
     const dx = holeOutwardDirectionForRef('X', cut.refX, cut.refY, cut.refZ);
     const dy = holeOutwardDirectionForRef('Y', cut.refX, cut.refY, cut.refZ);
     const dz = holeOutwardDirectionForRef('Z', cut.refX, cut.refY, cut.refZ);
     if (dx !== null) sides.push({ axis: 'X', direction: dx });
-    if (dy !== null) sides.push({ axis: 'Y', direction: dy });
     if (dz !== null) sides.push({ axis: 'Z', direction: dz });
-    if (sides.length === 1) return sides[0];
-    if (sides.length > 1) {
-        const pref = sides.find((s) => s.axis === cut.axis);
-        return pref ?? sides[0];
-    }
-    const axis: CutAxis = cut.axis === 'X' || cut.axis === 'Y' || cut.axis === 'Z' ? cut.axis : 'Y';
-    const direction: 1 | -1 = cut.direction === 1 || cut.direction === -1 ? cut.direction : 1;
-    return { axis, direction };
+    if (dy !== null) sides.push({ axis: 'Y', direction: dy });
+    if (sides.length > 0) return sides[0];
+
+    return { axis: 'X', direction: -1 };
 }
 
 /** @deprecated użyj cutOrientFromRefs */
 export const pocketAxisDirection = cutOrientFromRefs;
+
+/**
+ * Oblicza pętlę 2D przekroju poprzecznego narzędzia wycinającego (prostopadłego do osi natarcia `axis`).
+ * Zwraca listę punktów `[x, y]` w lokalnym układzie przekroju narzędzia (ze środkiem w (0,0)).
+ * Wymiary przekroju szkicu to zawsze `widthMm × heightMm`, a wyciągnięcie (głębokość cięcia wzdłuż +Z narzędzia) to `depthMm`.
+ */
+export function resolveCutProfileLoop2D(cut: any): Array<[number, number]> {
+    if (!cut) return [];
+    const prof = cut.profile as CutProfileDefinition | undefined;
+    if (prof && Array.isArray(prof.points) && prof.points.length >= 3) {
+        return prof.points;
+    }
+
+    const w = Math.max(1, Number(cut.widthMm ?? prof?.widthMm) || 10);
+    const h = Math.max(1, Number(cut.heightMm ?? prof?.heightMm) || 10);
+
+    const hw = w / 2;
+    const hh = h / 2;
+    const cr = Number(cut.cornerRadiusMm ?? prof?.cornerRadiusMm) || 0;
+    const r = (prof?.type === 'ROUNDED_RECT' || cr > 0)
+        ? Math.min(cr, hw - 0.5, hh - 0.5)
+        : 0;
+
+    if (r > 0.5) {
+        const loop: Array<[number, number]> = [];
+        const segs = 4;
+        const addCorner = (cx: number, cy: number, startAngle: number) => {
+            for (let i = 0; i <= segs; i++) {
+                const a = startAngle + (i / segs) * (Math.PI / 2);
+                loop.push([
+                    Math.round((cx + r * Math.cos(a)) * 1000) / 1000,
+                    Math.round((cy + r * Math.sin(a)) * 1000) / 1000,
+                ]);
+            }
+        };
+        addCorner(hw - r, hh - r, 0);                 // I ćwiartka
+        addCorner(-hw + r, hh - r, Math.PI / 2);       // II ćwiartka
+        addCorner(-hw + r, -hh + r, Math.PI);          // III ćwiartka
+        addCorner(hw - r, -hh + r, (3 * Math.PI) / 2); // IV ćwiartka
+        return loop;
+    }
+
+    // Domyślny prostokąt CCW
+    return [
+        [-hw, -hh],
+        [hw, -hh],
+        [hw, hh],
+        [-hw, hh],
+    ];
+}
+
+/**
+ * Wymiary bryły 3D POCKET w układzie osi CAD (xMm, yMm, zMm) po uwzględnieniu orientacji narzędzia (`axis`).
+ * - Przekrój szkicu 2D: `widthMm × heightMm` (prostopadły do `axis`)
+ * - Głębokość wycięcia wzdłuż osi natarcia narzędzia (`axis`): `depthMm`
+ */
+export function pocketBoxDimsCad(pocket: {
+    widthMm?: number;
+    heightMm?: number;
+    depthMm?: number;
+    axis?: CutAxis;
+    direction?: 1 | -1;
+    refX?: string;
+    refY?: string;
+    refZ?: string;
+}): { xMm: number; yMm: number; zMm: number } {
+    const prof = (pocket as any)?.profile;
+    const w = Math.max(1, Number(pocket.widthMm ?? prof?.widthMm) || 1);
+    const h = Math.max(1, Number(pocket.heightMm ?? prof?.heightMm) || 1);
+    const d = Math.max(1, Number(pocket.depthMm) || 1);
+    const { axis } = cutOrientFromRefs(pocket);
+    if (axis === 'X') {
+        // Cięcie w bok (lewy/prawy): głębokość cięcia wzdłuż X, profil (width × height) w płaszczyźnie YZ
+        return { xMm: d, yMm: w, zMm: h };
+    }
+    if (axis === 'Y') {
+        // Cięcie w przód/tył: głębokość cięcia wzdłuż Y, profil (width × height) w płaszczyźnie XZ
+        return { xMm: w, yMm: d, zMm: h };
+    }
+    // Cięcie w górę/dół (axis === 'Z'): głębokość cięcia wzdłuż Z, profil (width × height) w płaszczyźnie XY
+    return { xMm: w, yMm: h, zMm: d };
+}
 
 /**
  * Środek geometrii walca z początku (LCS).
@@ -451,7 +592,7 @@ export function holeCenterFromOriginCad(cut: {
     return { xMm: cut.xMm, yMm: cut.yMm, zMm: cut.zMm + direction * half };
 }
 
-/** Środek sześcianu z początku (LCS). */
+/** Środek sześcianu z początku (LCS): przesunięty o direction × (depthMm / 2) wzdłuż osi natarcia `axis`. */
 export function pocketCenterFromOriginCad(pocket: {
     xMm: number;
     yMm: number;
@@ -466,10 +607,7 @@ export function pocketCenterFromOriginCad(pocket: {
     refZ?: string;
 }): { xMm: number; yMm: number; zMm: number } {
     const { axis, direction } = cutOrientFromRefs(pocket);
-    const half =
-        axis === 'X' ? Math.max(1, pocket.widthMm) / 2
-        : axis === 'Y' ? Math.max(1, pocket.depthMm) / 2
-        : Math.max(1, pocket.heightMm) / 2;
+    const half = Math.max(1, Number(pocket.depthMm) || 1) / 2;
     if (axis === 'X') return { xMm: pocket.xMm + direction * half, yMm: pocket.yMm, zMm: pocket.zMm };
     if (axis === 'Y') return { xMm: pocket.xMm, yMm: pocket.yMm + direction * half, zMm: pocket.zMm };
     return { xMm: pocket.xMm, yMm: pocket.yMm, zMm: pocket.zMm + direction * half };
@@ -524,9 +662,10 @@ export function calculateCutProtrusion(
             maxZ = oz + halfLen;
         }
     } else {
-        const halfW = cut.widthMm / 2;
-        const halfD = cut.depthMm / 2;
-        const halfH = cut.heightMm / 2;
+        const dims = pocketBoxDimsCad(cut);
+        const halfW = dims.xMm / 2;
+        const halfD = dims.yMm / 2;
+        const halfH = dims.zMm / 2;
         const c = pocketCenterFromOriginCad(cut);
         ox = (partOrigin?.xMm ?? 0) + c.xMm;
         oy = (partOrigin?.yMm ?? 0) + c.yMm;
@@ -705,15 +844,40 @@ function cutsAlreadyPartLocal(def: SmartPartPackageDefinition): boolean {
     const parts = Array.isArray(def.parts) ? def.parts : [];
     const cuts = Array.isArray(def.cuts) ? def.cuts : [];
     if (parts.length === 0 || cuts.length === 0) return true;
-    let checked = 0;
+
+    // Sprawdzamy czy cięcia leżą w lokalnym LCS Parta (wokół 0,0,0 Parta)
+    // czy w absolutnym układzie kontenera (wokół part.xMm/yMm/zMm w kontenerze)
+    let localVotes = 0;
+    let containerVotes = 0;
+
     for (const c of cuts) {
-        const ownerId = c.partId && parts.some((p) => p.id === c.partId) ? c.partId : undefined;
-        if (!ownerId) continue;
-        const part = parts.find((p) => p.id === ownerId)!;
-        checked += 1;
-        if (!cutInsidePartLocal(part, c)) return false;
+        const part = findPartForCut(def, c);
+        if (!part) continue;
+
+        const partDistFromOrigin = Math.hypot(Number(part.xMm) || 0, Number(part.yMm) || 0, Number(part.zMm) || 0);
+        if (partDistFromOrigin < 10) {
+            if (cutInsidePartLocal(part, c)) localVotes++;
+            continue;
+        }
+
+        const distIfLocal = Math.hypot(Number(c.xMm) || 0, Number(c.yMm) || 0, Number(c.zMm) || 0);
+        const distIfContainer = Math.hypot(
+            (Number(c.xMm) || 0) - (Number(part.xMm) || 0),
+            (Number(c.yMm) || 0) - (Number(part.yMm) || 0),
+            (Number(c.zMm) || 0) - (Number(part.zMm) || 0)
+        );
+
+        if (distIfLocal < distIfContainer) {
+            localVotes++;
+        } else {
+            containerVotes++;
+        }
     }
-    return checked > 0;
+
+    if (containerVotes > 0 && containerVotes >= localVotes) {
+        return false;
+    }
+    return localVotes > 0;
 }
 
 /** Stare cięcia w układzie kontenera głównego → lokalne LCS Parta (tylko cut z żywym partId). */
@@ -824,7 +988,11 @@ export function normalizeSmartPartToCadCoords(
         next.cuts = next.cuts.map((c) => {
             const part = findPartForCut(next, c);
             const dims = part ? partDimsAsMain(part) : next.mainContainer;
-            return dims ? syncWallAbsolute(c, dims) : c;
+            const synced = dims ? syncWallAbsolute(c, dims) : c;
+            return {
+                ...synced,
+                profile: ensureCutProfile(synced),
+            };
         });
     }
     return next;

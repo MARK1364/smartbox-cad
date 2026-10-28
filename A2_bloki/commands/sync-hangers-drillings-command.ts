@@ -37,14 +37,22 @@ export class SyncHangersDrillingsCommand implements Command {
         // 1. Wylicz intencje nawierceń ze Bloku (Zawieszki) — warstwa MACHINING
         const intents = buildHangersDrillings(document, this.cabinetContainerId);
 
-        // 2. Zidentyfikuj formatki scope (korpus, jeśli podano) — zakres 1:1 jak przed migracją
-        let panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
+        // 2. Zidentyfikuj formatki scope (korpus, jeśli podano)
+        let panels: any[];
         if (this.cabinetContainerId) {
-            panels = panels.filter((p: any) =>
-                p.parent?.id === this.cabinetContainerId ||
-                p.domainData?.cabinetId === this.cabinetContainerId ||
-                p.parentContainerId === this.cabinetContainerId
-            );
+            const cabNode = document.findNode(this.cabinetContainerId);
+            if (cabNode) {
+                panels = [];
+                const collect = (n: any) => {
+                    if (n.domainData && n.domainData.type !== 'container') panels.push(n);
+                    for (const ch of n.children) collect(ch);
+                };
+                collect(cabNode);
+            } else {
+                panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
+            }
+        } else {
+            panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
         }
 
         // 3+4. Clear starych automatów isHangerDrilling + upsert intencji — wspólny rdzeń MACHINING
@@ -64,11 +72,6 @@ export class SyncHangersDrillingsCommand implements Command {
         // 6. Powiadom o zmianie dokumentu
         if (typeof document.notifyDocumentChanged === 'function') {
             document.notifyDocumentChanged();
-        }
-
-        // 7. Zgłoś zmianę geometrii jeśli zmieniono formatki
-        if (changedNodeIds.size > 0 && typeof (window as any)?.__rebuildGeometry === 'function') {
-            (window as any).__rebuildGeometry('SyncHangersDrillingsCommand');
         }
     }
 

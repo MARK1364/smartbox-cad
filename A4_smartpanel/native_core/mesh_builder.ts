@@ -1,10 +1,13 @@
 import earcut from 'earcut';
 import { isCylindricalPart } from '../../A1_core/cad-node/part-shape.js';
 import { AluFrameManager } from '../alu-frame-manager.js';
-import { computeFaceData, localTo3D, local3DToFaceUV, PANEL_FACE_NAMES } from './face-lcs.js';
-import { buildBoxTopology } from './box-topology.js';
-import { buildPolygonPanelTopology } from './polygon-extrusion.js';
+import { buildProfileFrameMesh } from './alu-frame-profile.js';
+import { computeFaceData, localTo3D, local3DToFaceUV } from './face-lcs.js';
+import { nmToMm } from '../../A1_core/cad-math/units.js';
+import { buildPolygonPanelTopology, deriveOutlineWithCutouts, extractGrooveBoxes, splitSegmentByGrooves } from './polygon-extrusion.js';
 import { buildBeveledBox, hasEdgeCutConfig, readEdgeCutConfig } from './edge-bevel.js';
+import { buildSkosnyRoofWithTrapezoidGroove } from './skosny-roof-groove.js';
+import { buildBoxPanelMeshData } from './plate-buffer-builder.js';
 import { validatePanelDimensionsNm } from './panel-dimensions.js';
 import {
     appendFeatureEdges,
@@ -31,6 +34,30 @@ export function buildAluFrameMeshData(model: any) {
     const lipDepth = p.lip_depth_mm ?? 6;
     const clearance = g.clearance_mm ?? 1.5;
     const glassT = g.thickness_mm ?? 4;
+
+    const fillet_mm = Number(model.fillet_mm || model.custom_properties?.fillet_mm || (p as any).fillet_mm) || 0;
+    const inner_fillet_mm = Number(model.inner_fillet_mm || model.custom_properties?.inner_fillet_mm);
+
+    if (fillet_mm > 0.05 || model.frameType === 'PROFILE' || model.custom_properties?.frame_type === 'PROFILE') {
+        const frameRes = buildProfileFrameMesh({
+            w,
+            h,
+            t,
+            pw,
+            glassT,
+            lipDepth,
+            clearance,
+            fillet_mm,
+            inner_fillet_mm: Number.isFinite(inner_fillet_mm) ? inner_fillet_mm : undefined,
+            features: model.features
+        });
+        return {
+            alu_frame: frameRes.alu_frame,
+            alu_glass: frameRes.alu_glass,
+            edges: frameRes.edges,
+            vertices: frameRes.vertices
+        };
+    }
 
     const halfW = w / 2;
     const halfH = h / 2;
@@ -186,25 +213,51 @@ export function buildMeshFromPanel(model: any) {
         return { edges: [], vertices: [] };
     }
 
-    const outlineRaw = model.custom_properties?.outline2d || model.customProperties?.outline2d;
-    const outline2d: number[][] | null = Array.isArray(outlineRaw) && outlineRaw.length >= 3
-        ? outlineRaw.map((p: any) => [Number(p[0]) || 0, Number(p[1]) || 0])
-        : null;
-
     const dims = validatePanelDimensionsNm(model, 'buildMeshFromPanel');
     const modelWidth = dims.widthMm;
     const modelHeight = dims.heightMm;
     const modelThickness = dims.thicknessMm;
 
-    // Formatka kształtowa (wieniec L): jedna ekstruzja wielokąta — caps + boki + wpusty
+    const outlineRaw = model.custom_properties?.outline2d || model.customProperties?.outline2d;
+    let outline2d: number[][] | null = Array.isArray(outlineRaw) && outlineRaw.length >= 3
+        ? outlineRaw.map((p: any) => [Number(p[0]) || 0, Number(p[1]) || 0])
+        : null;
+
+    const outlineNmRaw = model.custom_properties?.outline2d_nm || model.customProperties?.outline2d_nm;
+    if (!outline2d && Array.isArray(outlineNmRaw) && outlineNmRaw.length >= 3) {
+        outline2d = outlineNmRaw.map(([unm, vnm]: any) => [nmToMm(unm), nmToMm(vnm)]);
+    }
+
+    let consumedFeatures: Set<any> | undefined;
+    let adjustedFeatures: any[] | undefined;
+    if (!outline2d) {
+        const derived = deriveOutlineWithCutouts(modelWidth, modelHeight, modelThickness, model.features);
+        if (derived) {
+            outline2d = derived.outline2d;
+            consumedFeatures = derived.consumedFeatures;
+            adjustedFeatures = derived.adjustedFeatures;
+        }
+    }
+
+    // Formatka kształtowa lub z wycięciem brzegowym: jedna ekstruzja wielokąta — caps + boki + wpusty
     if (outline2d) {
+        const baseFeatures = adjustedFeatures || model.features || [];
+        const activeFeatures = consumedFeatures && consumedFeatures.size > 0
+            ? baseFeatures.filter((f: any) => !consumedFeatures!.has(f))
+            : baseFeatures;
+
         return buildPolygonPanelTopology({
             outline2d,
             plateW: modelWidth,
             plateD: modelHeight,
             thickness: modelThickness,
-            features: model.features
+            features: activeFeatures
         });
+    }
+
+    const trapezoidSpec = model.customProperties?.backGrooveTrapezoid || model.custom_properties?.backGrooveTrapezoid;
+    if (trapezoidSpec && trapezoidSpec.margines_gorny_plecow_mm > 0.05) {
+        return buildSkosnyRoofWithTrapezoidGroove(modelWidth, modelHeight, modelThickness, trapezoidSpec);
     }
 
     const cutConfig = readEdgeCutConfig(model.edgeBanding || model.custom_properties?.edge_banding);
@@ -236,19 +289,32 @@ export function buildMeshFromPanel(model: any) {
             const uv = local3DToFaceUV(faceDataZPlus, p as [number, number, number]);
             return [uv.u, uv.v];
         });
+        const bottomContourZPlus = box.bottom.map(p => {
+            const uv = local3DToFaceUV(faceDataZPlus, p as [number, number, number]);
+            return [uv.u, uv.v];
+        });
         const bottomCcw = [box.bottom[1], box.bottom[0], box.bottom[3], box.bottom[2]];
         const contourZMinus = bottomCcw.map(p => {
+            const uv = local3DToFaceUV(faceDataZMinus, p as [number, number, number]);
+            return [uv.u, uv.v];
+        });
+        const topCcwForZMinus = [box.top[1], box.top[0], box.top[3], box.top[2]];
+        const bottomContourZMinus = topCcwForZMinus.map(p => {
             const uv = local3DToFaceUV(faceDataZMinus, p as [number, number, number]);
             return [uv.u, uv.v];
         });
 
         const extraHoles2D = collectExtraHoles2D(model.features, modelWidth, modelHeight, modelThickness);
 
+        const featsZPlus = featuresOnFace(model.features, 'FACE_Z_PLUS');
+        const featsZMinus = featuresOnFace(model.features, 'FACE_Z_MINUS');
+
         const builtZPlus = buildFaceMeshWithFeatures({
             faceData: faceDataZPlus,
             outerContour: contourZPlus,
+            bottomContour: bottomContourZPlus,
             extraHoles: extraHoles2D['FACE_Z_PLUS'] || [],
-            featuresOnFace: featuresOnFace(model.features, 'FACE_Z_PLUS'),
+            featuresOnFace: featsZPlus,
             w: modelWidth,
             h: modelHeight,
             t: modelThickness
@@ -257,37 +323,198 @@ export function buildMeshFromPanel(model: any) {
         const builtZMinus = buildFaceMeshWithFeatures({
             faceData: faceDataZMinus,
             outerContour: contourZMinus,
+            bottomContour: bottomContourZMinus,
             extraHoles: extraHoles2D['FACE_Z_MINUS'] || [],
-            featuresOnFace: featuresOnFace(model.features, 'FACE_Z_MINUS'),
+            featuresOnFace: featsZMinus,
             w: modelWidth,
             h: modelHeight,
             t: modelThickness
+        });
+
+        let uMinTop = Infinity, uMaxTop = -Infinity, vMinTop = Infinity, vMaxTop = -Infinity;
+        for (const [cu, cv] of contourZPlus) {
+            if (cu < uMinTop) uMinTop = cu;
+            if (cu > uMaxTop) uMaxTop = cu;
+            if (cv < vMinTop) vMinTop = cv;
+            if (cv > vMaxTop) vMaxTop = cv;
+        }
+        let uMinBot = Infinity, uMaxBot = -Infinity, vMinBot = Infinity, vMaxBot = -Infinity;
+        for (const [cu, cv] of bottomContourZPlus) {
+            if (cu < uMinBot) uMinBot = cu;
+            if (cu > uMaxBot) uMaxBot = cu;
+            if (cv < vMinBot) vMinBot = cv;
+            if (cv > vMaxBot) vMaxBot = cv;
+        }
+
+        const evalBevelPerimeter3D = (uNom: number, vNom: number, depthFromZPlus: number): [number, number, number] => {
+            const s = modelThickness > 1e-6 ? Math.max(0, Math.min(1, depthFromZPlus / modelThickness)) : 0;
+            const uMinD = uMinTop + s * (uMinBot - uMinTop);
+            const uMaxD = uMaxTop + s * (uMaxBot - uMaxTop);
+            const vMinD = vMinTop + s * (vMinBot - vMinTop);
+            const vMaxD = vMaxTop + s * (vMaxBot - vMaxTop);
+            const EPS = 0.05;
+            const duBevel = uNom > modelWidth / 2 ? s * (uMaxBot - uMaxTop) : s * (uMinBot - uMinTop);
+            const dvBevel = vNom > modelHeight / 2 ? s * (vMaxBot - vMaxTop) : s * (vMinBot - vMinTop);
+            const uEff = uNom <= EPS ? uMinD : (uNom >= modelWidth - EPS ? uMaxD : Math.max(uMinD, Math.min(uMaxD, uNom + duBevel)));
+            const vEff = vNom <= EPS ? vMinD : (vNom >= modelHeight - EPS ? vMaxD : Math.max(vMinD, Math.min(vMaxD, vNom + dvBevel)));
+            return localTo3D(faceDataZPlus, uEff, vEff, depthFromZPlus) as [number, number, number];
+        };
+
+        const grooveBoxes = extractGrooveBoxes(model.features, modelWidth);
+        const nominalOutline: Array<[number, number]> = [
+            [0, 0],
+            [modelWidth, 0],
+            [modelWidth, modelHeight],
+            [0, modelHeight]
+        ];
+        const allSubsegs = nominalOutline.map((pt, idx) => {
+            const next = (idx + 1) % 4;
+            return splitSegmentByGrooves(pt[0], pt[1], nominalOutline[next][0], nominalOutline[next][1], grooveBoxes);
         });
 
         const result: any = {
             FACE_Z_PLUS: builtZPlus.mesh,
             FACE_Z_MINUS: builtZMinus.mesh,
             vertices: [...box.top, ...box.bottom],
-            edges: [...box.edges],
+            edges: grooveBoxes.length === 0 ? [...box.edges] : [],
         };
 
-        const sideFacesConfig: Array<{ face: string; edgeKey: '+X' | '-X' | '+Y' | '-Y'; pts3D: number[][] }> = [
-            { face: 'FACE_X_PLUS', edgeKey: '+X', pts3D: [box.top[1], box.bottom[1], box.bottom[2], box.top[2]] },
-            { face: 'FACE_X_MINUS', edgeKey: '-X', pts3D: [box.bottom[0], box.top[0], box.top[3], box.bottom[3]] },
-            { face: 'FACE_Y_PLUS', edgeKey: '+Y', pts3D: [box.top[3], box.top[2], box.bottom[2], box.bottom[3]] },
-            { face: 'FACE_Y_MINUS', edgeKey: '-Y', pts3D: [box.bottom[0], box.bottom[1], box.top[1], box.top[0]] },
-        ];
+        const sideFacesConfig: Array<{
+            face: string;
+            edgeKey: '+X' | '-X' | '+Y' | '-Y';
+            segIdx: number;
+            pts3D: number[][];
+            topKey: string;
+            botKey: string;
+            vertKey: string;
+            vertFaces: [string, string];
+        }> = [
+                {
+                    face: 'FACE_Y_MINUS', edgeKey: '-Y', segIdx: 0,
+                    pts3D: [box.bottom[0], box.bottom[1], box.top[1], box.top[0]],
+                    topKey: 'dol_przod', botKey: 'dol_tyl', vertKey: 'dol_lewo', vertFaces: ['FACE_X_MINUS', 'FACE_Y_MINUS']
+                },
+                {
+                    face: 'FACE_X_PLUS', edgeKey: '+X', segIdx: 1,
+                    pts3D: [box.top[1], box.bottom[1], box.bottom[2], box.top[2]],
+                    topKey: 'przod_prawo', botKey: 'tyl_prawo', vertKey: 'dol_prawo', vertFaces: ['FACE_X_PLUS', 'FACE_Y_MINUS']
+                },
+                {
+                    face: 'FACE_Y_PLUS', edgeKey: '+Y', segIdx: 2,
+                    pts3D: [box.top[3], box.top[2], box.bottom[2], box.bottom[3]],
+                    topKey: 'gora_przod', botKey: 'gora_tyl', vertKey: 'gora_prawo', vertFaces: ['FACE_X_PLUS', 'FACE_Y_PLUS']
+                },
+                {
+                    face: 'FACE_X_MINUS', edgeKey: '-X', segIdx: 3,
+                    pts3D: [box.bottom[0], box.top[0], box.top[3], box.bottom[3]],
+                    topKey: 'przod_lewo', botKey: 'tyl_lewo', vertKey: 'gora_lewo', vertFaces: ['FACE_X_MINUS', 'FACE_Y_PLUS']
+                }
+            ];
 
         const sideFaceDataMap: Record<string, any> = {};
-        const featuresForEdges = [...model.features];
+        const featuresForEdges = [
+            ...featsZPlus,
+            ...featsZMinus,
+            ...model.features.filter((f: any) => {
+                const face = f.face || f.side || '';
+                return !String(face).includes('FACE_Z') && face !== '+Z' && face !== '-Z';
+            })
+        ];
 
         for (const side of sideFacesConfig) {
             const sideFeatures = featuresOnFace(model.features, side.face);
-            const sideExtraHoles = extraHoles2D[side.face] || [];
-            if (sideFeatures.length === 0 && sideExtraHoles.length === 0) {
-                result[side.face] = box.sides[side.edgeKey];
+            const subsegs = allSubsegs[side.segIdx];
+            const prevSubsegs = allSubsegs[(side.segIdx + 3) % 4];
+            const prevLastSub = prevSubsegs[prevSubsegs.length - 1];
+
+            if (grooveBoxes.length > 0) {
+                for (let sIdx = 0; sIdx < subsegs.length; sIdx++) {
+                    const sub = subsegs[sIdx];
+                    const p0t = evalBevelPerimeter3D(sub.u0, sub.v0, sub.depthPlus);
+                    const p1t = evalBevelPerimeter3D(sub.u1, sub.v1, sub.depthPlus);
+                    const p0b = evalBevelPerimeter3D(sub.u0, sub.v0, modelThickness - sub.depthMinus);
+                    const p1b = evalBevelPerimeter3D(sub.u1, sub.v1, modelThickness - sub.depthMinus);
+                    const suffix = subsegs.length > 1 ? `_${sIdx + 1}` : '';
+
+                    result.edges.push({
+                        key: `${side.topKey}${suffix}`,
+                        alias: side.topKey,
+                        points: [p0t, p1t],
+                        faces: ['FACE_Z_PLUS', side.face],
+                        edgeKey: side.edgeKey
+                    });
+                    result.edges.push({
+                        key: `${side.botKey}${suffix}`,
+                        alias: side.botKey,
+                        points: [p0b, p1b],
+                        faces: ['FACE_Z_MINUS', side.face],
+                        edgeKey: side.edgeKey
+                    });
+
+                    if (sIdx === 0) {
+                        const cornerDepthPlus = prevLastSub ? Math.max(prevLastSub.depthPlus, sub.depthPlus) : sub.depthPlus;
+                        const cornerDepthMinus = prevLastSub ? Math.max(prevLastSub.depthMinus, sub.depthMinus) : sub.depthMinus;
+                        const pCornert = evalBevelPerimeter3D(sub.u0, sub.v0, cornerDepthPlus);
+                        const pCornerb = evalBevelPerimeter3D(sub.u0, sub.v0, modelThickness - cornerDepthMinus);
+                        result.edges.push({
+                            key: side.vertKey,
+                            alias: side.vertKey,
+                            points: [pCornerb, pCornert],
+                            faces: side.vertFaces,
+                            edgeKey: side.edgeKey
+                        });
+                    } else {
+                        const prevSub = subsegs[sIdx - 1];
+                        const dPlus0 = Math.min(prevSub.depthPlus, sub.depthPlus);
+                        const dPlus1 = Math.max(prevSub.depthPlus, sub.depthPlus);
+                        if (dPlus1 - dPlus0 > 0.05) {
+                            result.edges.push({
+                                key: `outline_step_top_${side.segIdx}_${sIdx}`,
+                                points: [
+                                    evalBevelPerimeter3D(sub.u0, sub.v0, dPlus0),
+                                    evalBevelPerimeter3D(sub.u0, sub.v0, dPlus1)
+                                ],
+                                faces: ['FACE_Z_PLUS', side.face],
+                                edgeKey: side.edgeKey
+                            });
+                        }
+                        const dMinus0 = Math.min(prevSub.depthMinus, sub.depthMinus);
+                        const dMinus1 = Math.max(prevSub.depthMinus, sub.depthMinus);
+                        if (dMinus1 - dMinus0 > 0.05) {
+                            result.edges.push({
+                                key: `outline_step_bot_${side.segIdx}_${sIdx}`,
+                                points: [
+                                    evalBevelPerimeter3D(sub.u0, sub.v0, modelThickness - dMinus0),
+                                    evalBevelPerimeter3D(sub.u0, sub.v0, modelThickness - dMinus1)
+                                ],
+                                faces: ['FACE_Z_MINUS', side.face],
+                                edgeKey: side.edgeKey
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (sideFeatures.length === 0) {
+                if (grooveBoxes.length === 0) {
+                    result[side.face] = box.sides[side.edgeKey];
+                } else {
+                    const pos: number[] = [];
+                    const ind: number[] = [];
+                    let vertOffset = 0;
+                    for (const sub of subsegs) {
+                        const p0t = evalBevelPerimeter3D(sub.u0, sub.v0, sub.depthPlus);
+                        const p1t = evalBevelPerimeter3D(sub.u1, sub.v1, sub.depthPlus);
+                        const p0b = evalBevelPerimeter3D(sub.u0, sub.v0, modelThickness - sub.depthMinus);
+                        const p1b = evalBevelPerimeter3D(sub.u1, sub.v1, modelThickness - sub.depthMinus);
+                        pos.push(...p0t, ...p1t, ...p1b, ...p0b);
+                        ind.push(vertOffset, vertOffset + 2, vertOffset + 1, vertOffset, vertOffset + 3, vertOffset + 2);
+                        vertOffset += 4;
+                    }
+                    result[side.face] = { positions: pos, indices: ind };
+                }
             } else {
-                // Obliczamy lokalną bazę płaszczyzny bezpośrednio z czworokąta 3D (zachowuje kąt fazy!)
+                // Lokalna baza (LCS) skośnej ściany dla nawiertów bocznych (hole)
                 const p0 = side.pts3D[0];
                 const du = [side.pts3D[1][0] - p0[0], side.pts3D[1][1] - p0[1], side.pts3D[1][2] - p0[2]];
                 const lenU = Math.hypot(du[0], du[1], du[2]) || 1;
@@ -326,11 +553,10 @@ export function buildMeshFromPanel(model: any) {
                     ];
                 });
 
-                // Przeliczamy (u, v) cech z nominalnego LCS na lokalną bazę skośnego czworokąta
                 const nominalFaceData = computeFaceData(side.face, modelWidth, modelHeight, modelThickness);
                 const denom = nominalFaceData.normal[0] * faceData.normal[0] +
-                              nominalFaceData.normal[1] * faceData.normal[1] +
-                              nominalFaceData.normal[2] * faceData.normal[2];
+                    nominalFaceData.normal[1] * faceData.normal[1] +
+                    nominalFaceData.normal[2] * faceData.normal[2];
 
                 const mappedSideFeatures = sideFeatures.map(feat => {
                     if (feat.type !== 'hole' || !feat.params) return feat;
@@ -368,7 +594,6 @@ export function buildMeshFromPanel(model: any) {
                         }
                     };
 
-                    // Aktualizujemy listę dla appendFeatureEdges
                     const idx = featuresForEdges.findIndex(f => f.id === feat.id);
                     if (idx >= 0) featuresForEdges[idx] = mapped;
 
@@ -378,7 +603,7 @@ export function buildMeshFromPanel(model: any) {
                 const builtSide = buildFaceMeshWithFeatures({
                     faceData,
                     outerContour,
-                    extraHoles: sideExtraHoles,
+                    extraHoles: [],
                     featuresOnFace: mappedSideFeatures,
                     w: modelWidth,
                     h: modelHeight,
@@ -391,39 +616,33 @@ export function buildMeshFromPanel(model: any) {
 
         Object.assign(result, builtZPlus.featureMeshes);
         Object.assign(result, builtZMinus.featureMeshes);
-        appendFeatureEdges(result.edges, featuresForEdges, modelWidth, modelHeight, modelThickness, sideFaceDataMap);
+        appendFeatureEdges(
+            result.edges,
+            featuresForEdges,
+            modelWidth,
+            modelHeight,
+            modelThickness,
+            sideFaceDataMap,
+            undefined,
+            {
+                FACE_Z_PLUS: { faceContour: contourZPlus, bottomContour: bottomContourZPlus },
+                FACE_Z_MINUS: { faceContour: contourZMinus, bottomContour: bottomContourZMinus }
+            }
+        );
 
         return result;
     }
 
-    const result: any = {};
-    const extraHoles2D = collectExtraHoles2D(model.features, modelWidth, modelHeight, modelThickness);
-
-    for (const face of PANEL_FACE_NAMES) {
-        const faceData = computeFaceData(face, modelWidth, modelHeight, modelThickness);
-        const outerContour = [
+    return buildPolygonPanelTopology({
+        outline2d: [
             [0, 0],
-            [faceData.width, 0],
-            [faceData.width, faceData.height],
-            [0, faceData.height]
-        ];
-        const built = buildFaceMeshWithFeatures({
-            faceData,
-            outerContour,
-            extraHoles: extraHoles2D[face] || [],
-            featuresOnFace: featuresOnFace(model.features, face),
-            w: modelWidth,
-            h: modelHeight,
-            t: modelThickness
-        });
-        result[face] = built.mesh;
-        Object.assign(result, built.featureMeshes);
-    }
-
-    const boxTopo = buildBoxTopology(modelWidth, modelHeight, modelThickness);
-    result['vertices'] = boxTopo.vertices;
-    result['edges'] = boxTopo.edges;
-    appendFeatureEdges(result['edges'], model.features, modelWidth, modelHeight, modelThickness);
-
-    return result;
+            [modelWidth, 0],
+            [modelWidth, modelHeight],
+            [0, modelHeight]
+        ],
+        plateW: modelWidth,
+        plateD: modelHeight,
+        thickness: modelThickness,
+        features: model.features
+    });
 }

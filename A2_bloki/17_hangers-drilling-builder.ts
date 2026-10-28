@@ -19,6 +19,7 @@ import { resolveActiveHangerSet } from './17_hangers-types.js';
 import { getHardware } from '../B1_biblioteka/index.js';
 import {
     bayFrameFromDocument,
+    bayFrameFromDetectedBay,
     bayWallRefsFromCustomReferences,
     computeSmartPartCutIntents,
     type SmartPartBayFrameMm,
@@ -61,7 +62,7 @@ export function buildHangersDrillings(
         if (!gp) continue;
 
         const params: HangersPlanParams = {
-            szablon_id: gp.szablon_id || gp.hardwareId || 'TT2',
+            szablon_id: gp.szablon_id || gp.hardwareId || 'zawieszka_camaro',
             zestaw_id: gp.zestaw_id || '',
             odsuniecie_bok_mm: gp.odsuniecie_bok_mm,
             odsuniecie_tyl_mm: gp.odsuniecie_tyl_mm,
@@ -98,8 +99,17 @@ export function buildHangersDrillings(
 
         // Zbuduj ramkę wnęki z referencji
         const customRefs = gp.customReferences || {};
-        const bayWallRefs = bayWallRefsFromCustomReferences(document, customRefs, gp.bayWallRefs);
-        const frame: SmartPartBayFrameMm | null = bayFrameFromDocument(document, bayWallRefs);
+        const initialBayRefs = gp.bayWallRefs || (gp.boundary ? {
+            left: { nodeId: gp.boundary.left?.nodeId, face: gp.boundary.left?.face, planeCoordMm: gp.boundary.left?.planeCoordMm },
+            right: { nodeId: gp.boundary.right?.nodeId, face: gp.boundary.right?.face, planeCoordMm: gp.boundary.right?.planeCoordMm },
+            bottom: { nodeId: gp.boundary.bottom?.nodeId, face: gp.boundary.bottom?.face, planeCoordMm: gp.boundary.bottom?.planeCoordMm },
+            top: { nodeId: gp.boundary.top?.nodeId, face: gp.boundary.top?.face, planeCoordMm: gp.boundary.top?.planeCoordMm },
+            back: { nodeId: gp.boundary.back?.nodeId, face: gp.boundary.back?.face, planeCoordMm: gp.boundary.back?.planeCoordMm },
+            front: { nodeId: gp.boundary.front?.nodeId, face: gp.boundary.front?.face, planeCoordMm: gp.boundary.front?.planeCoordMm ?? gp.boundary.frontPlaneYMm },
+        } : undefined);
+        const bayWallRefs = bayWallRefsFromCustomReferences(document, customRefs, initialBayRefs);
+        const frame: SmartPartBayFrameMm | null = bayFrameFromDocument(document, bayWallRefs)
+            || (gp.detectedBay ? bayFrameFromDetectedBay(gp.detectedBay, gp.boundary) : null);
         if (!frame) continue;
 
         // Wylicz intencje rzutowania cięć na formatki korpusu

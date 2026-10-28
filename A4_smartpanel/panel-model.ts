@@ -448,32 +448,59 @@ export class PanelModel {
         return result;
     }
 
-    // ─── Features ────────────────────────────────────
+    // ─── Features (Zarządzane centralnie przez IDManager) ──
 
     /**
-     * Dodaje feature do płyty.
+     * Rejestruje cechę obróbczą w centralnym IDManagerze i gwarantuje unikalny SmartID.
+     */
+    private _registerFeature(f: any): any {
+        const idMgr = IDManager.getInstance();
+        const parentPath = this.smartId ? this.smartId.fullPath : (this.id ? `part:${this.id}` : '');
+        const rawId = f && f.id !== undefined && f.id !== null && f.id !== '' ? f.id : '';
+        
+        let smartId;
+        if (rawId !== '') {
+            smartId = idMgr.registerStable(EntityType.FEATURE, parentPath, String(rawId), { feature: f, panel: this });
+        } else {
+            const role = f?.type ? String(f.type) : 'feat';
+            smartId = idMgr.register(EntityType.FEATURE, parentPath, role, { feature: f, panel: this });
+        }
+
+        const id = rawId !== '' ? rawId : smartId.uid;
+        return {
+            ...f,
+            id,
+            smartId: smartId.fullPath,
+            params: { ...(f?.params || {}) }
+        };
+    }
+
+    /**
+     * Dodaje feature do płyty z gwarancją unikalnego SmartID z IDManagera.
      * @param {{ type: string, face: string, params: object }} feature
-     * @returns {number} id dodanego feature
+     * @returns {string|number} id dodanego feature
      */
     addFeature({ type, face, params }: { type: string, face: string, params: any }) {
         let canonicalFace = face;
         if (face !== 'edge' && face !== 'none') {
             canonicalFace = normalizeFaceName(face);
         }
-        const id = this._nextId++;
-        const entry = { id, type, face: canonicalFace, params: { ...params } };
+        const entry = this._registerFeature({ type, face: canonicalFace, params: { ...params } });
         this.features.push(entry);
         this._emit('featureAdded', entry);
-        return id;
+        return entry.id;
     }
 
     /**
-     * Usuwa feature po id.
+     * Usuwa feature po id lub smartId i wyrejestrowuje go z IDManagera.
      */
-    removeFeature(id) {
-        const idx = this.features.findIndex(f => f.id === id);
+    removeFeature(id: any) {
+        const idx = this.features.findIndex(f => f.id === id || f.smartId === id);
         if (idx !== -1) {
             const removed = this.features.splice(idx, 1)[0];
+            if (removed?.smartId) {
+                IDManager.getInstance().unregister(removed.smartId);
+            }
             this._emit('featureRemoved', removed);
         }
     }
@@ -481,28 +508,30 @@ export class PanelModel {
     /**
      * Zwraca features na danej ścianie.
      */
-    getFeaturesOnFace(faceName) {
+    getFeaturesOnFace(faceName: string) {
         return this.features.filter(f => f.face === faceName);
     }
 
     /**
-     * Czyści wszystkie features.
+     * Czyści wszystkie features i wyrejestrowuje je z IDManagera.
      */
     clearFeatures() {
+        const idMgr = IDManager.getInstance();
+        for (const f of this.features) {
+            if (f?.smartId) {
+                idMgr.unregister(f.smartId);
+            }
+        }
         this.features = [];
         this._nextId = 1;
         this._emit('featuresCleared', {});
     }
 
     /**
-     * Ustawia nową tablicę operacji (features) i powiadamia widok 3D.
+     * Ustawia nową tablicę operacji (features) z gwarancją rejestracji w IDManagerze i powiadamia widok 3D.
      */
-    setFeatures(features) {
-        this.features = (features || []).map(f => ({
-            ...f,
-            params: { ...(f.params || {}) }
-        }));
-        this._nextId = this.features.reduce((max, f) => Math.max(max, (f.id || 0) + 1), 1);
+    setFeatures(features: any[]) {
+        this.features = (features || []).map(f => this._registerFeature(f));
         this._emit('features', { features: this.features });
     }
 
@@ -571,11 +600,7 @@ export class PanelModel {
         if (data.panelForm) this.panelForm = data.panelForm;
         if (data.frameTemplateId !== undefined) this.frameTemplateId = data.frameTemplateId;
         if (data.features) {
-            this.features = data.features.map((f: any) => ({
-                ...f,
-                params: { ...(f.params || {}) }
-            }));
-            this._nextId = this.features.reduce((max, f) => Math.max(max, (f.id || 0) + 1), 1);
+            this.features = data.features.map((f: any) => this._registerFeature(f));
         }
         if (data.cncPrograms && Array.isArray(data.cncPrograms)) {
             this.cncPrograms = data.cncPrograms.map((p: any) => ({
@@ -628,11 +653,9 @@ export class PanelModel {
         if (data.associativeDims !== undefined) this.associativeDims = data.associativeDims;
         if (data.panelForm) this.panelForm = data.panelForm;
         if (data.frameTemplateId !== undefined) this.frameTemplateId = data.frameTemplateId;
-        this.features = (data.features || []).map(f => ({
-            ...f,
-            params: { ...f.params }
-        }));
-        this._nextId = this.features.reduce((max, f) => Math.max(max, f.id + 1), 1);
+        if (data.features) {
+            this.features = (data.features || []).map((f: any) => this._registerFeature(f));
+        }
         this._emit('loaded', data);
     }
 
