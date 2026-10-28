@@ -94,6 +94,7 @@ export interface BuildGuideOptions {
     length: number;
     localMatrix: number[] | null;
     measureDirWorld: Vec3 | null;
+    isOffsetAllowed?: (axis: 'X' | 'Y' | 'Z', space: 'GLOBAL' | 'LOCAL', dir: Vec3) => boolean;
 }
 
 export function buildOffsetGuideCandidates(opts: BuildGuideOptions): OffsetGuideCandidate[] {

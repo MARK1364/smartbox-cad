@@ -3,24 +3,30 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bloki CAD/CAM — Przewodnik i Odpowiedzi na Pytania</title>
-    <meta name="description" content="Praktyczne odpowiedzi na pytania o systemie Bloki CAD/CAM: jak działa projektowanie korpusów, nesting rozkroju, generowanie kodów CNC, gdzie zapisują się projekty i ile to kosztuje.">
+    <title>Crevo — projektowanie mebli na wymiar</title>
+    <meta name="description" content="Crevo — prosty program do projektowania mebli na wymiar: korpusy, Bloki, rozkrój płyt, obróbka CNC, rysunki i wycena. Wszystko w przeglądarce.">
+    <meta name="theme-color" content="#f6f7fb">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-page: #0b0f17;
-            --bg-card: #131b26;
-            --bg-card-hover: #182232;
-            --border-color: #1e293b;
-            --border-highlight: #3b82f6;
-            --text-primary: #f8fafc;
-            --text-secondary: #cbd5e1;
-            --text-muted: #94a3b8;
-            --accent-blue: #2563eb;
-            --accent-blue-hover: #1d4ed8;
-            --font-mono: 'JetBrains Mono', monospace;
+            --bg: #f6f7fb;
+            --bg-2: #eef1f9;
+            --surface: #ffffff;
+            --line: #e4e8f2;
+            --line-2: #d3daea;
+            --text: #141821;
+            --text-2: #47506a;
+            --muted: #7c85a0;
+            --blue: #3b6df6;
+            --blue-dark: #2a55d8;
+            --blue-soft: rgba(59, 109, 246, 0.1);
+            --warm: #ff8a5c;
+            --radius: 18px;
+            --radius-sm: 12px;
+            --shadow: 0 18px 44px rgba(23, 37, 84, 0.1);
+            --shadow-sm: 0 8px 22px rgba(23, 37, 84, 0.08);
         }
 
         * {
@@ -29,1310 +35,1342 @@
             padding: 0;
         }
 
+        html {
+            scroll-behavior: smooth;
+            -webkit-text-size-adjust: 100%;
+        }
+
         body {
-            background-color: var(--bg-page);
-            color: var(--text-primary);
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
             line-height: 1.6;
-            padding-bottom: 60px;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
         }
 
-        .container {
-            max-width: 960px;
+        a {
+            color: inherit;
+        }
+
+        .wrap {
+            width: min(1180px, calc(100% - 48px));
             margin: 0 auto;
-            padding: 0 20px;
         }
 
-        /* Header */
-        header {
-            border-bottom: 1px solid var(--border-color);
-            background: #090d14;
-            padding: 16px 0;
+        /* ---------- NAV ---------- */
+        .nav {
             position: sticky;
             top: 0;
-            z-index: 100;
+            z-index: 50;
+            background: rgba(246, 247, 251, 0.85);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--line);
         }
 
-        .header-inner {
+        .nav-inner {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 26px;
+            height: 66px;
         }
 
         .brand {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #fff;
-            text-decoration: none;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text);
+            flex: 0 0 auto;
         }
 
-        .brand-badge {
-            font-family: var(--font-mono);
-            font-size: 0.7rem;
-            background: rgba(37, 99, 235, 0.2);
-            color: #60a5fa;
-            padding: 2px 6px;
-            border-radius: 4px;
-            border: 1px solid rgba(37, 99, 235, 0.4);
+        .brand-mark {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: linear-gradient(150deg, var(--blue), #6b93ff);
+            color: #ffffff;
+            box-shadow: 0 6px 16px rgba(59, 109, 246, 0.35);
         }
 
+        .brand-mark svg {
+            width: 19px;
+            height: 19px;
+        }
+
+        .brand-name {
+            font-size: 1.22rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1;
+        }
+
+        .brand-sub {
+            font-size: 0.72rem;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 1 1 auto;
+        }
+
+        .nav-links a {
+            padding: 8px 13px;
+            border-radius: 9px;
+            font-size: 0.86rem;
+            font-weight: 500;
+            color: var(--text-2);
+            text-decoration: none;
+            transition: color 0.15s ease, background-color 0.15s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--text);
+            background: var(--surface);
+        }
+
+        .nav-cta {
+            flex: 0 0 auto;
+        }
+
+        /* ---------- BUTTONS ---------- */
         .btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            padding: 9px 20px;
-            border-radius: 6px;
-            font-size: 0.88rem;
+            gap: 9px;
+            height: 46px;
+            padding: 0 22px;
+            border: 1px solid transparent;
+            border-radius: 13px;
+            font-family: inherit;
+            font-size: 0.9rem;
             font-weight: 600;
             text-decoration: none;
             cursor: pointer;
-            border: none;
-            transition: background-color 0.15s ease;
+            transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
         }
 
         .btn-primary {
-            background: var(--accent-blue);
-            color: #fff;
+            background: linear-gradient(150deg, var(--blue), #5f88ff);
+            color: #ffffff;
+            box-shadow: 0 10px 24px rgba(59, 109, 246, 0.32);
         }
 
         .btn-primary:hover {
-            background: var(--accent-blue-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 14px 30px rgba(59, 109, 246, 0.38);
         }
 
-        /* Hero / Introduction */
-        .intro {
-            padding: 40px 0 30px;
-            border-bottom: 1px solid var(--border-color);
+        .btn-ghost {
+            background: var(--surface);
+            border-color: var(--line-2);
+            color: var(--text);
+            box-shadow: var(--shadow-sm);
         }
 
-        .intro h1 {
-            font-size: 1.85rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: #fff;
-            line-height: 1.3;
+        .btn-ghost:hover {
+            border-color: var(--blue);
+            color: var(--blue);
         }
 
-        .intro p {
-            font-size: 1.02rem;
-            color: var(--text-secondary);
-            line-height: 1.6;
+        .btn-sm {
+            height: 38px;
+            padding: 0 16px;
+            font-size: 0.83rem;
+            border-radius: 11px;
         }
 
-        /* Quick Facts Grid */
-        .facts-grid {
+        /* ---------- HERO ---------- */
+        .hero {
+            position: relative;
+            padding: 76px 0 84px;
+            overflow: hidden;
+            background:
+                radial-gradient(760px 420px at 8% -6%, rgba(59, 109, 246, 0.16), transparent 68%),
+                radial-gradient(620px 380px at 96% 4%, rgba(255, 138, 92, 0.14), transparent 68%),
+                linear-gradient(180deg, #ffffff, var(--bg));
+        }
+
+        .hero-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            margin: 24px 0 10px;
+            grid-template-columns: 1.04fr 0.96fr;
+            gap: 52px;
+            align-items: center;
         }
 
-        .fact-card {
-            background: #101722;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 14px 16px;
-        }
-
-        .fact-label {
-            font-size: 0.72rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #38bdf8;
-            font-family: var(--font-mono);
-            margin-bottom: 4px;
-        }
-
-        .fact-value {
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #fff;
-            line-height: 1.35;
-        }
-
-        .fact-desc {
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-radius: 999px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            box-shadow: var(--shadow-sm);
             font-size: 0.78rem;
-            color: var(--text-muted);
-            margin-top: 2px;
+            font-weight: 600;
+            color: var(--text-2);
         }
 
-        /* Q&A Section Item */
-        .qa-item {
-            padding: 32px 0;
-            border-bottom: 1px solid var(--border-color);
+        .badge i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #34d399;
         }
 
-        .qa-item:last-child {
-            border-bottom: none;
+        .hero h1 {
+            margin: 22px 0 18px;
+            font-size: clamp(2.1rem, 4.8vw, 3.3rem);
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            line-height: 1.08;
         }
 
-        .qa-question {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: #f8fafc;
+        .hero h1 em {
+            font-style: normal;
+            background: linear-gradient(120deg, var(--blue), #7aa0ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .hero p.lead {
+            max-width: 540px;
+            font-size: clamp(1rem, 1.5vw, 1.1rem);
+            color: var(--text-2);
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .hero-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 30px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--line);
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-2);
+        }
+
+        .pill svg {
+            width: 15px;
+            height: 15px;
+            color: var(--blue);
+            flex: 0 0 auto;
+        }
+
+        .hero-art {
+            position: relative;
+        }
+
+        .art-card {
+            position: relative;
+            padding: 18px;
+            background: linear-gradient(160deg, #ffffff, #f2f5ff);
+            border: 1px solid var(--line);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .art-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             margin-bottom: 14px;
+            padding: 0 4px;
+        }
+
+        .art-bar i {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--line-2);
+        }
+
+        .art-bar span {
+            margin-left: auto;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .art-card svg {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .art-float {
+            position: absolute;
+            right: -14px;
+            bottom: 26px;
             display: flex;
             align-items: center;
             gap: 10px;
-        }
-
-        .qa-bullet {
-            width: 6px;
-            height: 6px;
-            background: #38bdf8;
-            border-radius: 50%;
-            display: inline-block;
-            flex-shrink: 0;
-        }
-
-        .qa-answer {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            line-height: 1.65;
-        }
-
-        .qa-answer p {
-            margin-bottom: 14px;
-        }
-
-        .qa-answer p:last-child {
-            margin-bottom: 0;
-        }
-
-        .qa-answer strong {
-            color: #fff;
-        }
-
-        /* Technical Info Box */
-        .info-box {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 18px 20px;
-            margin: 16px 0;
-        }
-
-        .info-box ul {
-            margin-left: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        /* 6-step Workflow Grid */
-        .workflow-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 14px;
-            margin: 20px 0;
-        }
-
-        .wf-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 16px;
-        }
-
-        .wf-card-header {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.78rem;
-            font-family: var(--font-mono);
-            color: #38bdf8;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        .wf-preview {
-            height: 110px;
-            background: #090d14;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 10px;
-        }
-
-        .wf-card h4 {
-            font-size: 0.92rem;
-            color: #fff;
-            margin-bottom: 4px;
-        }
-
-        .wf-card p {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            line-height: 1.4;
-        }
-
-        /* Module Launcher List */
-        .module-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 12px;
-            margin: 18px 0;
-        }
-
-        .module-entry {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 16px;
-            text-decoration: none;
-            color: inherit;
-            display: flex;
-            flex-direction: column;
-            transition: all 0.15s ease;
-        }
-
-        .module-entry:hover {
-            border-color: var(--border-highlight);
-            background: var(--bg-card-hover);
-        }
-
-        .module-entry-title {
-            font-weight: 600;
-            color: #fff;
-            font-size: 0.95rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
-        }
-
-        .module-entry-title span {
-            font-size: 0.72rem;
-            font-family: var(--font-mono);
-            color: #60a5fa;
-        }
-
-        .module-entry-desc {
+            padding: 12px 16px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
             font-size: 0.82rem;
-            color: var(--text-muted);
-            line-height: 1.4;
+            font-weight: 600;
         }
 
-        /* Simple Pricing Comparison */
-        .pricing-table {
+        .art-float b {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 10px;
+            background: linear-gradient(150deg, var(--warm), #ffb08c);
+            color: #ffffff;
+        }
+
+        .art-float small {
+            display: block;
+            font-weight: 500;
+            color: var(--muted);
+            font-size: 0.72rem;
+        }
+
+        /* ---------- SECTION ---------- */
+        section {
+            padding: 84px 0;
+            scroll-margin-top: 66px;
+        }
+
+        .section-head {
+            max-width: 640px;
+            margin-bottom: 42px;
+        }
+
+        .section-head h2 {
+            margin: 14px 0 12px;
+            font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+        }
+
+        .section-head p {
+            color: var(--text-2);
+            font-size: 1rem;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--blue);
+        }
+
+        .eyebrow::before {
+            content: "";
+            width: 20px;
+            height: 2px;
+            border-radius: 2px;
+            background: var(--blue);
+        }
+
+        #modules {
+            background: linear-gradient(180deg, var(--bg), #ffffff);
+        }
+
+        /* ---------- MODULES ---------- */
+        .group + .group {
+            margin-top: 44px;
+        }
+
+        .group-label {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 16px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: var(--muted);
+        }
+
+        .group-label::after {
+            content: "";
+            flex: 1 1 auto;
+            height: 1px;
+            background: var(--line);
+        }
+
+        .cards {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin: 20px 0;
+            grid-template-columns: repeat(auto-fill, minmax(262px, 1fr));
+            gap: 14px;
         }
 
-        @media (max-width: 680px) {
-            .pricing-table {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .pricing-col {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 24px;
-        }
-
-        .pricing-col.pro {
-            border-color: #2563eb;
-            background: #0f1826;
-        }
-
-        .pricing-title {
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .pricing-price {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #fff;
-            margin: 8px 0 14px;
-        }
-
-        .pricing-price span {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            font-weight: 400;
-        }
-
-        .pricing-list {
-            list-style: none;
+        .mod {
+            position: relative;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-bottom: 20px;
-        }
-
-        /* Footer CTA */
-        .cta-box {
-            background: #131b26;
-            border: 1px solid var(--border-highlight);
-            border-radius: 8px;
-            padding: 30px;
-            text-align: center;
-            margin-top: 40px;
-        }
-
-        .cta-box h3 {
-            font-size: 1.3rem;
-            color: #fff;
-            margin-bottom: 8px;
-        }
-
-        .cta-box p {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-bottom: 20px;
-        }
-
-        /* ─── INTERACTIVE VIRTUAL TOUR ─── */
-        .tour-wrapper {
-            background: #0d131d;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            display: grid;
-            grid-template-columns: 1.15fr 0.85fr;
-            gap: 20px;
-            align-items: center;
-        }
-
-        @media (max-width: 800px) {
-            .tour-wrapper {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .tour-visual-stage {
-            position: relative;
-            background: #080c13;
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            border-radius: 8px;
-            padding: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            min-height: 320px;
-        }
-
-        .tour-svg-layer {
+            align-items: flex-start;
+            gap: 14px;
             width: 100%;
-            max-width: 440px;
-            height: auto;
-            display: block;
+            padding: 22px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            text-align: left;
+            color: inherit;
+            font: inherit;
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
         }
 
-        /* Hotspots */
-        .hotspot-point {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            margin-left: -12px;
-            margin-top: -12px;
-            cursor: pointer;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: none;
-            background: transparent;
+        .mod:hover,
+        .mod:focus-visible {
+            transform: translateY(-3px);
+            border-color: var(--line-2);
+            box-shadow: var(--shadow);
             outline: none;
         }
 
-        .hotspot-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #38bdf8;
-            box-shadow: 0 0 10px #38bdf8;
-            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s;
+        .mod[aria-current="true"] {
+            border-color: var(--blue);
+            box-shadow: 0 0 0 4px var(--blue-soft);
         }
 
-        .hotspot-ping {
+        .mod-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            background: var(--blue-soft);
+            color: var(--blue);
+        }
+
+        .mod-wrap:nth-child(4n+2) .mod-icon {
+            background: rgba(255, 138, 92, 0.13);
+            color: #ef6d3d;
+        }
+
+        .mod-wrap:nth-child(4n+3) .mod-icon {
+            background: rgba(20, 184, 166, 0.13);
+            color: #0d9488;
+        }
+
+        .mod-wrap:nth-child(4n+4) .mod-icon {
+            background: rgba(139, 92, 246, 0.13);
+            color: #7c5cf0;
+        }
+
+        .mod-icon svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .mod-title {
+            font-size: 1.02rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        .mod-desc {
+            display: block;
+            margin-top: 5px;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .mod-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 14px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--blue);
+            opacity: 0.85;
+        }
+
+        .mod-new {
             position: absolute;
-            width: 28px;
-            height: 28px;
+            top: 18px;
+            right: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
+            color: var(--muted);
+            font-size: 0.82rem;
+            text-decoration: none;
+            background: var(--surface);
+            opacity: 0;
+            transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+        }
+
+        .mod:hover .mod-new,
+        .mod-new:focus-visible {
+            opacity: 1;
+        }
+
+        .mod-new:hover {
+            color: var(--blue);
+            background: var(--blue-soft);
+        }
+
+        .mod-wrap {
+            position: relative;
+        }
+
+        /* ---------- APP ---------- */
+        .app-section {
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            background:
+                radial-gradient(720px 360px at 50% -10%, rgba(59, 109, 246, 0.1), transparent 70%),
+                linear-gradient(180deg, #eef2fb, #e6ebf8);
+            padding-top: 64px;
+        }
+
+        .app-section .section-head {
+            margin-bottom: 28px;
+        }
+
+        .app-stage {
+            display: flex;
+            justify-content: center;
+            padding: 0 24px 70px;
+        }
+
+        .window {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            width: 80vw;
+            height: 80vh;
+            min-width: 320px;
+            min-height: 240px;
+            background: #101521;
+            border: 1px solid #2b3450;
+            border-radius: 20px;
+            box-shadow: 0 30px 70px rgba(23, 37, 84, 0.32);
+            overflow: hidden;
+        }
+
+        .app-stage.max .window {
+            width: min(1600px, 96vw) !important;
+            height: min(92vh, 1000px) !important;
+        }
+
+        .window-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 0 0 auto;
+            height: 46px;
+            padding: 0 14px;
+            background: #161b29;
+            border-bottom: 1px solid #232c42;
+        }
+
+        .window-dots {
+            display: flex;
+            gap: 6px;
+            flex: 0 0 auto;
+        }
+
+        .window-dots i {
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            background: rgba(56, 189, 248, 0.4);
-            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-            pointer-events: none;
+            background: #313b56;
         }
 
-        .hotspot-point:hover .hotspot-dot,
-        .hotspot-point.active .hotspot-dot {
-            background: #60a5fa;
-            transform: scale(1.35);
-            box-shadow: 0 0 16px #60a5fa;
+        .window-title {
+            flex: 1 1 auto;
+            min-width: 0;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #9aa4bf;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .hotspot-point.active .hotspot-ping {
-            background: rgba(96, 165, 250, 0.6);
-            animation-duration: 1.2s;
+        .window-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 0 0 auto;
         }
 
-        @keyframes ping {
-            75%, 100% {
-                transform: scale(2.2);
-                opacity: 0;
+        .window-actions a,
+        .window-actions button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 30px;
+            padding: 0 12px;
+            border: 1px solid #2b3450;
+            border-radius: 9px;
+            background: transparent;
+            color: #a7b0c8;
+            font-family: inherit;
+            font-size: 0.76rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+        }
+
+        .window-actions a:hover,
+        .window-actions button:hover {
+            color: #ffffff;
+            border-color: #3d4870;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .window-actions .icon-only {
+            width: 30px;
+            padding: 0;
+            font-size: 0.82rem;
+        }
+
+        .window-stage {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
+            background: #000;
+        }
+
+        .window-stage iframe {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        .window-stage.loading::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--blue), transparent);
+            animation: sweep 1.1s linear infinite;
+        }
+
+        @keyframes sweep {
+            from {
+                transform: translateX(-100%);
+            }
+
+            to {
+                transform: translateX(100%);
             }
         }
 
-        /* Tour Details Inspector */
-        .tour-inspector {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            height: 100%;
+        .window-resize {
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            width: 18px;
+            height: 18px;
+            cursor: nwse-resize;
+            background:
+                linear-gradient(135deg, transparent 46%, #3d4870 46%, #3d4870 54%, transparent 54%),
+                linear-gradient(135deg, transparent 72%, #3d4870 72%, #3d4870 80%, transparent 80%);
+            opacity: 0.85;
+            touch-action: none;
         }
 
-        .tour-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            transition: all 0.2s ease;
+        .window-resize:hover {
+            opacity: 1;
         }
 
-        .tour-card-tag {
-            display: inline-block;
-            font-family: var(--font-mono);
-            font-size: 0.72rem;
-            color: #38bdf8;
-            background: rgba(56, 189, 248, 0.1);
-            border: 1px solid rgba(56, 189, 248, 0.3);
-            padding: 2px 8px;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            font-weight: 600;
+        .window:fullscreen {
+            width: 100% !important;
+            height: 100% !important;
+            border: 0;
+            border-radius: 0;
         }
 
-        .tour-card-title {
-            font-size: 1.15rem;
-            color: #fff;
+        .app-hint {
+            max-width: 720px;
+            margin: 24px auto 0;
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        /* ---------- WHY ---------- */
+        #why {
+            background: linear-gradient(180deg, #ffffff, var(--bg));
+        }
+
+        .why {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+        }
+
+        .why-card {
+            padding: 26px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .why-card .ico {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            margin-bottom: 16px;
+            border-radius: 13px;
+            background: var(--blue-soft);
+            color: var(--blue);
+        }
+
+        .why-card .ico svg {
+            width: 21px;
+            height: 21px;
+        }
+
+        .why-card h3 {
+            font-size: 1rem;
             font-weight: 700;
-            margin-bottom: 8px;
-            line-height: 1.3;
         }
 
-        .tour-card-text {
-            font-size: 0.88rem;
-            color: var(--text-secondary);
-            line-height: 1.55;
-            margin-bottom: 14px;
+        .why-card p {
+            margin-top: 8px;
+            font-size: 0.86rem;
+            color: var(--muted);
         }
 
-        .tour-specs-list {
-            list-style: none;
+        /* ---------- FOOTER ---------- */
+        footer {
+            padding: 54px 0 40px;
+            background: #ffffff;
+            border-top: 1px solid var(--line);
+        }
+
+        .footer-inner {
             display: flex;
-            flex-direction: column;
-            gap: 6px;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            padding-top: 12px;
-            font-size: 0.8rem;
-            font-family: var(--font-mono);
-            color: #94a3b8;
-        }
-
-        .tour-specs-list li {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .tour-specs-list li span {
-            color: #38bdf8;
-        }
-
-        /* Tour Bottom Controls */
-        .tour-controls {
-            display: flex;
-            align-items: center;
+            flex-wrap: wrap;
+            align-items: flex-start;
             justify-content: space-between;
+            gap: 30px;
+        }
+
+        .footer-brand p {
+            max-width: 340px;
             margin-top: 14px;
-            gap: 10px;
+            font-size: 0.86rem;
+            color: var(--muted);
         }
 
-        .tour-nav-btns {
+        .footer-cols {
             display: flex;
-            gap: 6px;
+            flex-wrap: wrap;
+            gap: 56px;
         }
 
-        .tour-btn {
-            background: #182232;
-            border: 1px solid var(--border-color);
-            color: #cbd5e1;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background 0.15s, border-color 0.15s;
+        .footer-col h4 {
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: var(--muted);
+            margin-bottom: 12px;
         }
 
-        .tour-btn:hover {
-            background: #233147;
-            border-color: #3b82f6;
-            color: #fff;
+        .footer-col a {
+            display: block;
+            padding: 4px 0;
+            font-size: 0.86rem;
+            color: var(--text-2);
+            text-decoration: none;
         }
 
-        .tour-btn-play {
+        .footer-col a:hover {
+            color: var(--blue);
+        }
+
+        .footer-bottom {
             display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(37, 99, 235, 0.15);
-            border-color: rgba(37, 99, 235, 0.4);
-            color: #60a5fa;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 44px;
+            padding-top: 20px;
+            border-top: 1px solid var(--line);
+            font-size: 0.78rem;
+            color: var(--muted);
         }
 
-        .tour-btn-play:hover {
-            background: rgba(37, 99, 235, 0.3);
-            border-color: #3b82f6;
-            color: #fff;
+        @media (max-width: 980px) {
+            .hero-grid {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .hero-art {
+                order: -1;
+            }
         }
 
-        .tour-indicators {
-            display: flex;
-            gap: 6px;
+        @media (max-width: 900px) {
+            .wrap {
+                width: calc(100% - 32px);
+            }
+
+            .nav-inner {
+                gap: 14px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .hero {
+                padding: 52px 0 60px;
+            }
+
+            section {
+                padding: 60px 0;
+            }
+
+            .app-stage {
+                padding: 0 14px 54px;
+            }
+
+            .window {
+                width: 100%;
+                height: min(72vh, 720px);
+                min-width: 0;
+            }
+
+            .art-float {
+                right: 10px;
+            }
         }
 
-        .tour-dot-btn {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #334155;
-            border: none;
-            cursor: pointer;
-            padding: 0;
-            transition: all 0.2s;
-        }
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto;
+            }
 
-        .tour-dot-btn.active {
-            background: #38bdf8;
-            transform: scale(1.4);
+            * {
+                transition: none !important;
+                animation: none !important;
+            }
         }
     </style>
 </head>
 <body>
-
-    <!-- ─── HEADER ─── -->
-    <header>
-        <div class="container header-inner">
-            <a href="landing.html" class="brand">
-                SmartPanel CAD/CAM
-                <span class="brand-badge">B2B</span>
+    <nav class="nav">
+        <div class="wrap nav-inner">
+            <a class="brand" href="#top">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/>
+                        <path d="M3 7.5 12 12l9-4.5"/>
+                        <path d="M12 12v9"/>
+                    </svg>
+                </span>
+                <span>
+                    <span class="brand-name">Crevo</span>
+                </span>
             </a>
+            <div class="nav-links">
+                <a href="#modules">Możliwości</a>
+                <a href="#app">Program</a>
+                <a href="#why">Dlaczego Crevo</a>
+            </div>
+            <a class="btn btn-primary btn-sm nav-cta" href="#app" id="nav-cta">Projektuj teraz</a>
+        </div>
+    </nav>
 
-            <div style="display: flex; gap: 10px;">
-                <a href="index.html" class="btn btn-primary">Uruchom edytor CAD 3D</a>
+    <header class="hero" id="top">
+        <div class="wrap hero-grid">
+            <div>
+                <span class="badge"><i></i> Działa w przeglądarce — bez instalacji</span>
+                <h1>Zaprojektuj meble na wymiar i <em>wyślij je na CNC</em>.</h1>
+                <p class="lead">
+                    Crevo to prosty program dla stolarza i projektanta wnętrz. Ustawiasz wymiary, układasz korpus, półki
+                    i szuflady — a program sam przygotuje rozkrój płyt, rysunki i wycenę.
+                </p>
+                <div class="hero-actions">
+                    <a class="btn btn-primary" href="#app" id="hero-cta">Projektuj teraz</a>
+                    <a class="btn btn-ghost" href="#modules">Zobacz możliwości</a>
+                </div>
+                <div class="hero-pills">
+                    <span class="pill">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+                        Krok po kroku
+                    </span>
+                    <span class="pill">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+                        Gotowa wycena
+                    </span>
+                    <span class="pill">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+                        Rysunki dla klienta
+                    </span>
+                </div>
+            </div>
+
+            <div class="hero-art">
+                <div class="art-card">
+                    <div class="art-bar">
+                        <i></i><i></i><i></i>
+                        <span>Szafa — 600 × 720 × 560 mm</span>
+                    </div>
+                    <svg viewBox="0 0 520 400" role="img" aria-label="Podgląd projektu szafy z wymiarami">
+                        <defs>
+                            <linearGradient id="bodyFill" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0" stop-color="#f7f9ff"/>
+                                <stop offset="1" stop-color="#e8eefc"/>
+                            </linearGradient>
+                        </defs>
+                        <circle cx="120" cy="90" r="70" fill="#e4ebff" opacity="0.7"/>
+                        <circle cx="430" cy="330" r="80" fill="#ffe9dd" opacity="0.65"/>
+
+                        <rect x="120" y="80" width="300" height="260" rx="10" fill="url(#bodyFill)" stroke="#9db1e0" stroke-width="2"/>
+                        <line x1="240" y1="80" x2="240" y2="340" stroke="#9db1e0" stroke-width="2"/>
+                        <line x1="120" y1="160" x2="240" y2="160" stroke="#b9c8ea" stroke-width="2"/>
+                        <line x1="120" y1="240" x2="240" y2="240" stroke="#b9c8ea" stroke-width="2"/>
+
+                        <rect x="252" y="92" width="156" height="52" rx="7" fill="#ffffff" stroke="#9db1e0" stroke-width="2"/>
+                        <rect x="252" y="154" width="156" height="52" rx="7" fill="#ffffff" stroke="#9db1e0" stroke-width="2"/>
+                        <rect x="252" y="216" width="156" height="52" rx="7" fill="#ffffff" stroke="#9db1e0" stroke-width="2"/>
+                        <line x1="330" y1="108" x2="330" y2="128" stroke="#c3cfec" stroke-width="3" stroke-linecap="round"/>
+                        <line x1="330" y1="170" x2="330" y2="190" stroke="#c3cfec" stroke-width="3" stroke-linecap="round"/>
+                        <line x1="330" y1="232" x2="330" y2="252" stroke="#c3cfec" stroke-width="3" stroke-linecap="round"/>
+
+                        <line x1="120" y1="52" x2="420" y2="52" stroke="#ff8a5c" stroke-width="2"/>
+                        <line x1="120" y1="44" x2="120" y2="60" stroke="#ff8a5c" stroke-width="2"/>
+                        <line x1="420" y1="44" x2="420" y2="60" stroke="#ff8a5c" stroke-width="2"/>
+                        <text x="270" y="42" text-anchor="middle" font-family="Inter, sans-serif" font-size="17" font-weight="600" fill="#ef6d3d">600 mm</text>
+
+                        <line x1="92" y1="80" x2="92" y2="340" stroke="#ff8a5c" stroke-width="2"/>
+                        <line x1="84" y1="80" x2="100" y2="80" stroke="#ff8a5c" stroke-width="2"/>
+                        <line x1="84" y1="340" x2="100" y2="340" stroke="#ff8a5c" stroke-width="2"/>
+                        <text x="76" y="215" text-anchor="middle" font-family="Inter, sans-serif" font-size="17" font-weight="600" fill="#ef6d3d" transform="rotate(-90 76 215)">720 mm</text>
+                    </svg>
+                </div>
+                <div class="art-float">
+                    <b aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
+                    </b>
+                    <span>Rozkrój gotowy<small>bez liczenia w notesie</small></span>
+                </div>
             </div>
         </div>
     </header>
 
-    <main class="container">
-
-        <!-- ─── WSTĘP I SUCHE FAKTY ─── -->
-        <section class="intro">
-            <h1>Czym jest SmartPanel CAD/CAM i jak działa?</h1>
-            <p>
-                To inżynierski system w przeglądarce internetowej stworzony do parametrycznego projektowania mebli korpusowych, automatycznego rozkroju płyt (nesting) oraz bezpośredniego generowania kodów na obrabiarki CNC. Poniżej zebraliśmy kluczowe fakty techniczne oraz bezpośrednie odpowiedzi na pytania warsztatowe.
-            </p>
-
-            <!-- SUCHE FAKTY W PIGUŁCE -->
-            <div class="facts-grid">
-                <div class="fact-card">
-                    <div class="fact-label">ŚRODOWISKO</div>
-                    <div class="fact-value">100% Przeglądarka</div>
-                    <div class="fact-desc">Zero instalacji. Działa na Windows, Mac, Linux i iPad.</div>
+    <main>
+        <section id="modules">
+            <div class="wrap">
+                <div class="section-head">
+                    <span class="eyebrow">Co możesz zrobić</span>
+                    <h2>Wszystko, czego potrzebujesz w warsztacie</h2>
+                    <p>Kliknij kafelek, aby otworzyć daną funkcję w programie poniżej. Nie musisz nic instalować.</p>
                 </div>
-
-                <div class="fact-card">
-                    <div class="fact-label">PRECYZJA CAD</div>
-                    <div class="fact-value">Nanometrowy B-rep</div>
-                    <div class="fact-desc">Obliczenia w liczbach całkowitych. Zero błędów zaokrągleń.</div>
-                </div>
-
-                <div class="fact-card">
-                    <div class="fact-label">ZAPIS PROJEKTÓW</div>
-                    <div class="fact-value">Dysk Google (15 GB)</div>
-                    <div class="fact-desc">Twoja prywatna chmura lub pobieranie plików .spp.json.</div>
-                </div>
-
-                <div class="fact-card">
-                    <div class="fact-label">OBRÓBKA CNC</div>
-                    <div class="fact-value">ISO G-Code / CLData</div>
-                    <div class="fact-desc">Homag, Biesse, SCM, Felder, InfoTEC, Kimla, Mach3.</div>
-                </div>
-
-                <div class="fact-card">
-                    <div class="fact-label">ROZKRÓJ PŁYT</div>
-                    <div class="fact-value">Wbudowany Nesting</div>
-                    <div class="fact-desc">Arkusze 2800x2070 mm, kontrola usłojenia i rzazu freza.</div>
-                </div>
-
-                <div class="fact-card">
-                    <div class="fact-label">KOSZT</div>
-                    <div class="fact-value">0 zł / 99 zł miesięcznie</div>
-                    <div class="fact-desc">Darmowy start bez karty, licencja PRO bez zobowiązań.</div>
-                </div>
+                <div id="groups"></div>
             </div>
         </section>
 
-        <!-- ─── INTERAKTYWNY WIRTUALNY PRZEWODNIK ─── -->
-        <article class="qa-item" id="virtual-tour">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Wirtualny przewodnik: jak działają narzędzia i anatomia szafki?
-            </h2>
-            <div class="qa-answer">
-                <p>
-                    Kliknij dowolny pulsujący punkt na szafce lub włącz autoodtwarzanie, aby zobaczyć jak system automatyzuje konstrukcję mebla:
-                </p>
+        <section class="app-section" id="app">
+            <div class="wrap">
+                <div class="section-head">
+                    <span class="eyebrow">Program</span>
+                    <h2>Projektuj prosto w oknie</h2>
+                    <p>Powróć do projektu w każdej chwili. Okno możesz powiększyć, zmienić jego rozmiar albo otworzyć osobno.</p>
+                </div>
+            </div>
 
-                <div class="tour-wrapper">
-                    <!-- LEWA STRONA: WIZUALIZACJA SVG Z PUNKTAMI -->
-                    <div class="tour-visual-stage" id="tour-stage">
-                        <svg class="tour-svg-layer" viewBox="0 0 460 340" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <!-- Tło / Baza CAD -->
-                            <rect x="10" y="10" width="440" height="320" rx="6" fill="#0b1019" stroke="#1e293b" stroke-width="1.5"/>
-                            
-                            <!-- Boki korpusu -->
-                            <rect x="70" y="40" width="16" height="250" fill="#131e2e" stroke="#38bdf8" stroke-width="1.6"/>
-                            <rect x="330" y="40" width="16" height="250" fill="#131e2e" stroke="#38bdf8" stroke-width="1.6"/>
-                            
-                            <!-- Wieniec górny i dolny -->
-                            <rect x="86" y="40" width="244" height="16" fill="#131e2e" stroke="#38bdf8" stroke-width="1.6"/>
-                            <rect x="86" y="274" width="244" height="16" fill="#131e2e" stroke="#38bdf8" stroke-width="1.6"/>
-                            
-                            <!-- Plecy i linia nutu -->
-                            <line x1="86" y1="58" x2="330" y2="58" stroke="#334155" stroke-dasharray="3 3" stroke-width="1.2"/>
-                            <line x1="86" y1="272" x2="330" y2="272" stroke="#334155" stroke-dasharray="3 3" stroke-width="1.2"/>
-                            
-                            <!-- Przegroda pionowa -->
-                            <rect x="200" y="56" width="14" height="218" fill="#152233" stroke="#60a5fa" stroke-width="1.4"/>
-                            
-                            <!-- Półka lewa (stała / System 32) -->
-                            <rect x="86" y="150" width="114" height="14" fill="#18273b" stroke="#60a5fa" stroke-width="1.3"/>
-                            <!-- Raster otworów System 32 -->
-                            <circle cx="98" cy="115" r="2.5" fill="#38bdf8"/>
-                            <circle cx="98" cy="130" r="2.5" fill="#38bdf8"/>
-                            <circle cx="98" cy="180" r="2.5" fill="#38bdf8"/>
-                            <circle cx="98" cy="195" r="2.5" fill="#38bdf8"/>
-                            <circle cx="188" cy="115" r="2.5" fill="#38bdf8"/>
-                            <circle cx="188" cy="130" r="2.5" fill="#38bdf8"/>
-                            <circle cx="188" cy="180" r="2.5" fill="#38bdf8"/>
-                            <circle cx="188" cy="195" r="2.5" fill="#38bdf8"/>
-
-                            <!-- Szuflada prawa dolna -->
-                            <rect x="218" y="200" width="108" height="70" rx="2" fill="#101a28" stroke="#60a5fa" stroke-width="1.3"/>
-                            <line x1="222" y1="262" x2="322" y2="262" stroke="#38bdf8" stroke-width="1.2"/>
-                            <rect x="250" y="232" width="44" height="6" rx="2" fill="#38bdf8" opacity="0.8"/>
-
-                            <!-- Zawias z puszką ø35mm prawy górny -->
-                            <rect x="340" y="70" width="30" height="90" rx="2" fill="#0d1522" stroke="#eab308" stroke-width="1.2" stroke-dasharray="2 2"/>
-                            <circle cx="355" cy="100" r="10" fill="#1e293b" stroke="#eab308" stroke-width="1.6"/>
-                            <circle cx="355" cy="100" r="2" fill="#eab308"/>
-
-                            <!-- Frezowanie obwiedniowe CNC / WCS -->
-                            <rect x="62" y="32" width="292" height="266" rx="2" fill="none" stroke="#22c55e" stroke-width="1" stroke-dasharray="4 3"/>
-                            <!-- Baza G54 -->
-                            <circle cx="70" cy="290" r="5" fill="none" stroke="#22c55e" stroke-width="1.5"/>
-                            <line x1="70" y1="280" x2="70" y2="300" stroke="#22c55e" stroke-width="1"/>
-                            <line x1="60" y1="290" x2="80" y2="290" stroke="#22c55e" stroke-width="1"/>
-                        </svg>
-
-                        <!-- PUNKTY INTERAKTYWNE (HOTSPOTS) -->
-                        <button class="hotspot-point active" style="left: 24%; top: 15%;" data-step="0" title="SmartFrame: Korpus">
-                            <span class="hotspot-ping"></span>
-                            <span class="hotspot-dot"></span>
-                        </button>
-
-                        <button class="hotspot-point" style="left: 32%; top: 48%;" data-step="1" title="Bloki: Półki i System 32">
-                            <span class="hotspot-ping"></span>
-                            <span class="hotspot-dot"></span>
-                        </button>
-
-                        <button class="hotspot-point" style="left: 78%; top: 30%;" data-step="2" title="Okucia: Puszka ø35 mm">
-                            <span class="hotspot-ping"></span>
-                            <span class="hotspot-dot"></span>
-                        </button>
-
-                        <button class="hotspot-point" style="left: 60%; top: 72%;" data-step="3" title="Szuflady i prowadnice">
-                            <span class="hotspot-ping"></span>
-                            <span class="hotspot-dot"></span>
-                        </button>
-
-                        <button class="hotspot-point" style="left: 14%; top: 86%;" data-step="4" title="CAM CNC i Bazy obróbcze">
-                            <span class="hotspot-ping"></span>
-                            <span class="hotspot-dot"></span>
-                        </button>
+            <div class="app-stage" id="app-stage">
+                <div class="window" id="window">
+                    <div class="window-bar">
+                        <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                        <span class="window-title" id="window-title">Korpus</span>
+                        <span class="window-actions">
+                            <a id="window-open" href="index.html" target="_blank" rel="noopener">↗ <span>Nowe okno</span></a>
+                            <button id="window-full" class="icon-only" type="button" title="Pełny ekran" aria-label="Pełny ekran">⛶</button>
+                            <button id="window-max" class="icon-only" type="button" title="Powiększ" aria-label="Powiększ">⤢</button>
+                        </span>
                     </div>
+                    <div class="window-stage loading" id="window-stage">
+                        <iframe id="view" src="index.html" title="Crevo — program" allow="clipboard-read; clipboard-write; fullscreen"></iframe>
+                    </div>
+                    <span class="window-resize" id="window-resize" title="Zmień rozmiar"></span>
+                </div>
+            </div>
 
-                    <!-- PRAWA STRONA: INSPEKTOR SZCZEGÓŁÓW -->
-                    <div class="tour-inspector">
-                        <div class="tour-card" id="tour-card">
-                            <span class="tour-card-tag" id="tour-tag">MODUŁ: SMARTFRAME</span>
-                            <h3 class="tour-card-title" id="tour-title">Parametryczny Korpus i Nut pod Plecy</h3>
-                            <p class="tour-card-text" id="tour-desc">
-                                Zewnętrzna konstrukcja szafki (boki, wieńce, cokoły). Zmiana szerokości, wysokości lub grubości płyty (np. 18 mm) natychmiast przelicza długości formatek i automatycznie generuje nut pod plecy 3 mm z właściwym odsunięciem.
-                            </p>
-                            <ul class="tour-specs-list" id="tour-specs">
-                                <li><span>•</span> Grubość płyty: 18 mm</li>
-                                <li><span>•</span> Nut pod plecy: 4 × 8 mm</li>
-                                <li><span>•</span> Baza WCS: lewy dolny narożnik (G54)</li>
-                            </ul>
-                        </div>
+            <div class="wrap">
+                <p class="app-hint">Wskazówka: chwyć róg okna, aby je powiększyć. Klawisz Esc zamyka pełny ekran.</p>
+            </div>
+        </section>
 
-                        <!-- KONTROLER PRZEWODNIKA -->
-                        <div class="tour-controls">
-                            <button class="tour-btn tour-btn-play" id="tour-play-btn">
-                                <span id="tour-play-icon">⏸</span>
-                                <span id="tour-play-label">Pauza</span>
-                            </button>
-
-                            <div class="tour-indicators" id="tour-indicators">
-                                <button class="tour-dot-btn active" data-step="0"></button>
-                                <button class="tour-dot-btn" data-step="1"></button>
-                                <button class="tour-dot-btn" data-step="2"></button>
-                                <button class="tour-dot-btn" data-step="3"></button>
-                                <button class="tour-dot-btn" data-step="4"></button>
-                            </div>
-
-                            <div class="tour-nav-btns">
-                                <button class="tour-btn" id="tour-prev-btn">◀ Poprzedni</button>
-                                <button class="tour-btn" id="tour-next-btn">Dalej ▶</button>
-                            </div>
-                        </div>
+        <section id="why">
+            <div class="wrap">
+                <div class="section-head">
+                    <span class="eyebrow">Dlaczego Crevo</span>
+                    <h2>Proste narzędzie, poważne efekty</h2>
+                    <p>Zamiast godzin rysowania w kilku programach — jeden projekt, który od razu nadaje się do produkcji.</p>
+                </div>
+                <div class="why">
+                    <div class="why-card">
+                        <span class="ico">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>
+                        </span>
+                        <h3>Wszystko w przeglądarce</h3>
+                        <p>Otwierasz i pracujesz — na komputerze w biurze i na tablecie u klienta.</p>
+                    </div>
+                    <div class="why-card">
+                        <span class="ico">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h4"/></svg>
+                        </span>
+                        <h3>Dokumenty gotowe do druku</h3>
+                        <p>Rysunki z wymiarami, lista płyt i obrzeży oraz wycena dla klienta.</p>
                     </div>
                 </div>
             </div>
-        </article>
-
-        <!-- ─── PYTANIE: CZYM RÓŻNI SIĘ OD ZWYKŁYCH PROGRAMÓW? ─── -->
-        <article class="qa-item">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Czym różni się ten program od tradycyjnych programów CAD (PRO100, AutoCAD)?
-            </h2>
-            <div class="qa-answer">
-                <p>
-                    Tradycyjne programy traktują szafkę jak zwykły rysunek 3D — przy zmianie wymiaru musisz ręcznie przesuwać węzły, formatki i od nowa liczyć pozycje zawiasów czy kołków.
-                </p>
-                <p>
-                    <strong>SmartPanel CAD jest systemem semantycznym (obiektowym):</strong>
-                </p>
-                <div class="info-box">
-                    <ul>
-                        <li>Wpisujesz wymiar zewnętrzny korpusu (np. szerokość 800 mm) $\rightarrow$ długości wieńców, podział wnęk i światło szuflad przeliczają się same.</li>
-                        <li>Nawierty pod zawiasy (Blum, Hettich, GTV) i złącza meblowe (System 32) pozycjonują się automatycznie na podstawie reguł technologicznych.</li>
-                        <li>Wszystkie obliczenia geometrii B-rep wykonywane są natywnie w przeglądarce w całkowitych nanometrach, eliminując błędy produkcyjne.</li>
-                    </ul>
-                </div>
-            </div>
-        </article>
-
-        <!-- ─── PYTANIE: JAK WYGLĄDA PRACA KROK PO KROKU? ─── -->
-        <article class="qa-item">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Jak wygląda proces projektowania i produkcji krok po kroku?
-            </h2>
-            <div class="qa-answer">
-                <p>Cały proces od pustego projektu do maszyny CNC zamyka się w 6 logicznych etapach:</p>
-
-                <div class="workflow-grid">
-                    
-                    <!-- KROK 1 -->
-                    <div class="wf-card">
-                        <div class="wf-card-header">
-                            <span>ETAP 01</span>
-                            <span>SmartFrame</span>
-                        </div>
-                        <div class="wf-preview">
-                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
-                                <rect x="25" y="10" width="70" height="60" rx="2" fill="#131b26" stroke="#38bdf8" stroke-width="1.8"/>
-                                <rect x="25" y="10" width="8" height="60" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
-                                <rect x="87" y="10" width="8" height="60" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
-                                <rect x="33" y="10" width="54" height="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
-                                <rect x="33" y="64" width="54" height="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
-                            </svg>
-                        </div>
-                        <h4>Korpus (SmartFrame)</h4>
-                        <p>Zdefiniowanie gabarytów (szer., wys., głęb.), grubości płyty (18 mm) i nutu pod plecy.</p>
-                    </div>
-
-                    <!-- KROK 2 -->
-                    <div class="wf-card">
-                        <div class="wf-card-header">
-                            <span>ETAP 02</span>
-                            <span>Bloki</span>
-                        </div>
-                        <div class="wf-preview">
-                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
-                                <rect x="25" y="10" width="70" height="60" rx="2" fill="#131b26" stroke="#38bdf8" stroke-width="1.8"/>
-                                <rect x="58" y="16" width="4" height="48" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
-                                <line x1="33" y1="35" x2="58" y2="35" stroke="#38bdf8" stroke-width="1.5"/>
-                                <line x1="33" y1="50" x2="58" y2="50" stroke="#38bdf8" stroke-width="1.5"/>
-                                <rect x="65" y="20" width="22" height="18" fill="none" stroke="#60a5fa" stroke-width="1.2"/>
-                                <rect x="65" y="42" width="22" height="22" fill="none" stroke="#60a5fa" stroke-width="1.2"/>
-                            </svg>
-                        </div>
-                        <h4>Wnętrze i półki</h4>
-                        <p>Podział na strefy, wstawianie przegród, półek stałych/regulowanych oraz szuflad.</p>
-                    </div>
-
-                    <!-- KROK 3 -->
-                    <div class="wf-card">
-                        <div class="wf-card-header">
-                            <span>ETAP 03</span>
-                            <span>Zabudowa</span>
-                        </div>
-                        <div class="wf-preview">
-                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
-                                <rect x="15" y="10" width="28" height="60" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.5"/>
-                                <rect x="47" y="38" width="30" height="32" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.5"/>
-                                <rect x="80" y="38" width="25" height="32" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.5"/>
-                                <rect x="47" y="12" width="58" height="20" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.5"/>
-                            </svg>
-                        </div>
-                        <h4>Zestaw szaf</h4>
-                        <p>Łączenie korpusów w ciągi zabudowy kuchennej lub szaf wnękowych.</p>
-                    </div>
-
-                    <!-- KROK 4 -->
-                    <div class="wf-card">
-                        <div class="wf-card-header">
-                            <span>ETAP 04</span>
-                            <span>Wykaz BOM</span>
-                        </div>
-                        <div class="wf-preview">
-                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
-                                <rect x="20" y="12" width="80" height="56" rx="2" fill="#131b26" stroke="#38bdf8" stroke-width="1.2"/>
-                                <rect x="20" y="12" width="80" height="12" fill="#1e293b"/>
-                                <line x1="20" y1="24" x2="100" y2="24" stroke="#38bdf8" stroke-width="1"/>
-                                <line x1="25" y1="35" x2="95" y2="35" stroke="#60a5fa" stroke-width="1.5"/>
-                                <line x1="25" y1="48" x2="90" y2="48" stroke="#64748b" stroke-width="1.2"/>
-                                <line x1="25" y1="58" x2="92" y2="58" stroke="#64748b" stroke-width="1.2"/>
-                            </svg>
-                        </div>
-                        <h4>Raport materiałowy</h4>
-                        <p>Wykaz formatek z wymiarami cięcia, przypisaniem obrzeży i bilansu m² płyty.</p>
-                    </div>
-
-                    <!-- KROK 5 -->
-                    <div class="wf-card">
-                        <div class="wf-card-header">
-                            <span>ETAP 05</span>
-                            <span>Nesting</span>
-                        </div>
-                        <div class="wf-preview">
-                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
-                                <rect x="15" y="15" width="90" height="50" rx="1" fill="#0f172a" stroke="#64748b" stroke-width="1.2"/>
-                                <rect x="18" y="18" width="30" height="24" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
-                                <rect x="18" y="44" width="30" height="18" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
-                                <rect x="50" y="18" width="35" height="20" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
-                                <rect x="50" y="40" width="35" height="22" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
-                                <rect x="87" y="18" width="15" height="44" fill="#1e293b" stroke="#38bdf8" stroke-width="1"/>
-                            </svg>
-                        </div>
-                        <h4>Rozkrój płyty</h4>
-                        <p>Optymalne ułożenie formatek na arkuszu 2800x2070 mm z uwzględnieniem usłojenia.</p>
-                    </div>
-
-                    <!-- KROK 6 -->
-                    <div class="wf-card">
-                        <div class="wf-card-header">
-                            <span>ETAP 06</span>
-                            <span>CAM / CNC</span>
-                        </div>
-                        <div class="wf-preview">
-                            <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
-                                <rect x="20" y="15" width="80" height="50" rx="1" fill="#131b26" stroke="#38bdf8" stroke-width="1.2"/>
-                                <rect x="25" y="20" width="70" height="40" rx="1" fill="none" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="2 2"/>
-                                <circle cx="30" cy="25" r="2.5" fill="#fff" stroke="#38bdf8" stroke-width="0.8"/>
-                                <circle cx="30" cy="40" r="2.5" fill="#fff" stroke="#38bdf8" stroke-width="0.8"/>
-                                <circle cx="30" cy="55" r="2.5" fill="#fff" stroke="#38bdf8" stroke-width="0.8"/>
-                                <circle cx="80" cy="30" r="5" fill="#1e293b" stroke="#eab308" stroke-width="1.2"/>
-                            </svg>
-                        </div>
-                        <h4>Kod maszynowy CNC</h4>
-                        <p>Ścieżki frezowania, nawierty Systemu 32 i eksport plików G-Code / CLData.</p>
-                    </div>
-
-                </div>
-            </div>
-        </article>
-
-        <!-- ─── PYTANIE: JAKIE SĄ MODUŁY I JAK JE URUCHOMIĆ? ─── -->
-        <article class="qa-item">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Jakie moduły wchodzą w skład systemu i jak je otworzyć?
-            </h2>
-            <div class="qa-answer">
-                <p>System podzielony jest na wyspecjalizowane podstrony. Możesz przejść do każdego modułu bezpośrednio:</p>
-
-                <div class="module-list">
-                    <a href="index.html" class="module-entry">
-                        <div class="module-entry-title">
-                            Główny CAD 3D (SmartPanel)
-                            <span>index.html</span>
-                        </div>
-                        <div class="module-entry-desc">
-                            Środowisko do parametrycznego modelowania korpusów, szafek, szuflad, zawiasów i przypisywania dekorów płyt.
-                        </div>
-                    </a>
-
-                    <a href="cnc.html" class="module-entry">
-                        <div class="module-entry-title">
-                            Centrum CAM CNC
-                            <span>cnc.html</span>
-                        </div>
-                        <div class="module-entry-desc">
-                            Weryfikacja ścieżek narzędziowych w standardzie CLData (ISO 4343) i generowanie kodów G-Code na obrabiarki.
-                        </div>
-                    </a>
-
-                    <a href="nesting.html" class="module-entry">
-                        <div class="module-entry-title">
-                            Moduł Nestingu
-                            <span>nesting.html</span>
-                        </div>
-                        <div class="module-entry-desc">
-                            Optymalizator rozkroju formatek na arkuszach z kontrolą rzazu freza i kierunku usłojenia.
-                        </div>
-                    </a>
-
-                    <a href="draw.html" class="module-entry">
-                        <div class="module-entry-title">
-                            Rysunki Techniczne 2D
-                            <span>draw.html</span>
-                        </div>
-                        <div class="module-entry-desc">
-                            Automatyczne rzuty formatek z naniesionymi bazami wymiarowymi i pozycjami nawierceń.
-                        </div>
-                    </a>
-
-                    <a href="report.html" class="module-entry">
-                        <div class="module-entry-title">
-                            Raporty i BOM
-                            <span>report.html</span>
-                        </div>
-                        <div class="module-entry-desc">
-                            Zestawienie materiałowe formatek, metrów bieżących obrzeża, zużycia okuć oraz kalkulacja kosztów.
-                        </div>
-                    </a>
-                </div>
-            </div>
-        </article>
-
-        <!-- ─── PYTANIE: CZY MUSZĘ COŚ INSTALOWAĆ? ─── -->
-        <article class="qa-item">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Czy muszę instalować jakikolwiek program na komputerze?
-            </h2>
-            <div class="qa-answer">
-                <p>
-                    <strong>Nie. System w 100% działa w przeglądarce internetowej</strong> (Chrome, Edge, Firefox, Safari).
-                </p>
-                <div class="info-box">
-                    <ul>
-                        <li>Działa na dowolnym systemie: Windows, macOS, Linux, a także na tabletach.</li>
-                        <li>Nie wymaga drogiej stacji roboczej CAD — silnik triangulacji 2D/3D został zoptymalizowany do płynnej pracy przy 60 FPS na zwykłym laptopie.</li>
-                        <li>Wszystkie aktualizacje silnika CAD i katalogów okuć są dostępne natychmiast bez instalowania poprawek.</li>
-                    </ul>
-                </div>
-            </div>
-        </article>
-
-        <!-- ─── PYTANIE: GDZIE ZAPISYWANE SĄ MOJE PROJEKTY? ─── -->
-        <article class="qa-item">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Gdzie są zapisywane moje projekty i czy mam do nich stały dostęp?
-            </h2>
-            <div class="qa-answer">
-                <p>Masz dwa w pełni niezależne sposoby zapisu:</p>
-                <div class="info-box">
-                    <ul>
-                        <li><strong>Dysk Google (Chmura CAD)</strong>: Projekty zapisują się bezpośrednio w folderze <code>SmartPanel CAD Projects</code> na Twoim prywatnym koncie Google (15 GB darmowego miejsca). Masz do nich dostęp z biura, z warsztatu i z telefonu.</li>
-                        <li><strong>Tradycyjny plik lokalny (Pobierz)</strong>: W każdej chwili możesz pobrać projekt jako pojedynczy plik <code>.spp.json</code> na swój twardy dysk lub pendrive.</li>
-                    </ul>
-                </div>
-            </div>
-        </article>
-
-        <!-- ─── PYTANIE: JAKIE MASZYNY CNC I FORMATY SĄ OBSŁUGIWANE? ─── -->
-        <article class="qa-item">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Jakie maszyny CNC i formaty plików są obsługiwane?
-            </h2>
-            <div class="qa-answer">
-                <p>
-                    Silnik CAM generuje obróbki w neutralnym standardzie pośrednim <strong>CLData (ISO 4343)</strong>, który następnie jest tłumaczony przez dedykowane postprocesory na kod maszynowy:
-                </p>
-                <div class="info-box">
-                    <ul>
-                        <li><strong>Formaty maszynowe</strong>: Standardowy ISO G-Code (dla sterowników Mach3, LinuxCNC, Syntec, Weihong), pliki obróbcze pod centra Homag (WoodWOP), Biesse (BiesseWorks / bSolid), SCM (Xilog / Maestro), Felder, InfoTEC, Kimla.</li>
-                        <li><strong>Formaty CAD</strong>: Eksport geometrii formatek do DXF (z podziałem na warstwy frezowań i wierceń) oraz wektorowych arkuszy SVG.</li>
-                    </ul>
-                </div>
-            </div>
-        </article>
-
-        <!-- ─── PYTANIE: ILE TO KOSZTUJE? ─── -->
-        <article class="qa-item">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Ile to kosztuje i czym różni się wersja Starter od PRO?
-            </h2>
-            <div class="qa-answer">
-                <p>Zasady licencjonowania są proste i przejrzyste — bez opłat wdrożeniowych i bez długoterminowych umów:</p>
-
-                <div class="pricing-table">
-                    <!-- PLAN FREE -->
-                    <div class="pricing-col">
-                        <div class="pricing-title">Plan Starter</div>
-                        <div class="pricing-price">0 zł <span>/ na zawsze</span></div>
-                        <ul class="pricing-list">
-                            <li>✓ Pełne modelowanie szafek w 3D</li>
-                            <li>✓ Parametryczne korpusy Bloki</li>
-                            <li>✓ Podstawowe rysunki techniczne 2D</li>
-                            <li>✓ Do 3 projektów w chmurze Google</li>
-                            <li style="color: #64748b;">✕ Eksport kodów na obrabiarki CNC</li>
-                            <li style="color: #64748b;">✕ Nielimitowany nesting rozkroju</li>
-                        </ul>
-                        <a href="index.html" class="btn btn-primary" style="background: rgba(255,255,255,0.08); color: #fff; width: 100%;">
-                            Uruchom za darmo
-                        </a>
-                    </div>
-
-                    <!-- PLAN PRO -->
-                    <div class="pricing-col pro">
-                        <div class="pricing-title" style="color: #93c5fd;">Plan Warsztat PRO</div>
-                        <div class="pricing-price">99 zł <span>/ miesiąc</span></div>
-                        <ul class="pricing-list">
-                            <li>✓ <strong>Wszystko z planu Starter</strong></li>
-                            <li>✓ <strong>Generowanie kodów CNC (G-Code / CLData)</strong></li>
-                            <li>✓ <strong>Pełny nesting wieloarkuszowy z usłojeniem</strong></li>
-                            <li>✓ <strong>Nielimitowane projekty w chmurze</strong></li>
-                            <li>✓ <strong>Udostępnianie modelu 3D linkiem dla klienta</strong></li>
-                            <li>✓ Eksport wektorowy DXF i etykiety produkcyjne</li>
-                        </ul>
-                        <a href="index.html" class="btn btn-primary" style="width: 100%;">
-                            Przejdź do wersji PRO
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </article>
-
-        <!-- ─── PYTANIE: JAK ZACZĄĆ? ─── -->
-        <article class="qa-item">
-            <h2 class="qa-question">
-                <span class="qa-bullet"></span>
-                Jak mogę zacząć projektować już teraz?
-            </h2>
-            <div class="qa-answer">
-                <p>
-                    Wystarczy jedno kliknięcie — nie musisz podawać karty płatniczej ani zakładać konta, aby przetestować edytor 3D:
-                </p>
-                <div class="cta-box">
-                    <h3>Otwórz środowisko projektowe SmartPanel CAD</h3>
-                    <p>Zaprojektuj pierwszy korpus, wstaw szuflady i sprawdź automatyczny rozkrój formatek.</p>
-                    <a href="index.html" class="btn btn-primary" style="padding: 12px 32px; font-size: 1rem;">
-                        ▶ Rozpocznij projektowanie w CAD 3D
-                    </a>
-                </div>
-            </div>
-        </article>
-
+        </section>
     </main>
 
-    <!-- ─── SKRYPT WIRTUALNEGO PRZEWODNIKA ─── -->
+    <footer>
+        <div class="wrap">
+            <div class="footer-inner">
+                <div class="footer-brand">
+                    <span class="brand">
+                        <span class="brand-mark" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/>
+                                <path d="M3 7.5 12 12l9-4.5"/>
+                                <path d="M12 12v9"/>
+                            </svg>
+                        </span>
+                        <span class="brand-name">Crevo</span>
+                    </span>
+                    <p>Prosty program do projektowania mebli na wymiar. Od pomysłu, przez rozkrój płyt, aż po gotowe cięcie na CNC.</p>
+                </div>
+                <div class="footer-cols">
+                    <div class="footer-col">
+                        <h4>Skróty</h4>
+                        <a href="#app" data-goto="korpus">Korpus</a>
+                        <a href="#app" data-goto="bloki">Bloki</a>
+                        <a href="#app" data-goto="nesting">Rozkrój płyt</a>
+                        <a href="#app" data-goto="rysunki">Rysunki</a>
+                        <a href="#app" data-goto="wycena">Wycena</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span>© Crevo</span>
+                <span>Projektowanie mebli na wymiar · Rozkrój płyt · Obróbka CNC</span>
+            </div>
+        </div>
+    </footer>
+
     <script>
-        (function() {
-            const tourSteps = [
-                {
-                    tag: "MODUŁ: SMARTFRAME",
-                    title: "Parametryczny Korpus i Nut pod Plecy",
-                    desc: "Zewnętrzna konstrukcja szafki (boki, wieńce, cokoły). Zmiana szerokości, wysokości lub grubości płyty (np. 18 mm) natychmiast przelicza długości formatek i automatycznie generuje nut pod plecy 3 mm z właściwym odsunięciem.",
-                    specs: [
-                        "Grubość płyty: 18 mm (lub zdefiniowana przez użytkownika)",
-                        "Nut pod plecy: 4 × 8 mm z odsunięciem 15 mm",
-                        "Baza WCS: lewy dolny narożnik (G54)"
-                    ]
-                },
-                {
-                    tag: "MODUŁ: BLOKI",
-                    title: "Wnęki, Półki i System 32",
-                    desc: "Inteligentne zarządzanie przestrzenią szafki. Półki stałe generują złącza mimośrodowe lub kołki, a półki regulowane automatycznie tworzą rzędy otworów w rozstawie 32 mm na zdefiniowanej wysokości roboczej.",
-                    specs: [
-                        "Rozstaw otworów: System 32 (raster co 32 mm)",
-                        "Wiercenia: ø5 mm × 12 mm pod podpórki półek",
-                        "Reguła: automatyczne centrowanie i równy podział wnęk"
-                    ]
-                },
-                {
-                    tag: "OKUCIA: BLUM / HETTICH",
-                    title: "Automatyczne Puszki Zawiasowe",
-                    desc: "Katalog standardowych okuć meblowych. Program automatycznie wyznacza puszkę zawiasową ø35 mm w odległości 21.5 mm od krawędzi frontu oraz rozstaw wkrętów prowadnika w korpusie bez konieczności ręcznego trasowania.",
-                    specs: [
-                        "Średnica puszki: ø35 mm (głębokość 13 mm)",
-                        "Katalog: Blum Clip Top, Hettich Sensys, GTV 3D",
-                        "Baza: automatyczny offset od krawędzi z luzem 1.5 mm"
-                    ]
-                },
-                {
-                    tag: "MODUŁ: SZUFLADY",
-                    title: "Prowadnice i Dno Szuflady",
-                    desc: "Automatyczny dobór długości prowadnicy do głębokości korpusu. System sam wylicza szerokość dna szuflady z uwzględnieniem luzów bocznych, grubości ścianek bocznych i otworów montażowych pod wkręty euro.",
-                    specs: [
-                        "Systemy: Tandem, Legrabox, ModernBox, Sevroll",
-                        "Kalkulacja: dno + plecy ze zdefiniowanym luzem montażowym",
-                        "Nawierty sprzęgieł: generowane automatycznie na spodzie"
-                    ]
-                },
-                {
-                    tag: "MODUŁ: CAM CNC & NESTING",
-                    title: "Ścieżki Maszynowe i Rozkrój Płyty",
-                    desc: "Pełne przejście do produkcji. Z geometrii formatek B-rep generowany jest optymalny nesting na arkuszu 2800x2070 mm oraz neutralny kod CLData / ISO G-Code na centra Homag, Biesse, SCM, Kimla, InfoTEC i obrabiarki ze sterownikiem Mach3.",
-                    specs: [
-                        "Standard ścieżek: ISO 4343 CLData",
-                        "Kompensacja: rzaz freza i usłojenie płyty",
-                        "Postprocesory: Homag MPR, Biesse CIX, Standard G-Code"
-                    ]
-                }
-            ];
+        const ICONS = {
+            cube: '<path d="M12 3 3 7.5v9L12 21l9-4.5v-9L12 3Z"/><path d="M3 7.5 12 12l9-4.5"/><path d="M12 12v9"/>',
+            layers: '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M3 13l9 5 9-5"/>',
+            wall: '<path d="M3 21V8l9-5 9 5v13"/><path d="M3 12h18"/><path d="M9 12v9"/><path d="M15 12v9"/>',
+            drill: '<path d="M12 3v5"/><path d="M9 8h6l-1 5H10L9 8Z"/><path d="M12 13v8"/><path d="M8 21h8"/>',
+            gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/>',
+            grid: '<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+            plug: '<path d="M9 3v5M15 3v5"/><path d="M6 8h12v3a6 6 0 0 1-12 0V8Z"/><path d="M12 17v4"/>',
+            appliance: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16"/><circle cx="8" cy="6" r="0.6"/><path d="M8 13v6M12 13v6M16 13v6"/>',
+            ruler: '<path d="M3 15 15 3l6 6L9 21l-6-6Z"/><path d="M8 12l1.5 1.5M11 9l1.5 1.5M14 6l1.5 1.5"/>',
+            sheet: '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 3v18M4 9h4M4 15h4"/>',
+            list: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+            download: '<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/>',
+            palette: '<path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H12a2 2 0 0 1 0-4h6a3 3 0 0 0 3-3 7 7 0 0 0-9-6Z"/><circle cx="7.5" cy="10.5" r="1"/><circle cx="12" cy="7.5" r="1"/><circle cx="16.5" cy="10.5" r="1"/>',
+            toolbox: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/>',
+            camera: '<path d="M4 7h3l1.5-2h7L17 7h3v13H4V7Z"/><circle cx="12" cy="13.5" r="3.5"/>',
+            sparkles: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z"/>',
+            link: '<path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/>'
+        };
 
-            let currentStep = 0;
-            let isAutoPlaying = true;
-            let tourTimer = null;
+        const TILES = [
+            { id: "korpus", label: "Korpus", desc: "Szafy, komody i szafki dokładnie w takich wymiarach, jakie potrzebujesz.", page: "index.html", icon: "cube" },
+            { id: "bloki", label: "Bloki", desc: "Półki, szuflady, drzwi i drążki — gotowe elementy wyposażenia.", page: "index.html", icon: "layers" },
+            { id: "material", label: "Materiał", desc: "Wybierz płytę, kolor i obrzeże — cena policzy się sama.", page: "cennik.html", icon: "palette" },
+            { id: "operacje", label: "Obróbki", desc: "Otwory, kieszenie i frezowanie ustawiane jednym kliknięciem.", page: "index.html", icon: "drill" },
+            { id: "cnc", label: "Obróbka CNC", desc: "Gotowy program dla maszyny i podgląd pracy narzędzia.", page: "cnc.html", icon: "gear" },
+            { id: "nesting", label: "Rozkrój płyt", desc: "Formatki ułożone na płytach z jak najmniejszym odpadem.", page: "nesting.html", icon: "grid" },
+            { id: "rysunki", label: "Rysunki", desc: "Czytelne rzuty i przekroje do druku.", page: "draw.html", icon: "sheet" },
+            { id: "wycena", label: "Wycena", desc: "Lista płyt, obrzeży i kosztów w jednym zestawieniu.", page: "report.html", icon: "list" }
+        ];
 
-            const tagEl = document.getElementById("tour-tag");
-            const titleEl = document.getElementById("tour-title");
-            const descEl = document.getElementById("tour-desc");
-            const specsEl = document.getElementById("tour-specs");
-            const cardEl = document.getElementById("tour-card");
+        const FLAT = TILES;
 
-            const playBtn = document.getElementById("tour-play-btn");
-            const playIcon = document.getElementById("tour-play-icon");
-            const playLabel = document.getElementById("tour-play-label");
+        const groupsEl = document.getElementById("groups");
+        const appStage = document.getElementById("app-stage");
+        const windowEl = document.getElementById("window");
+        const resizeHandle = document.getElementById("window-resize");
+        const stage = document.getElementById("window-stage");
+        const view = document.getElementById("view");
+        const windowTitle = document.getElementById("window-title");
+        const windowOpen = document.getElementById("window-open");
+        const windowFull = document.getElementById("window-full");
+        const windowMax = document.getElementById("window-max");
+        const appSection = document.getElementById("app");
 
-            const prevBtn = document.getElementById("tour-prev-btn");
-            const nextBtn = document.getElementById("tour-next-btn");
+        const SIZE_KEY = "crevo.window.size";
+        const MIN_W = 340;
+        const MIN_H = 240;
 
-            const hotspots = document.querySelectorAll(".hotspot-point");
-            const indicatorDots = document.querySelectorAll(".tour-dot-btn");
+        function svg(name) {
+            return '<span class="mod-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + "</svg></span>";
+        }
 
-            function showStep(idx) {
-                currentStep = (idx + tourSteps.length) % tourSteps.length;
-                const data = tourSteps[currentStep];
+        const cards = document.createElement("div");
+        cards.className = "cards";
 
-                // Update text content
-                tagEl.textContent = data.tag;
-                titleEl.textContent = data.title;
-                descEl.textContent = data.desc;
+        TILES.forEach((mod) => {
+            const wrap = document.createElement("div");
+            wrap.className = "mod-wrap";
 
-                specsEl.innerHTML = data.specs.map(function(s) {
-                    return '<li><span>•</span> ' + s + '</li>';
-                }).join('');
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "mod";
+            btn.dataset.id = mod.id;
+            btn.innerHTML =
+                svg(mod.icon) +
+                "<span><span class=\"mod-title\">" + mod.label + "</span>" +
+                '<span class="mod-desc">' + mod.desc + "</span></span>" +
+                '<span class="mod-cta">Otwórz w programie →</span>';
 
-                // Update active hotspot
-                hotspots.forEach(function(h, i) {
-                    if (i === currentStep) {
-                        h.classList.add("active");
-                    } else {
-                        h.classList.remove("active");
-                    }
-                });
+            const newLink = document.createElement("a");
+            newLink.className = "mod-new";
+            newLink.href = mod.page;
+            newLink.target = "_blank";
+            newLink.rel = "noopener";
+            newLink.textContent = "↗";
+            newLink.title = "Otwórz " + mod.label + " w nowym oknie";
+            newLink.setAttribute("aria-label", newLink.title);
 
-                // Update indicator dots
-                indicatorDots.forEach(function(dot, i) {
-                    if (i === currentStep) {
-                        dot.classList.add("active");
-                    } else {
-                        dot.classList.remove("active");
-                    }
-                });
+            wrap.appendChild(btn);
+            wrap.appendChild(newLink);
+            cards.appendChild(wrap);
+        });
 
-                // Subtle card flash
-                cardEl.style.transform = "scale(0.99)";
-                setTimeout(function() {
-                    cardEl.style.transform = "scale(1)";
-                }, 120);
+        groupsEl.appendChild(cards);
+
+        function moduleById(id) {
+            return FLAT.find((m) => m.id === id) || FLAT[0];
+        }
+
+        function focusApp() {
+            appSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        function openModule(id, scroll) {
+            const mod = moduleById(id);
+
+            if (view.getAttribute("src") !== mod.page) {
+                stage.classList.add("loading");
+                view.setAttribute("src", mod.page);
             }
 
-            function startTimer() {
-                clearInterval(tourTimer);
-                tourTimer = setInterval(function() {
-                    if (isAutoPlaying) {
-                        showStep(currentStep + 1);
-                    }
-                }, 4500);
+            windowTitle.textContent = mod.label;
+            windowOpen.setAttribute("href", mod.page);
+            windowOpen.setAttribute("title", "Otwórz " + mod.label + " w nowym oknie");
+            document.title = "Crevo — " + mod.label;
+
+            groupsEl.querySelectorAll(".mod").forEach((b) => {
+                b.setAttribute("aria-current", b.dataset.id === mod.id ? "true" : "false");
+            });
+
+            if (location.hash !== "#" + mod.id) {
+                history.replaceState(null, "", "#" + mod.id);
             }
 
-            function setAutoPlay(val) {
-                isAutoPlaying = val;
-                if (isAutoPlaying) {
-                    playIcon.textContent = "⏸";
-                    playLabel.textContent = "Pauza";
-                    startTimer();
-                } else {
-                    playIcon.textContent = "▶";
-                    playLabel.textContent = "Odtwórz";
-                    clearInterval(tourTimer);
-                }
+            if (scroll) focusApp();
+        }
+
+        groupsEl.addEventListener("click", (e) => {
+            const btn = e.target.closest(".mod");
+            if (btn) openModule(btn.dataset.id, true);
+        });
+
+        document.querySelectorAll("[data-goto]").forEach((a) => {
+            a.addEventListener("click", (e) => {
+                e.preventDefault();
+                openModule(a.dataset.goto, true);
+            });
+        });
+
+        document.getElementById("hero-cta").addEventListener("click", (e) => {
+            e.preventDefault();
+            openModule(FLAT[0].id, true);
+        });
+
+        document.getElementById("nav-cta").addEventListener("click", (e) => {
+            e.preventDefault();
+            openModule(FLAT[0].id, true);
+        });
+
+        const SIZE = { saved: null };
+
+        function stageBounds() {
+            const style = getComputedStyle(appStage);
+            const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+            return {
+                maxW: Math.max(MIN_W, appStage.clientWidth - padX),
+                maxH: Math.max(MIN_H, window.innerHeight - 160)
+            };
+        }
+
+        function clampSize(w, h) {
+            const { maxW, maxH } = stageBounds();
+            return {
+                w: Math.min(Math.max(Math.round(w), MIN_W), maxW),
+                h: Math.min(Math.max(Math.round(h), MIN_H), maxH)
+            };
+        }
+
+        function applySize(w, h, persist) {
+            const size = clampSize(w, h);
+            windowEl.style.width = size.w + "px";
+            windowEl.style.height = size.h + "px";
+            if (persist) {
+                try {
+                    localStorage.setItem(SIZE_KEY, JSON.stringify(size));
+                } catch (e) {}
+            }
+            return size;
+        }
+
+        function isMaximized() {
+            return appStage.classList.contains("max");
+        }
+
+        function setMaximized(on) {
+            if (on) {
+                SIZE.saved = SIZE.saved || { w: windowEl.offsetWidth, h: windowEl.offsetHeight };
+                appStage.classList.add("max");
+            } else {
+                appStage.classList.remove("max");
+                if (SIZE.saved) applySize(SIZE.saved.w, SIZE.saved.h, false);
+            }
+            windowMax.textContent = on ? "⤡" : "⤢";
+            windowMax.setAttribute("aria-label", on ? "Przywróć" : "Powiększ");
+            windowMax.setAttribute("title", on ? "Przywróć" : "Powiększ");
+        }
+
+        function restoreSize() {
+            let stored = null;
+            try {
+                stored = JSON.parse(localStorage.getItem(SIZE_KEY) || "null");
+            } catch (e) {}
+            if (stored && stored.w && stored.h) {
+                SIZE.saved = clampSize(stored.w, stored.h);
+                applySize(SIZE.saved.w, SIZE.saved.h, false);
+            }
+        }
+
+        function startResize(e) {
+            if (isMaximized()) setMaximized(false);
+            e.preventDefault();
+            resizeHandle.setPointerCapture(e.pointerId);
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startW = windowEl.offsetWidth;
+            const startH = windowEl.offsetHeight;
+
+            function onMove(ev) {
+                SIZE.saved = applySize(startW + (ev.clientX - startX), startH + (ev.clientY - startY), false);
             }
 
-            // Event Listeners
-            playBtn.addEventListener("click", function() {
-                setAutoPlay(!isAutoPlaying);
-            });
+            function onUp() {
+                resizeHandle.removeEventListener("pointermove", onMove);
+                resizeHandle.removeEventListener("pointerup", onUp);
+                resizeHandle.removeEventListener("pointercancel", onUp);
+                SIZE.saved = applySize(windowEl.offsetWidth, windowEl.offsetHeight, true);
+            }
 
-            prevBtn.addEventListener("click", function() {
-                setAutoPlay(false);
-                showStep(currentStep - 1);
-            });
+            resizeHandle.addEventListener("pointermove", onMove);
+            resizeHandle.addEventListener("pointerup", onUp);
+            resizeHandle.addEventListener("pointercancel", onUp);
+        }
 
-            nextBtn.addEventListener("click", function() {
-                setAutoPlay(false);
-                showStep(currentStep + 1);
-            });
+        windowMax.addEventListener("click", () => setMaximized(!isMaximized()));
 
-            hotspots.forEach(function(btn) {
-                btn.addEventListener("click", function() {
-                    const step = parseInt(btn.getAttribute("data-step"), 10);
-                    setAutoPlay(false);
-                    showStep(step);
-                });
-            });
+        windowFull.addEventListener("click", () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else if (windowEl.requestFullscreen) {
+                windowEl.requestFullscreen().catch(() => {});
+            }
+        });
 
-            indicatorDots.forEach(function(dot) {
-                dot.addEventListener("click", function() {
-                    const step = parseInt(dot.getAttribute("data-step"), 10);
-                    setAutoPlay(false);
-                    showStep(step);
-                });
-            });
+        document.addEventListener("fullscreenchange", () => {
+            const on = !!document.fullscreenElement;
+            windowFull.textContent = on ? "⤡" : "⛶";
+            windowFull.setAttribute("aria-label", on ? "Wyjdź z pełnego ekranu" : "Pełny ekran");
+            windowFull.setAttribute("title", on ? "Wyjdź z pełnego ekranu" : "Pełny ekran");
+        });
 
-            // Start Tour
-            showStep(0);
-            startTimer();
-        })();
+        resizeHandle.addEventListener("pointerdown", startResize);
+
+        window.addEventListener("resize", () => {
+            if (isMaximized()) return;
+            if (windowEl.style.width || windowEl.style.height) {
+                SIZE.saved = applySize(windowEl.offsetWidth, windowEl.offsetHeight, false);
+            }
+        });
+
+        view.addEventListener("load", () => {
+            stage.classList.remove("loading");
+            try {
+                view.contentWindow.focus();
+            } catch (e) {}
+        });
+
+        restoreSize();
+
+        const initial = FLAT.find((m) => m.id === (location.hash || "").replace(/^#/, ""));
+        if (initial) openModule(initial.id, false);
     </script>
 </body>
 </html>

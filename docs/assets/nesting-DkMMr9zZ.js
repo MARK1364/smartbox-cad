@@ -1,8 +1,8 @@
-import{r as b,j as e,c as $e,R as Se}from"./price-store-Cd2VMN0Y.js";import{g as Dt,a as Ne,b as Ce,r as Ie,c as Pe,d as Ae}from"./nesting-engine-DzhX5zrn.js";import{C as se,aq as Le,a as Be,r as Ee,t as Ut,s as De}from"./report-data-normalizer-d2U9-3fR.js";import{M as Xe}from"./ModuleSourceBar-C6bS7Eko.js";function Re(a){const o=(a.name||"").trim(),l=(a.furnitureName||"").trim();if(l){let r=o;return r.toLowerCase().startsWith(l.toLowerCase())&&(r=r.slice(l.length).replace(/^\s*[-–—:|/]\s*/,"").trim()),{project:l,panel:r||o||"Formatka"}}const n=o.match(/^(.+?)\s*[-–—|/]\s*(.+)$/);return n?{project:n[1].trim(),panel:n[2].trim()}:{project:"",panel:o||"Formatka"}}class Xt{static generatePrintableHtml(o,l,n=!1){const r=o.boards.map(c=>this.generateBoardSvgString(c,l)),m=o.machineType==="cnc"?"⚙️ Frezarka CNC (Nesting)":"🪚 Piła Formatowa / Panelowa",s=l.width>=l.height?"landscape":"portrait";let u=`<!DOCTYPE html>
+import{r as b,j as e,c as $e,R as Se}from"./price-store-C6GV9iHp.js";import{g as Dt,a as Ne,b as Ce,r as Ie,c as Pe,d as Ae}from"./nesting-engine-yZp9rT_X.js";import{C as se,av as Le,a as Be,r as Ee,t as Ut,s as De}from"./report-data-normalizer-D-HAFFkx.js";import{M as Xe}from"./ModuleSourceBar-B_-5HrMH.js";function Re(a){const o=(a.name||"").trim(),l=(a.furnitureName||"").trim();if(l){let r=o;return r.toLowerCase().startsWith(l.toLowerCase())&&(r=r.slice(l.length).replace(/^\s*[-–—:|/]\s*/,"").trim()),{project:l,panel:r||o||"Formatka"}}const n=o.match(/^(.+?)\s*[-–—|/]\s*(.+)$/);return n?{project:n[1].trim(),panel:n[2].trim()}:{project:"",panel:o||"Formatka"}}class Xt{static generatePrintableHtml(o,l,n=!1){const r=o.boards.map(c=>this.generateBoardSvgString(c,l)),m=o.machineType==="cnc"?"⚙️ Frezarka CNC (Nesting)":"🪚 Piła Formatowa / Panelowa",s=l.width>=l.height?"landscape":"portrait";let u=`<!DOCTYPE html>
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>Plan Rozkroju Płyt (${o.machineType.toUpperCase()}) - Bloki CAD</title>
+    <title>Plan Rozkroju Płyt (${o.machineType.toUpperCase()}) - Crevo CAD</title>
     <style>
         @page {
             size: A4 ${s};

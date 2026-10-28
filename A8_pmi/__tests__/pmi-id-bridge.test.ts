@@ -335,8 +335,8 @@ describe('pmi-id-bridge anchor resolution', () => {
         panelView.getBrepFaceIndices = () => new Uint32Array(0);
         panelView.getBrepVertexLocal = () => [];
         panelView.getBrepEdgePoints = () => [];
-        data.faceMesh.metadata.planeOriginLocal = v3(-data.hw, 0, 0);
-        data.faceMesh.metadata.planeNormalLocal = v3(-1, 0, 0);
+        (data.faceMesh.metadata as any).planeOriginLocal = v3(-data.hw, 0, 0);
+        (data.faceMesh.metadata as any).planeNormalLocal = v3(-1, 0, 0);
 
         const pick = resolveBrepGeometryPick(data.scene, {
             hit: true,
