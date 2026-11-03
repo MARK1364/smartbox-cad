@@ -132,7 +132,7 @@ export function registerTreeActionHandlers(
         getAllContainers(ctx.document).find((c: any) => c.id === data.id);
       if (entity) {
         if (entity.frozen || entity.params?.frozen) {
-          ctx.ui.setStatus?.(tx(srcTekst, 'tree.unfreeze_op', TX_NS) || 'Element jest zamrożony. Odmroź go, aby pokazać.', true);
+          ctx.ui.setStatus?.(tx(srcTekst, 'tree.unfreeze_op', TX_NS) || 'Element jest zamrozony. Odmroz go, aby pokazac.', true);
           return;
         }
         entity.visible = entity.visible === false ? true : false;
@@ -298,7 +298,7 @@ export function registerTreeActionHandlers(
         }
         const isFrozen = Boolean(hwNode.frozen || (hwNode.domainData as any).frozen);
         if (isFrozen) {
-          ctx.ui.setStatus?.('Okucie jest zamrożone. Odmroź je (ikona śnieżynki), aby pokazać.', true);
+          ctx.ui.setStatus?.('Okucie jest zamrozone. Odmroz je, aby pokazac.', true);
           return;
         }
         const curVis = (hwNode.domainData as any).visible !== false;

@@ -125,8 +125,8 @@ export default function App({
       PMIStore.instance.clearAllMeasurements();
       ContextManager.instance.pmiRenderer?.clearPreview?.();
       ContextManager.instance.pmiRenderer?.clearMeasurePreview?.();
-      ContextManager.instance.pmiRenderer?.setVisible?.(false);
     }
+    // Widoczność wymiarów (Wymiary / Eksport z opcją PMI) ustawia ContextManager.activeTab → syncPmiVisibility.
     HandleDimGizmo.instance.detach();
     setActiveTabRaw(tab);
     ContextManager.instance.activeTab = tab;

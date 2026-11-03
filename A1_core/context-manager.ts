@@ -8,6 +8,7 @@ import { SceneSyncAdapter } from './cad-node/scene-sync-adapter.js';
 import { CommandHistory } from './commands/command-history.js';
 import type { ProjectFileIO } from './project-file-io.js';
 import { deactivateAllPmiTools } from '../A8_pmi/pmi-tool-activate.js';
+import { PMIStore } from '../A8_pmi/pmi-data.js';
 
 export interface IAppAPI {
     addSmartPanel?: () => void;
@@ -72,6 +73,18 @@ export class ContextManager {
         if (tab !== 'tab-a8-pmi') {
             this.deactivatePmiToolsIfActive();
         }
+        this.syncPmiVisibility();
+    }
+
+    /** Ustawiane przez ExportEngine - opcja "Dolacz linie wymiarowe". */
+    public exportIncludesPmi = true;
+
+    /** Wymiary sa widoczne w zakladce Wymiary oraz w Eksporcie przy wlaczonej opcji dolaczenia. */
+    public syncPmiVisibility(): void {
+        const show = this._activeTab === 'tab-a8-pmi'
+            || (this._activeTab === 'tab-e1-export' && this.exportIncludesPmi);
+        this.pmiRenderer?.setVisible?.(show);
+        if (show) this.pmiRenderer?.renderAll?.(PMIStore.instance);
     }
 
     /** Uniwersalne wyjście z narzędzi PMI i powrót do SELECTION_TOOL. */

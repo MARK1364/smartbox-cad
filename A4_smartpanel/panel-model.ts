@@ -86,6 +86,8 @@ export class PanelModel {
     zonePrefix?: string;
     type: string = 'part';
     visible: boolean = true;
+    /** Zamrozenie: ukryty i wylaczony z obliczen; show-all tego nie cofa. */
+    declare frozen?: boolean;
     lcsVisible: boolean = true;
     materialId: string = 'W1100_ST9_18';
     /** Alias kompatybilności z JSON / Blender (materialId). */

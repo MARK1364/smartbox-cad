@@ -49,6 +49,9 @@ export class CADNode {
      */
     domainData: DomainData | null = null;
 
+    /** Zamrozenie (ukrycie + wylaczenie z obliczen); ustawiane dla wezlow HARDWARE. */
+    declare frozen?: boolean;
+
     // === Eventy ===
     private _worldMatrixListeners: Set<WorldMatrixChangedCallback> = new Set();
 

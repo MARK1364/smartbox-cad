@@ -709,8 +709,20 @@ export function recoverAnchorSource(node: CADNode, anchor: ConstraintAnchor): CA
         return byId;
     }
 
+    const descendants: CADNode[] = [];
+    const collectDescendants = (parent: CADNode) => {
+        for (const child of parent.children) {
+            descendants.push(child);
+            collectDescendants(child);
+        }
+    };
+    collectDescendants(node);
+
     if (anchor.sourceKey) {
-        const byKey = node.children.find((c) => (c.domainData as any)?.key === anchor.sourceKey);
+        const byKeyMatches = descendants.filter((candidate) =>
+            (candidate.domainData as any)?.key === anchor.sourceKey,
+        );
+        const byKey = byKeyMatches.length === 1 ? byKeyMatches[0] : null;
         if (byKey) {
             anchor.sourceNodeId = byKey.id;
             return byKey;
@@ -718,8 +730,10 @@ export function recoverAnchorSource(node: CADNode, anchor: ConstraintAnchor): CA
     }
 
     if (anchor.sourceRole) {
-        const byRole = node.children.filter(
-            (c) => (c.domainData as any)?.role === anchor.sourceRole || (c as any).role === anchor.sourceRole,
+        const byRole = descendants.filter(
+            (candidate) =>
+                (candidate.domainData as any)?.role === anchor.sourceRole ||
+                (candidate as any).role === anchor.sourceRole,
         );
         if (byRole.length === 1) {
             anchor.sourceNodeId = byRole[0].id;

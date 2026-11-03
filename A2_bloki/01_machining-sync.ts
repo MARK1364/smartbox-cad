@@ -78,6 +78,13 @@ export function syncMachiningHoles(
             : data.features.findIndex((feature: any) => feature?.id === intent.feature.id);
         if (existingIndex >= 0) {
             const existing = data.features[existingIndex];
+            if (!isOwnedHole(existing, ownerTag)) {
+                console.warn(
+                    `[machining-sync] Pominięto cechę "${intent.feature.id}" na formatce "${targetNode.id}": ` +
+                    `ID jest już używane przez obcą lub ręczną cechę.`,
+                );
+                continue;
+            }
             if (existing.frozen || existing.params?.frozen) continue;
             data.features[existingIndex] = intent.feature;
         } else {

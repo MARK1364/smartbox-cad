@@ -5,7 +5,7 @@
  *   - machining-sync: clear własnych automatów (zostaw obce/frozen) + upsert na docelowych,
  *   - komenda E2E: execute → upsert na formatek, undo przywraca pierwotną treść.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     buildHoleMachiningIntent,
     isOwnedHole,
@@ -441,6 +441,70 @@ describe('machining-sync — syncMachiningHoles', () => {
         expect(matchingFeatures).toHaveLength(1);
         expect(matchingFeatures[0]).toBe(originalFrozen);
         expect(matchingFeatures[0].params.frozen).toBe(true);
+    });
+
+    it('does not overwrite a non-frozen feature owned by another module with the same ID', () => {
+        const { doc, panelA, panels, oldFeatures } = makeSyncFixture();
+        const manualFeature = panelA.features.find((f: any) => f.id === 'handmade');
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const intent = buildHoleMachiningIntent({
+            targetNodeId: 'p_a',
+            id: 'handmade',
+            face: 'FACE_Z_PLUS',
+            u: 100,
+            v: 200,
+            diameter: 12,
+            depth: 20,
+            ownerTag: 'isDoorDrilling',
+        });
+
+        try {
+            syncMachiningHoles(doc, [intent], panels, 'isDoorDrilling', oldFeatures);
+
+            const matchingFeatures = panelA.features.filter((f: any) => f.id === 'handmade');
+            expect(matchingFeatures).toHaveLength(1);
+            expect(matchingFeatures[0]).toEqual(manualFeature);
+            expect(warn).toHaveBeenCalledWith(
+                expect.stringContaining('ID jest już używane przez obcą lub ręczną cechę.'),
+            );
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('warns and preserves a frozen feature owned by another module with the same ID', () => {
+        const { doc, panelA, panels, oldFeatures } = makeSyncFixture();
+        const frozenForeignFeature = {
+            id: 'foreign_frozen',
+            type: 'hole',
+            face: 'FACE_Z_MINUS',
+            params: { u: 9, v: 9, diameter: 20, isFlapDrilling: true, frozen: true },
+        };
+        panelA.features.push(frozenForeignFeature);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const intent = buildHoleMachiningIntent({
+            targetNodeId: 'p_a',
+            id: 'foreign_frozen',
+            face: 'FACE_Z_PLUS',
+            u: 100,
+            v: 200,
+            diameter: 12,
+            depth: 20,
+            ownerTag: 'isDoorDrilling',
+        });
+
+        try {
+            syncMachiningHoles(doc, [intent], panels, 'isDoorDrilling', oldFeatures);
+
+            const matchingFeatures = panelA.features.filter((f: any) => f.id === 'foreign_frozen');
+            expect(matchingFeatures).toHaveLength(1);
+            expect(matchingFeatures[0]).toBe(frozenForeignFeature);
+            expect(warn).toHaveBeenCalledWith(
+                expect.stringContaining('ID jest już używane przez obcą lub ręczną cechę.'),
+            );
+        } finally {
+            warn.mockRestore();
+        }
     });
 
     it('emit / restore: undo odtwarza pierwotne features i emituje (setFeatures)', () => {

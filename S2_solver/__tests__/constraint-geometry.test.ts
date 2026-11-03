@@ -668,6 +668,40 @@ describe('recoverAnchorSource - odzyskiwanie formatki kotwicy bez dopasowywania 
         expect(anchor.sourceNodeId).toBe(side.id);
     });
 
+    it('odzyskuje formatkę przez zagnieżdżone złożenie po sourceKey i sourceRole', () => {
+        const { document, cab } = createTestCabinet();
+        const assembly = document.createAssembly({}, cab.id);
+        const nestedAssembly = document.findNode(assembly.id)!;
+        const panel = document.createPanel(
+            { width: mmToNm(500), height: mmToNm(720), thickness: mmToNm(18) },
+            nestedAssembly.id,
+        );
+        const side = document.findNode(panel.id)!;
+        (side.domainData as any).key = 'B_BOK_L';
+        (side.domainData as any).role = 'LEFT_SIDE_PANEL';
+        (cab.children.find((child) => child !== nestedAssembly)!.domainData as any).role = 'OTHER_PANEL';
+
+        const anchorByKey = makeAnchor({
+            nodeId: cab.id,
+            kind: 'FACE',
+            sourceNodeId: 'stale-key-id',
+            sourceKey: 'B_BOK_L',
+            sourceRole: 'LEFT_SIDE_PANEL',
+        });
+        expect(recoverAnchorSource(cab, anchorByKey)).toBe(side);
+        expect(anchorByKey.sourceNodeId).toBe(side.id);
+
+        (side.domainData as any).key = undefined;
+        const anchorByRole = makeAnchor({
+            nodeId: cab.id,
+            kind: 'FACE',
+            sourceNodeId: 'stale-role-id',
+            sourceRole: 'LEFT_SIDE_PANEL',
+        });
+        expect(recoverAnchorSource(cab, anchorByRole)).toBe(side);
+        expect(anchorByRole.sourceNodeId).toBe(side.id);
+    });
+
     it('nigdy nie dopasowuje po sourceName (tożsamość tylko ID, key, role - kontrakt SSOT)', () => {
         const { cab, side } = createTestCabinet();
         side.name = 'Bok_L.001';

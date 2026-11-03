@@ -264,6 +264,10 @@ export class ExportEngine {
 
     public setIncludePMI(include: boolean): void {
         this.includePMI = include;
+        if (ContextManager.instance) {
+            ContextManager.instance.exportIncludesPmi = include;
+            ContextManager.instance.syncPmiVisibility();
+        }
         this._notify();
     }
 
