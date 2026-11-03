@@ -91,32 +91,58 @@ export function FloatingKorpusEdit({
 
     useEffect(() => {
         if (!container) return;
-        const p = container.generatorParams || {};
-        const type = engineToUiType(p.typ_korpusu || p.type);
-        setCabinetType(type);
-        const w = nmToMm(container.width);
-        const h = nmToMm(container.height);
-        const d = nmToMm(container.depth);
-        if (Number.isFinite(w)) setWidth(Math.round(w));
-        if (Number.isFinite(h)) setHeight(Math.round(h));
-        if (Number.isFinite(d)) setDepth(Math.round(d));
-        const zc = p.liczba_stref !== undefined ? (Number(p.liczba_stref) as 1 | 2 | 3) : 3;
-        setZoneCount(zc);
-        if (p.wysokosc_strefy_dolnej_mm !== undefined) setBottomHeight(p.wysokosc_strefy_dolnej_mm);
-        if (p.wysokosc_strefy_srodkowej_mm !== undefined) setMiddleHeight(p.wysokosc_strefy_srodkowej_mm);
-        const bo = p.cofniecie_plecow_mm ?? p.backOffset;
-        if (bo !== undefined) setBackOffset(bo);
-        if (p.szerokosc_blendy_mm !== undefined) setBlindWidth(p.szerokosc_blendy_mm);
-        if (p.strona_blendy) setBlindSide(p.strona_blendy);
-        if (p.glebokosc_boku_lewego_mm !== undefined) setBokLewy(p.glebokosc_boku_lewego_mm);
-        if (p.glebokosc_boku_prawego_mm !== undefined) setBokPrawy(p.glebokosc_boku_prawego_mm);
-        if (p.szerokosc_listwy_naroznej_mm !== undefined) setSzerokoscListwy(p.szerokosc_listwy_naroznej_mm);
-        if (p.typ_listwy_naroznej) setTypListwy(p.typ_listwy_naroznej);
-        if (p.wysokosc_lewy_mm !== undefined) setHeightLeft(p.wysokosc_lewy_mm);
-        if (p.wysokosc_prawy_mm !== undefined) setHeightRight(p.wysokosc_prawy_mm);
-        if (p.wysokosc_przod_mm !== undefined) setHeightFront(p.wysokosc_przod_mm);
-        if (p.wysokosc_tyl_mm !== undefined) setHeightBack(p.wysokosc_tyl_mm);
-    }, [container, container?.id, container?.generatorParams]);
+        const sync = () => {
+            const p = container.generatorParams || {};
+            const type = engineToUiType(p.typ_korpusu || p.type);
+            setCabinetType(type);
+            const w = p.szerokosc_mm ?? nmToMm(container.width);
+            const h = p.wysokosc_mm ?? nmToMm(container.height);
+            const d = p.glebokosc_mm ?? nmToMm(container.depth);
+            if (Number.isFinite(w)) setWidth(Math.round(w));
+            if (Number.isFinite(h)) setHeight(Math.round(h));
+            if (Number.isFinite(d)) setDepth(Math.round(d));
+            const zc = p.liczba_stref !== undefined ? (Number(p.liczba_stref) as 1 | 2 | 3) : 3;
+            setZoneCount(zc);
+            if (p.wysokosc_strefy_dolnej_mm !== undefined) setBottomHeight(Math.round(p.wysokosc_strefy_dolnej_mm));
+            if (p.wysokosc_strefy_srodkowej_mm !== undefined) setMiddleHeight(Math.round(p.wysokosc_strefy_srodkowej_mm));
+            const bo = p.cofniecie_plecow_mm ?? p.backOffset;
+            if (bo !== undefined) setBackOffset(bo);
+            if (p.szerokosc_blendy_mm !== undefined) setBlindWidth(p.szerokosc_blendy_mm);
+            if (p.strona_blendy) setBlindSide(p.strona_blendy);
+            if (p.glebokosc_boku_lewego_mm !== undefined) setBokLewy(p.glebokosc_boku_lewego_mm);
+            if (p.glebokosc_boku_prawego_mm !== undefined) setBokPrawy(p.glebokosc_boku_prawego_mm);
+            if (p.szerokosc_listwy_naroznej_mm !== undefined) setSzerokoscListwy(p.szerokosc_listwy_naroznej_mm);
+            if (p.typ_listwy_naroznej) setTypListwy(p.typ_listwy_naroznej);
+            if (p.wysokosc_lewy_mm !== undefined) setHeightLeft(p.wysokosc_lewy_mm);
+            if (p.wysokosc_prawy_mm !== undefined) setHeightRight(p.wysokosc_prawy_mm);
+            if (p.wysokosc_przod_mm !== undefined) setHeightFront(p.wysokosc_przod_mm);
+            if (p.wysokosc_tyl_mm !== undefined) setHeightBack(p.wysokosc_tyl_mm);
+        };
+
+        sync();
+        const doc = projectModel || ContextManager.instance.document;
+        const unsubDoc = doc?.onDocumentChanged
+            ? doc.onDocumentChanged(sync)
+            : (doc?.onChange ? doc.onChange(sync) : null);
+        const onProjectChanged = () => sync();
+        if (typeof window !== 'undefined') {
+            window.addEventListener('bloki-project-changed', onProjectChanged);
+            if (window.document) {
+                window.document.addEventListener('bloki-project-changed', onProjectChanged);
+            }
+        }
+
+        return () => {
+            if (typeof unsubDoc === 'function') unsubDoc();
+            else if (doc?.offChange) doc.offChange(sync);
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('bloki-project-changed', onProjectChanged);
+                if (window.document) {
+                    window.document.removeEventListener('bloki-project-changed', onProjectChanged);
+                }
+            }
+        };
+    }, [container, container?.id, projectModel]);
 
     const isRogowy1 = cabinetType === 'KORPUS_ROGOWY1';
     const isRogowy90 = cabinetType === 'KORPUS_ROGOWY90';
@@ -176,20 +202,20 @@ export function FloatingKorpusEdit({
 
     return (
         <div>
-            <InputRow label={tx(korpusTekst, 'dims.width', TX_NS)} value={width} min={150} max={4000}
+            <InputRow label={tx(korpusTekst, 'dims.width', TX_NS)} value={width} min={1} max={10000}
                 onChange={(v) => {
                     setWidth(v);
                     triggerRealtime(v, height, depth, effectiveZoneCount, bottomHeight, middleHeight, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, heightFront, heightBack);
                 }} />
-            {!isSkosnyDach && (
-                <InputRow label={tx(korpusTekst, 'dims.height', TX_NS)} value={height} min={150} max={4000}
+            {!isSkosnyOneZone && (
+                <InputRow label={tx(korpusTekst, 'dims.height', TX_NS)} value={height} min={1} max={10000}
                     onChange={(v) => {
                         setHeight(v);
                         setHeightRight(v);
                         triggerRealtime(width, v, depth, effectiveZoneCount, bottomHeight, middleHeight, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, v, heightFront, heightBack);
                     }} />
             )}
-            <InputRow label={tx(korpusTekst, 'dims.depth', TX_NS)} value={depth} min={150} max={4000}
+            <InputRow label={tx(korpusTekst, 'dims.depth', TX_NS)} value={depth} min={1} max={10000}
                 onChange={(v) => {
                     setDepth(v);
                     triggerRealtime(width, height, v, effectiveZoneCount, bottomHeight, middleHeight, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, heightFront, heightBack);
@@ -294,14 +320,14 @@ export function FloatingKorpusEdit({
                     <div style={{ fontSize: '11px', fontWeight: 700, margin: '8px 0 4px', color: '#e4e4e7' }}>
                         {tx(korpusTekst, 'skosny_dach.title', TX_NS)}
                     </div>
-                    <InputRow label={tx(korpusTekst, 'skosny_dach.height_front', TX_NS)} value={heightFront} min={100} max={4000}
+                    <InputRow label={tx(korpusTekst, 'skosny_dach.height_front', TX_NS)} value={heightFront} min={1} max={10000}
                         onChange={(v) => {
                             setHeightFront(v);
                             const maxH = Math.max(v, heightBack);
                             setHeight(maxH);
                             triggerRealtime(width, maxH, depth, 1, maxH, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, heightRight, v, heightBack);
                         }} />
-                    <InputRow label={tx(korpusTekst, 'skosny_dach.height_back', TX_NS)} value={heightBack} min={100} max={4000}
+                    <InputRow label={tx(korpusTekst, 'skosny_dach.height_back', TX_NS)} value={heightBack} min={1} max={10000}
                         onChange={(v) => {
                             setHeightBack(v);
                             const maxH = Math.max(heightFront, v);
@@ -343,13 +369,22 @@ export function FloatingKorpusEdit({
 
             {isSkosnyLrUc && (
                 <>
-                    <InputRow label={tx(korpusTekst, 'skosny_lr.height_left', TX_NS)} value={heightLeft} min={100} max={Math.max(100, height - 1)}
+                    <InputRow label={tx(korpusTekst, 'skosny_lr.height_left', TX_NS)} value={heightLeft} min={100} max={10000}
                         onChange={(v) => {
                             setHeightLeft(v);
-                            triggerRealtime(width, height, depth, 1, height, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, v, height, heightFront, heightBack);
+                            const maxH = Math.max(v, heightRight);
+                            setHeight(maxH);
+                            triggerRealtime(width, maxH, depth, 1, maxH, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, v, heightRight, heightFront, heightBack);
+                        }} />
+                    <InputRow label={tx(korpusTekst, 'skosny_lr.height_right', TX_NS)} value={heightRight} min={100} max={10000}
+                        onChange={(v) => {
+                            setHeightRight(v);
+                            const maxH = Math.max(heightLeft, v);
+                            setHeight(maxH);
+                            triggerRealtime(width, maxH, depth, 1, maxH, 0, backOffset, cabinetType, blindWidth, blindSide, bokLewy, bokPrawy, heightLeft, v, heightFront, heightBack);
                         }} />
                     {(() => {
-                        const roznica_wysokosci_mm = Math.abs(height - heightLeft);
+                        const roznica_wysokosci_mm = Math.abs(heightRight - heightLeft);
                         const kat_skosu_deg = width > 0 ? (Math.atan2(roznica_wysokosci_mm, width) * 180) / Math.PI : 0;
                         const cos_kat_skosu = Math.cos((kat_skosu_deg * Math.PI) / 180);
                         const wieniec_w_pionie_mm = Math.abs(cos_kat_skosu) > 1e-6 ? (18 / cos_kat_skosu).toFixed(1) : '-';

@@ -105,7 +105,33 @@ export class ModalTransformManager {
                     // Nie zamykaj trybu jeśli kliknięto w jakikolwiek element gizma lub widget DOM
                     const targetEl = evt.target as HTMLElement;
                     const isInsideWidget = targetEl && (targetEl.closest('#modal-transform-widget') !== null);
-                    if (!isGizmoMesh && !pointerInfo.pickInfo?.hit && !isInsideWidget) {
+                    if (isInsideWidget) return;
+
+                    const gizmoCtrl = ContextManager.instance.gizmoController;
+                    const posGizmo = gizmoCtrl?.positionGizmo;
+                    const rotGizmo = gizmoCtrl?.rotationGizmo;
+
+                    let clickedUtilityGizmo = false;
+                    const layers = [
+                        posGizmo?.utilityLayer,
+                        (rotGizmo as any)?._utilityLayer,
+                        (rotGizmo as any)?.utilityLayer
+                    ];
+                    for (const u of layers) {
+                        if (u?.utilityLayerScene) {
+                            const utilPick = u.utilityLayerScene.pick(viewport.scene.pointerX, viewport.scene.pointerY);
+                            if (utilPick && utilPick.hit) {
+                                clickedUtilityGizmo = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (posGizmo?.isDragging || clickedUtilityGizmo || isGizmoMesh) {
+                        return;
+                    }
+
+                    if (!pointerInfo.pickInfo?.hit) {
                         this.confirmTransform();
                     }
                 } else if (evt.button === 2) {
@@ -119,6 +145,46 @@ export class ModalTransformManager {
 
     public updateLiveValues(): void {
         this._updateWidgetUI();
+    }
+
+    public setTargetEntity(entity: any): void {
+        const doc = ContextManager.instance.document;
+        const viewport = ContextManager.instance.viewport;
+        if (!doc || !viewport || !viewport.scene || !entity) return;
+
+        const { target } = doc.getTransformableTarget(entity);
+        if (!target) return;
+
+        const actualEntity = target;
+        let node = ContextManager.instance.panelViews.get(actualEntity)?.root ||
+                   ContextManager.instance.containerViews.get(actualEntity)?.rootNode ||
+                   ContextManager.instance.containerViews.get(actualEntity)?.root;
+
+        if (!node && actualEntity.id) {
+            for (const [c, v] of ContextManager.instance.containerViews || []) {
+                if (c?.id === actualEntity.id) {
+                    node = v?.rootNode || v?.root;
+                    break;
+                }
+            }
+        }
+        if (!node && actualEntity.name) {
+            node = viewport.scene.getNodeByName(actualEntity.name) || viewport.scene.getNodeByName(actualEntity.id);
+        }
+
+        this.targetEntity = actualEntity;
+        this.targetNode = node;
+
+        const cadNode = doc.findNode(actualEntity.id);
+        if (cadNode) {
+            this.initialMatrix = cadNode.localMatrix.clone();
+            const { translation, rotation, scale } = cadNode.localMatrix.decompose();
+            this.initialTranslationNm = translation;
+            this.initialRotationQuat = rotation;
+            this.initialScaleVec = scale;
+        } else {
+            this.initialMatrix = null;
+        }
     }
 
     private _setupKeyboardListeners(): void {
@@ -212,10 +278,19 @@ export class ModalTransformManager {
         }
 
         const actualEntity = target;
-        let node = ContextManager.instance.panelViews.get(actualEntity)?.root ||
+        let node = ContextManager.instance.gizmoController?._resolveTargetMesh?.(actualEntity) ||
+                   ContextManager.instance.panelViews.get(actualEntity)?.root ||
                    ContextManager.instance.containerViews.get(actualEntity)?.rootNode ||
                    ContextManager.instance.containerViews.get(actualEntity)?.root;
 
+        if (!node && actualEntity.id) {
+            for (const [c, v] of ContextManager.instance.containerViews || []) {
+                if (c?.id === actualEntity.id) {
+                    node = v?.rootNode || v?.root;
+                    break;
+                }
+            }
+        }
         if (!node && actualEntity.name) {
             node = viewport.scene.getNodeByName(actualEntity.name) || viewport.scene.getNodeByName(actualEntity.id);
         }

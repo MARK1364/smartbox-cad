@@ -32,7 +32,12 @@ export function openDrzewoRelacjeTab(constraintId?: string): void {
     );
 }
 
-export function expectedKindForBind(bindType: BindType, groundKind: AnchorKind = 'VERTEX'): AnchorKind {
+export function expectedKindForBind(
+    bindType: BindType,
+    groundKind: AnchorKind = 'VERTEX',
+    slot: 'A' | 'B' = 'A',
+): AnchorKind {
+    if (bindType === 'VERTEX_DATUM') return slot === 'B' ? 'DATUM' : 'VERTEX';
     if (bindType === 'VERTEX') return 'VERTEX';
     if (bindType === 'GROUND') return groundKind;
     return 'FACE';
@@ -58,14 +63,16 @@ export function beginConstraintSlotPick(opts: {
     }
 
     const stepLabel = opts.slot === 'A'
-        ? (opts.thenPickB ? 'Krok 1/2: wskaż pierwszą ścianę w 3D' : 'Wskaż ścianę (A) w 3D')
-        : 'Krok 2/2: wskaż drugą ścianę w 3D';
+        ? (opts.thenPickB ? 'Krok 1/2: wskaż element A w 3D' : 'Wskaż element (A) w 3D')
+        : 'Krok 2/2: wskaż element (B) w 3D';
     const kindHint =
         opts.expectedKind === 'VERTEX'
             ? 'narożnik'
-            : opts.expectedKind === 'FACE'
-              ? 'ścianę'
-              : 'obiekt';
+            : opts.expectedKind === 'DATUM'
+              ? 'poziom Z / płaszczyznę'
+              : opts.expectedKind === 'FACE'
+                ? 'ścianę'
+                : 'obiekt';
 
     activePick = { constraintId: opts.constraintId, slot: opts.slot };
     ConstraintHighlightOverlay.instance.setHighlighted([opts.constraintId]);
@@ -164,7 +171,7 @@ export function beginConstraintSlotPick(opts: {
                 beginConstraintSlotPick({
                     constraintId: opts.constraintId,
                     slot: 'B',
-                    expectedKind: opts.expectedKind,
+                    expectedKind: expectedKindForBind(live.bindType, 'VERTEX', 'B'),
                 });
             }
         },
@@ -176,7 +183,11 @@ export function beginConstraintSlotPick(opts: {
         },
     });
 
-    if (opts.slot === 'B' && constraint.bindType === 'VERTEX' && constraint.anchorA) {
+    if (
+        opts.slot === 'B' &&
+        (constraint.bindType === 'VERTEX' || constraint.bindType === 'VERTEX_DATUM') &&
+        constraint.anchorA
+    ) {
         ConstraintHighlightOverlay.instance.startVertexRubberBand(opts.constraintId);
     } else {
         ConstraintHighlightOverlay.instance.stopVertexRubberBand();
@@ -218,7 +229,7 @@ export function addConstraintDraft(bindType: BindType, autoPick: boolean = false
         beginConstraintSlotPick({
             constraintId: draft.id,
             slot: 'A',
-            expectedKind: expectedKindForBind(bindType, bindType === 'GROUND' ? 'VERTEX' : 'FACE'),
+            expectedKind: expectedKindForBind(bindType, bindType === 'GROUND' ? 'VERTEX' : 'FACE', 'A'),
             thenPickB: bindType !== 'GROUND',
         });
     } else {

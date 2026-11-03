@@ -528,3 +528,63 @@ describe('Łańcuch uziemionych szaf — niezależność od kolejności kliknię
         expect(nmToMm(cab3Pos.x)).toBeCloseTo(1200, 1);
     });
 });
+
+
+describe('VERTEX_DATUM — kotwiczenie naroży kontenera SmartFrame do poziomów wysokości Z (DATUM_LEVEL)', () => {
+    it('rozpina wysokość korpusu i pozycję Z pomiędzy dolnym a górnym poziomem DATUM_LEVEL oraz reaguje na ruch poziomu', () => {
+        const document = new ProjectDocument();
+        const cab = newContainer(document);
+        (cab.domainData as any).generatorParams = {
+            type: 'korpus3',
+            szerokosc_mm: 600,
+            wysokosc_mm: 500,
+            glebokosc_mm: 400,
+        };
+        cab.setLocalTransform(new Vec3(mmToNm(300), mmToNm(200), mmToNm(0)), Quat.IDENTITY);
+
+        const levelBottom = document.addDatumLevel(100, 'Cokół');
+        const levelTop = document.addDatumLevel(820, 'Blat');
+
+        const cBottom = constraint({
+            id: 'cst_bottom_level',
+            bindType: 'VERTEX_DATUM',
+            anchorA: makeAnchor({ nodeId: cab.id, kind: 'VERTEX', cornerIndex: 0 }),
+            anchorB: makeAnchor({ nodeId: levelBottom.id, kind: 'DATUM', faceName: 'Cokół' }),
+            offsetMm: 0,
+        });
+
+        const cTop = constraint({
+            id: 'cst_top_level',
+            bindType: 'VERTEX_DATUM',
+            anchorA: makeAnchor({ nodeId: cab.id, kind: 'VERTEX', cornerIndex: 4 }),
+            anchorB: makeAnchor({ nodeId: levelTop.id, kind: 'DATUM', faceName: 'Blat' }),
+            offsetMm: 0,
+        });
+
+        const input = buildSolverInput(document, [cBottom, cTop]);
+        solveConstraintsPure(input.contract, input.states, 40, RESIDUAL_TOLERANCE);
+        new SolveConstraintsCommand(collectTransformDeltas(input)).execute(document);
+
+        // Wysokość korpusu dopasowana do 820 - 100 = 720 mm
+        expect(nmToMm((cab.domainData as any).height)).toBe(720);
+        expect((cab.domainData as any).generatorParams.wysokosc_mm).toBe(720);
+
+        // Spód korpusu stoi na Z = 100 mm, a X i Y pozostały nienaruszone (300, 200)
+        const pos1 = cab.getWorldMatrix().decompose().translation;
+        expect(nmToMm(pos1.x)).toBeCloseTo(300, 2);
+        expect(nmToMm(pos1.y)).toBeCloseTo(200, 2);
+        expect(nmToMm(pos1.z)).toBeCloseTo(100, 2);
+
+        // Zmiana górnego poziomu z 820 mm na 920 mm -> wysokość korpusu rośnie do 820 mm
+        (levelTop.domainData as any).z_nm = mmToNm(920);
+        levelTop.setLocalTransform(new Vec3(0, 0, mmToNm(920)), Quat.IDENTITY);
+
+        const input2 = buildSolverInput(document, [cBottom, cTop]);
+        solveConstraintsPure(input2.contract, input2.states, 40, RESIDUAL_TOLERANCE);
+        new SolveConstraintsCommand(collectTransformDeltas(input2)).execute(document);
+
+        expect(nmToMm((cab.domainData as any).height)).toBe(820);
+        expect((cab.domainData as any).generatorParams.wysokosc_mm).toBe(820);
+        expect(nmToMm(cab.getWorldMatrix().decompose().translation.z)).toBeCloseTo(100, 2);
+    });
+});

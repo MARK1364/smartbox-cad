@@ -187,7 +187,7 @@ export function calculateDoorsPlan(
     } = params;
 
     // Całkowita wysokość frontu i jego położenie w Z oraz Y
-    const calkowita_wysokosc_drzwi_mm = wysokosc_strefy_mm + nalozenie_gora_mm + nalozenie_dol_mm;
+    const calkowita_wysokosc_drzwi_mm = Math.max(10, wysokosc_strefy_mm + nalozenie_gora_mm + nalozenie_dol_mm);
     const pozycja_z_mm = wysokosc_strefy_mm / 2 + (nalozenie_gora_mm - nalozenie_dol_mm) / 2;
     // W układzie CADNode przód korpusu to -depth/2 (współrzędna Y)
     const pozycja_y_mm = -(glebokosc_strefy_mm / 2 + grubosc_frontu_mm / 2);
@@ -296,7 +296,7 @@ export function calculateDoorsPlan(
 
     if (rodzaj_drzwi === 'LEFT' || rodzaj_drzwi === 'RIGHT') {
         // Pojedyncze drzwi
-        const szerokosc_drzwi_mm = szerokosc_strefy_mm + nalozenie_lewe_mm + nalozenie_prawe_mm;
+        const szerokosc_drzwi_mm = Math.max(10, szerokosc_strefy_mm + nalozenie_lewe_mm + nalozenie_prawe_mm);
         const pozycja_x_mm = (nalozenie_prawe_mm - nalozenie_lewe_mm) / 2;
         const hingeSide = rodzaj_drzwi === 'LEFT' ? 'left' : 'right';
         const doorRule = rodzaj_drzwi === 'LEFT' ? doorLRule : doorRRule;
@@ -319,8 +319,8 @@ export function calculateDoorsPlan(
     } else {
         // Podwójne drzwi (DOUBLE)
         const baza_szerokosc_mm = (szerokosc_strefy_mm - szczelina_mm) / 2;
-        const szerokosc_lewe_mm = baza_szerokosc_mm + nalozenie_lewe_mm;
-        const szerokosc_prawe_mm = baza_szerokosc_mm + nalozenie_prawe_mm;
+        const szerokosc_lewe_mm = Math.max(10, baza_szerokosc_mm + nalozenie_lewe_mm);
+        const szerokosc_prawe_mm = Math.max(10, baza_szerokosc_mm + nalozenie_prawe_mm);
 
         // Pozycja X dla lewego i prawego skrzydła
         const pozycja_lewe_x_mm = -szerokosc_strefy_mm / 2 - nalozenie_lewe_mm + szerokosc_lewe_mm / 2;

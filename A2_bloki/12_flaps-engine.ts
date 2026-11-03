@@ -107,8 +107,8 @@ export function calculateFlapsPlan(
         return baseHingeId;
     };
 
-    const flapWidth_mm = dims_mm.width_mm + params.nalozenie_lewe_mm + params.nalozenie_prawe_mm;
-    const flapHeight_mm = dims_mm.height_mm + params.nalozenie_gora_mm + params.nalozenie_dol_mm;
+    const flapWidth_mm = Math.max(10, dims_mm.width_mm + params.nalozenie_lewe_mm + params.nalozenie_prawe_mm);
+    const flapHeight_mm = Math.max(10, dims_mm.height_mm + params.nalozenie_gora_mm + params.nalozenie_dol_mm);
     const posX_mm = (params.nalozenie_prawe_mm - params.nalozenie_lewe_mm) / 2;
     const posZ_mm = dims_mm.height_mm / 2 + (params.nalozenie_gora_mm - params.nalozenie_dol_mm) / 2;
     const posY_mm = -(dims_mm.depth_mm / 2 + params.grubosc_frontu_mm / 2);

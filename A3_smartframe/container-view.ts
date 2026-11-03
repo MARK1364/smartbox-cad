@@ -205,14 +205,14 @@ export class ContainerView {
         // 3. Szafka skośna (korpus_skosny / korpus_skosny_lr)
         const cabType = String(gp.typ_korpusu || gp.type || '').toLowerCase();
         if (cabType.includes('skosny')) {
-            if (gp.wysokosc_lewy_mm != null && gp.wysokosc_prawy_mm != null && Math.abs(gp.wysokosc_lewy_mm - gp.wysokosc_prawy_mm) > 1) {
+            if (gp.wysokosc_lewy_mm != null && gp.wysokosc_prawy_mm != null) {
                 return {
                     isSloped: true,
                     yTopLeft: Number(gp.wysokosc_lewy_mm),
                     yTopRight: Number(gp.wysokosc_prawy_mm)
                 };
             }
-            if (gp.wysokosc_przod_mm != null && gp.wysokosc_tyl_mm != null && Math.abs(gp.wysokosc_przod_mm - gp.wysokosc_tyl_mm) > 1) {
+            if (gp.wysokosc_przod_mm != null && gp.wysokosc_tyl_mm != null) {
                 const hFront = Number(gp.wysokosc_przod_mm);
                 const hBack = Number(gp.wysokosc_tyl_mm);
                 return {

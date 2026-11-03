@@ -261,7 +261,12 @@ export function FloatingEditHost({ projectModel }: { projectModel?: any }): Reac
 
         if (!model) return;
         doc.setActiveEntity?.(model);
-        setSession({ kind, entityId: resolvedId, model });
+        setSession(prev => {
+            if (prev && prev.kind === kind && (prev.entityId === resolvedId || prev.model?.id === resolvedId)) {
+                return prev;
+            }
+            return { kind, entityId: resolvedId, model };
+        });
         if (kind === 'smartpart' && isSmartPartHandle(model)) {
             SinkDimGizmo.instance.detach();
             // HandleEditPanel sam podpina gizmo
@@ -360,15 +365,31 @@ export function FloatingEditHost({ projectModel }: { projectModel?: any }): Reac
         };
 
         const checkActive = () => {
+            // 1. Sprawdź, czy edytowany obiekt nadal istnieje w dokumencie (czy nie został skasowany)
+            const exists = doc.findNode
+                ? Boolean(doc.findNode(sessionId) || doc.findNode(session.entityId))
+                : true;
+            if (!exists) {
+                close();
+                return;
+            }
+
             const currentActive = doc.activeEntity;
-            if (!currentActive) return;
+            if (!currentActive) {
+                // Brak aktywnego obiektu (np. po usunięciu węzła ze sceny) — zamknij okno edycji
+                close();
+                return;
+            }
             if (isChildOrSame(currentActive.id)) return;
             close();
         };
 
-        const unsub = doc.onDocumentChanged?.(() => {
-            checkActive();
-        });
+        const unsub = doc.onDocumentChanged
+            ? doc.onDocumentChanged(() => checkActive())
+            : (doc.onChange ? doc.onChange(() => checkActive()) : null);
+
+        const onProjectChanged = () => checkActive();
+        window.document.addEventListener('bloki-project-changed', onProjectChanged);
 
         const onProps = (e: any) => {
             const id = e.detail?.id || e.detail?.partId || e.detail?.containerId;
@@ -408,8 +429,10 @@ export function FloatingEditHost({ projectModel }: { projectModel?: any }): Reac
         window.addEventListener('contextmenu', onContextMenu);
 
         return () => {
-            unsub?.();
+            if (typeof unsub === 'function') unsub();
+            else if (doc?.offChange) doc.offChange(checkActive);
             unsubSm?.();
+            window.document.removeEventListener('bloki-project-changed', onProjectChanged);
             document.removeEventListener('bloki-properties-update', onProps);
             window.removeEventListener('cad-tab-switched', onTabSwitched);
             window.removeEventListener('cad-switch-tab', onTabSwitched);

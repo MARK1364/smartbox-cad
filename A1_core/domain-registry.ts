@@ -5,6 +5,8 @@
  * (domyślne handlery + per-dokument registerHydrator/registerFactory).
  */
 
+import { DatumLevelModel, GlcDomainModel } from '../S1_sketcher/datum-types.js';
+
 export type DomainHydrator = (raw: any, nodeJson: any) => any;
 export type DomainFactory = (options?: any) => any;
 
@@ -18,6 +20,10 @@ export function registerDefaultHydrator(nodeType: string, hydrator: DomainHydrat
 export function registerDefaultFactory(nodeType: string, factory: DomainFactory): void {
     defaultFactories.set(nodeType, factory);
 }
+
+// Domyślne hydratory dla struktur układu odniesienia i geometrii pomocniczej
+registerDefaultHydrator('GLC_FRAME', (raw) => (raw ? GlcDomainModel.fromJSON(raw) : null));
+registerDefaultHydrator('DATUM_LEVEL', (raw) => (raw ? DatumLevelModel.fromJSON(raw) : null));
 
 export interface DomainHandlerHost {
     registerHydrator(nodeType: string, hydrator: DomainHydrator): () => void;

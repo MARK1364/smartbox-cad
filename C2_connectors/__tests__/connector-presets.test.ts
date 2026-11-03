@@ -93,4 +93,32 @@ describe('connector-presets', () => {
         const dtos = generateConnectors(verts, new Vec3(1, 0, 0), 'standard_od_lewej', null, null, 32, undefined, types);
         expect(dtos[0]?.type).toBe('konfirmat_5x50');
     });
+    it('aktualizuje istniejący preset przez update()', () => {
+        const store = ConnectorPresetStore.instance;
+        const preset = store.add({
+            name: 'Oryginalny',
+            placementRule: 'standard_od_lewej',
+            firstOffsetMm: 32,
+            positionsActive: [true, true, true],
+            positionTypes: ['kolki_d8x35', 'kolki_d8x35', 'kolki_d8x35'],
+        });
+
+        const updated = store.update(preset.id, {
+            name: 'Zmieniony',
+            firstOffsetMm: 50,
+            positionsActive: [true, false, true],
+        });
+
+        expect(updated).not.toBeNull();
+        expect(updated?.name).toBe('Zmieniony');
+        expect(updated?.firstOffsetMm).toBe(50);
+        expect(updated?.positionsActive[1]).toBe(false);
+
+        store.presets = [];
+        store.load();
+        const loaded = store.get(preset.id);
+        expect(loaded?.name).toBe('Zmieniony');
+        expect(loaded?.firstOffsetMm).toBe(50);
+        expect(loaded?.positionsActive[1]).toBe(false);
+    });
 });

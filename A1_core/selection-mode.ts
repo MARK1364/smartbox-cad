@@ -5,11 +5,12 @@
  *   - object       — klik aktywuje całą formatkę / korpus (activeEntity)
  *   - subgeometry  — klik wybiera krawędź / naroże / płaszczyznę
  *
- * Złącza (tab-c2-connectors) mają dwa tryby sterowane przyciskiem
- * „Wstaw połączenia”:
- *   - wyłączony → object (zaznaczanie formatek, wejście do CNC)
- *   - włączony  → subgeometry (pick płaszczyzn styku, bez promocji formatki)
+ * Złącza (tab-c2-connectors) i Relacje (tab-s2-solver) mają tryb domyślny
+ * 'object' (zaznaczanie i edycja obiektów/formatek). W tryb 'subgeometry'
+ * wchodzą tylko wtedy, gdy aktywne jest narzędzie wskazywania (pipeta / picker).
  */
+
+import { ContextManager } from './context-manager.js';
 
 export type SelectionMode = 'object' | 'subgeometry';
 
@@ -22,7 +23,7 @@ export const MODULE_SELECTION_MODES: Record<string, SelectionMode> = {
     'tab-a5-smartparts': 'object',
     'tab-a7-material': 'object',
     'tab-agd': 'object',
-    'tab-s2-solver': 'subgeometry',
+    'tab-s2-solver': 'object',
     'tab-c2-connectors': 'object',
     'tab-o1-operacji': 'subgeometry',
     'tab-e1-export': 'object',
@@ -46,12 +47,16 @@ export function getSelectionModeForTab(tabId: string | null | undefined): Select
     if (tabId === 'tab-c2-connectors' && _connectorsPlanePickActive) {
         return 'subgeometry';
     }
+    if (tabId === 'tab-s2-solver' && ContextManager?.instance?.activeConstraintPicker) {
+        return ContextManager.instance.activeConstraintPicker.expectedKind === 'OBJECT' ? 'object' : 'subgeometry';
+    }
     return MODULE_SELECTION_MODES[tabId] ?? 'subgeometry';
 }
 
-/** Zakładki, w których klik podgeometrii nie aktywuje całej formatki/korpusu w drzewie. */
+/** Zakładki / stany, w których klik podgeometrii nie aktywuje całej formatki/korpusu w drzewie. */
 export function shouldPromoteSubgeometryToEntity(tabId: string | null | undefined): boolean {
-    if (tabId === 'tab-s2-solver') {
+    const cm = ContextManager?.instance;
+    if (cm?.activeReferencePicker || cm?.activeConstraintPicker) {
         return false;
     }
     if (tabId === 'tab-c2-connectors' && _connectorsPlanePickActive) {
@@ -62,7 +67,8 @@ export function shouldPromoteSubgeometryToEntity(tabId: string | null | undefine
 
 /** Zakładki bez zielonego obrysu całego komponentu (podświetlenie zostaje na wybranej podgeometrii). */
 export function shouldSuppressEntitySelectionHighlight(tabId: string | null | undefined): boolean {
-    if (tabId === 'tab-s2-solver') {
+    const cm = ContextManager?.instance;
+    if (cm?.activeReferencePicker || cm?.activeConstraintPicker) {
         return true;
     }
     if (tabId === 'tab-c2-connectors' && _connectorsPlanePickActive) {

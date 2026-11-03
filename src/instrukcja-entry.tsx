@@ -16,7 +16,12 @@ import { CAD_RESTORE_FLAG, installModulePageLifecycle } from './module-data/sess
 // odtworzyć projekt z ostatniego snapshotu (localStorage, wspólny z CAD).
 try {
     sessionStorage.setItem(CAD_RESTORE_FLAG, '1');
+    sessionStorage.setItem('CAD_MODE', 'instrukcja');
 } catch { /* ignore */ }
+if (typeof window !== 'undefined') {
+    (window as any).__CAD_MODE = 'instrukcja';
+    (window as any).__IS_INSTRUCTION_MODE = true;
+}
 
 // window.name = SmartPanelInstrukcja (nie koliduje z oknem CAD).
 const uninstallLifecycle = installModulePageLifecycle('instrukcja');

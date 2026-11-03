@@ -24,6 +24,8 @@ const FILE_PICKER_TYPES = [
 interface NativeFileHandle {
     name?: string;
     getFile(): Promise<File>;
+    queryPermission?(descriptor?: { mode: 'read' | 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>;
+    requestPermission?(descriptor?: { mode: 'read' | 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>;
     createWritable(): Promise<{
         write(data: string): Promise<void>;
         close(): Promise<void>;
@@ -111,9 +113,32 @@ export class ProjectFileIO {
         const filename = this.currentFileName || suggestedProjectFileName(document.name);
 
         if (this.fileHandle) {
-            await writeHandle(this.fileHandle, text);
-            this._afterWrite(document, payload);
-            return 'native';
+            try {
+                if (typeof this.fileHandle.queryPermission === 'function') {
+                    let perm = await this.fileHandle.queryPermission({ mode: 'readwrite' });
+                    if (perm !== 'granted' && typeof this.fileHandle.requestPermission === 'function') {
+                        perm = await this.fileHandle.requestPermission({ mode: 'readwrite' });
+                    }
+                    if (perm !== 'granted') {
+                        console.warn('[ProjectFileIO] Brak uprawnień do zapisu pliku, fallback do wyboru nowego pliku.');
+                        this.fileHandle = null;
+                    }
+                }
+            } catch (permErr) {
+                console.warn('[ProjectFileIO] Błąd sprawdzania uprawnień pliku:', permErr);
+                this.fileHandle = null;
+            }
+
+            if (this.fileHandle) {
+                try {
+                    await writeHandle(this.fileHandle, text);
+                    this._afterWrite(document, payload);
+                    return 'native';
+                } catch (writeErr) {
+                    console.warn('[ProjectFileIO] Błąd bezpośredniego zapisu do uchwytu, fallback do wyboru pliku:', writeErr);
+                    this.fileHandle = null;
+                }
+            }
         }
 
         if (hasSavePicker()) {

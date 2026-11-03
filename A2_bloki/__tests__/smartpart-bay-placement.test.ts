@@ -358,6 +358,44 @@ describe('A5_smartparts / smartpart-bay-placement — Parametryczne wpasowanie w
         expect(v2).toBeCloseTo(v - 300, 0);
     });
 
+    it('does not resolve a cut to a part by a matching display name', () => {
+        const doc = new ProjectDocument();
+        const panel = new PanelModel({
+            width: mmToNm(330),
+            height: mmToNm(1000),
+            thickness: mmToNm(18),
+            role: 'LEFT_SIDE_PANEL',
+        });
+        const node = CADNode.create(NodeType.PART, 'Side panel', panel.id);
+        node.domainData = panel;
+        node.setLocalTransform(
+            new Vec3(mmToNm(-291), 0, mmToNm(500)),
+            Quat.fromEulerXYZ(0, 0, -Math.PI / 2),
+        );
+        doc.addNode(doc.rootNode.id, node);
+        const frame = {
+            xL: -282, xR: 282,
+            zBottom: 0, zTop: 1000,
+            backY: 165, frontY: -165,
+            backToFront: -1 as const,
+            widthMm: 564, heightMm: 1000, depthMm: 330,
+            refs: { left: { nodeId: node.id, face: 'FACE_Z_PLUS', planeCoordMm: -282 } },
+        };
+        const definition = {
+            parts: [{
+                ...p40.parts[0],
+                id: 'stable-part-id',
+                name: 'Display name',
+            }],
+            cuts: [{
+                ...p40.cuts[0],
+                partId: 'old-id-Display name',
+            }],
+        };
+
+        expect(computeSmartPartCutIntents(doc, frame as any, definition, 'group')).toHaveLength(0);
+    });
+
     it('TT2: wcięcie na plecach jest przy lewym górnym rogu (nie na środku płyty)', () => {
         const doc = new ProjectDocument();
         const W = 564;
@@ -406,11 +444,11 @@ describe('A5_smartparts / smartpart-bay-placement — Parametryczne wpasowanie w
             }],
         };
         const intents = computeSmartPartCutIntents(doc, frame as any, def, 'grp');
-        const groove = intents.find((i) => i.feature.type === 'groove');
-        expect(groove).toBeTruthy();
-        expect(groove!.feature.face).toBe('FACE_Z_PLUS');
-        const u = groove!.feature.params.u as number;
-        const v = groove!.feature.params.v as number;
+        const cutout = intents.find((i) => i.feature.type === 'cutout');
+        expect(cutout).toBeTruthy();
+        expect(cutout!.feature.face).toBe('FACE_Z_PLUS');
+        const u = cutout!.feature.params.u as number;
+        const v = cutout!.feature.params.v as number;
         // Środek Parta X=10 od lewego → u blisko lewej; TOP−20 → małe V (od góry płyty)
         expect(u).toBeLessThan(W * 0.25);
         expect(v).toBeLessThan(H * 0.25);

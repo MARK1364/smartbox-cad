@@ -1,7 +1,7 @@
 /**
  * solver-core.ts — iteracyjny solver więzów geometrycznych.
  *
- * Pełny solver więzów (GROUND, VERTEX, COPLANAR, FLUSH)
+ * Pełny solver więzów (GROUND, VERTEX, VERTEX_DATUM, COPLANAR, FLUSH)
  * + wykrywanie i rozwiązywanie konfliktów (`solveWithConflictResolution`).
  *
  * JEDNOSTKI: milimetry (mm) oraz radiany (rad).
@@ -54,6 +54,7 @@ export const RELAX = 0.5;
 export const BIND_PRIORITY: Record<BindType, number> = {
     GROUND: 0,
     VERTEX: 1,
+    VERTEX_DATUM: 1,
     COPLANAR: 2,
     FLUSH: 2,
 };
@@ -62,6 +63,7 @@ export const BIND_PRIORITY: Record<BindType, number> = {
 export const IMPLEMENTED_BIND_TYPES: ReadonlySet<BindType> = new Set<BindType>([
     'GROUND',
     'VERTEX',
+    'VERTEX_DATUM',
     'COPLANAR',
     'FLUSH',
 ]);
@@ -257,7 +259,7 @@ export function solveConstraintsPure(
             }
         }
 
-        // 2. RELATYWNE — VERTEX, COPLANAR, FLUSH.
+        // 2. RELATYWNE — VERTEX, VERTEX_DATUM, COPLANAR, FLUSH.
         for (const bind of constraints) {
             if (bind.bindType === 'GROUND') {
                 continue;
@@ -275,7 +277,27 @@ export function solveConstraintsPure(
                 continue;
             }
 
-            if (bind.bindType === 'VERTEX') {
+            if (bind.bindType === 'VERTEX_DATUM' || (bind.bindType === 'VERTEX' && bind.vertA >= 0 && bind.faceB >= 0)) {
+                getVertexWorldPositionTo(stateA, bind.vertA, _rV0);
+                getFaceWorldDataTo(stateB, bind.faceB, _rCenterB, _rNormB);
+                vec3SubTo(_rV0, _rCenterB, _rV1);
+                const proj = vec3Dot(_rV1, _rNormB);
+                const targetDist = proj - bind.offset;
+
+                if (Math.abs(targetDist) > tol.linearMm) {
+                    const kB = wb === 0 ? 0 : wa === 0 ? RELAX : RELAX * wb;
+                    const kA = wa === 0 ? 0 : wb === 0 ? RELAX : RELAX * wa;
+                    if (kB > 0) {
+                        vec3ScaleTo(_rNormB, targetDist * kB, _rV2);
+                        vec3AddTo(stateB.location, _rV2, stateB.location);
+                    }
+                    if (kA > 0) {
+                        vec3ScaleTo(_rNormB, -targetDist * kA, _rV2);
+                        vec3AddTo(stateA.location, _rV2, stateA.location);
+                    }
+                    maxLinear = Math.max(maxLinear, Math.abs(targetDist));
+                }
+            } else if (bind.bindType === 'VERTEX') {
                 getVertexWorldPositionTo(stateA, bind.vertA, _rV0);
                 getVertexWorldPositionTo(stateB, bind.vertB, _rV1);
                 vec3SubTo(_rV0, _rV1, _rV2);
@@ -425,10 +447,22 @@ export function computeConstraintResidual(
             getFaceWorldDataTo(stateA, bind.faceA, _rCenterA, _rNormA);
             vec3SubTo(bind.groundPos, _rCenterA, _rV0);
             const posErr = vec3Len(_rV0);
-            vec3NormalizeTo(bind.groundNormal, _rV1);
-            const dot = Math.min(Math.abs(vec3Dot(_rNormA, _rV1)), 1.0);
+            const dot = Math.min(Math.abs(vec3Dot(_rNormA, bind.groundNormal)), 1.0);
             return { linearMm: posErr, angularRad: Math.acos(dot) };
         }
+    }
+
+    if (bind.bindType === 'VERTEX_DATUM' || (bind.bindType === 'VERTEX' && bind.vertA >= 0 && bind.faceB >= 0)) {
+        if (!stateA || !stateB) {
+            return emptyConstraintResidual();
+        }
+        getVertexWorldPositionTo(stateA, bind.vertA, _rV0);
+        getFaceWorldDataTo(stateB, bind.faceB, _rCenterB, _rNormB);
+        vec3SubTo(_rV0, _rCenterB, _rV1);
+        return {
+            linearMm: Math.abs(vec3Dot(_rV1, _rNormB) - bind.offset),
+            angularRad: 0,
+        };
     }
 
     if (bind.bindType === 'VERTEX') {
@@ -543,7 +577,13 @@ function detectAndSuppressConflicts(
     }
 
     const candidates = [...active]
-        .filter((b) => b.bindType === 'VERTEX' || b.bindType === 'COPLANAR' || b.bindType === 'FLUSH')
+        .filter(
+            (b) =>
+                b.bindType === 'VERTEX' ||
+                b.bindType === 'VERTEX_DATUM' ||
+                b.bindType === 'COPLANAR' ||
+                b.bindType === 'FLUSH',
+        )
         .sort((l, r) => (indexMap.get(r.constraintId) ?? 999) - (indexMap.get(l.constraintId) ?? 999));
 
     let newConflicts = false;

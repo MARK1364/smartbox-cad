@@ -27,6 +27,8 @@ import {
     type DomainHydrator,
 } from './domain-registry.js';
 import { HardwareModel } from './hardware-model.js';
+import { DatumLevelModel, GlcDomainModel } from '../S1_sketcher/datum-types.js';
+import { deduplicateName } from './naming.js';
 import appPackage from '../package.json';
 import {
     PROJECT_FORMAT,
@@ -141,6 +143,13 @@ export class ProjectDocument {
     }
 
     setActiveEntity(entity: DomainData | null): void {
+        const win = typeof window !== 'undefined' ? (window as any) : (typeof globalThis !== 'undefined' ? (globalThis as any) : null);
+        if (win) {
+            const isGlcDragging = Boolean(win.__glcAxis && win.__glcAxis.isDraggingGizmo);
+            if (!isGlcDragging) {
+                win.__glcGizmoActive = false;
+            }
+        }
         this.activeEntity = entity;
         this.emitChange('all');
     }
@@ -168,6 +177,19 @@ export class ProjectDocument {
     }
 
     // ─── Rejestr węzłów ──────────────────────────────────────────
+
+    private _assertNoDuplicateIds(node: CADNode, seenIds = new Set<string>()): void {
+        if (this._nodeIndex.has(node.id) && this._nodeIndex.get(node.id) !== node) {
+            throw new Error(`ProjectDocument: duplicate node ID "${node.id}".`);
+        }
+        if (seenIds.has(node.id)) {
+            throw new Error(`ProjectDocument: duplicate node ID "${node.id}" within subtree being added.`);
+        }
+        seenIds.add(node.id);
+        for (const child of node.children) {
+            this._assertNoDuplicateIds(child, seenIds);
+        }
+    }
 
     private _registerSubtree(node: CADNode): void {
         if (this._nodeIndex.has(node.id) && this._nodeIndex.get(node.id) !== node) {
@@ -198,6 +220,28 @@ export class ProjectDocument {
      */
     getNodesByType(type: NodeType): CADNode[] {
         return Array.from(this._nodeIndex.values()).filter(n => n.nodeType === type);
+    }
+
+    /**
+     * Zwraca zbiór wszystkich nazw węzłów w dokumencie.
+     * @param excludeNodeId Opcjonalne ID węzła do wykluczenia (np. przy zmianie własnej nazwy).
+     */
+    getAllNodeNames(excludeNodeId?: string): Set<string> {
+        const names = new Set<string>();
+        for (const [id, node] of this._nodeIndex) {
+            if (excludeNodeId && id === excludeNodeId) continue;
+            if (node.name) {
+                names.add(node.name);
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Zwraca unikalną nazwę w dokumencie (wzorem Blendera .001, .002...).
+     */
+    ensureUniqueNodeName(desiredName: string, excludeNodeId?: string): string {
+        return deduplicateName(desiredName, this.getAllNodeNames(excludeNodeId));
     }
 
     /**
@@ -234,21 +278,31 @@ export class ProjectDocument {
             ancestor = ancestor.parent;
         }
 
+        // 1. Walidacja unikalności ID w poddrzewie PRZED modyfikacją relacji parent-dziecko
+        this._assertNoDuplicateIds(node);
+
         parent.addChild(node);
 
-        // Jeśli podano konkretny indeks w liście dzieci
-        if (index !== undefined && index >= 0 && index < parent.children.length - 1) {
-            const childrenArr = (parent as any)._children as CADNode[];
-            if (childrenArr) {
-                const currentIdx = childrenArr.indexOf(node);
-                if (currentIdx !== -1) {
-                    childrenArr.splice(currentIdx, 1);
-                    childrenArr.splice(index, 0, node);
+        try {
+            // Jeśli podano konkretny indeks w liście dzieci
+            if (index !== undefined && index >= 0 && index < parent.children.length - 1) {
+                const childrenArr = (parent as any)._children as CADNode[];
+                if (childrenArr) {
+                    const currentIdx = childrenArr.indexOf(node);
+                    if (currentIdx !== -1) {
+                        childrenArr.splice(currentIdx, 1);
+                        childrenArr.splice(index, 0, node);
+                    }
                 }
             }
+
+            this._registerSubtree(node);
+        } catch (err) {
+            node.detach();
+            this._unregisterSubtree(node);
+            throw err;
         }
 
-        this._registerSubtree(node);
         this.emitChange('structure', [node.id, parentId]);
     }
 
@@ -267,6 +321,13 @@ export class ProjectDocument {
 
         node.detach();
         this._unregisterSubtree(node);
+
+        if (this.activeEntity) {
+            const activeId = (this.activeEntity as any).id;
+            if (activeId && (activeId === nodeId || !this.findNode(activeId))) {
+                this.setActiveEntity(null);
+            }
+        }
 
         this.emitChange('structure', parentId ? [nodeId, parentId] : [nodeId]);
         return node;
@@ -333,7 +394,10 @@ export class ProjectDocument {
             );
         }
         const container = factory(options);
-        const node = new CADNode(container.id, container.name, NodeType.ASSEMBLY);
+        const rawName = (options.name as string) || container.name || 'Korpus';
+        const uniqueName = this.ensureUniqueNodeName(rawName, container.id);
+        container.name = uniqueName;
+        const node = new CADNode(container.id, uniqueName, NodeType.ASSEMBLY);
         node.domainData = container;
         const targetParentId = parentId ?? this._rootNode.id;
         this.addNode(targetParentId, node);
@@ -354,11 +418,159 @@ export class ProjectDocument {
             thickness: options.thickness ?? options.depth,
         };
         const panel = factory(normalized);
-        const node = new CADNode(panel.id, panel.name, NodeType.PART);
+        const rawName = (options.name as string) || panel.name || 'Płyta';
+        const uniqueName = this.ensureUniqueNodeName(rawName, panel.id);
+        panel.name = uniqueName;
+        const node = new CADNode(panel.id, uniqueName, NodeType.PART);
         node.domainData = panel;
         const targetParentId = parentId ?? this._rootNode.id;
         this.addNode(targetParentId, node);
         return panel;
+    }
+
+    /**
+     * Zwraca węzeł GLC (globalny układ odniesienia sceny) lub tworzy go na początku drzewa rootNode.
+     * Domyślnie tworzy 2 poziomy odniesienia (każda sfera na osi Z reprezentowana 1:1 w drzewie):
+     * 1. datum_level_1 (z = 100 mm, "Płaszczyzna 1", visiblePlane: false)
+     * 2. datum_level_top (z = 2400 mm, "Góra osi Z", visiblePlane: false)
+     */
+    ensureGlcNode(name = 'Układ globalny (GLC)'): CADNode {
+        const existing = this.getGlcNode();
+        if (existing) {
+            const hasLevels = existing.children.filter(c => c.nodeType === NodeType.DATUM_LEVEL);
+            if (hasLevels.length === 0) {
+                const defaultLevelId = 'datum_level_1';
+                const defaultLevelName = 'Płaszczyzna 1';
+                const z_nm = mmToNm(100);
+                const levelNode = new CADNode(defaultLevelId, defaultLevelName, NodeType.DATUM_LEVEL);
+                levelNode.setLocalTransform(new Vec3(0, 0, z_nm), Quat.IDENTITY);
+                levelNode.domainData = new DatumLevelModel({
+                    id: defaultLevelId,
+                    name: defaultLevelName,
+                    z_nm,
+                    isLocked: false,
+                    visiblePlane: false,
+                    visible: true,
+                }) as any;
+                this.addNode(existing.id, levelNode);
+
+                const topLevelId = 'datum_level_top';
+                const topLevelName = 'Góra osi Z';
+                const top_z_nm = mmToNm(2400);
+                const topLevelNode = new CADNode(topLevelId, topLevelName, NodeType.DATUM_LEVEL);
+                topLevelNode.setLocalTransform(new Vec3(0, 0, top_z_nm), Quat.IDENTITY);
+                topLevelNode.domainData = new DatumLevelModel({
+                    id: topLevelId,
+                    name: topLevelName,
+                    z_nm: top_z_nm,
+                    isLocked: false,
+                    visiblePlane: false,
+                    visible: true,
+                }) as any;
+                this.addNode(existing.id, topLevelNode);
+            } else if (hasLevels.length === 1 && hasLevels[0].id === 'datum_level_1') {
+                const topLevelId = 'datum_level_top';
+                const topLevelName = 'Góra osi Z';
+                const top_z_nm = mmToNm(2400);
+                const topLevelNode = new CADNode(topLevelId, topLevelName, NodeType.DATUM_LEVEL);
+                topLevelNode.setLocalTransform(new Vec3(0, 0, top_z_nm), Quat.IDENTITY);
+                topLevelNode.domainData = new DatumLevelModel({
+                    id: topLevelId,
+                    name: topLevelName,
+                    z_nm: top_z_nm,
+                    isLocked: false,
+                    visiblePlane: false,
+                    visible: true,
+                }) as any;
+                this.addNode(existing.id, topLevelNode);
+            }
+            return existing;
+        }
+
+        const glcNode = new CADNode('glc_origin', name, NodeType.GLC_FRAME);
+        glcNode.domainData = new GlcDomainModel({
+            id: 'glc_origin',
+            name,
+            showPlanes: true,
+            showAxisZ: true,
+            axisZHeight_nm: mmToNm(2400),
+        }) as any;
+
+        this.addNode(this._rootNode.id, glcNode, 0);
+
+        // Domyślnie dodane dwa poziomy odniesienia (dół i czubek osi Z):
+        // 1. Dół (100 mm, "Płaszczyzna 1")
+        const defaultLevelId = 'datum_level_1';
+        const defaultLevelName = 'Płaszczyzna 1';
+        const z_nm = mmToNm(100);
+        const levelNode = new CADNode(defaultLevelId, defaultLevelName, NodeType.DATUM_LEVEL);
+        levelNode.setLocalTransform(new Vec3(0, 0, z_nm), Quat.IDENTITY);
+        levelNode.domainData = new DatumLevelModel({
+            id: defaultLevelId,
+            name: defaultLevelName,
+            z_nm,
+            isLocked: false,
+            visiblePlane: false,
+            visible: true,
+        }) as any;
+        this.addNode(glcNode.id, levelNode);
+
+        // 2. Czubek osi Z (2400 mm, "Góra osi Z")
+        const topLevelId = 'datum_level_top';
+        const topLevelName = 'Góra osi Z';
+        const top_z_nm = mmToNm(2400);
+        const topLevelNode = new CADNode(topLevelId, topLevelName, NodeType.DATUM_LEVEL);
+        topLevelNode.setLocalTransform(new Vec3(0, 0, top_z_nm), Quat.IDENTITY);
+        topLevelNode.domainData = new DatumLevelModel({
+            id: topLevelId,
+            name: topLevelName,
+            z_nm: top_z_nm,
+            isLocked: false,
+            visiblePlane: false,
+            visible: true,
+        }) as any;
+        this.addNode(glcNode.id, topLevelNode);
+
+        return glcNode;
+    }
+
+    /**
+     * Wyszukuje pierwszy węzeł GLC_FRAME w dokumencie.
+     */
+    getGlcNode(): CADNode | null {
+        for (const child of this._rootNode.children) {
+            if (child.nodeType === NodeType.GLC_FRAME) {
+                return child;
+            }
+        }
+        return this.findNode('glc_origin');
+    }
+
+    /**
+     * Dodaje poziom odniesienia (Datum Level / Sferę Z) pod układem globalnym GLC.
+     * @param z_mm Wysokość poziomu w milimetrach (UI)
+     * @param name Opcjonalna nazwa (np. "Wierzch blatu")
+     */
+    addDatumLevel(z_mm: number, name?: string): CADNode {
+        const glc = this.ensureGlcNode();
+        const levelId = `level_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+        const rawName = name ?? `Poziom Z = ${z_mm} mm`;
+        const levelName = this.ensureUniqueNodeName(rawName);
+        const levelNode = new CADNode(levelId, levelName, NodeType.DATUM_LEVEL);
+
+        const z_nm = mmToNm(z_mm);
+        levelNode.setLocalTransform(new Vec3(0, 0, z_nm), Quat.IDENTITY);
+        levelNode.domainData = new DatumLevelModel({
+            id: levelId,
+            name: levelName,
+            z_nm,
+            isLocked: false,
+            visiblePlane: false,
+            visible: true,
+        }) as any;
+
+        this.addNode(glc.id, levelNode);
+        return levelNode;
     }
 
     /**
@@ -371,6 +583,7 @@ export class ProjectDocument {
         const json = this._serializeNode(sourceNode);
 
         const idMap = new Map<string, string>();
+        const existingNames = new Set(this.getAllNodeNames());
 
         const collectAndAssignNewIds = (data: any) => {
             const oldId = data.id;
@@ -379,10 +592,16 @@ export class ProjectDocument {
                 idMap.set(oldId, newId);
             }
             data.id = newId;
-            data.name = `${data.name || 'Obiekt'} (Kopia)`;
+
+            // Zapewnienie unikalności nazwy wzorem Blendera (.001, .002...)
+            const baseName = data.name || 'Obiekt';
+            const uniqueName = deduplicateName(baseName, existingNames);
+            existingNames.add(uniqueName);
+            data.name = uniqueName;
+
             if (data.domainData) {
                 data.domainData.id = newId;
-                data.domainData.name = data.name;
+                data.domainData.name = uniqueName;
             }
             if (data.children && Array.isArray(data.children)) {
                 for (const child of data.children) {
@@ -590,6 +809,12 @@ export class ProjectDocument {
                 if (node.nodeType === NodeType.HARDWARE && data && typeof data === 'object') {
                     data = HardwareModel.fromJSON(data);
                     node.domainData = data;
+                } else if (node.nodeType === NodeType.GLC_FRAME && data && typeof data === 'object') {
+                    data = GlcDomainModel.fromJSON(data);
+                    node.domainData = data;
+                } else if (node.nodeType === NodeType.DATUM_LEVEL && data && typeof data === 'object') {
+                    data = DatumLevelModel.fromJSON(data);
+                    node.domainData = data;
                 } else {
                     throw new Error(
                         `ProjectDocument.serialize: węzeł "${node.id}" (${node.nodeType}) ma domainData bez toJSON() — dane zostałyby pominięte.`
@@ -628,17 +853,74 @@ export class ProjectDocument {
 
         const normalized = migrateProjectToCurrent(data);
 
-        this._nodeIndex.clear();
-        this.id = normalized.id || this.id;
-        this.name = normalized.name || this.name;
-        this.metadata = normalized.metadata ? { ...normalized.metadata } : {};
-        this._rootNode = this._deserializeNode(normalized.rootNode);
+        // Kopia bezpieczeństwa przed rozpoczęciem deserializacji
+        const prevIndex = new Map(this._nodeIndex);
+        const prevRoot = this._rootNode;
+        const prevId = this.id;
+        const prevName = this.name;
+        const prevMetadata = this.metadata;
+        const prevRevision = this._revision;
+        const prevOrphans = this._orphanExtensions;
+        const prevActiveEntity = this.activeEntity;
+        const prevExtensionsState = new Map<string, any>();
+        for (const [key, ext] of this._extensions) {
+            try {
+                const state = ext.serialize();
+                prevExtensionsState.set(
+                    key,
+                    state === undefined ? undefined : JSON.parse(JSON.stringify(state)),
+                );
+            } catch (snapshotError) {
+                throw new Error(
+                    `ProjectDocument.load: nie można zapisać stanu rozszerzenia "${key}" na potrzeby rollbacku: ` +
+                    `${snapshotError instanceof Error ? snapshotError.message : String(snapshotError)}`
+                );
+            }
+        }
 
-        this.activeEntity = null;
-        this._revision = 0;
-        this._loadExtensions(normalized.extensions ?? {}, options);
-        this.emitChange('loaded');
-        this._savedRevision = this._revision;
+        try {
+            this._nodeIndex.clear();
+            this.id = normalized.id || this.id;
+            this.name = normalized.name || this.name;
+            this.metadata = normalized.metadata ? { ...normalized.metadata } : {};
+            this._rootNode = this._deserializeNode(normalized.rootNode);
+
+            this.activeEntity = null;
+            this._revision = 0;
+            this._loadExtensions(normalized.extensions ?? {}, options);
+            this.emitChange('loaded');
+            this._savedRevision = this._revision;
+        } catch (err) {
+            // Rollback w przypadku błędu ładowania / hydratacji / rozszerzeń
+            this._nodeIndex = prevIndex;
+            this._rootNode = prevRoot;
+            this.id = prevId;
+            this.name = prevName;
+            this.metadata = prevMetadata;
+            this._revision = prevRevision;
+            this._orphanExtensions = prevOrphans;
+            this.activeEntity = prevActiveEntity;
+            const rollbackErrors: string[] = [];
+            for (const [key, savedState] of prevExtensionsState) {
+                const ext = this._extensions.get(key);
+                if (ext) {
+                    try {
+                        ext.load(savedState);
+                    } catch (rollbackError) {
+                        rollbackErrors.push(
+                            `"${key}": ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+                        );
+                    }
+                }
+            }
+            if (rollbackErrors.length > 0) {
+                const loadError = err instanceof Error ? err.message : String(err);
+                throw new Error(
+                    `ProjectDocument.load: ${loadError}; rollback rozszerzeń nie powiódł się: ${rollbackErrors.join('; ')}`
+                );
+            }
+            throw err;
+        }
     }
 
     private _hydrateDomainData(node: CADNode, nodeJson: any): void {

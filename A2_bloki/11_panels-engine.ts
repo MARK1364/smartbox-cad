@@ -164,9 +164,9 @@ export function calculatePanelsPlan(
     const depth_mm = dims_mm.depth_mm;
     const grubosc_blendy_mm = params.grubosc_blendy_mm;
 
-    const depthLeft_mm = params.auto_glebokosc_lewy ? depth_mm : params.glebokosc_blendy_lewa_mm;
-    const depthRight_mm = params.auto_glebokosc_prawy ? depth_mm : params.glebokosc_blendy_prawa_mm;
-    const depthTop_mm = params.auto_glebokosc_gorny ? depth_mm : params.glebokosc_blendy_gora_mm;
+    const depthLeft_mm = Math.max(10, params.auto_glebokosc_lewy ? depth_mm : params.glebokosc_blendy_lewa_mm);
+    const depthRight_mm = Math.max(10, params.auto_glebokosc_prawy ? depth_mm : params.glebokosc_blendy_prawa_mm);
+    const depthTop_mm = Math.max(10, params.auto_glebokosc_gorny ? depth_mm : params.glebokosc_blendy_gora_mm);
 
     const { sideH, zCenter } = calcSideSpan(
         params.tryb_paneli_bocznych,

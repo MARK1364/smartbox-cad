@@ -28,6 +28,7 @@ import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
 import { getAllPanels } from './document-queries.js';
 import { createRebuildGeometry } from './geometry-rebuild.js';
+import { applyAllAssociativeDims } from '../../A4_smartpanel/associative-dim.js';
 import { generate10CabinetsRow, expandCabinet, generateWardrobeDemo } from '../../S2_solver/demo-row.js';
 import { registerTreeActionHandlers } from './tree-action-handlers.js';
 
@@ -134,7 +135,7 @@ async function main() {
                 const panelModel = data.panelModel || data.mesh?.metadata?.panelModel || null;
                 if (panelModel && data.face) {
                     const payload = {
-                        partKey: (panelModel as any).key || panelModel.name || panelModel.id,
+                        partKey: (panelModel as any).key || panelModel.id,
                         face: data.face,
                         panelModel,
                         nodeId: panelModel.id,
@@ -215,7 +216,10 @@ async function main() {
     });
 
     // ─── Rejestracja synchronizacji aktywnej encji ───
-    ctx.document.onDocumentChanged(() => {
+    ctx.document.onDocumentChanged((evt: any) => {
+        if (evt?.type === 'dimensions' || evt?.type === 'transform' || evt?.type === 'all') {
+            applyAllAssociativeDims(ctx.document);
+        }
         const active = ctx.document.activeEntity;
 
         syncSelectionHighlights(ctx);
@@ -320,12 +324,69 @@ async function main() {
         // Restore sesji ≠ krok Undo. Historia edycji = CommandHistory (pusta po starcie/load).
         ContextManager.instance.commandHistory?.clear();
         if (consumeCadRestoreFlag()) {
-            const snapshot = readProjectSnapshot();
+            let snapshot = readProjectSnapshot();
             if (snapshot) {
                 try {
+                    const isInstructionMode = typeof window !== 'undefined' && (
+                        window.name === 'SmartPanelInstrukcja' ||
+                        window.location.pathname.includes('instrukcja') ||
+                        (window as any).__CAD_MODE === 'instrukcja' ||
+                        sessionStorage.getItem('CAD_MODE') === 'instrukcja'
+                    );
+                    if (isInstructionMode) {
+                        const { readModuleSession } = await import('../module-data/session.js');
+                        const session = readModuleSession<any>('instrukcja');
+                        if (session?.snapshot) {
+                            snapshot = session.snapshot;
+                        } else {
+                            const targetContainerId = session?.scope?.type === 'CONTAINER' || session?.scope?.type === 'BLOKI'
+                                ? session.scope.id
+                                : (session?.scope?.id && session.scope.id !== 'ALL' && session.scope.id !== 'project'
+                                    ? session.scope.id
+                                    : null);
+
+                            if (targetContainerId) {
+                                const { isolateContainerInSnapshot } = await import('../../I1_instrukcja/assembly-scene-adapter.js');
+                                snapshot = isolateContainerInSnapshot(snapshot, targetContainerId);
+                            }
+                        }
+                    }
                     ctx.document.load(snapshot);
                     ContextManager.instance.commandHistory?.clear();
                     rebuildGeometry(tx(srcTekst, 'cadapp.project_restored_back', TX_NS));
+                    if (isInstructionMode) {
+                        try {
+                            ctx.viewport?.zoomToFit?.();
+                        } catch { /* ignore */ }
+
+                        // Nasłuchiwanie na zmianę korpusu z CAD gdy okno instrukcji jest już otwarte
+                        try {
+                            const { CAD_BRIDGE_CHANNEL, MODULE_SESSION_UPDATED_MSG, readModuleSession } = await import('../module-data/session.js');
+                            const channel = new BroadcastChannel(CAD_BRIDGE_CHANNEL);
+                            channel.onmessage = async (ev) => {
+                                if (ev.data?.type === MODULE_SESSION_UPDATED_MSG && ev.data?.module === 'instrukcja') {
+                                    const sess = readModuleSession<any>('instrukcja');
+                                    let newSnap = sess?.snapshot;
+                                    if (!newSnap && sess?.scope?.id) {
+                                        const { readProjectSnapshot } = await import('../module-data/session.js');
+                                        const full = readProjectSnapshot();
+                                        if (full) {
+                                            const { isolateContainerInSnapshot } = await import('../../I1_instrukcja/assembly-scene-adapter.js');
+                                            newSnap = isolateContainerInSnapshot(full, sess.scope.id);
+                                        }
+                                    }
+                                    if (newSnap) {
+                                        ctx.document.load(newSnap);
+                                        ContextManager.instance.commandHistory?.clear();
+                                        rebuildGeometry(tx(srcTekst, 'cadapp.project_restored_back', TX_NS));
+                                        try {
+                                            ctx.viewport?.zoomToFit?.();
+                                        } catch { /* ignore */ }
+                                    }
+                                }
+                            };
+                        } catch { /* ignore */ }
+                    }
                     console.log('SmartPanel Web — restored project after module return');
                 } catch (restoreErr) {
                     console.error('Restore failed, empty scene:', restoreErr);

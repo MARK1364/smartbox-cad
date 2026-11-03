@@ -4,7 +4,14 @@ import { AluFrameManager } from '../alu-frame-manager.js';
 import { buildProfileFrameMesh } from './alu-frame-profile.js';
 import { computeFaceData, localTo3D, local3DToFaceUV } from './face-lcs.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
-import { buildPolygonPanelTopology, deriveOutlineWithCutouts, extractGrooveBoxes, splitSegmentByGrooves } from './polygon-extrusion.js';
+import {
+    buildPolygonPanelTopology,
+    deriveOutlineWithCutouts,
+    extractGrooveBoxes,
+    splitSegmentByGrooves,
+    triangulateWallSubsegs
+} from './polygon-extrusion.js';
+import { dissolveCoplanarEdges } from './brep-topology.js';
 import { buildBeveledBox, hasEdgeCutConfig, readEdgeCutConfig } from './edge-bevel.js';
 import { buildSkosnyRoofWithTrapezoidGroove } from './skosny-roof-groove.js';
 import { buildBoxPanelMeshData } from './plate-buffer-builder.js';
@@ -499,19 +506,15 @@ export function buildMeshFromPanel(model: any) {
                 if (grooveBoxes.length === 0) {
                     result[side.face] = box.sides[side.edgeKey];
                 } else {
-                    const pos: number[] = [];
-                    const ind: number[] = [];
-                    let vertOffset = 0;
-                    for (const sub of subsegs) {
-                        const p0t = evalBevelPerimeter3D(sub.u0, sub.v0, sub.depthPlus);
-                        const p1t = evalBevelPerimeter3D(sub.u1, sub.v1, sub.depthPlus);
-                        const p0b = evalBevelPerimeter3D(sub.u0, sub.v0, modelThickness - sub.depthMinus);
-                        const p1b = evalBevelPerimeter3D(sub.u1, sub.v1, modelThickness - sub.depthMinus);
-                        pos.push(...p0t, ...p1t, ...p1b, ...p0b);
-                        ind.push(vertOffset, vertOffset + 2, vertOffset + 1, vertOffset, vertOffset + 3, vertOffset + 2);
-                        vertOffset += 4;
-                    }
-                    result[side.face] = { positions: pos, indices: ind };
+                    const first = subsegs[0];
+                    const last = subsegs[subsegs.length - 1];
+                    const wallMesh = triangulateWallSubsegs(
+                        first.u0, first.v0,
+                        last.u1, last.v1,
+                        modelThickness, subsegs,
+                        (u, v, d) => evalBevelPerimeter3D(u, v, d)
+                    );
+                    result[side.face] = { positions: wallMesh.positions, indices: wallMesh.indices };
                 }
             } else {
                 // Lokalna baza (LCS) skośnej ściany dla nawiertów bocznych (hole)
@@ -629,6 +632,7 @@ export function buildMeshFromPanel(model: any) {
                 FACE_Z_MINUS: { faceContour: contourZMinus, bottomContour: bottomContourZMinus }
             }
         );
+        result.edges = dissolveCoplanarEdges(result);
 
         return result;
     }

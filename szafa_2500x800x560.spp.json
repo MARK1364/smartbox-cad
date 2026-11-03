@@ -2,7 +2,7 @@
   "format": "smartpanel-project",
   "version": 4,
   "domainUnit": "nm",
-  "id": "doc_1793219169228_5722",
+  "id": "doc_1793723327388_602",
   "name": "Szafa 2500x800x560",
   "metadata": {
     "appVersion": "0.0.0"
@@ -29,7 +29,7 @@
     ],
     "children": [
       {
-        "id": "container_1793219169230_1_836612",
+        "id": "container_1793723327390_1_371247",
         "name": "Korpus 1",
         "nodeType": "ASSEMBLY",
         "translationNm": [
@@ -108,6 +108,7 @@
                 "material_name": "Biały Alpejski",
                 "material_code": "W1100 ST9",
                 "thickness_mm": 18,
+                "zone": "SEKCJA_B",
                 "edge_banding": {
                   "+X": {
                     "active": true,
@@ -128,6 +129,9 @@
                 },
                 "is_bloki_child": true
               },
+              "key": "BOK_L",
+              "zoneId": "SEKCJA_B",
+              "zonePrefix": "B_",
               "engineManaged": true,
               "associativeDims": null,
               "panelForm": "SOLID",
@@ -150,7 +154,7 @@
                     "length_nm": 2486000000,
                     "depth_nm": 11000000
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:feat_back_groove_panel_1"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:feat_back_groove_panel_1"
                 },
                 {
                   "id": "shelf_1_left_front",
@@ -161,7 +165,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -176,10 +180,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_1_left_front"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_1_left_front"
                 },
                 {
                   "id": "shelf_1_left_back",
@@ -190,7 +194,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -205,10 +209,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_1_left_back"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_1_left_back"
                 },
                 {
                   "id": "shelf_1_left_front_top",
@@ -219,7 +223,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -234,10 +238,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_1_left_front_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_1_left_front_top"
                 },
                 {
                   "id": "shelf_1_left_back_top",
@@ -248,7 +252,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -263,10 +267,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_1_left_back_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_1_left_back_top"
                 },
                 {
                   "id": "shelf_1_left_front_bottom",
@@ -277,7 +281,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -292,10 +296,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_1_left_front_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_1_left_front_bottom"
                 },
                 {
                   "id": "shelf_1_left_back_bottom",
@@ -306,7 +310,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -321,10 +325,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_1_left_back_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_1_left_back_bottom"
                 },
                 {
                   "id": "shelf_2_left_front",
@@ -335,7 +339,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -350,10 +354,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_2_left_front"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_2_left_front"
                 },
                 {
                   "id": "shelf_2_left_back",
@@ -364,7 +368,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -379,10 +383,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_2_left_back"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_2_left_back"
                 },
                 {
                   "id": "shelf_2_left_front_top",
@@ -393,7 +397,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -408,10 +412,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_2_left_front_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_2_left_front_top"
                 },
                 {
                   "id": "shelf_2_left_back_top",
@@ -422,7 +426,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -437,10 +441,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_2_left_back_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_2_left_back_top"
                 },
                 {
                   "id": "shelf_2_left_front_bottom",
@@ -451,7 +455,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -466,10 +470,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_2_left_front_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_2_left_front_bottom"
                 },
                 {
                   "id": "shelf_2_left_back_bottom",
@@ -480,7 +484,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -495,10 +499,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_2_left_back_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_2_left_back_bottom"
                 },
                 {
                   "id": "shelf_3_left_front",
@@ -509,7 +513,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -524,10 +528,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_3_left_front"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_3_left_front"
                 },
                 {
                   "id": "shelf_3_left_back",
@@ -538,7 +542,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -553,10 +557,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_3_left_back"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_3_left_back"
                 },
                 {
                   "id": "shelf_3_left_front_top",
@@ -567,7 +571,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -582,10 +586,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_3_left_front_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_3_left_front_top"
                 },
                 {
                   "id": "shelf_3_left_back_top",
@@ -596,7 +600,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -611,10 +615,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_3_left_back_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_3_left_back_top"
                 },
                 {
                   "id": "shelf_3_left_front_bottom",
@@ -625,7 +629,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -640,10 +644,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_3_left_front_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_3_left_front_bottom"
                 },
                 {
                   "id": "shelf_3_left_back_bottom",
@@ -654,7 +658,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -669,10 +673,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_3_left_back_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_3_left_back_bottom"
                 },
                 {
                   "id": "shelf_4_left_front",
@@ -683,7 +687,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -698,10 +702,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_4_left_front"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_4_left_front"
                 },
                 {
                   "id": "shelf_4_left_back",
@@ -712,7 +716,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -727,10 +731,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_4_left_back"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_4_left_back"
                 },
                 {
                   "id": "shelf_4_left_front_top",
@@ -741,7 +745,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -756,10 +760,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_4_left_front_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_4_left_front_top"
                 },
                 {
                   "id": "shelf_4_left_back_top",
@@ -770,7 +774,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -785,10 +789,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_4_left_back_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_4_left_back_top"
                 },
                 {
                   "id": "shelf_4_left_front_bottom",
@@ -799,7 +803,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -814,10 +818,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_4_left_front_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_4_left_front_bottom"
                 },
                 {
                   "id": "shelf_4_left_back_bottom",
@@ -828,7 +832,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -843,10 +847,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_4_left_back_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_4_left_back_bottom"
                 },
                 {
                   "id": "shelf_5_left_front",
@@ -857,7 +861,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -872,10 +876,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_5_left_front"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_5_left_front"
                 },
                 {
                   "id": "shelf_5_left_back",
@@ -886,7 +890,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -901,10 +905,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_5_left_back"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_5_left_back"
                 },
                 {
                   "id": "shelf_5_left_front_top",
@@ -915,7 +919,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -930,10 +934,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_5_left_front_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_5_left_front_top"
                 },
                 {
                   "id": "shelf_5_left_back_top",
@@ -944,7 +948,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -959,10 +963,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_5_left_back_top"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_5_left_back_top"
                 },
                 {
                   "id": "shelf_5_left_front_bottom",
@@ -973,7 +977,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -988,10 +992,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_5_left_front_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_5_left_front_bottom"
                 },
                 {
                   "id": "shelf_5_left_back_bottom",
@@ -1002,7 +1006,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -1017,10 +1021,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:shelf_5_left_back_bottom"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:shelf_5_left_back_bottom"
                 },
                 {
                   "id": "hinge_plate_l_1_Prowadnik_otw_G",
@@ -1028,11 +1032,11 @@
                   "face": "FACE_Z_PLUS",
                   "side": "FACE_Z_PLUS",
                   "drivenBy": {
-                    "nodeId": "container_1793219169263_3_53533_hinge_left_1",
+                    "nodeId": "container_1793723327434_3_69919_hinge_left_1",
                     "role": "HARDWARE",
                     "hardwareType": "HINGE",
                     "partKey": "Hinge_L1",
-                    "containerId": "container_1793219169263_3_53533"
+                    "containerId": "container_1793723327434_3_69919"
                   },
                   "rule": "mount_plate",
                   "generatedBy": "blok_doors",
@@ -1047,10 +1051,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isDoorDrilling": true,
-                    "sourceContainerId": "container_1793219169263_3_53533",
+                    "sourceContainerId": "container_1793723327434_3_69919",
                     "sourcePartId": "Hinge_L1"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:hinge_plate_l_1_Prowadnik_otw_G"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:hinge_plate_l_1_Prowadnik_otw_G"
                 },
                 {
                   "id": "hinge_plate_l_1_Prowadnik_otw_D",
@@ -1058,11 +1062,11 @@
                   "face": "FACE_Z_PLUS",
                   "side": "FACE_Z_PLUS",
                   "drivenBy": {
-                    "nodeId": "container_1793219169263_3_53533_hinge_left_1",
+                    "nodeId": "container_1793723327434_3_69919_hinge_left_1",
                     "role": "HARDWARE",
                     "hardwareType": "HINGE",
                     "partKey": "Hinge_L1",
-                    "containerId": "container_1793219169263_3_53533"
+                    "containerId": "container_1793723327434_3_69919"
                   },
                   "rule": "mount_plate",
                   "generatedBy": "blok_doors",
@@ -1077,10 +1081,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isDoorDrilling": true,
-                    "sourceContainerId": "container_1793219169263_3_53533",
+                    "sourceContainerId": "container_1793723327434_3_69919",
                     "sourcePartId": "Hinge_L1"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:hinge_plate_l_1_Prowadnik_otw_D"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:hinge_plate_l_1_Prowadnik_otw_D"
                 },
                 {
                   "id": "hinge_plate_l_6_Prowadnik_otw_G",
@@ -1088,11 +1092,11 @@
                   "face": "FACE_Z_PLUS",
                   "side": "FACE_Z_PLUS",
                   "drivenBy": {
-                    "nodeId": "container_1793219169263_3_53533_hinge_left_6",
+                    "nodeId": "container_1793723327434_3_69919_hinge_left_6",
                     "role": "HARDWARE",
                     "hardwareType": "HINGE",
                     "partKey": "Hinge_L6",
-                    "containerId": "container_1793219169263_3_53533"
+                    "containerId": "container_1793723327434_3_69919"
                   },
                   "rule": "mount_plate",
                   "generatedBy": "blok_doors",
@@ -1107,10 +1111,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isDoorDrilling": true,
-                    "sourceContainerId": "container_1793219169263_3_53533",
+                    "sourceContainerId": "container_1793723327434_3_69919",
                     "sourcePartId": "Hinge_L6"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:hinge_plate_l_6_Prowadnik_otw_G"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:hinge_plate_l_6_Prowadnik_otw_G"
                 },
                 {
                   "id": "hinge_plate_l_6_Prowadnik_otw_D",
@@ -1118,11 +1122,11 @@
                   "face": "FACE_Z_PLUS",
                   "side": "FACE_Z_PLUS",
                   "drivenBy": {
-                    "nodeId": "container_1793219169263_3_53533_hinge_left_6",
+                    "nodeId": "container_1793723327434_3_69919_hinge_left_6",
                     "role": "HARDWARE",
                     "hardwareType": "HINGE",
                     "partKey": "Hinge_L6",
-                    "containerId": "container_1793219169263_3_53533"
+                    "containerId": "container_1793723327434_3_69919"
                   },
                   "rule": "mount_plate",
                   "generatedBy": "blok_doors",
@@ -1137,10 +1141,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isDoorDrilling": true,
-                    "sourceContainerId": "container_1793219169263_3_53533",
+                    "sourceContainerId": "container_1793723327434_3_69919",
                     "sourcePartId": "Hinge_L6"
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:hinge_plate_l_6_Prowadnik_otw_D"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:hinge_plate_l_6_Prowadnik_otw_D"
                 },
                 {
                   "id": "op_rewizja_FACE_Z_MINUS",
@@ -1170,7 +1174,7 @@
                     "u_ref": 300,
                     "v_ref": 150
                   },
-                  "smartId": "sb:main/part:qzgsrht3rno/feat:op_rewizja_FACE_Z_MINUS"
+                  "smartId": "sb:main/part:gvyyvxo4jg/feat:op_rewizja_FACE_Z_MINUS"
                 }
               ],
               "cncPrograms": [
@@ -1817,6 +1821,7 @@
                 "material_name": "Biały Alpejski",
                 "material_code": "W1100 ST9",
                 "thickness_mm": 18,
+                "zone": "SEKCJA_B",
                 "edge_banding": {
                   "+X": {
                     "active": false,
@@ -1837,6 +1842,9 @@
                 },
                 "is_bloki_child": true
               },
+              "key": "BOK_P",
+              "zoneId": "SEKCJA_B",
+              "zonePrefix": "B_",
               "engineManaged": true,
               "associativeDims": null,
               "panelForm": "SOLID",
@@ -1859,7 +1867,7 @@
                     "length_nm": 2486000000,
                     "depth_nm": 11000000
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:feat_back_groove_panel_2"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:feat_back_groove_panel_2"
                 },
                 {
                   "id": "shelf_1_right_front",
@@ -1870,7 +1878,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -1885,10 +1893,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_1_right_front"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_1_right_front"
                 },
                 {
                   "id": "shelf_1_right_back",
@@ -1899,7 +1907,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -1914,10 +1922,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_1_right_back"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_1_right_back"
                 },
                 {
                   "id": "shelf_1_right_front_top",
@@ -1928,7 +1936,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -1943,10 +1951,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_1_right_front_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_1_right_front_top"
                 },
                 {
                   "id": "shelf_1_right_back_top",
@@ -1957,7 +1965,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -1972,10 +1980,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_1_right_back_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_1_right_back_top"
                 },
                 {
                   "id": "shelf_1_right_front_bottom",
@@ -1986,7 +1994,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2001,10 +2009,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_1_right_front_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_1_right_front_bottom"
                 },
                 {
                   "id": "shelf_1_right_back_bottom",
@@ -2015,7 +2023,7 @@
                     "nodeId": "panel_6",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_1",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2030,10 +2038,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_1"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_1_right_back_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_1_right_back_bottom"
                 },
                 {
                   "id": "shelf_2_right_front",
@@ -2044,7 +2052,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2059,10 +2067,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_2_right_front"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_2_right_front"
                 },
                 {
                   "id": "shelf_2_right_back",
@@ -2073,7 +2081,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2088,10 +2096,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_2_right_back"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_2_right_back"
                 },
                 {
                   "id": "shelf_2_right_front_top",
@@ -2102,7 +2110,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2117,10 +2125,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_2_right_front_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_2_right_front_top"
                 },
                 {
                   "id": "shelf_2_right_back_top",
@@ -2131,7 +2139,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2146,10 +2154,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_2_right_back_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_2_right_back_top"
                 },
                 {
                   "id": "shelf_2_right_front_bottom",
@@ -2160,7 +2168,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2175,10 +2183,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_2_right_front_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_2_right_front_bottom"
                 },
                 {
                   "id": "shelf_2_right_back_bottom",
@@ -2189,7 +2197,7 @@
                     "nodeId": "panel_7",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_2",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2204,10 +2212,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_2"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_2_right_back_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_2_right_back_bottom"
                 },
                 {
                   "id": "shelf_3_right_front",
@@ -2218,7 +2226,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2233,10 +2241,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_3_right_front"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_3_right_front"
                 },
                 {
                   "id": "shelf_3_right_back",
@@ -2247,7 +2255,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2262,10 +2270,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_3_right_back"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_3_right_back"
                 },
                 {
                   "id": "shelf_3_right_front_top",
@@ -2276,7 +2284,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2291,10 +2299,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_3_right_front_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_3_right_front_top"
                 },
                 {
                   "id": "shelf_3_right_back_top",
@@ -2305,7 +2313,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2320,10 +2328,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_3_right_back_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_3_right_back_top"
                 },
                 {
                   "id": "shelf_3_right_front_bottom",
@@ -2334,7 +2342,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2349,10 +2357,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_3_right_front_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_3_right_front_bottom"
                 },
                 {
                   "id": "shelf_3_right_back_bottom",
@@ -2363,7 +2371,7 @@
                     "nodeId": "panel_8",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_3",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2378,10 +2386,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_3"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_3_right_back_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_3_right_back_bottom"
                 },
                 {
                   "id": "shelf_4_right_front",
@@ -2392,7 +2400,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2407,10 +2415,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_4_right_front"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_4_right_front"
                 },
                 {
                   "id": "shelf_4_right_back",
@@ -2421,7 +2429,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2436,10 +2444,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_4_right_back"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_4_right_back"
                 },
                 {
                   "id": "shelf_4_right_front_top",
@@ -2450,7 +2458,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2465,10 +2473,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_4_right_front_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_4_right_front_top"
                 },
                 {
                   "id": "shelf_4_right_back_top",
@@ -2479,7 +2487,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2494,10 +2502,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_4_right_back_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_4_right_back_top"
                 },
                 {
                   "id": "shelf_4_right_front_bottom",
@@ -2508,7 +2516,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2523,10 +2531,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_4_right_front_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_4_right_front_bottom"
                 },
                 {
                   "id": "shelf_4_right_back_bottom",
@@ -2537,7 +2545,7 @@
                     "nodeId": "panel_9",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_4",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2552,10 +2560,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_4"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_4_right_back_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_4_right_back_bottom"
                 },
                 {
                   "id": "shelf_5_right_front",
@@ -2566,7 +2574,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2581,10 +2589,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_5_right_front"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_5_right_front"
                 },
                 {
                   "id": "shelf_5_right_back",
@@ -2595,7 +2603,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2610,10 +2618,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_5_right_back"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_5_right_back"
                 },
                 {
                   "id": "shelf_5_right_front_top",
@@ -2624,7 +2632,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2639,10 +2647,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_5_right_front_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_5_right_front_top"
                 },
                 {
                   "id": "shelf_5_right_back_top",
@@ -2653,7 +2661,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2668,10 +2676,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_5_right_back_top"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_5_right_back_top"
                 },
                 {
                   "id": "shelf_5_right_front_bottom",
@@ -2682,7 +2690,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2697,10 +2705,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_5_right_front_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_5_right_front_bottom"
                 },
                 {
                   "id": "shelf_5_right_back_bottom",
@@ -2711,7 +2719,7 @@
                     "nodeId": "panel_10",
                     "role": "SHELF_PANEL",
                     "partKey": "Polka_5",
-                    "containerId": "container_1793219169250_2_154957"
+                    "containerId": "container_1793723327418_2_766787"
                   },
                   "rule": "shelf_pin",
                   "generatedBy": "blok_shelves",
@@ -2726,10 +2734,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isShelfDrilling": true,
-                    "sourceContainerId": "container_1793219169250_2_154957",
+                    "sourceContainerId": "container_1793723327418_2_766787",
                     "sourcePartId": "Polka_5"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:shelf_5_right_back_bottom"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:shelf_5_right_back_bottom"
                 },
                 {
                   "id": "hinge_plate_r_1_Prowadnik_otw_G",
@@ -2737,11 +2745,11 @@
                   "face": "FACE_Z_PLUS",
                   "side": "FACE_Z_PLUS",
                   "drivenBy": {
-                    "nodeId": "container_1793219169263_3_53533_hinge_right_1",
+                    "nodeId": "container_1793723327434_3_69919_hinge_right_1",
                     "role": "HARDWARE",
                     "hardwareType": "HINGE",
                     "partKey": "Hinge_R1",
-                    "containerId": "container_1793219169263_3_53533"
+                    "containerId": "container_1793723327434_3_69919"
                   },
                   "rule": "mount_plate",
                   "generatedBy": "blok_doors",
@@ -2756,10 +2764,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isDoorDrilling": true,
-                    "sourceContainerId": "container_1793219169263_3_53533",
+                    "sourceContainerId": "container_1793723327434_3_69919",
                     "sourcePartId": "Hinge_R1"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:hinge_plate_r_1_Prowadnik_otw_G"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:hinge_plate_r_1_Prowadnik_otw_G"
                 },
                 {
                   "id": "hinge_plate_r_1_Prowadnik_otw_D",
@@ -2767,11 +2775,11 @@
                   "face": "FACE_Z_PLUS",
                   "side": "FACE_Z_PLUS",
                   "drivenBy": {
-                    "nodeId": "container_1793219169263_3_53533_hinge_right_1",
+                    "nodeId": "container_1793723327434_3_69919_hinge_right_1",
                     "role": "HARDWARE",
                     "hardwareType": "HINGE",
                     "partKey": "Hinge_R1",
-                    "containerId": "container_1793219169263_3_53533"
+                    "containerId": "container_1793723327434_3_69919"
                   },
                   "rule": "mount_plate",
                   "generatedBy": "blok_doors",
@@ -2786,10 +2794,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isDoorDrilling": true,
-                    "sourceContainerId": "container_1793219169263_3_53533",
+                    "sourceContainerId": "container_1793723327434_3_69919",
                     "sourcePartId": "Hinge_R1"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:hinge_plate_r_1_Prowadnik_otw_D"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:hinge_plate_r_1_Prowadnik_otw_D"
                 },
                 {
                   "id": "hinge_plate_r_6_Prowadnik_otw_G",
@@ -2797,11 +2805,11 @@
                   "face": "FACE_Z_PLUS",
                   "side": "FACE_Z_PLUS",
                   "drivenBy": {
-                    "nodeId": "container_1793219169263_3_53533_hinge_right_6",
+                    "nodeId": "container_1793723327434_3_69919_hinge_right_6",
                     "role": "HARDWARE",
                     "hardwareType": "HINGE",
                     "partKey": "Hinge_R6",
-                    "containerId": "container_1793219169263_3_53533"
+                    "containerId": "container_1793723327434_3_69919"
                   },
                   "rule": "mount_plate",
                   "generatedBy": "blok_doors",
@@ -2816,10 +2824,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isDoorDrilling": true,
-                    "sourceContainerId": "container_1793219169263_3_53533",
+                    "sourceContainerId": "container_1793723327434_3_69919",
                     "sourcePartId": "Hinge_R6"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:hinge_plate_r_6_Prowadnik_otw_G"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:hinge_plate_r_6_Prowadnik_otw_G"
                 },
                 {
                   "id": "hinge_plate_r_6_Prowadnik_otw_D",
@@ -2827,11 +2835,11 @@
                   "face": "FACE_Z_PLUS",
                   "side": "FACE_Z_PLUS",
                   "drivenBy": {
-                    "nodeId": "container_1793219169263_3_53533_hinge_right_6",
+                    "nodeId": "container_1793723327434_3_69919_hinge_right_6",
                     "role": "HARDWARE",
                     "hardwareType": "HINGE",
                     "partKey": "Hinge_R6",
-                    "containerId": "container_1793219169263_3_53533"
+                    "containerId": "container_1793723327434_3_69919"
                   },
                   "rule": "mount_plate",
                   "generatedBy": "blok_doors",
@@ -2846,10 +2854,10 @@
                     "depth": 12,
                     "depth_mm": 12,
                     "isDoorDrilling": true,
-                    "sourceContainerId": "container_1793219169263_3_53533",
+                    "sourceContainerId": "container_1793723327434_3_69919",
                     "sourcePartId": "Hinge_R6"
                   },
-                  "smartId": "sb:main_2/part:wee4nt05r1/feat:hinge_plate_r_6_Prowadnik_otw_D"
+                  "smartId": "sb:main_2/part:12mga6mxha5h/feat:hinge_plate_r_6_Prowadnik_otw_D"
                 }
               ],
               "cncPrograms": [
@@ -3422,6 +3430,7 @@
                 "material_name": "Biały Alpejski",
                 "material_code": "W1100 ST9",
                 "thickness_mm": 18,
+                "zone": "SEKCJA_B",
                 "edge_banding": {
                   "+X": {
                     "active": false,
@@ -3442,6 +3451,9 @@
                 },
                 "is_bloki_child": true
               },
+              "key": "WIENIEC_D",
+              "zoneId": "SEKCJA_B",
+              "zonePrefix": "B_",
               "engineManaged": true,
               "associativeDims": null,
               "panelForm": "SOLID",
@@ -3586,6 +3598,7 @@
                 "material_name": "Biały Alpejski",
                 "material_code": "W1100 ST9",
                 "thickness_mm": 18,
+                "zone": "SEKCJA_B",
                 "edge_banding": {
                   "+X": {
                     "active": false,
@@ -3606,6 +3619,9 @@
                 },
                 "is_bloki_child": true
               },
+              "key": "WIENIEC_G",
+              "zoneId": "SEKCJA_B",
+              "zonePrefix": "B_",
               "engineManaged": true,
               "associativeDims": null,
               "panelForm": "SOLID",
@@ -3750,6 +3766,7 @@
                 "material_name": "HDF Biały 3mm",
                 "material_code": "HDF_WHITE_3",
                 "thickness_mm": 3,
+                "zone": "SEKCJA_B",
                 "edge_banding": {
                   "+X": {
                     "active": false,
@@ -3770,6 +3787,9 @@
                 },
                 "is_bloki_child": true
               },
+              "key": "PLECY",
+              "zoneId": "SEKCJA_B",
+              "zonePrefix": "B_",
               "engineManaged": true,
               "associativeDims": null,
               "panelForm": "SOLID",
@@ -3777,7 +3797,7 @@
             }
           },
           {
-            "id": "container_1793219169250_2_154957",
+            "id": "container_1793723327418_2_766787",
             "name": "blok_polki",
             "nodeType": "ASSEMBLY",
             "translationNm": [
@@ -4218,7 +4238,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_1_pin_LF",
+                "id": "container_1793723327418_2_766787_shelf_1_pin_LF",
                 "name": "Podpórka 1 (Lewy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4240,7 +4260,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_1_pin_LF",
+                  "id": "container_1793723327418_2_766787_shelf_1_pin_LF",
                   "name": "Podpórka 1 (Lewy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4262,7 +4282,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_1_pin_LB",
+                "id": "container_1793723327418_2_766787_shelf_1_pin_LB",
                 "name": "Podpórka 1 (Lewy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4284,7 +4304,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_1_pin_LB",
+                  "id": "container_1793723327418_2_766787_shelf_1_pin_LB",
                   "name": "Podpórka 1 (Lewy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4306,7 +4326,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_1_pin_RF",
+                "id": "container_1793723327418_2_766787_shelf_1_pin_RF",
                 "name": "Podpórka 1 (Prawy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4328,7 +4348,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_1_pin_RF",
+                  "id": "container_1793723327418_2_766787_shelf_1_pin_RF",
                   "name": "Podpórka 1 (Prawy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4350,7 +4370,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_1_pin_RB",
+                "id": "container_1793723327418_2_766787_shelf_1_pin_RB",
                 "name": "Podpórka 1 (Prawy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4372,7 +4392,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_1_pin_RB",
+                  "id": "container_1793723327418_2_766787_shelf_1_pin_RB",
                   "name": "Podpórka 1 (Prawy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4394,7 +4414,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_2_pin_LF",
+                "id": "container_1793723327418_2_766787_shelf_2_pin_LF",
                 "name": "Podpórka 2 (Lewy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4416,7 +4436,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_2_pin_LF",
+                  "id": "container_1793723327418_2_766787_shelf_2_pin_LF",
                   "name": "Podpórka 2 (Lewy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4438,7 +4458,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_2_pin_LB",
+                "id": "container_1793723327418_2_766787_shelf_2_pin_LB",
                 "name": "Podpórka 2 (Lewy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4460,7 +4480,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_2_pin_LB",
+                  "id": "container_1793723327418_2_766787_shelf_2_pin_LB",
                   "name": "Podpórka 2 (Lewy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4482,7 +4502,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_2_pin_RF",
+                "id": "container_1793723327418_2_766787_shelf_2_pin_RF",
                 "name": "Podpórka 2 (Prawy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4504,7 +4524,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_2_pin_RF",
+                  "id": "container_1793723327418_2_766787_shelf_2_pin_RF",
                   "name": "Podpórka 2 (Prawy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4526,7 +4546,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_2_pin_RB",
+                "id": "container_1793723327418_2_766787_shelf_2_pin_RB",
                 "name": "Podpórka 2 (Prawy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4548,7 +4568,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_2_pin_RB",
+                  "id": "container_1793723327418_2_766787_shelf_2_pin_RB",
                   "name": "Podpórka 2 (Prawy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4570,7 +4590,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_3_pin_LF",
+                "id": "container_1793723327418_2_766787_shelf_3_pin_LF",
                 "name": "Podpórka 3 (Lewy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4592,7 +4612,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_3_pin_LF",
+                  "id": "container_1793723327418_2_766787_shelf_3_pin_LF",
                   "name": "Podpórka 3 (Lewy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4614,7 +4634,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_3_pin_LB",
+                "id": "container_1793723327418_2_766787_shelf_3_pin_LB",
                 "name": "Podpórka 3 (Lewy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4636,7 +4656,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_3_pin_LB",
+                  "id": "container_1793723327418_2_766787_shelf_3_pin_LB",
                   "name": "Podpórka 3 (Lewy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4658,7 +4678,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_3_pin_RF",
+                "id": "container_1793723327418_2_766787_shelf_3_pin_RF",
                 "name": "Podpórka 3 (Prawy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4680,7 +4700,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_3_pin_RF",
+                  "id": "container_1793723327418_2_766787_shelf_3_pin_RF",
                   "name": "Podpórka 3 (Prawy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4702,7 +4722,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_3_pin_RB",
+                "id": "container_1793723327418_2_766787_shelf_3_pin_RB",
                 "name": "Podpórka 3 (Prawy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4724,7 +4744,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_3_pin_RB",
+                  "id": "container_1793723327418_2_766787_shelf_3_pin_RB",
                   "name": "Podpórka 3 (Prawy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4746,7 +4766,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_4_pin_LF",
+                "id": "container_1793723327418_2_766787_shelf_4_pin_LF",
                 "name": "Podpórka 4 (Lewy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4768,7 +4788,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_4_pin_LF",
+                  "id": "container_1793723327418_2_766787_shelf_4_pin_LF",
                   "name": "Podpórka 4 (Lewy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4790,7 +4810,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_4_pin_LB",
+                "id": "container_1793723327418_2_766787_shelf_4_pin_LB",
                 "name": "Podpórka 4 (Lewy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4812,7 +4832,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_4_pin_LB",
+                  "id": "container_1793723327418_2_766787_shelf_4_pin_LB",
                   "name": "Podpórka 4 (Lewy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4834,7 +4854,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_4_pin_RF",
+                "id": "container_1793723327418_2_766787_shelf_4_pin_RF",
                 "name": "Podpórka 4 (Prawy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4856,7 +4876,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_4_pin_RF",
+                  "id": "container_1793723327418_2_766787_shelf_4_pin_RF",
                   "name": "Podpórka 4 (Prawy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4878,7 +4898,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_4_pin_RB",
+                "id": "container_1793723327418_2_766787_shelf_4_pin_RB",
                 "name": "Podpórka 4 (Prawy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4900,7 +4920,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_4_pin_RB",
+                  "id": "container_1793723327418_2_766787_shelf_4_pin_RB",
                   "name": "Podpórka 4 (Prawy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4922,7 +4942,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_5_pin_LF",
+                "id": "container_1793723327418_2_766787_shelf_5_pin_LF",
                 "name": "Podpórka 5 (Lewy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4944,7 +4964,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_5_pin_LF",
+                  "id": "container_1793723327418_2_766787_shelf_5_pin_LF",
                   "name": "Podpórka 5 (Lewy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -4966,7 +4986,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_5_pin_LB",
+                "id": "container_1793723327418_2_766787_shelf_5_pin_LB",
                 "name": "Podpórka 5 (Lewy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -4988,7 +5008,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_5_pin_LB",
+                  "id": "container_1793723327418_2_766787_shelf_5_pin_LB",
                   "name": "Podpórka 5 (Lewy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -5010,7 +5030,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_5_pin_RF",
+                "id": "container_1793723327418_2_766787_shelf_5_pin_RF",
                 "name": "Podpórka 5 (Prawy Przód)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -5032,7 +5052,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_5_pin_RF",
+                  "id": "container_1793723327418_2_766787_shelf_5_pin_RF",
                   "name": "Podpórka 5 (Prawy Przód)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -5054,7 +5074,7 @@
                 }
               },
               {
-                "id": "container_1793219169250_2_154957_shelf_5_pin_RB",
+                "id": "container_1793723327418_2_766787_shelf_5_pin_RB",
                 "name": "Podpórka 5 (Prawy Tył)",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -5076,7 +5096,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169250_2_154957_shelf_5_pin_RB",
+                  "id": "container_1793723327418_2_766787_shelf_5_pin_RB",
                   "name": "Podpórka 5 (Prawy Tył)",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -5105,7 +5125,7 @@
               "height": 2464000000,
               "depth": 557000000,
               "generatorParams": {
-                "parentContainerId": "container_1793219169230_1_836612",
+                "parentContainerId": "container_1793723327390_1_371247",
                 "boundary": {
                   "left": {
                     "nodeId": "panel_1",
@@ -5168,7 +5188,7 @@
                     "planeCoordMm": 277
                   },
                   "front": {
-                    "nodeId": "container_1793219169230_1_836612",
+                    "nodeId": "container_1793723327390_1_371247",
                     "nodeName": "Przód Korpusu",
                     "face": "FACE_Y_MINUS",
                     "faceName": "FACE_Y_MINUS",
@@ -5197,7 +5217,7 @@
                     "y": -1.5,
                     "z": 1250
                   },
-                  "parentCabinetId": "container_1793219169230_1_836612"
+                  "parentCabinetId": "container_1793723327390_1_371247"
                 },
                 "side_references_bloki": "INNER",
                 "customReferences": {
@@ -5224,7 +5244,7 @@
                   "yMin": {
                     "partKey": "Przód Korpusu",
                     "face": "FACE_Y_MINUS",
-                    "panelId": "container_1793219169230_1_836612"
+                    "panelId": "container_1793723327390_1_371247"
                   },
                   "yMax": {
                     "partKey": "Plecy",
@@ -5255,7 +5275,7 @@
             }
           },
           {
-            "id": "container_1793219169263_3_53533",
+            "id": "container_1793723327434_3_69919",
             "name": "blok_drzwi",
             "nodeType": "ASSEMBLY",
             "translationNm": [
@@ -5297,7 +5317,7 @@
                 ],
                 "children": [
                   {
-                    "id": "container_1793219169287_4_410927",
+                    "id": "container_1793723327450_4_225701",
                     "name": "Uchwyty",
                     "nodeType": "ASSEMBLY",
                     "translationNm": [
@@ -5318,7 +5338,7 @@
                     ],
                     "children": [
                       {
-                        "id": "hw_container_1793219169287_4_410927",
+                        "id": "hw_container_1793723327450_4_225701",
                         "name": "Okucie_Uchwyty",
                         "nodeType": "HARDWARE",
                         "translationNm": [
@@ -5340,7 +5360,7 @@
                         "children": [],
                         "domainData": {
                           "type": "hardware",
-                          "id": "hw_container_1793219169287_4_410927",
+                          "id": "hw_container_1793723327450_4_225701",
                           "name": "Uchwyty",
                           "role": "HANDLE",
                           "nodeType": "HARDWARE",
@@ -5486,11 +5506,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_left_1",
+                        "nodeId": "container_1793723327434_3_69919_hinge_left_1",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_L1",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "cup",
                       "generatedBy": "blok_doors",
@@ -5512,7 +5532,7 @@
                         "side": "left",
                         "hardwareId": "hinge_left_1"
                       },
-                      "smartId": "sb:main_11/part:jjjuzby0wpm/feat:hinge_cup_left_1"
+                      "smartId": "sb:main_11/part:adm4quqx52/feat:hinge_cup_left_1"
                     },
                     {
                       "id": "hinge_screw_left_1_Wkret_1",
@@ -5520,11 +5540,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_left_1",
+                        "nodeId": "container_1793723327434_3_69919_hinge_left_1",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_L1",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "screw",
                       "generatedBy": "blok_doors",
@@ -5546,7 +5566,7 @@
                         "side": "left",
                         "hardwareId": "hinge_left_1"
                       },
-                      "smartId": "sb:main_11/part:jjjuzby0wpm/feat:hinge_screw_left_1_Wkret_1"
+                      "smartId": "sb:main_11/part:adm4quqx52/feat:hinge_screw_left_1_Wkret_1"
                     },
                     {
                       "id": "hinge_screw_left_1_Wkret_2",
@@ -5554,11 +5574,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_left_1",
+                        "nodeId": "container_1793723327434_3_69919_hinge_left_1",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_L1",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "screw",
                       "generatedBy": "blok_doors",
@@ -5580,7 +5600,7 @@
                         "side": "left",
                         "hardwareId": "hinge_left_1"
                       },
-                      "smartId": "sb:main_11/part:jjjuzby0wpm/feat:hinge_screw_left_1_Wkret_2"
+                      "smartId": "sb:main_11/part:adm4quqx52/feat:hinge_screw_left_1_Wkret_2"
                     },
                     {
                       "id": "hinge_cup_left_6",
@@ -5588,11 +5608,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_left_6",
+                        "nodeId": "container_1793723327434_3_69919_hinge_left_6",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_L6",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "cup",
                       "generatedBy": "blok_doors",
@@ -5614,7 +5634,7 @@
                         "side": "left",
                         "hardwareId": "hinge_left_6"
                       },
-                      "smartId": "sb:main_11/part:jjjuzby0wpm/feat:hinge_cup_left_6"
+                      "smartId": "sb:main_11/part:adm4quqx52/feat:hinge_cup_left_6"
                     },
                     {
                       "id": "hinge_screw_left_6_Wkret_1",
@@ -5622,11 +5642,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_left_6",
+                        "nodeId": "container_1793723327434_3_69919_hinge_left_6",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_L6",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "screw",
                       "generatedBy": "blok_doors",
@@ -5648,7 +5668,7 @@
                         "side": "left",
                         "hardwareId": "hinge_left_6"
                       },
-                      "smartId": "sb:main_11/part:jjjuzby0wpm/feat:hinge_screw_left_6_Wkret_1"
+                      "smartId": "sb:main_11/part:adm4quqx52/feat:hinge_screw_left_6_Wkret_1"
                     },
                     {
                       "id": "hinge_screw_left_6_Wkret_2",
@@ -5656,11 +5676,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_left_6",
+                        "nodeId": "container_1793723327434_3_69919_hinge_left_6",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_L6",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "screw",
                       "generatedBy": "blok_doors",
@@ -5682,20 +5702,20 @@
                         "side": "left",
                         "hardwareId": "hinge_left_6"
                       },
-                      "smartId": "sb:main_11/part:jjjuzby0wpm/feat:hinge_screw_left_6_Wkret_2"
+                      "smartId": "sb:main_11/part:adm4quqx52/feat:hinge_screw_left_6_Wkret_2"
                     },
                     {
-                      "id": "hole_handle_container_1793219169287_4_410927_1",
+                      "id": "hole_handle_container_1793723327450_4_225701_1",
                       "type": "hole",
                       "face": "FACE_Z_MINUS",
                       "side": "FACE_Z_MINUS",
                       "name": "Otwór uchwytu fi 4mm",
                       "drivenBy": {
-                        "nodeId": "hw_container_1793219169287_4_410927",
+                        "nodeId": "hw_container_1793723327450_4_225701",
                         "role": "HARDWARE",
                         "hardwareType": "HANDLE",
                         "partKey": "Handle",
-                        "containerId": "container_1793219169287_4_410927"
+                        "containerId": "container_1793723327450_4_225701"
                       },
                       "rule": "handle_hole",
                       "generatedBy": "blok_handles",
@@ -5705,25 +5725,25 @@
                         "diameter": 4,
                         "depth": 20,
                         "isHandleDrilling": true,
-                        "handleId": "container_1793219169287_4_410927",
-                        "sourceContainerId": "container_1793219169287_4_410927",
-                        "sourcePartId": "hw_container_1793219169287_4_410927",
+                        "handleId": "container_1793723327450_4_225701",
+                        "sourceContainerId": "container_1793723327450_4_225701",
+                        "sourcePartId": "hw_container_1793723327450_4_225701",
                         "holeIndex": 1
                       },
-                      "smartId": "sb:main_11/part:jjjuzby0wpm/feat:hole_handle_container_1793219169287_4_410927_1"
+                      "smartId": "sb:main_11/part:adm4quqx52/feat:hole_handle_container_1793723327450_4_225701_1"
                     },
                     {
-                      "id": "hole_handle_container_1793219169287_4_410927_2",
+                      "id": "hole_handle_container_1793723327450_4_225701_2",
                       "type": "hole",
                       "face": "FACE_Z_MINUS",
                       "side": "FACE_Z_MINUS",
                       "name": "Otwór uchwytu fi 4mm",
                       "drivenBy": {
-                        "nodeId": "hw_container_1793219169287_4_410927",
+                        "nodeId": "hw_container_1793723327450_4_225701",
                         "role": "HARDWARE",
                         "hardwareType": "HANDLE",
                         "partKey": "Handle",
-                        "containerId": "container_1793219169287_4_410927"
+                        "containerId": "container_1793723327450_4_225701"
                       },
                       "rule": "handle_hole",
                       "generatedBy": "blok_handles",
@@ -5733,12 +5753,12 @@
                         "diameter": 4,
                         "depth": 20,
                         "isHandleDrilling": true,
-                        "handleId": "container_1793219169287_4_410927",
-                        "sourceContainerId": "container_1793219169287_4_410927",
-                        "sourcePartId": "hw_container_1793219169287_4_410927",
+                        "handleId": "container_1793723327450_4_225701",
+                        "sourceContainerId": "container_1793723327450_4_225701",
+                        "sourcePartId": "hw_container_1793723327450_4_225701",
                         "holeIndex": 2
                       },
-                      "smartId": "sb:main_11/part:jjjuzby0wpm/feat:hole_handle_container_1793219169287_4_410927_2"
+                      "smartId": "sb:main_11/part:adm4quqx52/feat:hole_handle_container_1793723327450_4_225701_2"
                     }
                   ],
                   "cncPrograms": [
@@ -5934,8 +5954,8 @@
                           ],
                           "holeCount": 2,
                           "childFeatureIds": [
-                            "hole_handle_container_1793219169287_4_410927_1",
-                            "hole_handle_container_1793219169287_4_410927_2"
+                            "hole_handle_container_1793723327450_4_225701_1",
+                            "hole_handle_container_1793723327450_4_225701_2"
                           ],
                           "axis": {
                             "x": 0,
@@ -5983,7 +6003,7 @@
                 ],
                 "children": [
                   {
-                    "id": "container_1793219169288_5_737803",
+                    "id": "container_1793723327451_5_532283",
                     "name": "Uchwyty",
                     "nodeType": "ASSEMBLY",
                     "translationNm": [
@@ -6004,7 +6024,7 @@
                     ],
                     "children": [
                       {
-                        "id": "hw_container_1793219169288_5_737803",
+                        "id": "hw_container_1793723327451_5_532283",
                         "name": "Okucie_Uchwyty",
                         "nodeType": "HARDWARE",
                         "translationNm": [
@@ -6026,7 +6046,7 @@
                         "children": [],
                         "domainData": {
                           "type": "hardware",
-                          "id": "hw_container_1793219169288_5_737803",
+                          "id": "hw_container_1793723327451_5_532283",
                           "name": "Uchwyty",
                           "role": "HANDLE",
                           "nodeType": "HARDWARE",
@@ -6172,11 +6192,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_right_1",
+                        "nodeId": "container_1793723327434_3_69919_hinge_right_1",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_R1",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "cup",
                       "generatedBy": "blok_doors",
@@ -6198,7 +6218,7 @@
                         "side": "right",
                         "hardwareId": "hinge_right_1"
                       },
-                      "smartId": "sb:main_12/part:fb7vp40co2t/feat:hinge_cup_right_1"
+                      "smartId": "sb:main_12/part:d0ui5i3qrgc/feat:hinge_cup_right_1"
                     },
                     {
                       "id": "hinge_screw_right_1_Wkret_1",
@@ -6206,11 +6226,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_right_1",
+                        "nodeId": "container_1793723327434_3_69919_hinge_right_1",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_R1",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "screw",
                       "generatedBy": "blok_doors",
@@ -6232,7 +6252,7 @@
                         "side": "right",
                         "hardwareId": "hinge_right_1"
                       },
-                      "smartId": "sb:main_12/part:fb7vp40co2t/feat:hinge_screw_right_1_Wkret_1"
+                      "smartId": "sb:main_12/part:d0ui5i3qrgc/feat:hinge_screw_right_1_Wkret_1"
                     },
                     {
                       "id": "hinge_screw_right_1_Wkret_2",
@@ -6240,11 +6260,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_right_1",
+                        "nodeId": "container_1793723327434_3_69919_hinge_right_1",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_R1",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "screw",
                       "generatedBy": "blok_doors",
@@ -6266,7 +6286,7 @@
                         "side": "right",
                         "hardwareId": "hinge_right_1"
                       },
-                      "smartId": "sb:main_12/part:fb7vp40co2t/feat:hinge_screw_right_1_Wkret_2"
+                      "smartId": "sb:main_12/part:d0ui5i3qrgc/feat:hinge_screw_right_1_Wkret_2"
                     },
                     {
                       "id": "hinge_cup_right_6",
@@ -6274,11 +6294,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_right_6",
+                        "nodeId": "container_1793723327434_3_69919_hinge_right_6",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_R6",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "cup",
                       "generatedBy": "blok_doors",
@@ -6300,7 +6320,7 @@
                         "side": "right",
                         "hardwareId": "hinge_right_6"
                       },
-                      "smartId": "sb:main_12/part:fb7vp40co2t/feat:hinge_cup_right_6"
+                      "smartId": "sb:main_12/part:d0ui5i3qrgc/feat:hinge_cup_right_6"
                     },
                     {
                       "id": "hinge_screw_right_6_Wkret_1",
@@ -6308,11 +6328,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_right_6",
+                        "nodeId": "container_1793723327434_3_69919_hinge_right_6",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_R6",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "screw",
                       "generatedBy": "blok_doors",
@@ -6334,7 +6354,7 @@
                         "side": "right",
                         "hardwareId": "hinge_right_6"
                       },
-                      "smartId": "sb:main_12/part:fb7vp40co2t/feat:hinge_screw_right_6_Wkret_1"
+                      "smartId": "sb:main_12/part:d0ui5i3qrgc/feat:hinge_screw_right_6_Wkret_1"
                     },
                     {
                       "id": "hinge_screw_right_6_Wkret_2",
@@ -6342,11 +6362,11 @@
                       "face": "FACE_Z_PLUS",
                       "side": "FACE_Z_PLUS",
                       "drivenBy": {
-                        "nodeId": "container_1793219169263_3_53533_hinge_right_6",
+                        "nodeId": "container_1793723327434_3_69919_hinge_right_6",
                         "role": "HARDWARE",
                         "hardwareType": "HINGE",
                         "partKey": "Hinge_R6",
-                        "containerId": "container_1793219169263_3_53533"
+                        "containerId": "container_1793723327434_3_69919"
                       },
                       "rule": "screw",
                       "generatedBy": "blok_doors",
@@ -6368,20 +6388,20 @@
                         "side": "right",
                         "hardwareId": "hinge_right_6"
                       },
-                      "smartId": "sb:main_12/part:fb7vp40co2t/feat:hinge_screw_right_6_Wkret_2"
+                      "smartId": "sb:main_12/part:d0ui5i3qrgc/feat:hinge_screw_right_6_Wkret_2"
                     },
                     {
-                      "id": "hole_handle_container_1793219169288_5_737803_1",
+                      "id": "hole_handle_container_1793723327451_5_532283_1",
                       "type": "hole",
                       "face": "FACE_Z_MINUS",
                       "side": "FACE_Z_MINUS",
                       "name": "Otwór uchwytu fi 4mm",
                       "drivenBy": {
-                        "nodeId": "hw_container_1793219169288_5_737803",
+                        "nodeId": "hw_container_1793723327451_5_532283",
                         "role": "HARDWARE",
                         "hardwareType": "HANDLE",
                         "partKey": "Handle",
-                        "containerId": "container_1793219169288_5_737803"
+                        "containerId": "container_1793723327451_5_532283"
                       },
                       "rule": "handle_hole",
                       "generatedBy": "blok_handles",
@@ -6391,25 +6411,25 @@
                         "diameter": 4,
                         "depth": 20,
                         "isHandleDrilling": true,
-                        "handleId": "container_1793219169288_5_737803",
-                        "sourceContainerId": "container_1793219169288_5_737803",
-                        "sourcePartId": "hw_container_1793219169288_5_737803",
+                        "handleId": "container_1793723327451_5_532283",
+                        "sourceContainerId": "container_1793723327451_5_532283",
+                        "sourcePartId": "hw_container_1793723327451_5_532283",
                         "holeIndex": 1
                       },
-                      "smartId": "sb:main_12/part:fb7vp40co2t/feat:hole_handle_container_1793219169288_5_737803_1"
+                      "smartId": "sb:main_12/part:d0ui5i3qrgc/feat:hole_handle_container_1793723327451_5_532283_1"
                     },
                     {
-                      "id": "hole_handle_container_1793219169288_5_737803_2",
+                      "id": "hole_handle_container_1793723327451_5_532283_2",
                       "type": "hole",
                       "face": "FACE_Z_MINUS",
                       "side": "FACE_Z_MINUS",
                       "name": "Otwór uchwytu fi 4mm",
                       "drivenBy": {
-                        "nodeId": "hw_container_1793219169288_5_737803",
+                        "nodeId": "hw_container_1793723327451_5_532283",
                         "role": "HARDWARE",
                         "hardwareType": "HANDLE",
                         "partKey": "Handle",
-                        "containerId": "container_1793219169288_5_737803"
+                        "containerId": "container_1793723327451_5_532283"
                       },
                       "rule": "handle_hole",
                       "generatedBy": "blok_handles",
@@ -6419,12 +6439,12 @@
                         "diameter": 4,
                         "depth": 20,
                         "isHandleDrilling": true,
-                        "handleId": "container_1793219169288_5_737803",
-                        "sourceContainerId": "container_1793219169288_5_737803",
-                        "sourcePartId": "hw_container_1793219169288_5_737803",
+                        "handleId": "container_1793723327451_5_532283",
+                        "sourceContainerId": "container_1793723327451_5_532283",
+                        "sourcePartId": "hw_container_1793723327451_5_532283",
                         "holeIndex": 2
                       },
-                      "smartId": "sb:main_12/part:fb7vp40co2t/feat:hole_handle_container_1793219169288_5_737803_2"
+                      "smartId": "sb:main_12/part:d0ui5i3qrgc/feat:hole_handle_container_1793723327451_5_532283_2"
                     }
                   ],
                   "cncPrograms": [
@@ -6620,8 +6640,8 @@
                           ],
                           "holeCount": 2,
                           "childFeatureIds": [
-                            "hole_handle_container_1793219169288_5_737803_1",
-                            "hole_handle_container_1793219169288_5_737803_2"
+                            "hole_handle_container_1793723327451_5_532283_1",
+                            "hole_handle_container_1793723327451_5_532283_2"
                           ],
                           "axis": {
                             "x": 0,
@@ -6648,7 +6668,7 @@
                 }
               },
               {
-                "id": "container_1793219169263_3_53533_hinge_left_1",
+                "id": "container_1793723327434_3_69919_hinge_left_1",
                 "name": "Zawias 1 (Lewy) [BLUM_71B3550]",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -6670,7 +6690,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169263_3_53533_hinge_left_1",
+                  "id": "container_1793723327434_3_69919_hinge_left_1",
                   "name": "Zawias 1 (Lewy) [BLUM_71B3550]",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -6692,7 +6712,7 @@
                 }
               },
               {
-                "id": "container_1793219169263_3_53533_hinge_left_6",
+                "id": "container_1793723327434_3_69919_hinge_left_6",
                 "name": "Zawias 6 (Lewy) [BLUM_71T3550]",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -6714,7 +6734,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169263_3_53533_hinge_left_6",
+                  "id": "container_1793723327434_3_69919_hinge_left_6",
                   "name": "Zawias 6 (Lewy) [BLUM_71T3550]",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -6736,7 +6756,7 @@
                 }
               },
               {
-                "id": "container_1793219169263_3_53533_hinge_right_1",
+                "id": "container_1793723327434_3_69919_hinge_right_1",
                 "name": "Zawias 1 (Prawy) [BLUM_71B3550]",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -6758,7 +6778,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169263_3_53533_hinge_right_1",
+                  "id": "container_1793723327434_3_69919_hinge_right_1",
                   "name": "Zawias 1 (Prawy) [BLUM_71B3550]",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -6780,7 +6800,7 @@
                 }
               },
               {
-                "id": "container_1793219169263_3_53533_hinge_right_6",
+                "id": "container_1793723327434_3_69919_hinge_right_6",
                 "name": "Zawias 6 (Prawy) [BLUM_71T3550]",
                 "nodeType": "HARDWARE",
                 "translationNm": [
@@ -6802,7 +6822,7 @@
                 "children": [],
                 "domainData": {
                   "type": "hardware",
-                  "id": "container_1793219169263_3_53533_hinge_right_6",
+                  "id": "container_1793723327434_3_69919_hinge_right_6",
                   "name": "Zawias 6 (Prawy) [BLUM_71T3550]",
                   "role": "HARDWARE",
                   "nodeType": "HARDWARE",
@@ -6831,7 +6851,7 @@
               "height": 2464000000,
               "depth": 557000000,
               "generatorParams": {
-                "parentContainerId": "container_1793219169230_1_836612",
+                "parentContainerId": "container_1793723327390_1_371247",
                 "boundary": {
                   "left": {
                     "nodeId": "panel_1",
@@ -6894,7 +6914,7 @@
                     "planeCoordMm": 277
                   },
                   "front": {
-                    "nodeId": "container_1793219169230_1_836612",
+                    "nodeId": "container_1793723327390_1_371247",
                     "nodeName": "Przód Korpusu",
                     "face": "FACE_Y_MINUS",
                     "faceName": "FACE_Y_MINUS",
@@ -6923,7 +6943,7 @@
                     "y": -1.5,
                     "z": 1250
                   },
-                  "parentCabinetId": "container_1793219169230_1_836612"
+                  "parentCabinetId": "container_1793723327390_1_371247"
                 },
                 "side_references_bloki": "INNER",
                 "customReferences": {
@@ -6950,7 +6970,7 @@
                   "yMin": {
                     "partKey": "Przód Korpusu",
                     "face": "FACE_Y_MINUS",
-                    "panelId": "container_1793219169230_1_836612"
+                    "panelId": "container_1793723327390_1_371247"
                   },
                   "yMax": {
                     "partKey": "Plecy",

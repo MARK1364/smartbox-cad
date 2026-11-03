@@ -47,24 +47,35 @@ export function findFacesAlongRay(scene: any, pointerX: number, pointerY: number
         return [];
     }
 
-    const faceHits = scene.multiPick(
-        pointerX,
-        pointerY,
-        (mesh: any) => {
-            if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata || !mesh.metadata.faceName) {
-                return false;
-            }
-            const pVis = mesh.metadata.panelModel ? mesh.metadata.panelModel.visible !== false : true;
-            const mVis = mesh.metadata.model ? mesh.metadata.model.visible !== false : true;
-            return pVis && mVis;
+    const filter = (mesh: any) => {
+        if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata || !mesh.metadata.faceName) {
+            return false;
         }
-    );
+        const pVis = mesh.metadata.panelModel ? mesh.metadata.panelModel.visible !== false : true;
+        const mVis = mesh.metadata.model ? mesh.metadata.model.visible !== false : true;
+        return pVis && mVis;
+    };
 
-    if (!faceHits || faceHits.length === 0) {
-        return [];
+    let faceHits = scene.multiPick(pointerX, pointerY, filter);
+    let validHits = faceHits ? faceHits.filter((h: any) => h.hit && h.pickedMesh && h.pickedMesh.metadata?.faceName) : [];
+
+    // Fallback: jeśli kliknięto tuż obok wąskiego paska (np. 1-4px w pustą przestrzeń obok mebla)
+    if (validHits.length === 0) {
+        const ring = [
+            [-3, 0], [3, 0], [0, -3], [0, 3],
+            [-6, 0], [6, 0], [0, -6], [0, 6],
+            [-3, -3], [3, 3], [-3, 3], [3, -3]
+        ];
+        for (const [dx, dy] of ring) {
+            const hits = scene.multiPick(pointerX + dx, pointerY + dy, filter);
+            const v = hits ? hits.filter((h: any) => h.hit && h.pickedMesh && h.pickedMesh.metadata?.faceName) : [];
+            if (v.length > 0) {
+                validHits = v;
+                break;
+            }
+        }
     }
 
-    const validHits = faceHits.filter((h: any) => h.hit && h.pickedMesh && h.pickedMesh.metadata?.faceName);
     if (validHits.length === 0) {
         return [];
     }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planCabinet } from '../smartframe-engine.js';
+import { buildPolygonPanelTopology } from '../../A4_smartpanel/native_core/polygon-extrusion.js';
 
 describe('KORPUS_ROGOWY90 kÄ…townik', () => {
     it('plans two perpendicular backs and two end sides', () => {
@@ -350,5 +351,75 @@ describe('KORPUS_ROGOWY90 kÄ…townik', () => {
 
         expect(listwa1.loc.x).toBeCloseTo(-356 + 10, 0);
         expect(listwa2.loc.y).toBeCloseTo(356 - 5, 0);
+    });
+
+    it('wieniec L posiada komplet 4 zewnętrznych ścian bocznych pod gizma (2 czerwone i 2 zielone) oraz zmienia rozmiar zamiast przesuwać cały wieniec', () => {
+        const basePlan = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_rogowy90',
+            glebokosc_boku_lewego_mm: 600,
+            glebokosc_boku_prawego_mm: 600
+        });
+
+        const baseTop = basePlan.parts.find(p => p.role === 'TOP_PANEL')!;
+        const baseOutline = baseTop.customProperties?.outline2d as number[][];
+        const topo = buildPolygonPanelTopology({
+            outline2d: baseOutline,
+            plateW: baseTop.dim.x,
+            plateD: baseTop.dim.y,
+            thickness: baseTop.dim.z
+        });
+
+        const edgeKeys = Object.entries(topo)
+            .filter(([k]) => k.startsWith('OUTLINE_SIDE_'))
+            .map(([, v]: any) => v.edgeKey);
+
+        expect(edgeKeys).toContain('-X');
+        expect(edgeKeys).toContain('+X');
+        expect(edgeKeys).toContain('-Y');
+        expect(edgeKeys).toContain('+Y');
+        expect(edgeKeys.filter(k => k === 'NOTCH')).toHaveLength(2);
+
+        const resizedPlan = planCabinet({
+            szerokosc_mm: 900,
+            wysokosc_mm: 720,
+            glebokosc_mm: 900,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_rogowy90',
+            glebokosc_boku_lewego_mm: 600,
+            glebokosc_boku_prawego_mm: 600,
+            offsets: {
+                'Wieniec_G_+X': 25,
+                'Wieniec_G_-Y': 30,
+                'Wieniec_D_-X': 15,
+                'Wieniec_D_+Y': 20
+            }
+        });
+
+        const top = resizedPlan.parts.find(p => p.role === 'TOP_PANEL')!;
+        const bot = resizedPlan.parts.find(p => p.role === 'BOTTOM_PANEL')!;
+
+        expect(top.dim.x).toBeCloseTo(900 + 30, 3);
+        expect(top.dim.y).toBeCloseTo(900 + 25, 3);
+        expect(top.loc.x).toBeCloseTo(-15, 3);
+        expect(top.loc.y).toBeCloseTo(12.5, 3);
+
+        expect(bot.dim.x).toBeCloseTo(900 + 20, 3);
+        expect(bot.dim.y).toBeCloseTo(900 + 15, 3);
+        expect(bot.loc.x).toBeCloseTo(10, 3);
+        expect(bot.loc.y).toBeCloseTo(-7.5, 3);
+
+        const topOutline = top.customProperties?.outline2d as number[][];
+        const worldNotchPoints = topOutline.map(([u, v]) => [
+            top.loc.x - top.dim.x / 2 + u,
+            top.loc.y - top.dim.y / 2 + v
+        ]);
+        const hasFixedInnerCorner = worldNotchPoints.some(
+            ([wx, wy]) => Math.abs(wx - 150) < 0.01 && Math.abs(wy - (-150)) < 0.01
+        );
+        expect(hasFixedInnerCorner).toBe(true);
     });
 });

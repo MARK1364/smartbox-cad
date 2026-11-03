@@ -100,19 +100,19 @@
     "de": "Höhe hinten"
   },
   "cards.skosny_lr_uc.title": {
-    "pl": "Przeciągnij na scenę 3D — skośna lewa (wieniec w świetle)",
-    "en": "Drag onto the 3D scene — slanted left (top in clear width)",
-    "de": "Auf die 3D-Szene ziehen — schräg links (Deckplatte im Lichtmaß)"
+    "pl": "Przeciągnij na scenę 3D — szafka skośna (wieniec w świetle)",
+    "en": "Drag onto the 3D scene — slanted cabinet (top in clear width)",
+    "de": "Auf die 3D-Szene ziehen — schräger Korpus (Deckplatte im Lichtmaß)"
   },
   "cards.skosny_lr_uc.label": {
-    "pl": "Skośna lewa",
-    "en": "Slanted left",
-    "de": "Schräg links"
+    "pl": "Skośna",
+    "en": "Slanted",
+    "de": "Schräg"
   },
   "skosny_lr_uc.title": {
-    "pl": "Skośna lewa — ucięcie na stykach (wieniec w świetle)",
-    "en": "Slanted left — mitered joints (top in clear width)",
-    "de": "Schräg links — Gehrungen (Deckplatte im Lichtmaß)"
+    "pl": "Skośna — ucięcie na stykach (wieniec w świetle)",
+    "en": "Slanted — mitered joints (top in clear width)",
+    "de": "Schräg — Gehrungen (Deckplatte im Lichtmaß)"
   },
   "skosny_lr.height_left": {
     "pl": "Wys. lewa",

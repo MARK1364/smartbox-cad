@@ -474,7 +474,7 @@ export function applySmartPartCutsToBay(
     return applySmartPartCutIntents(document, groupContainerId, candidateNodeIds, intents);
 }
 function panelRoleText(node: any): string {
-    return String(node?.domainData?.role || node?.name || node?.domainData?.name || '').toUpperCase();
+    return String(node?.domainData?.role || '').toUpperCase();
 }
 
 /** Wieniec / półka / dno — nie bok (środek boku na Z ≈ środek korpusu). */
@@ -820,6 +820,7 @@ export function updateSmartPartHangersGroup(groupNode: CADNode, document: any): 
     }
     // Parts ze sourceDefinition/definition — refZ TOP z JSON Studia musi zostać (nie gubić przy merge)
     const bodies = smartPartBodies(gp.definition || gp.sourceDefinition);
+    const usedBodyIds = new Set<string>();
     // Part jest dzieckiem grupy (CAD); zbierz też zagnieżdżone (gdy struktura drzewa się rozjechała)
     const partNodes: CADNode[] = [];
     const collectParts = (n: CADNode) => {
@@ -843,9 +844,10 @@ export function updateSmartPartHangersGroup(groupNode: CADNode, document: any): 
         const oldPart = childGp.part;
         const fromDef = bodies.length > 0
             ? (bodies.find((b: any) => b?.id && b.id === oldPart?.id)
-                || bodies.find((b: any) => b?.name && b.name === oldPart?.name)
-                || bodies[0])
+                || bodies.find((b: any) => b?.id && !usedBodyIds.has(String(b.id)))
+                || (bodies.length === 1 ? bodies[0] : null))
             : null;
+        if (fromDef?.id) usedBodyIds.add(String(fromDef.id));
         // Referencje zawsze z definicji JSON; wymiary mogą pochodzić z live Parta
         const part = fromDef
             ? {
@@ -1099,9 +1101,8 @@ export function updateHangerSmartPartParams(
         const childGp = childContainer?.generatorParams;
         if (!childGp) continue;
         const oldPart = childGp.part;
-        // Match po id/name; bez trafienia — adoptuj pierwszy nieużyty part definicji
+        // Match by stable ID; legacy parts without a match adopt the next unused body.
         const nextPart = bodies.find((b: any) => b?.id && b.id === oldPart?.id)
-            || bodies.find((b: any) => b?.name && b.name === oldPart?.name)
             || bodies.find((b: any) => b?.id && !usedBodyIds.has(String(b.id)))
             || null;
         if (!nextPart) {

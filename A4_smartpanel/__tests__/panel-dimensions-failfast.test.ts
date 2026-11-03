@@ -28,4 +28,19 @@ describe('A4_smartpanel fail-fast wymiary formatki', () => {
         expect(() => buildMeshFromPanel({ width: mmToNm(600), height: mmToNm(720) }))
             .toThrow(/Nieprawidłowe wymiary/);
     });
+
+    it('PanelModel.fromJSON samonaprawia ujemne lub zerowe wymiary (np. width=-23000000 nm)', () => {
+        const corruptJson = {
+            id: 'panel_26',
+            width: -23000000,
+            height: 732000000,
+            thickness: 18000000,
+            name: 'Front',
+            role: 'FRONT',
+        };
+        const panel = PanelModel.fromJSON(corruptJson);
+        expect(panel.width).toBeGreaterThan(0);
+        expect(panel.height).toBe(732000000);
+        expect(panel.thickness).toBe(18000000);
+    });
 });

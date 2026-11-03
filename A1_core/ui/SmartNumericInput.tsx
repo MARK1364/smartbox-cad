@@ -79,22 +79,28 @@ export function SmartNumericInput({
         return parseFloat(sanitized);
     };
 
-    const flush = (valStr: string) => {
+    const flush = (valStr: string, isFinal: boolean = false) => {
         const parsed = parseNum(valStr);
         if (!isNaN(parsed)) {
             let clamped = parsed;
-            if (min !== undefined) clamped = Math.max(min, clamped);
-            if (max !== undefined) clamped = Math.min(max, clamped);
-            if (decimals !== undefined && decimals >= 0) {
-                const factor = Math.pow(10, decimals);
-                clamped = Math.round(clamped * factor) / factor;
+            if (isFinal) {
+                if (min !== undefined) clamped = Math.max(min, clamped);
+                if (max !== undefined) clamped = Math.min(max, clamped);
+                if (decimals !== undefined && decimals >= 0) {
+                    const factor = Math.pow(10, decimals);
+                    clamped = Math.round(clamped * factor) / factor;
+                }
+                setLocalVal(formatVal(clamped));
+            } else {
+                // Podczas pisania nie nadpisujemy pola i nie wysylamy wartosci ponizej min
+                if (min !== undefined && parsed < min) return;
+                if (max !== undefined && parsed > max) return;
             }
-            setLocalVal(formatVal(clamped));
             const currentNum = Number(value);
             if (isNaN(currentNum) || Math.abs(clamped - currentNum) > 1e-6) {
                 onChange(clamped);
             }
-        } else {
+        } else if (isFinal) {
             setLocalVal(formatVal(value));
         }
     };
@@ -106,10 +112,10 @@ export function SmartNumericInput({
             clearTimeout(debounceTimerRef.current);
         }
         if (debounceMs <= 0) {
-            flush(val);
+            flush(val, false);
         } else {
             debounceTimerRef.current = setTimeout(() => {
-                flush(val);
+                flush(val, false);
             }, debounceMs);
         }
     };
@@ -119,7 +125,7 @@ export function SmartNumericInput({
             clearTimeout(debounceTimerRef.current);
         }
         setIsFocused(false);
-        flush(localVal);
+        flush(localVal, true);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -129,7 +135,7 @@ export function SmartNumericInput({
             if (debounceTimerRef.current) {
                 clearTimeout(debounceTimerRef.current);
             }
-            flush(localVal);
+            flush(localVal, true);
             (e.target as HTMLInputElement).blur();
         } else if (e.key === 'Escape') {
             e.preventDefault();
@@ -153,6 +159,7 @@ export function SmartNumericInput({
             disabled={disabled}
             readOnly={readOnly}
             placeholder={placeholder}
+            title={min !== undefined || max !== undefined ? `Zakres: ${min ?? ''} - ${max ?? ''}${unit ? ` ${unit}` : ' mm'}` : undefined}
             className={className}
             style={style}
             onFocus={() => setIsFocused(true)}

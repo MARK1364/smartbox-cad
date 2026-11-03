@@ -21,6 +21,7 @@ import {
     resolveCornerLocalMm,
     resolveFaceLocalMm,
     snapPickToSmartFrame,
+    recoverAnchorSource,
 } from '../constraint-geometry.js';
 import { makeAnchor } from '../constraint-types.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
@@ -625,5 +626,114 @@ describe('Dosuń ściany — OUTER vs odwrócona normalna mesha', () => {
 
         expect(quad.normal[0]).toBeCloseTo(-1);
         expect(quad.center[0]).toBeCloseTo(-300);
+    });
+});
+
+describe('recoverAnchorSource - odzyskiwanie formatki kotwicy bez dopasowywania po nazwie', () => {
+    function createTestCabinet() {
+        const document = new ProjectDocument();
+        const container = document.createAssembly({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            depth: mmToNm(500),
+        });
+        const cab = document.findNode(container.id)!;
+        const panel = document.createPanel(
+            { width: mmToNm(500), height: mmToNm(720), thickness: mmToNm(18) },
+            container.id,
+        );
+        const side = document.findNode(panel.id)!;
+        side.setLocalTransform(
+            new Vec3(mmToNm(-300 + 9), 0, mmToNm(360)),
+            Quat.fromEulerXYZ(0, 0, -Math.PI / 2),
+        );
+        return { document, cab, side };
+    }
+
+    it('odzyskuje formatkę po unikalnym sourceKey, gdy sourceNodeId uległo zmianie', () => {
+        const { cab, side } = createTestCabinet();
+        (side.domainData as any).key = 'B_BOK_L';
+
+        const anchor = makeAnchor({
+            nodeId: cab.id,
+            kind: 'FACE',
+            sourceNodeId: 'old-stale-id',
+            sourceKey: 'B_BOK_L',
+            sourceRole: 'LEFT_SIDE_PANEL',
+            sourceName: 'Zupełnie Inna Nazwa',
+        });
+
+        const recovered = recoverAnchorSource(cab, anchor);
+        expect(recovered).toBe(side);
+        expect(anchor.sourceNodeId).toBe(side.id);
+    });
+
+    it('nigdy nie dopasowuje po sourceName (tożsamość tylko ID, key, role - kontrakt SSOT)', () => {
+        const { cab, side } = createTestCabinet();
+        side.name = 'Bok_L.001';
+
+        const anchor = makeAnchor({
+            nodeId: cab.id,
+            kind: 'FACE',
+            sourceNodeId: 'stale-id',
+            sourceName: 'Bok_L.001',
+        });
+
+        // Brak sourceKey i sourceRole -> fail-fast (null), nazwa nie jest używana
+        const recovered = recoverAnchorSource(cab, anchor);
+        expect(recovered).toBeNull();
+    });
+
+    it('zwraca null przy remisie geometrycznym (brak jednoznacznego kandydata)', () => {
+        const doc = new ProjectDocument();
+        const container = doc.createAssembly({ width: mmToNm(600), height: mmToNm(720), depth: mmToNm(500) });
+        const cab = doc.findNode(container.id)!;
+        const p1Data = doc.createPanel({ width: mmToNm(564), height: mmToNm(18), thickness: mmToNm(480) }, container.id);
+        const p2Data = doc.createPanel({ width: mmToNm(564), height: mmToNm(18), thickness: mmToNm(480) }, container.id);
+        const p1 = doc.findNode(p1Data.id)!;
+        const p2 = doc.findNode(p2Data.id)!;
+        (p1.domainData as any).role = 'SHELF';
+        (p2.domainData as any).role = 'SHELF';
+
+        // Obie półki są w tej samej orientacji i położeniu (remis)
+        const anchor = makeAnchor({
+            nodeId: cab.id,
+            kind: 'FACE',
+            sourceNodeId: 'stale-id',
+            sourceRole: 'SHELF',
+            faceName: 'FACE_Z_MINUS',
+            localNormalMm: [0, -1, 0],
+            localPointMm: [0, -240, 0],
+        });
+
+        const recovered = recoverAnchorSource(cab, anchor);
+        expect(recovered).toBeNull(); // Remis odrzucany
+    });
+
+    it('rozstrzyga geometrycznie tylko wtedy, gdy dokładnie jeden kandydat jest jednoznacznie bliższy', () => {
+        const doc = new ProjectDocument();
+        const container = doc.createAssembly({ width: mmToNm(600), height: mmToNm(720), depth: mmToNm(500) });
+        const cab = doc.findNode(container.id)!;
+        const p1Data = doc.createPanel({ width: mmToNm(564), height: mmToNm(18), thickness: mmToNm(480) }, container.id);
+        const p2Data = doc.createPanel({ width: mmToNm(564), height: mmToNm(18), thickness: mmToNm(480) }, container.id);
+        const p1 = doc.findNode(p1Data.id)!;
+        const p2 = doc.findNode(p2Data.id)!;
+        (p1.domainData as any).role = 'SHELF';
+        (p2.domainData as any).role = 'SHELF';
+        p1.setLocalTransform(new Vec3(0, 0, mmToNm(100)));
+        p2.setLocalTransform(new Vec3(0, 0, mmToNm(300)));
+
+        const anchor = makeAnchor({
+            nodeId: cab.id,
+            kind: 'FACE',
+            sourceNodeId: 'stale-id',
+            sourceRole: 'SHELF',
+            faceName: 'FACE_Z_MINUS',
+            localNormalMm: [0, -1, 0],
+            localPointMm: [0, -240, 102], // blisko p1 (~2mm), daleko od p2 (~198mm)
+        });
+
+        const recovered = recoverAnchorSource(cab, anchor);
+        expect(recovered).toBe(p1);
     });
 });

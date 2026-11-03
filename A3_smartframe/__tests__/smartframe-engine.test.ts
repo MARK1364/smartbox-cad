@@ -63,4 +63,23 @@ describe('planCabinet SmartFrame generation', () => {
         expect(Math.abs(cadWorldZNormal.y)).toBeCloseTo(0);
         expect(cadWorldZNormal.z).toBeCloseTo(-1);
     });
+
+    it('proporcjonalnie skaluje wysokości stref w korpusie 3-strefowym, gdy wysokość całkowita jest mniejsza niż suma stref stałych (np. 750 mm < 1700 mm)', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 750,
+            glebokosc_mm: 600,
+            liczba_stref: 3,
+            wysokosc_strefy_dolnej_mm: 500,
+            wysokosc_strefy_srodkowej_mm: 1200
+        });
+
+        expect(plan.zones).toHaveLength(3);
+        const [b, m, t] = plan.zones;
+        expect(b.size).toBeGreaterThan(0);
+        expect(m.size).toBeGreaterThan(0);
+        expect(t.size).toBeGreaterThan(0);
+        expect(b.size + m.size + t.size).toBeCloseTo(750, 2);
+        expect(t.baseOffset + t.size).toBeCloseTo(750, 2);
+    });
 });

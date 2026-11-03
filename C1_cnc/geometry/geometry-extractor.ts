@@ -10,6 +10,7 @@ import { nmToMm } from '../../A1_core/cad-math/units.js';
 import { getGrooveParamsMm } from '../../A1_core/groove-params.js';
 import { WcsRulesMapper } from '../wcs/wcs-rules-mapper.js';
 import { nearestEndFace } from '../../C2_connectors/connectors-embedment.js';
+import { computeFaceData } from '../../A4_smartpanel/native_core/face-lcs.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import cncTekstRaw from '../cnc_tekst.json';
@@ -110,6 +111,13 @@ export class GeometryDataExtractor {
             if (panel.getFace && typeof panel.getFace === 'function') {
                 try {
                     faceData = panel.getFace(faceName);
+                } catch {
+                    faceData = null;
+                }
+            }
+            if (!faceData) {
+                try {
+                    faceData = computeFaceData(faceName, pW, pH, pT);
                 } catch {
                     faceData = null;
                 }

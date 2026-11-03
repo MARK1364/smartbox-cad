@@ -12,6 +12,7 @@ import type { CADNode } from '../A1_core/cad-node/cad-node.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
 import { resolveAnchor } from './constraint-geometry.js';
 import type { ConstraintAnchor, SolverConstraint } from './constraint-types.js';
+import { isDatumAnchor, resolveDatumAnchorPose } from './datum-planes.js';
 
 export const AXIS_EPS = 1e-12;
 const AXIS_LEN_SQ = 1e-12;
@@ -163,7 +164,29 @@ export function buildGroundLocks(
 ): GroundLock[] {
     const locks: GroundLock[] = [];
     for (const c of constraints) {
-        if (!c.enabled || c.conflict || c.bindType !== 'GROUND' || !c.anchorA) {
+        if (!c.enabled || c.conflict || !c.anchorA) {
+            continue;
+        }
+        if (c.bindType === 'VERTEX_DATUM' && c.anchorB) {
+            const vertAnchor = isDatumAnchor(c.anchorA) ? c.anchorB : c.anchorA;
+            const datumAnchor = isDatumAnchor(c.anchorA) ? c.anchorA : c.anchorB;
+            const node = document.findNode(vertAnchor.nodeId);
+            const pose = resolveDatumAnchorPose(datumAnchor, document);
+            if (node && pose) {
+                const resolved = resolveOnNode(document, node, vertAnchor);
+                const normal = new Vec3(pose.normalMm[0], pose.normalMm[1], pose.normalMm[2]).normalize();
+                locks.push({
+                    nodeId: node.id,
+                    mode: 'FACE',
+                    localPointNm: localMmToNm(resolved?.localPointMm),
+                    worldNormal: normal,
+                    twistAxis: normal,
+                    translationConstrainedBasis: [normal],
+                });
+            }
+            continue;
+        }
+        if (c.bindType !== 'GROUND') {
             continue;
         }
         const node = document.findNode(c.anchorA.nodeId);
@@ -217,7 +240,7 @@ export function buildConstraintFrames(
 ): ConstraintFrame[] {
     const frames: ConstraintFrame[] = [];
     for (const c of constraints) {
-        if (!c.enabled || c.conflict || c.bindType === 'GROUND') {
+        if (!c.enabled || c.conflict || c.bindType === 'GROUND' || c.bindType === 'VERTEX_DATUM') {
             continue;
         }
         if (!c.anchorA || !c.anchorB) {

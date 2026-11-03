@@ -62,6 +62,7 @@ import { ExportUI, ExportEngine } from '../E1_export';
 import { Vec3 } from '../A1_core/cad-math/vec3';
 import { Quat } from '../A1_core/cad-math/quat';
 import { mmToNm } from '../A1_core/cad-math/units';
+import { renderToCAD } from '../A1_core/cad-math/coord-system';
 import { PanelModel } from '../A4_smartpanel/panel-model';
 import { CADNode } from '../A1_core/cad-node/cad-node';
 import { NodeType } from '../A1_core/cad-node/node-type';
@@ -468,7 +469,8 @@ export default function App({
                           try {
                               const isHw = m.metadata?.type === 'hardware' || m.name?.startsWith('hw_');
                               if (isHw) {
-                                  const hwVis = m.metadata?.feature?.visible !== false && m.metadata?.feature?.params?.visible !== false && m.metadata?.visible !== false;
+                                  const isHwFrozen = m.metadata?.frozen === true || m.metadata?.feature?.frozen === true || m.metadata?.feature?.params?.frozen === true;
+                                  const hwVis = !isHwFrozen && m.metadata?.feature?.visible !== false && m.metadata?.feature?.params?.visible !== false && m.metadata?.visible !== false;
                                   const showHw = isolate ? isTargetPanel : hwVis;
                                   m.setEnabled(showHw);
                                   if ('isVisible' in m) m.isVisible = showHw && !wireframe;
@@ -1870,8 +1872,9 @@ export default function App({
 
               const pNode = CADNode.create(NodeType.PART, newPanel.name, newPanel.id);
               pNode.domainData = newPanel;
+              const cadDropPosMm = renderToCAD(new Vec3(dropX, pHeight / 2, dropZ));
               pNode.setLocalTransform(
-                new Vec3(mmToNm(dropX), mmToNm(pHeight / 2), mmToNm(dropZ)),
+                new Vec3(mmToNm(cadDropPosMm.x), mmToNm(cadDropPosMm.y), mmToNm(cadDropPosMm.z)),
                 Quat.IDENTITY
               );
 
@@ -1920,8 +1923,9 @@ export default function App({
               const cloned = (doc as any).duplicateCADNode(nodeId, { x: 0, y: 0, z: 0 });
               if (cloned) {
                 const { rotation, scale } = cloned.localMatrix.decompose();
+                const cadDropPosMm = renderToCAD(new Vec3(dropX, 0, dropZ));
                 cloned.setLocalTransform(
-                  new Vec3(mmToNm(dropX), 0, mmToNm(dropZ)),
+                  new Vec3(mmToNm(cadDropPosMm.x), mmToNm(cadDropPosMm.y), mmToNm(cadDropPosMm.z)),
                   rotation,
                   scale
                 );

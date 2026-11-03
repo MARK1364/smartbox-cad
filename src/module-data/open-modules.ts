@@ -1,3 +1,4 @@
+import { resolveParentContainer } from './tree-context-menu.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
 import { E3LibraryExtractor } from '../../R2_rys';
@@ -186,9 +187,29 @@ export function openDagFromCad(scope: ModuleScope): void {
 export function openInstrukcjaFromCad(scope: ModuleScope): void {
     try {
         const doc = getDoc();
+        if (scope.type === 'PROJECT' && doc) {
+            const active = doc.activeEntity;
+            if (active) {
+                if (active.type === 'container') {
+                    scope = { type: 'CONTAINER', id: active.id, name: active.name || active.id };
+                } else if (active.type === 'panel' || active.type === 'part') {
+                    const parent = resolveParentContainer(active.id);
+                    if (parent) {
+                        scope = { type: parent.isBlok ? 'BLOKI' : 'CONTAINER', id: parent.id, name: parent.model?.name || parent.id };
+                    }
+                }
+            } else {
+                const containers = typeof doc.getContainers === 'function' ? doc.getContainers() : [];
+                if (containers.length === 1) {
+                    const c = containers[0].domainData || containers[0];
+                    scope = { type: 'CONTAINER', id: c.id, name: c.name || c.id };
+                }
+            }
+        }
         persistProjectSnapshot(doc);
         const payload = extractInstrukcjaPayload(scope, doc);
         writeModuleSession('instrukcja', payload);
+        notifyModuleSessionUpdated('instrukcja');
         openModulePage('instrukcja');
     } catch (e: any) {
         alert(e?.message || tx(srcTekst, 'moddata.instrukcja_origin', TX_NS));

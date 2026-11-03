@@ -135,8 +135,20 @@ function applyGroundLock(lock: GroundLock, initial: WorldPose, current: WorldPos
     const rotated = poseFromTRS(current.translation, rotation, current.scale);
     const initialPt = worldPoint(initial, lock.localPointNm);
     const currentPt = worldPoint(rotated, lock.localPointNm);
+    const diff = initialPt.sub(currentPt);
+
+    let correction = Vec3.ZERO;
+    if (lock.translationConstrainedBasis && lock.translationConstrainedBasis.length > 0) {
+        for (const basisVec of lock.translationConstrainedBasis) {
+            const u = basisVec.normalize();
+            correction = correction.add(u.scale(diff.dot(u)));
+        }
+    } else {
+        correction = diff;
+    }
+
     return poseFromTRS(
-        rotated.translation.add(initialPt.sub(currentPt)),
+        rotated.translation.add(correction),
         rotation,
         current.scale,
     );

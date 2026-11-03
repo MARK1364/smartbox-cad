@@ -109,11 +109,12 @@ export function reparentManualPanel(doc: any, panelId: string, rawParentId: stri
 function manualPanelLocalOffset(parentDomain: any, inAssembly: boolean): Vec3 {
     if (inAssembly && parentDomain?.type === 'container') {
         const w = parentDomain.width ?? mmToNm(600);
-        const h = parentDomain.height ?? mmToNm(720);
         const d = parentDomain.depth ?? mmToNm(500);
-        return new Vec3(w * 0.15, h * 0.2, d * 0.3);
+        const h = parentDomain.height ?? mmToNm(720);
+        return new Vec3(w * 0.15, d * 0.3, h * 0.2);
     }
-    return new Vec3(mmToNm(Math.random() * 200), mmToNm(Math.random() * 200), 0);
+    const defaultElevationNm = mmToNm(510 / 2);
+    return new Vec3(mmToNm(Math.random() * 200), mmToNm(Math.random() * 200), defaultElevationNm);
 }
 
 export class AppCommands {
@@ -282,9 +283,10 @@ export class AppCommands {
         const saveProject = async (): Promise<boolean> => {
             try {
                 const mode = await fileIO.save(document);
+                const fname = fileIO.currentFileName;
                 ui.setStatus(
                     mode === 'native'
-                        ? 'Zapisano projekt'
+                        ? (fname ? `Zapisano projekt: ${fname}` : 'Zapisano projekt')
                         : tx(srcTekst, 'cmd.project_copy', TX_NS),
                     true
                 );

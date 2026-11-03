@@ -8,7 +8,7 @@
 import { ContextManager } from './context-manager.js';
 import { Vec3 } from './cad-math/vec3.js';
 import { Mat4 } from './cad-math/mat4.js';
-import { nmToMm } from './cad-math/units.js';
+import { nmToMm, mmToNm } from './cad-math/units.js';
 import { TransformNodeCommand } from './commands/transform-node-command.js';
 import { MacroCommand } from './commands/macro-command.js';
 import { normalizeFaceName } from './face-name.js';
@@ -17,6 +17,12 @@ import { getCabinetModule, TopPanelMode } from './cabinet-port.js';
 import { CadTranslateGizmo } from './cad-translate-gizmo.js';
 import { getConstraintDragPort } from './constraint-drag-port.js';
 import { NodeType } from './cad-node/node-type.js';
+
+import { ConstraintStore } from '../S2_solver/constraint-store.js';
+import { makeAnchor } from '../S2_solver/constraint-types.js';
+import { makeDatumLevelAnchor } from '../S2_solver/datum-planes.js';
+import { resolveCornerLocalMm } from '../S2_solver/constraint-geometry.js';
+import { handleConstraintPickEvent } from '../S2_solver/constraint-picker.js';
 
 declare const BABYLON: any;
 
@@ -29,6 +35,7 @@ export class GizmoController {
     private activeGizmoSphere: any = null;
     private activeGizmoParamName = '';
     private activeGizmoContainer: any = null;
+    private lastActiveEntityId: string | null = null;
     private originalValueBeforeEdit = 0;
     private badgeFixedPos: { left: number, top: number } | null = null;
     private positionGizmo: CadTranslateGizmo | null = null;
@@ -38,8 +45,21 @@ export class GizmoController {
     private matrixBeforeDrag: Mat4 | null = null;
     private activeTopPanelEntity: any = null;
     private activeTopPanelContainer: any = null;
+    private activeGizmoRole?: string;
+    private activeCornerSession: {
+        container: any;
+        paramName: string;
+        sphere: any;
+        originalValue: number;
+    } | null = null;
+    private _cornerGizmoPointerObserver: any = null;
+    private isDraggingCornerGizmo = false;
     private isTopPanelWidgetOpen = false;
     private topPanelWidgetManualPos: { left: number; top: number } | null = null;
+    private _blurTimeoutId: any = null;
+    private _isClosingFloatingInput = false;
+    private _hookedInputEl: HTMLInputElement | null = null;
+    private _ignoreBlurUntil = 0;
 
     /**
      * Ściana panelu (klucz = kanoniczny FaceName) → sufiks parametra korpusu.
@@ -124,6 +144,7 @@ export class GizmoController {
         if (entity.visible === false) return false;
         if (entity.params?.visible === false) return false;
         if (entity.generatorParams?.visible === false) return false;
+
         if (entity.frozen === true || entity.params?.frozen === true) return false;
 
         const doc = ContextManager.instance.document;
@@ -139,7 +160,23 @@ export class GizmoController {
 
         const panelViews = ContextManager.instance.panelViews;
         const containerViews = ContextManager.instance.containerViews;
-        const view = panelViews?.get(entity) || containerViews?.get(entity);
+        let view = panelViews?.get(entity) || (entity?.id ? panelViews?.get(entity.id) : null) || containerViews?.get(entity);
+        if (!view && entity?.id) {
+            for (const [p, v] of panelViews || []) {
+                if (p?.id === entity.id) {
+                    view = v;
+                    break;
+                }
+            }
+            if (!view) {
+                for (const [c, v] of containerViews || []) {
+                    if (c?.id === entity.id) {
+                        view = v;
+                        break;
+                    }
+                }
+            }
+        }
         const root = (view as any)?.rootNode || (view as any)?.root;
         if (root && (root.isEnabled() === false || root.isVisible === false)) {
             return false;
@@ -168,21 +205,20 @@ export class GizmoController {
         this.createTopPanelWidget();
 
         viewport.scene.onBeforeRenderObservable.add(() => {
+            if ((window as any).__glcGizmoActive || this.isDraggingCornerGizmo) {
+                return;
+            }
+
             const activeEntity = ContextManager.instance.document?.activeEntity;
             const isEntityVis = this.isEntityVisible(activeEntity);
 
-            if (!isEntityVis || !this.activeGizmoSphere || !this.activeGizmoContainer || !this.isEntityVisible(this.activeGizmoContainer) || (this.activeGizmoSphere.isDisposed && this.activeGizmoSphere.isDisposed())) {
+            if ((!isEntityVis && !this.activeCornerSession) || !this.activeGizmoSphere || !this.activeGizmoContainer || !this.isEntityVisible(this.activeGizmoContainer) || (this.activeGizmoSphere.isDisposed && this.activeGizmoSphere.isDisposed())) {
                 const badge = document.getElementById('gizmo-floating-input');
                 if (badge && badge.style.display !== 'none' && !this.isEditingFaceGizmo) {
                     badge.style.display = 'none';
                     this.badgeFixedPos = null;
                 }
-                if (!isEntityVis && badge && badge.style.display !== 'none') {
-                    badge.style.display = 'none';
-                    this.badgeFixedPos = null;
-                    this.isEditingFaceGizmo = false;
-                }
-            } else if ((this.isDraggingFaceGizmo || this.isEditingFaceGizmo) && this.activeGizmoSphere && this.activeGizmoContainer && this.activeGizmoParamName) {
+            } else if ((this.isDraggingFaceGizmo || this.isEditingFaceGizmo) && this.activeGizmoSphere && this.activeGizmoContainer && (this.activeGizmoParamName || this.activeCornerSession)) {
                 const badge = document.getElementById('gizmo-floating-input');
                 const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
                 const canvas = viewport.canvas;
@@ -195,8 +231,18 @@ export class GizmoController {
                         badge.style.left = `${this.badgeFixedPos.left}px`;
                         badge.style.top = `${this.badgeFixedPos.top}px`;
                     } else if (this.isDraggingFaceGizmo || !this.badgeFixedPos) {
+                        if (this.activeGizmoSphere?.parent?.computeWorldMatrix) {
+                            this.activeGizmoSphere.parent.computeWorldMatrix(true);
+                        }
+                        if (this.activeGizmoSphere?.computeWorldMatrix) {
+                            this.activeGizmoSphere.computeWorldMatrix(true);
+                        }
+                        const spherePos = this.activeGizmoSphere?.getAbsolutePosition
+                            ? this.activeGizmoSphere.getAbsolutePosition()
+                            : (this.activeGizmoSphere?.position ?? BABYLON.Vector3.Zero());
+
                         const screenPos = BABYLON.Vector3.Project(
-                            this.activeGizmoSphere.absolutePosition,
+                            spherePos,
                             BABYLON.Matrix.Identity(),
                             viewport.scene.getTransformMatrix(),
                             viewport.scene.activeCamera.viewport.toGlobal(
@@ -205,25 +251,29 @@ export class GizmoController {
                             )
                         );
 
-                        const canvasRect = canvas.getBoundingClientRect();
-                        const curLeft = canvasRect.left + screenPos.x + 20;
-                        const curTop = canvasRect.top + screenPos.y - 45;
-                        badge.style.left = `${curLeft}px`;
-                        badge.style.top = `${curTop}px`;
+                        if (screenPos.z >= 0 && screenPos.z <= 1) {
+                            const canvasRect = canvas.getBoundingClientRect();
+                            const curLeft = canvasRect.left + screenPos.x + 20;
+                            const curTop = canvasRect.top + screenPos.y - 45;
+                            badge.style.left = `${curLeft}px`;
+                            badge.style.top = `${curTop}px`;
 
-                        if (this.isEditingFaceGizmo && !this.badgeFixedPos) {
-                            this.badgeFixedPos = { left: curLeft, top: curTop };
+                            if (this.isEditingFaceGizmo && !this.badgeFixedPos) {
+                                this.badgeFixedPos = { left: curLeft, top: curTop };
+                            }
                         }
                     }
 
-                    if (document.activeElement !== input) {
+                    if (this.isDraggingFaceGizmo) {
                         let currentVal: number;
-                        if (this.activeGizmoParamName === 'backOffset' || this.activeGizmoParamName === 'cofniecie_plecow_mm') {
+                        if (this.activeCornerSession) {
+                            currentVal = this.activeCornerSession.originalValue;
+                        } else if (this.activeGizmoParamName === 'backOffset' || this.activeGizmoParamName === 'cofniecie_plecow_mm') {
                             const gp = this.activeGizmoContainer.generatorParams;
                             currentVal = gp?.cofniecie_plecow_mm ?? gp?.backOffset ?? gp?.offsets?.backOffset ?? 3;
                         } else {
                             const activeEntity = ContextManager.instance.document?.activeEntity;
-                            const role = (activeEntity as any)?.role;
+                            const role = this.activeGizmoRole || (activeEntity as any)?.role;
                             currentVal = this._readOffsetMm(
                                 this.activeGizmoContainer,
                                 this.activeGizmoParamName,
@@ -231,6 +281,7 @@ export class GizmoController {
                             );
                         }
                         input.value = currentVal.toString();
+                        input.style.width = `${Math.max(45, input.value.length * 9)}px`;
                     }
                 }
             } else {
@@ -285,95 +336,240 @@ export class GizmoController {
     }
 
     public createFloatingInput(): void {
-        if (document.getElementById('gizmo-floating-input')) return;
+        if (typeof document === 'undefined') return;
+        let badge = document.getElementById('gizmo-floating-input') as HTMLElement | null;
+        let input = document.getElementById('gizmo-input-field') as HTMLInputElement | null;
 
-        const style = document.createElement('style');
-        style.innerHTML = `
-            #gizmo-input-field::-webkit-outer-spin-button,
-            #gizmo-input-field::-webkit-inner-spin-button {
-                -webkit-appearance: none;
-                margin: 0;
-            }
-            #gizmo-input-field {
-                -moz-appearance: textfield;
-            }
-        `;
-        document.head.appendChild(style);
+        if (!badge || !input) {
+            const style = document.createElement('style');
+            style.innerHTML = `
+                #gizmo-input-field::-webkit-outer-spin-button,
+                #gizmo-input-field::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                }
+                #gizmo-input-field {
+                    -moz-appearance: textfield;
+                }
+            `;
+            document.head.appendChild(style);
 
-        const badge = document.createElement('div');
-        badge.id = 'gizmo-floating-input';
-        badge.style.cssText = `
-            position: absolute;
-            display: none;
-            z-index: 1000;
-            pointer-events: auto;
-            background: rgba(20, 20, 20, 0.85);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1.5px solid rgba(255, 102, 0, 0.8);
-            border-radius: 6px;
-            padding: 2px 6px;
-            align-items: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            font-family: 'Outfit', 'Inter', sans-serif;
-            color: #fff;
-            font-size: 13px;
-        `;
+            badge = document.createElement('div');
+            badge.id = 'gizmo-floating-input';
+            badge.style.cssText = `
+                position: absolute;
+                display: none;
+                z-index: 1000;
+                pointer-events: auto;
+                background: rgba(20, 20, 20, 0.85);
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                border: 1.5px solid rgba(255, 102, 0, 0.8);
+                border-radius: 6px;
+                padding: 2px 6px;
+                align-items: center;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                font-family: 'Outfit', 'Inter', sans-serif;
+                color: #fff;
+                font-size: 13px;
+            `;
 
-        const input = document.createElement('input');
-        input.type = 'text'; // Obsługa wyrażeń matematycznych (np. 88+10, 600/2)
-        input.id = 'gizmo-input-field';
-        input.style.cssText = `
-            background: transparent;
-            border: none;
-            color: #fff;
-            font-family: inherit;
-            font-size: 13px;
-            min-width: 45px;
-            width: auto;
-            text-align: right;
-            outline: none;
-            font-weight: bold;
-        `;
+            input = document.createElement('input');
+            input.type = 'text'; // Obsługa wyrażeń matematycznych (np. 88+10, 600/2)
+            input.id = 'gizmo-input-field';
+            input.style.cssText = `
+                background: transparent;
+                border: none;
+                color: #fff;
+                font-family: inherit;
+                font-size: 13px;
+                min-width: 45px;
+                width: auto;
+                text-align: right;
+                outline: none;
+                font-weight: bold;
+                pointer-events: auto;
+                cursor: text;
+            `;
 
-        const unit = document.createElement('span');
-        unit.innerText = 'mm';
-        unit.style.cssText = `
-            margin-left: 2px;
-            color: rgba(255,255,255,0.7);
-            font-weight: 500;
-        `;
+            const unit = document.createElement('span');
+            unit.innerText = 'mm';
+            unit.style.cssText = `
+                margin-left: 2px;
+                color: rgba(255,255,255,0.7);
+                font-weight: 500;
+                user-select: none;
+            `;
 
-        badge.appendChild(input);
-        badge.appendChild(unit);
-        document.body.appendChild(badge);
+            badge.appendChild(input);
+            badge.appendChild(unit);
+            document.body.appendChild(badge);
+        }
 
-        badge.onmousedown = (e) => e.stopPropagation();
-        badge.onpointerdown = (e) => e.stopPropagation();
-        input.onmousedown = (e) => e.stopPropagation();
-        input.onpointerdown = (e) => e.stopPropagation();
+        if (this._hookedInputEl !== input) {
+            this._hookedInputEl = input;
+            badge.onmousedown = (e) => {
+                e.stopPropagation();
+                if (e.target !== input) {
+                    input!.focus();
+                }
+            };
+            badge.onpointerdown = (e) => {
+                e.stopPropagation();
+                if (e.target !== input) {
+                    input!.focus();
+                }
+            };
+            badge.onmouseup = (e) => e.stopPropagation();
+            badge.onpointerup = (e) => e.stopPropagation();
+            badge.onclick = (e) => e.stopPropagation();
+            input.onmousedown = (e) => e.stopPropagation();
+            input.onpointerdown = (e) => e.stopPropagation();
+            input.onmouseup = (e) => e.stopPropagation();
+            input.onpointerup = (e) => e.stopPropagation();
+            input.onclick = (e) => e.stopPropagation();
 
-        this.initFloatingInputEvents(input, badge);
+            this.initFloatingInputEvents(input, badge);
+        }
     }
 
-    private openFloatingInput(sphere: any, paramName: string, container: any, role?: string): void {
+    private _updateFaceFloatingBadgePosition(sphere: any, colorHex?: string): void {
+        const viewport = ContextManager.instance.viewport;
+        if (!viewport || !viewport.scene || !viewport.canvas || !sphere) return;
+        const badge = document.getElementById('gizmo-floating-input');
+        if (!badge) return;
+
+        if (sphere.parent?.computeWorldMatrix) {
+            sphere.parent.computeWorldMatrix(true);
+        }
+        if (sphere.computeWorldMatrix) {
+            sphere.computeWorldMatrix(true);
+        }
+
+        const pos = sphere.getAbsolutePosition ? sphere.getAbsolutePosition() : (sphere.position ?? BABYLON.Vector3.Zero());
+        const screenPos = BABYLON.Vector3.Project(
+            pos,
+            BABYLON.Matrix.Identity(),
+            viewport.scene.getTransformMatrix(),
+            viewport.scene.activeCamera.viewport.toGlobal(
+                viewport.engine.getRenderWidth(),
+                viewport.engine.getRenderHeight()
+            )
+        );
+
+        if (screenPos.z < 0 || screenPos.z > 1) {
+            badge.style.display = 'none';
+            return;
+        }
+
+        const canvasRect = viewport.canvas.getBoundingClientRect();
+        const curLeft = canvasRect.left + screenPos.x + 20;
+        const curTop = canvasRect.top + screenPos.y - 45;
+        badge.style.left = `${curLeft}px`;
+        badge.style.top = `${curTop}px`;
+        if (colorHex) {
+            badge.style.border = `1.5px solid ${colorHex}`;
+        }
+        this.badgeFixedPos = { left: curLeft, top: curTop };
+    }
+
+    private openFloatingInput(sphere: any, paramName: string, container: any, role?: string, originalValueOverride?: number): void {
+        this.createFloatingInput();
+        if (typeof window !== 'undefined') {
+            (window as any).__glcGizmoActive = false;
+        }
+        if (this._blurTimeoutId) {
+            clearTimeout(this._blurTimeoutId);
+            this._blurTimeoutId = null;
+        }
+        if (this.isEditingFaceGizmo) {
+            this.closeFloatingInput(true);
+        }
+
+        this.activeCornerSession = null;
         this.activeGizmoSphere = sphere;
         this.activeGizmoParamName = paramName;
         this.activeGizmoContainer = container;
+        this.activeGizmoRole = role;
         this.isEditingFaceGizmo = true;
         this.badgeFixedPos = null;
+        this._ignoreBlurUntil = Date.now() + 150;
 
         const isBackOffset = paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm';
         const gp = container?.generatorParams;
-        this.originalValueBeforeEdit = isBackOffset
+        const currentValue = isBackOffset
             ? (gp?.cofniecie_plecow_mm ?? gp?.backOffset ?? gp?.offsets?.backOffset ?? 3)
             : this._readOffsetMm(container, paramName, role);
+        this.originalValueBeforeEdit = originalValueOverride !== undefined ? originalValueOverride : currentValue;
+
+        let borderHex = 'rgba(255, 102, 0, 0.8)';
+        if (sphere?.material?.diffuseColor) {
+            const dc = sphere.material.diffuseColor;
+            borderHex = `rgb(${Math.round(dc.r * 255)}, ${Math.round(dc.g * 255)}, ${Math.round(dc.b * 255)})`;
+        }
 
         const badge = document.getElementById('gizmo-floating-input');
         const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
         if (badge && input) {
             badge.style.display = 'flex';
-            input.value = this.originalValueBeforeEdit.toString();
+            badge.style.border = `1.5px solid ${borderHex}`;
+            input.value = currentValue.toString();
+            input.style.width = `${Math.max(45, input.value.length * 9)}px`;
+            
+            this._updateFaceFloatingBadgePosition(sphere, borderHex);
+
+            input.focus();
+            input.select();
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 25);
+        }
+    }
+
+    private openFloatingInputForCorner(opts: {
+        container: any;
+        paramName: string;
+        sphere: any;
+        valMm: number;
+        colorHex?: string;
+    }): void {
+        this.createFloatingInput();
+        if (typeof window !== 'undefined') {
+            (window as any).__glcGizmoActive = false;
+        }
+        if (this._blurTimeoutId) {
+            clearTimeout(this._blurTimeoutId);
+            this._blurTimeoutId = null;
+        }
+        if (this.isEditingFaceGizmo) {
+            this.closeFloatingInput(true);
+        }
+
+        const { container, paramName, sphere, valMm, colorHex = '#38bdf8' } = opts;
+        this.activeGizmoSphere = sphere;
+        this.activeGizmoParamName = '';
+        this.activeGizmoContainer = container;
+        this.activeGizmoRole = undefined;
+        this.activeCornerSession = {
+            container,
+            paramName,
+            sphere,
+            originalValue: Math.round(valMm)
+        };
+        this.originalValueBeforeEdit = Math.round(valMm);
+        this.isEditingFaceGizmo = true;
+        this.badgeFixedPos = null;
+        this._ignoreBlurUntil = Date.now() + 150;
+
+        this._updateCornerDragBadge(valMm, sphere, colorHex);
+
+        const badge = document.getElementById('gizmo-floating-input');
+        const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
+        if (badge && input) {
+            badge.style.display = 'flex';
+            badge.style.border = `1.5px solid ${colorHex}`;
+            input.value = Math.round(valMm).toString();
             input.style.width = `${Math.max(45, input.value.length * 9)}px`;
             setTimeout(() => {
                 input.focus();
@@ -388,9 +584,10 @@ export class GizmoController {
             const gp = container.generatorParams;
             return gp?.cofniecie_plecow_mm ?? gp?.backOffset ?? gp?.offsets?.backOffset ?? 3;
         }
-        const handler = role ? findOffsetGizmoHandler(role) : null;
+        const effectiveRole = role || this.activeGizmoRole;
+        const handler = effectiveRole ? findOffsetGizmoHandler(effectiveRole) : null;
         if (handler) {
-            return handler.readOffsetMm(container, paramName, role);
+            return handler.readOffsetMm(container, paramName, effectiveRole);
         }
         return container.generatorParams?.offsets?.[paramName] ?? 0;
     }
@@ -403,7 +600,8 @@ export class GizmoController {
         if (!container) return;
         if (!container.generatorParams) container.generatorParams = {};
 
-        const handler = role ? findOffsetGizmoHandler(role) : null;
+        const effectiveRole = role || this.activeGizmoRole;
+        const handler = effectiveRole ? findOffsetGizmoHandler(effectiveRole) : null;
         if (handler) {
             handler.previewOffset(container, paramName, value);
             return;
@@ -441,63 +639,161 @@ export class GizmoController {
         return null;
     }
 
-    private initFloatingInputEvents(input: HTMLInputElement, badge: HTMLElement): void {
-        input.oninput = () => {
-            if (!this.activeGizmoContainer || !this.activeGizmoParamName) return;
+    private commitFloatingInputValue(input: HTMLInputElement, badge: HTMLElement): void {
+        if (!input.value) return;
+        const val = this.evaluateMathExpression(input.value);
+        if (val === null) return;
 
+        if (this.activeCornerSession) {
+            const { container, paramName } = this.activeCornerSession;
+            const cabMod = getCabinetModule();
+            const doc = ContextManager.instance.document;
+            if (cabMod?.applyRealtimeUpdate && doc) {
+                cabMod.applyRealtimeUpdate(doc, { [paramName]: val }, container);
+            }
+            if (typeof window !== 'undefined') {
+                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                window.dispatchEvent(new CustomEvent('cad-edit-entity', {
+                    detail: { entityId: container.id, kind: 'korpus' }
+                }));
+            }
+        } else if (this.activeGizmoContainer && this.activeGizmoParamName) {
+            const role = this.activeGizmoRole;
+            const handler = role ? findOffsetGizmoHandler(role) : null;
+            if (handler?.commitOffset) {
+                handler.commitOffset(
+                    this.activeGizmoContainer,
+                    this.activeGizmoParamName,
+                    this.originalValueBeforeEdit,
+                    val
+                );
+            } else {
+                this.previewOffsetOnContainer(
+                    this.activeGizmoContainer,
+                    this.activeGizmoParamName,
+                    val,
+                    role
+                );
+            }
+            if (typeof window !== 'undefined') {
+                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                window.dispatchEvent(new CustomEvent('cad-edit-entity', {
+                    detail: { entityId: this.activeGizmoContainer.id, kind: 'korpus' }
+                }));
+            }
+            const doc = ContextManager.instance.document;
+            if (doc) {
+                doc.notifyDocumentChanged();
+            }
+        }
+    }
+
+    public closeFloatingInput(commit: boolean = true): void {
+        if (this._blurTimeoutId) {
+            clearTimeout(this._blurTimeoutId);
+            this._blurTimeoutId = null;
+        }
+
+        const badge = typeof document !== 'undefined' ? document.getElementById('gizmo-floating-input') : null;
+        const input = typeof document !== 'undefined' ? (document.getElementById('gizmo-input-field') as HTMLInputElement) : null;
+
+        if (commit && input && badge) {
+            this.commitFloatingInputValue(input, badge);
+        } else if (!commit) {
+            if (this.activeCornerSession) {
+                const { container, paramName, originalValue } = this.activeCornerSession;
+                const cabMod = getCabinetModule();
+                const doc = ContextManager.instance.document;
+                if (cabMod?.applyRealtimeUpdate && doc) {
+                    cabMod.applyRealtimeUpdate(doc, { [paramName]: originalValue }, container);
+                }
+            } else if (this.activeGizmoContainer && this.activeGizmoParamName) {
+                this.previewOffsetOnContainer(
+                    this.activeGizmoContainer,
+                    this.activeGizmoParamName,
+                    this.originalValueBeforeEdit,
+                    this.activeGizmoRole
+                );
+            }
+        }
+
+        this.isEditingFaceGizmo = false;
+        this.activeCornerSession = null;
+        this.badgeFixedPos = null;
+        this.activeGizmoSphere = null;
+        this.activeGizmoParamName = '';
+        this.activeGizmoContainer = null;
+        this.activeGizmoRole = undefined;
+
+        if (badge) {
+            badge.style.display = 'none';
+        }
+
+        if (input && typeof document !== 'undefined' && document.activeElement === input) {
+            this._isClosingFloatingInput = true;
+            try {
+                input.blur();
+            } finally {
+                this._isClosingFloatingInput = false;
+            }
+        }
+    }
+
+    private initFloatingInputEvents(input: HTMLInputElement, badge: HTMLElement): void {
+        input.oninput = (e) => {
+            if (this._isGlcGizmoActive()) return;
+            e.stopPropagation();
             // Dynamiczne dopasowanie szerokości inputa do długości wpisywanego wyrażenia
             input.style.width = `${Math.max(45, input.value.length * 9)}px`;
-
-            const val = this.evaluateMathExpression(input.value);
-            if (val === null) return;
-
-            this.previewOffsetOnContainer(
-                this.activeGizmoContainer,
-                this.activeGizmoParamName,
-                val
-            );
         };
 
         input.onkeydown = (e) => {
+            if (this._isGlcGizmoActive()) return;
+            e.stopPropagation();
             if (e.key === 'Enter') {
-                if (input.value) {
-                    const val = this.evaluateMathExpression(input.value);
-                    if (val !== null) {
-                        input.value = val.toString();
-                    }
+                e.preventDefault();
+                this._ignoreBlurUntil = 0;
+                this.closeFloatingInput(true);
+                if (this._blurTimeoutId) {
+                    clearTimeout(this._blurTimeoutId);
                 }
-                input.blur();
+                this._blurTimeoutId = setTimeout(() => {
+                    this._blurTimeoutId = null;
+                    this.updateFaceGizmo();
+                }, 50);
             } else if (e.key === 'Escape') {
-                input.value = this.originalValueBeforeEdit.toString();
-                if (this.activeGizmoContainer && this.activeGizmoParamName) {
-                    this.previewOffsetOnContainer(
-                        this.activeGizmoContainer,
-                        this.activeGizmoParamName,
-                        this.originalValueBeforeEdit
-                    );
+                e.preventDefault();
+                this._ignoreBlurUntil = 0;
+                this.closeFloatingInput(false);
+                if (this._blurTimeoutId) {
+                    clearTimeout(this._blurTimeoutId);
                 }
-                input.blur();
+                this._blurTimeoutId = setTimeout(() => {
+                    this._blurTimeoutId = null;
+                    this.updateFaceGizmo();
+                }, 50);
             }
         };
 
         input.onfocus = () => {
+            if (this._isGlcGizmoActive()) return;
             this.isEditingFaceGizmo = true;
         };
 
         input.onblur = () => {
-            if (input.value) {
-                const val = this.evaluateMathExpression(input.value);
-                if (val !== null) {
-                    input.value = val.toString();
-                }
+            if (this._isGlcGizmoActive()) return;
+            if (this._isClosingFloatingInput) return;
+            if (Date.now() < this._ignoreBlurUntil) {
+                input.focus();
+                input.select();
+                return;
             }
-            this.isEditingFaceGizmo = false;
-            this.badgeFixedPos = null;
-            badge.style.display = 'none';
-            this.activeGizmoSphere = null;
-            this.activeGizmoParamName = '';
-            this.activeGizmoContainer = null;
-            setTimeout(() => {
+            this.closeFloatingInput(true);
+            if (this._blurTimeoutId) {
+                clearTimeout(this._blurTimeoutId);
+            }
+            this._blurTimeoutId = setTimeout(() => {
+                this._blurTimeoutId = null;
                 this.updateFaceGizmo();
             }, 80);
         };
@@ -756,21 +1052,37 @@ export class GizmoController {
     }
 
     public clearFaceGizmos(): void {
+        if (this._blurTimeoutId) {
+            clearTimeout(this._blurTimeoutId);
+            this._blurTimeoutId = null;
+        }
         for (const sphere of this.activeFaceGizmoSpheres) {
             try { sphere.dispose(); } catch {}
         }
         this.activeFaceGizmoSpheres = [];
 
+        if (this._cornerGizmoPointerObserver) {
+            const vp = ContextManager.instance.viewport;
+            if (vp?.scene) {
+                vp.scene.onPointerObservable.remove(this._cornerGizmoPointerObserver);
+            }
+            this._cornerGizmoPointerObserver = null;
+        }
+
         this.activeGizmoSphere = null;
         this.activeGizmoParamName = '';
         this.activeGizmoContainer = null;
+        this.activeGizmoRole = undefined;
+        this.activeCornerSession = null;
         this.isDraggingFaceGizmo = false;
         this.isEditingFaceGizmo = false;
         this.badgeFixedPos = null;
 
-        const badge = typeof document !== 'undefined' ? document.getElementById('gizmo-floating-input') : null;
-        if (badge) {
-            badge.style.display = 'none';
+        if (!this._isGlcGizmoActive() && !this.isDraggingCornerGizmo) {
+            const badge = typeof document !== 'undefined' ? document.getElementById('gizmo-floating-input') : null;
+            if (badge) {
+                badge.style.display = 'none';
+            }
         }
 
         this.activeTopPanelEntity = null;
@@ -794,6 +1106,11 @@ export class GizmoController {
         this._disposeDragGuideLine();
     }
 
+    private _isGlcGizmoActive(): boolean {
+        const win = typeof window !== 'undefined' ? (window as any) : (typeof globalThis !== 'undefined' ? (globalThis as any) : null);
+        return Boolean(win && win.__glcGizmoActive);
+    }
+
     public showTranslateGizmo(entity?: any): void {
         const doc = ContextManager.instance.document;
         const viewport = ContextManager.instance.viewport;
@@ -811,7 +1128,11 @@ export class GizmoController {
         }
 
         const { target: activeEntity } = doc.getTransformableTarget(rawEntity);
-        if (!activeEntity || !this.isEntityVisible(activeEntity)) {
+        const isFrozen = Boolean(
+            (rawEntity as any)?.frozen || (rawEntity as any)?.params?.frozen ||
+            (activeEntity as any)?.frozen || (activeEntity as any)?.params?.frozen
+        );
+        if (!activeEntity || !this.isEntityVisible(activeEntity) || isFrozen) {
             if (this.positionGizmo) this.positionGizmo.attachedNode = null;
             if (this.freeDragSphere && !this.freeDragSphere.isDisposed()) {
                 this.freeDragSphere.setEnabled(false);
@@ -819,10 +1140,7 @@ export class GizmoController {
             return;
         }
 
-        const targetNode = panelViews.get(activeEntity)?.root ||
-                           containerViews.get(activeEntity)?.rootNode ||
-                           containerViews.get(activeEntity)?.root ||
-                           (activeEntity.name ? viewport.scene.getNodeByName(activeEntity.name) : null);
+        const targetNode = this._resolveTargetMesh(activeEntity);
         if (targetNode && typeof BABYLON !== 'undefined') {
             if (BABYLON.AxisDragGizmo) {
                 if (!this.positionGizmo) {
@@ -886,15 +1204,16 @@ export class GizmoController {
         }
 
         const { target: activeEntity } = doc.getTransformableTarget(rawEntity);
-        if (!activeEntity || !this.isEntityVisible(activeEntity)) {
+        const isFrozen = Boolean(
+            (rawEntity as any)?.frozen || (rawEntity as any)?.params?.frozen ||
+            (activeEntity as any)?.frozen || (activeEntity as any)?.params?.frozen
+        );
+        if (!activeEntity || !this.isEntityVisible(activeEntity) || isFrozen) {
             if (this.rotationGizmo) this.rotationGizmo.attachedNode = null;
             return;
         }
 
-        const targetNode = panelViews.get(activeEntity)?.root ||
-                           containerViews.get(activeEntity)?.rootNode ||
-                           containerViews.get(activeEntity)?.root ||
-                           (activeEntity.name ? viewport.scene.getNodeByName(activeEntity.name) : null);
+        const targetNode = this._resolveTargetMesh(activeEntity);
 
         if (targetNode && typeof BABYLON !== 'undefined' && BABYLON.RotationGizmo) {
             if (!this.rotationGizmo) {
@@ -958,24 +1277,80 @@ export class GizmoController {
     }
 
     public updateFaceGizmo(): void {
+        const doc = ContextManager.instance.document;
+        const activeEntity = doc?.activeEntity;
+
+        let activeContainerId: string | null = null;
+        if (activeEntity) {
+            if (activeEntity.type === 'container') {
+                activeContainerId = activeEntity.id;
+            } else {
+                let role = (activeEntity as any).role;
+                if (!role && activeEntity.id && doc) {
+                    const node = doc.findNode(activeEntity.id);
+                    if ((node?.domainData as any)?.role) {
+                        role = (node.domainData as any).role;
+                    }
+                }
+                const handler = role ? findOffsetGizmoHandler(role) : null;
+                const container: any = handler?.resolveContainer(doc, activeEntity) || (doc && activeEntity.id ? doc.findNode(activeEntity.id)?.parent?.domainData : null);
+                if (container?.id) {
+                    activeContainerId = container.id;
+                } else {
+                    const tr = doc?.getTransformableTarget(activeEntity);
+                    if (tr?.target?.type === 'container') {
+                        activeContainerId = tr.target.id;
+                    }
+                }
+            }
+        }
+
+        const currentEntityId = activeEntity?.id || null;
+        const entityChanged = Boolean(this.lastActiveEntityId !== currentEntityId);
+
+        // Jeśli zmienił się aktywny obiekt na inny kontener lub formatkę, zresetuj starą sesję edycji
+        const containerChanged = Boolean(
+            entityChanged ||
+            (this.activeGizmoContainer && activeContainerId && this.activeGizmoContainer.id !== activeContainerId) ||
+            (this.activeCornerSession && activeContainerId && this.activeCornerSession.container?.id !== activeContainerId) ||
+            (!activeEntity && (this.activeGizmoContainer || this.activeCornerSession || this.isEditingFaceGizmo))
+        );
+
+        this.lastActiveEntityId = currentEntityId;
+
+        const win = typeof window !== 'undefined' ? (window as any) : (typeof globalThis !== 'undefined' ? (globalThis as any) : null);
+
+        if (containerChanged) {
+            this.closeFloatingInput(true);
+            this.clearFaceGizmos();
+            if (win) {
+                win.__glcGizmoActive = false;
+            }
+            const badge = typeof document !== 'undefined' ? document.getElementById('gizmo-floating-input') : null;
+            if (badge) badge.style.display = 'none';
+        }
+
+        // Jeśli użytkownik wybrał obiekt w dokumencie, a flaga GLC wisiała, zresetuj ją, o ile nie trwa fizyczny drag osi GLC
+        const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+        const isGlcDragging = Boolean(glcAxis && (glcAxis as any).isDraggingGizmo);
+        if (win && !isGlcDragging && this._isGlcGizmoActive() && activeEntity) {
+            win.__glcGizmoActive = false;
+        }
+
+        if (this._isGlcGizmoActive() || this.isDraggingCornerGizmo) return;
         this.createFloatingInput();
 
-        if (this.isDraggingFaceGizmo || this.isEditingFaceGizmo) {
-            const activeEntity = ContextManager.instance.document?.activeEntity;
-            if (!this.isEntityVisible(activeEntity)) {
-                this.clearFaceGizmos();
-                return;
-            }
+        if (this.isDraggingFaceGizmo || (this.isEditingFaceGizmo && this.activeFaceGizmoSpheres.length > 0)) {
             return;
         }
 
         const modalMgr = ContextManager.instance.modalTransformManager;
         if (modalMgr && modalMgr.activeMode !== 'none') {
-            const activeEntity = ContextManager.instance.document?.activeEntity;
             if (!activeEntity || !this.isEntityVisible(activeEntity)) {
                 this.clearFaceGizmos();
                 return;
             }
+            modalMgr.setTargetEntity?.(activeEntity);
             if (modalMgr.activeMode === 'translate') {
                 this.showTranslateGizmo(activeEntity);
             } else if (modalMgr.activeMode === 'rotate') {
@@ -986,44 +1361,71 @@ export class GizmoController {
 
         this.clearFaceGizmos();
 
-        const doc = ContextManager.instance.document;
         const viewport = ContextManager.instance.viewport;
         const panelViews = ContextManager.instance.panelViews;
         const facePicker = ContextManager.instance.facePicker;
 
         if (!doc || !viewport) return;
 
-        const activeEntity = doc.activeEntity;
         if (!activeEntity || !this.isEntityVisible(activeEntity)) return;
 
-        // Gizma push/pull korpusu: wyłączone w modułach obróbczych/CAM, solverze relacji lub podczas aktywnego pickera referencji/więzów
+        // Gizma push/pull korpusu: wyłączone w module CAM (tab-c1-cnc), trybie instrukcji montażu lub podczas aktywnego pickera referencji/więzów
         const activeTab = ContextManager.instance.activeTab;
         const isPickingRef = Boolean(ContextManager.instance.activeReferencePicker || ContextManager.instance.activeConstraintPicker);
-        if (isPickingRef || activeTab === 'tab-c1-cnc' || activeTab === 'tab-s2-solver' || activeTab === 'tab-o1-operacji' || activeTab === 'tab-a4-smartpanel') {
+        if (isPickingRef || activeTab === 'tab-c1-cnc' || activeTab === 'tab-i1-instrukcja') {
             return;
         }
 
         if (activeEntity.type === 'container') {
+            this.createCornerGizmosForContainer(activeEntity);
             return;
         }
 
         const targetEntity = activeEntity;
-        const view = panelViews.get(targetEntity);
+        let view = panelViews.get(targetEntity) || (targetEntity?.id ? panelViews.get(targetEntity.id) : null);
+        if (!view && targetEntity?.id) {
+            for (const [p, v] of panelViews.entries()) {
+                if (p?.id === targetEntity.id) {
+                    view = v;
+                    break;
+                }
+            }
+        }
         if (!view || !view.faceMeshes) return;
         if (view.root && (view.root.isEnabled() === false || view.root.isVisible === false)) {
             return;
         }
 
-        const role = (targetEntity as any).role;
+        let role = (targetEntity as any).role;
+        if (!role && targetEntity?.id && doc) {
+            const node = doc.findNode(targetEntity.id);
+            if ((node?.domainData as any)?.role) {
+                role = (node.domainData as any).role;
+            }
+        }
         const handler = role ? findOffsetGizmoHandler(role) : null;
-        const mapping = handler?.getFaceMapping(role, targetEntity) || (role && this.pushPullMapping[role]) || null;
-        if (!mapping) return;
-
         // Zawsze korpus właściciel płyty — NIE getContainers()[0]
-        const container: any = handler?.resolveContainer(doc, targetEntity) || (doc ? doc.findNode(targetEntity.id)?.parent?.domainData : null);
+        let container: any = handler?.resolveContainer(doc, targetEntity) || (doc ? doc.findNode(targetEntity.id)?.parent?.domainData : null);
+        if (!container && targetEntity?.id && doc) {
+            const node = doc.findNode(targetEntity.id);
+            if (node?.parent?.domainData) {
+                container = node.parent.domainData;
+            }
+        }
+
+        const mapping = handler?.getFaceMapping(role, targetEntity) || (role && this.pushPullMapping[role]) || null;
+        if (!mapping) {
+            if (container) {
+                this.createCornerGizmosForContainer(container);
+            }
+            return;
+        }
+
         if (!container || !container.generatorParams || !this.isEntityVisible(container)) return;
 
-        const panelName = targetEntity.name;
+        const rawName = targetEntity.name || '';
+        const cleanName = rawName.replace(/\.\d+$/, '').replace(/_\d+$/, '');
+        const panelName = cleanName || (targetEntity as any).key || (targetEntity as any).role || rawName;
 
         if (role === 'TOP_PANEL' || role.includes('TOP')) {
             const owningKorpus = container;
@@ -1046,7 +1448,19 @@ export class GizmoController {
                 }
             }
             const canonicalFace = normalizeFaceName(faceName);
-            const mesh = view.faceMeshes[canonicalFace];
+            let mesh = view.faceMeshes[canonicalFace];
+            if (!mesh && (canonicalFace === 'FACE_X_PLUS' || canonicalFace === 'FACE_X_MINUS' || canonicalFace === 'FACE_Y_PLUS' || canonicalFace === 'FACE_Y_MINUS')) {
+                const targetEdgeKey = canonicalFace === 'FACE_X_PLUS' ? '+X'
+                    : canonicalFace === 'FACE_X_MINUS' ? '-X'
+                    : canonicalFace === 'FACE_Y_PLUS' ? '+Y'
+                    : '-Y';
+                for (const m of Object.values(view.faceMeshes)) {
+                    if ((m as any)?.metadata?.outlineEdgeKey === targetEdgeKey) {
+                        mesh = m;
+                        break;
+                    }
+                }
+            }
             if (!mesh) continue;
 
                 mesh.computeWorldMatrix(true);
@@ -1100,20 +1514,36 @@ export class GizmoController {
                 mat.emissiveColor = emissiveColor;
                 sphere.material = mat;
                 sphere.setParent(view.root);
+                if (sphere.computeWorldMatrix) {
+                    sphere.computeWorldMatrix(true);
+                }
 
                 const dragBehavior = new BABYLON.PointerDragBehavior({
                     dragAxis: normal
                 });
+                dragBehavior.useObjectOrientationForDragging = false;
                 dragBehavior.dragDeltaRatio = GIZMO_DRAG_MULTIPLIER;
 
                 let originalValue = 0;
                 let startPos: any = null;
+                let hasDragged = false;
 
                 dragBehavior.onDragStartObservable.add(() => {
+                    hasDragged = false;
+                    if (this._blurTimeoutId) {
+                        clearTimeout(this._blurTimeoutId);
+                        this._blurTimeoutId = null;
+                    }
+                    if (this.isEditingFaceGizmo) {
+                        this.closeFloatingInput(true);
+                    }
                     this.isDraggingFaceGizmo = true;
+                    this.isEditingFaceGizmo = false;
+                    this.badgeFixedPos = null;
                     this.activeGizmoSphere = sphere;
                     this.activeGizmoParamName = paramName;
                     this.activeGizmoContainer = container;
+                    this.activeGizmoRole = role;
                     const c = container as any;
                     if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
                         const gp = c.generatorParams;
@@ -1130,6 +1560,7 @@ export class GizmoController {
                 });
 
                 dragBehavior.onDragObservable.add(() => {
+                    hasDragged = true;
                     const c = container as any;
                     const projDist = this._projectPointerRayOntoAxis(viewport.scene, startPos, normal);
                     let delta = 0;
@@ -1168,15 +1599,24 @@ export class GizmoController {
                     this.isDraggingFaceGizmo = false;
                     viewport.camera.attachControl(viewport.canvas, true);
                     
+                    if (!hasDragged) {
+                        // Zwykłe kliknięcie (delta = 0) — nie niszcz geometrii ani kulek w onDragEnd;
+                        // otwarcie pola obsłuży OnPickTrigger na aktywnej, żywej kuli.
+                        sphere.setParent(view.root);
+                        return;
+                    }
+
                     const lastParam = this.activeGizmoParamName;
                     const lastContainer = this.activeGizmoContainer;
+                    const lastRole = role || this.activeGizmoRole;
+                    const startVal = originalValue;
                     
                     this.updateFaceGizmo();
                     
                     if (lastParam && lastContainer) {
                         const newSphere = this.activeFaceGizmoSpheres.find(s => s.metadata?.paramName === lastParam);
                         if (newSphere) {
-                            this.openFloatingInput(newSphere, lastParam, lastContainer, role);
+                            this.openFloatingInput(newSphere, lastParam, lastContainer, lastRole, startVal);
                         }
                     }
                 });
@@ -1241,6 +1681,12 @@ export class GizmoController {
                     const paramName = `${panelName}_${shiftParam}`;
                     
                     view.root.computeWorldMatrix(true);
+                    if (view.root.parent && typeof view.root.parent.getWorldMatrix === 'function') {
+                        if (typeof view.root.parent.computeWorldMatrix === 'function') {
+                            view.root.parent.computeWorldMatrix(true);
+                        }
+                        shiftAxis = BABYLON.Vector3.TransformNormal(shiftAxis, view.root.parent.getWorldMatrix()).normalize();
+                    }
                     const worldPos = view.root.getAbsolutePosition ? view.root.getAbsolutePosition().clone() : view.root.position.clone();
                     
                     const centerSphere = BABYLON.MeshBuilder.CreateSphere(`faceGizmoSphere_center`, { diameter: 30 }, viewport.scene);
@@ -1248,6 +1694,9 @@ export class GizmoController {
                     centerSphere.position.copyFrom(worldPos);
                     centerSphere.position.addInPlace(shiftAxis.scale(20));
                     centerSphere.setParent(view.root);
+                    if (centerSphere.computeWorldMatrix) {
+                        centerSphere.computeWorldMatrix(true);
+                    }
                     
                     // Środkowa kula do przesuwania (move / shift) -> ZAWSZE NIEBIESKA
                     const diffuseColor = new BABYLON.Color3(0.1, 0.45, 0.95);
@@ -1266,12 +1715,24 @@ export class GizmoController {
                     
                     let originalValue = 0;
                     let startPos: any = null;
+                    let hasCenterDragged = false;
                     
                     centerDrag.onDragStartObservable.add(() => {
+                        hasCenterDragged = false;
+                        if (this._blurTimeoutId) {
+                            clearTimeout(this._blurTimeoutId);
+                            this._blurTimeoutId = null;
+                        }
+                        if (this.isEditingFaceGizmo) {
+                            this.closeFloatingInput(true);
+                        }
                         this.isDraggingFaceGizmo = true;
+                        this.isEditingFaceGizmo = false;
+                        this.badgeFixedPos = null;
                         this.activeGizmoSphere = centerSphere;
                         this.activeGizmoParamName = paramName;
                         this.activeGizmoContainer = container;
+                        this.activeGizmoRole = role;
                         const c = container as any;
                         this.originalValueBeforeEdit = this._readOffsetMm(c, paramName, role);
 
@@ -1283,6 +1744,7 @@ export class GizmoController {
                     });
 
                     centerDrag.onDragObservable.add(() => {
+                        hasCenterDragged = true;
                         const c = container as any;
                         const projDist = this._projectPointerRayOntoAxis(viewport.scene, startPos, shiftAxis);
                         let delta = 0;
@@ -1313,14 +1775,21 @@ export class GizmoController {
                         this.isDraggingFaceGizmo = false;
                         viewport.camera.attachControl(viewport.canvas, true);
                         
+                        if (!hasCenterDragged) {
+                            centerSphere.setParent(view.root);
+                            return;
+                        }
+
                         const lastParam = this.activeGizmoParamName;
                         const lastContainer = this.activeGizmoContainer;
+                        const lastRole = role || this.activeGizmoRole;
+                        const startVal = originalValue;
                         this.updateFaceGizmo();
                         
                         if (lastParam && lastContainer) {
                             const newSphere = this.activeFaceGizmoSpheres.find(s => s.metadata?.paramName === lastParam);
                             if (newSphere) {
-                                this.openFloatingInput(newSphere, lastParam, lastContainer, role);
+                                this.openFloatingInput(newSphere, lastParam, lastContainer, lastRole, startVal);
                             }
                         }
                     });
@@ -1356,6 +1825,9 @@ export class GizmoController {
                         );
                         topCube.metadata = { isTopConfigCube: true };
                         topCube.setParent(view.root);
+                        if (topCube.computeWorldMatrix) {
+                            topCube.computeWorldMatrix(true);
+                        }
                         topCube.position.set(0, 0, 0);
 
                         // Niebieska kula move obok — nie zasłania pomarańczowej kostki w środku
@@ -1379,18 +1851,1009 @@ export class GizmoController {
                     }
                 }
             }
+
+        if (container) {
+            this.createCornerGizmosForContainer(container);
+        }
     }
-    private _resolveTargetMesh(entity: any): any {
+
+    /**
+     * Tworzy 8 niezależnych sfer gizmo w narożnikach SmartFrame (w kolorze krawędzi kontenera).
+     * Kliknięcie sfery natychmiast otwiera okno edycji korpusu (FloatingKorpusEdit).
+     * Przeciąganie sfery rozciąga gabaryt (szerokość, wysokość lub głębokość) asymetrycznie
+     * względem przeciwległego narożnika/ściany (przeciwległy bok pozostaje zakotwiczony w miejscu).
+     */
+    private createCornerGizmosForContainer(container: any): void {
+        const doc = ContextManager.instance.document;
+        const viewport = ContextManager.instance.viewport;
+        if (!doc || !viewport || !viewport.scene || !container) return;
+
+        if (this.activeGizmoContainer && this.activeGizmoContainer.id !== container.id) {
+            this.clearFaceGizmos();
+        }
+
+        if (this.activeFaceGizmoSpheres.some(s => s.name && s.name.startsWith('containerCornerGizmo_'))) {
+            if (this.activeGizmoContainer?.id === container.id) {
+                return;
+            }
+            this.clearFaceGizmos();
+        }
+
+        const gp = container.generatorParams || {};
+        const t = String(gp.type || gp.typ_korpusu || '');
+        const isSpecial = t.startsWith('blok_') || t.startsWith('smartpart') || t === 'smart_appliance' || t === 'smartwall' || container.role === 'APPLIANCE';
+        if (isSpecial) return;
+
+        const containerViews = ContextManager.instance.containerViews;
+        let view = containerViews?.get(container);
+        if (!view && container?.id) {
+            for (const [c, v] of containerViews || []) {
+                if (c?.id === container.id) {
+                    view = v;
+                    break;
+                }
+            }
+        }
+        if (!view || !view.mesh) return;
+
+        this.activeGizmoContainer = container;
+
+        if (view.mesh.parent && typeof view.mesh.parent.computeWorldMatrix === 'function') {
+            view.mesh.parent.computeWorldMatrix(true);
+        }
+        view.mesh.computeWorldMatrix(true);
+        const worldMatrix = view.mesh.getWorldMatrix().clone();
+
+        const width = container.generatorParams?.szerokosc_mm ?? nmToMm(container.width);
+        const height = container.generatorParams?.wysokosc_mm ?? nmToMm(container.height);
+        const depth = container.generatorParams?.glebokosc_mm ?? nmToMm(container.depth);
+        if (!width || !height || !depth || width <= 0 || height <= 0 || depth <= 0) return;
+
+        const slopeInfo = typeof view._getSlopedInfo === 'function' ? view._getSlopedInfo() : null;
+        const yTopFrontLeft = slopeInfo ? (slopeInfo.yTopFront !== undefined ? slopeInfo.yTopFront : slopeInfo.yTopLeft) : height;
+        const yTopFrontRight = slopeInfo ? (slopeInfo.yTopFront !== undefined ? slopeInfo.yTopFront : slopeInfo.yTopRight) : height;
+        const yTopBackRight = slopeInfo ? (slopeInfo.yTopBack !== undefined ? slopeInfo.yTopBack : slopeInfo.yTopRight) : height;
+        const yTopBackLeft = slopeInfo ? (slopeInfo.yTopBack !== undefined ? slopeInfo.yTopBack : slopeInfo.yTopLeft) : height;
+
+        const corners: Array<{ id: string; sx: 1 | -1; sy: 1 | -1; sz: 1 | -1; local: any }> = [
+            { id: 'front_top_right', sx: 1, sy: 1, sz: -1, local: new BABYLON.Vector3(width / 2, yTopFrontRight, -depth / 2) },
+            { id: 'front_top_left', sx: -1, sy: 1, sz: -1, local: new BABYLON.Vector3(-width / 2, yTopFrontLeft, -depth / 2) },
+            { id: 'front_bottom_right', sx: 1, sy: -1, sz: -1, local: new BABYLON.Vector3(width / 2, 0, -depth / 2) },
+            { id: 'front_bottom_left', sx: -1, sy: -1, sz: -1, local: new BABYLON.Vector3(-width / 2, 0, -depth / 2) },
+            { id: 'back_top_right', sx: 1, sy: 1, sz: 1, local: new BABYLON.Vector3(width / 2, yTopBackRight, depth / 2) },
+            { id: 'back_top_left', sx: -1, sy: 1, sz: 1, local: new BABYLON.Vector3(-width / 2, yTopBackLeft, depth / 2) },
+            { id: 'back_bottom_right', sx: 1, sy: -1, sz: 1, local: new BABYLON.Vector3(width / 2, 0, depth / 2) },
+            { id: 'back_bottom_left', sx: -1, sy: -1, sz: 1, local: new BABYLON.Vector3(-width / 2, 0, depth / 2) },
+        ];
+
+        // Osie szafki w układzie świata (X = szerokość, Y = wysokość w Babylon / Z w CAD, Z = głębokość w Babylon / Y w CAD)
+        const axisX = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(1, 0, 0), worldMatrix).normalize();
+        const axisY = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0, 1, 0), worldMatrix).normalize();
+        const axisZ = BABYLON.Vector3.TransformNormal(new BABYLON.Vector3(0, 0, 1), worldMatrix).normalize();
+
+        for (const c of corners) {
+            const sphere = BABYLON.MeshBuilder.CreateSphere(
+                `containerCornerGizmo_${c.id}_${container.id}`,
+                { diameter: 24 },
+                viewport.scene
+            );
+            const worldPos = BABYLON.Vector3.TransformCoordinates(c.local, worldMatrix);
+            sphere.position.copyFrom(worldPos);
+            sphere.isPickable = true;
+            sphere.renderingGroupId = 2;
+            const cornerIdx = (c.sx > 0 ? 1 : 0) | (c.sz < 0 ? 2 : 0) | (c.sy > 0 ? 4 : 0);
+            sphere.metadata = {
+                isCornerGizmo: true,
+                cornerId: c.id,
+                cornerIdx,
+                sx: c.sx,
+                sy: c.sy,
+                sz: c.sz,
+                containerId: container.id,
+                containerNode: doc.findNode(container.id),
+            };
+
+            const mat = new BABYLON.StandardMaterial(`containerCornerGizmoMat_${c.id}_${container.id}`, viewport.scene);
+            mat.diffuseColor = new BABYLON.Color3(0.15, 0.85, 1.0);
+            mat.emissiveColor = new BABYLON.Color3(0.2, 0.9, 1.0);
+            mat.specularColor = new BABYLON.Color3(0.8, 0.95, 1.0);
+            sphere.material = mat;
+
+            sphere.actionManager = new BABYLON.ActionManager(viewport.scene);
+            sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                BABYLON.ActionManager.OnPointerOverTrigger,
+                () => {
+                    sphere.scaling.setAll(1.3);
+                    if (!this.isDraggingCornerGizmo && !this.isEditingFaceGizmo && !this._isGlcGizmoActive()) {
+                        const curVal = c.sy === 1 ? c.local.y : width;
+                        this._updateCornerDragBadge(curVal, sphere, '#38bdf8');
+                    }
+                }
+            ));
+            sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                BABYLON.ActionManager.OnPointerOutTrigger,
+                () => {
+                    sphere.scaling.setAll(1.0);
+                    if (!this.isDraggingCornerGizmo && !this.isEditingFaceGizmo && !this._isGlcGizmoActive()) {
+                        const badge = document.getElementById('gizmo-floating-input');
+                        if (badge) badge.style.display = 'none';
+                    }
+                }
+            ));
+
+            this.activeFaceGizmoSpheres.push(sphere);
+        }
+
+        // Dodatkowe gizma dla podziałów stref w korpusach 2- i 3-strefowych
+        const isCorner = t.includes('rogowy');
+        const isSkosny = t.includes('skosny');
+        const defaultZones: 1 | 2 | 3 = (isCorner || isSkosny) ? 1 : 3;
+        const zCount = Number(gp.liczba_stref ?? (gp.typ_podzialu === 'POZIOMY_2_STREFY' ? 2 : gp.typ_podzialu === 'POZIOMY_3_STREFY' ? 3 : defaultZones)) as (1 | 2 | 3);
+        const defBottom = zCount === 2 ? Math.round(height / 2) : 500;
+        const defMiddle = zCount === 3 ? 1200 : 0;
+        const bHeight = typeof gp.wysokosc_strefy_dolnej_mm === 'number' ? gp.wysokosc_strefy_dolnej_mm : defBottom;
+        const mHeight = typeof gp.wysokosc_strefy_srodkowej_mm === 'number' ? gp.wysokosc_strefy_srodkowej_mm : defMiddle;
+
+        const zoneDividers: Array<{
+            dividerType: 'BOTTOM' | 'MIDDLE';
+            zMm: number;
+            color: { diffuse: any; emissive: any };
+        }> = [];
+
+        if (zCount === 2 && bHeight > 50 && bHeight < height - 50) {
+            zoneDividers.push({
+                dividerType: 'BOTTOM',
+                zMm: bHeight,
+                color: {
+                    diffuse: new BABYLON.Color3(0.95, 0.6, 0.15),
+                    emissive: new BABYLON.Color3(0.85, 0.45, 0.05),
+                },
+            });
+        } else if (zCount === 3) {
+            if (bHeight > 50 && bHeight < height - 100) {
+                zoneDividers.push({
+                    dividerType: 'BOTTOM',
+                    zMm: bHeight,
+                    color: {
+                        diffuse: new BABYLON.Color3(0.95, 0.6, 0.15),
+                        emissive: new BABYLON.Color3(0.85, 0.45, 0.05),
+                    },
+                });
+            }
+            const midZ = bHeight + mHeight;
+            if (midZ > bHeight + 50 && midZ < height - 50) {
+                zoneDividers.push({
+                    dividerType: 'MIDDLE',
+                    zMm: midZ,
+                    color: {
+                        diffuse: new BABYLON.Color3(0.85, 0.3, 0.95),
+                        emissive: new BABYLON.Color3(0.7, 0.15, 0.85),
+                    },
+                });
+            }
+        }
+
+        for (const div of zoneDividers) {
+            const divCorners: Array<{ id: string; sx: 1 | -1; sz: 1 | -1 }> = [
+                { id: `front_${div.dividerType.toLowerCase()}_right`, sx: 1, sz: -1 },
+                { id: `front_${div.dividerType.toLowerCase()}_left`, sx: -1, sz: -1 },
+                { id: `back_${div.dividerType.toLowerCase()}_right`, sx: 1, sz: 1 },
+                { id: `back_${div.dividerType.toLowerCase()}_left`, sx: -1, sz: 1 },
+            ];
+
+            for (const dc of divCorners) {
+                const sphere = BABYLON.MeshBuilder.CreateSphere(
+                    `containerZoneGizmo_${div.dividerType}_${dc.id}_${container.id}`,
+                    { diameter: 22 },
+                    viewport.scene
+                );
+                const localPos = new BABYLON.Vector3(dc.sx * (width / 2), div.zMm, dc.sz * (depth / 2));
+                const worldPos = BABYLON.Vector3.TransformCoordinates(localPos, worldMatrix);
+                sphere.position.copyFrom(worldPos);
+                sphere.isPickable = true;
+                sphere.renderingGroupId = 2;
+                sphere.metadata = {
+                    isCornerGizmo: true,
+                    isZoneGizmo: true,
+                    dividerType: div.dividerType,
+                    cornerId: dc.id,
+                    sx: dc.sx,
+                    sy: 0,
+                    sz: dc.sz,
+                    containerId: container.id,
+                    containerNode: doc.findNode(container.id),
+                };
+
+                const mat = new BABYLON.StandardMaterial(
+                    `containerZoneGizmoMat_${div.dividerType}_${dc.id}_${container.id}`,
+                    viewport.scene
+                );
+                mat.diffuseColor = div.color.diffuse;
+                mat.emissiveColor = div.color.emissive;
+                mat.specularColor = new BABYLON.Color3(0.9, 0.9, 0.9);
+                sphere.material = mat;
+
+                sphere.actionManager = new BABYLON.ActionManager(viewport.scene);
+                sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                    BABYLON.ActionManager.OnPointerOverTrigger,
+                    () => {
+                        sphere.scaling.setAll(1.35);
+                        if (!this.isDraggingCornerGizmo && !this._isGlcGizmoActive()) {
+                            this._updateCornerDragBadge(div.zMm, sphere, '#fb923c');
+                        }
+                    }
+                ));
+                sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                    BABYLON.ActionManager.OnPointerOutTrigger,
+                    () => {
+                        sphere.scaling.setAll(1.0);
+                        if (!this.isDraggingCornerGizmo && !this.isEditingFaceGizmo && !this._isGlcGizmoActive()) {
+                            const badge = document.getElementById('gizmo-floating-input');
+                            if (badge) badge.style.display = 'none';
+                        }
+                    }
+                ));
+
+                this.activeFaceGizmoSpheres.push(sphere);
+            }
+        }
+
+        if (this._cornerGizmoPointerObserver) {
+            viewport.scene.onPointerObservable.remove(this._cornerGizmoPointerObserver);
+            this._cornerGizmoPointerObserver = null;
+        }
+
+        let dragSession: {
+            sphere: any;
+            cornerId: string;
+            cornerIdx: number;
+            isZoneGizmo?: boolean;
+            dividerType?: 'BOTTOM' | 'MIDDLE';
+            startBottomHeight?: number;
+            startMiddleHeight?: number;
+            startZoneZMm?: number;
+            lastBottomHeight?: number;
+            lastMiddleHeight?: number;
+            isSkosny?: boolean;
+            isSkosnyLr?: boolean;
+            isSkosnyDach?: boolean;
+            startHeightLeft?: number;
+            startHeightRight?: number;
+            startHeightFront?: number;
+            startHeightBack?: number;
+            lastHeightLeft?: number;
+            lastHeightRight?: number;
+            lastHeightFront?: number;
+            lastHeightBack?: number;
+            sx: 1 | -1;
+            sy: 1 | -1 | 0;
+            sz: 1 | -1;
+            startPointerX: number;
+            startPointerY: number;
+            startSpherePos: any;
+            startWidth: number;
+            startHeight: number;
+            startDepth: number;
+            lastWidth: number;
+            lastHeight: number;
+            lastDepth: number;
+            lockedAxis: 'X' | 'Y' | 'Z' | null;
+            cadNode: any;
+            startDecomposed: { translation: Vec3; rotation: any; scale: Vec3 } | null;
+            hasDragged: boolean;
+            snappedLevelNode: any | null;
+        } | null = null;
+
+        const detectAxisFromPointer = (session: NonNullable<typeof dragSession>, dxPx: number, dyPx: number): 'X' | 'Y' | 'Z' => {
+            const cam = viewport.scene.activeCamera;
+            const engine = viewport.scene.getEngine?.();
+            if (cam && engine && BABYLON.Vector3?.Project && BABYLON.Matrix?.Identity && cam.viewport?.toGlobal) {
+                try {
+                    const vp = cam.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+                    const transform = viewport.scene.getTransformMatrix();
+                    const idMat = BABYLON.Matrix.Identity();
+                    const p0 = BABYLON.Vector3.Project(session.startSpherePos, idMat, transform, vp);
+                    const pX = BABYLON.Vector3.Project(session.startSpherePos.add(axisX.scale(100)), idMat, transform, vp);
+                    const pY = BABYLON.Vector3.Project(session.startSpherePos.add(axisY.scale(100)), idMat, transform, vp);
+                    const pZ = BABYLON.Vector3.Project(session.startSpherePos.add(axisZ.scale(100)), idMat, transform, vp);
+
+                    const mLen = Math.hypot(dxPx, dyPx) || 1;
+                    const mx = dxPx / mLen;
+                    const my = dyPx / mLen;
+
+                    const scoreVec = (p: any) => {
+                        const vx = p.x - p0.x;
+                        const vy = p.y - p0.y;
+                        const len = Math.hypot(vx, vy);
+                        if (len < 1e-3) return 0;
+                        return Math.abs((vx / len) * mx + (vy / len) * my);
+                    };
+
+                    const sX = scoreVec(pX);
+                    const sY = scoreVec(pY);
+                    const sZ = scoreVec(pZ);
+                    if (sX >= sY && sX >= sZ) return 'X';
+                    if (sY >= sX && sY >= sZ) return 'Y';
+                    return 'Z';
+                } catch {}
+            }
+            const dX = Math.abs(this._projectPointerRayOntoAxis(viewport.scene, session.startSpherePos, axisX) ?? 0);
+            const dY = Math.abs(this._projectPointerRayOntoAxis(viewport.scene, session.startSpherePos, axisY) ?? 0);
+            const dZ = Math.abs(this._projectPointerRayOntoAxis(viewport.scene, session.startSpherePos, axisZ) ?? 0);
+            if (dX >= dY && dX >= dZ) return 'X';
+            if (dY >= dX && dY >= dZ) return 'Y';
+            return 'Z';
+        };
+
+        this._cornerGizmoPointerObserver = viewport.scene.onPointerObservable.add((pointerInfo: any) => {
+            const type = pointerInfo.type;
+
+            if (type === BABYLON.PointerEventTypes.POINTERDOWN) {
+                if (pointerInfo.event && pointerInfo.event.button !== 0) return;
+                const pick = viewport.scene.pick(
+                    viewport.scene.pointerX,
+                    viewport.scene.pointerY,
+                    (m: any) => Boolean(m?.isPickable && m?.metadata?.isCornerGizmo && m?.metadata?.containerId === container.id)
+                ) || pointerInfo.pickInfo;
+                if (!pick?.hit || !pick.pickedMesh) return;
+                const mesh = pick.pickedMesh;
+                if (!mesh.metadata?.isCornerGizmo || mesh.metadata?.containerId !== container.id) return;
+
+                if (ContextManager.instance.activeConstraintPicker) {
+                    if (handleConstraintPickEvent('select-vertex', { mesh })) {
+                        return;
+                    }
+                }
+
+                if (viewport.camera) {
+                    viewport.camera.detachControl();
+                }
+                this.isDraggingFaceGizmo = true;
+                this.isDraggingCornerGizmo = true;
+
+                // Zawsze otwieraj okno edycji korpusu przy interakcji z gizmami gabarytu
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('cad-edit-entity', {
+                        detail: { entityId: container.id, kind: 'korpus' }
+                    }));
+                }
+
+                const curW = container.generatorParams?.szerokosc_mm ?? nmToMm(container.width);
+                const curH = container.generatorParams?.wysokosc_mm ?? nmToMm(container.height);
+                const curD = container.generatorParams?.glebokosc_mm ?? nmToMm(container.depth);
+                const cadNode = doc.findNode(container.id);
+                const startDecomposed = cadNode?.localMatrix?.decompose ? cadNode.localMatrix.decompose() : null;
+
+                const isZoneGizmo = Boolean(mesh.metadata?.isZoneGizmo);
+                const dividerType = mesh.metadata?.dividerType as ('BOTTOM' | 'MIDDLE' | undefined);
+                const curBottomH = typeof container.generatorParams?.wysokosc_strefy_dolnej_mm === 'number'
+                    ? container.generatorParams.wysokosc_strefy_dolnej_mm
+                    : (zCount === 2 ? Math.round(curH / 2) : 500);
+                const curMiddleH = typeof container.generatorParams?.wysokosc_strefy_srodkowej_mm === 'number'
+                    ? container.generatorParams.wysokosc_strefy_srodkowej_mm
+                    : (zCount === 3 ? 1200 : 0);
+                const startZoneZ = dividerType === 'MIDDLE' ? curBottomH + curMiddleH : curBottomH;
+
+                const cabTypeStr = String(container.generatorParams?.type || container.generatorParams?.typ_korpusu || '').toLowerCase();
+                const isSkosnyLr = cabTypeStr.includes('skosny_lr');
+                const isSkosnyDach = cabTypeStr.includes('skosny_dach') || (cabTypeStr.includes('skosny') && !isSkosnyLr);
+                const isSkosny = isSkosnyLr || isSkosnyDach;
+
+                const curHeightLeft = typeof container.generatorParams?.wysokosc_lewy_mm === 'number'
+                    ? container.generatorParams.wysokosc_lewy_mm : 1000;
+                const curHeightRight = typeof container.generatorParams?.wysokosc_prawy_mm === 'number'
+                    ? container.generatorParams.wysokosc_prawy_mm : curH;
+                const curHeightFront = typeof container.generatorParams?.wysokosc_przod_mm === 'number'
+                    ? container.generatorParams.wysokosc_przod_mm : curH;
+                const curHeightBack = typeof container.generatorParams?.wysokosc_tyl_mm === 'number'
+                    ? container.generatorParams.wysokosc_tyl_mm : 1000;
+
+                dragSession = {
+                    sphere: mesh,
+                    cornerId: mesh.metadata.cornerId,
+                    cornerIdx: mesh.metadata.cornerIdx ?? 0,
+                    isZoneGizmo,
+                    dividerType,
+                    startBottomHeight: curBottomH,
+                    startMiddleHeight: curMiddleH,
+                    startZoneZMm: startZoneZ,
+                    lastBottomHeight: curBottomH,
+                    lastMiddleHeight: curMiddleH,
+                    isSkosny,
+                    isSkosnyLr,
+                    isSkosnyDach,
+                    startHeightLeft: curHeightLeft,
+                    startHeightRight: curHeightRight,
+                    startHeightFront: curHeightFront,
+                    startHeightBack: curHeightBack,
+                    lastHeightLeft: curHeightLeft,
+                    lastHeightRight: curHeightRight,
+                    lastHeightFront: curHeightFront,
+                    lastHeightBack: curHeightBack,
+                    sx: mesh.metadata.sx ?? 1,
+                    sy: isZoneGizmo ? 0 : (mesh.metadata.sy ?? 1),
+                    sz: mesh.metadata.sz ?? -1,
+                    startPointerX: viewport.scene.pointerX,
+                    startPointerY: viewport.scene.pointerY,
+                    startSpherePos: mesh.position.clone(),
+                    startWidth: curW,
+                    startHeight: curH,
+                    startDepth: curD,
+                    lastWidth: curW,
+                    lastHeight: curH,
+                    lastDepth: curD,
+                    lockedAxis: isZoneGizmo ? 'Y' : null,
+                    cadNode,
+                    startDecomposed,
+                    hasDragged: false,
+                    snappedLevelNode: null,
+                };
+            } else if (type === BABYLON.PointerEventTypes.POINTERMOVE) {
+                if (!dragSession) return;
+
+                const dxPx = viewport.scene.pointerX - dragSession.startPointerX;
+                const dyPx = viewport.scene.pointerY - dragSession.startPointerY;
+                const distPx = Math.hypot(dxPx, dyPx);
+                if (!dragSession.hasDragged && distPx > 4) {
+                    dragSession.hasDragged = true;
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('cad-edit-entity', {
+                            detail: { entityId: container.id, kind: 'korpus' }
+                        }));
+                    }
+                }
+                if (!dragSession.hasDragged) return;
+
+                if (dragSession.isZoneGizmo) {
+                    // Gizmo podziału strefy rusza się wyłącznie w pionie (oś Y w Babylon / Z w CAD)
+                    dragSession.lockedAxis = 'Y';
+                    let deltaY = Math.round(this._projectPointerRayOntoAxis(viewport.scene, dragSession.startSpherePos, axisY) ?? 0);
+                    const rawZMm = (dragSession.startZoneZMm ?? 0) + deltaY;
+
+                    // Sprawdź przyciąganie do płaszczyzn poziomów Z w GLC
+                    let snappedLevel: any = null;
+                    let bestDist = 50; // Promień przyciągania [mm]
+                    const glcNode = doc.getGlcNode?.();
+                    if (glcNode) {
+                        const candidates: Array<{ node: any; zMm: number }> = [];
+                        if ((glcNode.domainData as any)?.showAxisZ !== false) {
+                            const tipZ_nm = (glcNode.domainData as any)?.tipZ_nm;
+                            const axisZ_nm = (glcNode.domainData as any)?.axisZHeight_nm;
+                            const tipZMm = typeof tipZ_nm === 'number' && tipZ_nm > 0
+                                ? Math.round(nmToMm(tipZ_nm))
+                                : (typeof axisZ_nm === 'number' && axisZ_nm > 0 ? Math.round(nmToMm(axisZ_nm)) + 30 : 2430);
+                            candidates.push({ node: glcNode, zMm: tipZMm });
+                        }
+                        if (Array.isArray(glcNode.children)) {
+                            for (const child of glcNode.children) {
+                                if (child.nodeType !== NodeType.DATUM_LEVEL) continue;
+                                if ((child.domainData as any)?.visible === false) continue;
+                                const z_nm = (child.domainData as any)?.z_nm ?? child.localMatrix?.getTranslation?.()?.z ?? 0;
+                                const levelZMm = Math.max(50, Math.round(nmToMm(z_nm)));
+                                candidates.push({ node: child, zMm: levelZMm });
+                            }
+                        }
+                        const containerBaseZ = dragSession.startDecomposed
+                            ? Math.round(nmToMm(dragSession.startDecomposed.translation.z))
+                            : 0;
+                        const worldTargetZ = containerBaseZ + rawZMm;
+                        for (const cand of candidates) {
+                            const d = Math.abs(worldTargetZ - cand.zMm);
+                            if (d <= bestDist) {
+                                bestDist = d;
+                                snappedLevel = cand.node;
+                                deltaY = (cand.zMm - containerBaseZ) - (dragSession.startZoneZMm ?? 0);
+                            }
+                        }
+                    }
+                    dragSession.snappedLevelNode = snappedLevel;
+                    if (typeof window !== 'undefined') {
+                        (window as any).__glcAxis?.highlightLevelPlane?.(snappedLevel?.id ?? null);
+                    }
+
+                    const newTargetZ = Math.round((dragSession.startZoneZMm ?? 0) + deltaY);
+                    let newBottomH = dragSession.startBottomHeight ?? 500;
+                    let newMiddleH = dragSession.startMiddleHeight ?? 1200;
+
+                    if (dragSession.dividerType === 'BOTTOM') {
+                        // Ograniczenia: min 100 mm, max (wysokosc - 100 mm) lub (wysokosc_srodka - 100 mm)
+                        const maxB = (zCount === 3)
+                            ? Math.max(100, (dragSession.startBottomHeight ?? 500) + (dragSession.startMiddleHeight ?? 1200) - 100)
+                            : Math.max(100, dragSession.startHeight - 100);
+                        newBottomH = Math.min(maxB, Math.max(100, newTargetZ));
+                        if (zCount === 3) {
+                            const sumBM = (dragSession.startBottomHeight ?? 500) + (dragSession.startMiddleHeight ?? 1200);
+                            newMiddleH = Math.max(100, sumBM - newBottomH);
+                        }
+                    } else if (dragSession.dividerType === 'MIDDLE') {
+                        // W korpusie 3-strefowym: newTargetZ = bottomH + middleH
+                        const minMidZ = (dragSession.startBottomHeight ?? 500) + 100;
+                        const maxMidZ = dragSession.startHeight - 100;
+                        const clampedZ = Math.min(maxMidZ, Math.max(minMidZ, newTargetZ));
+                        newMiddleH = Math.max(100, clampedZ - (dragSession.startBottomHeight ?? 500));
+                    }
+
+                    if (newBottomH === dragSession.lastBottomHeight && newMiddleH === dragSession.lastMiddleHeight) {
+                        return;
+                    }
+                    dragSession.lastBottomHeight = newBottomH;
+                    dragSession.lastMiddleHeight = newMiddleH;
+
+                    const divZ = dragSession.dividerType === 'MIDDLE' ? (newBottomH + newMiddleH) : newBottomH;
+                    this._updateCornerDragBadge(divZ, dragSession.sphere, '#fb923c');
+
+                    const cabMod = getCabinetModule();
+                    cabMod?.applyRealtimeUpdate?.(doc, {
+                        szerokosc_mm: dragSession.startWidth,
+                        wysokosc_mm: dragSession.startHeight,
+                        glebokosc_mm: dragSession.startDepth,
+                        liczba_stref: zCount,
+                        wysokosc_strefy_dolnej_mm: newBottomH,
+                        wysokosc_strefy_srodkowej_mm: zCount === 3 ? newMiddleH : undefined,
+                    }, container);
+
+                    if (view.mesh.parent && typeof view.mesh.parent.computeWorldMatrix === 'function') {
+                        view.mesh.parent.computeWorldMatrix(true);
+                    }
+                    view.mesh.computeWorldMatrix(true);
+                    const curWorldMat = view.mesh.getWorldMatrix();
+
+                    // Aktualizuj pozycje sfer
+                    for (const s of this.activeFaceGizmoSpheres) {
+                        if (!s.metadata?.isCornerGizmo || s.metadata?.containerId !== container.id) continue;
+                        if (s.metadata.isZoneGizmo) {
+                            const divZ = s.metadata.dividerType === 'MIDDLE' ? (newBottomH + newMiddleH) : newBottomH;
+                            const lx = (s.metadata.sx ?? 1) * (dragSession.startWidth / 2);
+                            const lz = (s.metadata.sz ?? -1) * (dragSession.startDepth / 2);
+                            const p = BABYLON.Vector3.TransformCoordinates(new BABYLON.Vector3(lx, divZ, lz), curWorldMat);
+                            s.position.copyFrom(p);
+                        }
+                    }
+                    return;
+                }
+
+                if (!dragSession.lockedAxis || distPx < 16) {
+                    const nextAxis = detectAxisFromPointer(dragSession, dxPx, dyPx);
+                    if (nextAxis !== dragSession.lockedAxis) {
+                        dragSession.lockedAxis = nextAxis;
+                        const guideAxis = nextAxis === 'X' ? axisX : nextAxis === 'Y' ? axisY : axisZ;
+                        const guideColor = nextAxis === 'X'
+                            ? new BABYLON.Color3(0.95, 0.2, 0.2)
+                            : nextAxis === 'Y'
+                                ? new BABYLON.Color3(0.15, 0.55, 1.0)
+                                : new BABYLON.Color3(0.15, 0.85, 0.3);
+                        this._showDragGuideLine(viewport.scene, dragSession.startSpherePos, guideAxis, guideColor);
+                    }
+                }
+
+                let newWidth = dragSession.startWidth;
+                let newHeight = dragSession.startHeight;
+                let newDepth = dragSession.startDepth;
+                let newHeightLeft = dragSession.startHeightLeft ?? 1000;
+                let newHeightRight = dragSession.startHeightRight ?? dragSession.startHeight;
+                let newHeightFront = dragSession.startHeightFront ?? dragSession.startHeight;
+                let newHeightBack = dragSession.startHeightBack ?? 1000;
+                let localShiftX_mm = 0;
+                let localShiftY_cad_mm = 0;
+                let localShiftZ_cad_mm = 0;
+
+                if (dragSession.lockedAxis === 'X') {
+                    const deltaX = Math.round(this._projectPointerRayOntoAxis(viewport.scene, dragSession.startSpherePos, axisX) ?? 0);
+                    newWidth = Math.max(150, dragSession.startWidth + dragSession.sx * deltaX);
+                    const dW = newWidth - dragSession.startWidth;
+                    localShiftX_mm = dragSession.sx * (dW / 2);
+                } else if (dragSession.lockedAxis === 'Y') {
+                    let deltaY = Math.round(this._projectPointerRayOntoAxis(viewport.scene, dragSession.startSpherePos, axisY) ?? 0);
+                    const startCornerZMm = Math.round(dragSession.startSpherePos.y);
+                    const rawCornerZMm = startCornerZMm + deltaY;
+
+                    // Sprawdź przyciąganie (snap) do płaszczyzn poziomów Z (DATUM_LEVEL) oraz górnego czubka osi Z (glcNode) w GLC
+                    let snappedLevel: any = null;
+                    let bestDist = 50; // Promień przyciągania [mm]
+                    const glcNode = doc.getGlcNode?.();
+                    if (glcNode) {
+                        const candidates: Array<{ node: any; zMm: number }> = [];
+                        if ((glcNode.domainData as any)?.showAxisZ !== false) {
+                            const tipZ_nm = (glcNode.domainData as any)?.tipZ_nm;
+                            const axisZ_nm = (glcNode.domainData as any)?.axisZHeight_nm;
+                            const tipZMm = typeof tipZ_nm === 'number' && tipZ_nm > 0
+                                ? Math.round(nmToMm(tipZ_nm))
+                                : (typeof axisZ_nm === 'number' && axisZ_nm > 0 ? Math.round(nmToMm(axisZ_nm)) + 30 : 2430);
+                            candidates.push({ node: glcNode, zMm: tipZMm });
+                        }
+                        if (Array.isArray(glcNode.children)) {
+                            for (const child of glcNode.children) {
+                                if (child.nodeType !== NodeType.DATUM_LEVEL) continue;
+                                if ((child.domainData as any)?.visible === false) continue;
+                                const z_nm = (child.domainData as any)?.z_nm ?? child.localMatrix?.getTranslation?.()?.z ?? 0;
+                                const levelZMm = Math.max(50, Math.round(nmToMm(z_nm)));
+                                candidates.push({ node: child, zMm: levelZMm });
+                            }
+                        }
+                        for (const cand of candidates) {
+                            const d = Math.abs(rawCornerZMm - cand.zMm);
+                            if (d <= bestDist) {
+                                bestDist = d;
+                                snappedLevel = cand.node;
+                                deltaY = cand.zMm - startCornerZMm;
+                            }
+                        }
+                    }
+                    dragSession.snappedLevelNode = snappedLevel;
+                    if (typeof window !== 'undefined') {
+                        (window as any).__glcAxis?.highlightLevelPlane?.(snappedLevel?.id ?? null);
+                    }
+
+                    if (dragSession.isSkosny && dragSession.sy === 1) {
+                        if (dragSession.isSkosnyLr) {
+                            if (dragSession.sx === -1) {
+                                newHeightLeft = Math.max(100, (dragSession.startHeightLeft ?? 1000) + deltaY);
+                                newHeightRight = dragSession.startHeightRight ?? dragSession.startHeight;
+                            } else {
+                                newHeightRight = Math.max(100, (dragSession.startHeightRight ?? dragSession.startHeight) + deltaY);
+                                newHeightLeft = dragSession.startHeightLeft ?? 1000;
+                            }
+                            newHeight = Math.max(newHeightLeft, newHeightRight);
+                        } else if (dragSession.isSkosnyDach) {
+                            if (dragSession.sz === -1) {
+                                newHeightFront = Math.max(100, (dragSession.startHeightFront ?? dragSession.startHeight) + deltaY);
+                                newHeightBack = dragSession.startHeightBack ?? 1000;
+                            } else {
+                                newHeightBack = Math.max(100, (dragSession.startHeightBack ?? 1000) + deltaY);
+                                newHeightFront = dragSession.startHeightFront ?? dragSession.startHeight;
+                            }
+                            newHeight = Math.max(newHeightFront, newHeightBack);
+                        }
+                    } else {
+                        newHeight = Math.max(150, dragSession.startHeight + dragSession.sy * deltaY);
+                        const dH = newHeight - dragSession.startHeight;
+                        localShiftZ_cad_mm = dragSession.sy === -1 ? -dH : 0;
+                    }
+                } else if (dragSession.lockedAxis === 'Z') {
+                    const deltaZ = Math.round(this._projectPointerRayOntoAxis(viewport.scene, dragSession.startSpherePos, axisZ) ?? 0);
+                    newDepth = Math.max(150, dragSession.startDepth + dragSession.sz * deltaZ);
+                    const dD = newDepth - dragSession.startDepth;
+                    localShiftY_cad_mm = dragSession.sz * (dD / 2);
+                }
+
+                if (
+                    newWidth === dragSession.lastWidth &&
+                    newHeight === dragSession.lastHeight &&
+                    newDepth === dragSession.lastDepth &&
+                    newHeightLeft === dragSession.lastHeightLeft &&
+                    newHeightRight === dragSession.lastHeightRight &&
+                    newHeightFront === dragSession.lastHeightFront &&
+                    newHeightBack === dragSession.lastHeightBack
+                ) {
+                    return;
+                }
+                dragSession.lastWidth = newWidth;
+                dragSession.lastHeight = newHeight;
+                dragSession.lastDepth = newDepth;
+                dragSession.lastHeightLeft = newHeightLeft;
+                dragSession.lastHeightRight = newHeightRight;
+                dragSession.lastHeightFront = newHeightFront;
+                dragSession.lastHeightBack = newHeightBack;
+
+                if (dragSession.lockedAxis === 'X') {
+                    this._updateCornerDragBadge(newWidth, dragSession.sphere, '#ef4444');
+                } else if (dragSession.lockedAxis === 'Y') {
+                    const displayH = dragSession.isSkosny && dragSession.sy === 1
+                        ? (dragSession.isSkosnyLr
+                            ? (dragSession.sx === -1 ? newHeightLeft : newHeightRight)
+                            : (dragSession.sz === -1 ? newHeightFront : newHeightBack))
+                        : newHeight;
+                    this._updateCornerDragBadge(displayH, dragSession.sphere, '#38bdf8');
+                } else if (dragSession.lockedAxis === 'Z') {
+                    this._updateCornerDragBadge(newDepth, dragSession.sphere, '#22c55e');
+                }
+
+                // Przesuń kontener tak, aby przeciwległy bok/narożnik pozostał zakotwiczony w miejscu
+                if (dragSession.cadNode && dragSession.startDecomposed) {
+                    const { translation: startTransNm, rotation: startRot, scale: startScale } = dragSession.startDecomposed;
+                    const localShiftNm = new Vec3(
+                        mmToNm(localShiftX_mm),
+                        mmToNm(localShiftY_cad_mm),
+                        mmToNm(localShiftZ_cad_mm)
+                    );
+                    const worldShiftNm = startRot.rotateVec3(localShiftNm);
+                    const newTransNm = startTransNm.add(worldShiftNm);
+                    dragSession.cadNode.setLocalTransform(newTransNm, startRot, startScale);
+                    ContextManager.instance.sceneSyncAdapter?.syncNodeToMesh?.(container.id);
+                }
+
+                const cabMod = getCabinetModule();
+                cabMod?.applyRealtimeUpdate?.(doc, {
+                    szerokosc_mm: newWidth,
+                    wysokosc_mm: newHeight,
+                    glebokosc_mm: newDepth,
+                    liczba_stref: zCount,
+                    wysokosc_strefy_dolnej_mm: zCount === 1 ? newHeight : container.generatorParams?.wysokosc_strefy_dolnej_mm,
+                    wysokosc_strefy_srodkowej_mm: zCount === 3 ? container.generatorParams?.wysokosc_strefy_srodkowej_mm : undefined,
+                    ...(dragSession.isSkosnyLr ? { wysokosc_lewy_mm: newHeightLeft, wysokosc_prawy_mm: newHeightRight } : {}),
+                    ...(dragSession.isSkosnyDach ? { wysokosc_przod_mm: newHeightFront, wysokosc_tyl_mm: newHeightBack } : {}),
+                }, container);
+
+                if (view.mesh.parent && typeof view.mesh.parent.computeWorldMatrix === 'function') {
+                    view.mesh.parent.computeWorldMatrix(true);
+                }
+                view.mesh.computeWorldMatrix(true);
+                const curWorldMat = view.mesh.getWorldMatrix();
+
+                // Aktualizuj pozycje wszystkich 8 sfer na bieżąco
+                for (const s of this.activeFaceGizmoSpheres) {
+                    if (!s.metadata?.isCornerGizmo || s.metadata?.containerId !== container.id) continue;
+                    const lx = (s.metadata.sx ?? 1) * (newWidth / 2);
+                    let ly = 0;
+                    if ((s.metadata.sy ?? 1) === 1) {
+                        if (dragSession.isSkosnyLr) {
+                            ly = (s.metadata.sx ?? 1) === -1 ? newHeightLeft : newHeightRight;
+                        } else if (dragSession.isSkosnyDach) {
+                            ly = (s.metadata.sz ?? -1) === -1 ? newHeightFront : newHeightBack;
+                        } else {
+                            ly = newHeight;
+                        }
+                    }
+                    const lz = (s.metadata.sz ?? -1) * (newDepth / 2);
+                    const p = BABYLON.Vector3.TransformCoordinates(new BABYLON.Vector3(lx, ly, lz), curWorldMat);
+                    s.position.copyFrom(p);
+                }
+            } else if (type === BABYLON.PointerEventTypes.POINTERUP) {
+                if (!dragSession) return;
+                const session = dragSession;
+                dragSession = null;
+                this.isDraggingFaceGizmo = false;
+                this.isDraggingCornerGizmo = false;
+                this._disposeDragGuideLine();
+                if (typeof window !== 'undefined') {
+                    (window as any).__glcAxis?.highlightLevelPlane?.(null);
+                }
+
+                if (viewport.camera && viewport.canvas) {
+                    viewport.camera.attachControl(viewport.canvas, true);
+                }
+
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('cad-edit-entity', {
+                        detail: { entityId: container.id, kind: 'korpus' }
+                    }));
+                }
+                if (session.hasDragged) {
+                    // Jeśli narożnik został dociągnięty (zassnapowany) do płaszczyzny DATUM_LEVEL -> dodaj/zaktualizuj relację VERTEX_DATUM
+                    if (session.lockedAxis === 'Y' && session.snappedLevelNode && session.cadNode && !session.isZoneGizmo) {
+                        const targetTopBit = session.cornerIdx & 4;
+                        let cornerYMm = 0;
+                        if (targetTopBit) {
+                            if (session.isSkosnyLr) {
+                                cornerYMm = session.sx === -1 ? (session.lastHeightLeft ?? session.lastHeight) : (session.lastHeightRight ?? session.lastHeight);
+                            } else if (session.isSkosnyDach) {
+                                cornerYMm = session.sz === -1 ? (session.lastHeightFront ?? session.lastHeight) : (session.lastHeightBack ?? session.lastHeight);
+                            } else {
+                                cornerYMm = session.lastHeight;
+                            }
+                        }
+                        const cornerPt = resolveCornerLocalMm(session.cadNode, session.cornerIdx) ?? [
+                            0,
+                            0,
+                            cornerYMm,
+                        ];
+                        const anchorA = makeAnchor({
+                            nodeId: session.cadNode.id,
+                            kind: 'VERTEX',
+                            cornerIndex: session.cornerIdx,
+                            sourceNodeId: undefined,
+                            localPointMm: cornerPt,
+                        });
+                        const anchorB = makeDatumLevelAnchor(session.snappedLevelNode);
+
+                        const existing = ConstraintStore.instance.constraints.find(
+                            (c) =>
+                                (c.bindType === 'VERTEX_DATUM' || c.bindType === 'VERTEX') &&
+                                c.anchorA?.nodeId === session.cadNode.id &&
+                                c.anchorA?.kind === 'VERTEX' &&
+                                ((c.anchorA.cornerIndex ?? 0) & 4) === targetTopBit &&
+                                c.anchorB?.kind === 'DATUM',
+                        );
+                        if (existing) {
+                            ConstraintStore.instance.update(existing.id, {
+                                bindType: 'VERTEX_DATUM',
+                                enabled: true,
+                                anchorA,
+                                anchorB,
+                                offsetMm: 0,
+                            });
+                        } else {
+                            ConstraintStore.instance.add({
+                                bindType: 'VERTEX_DATUM',
+                                anchorA,
+                                anchorB,
+                                offsetMm: 0,
+                            });
+                        }
+                        (ContextManager.instance as any)?.solverController?.solveNow?.();
+                    } else if (session.isZoneGizmo && session.snappedLevelNode && session.cadNode) {
+                        // Wieniec pośredni powiązany z poziomem Z (DATUM_LEVEL)
+                        const containerBaseZ = session.startDecomposed
+                            ? Math.round(nmToMm(session.startDecomposed.translation.z))
+                            : 0;
+                        const targetZMm = session.dividerType === 'MIDDLE'
+                            ? (session.lastBottomHeight ?? 500) + (session.lastMiddleHeight ?? 1200)
+                            : (session.lastBottomHeight ?? 500);
+
+                        const isMiddle = session.dividerType === 'MIDDLE';
+                        const zoneCornerIdx = isMiddle ? 16 : 8; // Wirtualne naroże/wieniec strefy
+                        const anchorA = makeAnchor({
+                            nodeId: session.cadNode.id,
+                            kind: 'VERTEX',
+                            cornerIndex: zoneCornerIdx,
+                            sourceNodeId: undefined,
+                            localPointMm: [0, 0, targetZMm],
+                            faceName: isMiddle ? 'Wieniec górny strefy' : 'Wieniec dolny strefy',
+                        });
+                        const anchorB = makeDatumLevelAnchor(session.snappedLevelNode);
+
+                        const existing = ConstraintStore.instance.constraints.find(
+                            (c) =>
+                                (c.bindType === 'VERTEX_DATUM' || c.bindType === 'VERTEX') &&
+                                c.anchorA?.nodeId === session.cadNode.id &&
+                                c.anchorA?.kind === 'VERTEX' &&
+                                c.anchorA?.cornerIndex === zoneCornerIdx &&
+                                c.anchorB?.kind === 'DATUM',
+                        );
+                        if (existing) {
+                            ConstraintStore.instance.update(existing.id, {
+                                bindType: 'VERTEX_DATUM',
+                                enabled: true,
+                                anchorA,
+                                anchorB,
+                                offsetMm: 0,
+                            });
+                        } else {
+                            ConstraintStore.instance.add({
+                                bindType: 'VERTEX_DATUM',
+                                anchorA,
+                                anchorB,
+                                offsetMm: 0,
+                            });
+                        }
+                        (ContextManager.instance as any)?.solverController?.solveNow?.();
+                    }
+
+                    // Po zakończeniu przeciągania -> odśwież widok i powiadom o zmianie projektu
+                    const rebuild = (typeof window !== 'undefined') ? (window as any).__rebuildGeometry : null;
+                    if (typeof rebuild === 'function') {
+                        try { rebuild('SmartFrame corner resize'); } catch {}
+                    }
+                    doc.notifyDocumentChanged();
+                    if (typeof window !== 'undefined' && window.document) {
+                        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                    }
+                    this.updateFaceGizmo();
+                }
+
+                // Otwórz okienko wpisywania wartości dla aktywnego narożnika/strefy
+                let cornerParamName = 'wysokosc_mm';
+                let cornerValMm = session.lastHeight ?? session.startHeight;
+                let colorHex = '#38bdf8'; // Blue for Z (height)
+
+                if (session.lockedAxis === 'X') {
+                    cornerParamName = 'szerokosc_mm';
+                    cornerValMm = session.lastWidth ?? session.startWidth;
+                    colorHex = '#f87171'; // Red for X (width)
+                } else if (session.lockedAxis === 'Z') {
+                    cornerParamName = 'glebokosc_mm';
+                    cornerValMm = session.lastDepth ?? session.startDepth;
+                    colorHex = '#4ade80'; // Green for Y cad (depth)
+                } else {
+                    // Y axis (CAD Z - Height / Zones / Slopes)
+                    if (session.isZoneGizmo) {
+                        cornerParamName = session.dividerType === 'BOTTOM'
+                            ? 'wysokosc_strefy_dolnej_mm'
+                            : 'wysokosc_strefy_srodkowej_mm';
+                        cornerValMm = session.dividerType === 'BOTTOM'
+                            ? (session.lastBottomHeight ?? session.startBottomHeight ?? 500)
+                            : (session.lastMiddleHeight ?? session.startMiddleHeight ?? 1200);
+                        colorHex = '#fb923c'; // Orange for zones
+                    } else if (session.isSkosnyLr) {
+                        cornerParamName = session.sx === -1 ? 'wysokosc_lewy_mm' : 'wysokosc_prawy_mm';
+                        cornerValMm = session.sx === -1
+                            ? (session.lastHeightLeft ?? session.startHeightLeft ?? session.lastHeight)
+                            : (session.lastHeightRight ?? session.startHeightRight ?? session.lastHeight);
+                    } else if (session.isSkosnyDach) {
+                        cornerParamName = session.sz === -1 ? 'wysokosc_front_mm' : 'wysokosc_back_mm';
+                        cornerValMm = session.sz === -1
+                            ? (session.lastHeightFront ?? session.startHeightFront ?? session.lastHeight)
+                            : (session.lastHeightBack ?? session.startHeightBack ?? session.lastHeight);
+                    } else {
+                        cornerParamName = 'wysokosc_mm';
+                        cornerValMm = session.lastHeight ?? session.startHeight;
+                    }
+                }
+
+                const targetSphere = session.isZoneGizmo
+                    ? (this.activeFaceGizmoSpheres.find(s => s.metadata?.isZoneGizmo && s.metadata?.dividerType === session.dividerType && s.metadata?.cornerId === session.cornerId) || session.sphere)
+                    : (this.activeFaceGizmoSpheres.find(s => s.metadata?.isCornerGizmo && !s.metadata?.isZoneGizmo && s.metadata?.cornerId === session.cornerId) || session.sphere);
+
+                this.openFloatingInputForCorner({
+                    container,
+                    paramName: cornerParamName,
+                    sphere: targetSphere,
+                    valMm: cornerValMm,
+                    colorHex
+                });
+            }
+        });
+    }
+
+    private _updateCornerDragBadge(valMm: number, sphere: any, colorHex: string = '#fb923c'): void {
+        const viewport = ContextManager.instance.viewport;
+        if (!viewport || !viewport.scene || !viewport.canvas) return;
+        const badge = document.getElementById('gizmo-floating-input');
+        const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
+        if (!badge || !input) return;
+
+        badge.style.display = 'flex';
+        badge.style.border = `1.5px solid ${colorHex}`;
+        if (document.activeElement !== input) {
+            input.value = Math.round(valMm).toString();
+            input.style.width = `${Math.max(45, input.value.length * 9)}px`;
+        }
+
+        if (sphere?.computeWorldMatrix) {
+            sphere.computeWorldMatrix(true);
+        }
+        const pos = sphere?.getAbsolutePosition ? sphere.getAbsolutePosition() : (sphere?.position ?? BABYLON.Vector3.Zero());
+        const screenPos = BABYLON.Vector3.Project(
+            pos,
+            BABYLON.Matrix.Identity(),
+            viewport.scene.getTransformMatrix(),
+            viewport.scene.activeCamera.viewport.toGlobal(
+                viewport.engine.getRenderWidth(),
+                viewport.engine.getRenderHeight()
+            )
+        );
+
+        if (screenPos.z < 0 || screenPos.z > 1) {
+            badge.style.display = 'none';
+            return;
+        }
+
+        const canvasRect = viewport.canvas.getBoundingClientRect();
+        badge.style.left = `${canvasRect.left + screenPos.x + 20}px`;
+        badge.style.top = `${canvasRect.top + screenPos.y - 45}px`;
+    }
+
+    public _resolveTargetMesh(entity: any): any {
         const viewport = ContextManager.instance.viewport;
         const panelViews = ContextManager.instance.panelViews;
         const containerViews = ContextManager.instance.containerViews;
         if (!entity || !viewport) {
             return null;
         }
-        return panelViews.get(entity)?.root ||
+        let node = panelViews.get(entity)?.root ||
+            (entity?.id ? panelViews.get(entity.id)?.root : null) ||
             containerViews.get(entity)?.rootNode ||
-            containerViews.get(entity)?.root ||
-            (entity.name ? viewport.scene.getNodeByName(entity.name) : null);
+            containerViews.get(entity)?.root;
+        if (!node && entity?.id) {
+            for (const [p, v] of panelViews || []) {
+                if (p?.id === entity.id) {
+                    node = v?.root;
+                    break;
+                }
+            }
+            if (!node) {
+                for (const [c, v] of containerViews || []) {
+                    if (c?.id === entity.id) {
+                        node = v?.rootNode || v?.root;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!node && entity.name) {
+            node = viewport.scene.getNodeByName(entity.name);
+        }
+        return node;
     }
 
     /** Kulka gizmo żyje w świecie — nie w LCS rodzica (panel w korpusie). */

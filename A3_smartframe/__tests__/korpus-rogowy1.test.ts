@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { planCabinet } from '../smartframe-engine.js';
-import { resolveBlindPanelEdgeBanding } from '../smartframe-adapter';
+import { resolveBlindPanelEdgeBanding, resolveTraverseVEdgeBanding } from '../smartframe-adapter';
 
 describe('KORPUS_ROGOWY1 blind panel', () => {
     it('plans LEFT blind panel at interior front with expected dim/loc', () => {
@@ -167,5 +167,34 @@ describe('KORPUS_ROGOWY1 blind panel', () => {
         expect(tvBlind.loc.z).toBeCloseTo(1059, 0);
         // plecy: innerH + groovey (domyślnie 11+11) = 2082+22 = 2104
         expect(tvBack.dim.z).toBeCloseTo(2104, 0);
+    });
+    it('TRAVERSE_V w szafce rogowej prostej: obrzeze na dolnej krawedzi (+Y), a nie pod blatem (-Y)', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 800,
+            wysokosc_mm: 2200,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_rogowy1',
+            szerokosc_blendy_mm: 400,
+            strona_blendy: 'LEFT',
+            cofniecie_plecow_mm: 3,
+            tryb_wienca_gornego: 'TRAVERSE_V',
+            szerokosc_trawersu_mm: 100,
+        });
+
+        const traverses = plan.parts.filter(p => p.role === 'TOP_PANEL');
+        expect(traverses).toHaveLength(2);
+        for (const trav of traverses) {
+            expect(trav.edge_banding?.['+Y']?.active).toBe(true);
+            expect(trav.edge_banding?.['-Y']?.active).toBe(false);
+        }
+    });
+
+    it('resolveTraverseVEdgeBanding: +Y aktywne, -Y nieaktywne', () => {
+        const eb = resolveTraverseVEdgeBanding();
+        expect(eb['+Y'].active).toBe(true);
+        expect(eb['-Y'].active).toBe(false);
+        expect(eb['+X'].active).toBe(false);
+        expect(eb['-X'].active).toBe(false);
     });
 });

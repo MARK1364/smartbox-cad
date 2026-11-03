@@ -73,7 +73,16 @@ export function syncMachiningHoles(
             oldFeatures.set(targetNode.id, JSON.parse(JSON.stringify(data.features)));
         }
 
-        data.features.push(intent.feature);
+        const existingIndex = intent.feature.id == null
+            ? -1
+            : data.features.findIndex((feature: any) => feature?.id === intent.feature.id);
+        if (existingIndex >= 0) {
+            const existing = data.features[existingIndex];
+            if (existing.frozen || existing.params?.frozen) continue;
+            data.features[existingIndex] = intent.feature;
+        } else {
+            data.features.push(intent.feature);
+        }
         changedNodeIds.add(targetNode.id);
     }
 

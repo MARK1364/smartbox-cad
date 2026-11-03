@@ -523,13 +523,16 @@ export function clipFeaturesToOutline(
 
         if (feat.type === 'groove' || feat.type === 'pocket' || feat.type === 'cutout') {
             const gp = getGrooveParamsMm(feat.params);
-            const u0 = gp.u;
-            const v0 = gp.v;
-            const u1 = u0 + gp.width;
-            const v1 = v0 + gp.length;
+            const u0 = Math.min(gp.u, gp.u + gp.width);
+            const u1 = Math.max(gp.u, gp.u + gp.width);
+            const v0 = Math.min(gp.v, gp.v + gp.length);
+            const v1 = Math.max(gp.v, gp.v + gp.length);
+            const width = u1 - u0;
+            const length = v1 - v0;
+            const depth = Math.abs(gp.depth || 0);
 
             const isThrough = feat.type === 'cutout' || Boolean(feat.params.through);
-            if (gp.width <= EPS || gp.length <= EPS || (!isThrough && gp.depth <= EPS)) {
+            if (width <= EPS || length <= EPS || (!isThrough && depth <= EPS)) {
                 continue;
             }
 

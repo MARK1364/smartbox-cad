@@ -1,15 +1,23 @@
 /**
  * smartframe-drag-controller.ts
- * Kontroler przeciągania i upuszczania korpusów SmartFrame na podłogę sceny 3D.
+ * Kontroler przeciągania i upuszczania korpusów SmartFrame na podłogę sceny 3D
+ * oraz na poziome płaszczyzny warstw Z (DATUM_LEVEL) w GLC.
  * Obsługuje 1, 2 oraz 3 strefy, rzutowanie na płaszczyznę ziemi (Y=0 w Babylon, Z=0 w CAD)
- * oraz podgląd bryły (ghost) w czasie rzeczywistym.
+ * lub przyciąganie do warstw Z (z automatycznym utworzeniem relacji VERTEX_DATUM w S2_solver).
  */
 
 declare const BABYLON: any;
 import { ContextManager } from '../A1_core/context-manager.js';
+import { nmToMm } from '../A1_core/cad-math/units.js';
+import { NodeType } from '../A1_core/cad-node/node-type.js';
+import type { CADNode } from '../A1_core/cad-node/cad-node.js';
 import { CreateKorpusCommand } from './commands/create-korpus-command.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
 import { instantiateCabinetTemplate } from '../B1_biblioteka/korpusy/cabinet-instantiator.js';
+import { ConstraintStore } from '../S2_solver/constraint-store.js';
+import { makeAnchor } from '../S2_solver/constraint-types.js';
+import { getDatumLevelZMm, makeDatumLevelAnchor } from '../S2_solver/datum-planes.js';
+import { resolveCornerLocalMm } from '../S2_solver/constraint-geometry.js';
 
 /**
  * Parametry przeciąganego korpusu — kanoniczne (SSOT: CabinetPlanParams).
@@ -42,6 +50,7 @@ export class SmartFrameDragController {
     private _ghostMesh: any = null;
     private _ghostMaterial: any = null;
     private _lastGroundPointMm: { x: number; y: number } | null = null;
+    private _snappedDatumLevel: CADNode | null = null;
 
     get isDragging(): boolean {
         return this._isDragging;
@@ -49,6 +58,10 @@ export class SmartFrameDragController {
 
     get draggedZoneCount(): 1 | 2 | 3 | null {
         return this._draggedZoneCount;
+    }
+
+    get snappedDatumLevel(): CADNode | null {
+        return this._snappedDatumLevel;
     }
 
     startDrag(liczba_stref: 1 | 2 | 3, params: DraggedKorpusParams): void {
@@ -59,6 +72,7 @@ export class SmartFrameDragController {
         this._draggedZoneCount = liczba_stref;
         this._draggedParams = { ...params };
         this._lastGroundPointMm = null;
+        this._snappedDatumLevel = null;
     }
 
     startDragTemplate(template: any): void {
@@ -80,6 +94,10 @@ export class SmartFrameDragController {
         this._draggedZoneCount = null;
         this._draggedParams = null;
         this._lastGroundPointMm = null;
+        this._snappedDatumLevel = null;
+        if (typeof window !== 'undefined') {
+            (window as any).__glcAxis?.highlightLevelPlane?.(null);
+        }
         this._disposeGhost();
     }
 
@@ -127,7 +145,68 @@ export class SmartFrameDragController {
     }
 
     /**
-     * Wywoływane z onDragOver na canvasie — rzuca promień na podłogę Y=0.
+     * Sprawdza, czy promień kursora trafia w płaszczyznę lub kulkę poziomu Z (DATUM_LEVEL).
+     */
+    private _detectDatumLevelSnap(ray: any): { levelNode: CADNode; hitX: number; hitZ: number; zMm: number } | null {
+        const doc = ContextManager.instance?.document as ProjectDocument | null;
+        const glcNode = doc?.getGlcNode?.();
+        if (!glcNode || !Array.isArray(glcNode.children)) return null;
+
+        let bestMatch: { levelNode: CADNode; hitX: number; hitZ: number; zMm: number; score: number } | null = null;
+        const PLANE_HALF_EXTENT = 550; // Płaszczyzna w interactive-glc-axis ma rozmiar 1000x1000 mm
+
+        const candidates: Array<{ node: CADNode; zMm: number }> = [];
+        if ((glcNode.domainData as any)?.showAxisZ !== false) {
+            const tipZ_nm = (glcNode.domainData as any)?.tipZ_nm;
+            const axisZ_nm = (glcNode.domainData as any)?.axisZHeight_nm;
+            const tipZMm = typeof tipZ_nm === 'number' && tipZ_nm > 0
+                ? Math.round(nmToMm(tipZ_nm))
+                : (typeof axisZ_nm === 'number' && axisZ_nm > 0 ? Math.round(nmToMm(axisZ_nm)) + 30 : 2430);
+            candidates.push({ node: glcNode, zMm: tipZMm });
+        }
+        for (const child of glcNode.children) {
+            if (child.nodeType !== NodeType.DATUM_LEVEL) continue;
+            if ((child.domainData as any)?.visible === false) continue;
+
+            const z_nm = (child.domainData as any)?.z_nm ?? child.localMatrix?.getTranslation?.()?.z ?? 0;
+            const zMm = Math.max(50, Math.round(nmToMm(z_nm)));
+            candidates.push({ node: child, zMm });
+        }
+
+        for (const cand of candidates) {
+            const { node: child, zMm } = cand;
+            if (Math.abs(ray.direction.y) < 1e-5) continue;
+            const tPlane = (zMm - ray.origin.y) / ray.direction.y;
+            if (tPlane <= 0) continue;
+
+            const hx = ray.origin.x + ray.direction.x * tPlane;
+            const hz = ray.origin.z + ray.direction.z * tPlane;
+
+            if (Math.abs(hx) <= PLANE_HALF_EXTENT && Math.abs(hz) <= PLANE_HALF_EXTENT) {
+                const distFromOrigin = Math.hypot(hx, hz);
+                if (!bestMatch || distFromOrigin < bestMatch.score) {
+                    bestMatch = {
+                        levelNode: child,
+                        hitX: Math.round(hx),
+                        hitZ: Math.round(hz),
+                        zMm,
+                        score: distFromOrigin,
+                    };
+                }
+            }
+        }
+
+        if (!bestMatch) return null;
+        return {
+            levelNode: bestMatch.levelNode,
+            hitX: bestMatch.hitX,
+            hitZ: bestMatch.hitZ,
+            zMm: bestMatch.zMm,
+        };
+    }
+
+    /**
+     * Wywoływane z onDragOver na canvasie — rzuca promień na płaszczyzny DATUM_LEVEL lub podłogę Y=0.
      */
     onPointerMoveOnScene(scene: any, pointerX: number, pointerY: number): { x: number; y: number } | null {
         if (!this._isDragging || !scene) return null;
@@ -145,16 +224,31 @@ export class SmartFrameDragController {
             : null;
         if (!ray || !ray.origin || !ray.direction || Math.abs(ray.direction.y) < 1e-5) return null;
 
-        // Przecięcie z płaszczyzną podłogi Y = 0 w Babylonie:
-        // ray.origin.y + t * ray.direction.y = 0 => t = -ray.origin.y / ray.direction.y
-        const t = -ray.origin.y / ray.direction.y;
-        if (t <= 0) return null;
+        const snapped = this._detectDatumLevelSnap(ray);
+        let floorCadX = 0;
+        let floorCadY = 0;
+        let baseZMm = 0;
 
-        const hitPoint = ray.origin.add(ray.direction.scale(t));
+        if (snapped) {
+            this._snappedDatumLevel = snapped.levelNode;
+            floorCadX = snapped.hitX;
+            floorCadY = snapped.hitZ;
+            baseZMm = snapped.zMm;
+            if (typeof window !== 'undefined') {
+                (window as any).__glcAxis?.highlightLevelPlane?.(snapped.levelNode.id);
+            }
+        } else {
+            this._snappedDatumLevel = null;
+            if (typeof window !== 'undefined') {
+                (window as any).__glcAxis?.highlightLevelPlane?.(null);
+            }
+            const t = -ray.origin.y / ray.direction.y;
+            if (t <= 0) return null;
 
-        // W Babylonie: X = CAD X, Z = CAD Y (głębokość), Y = wysokość (CAD Z).
-        const floorCadX = Math.round(hitPoint.x);
-        const floorCadY = Math.round(hitPoint.z);
+            const hitPoint = ray.origin.add(ray.direction.scale(t));
+            floorCadX = Math.round(hitPoint.x);
+            floorCadY = Math.round(hitPoint.z);
+        }
 
         this._lastGroundPointMm = { x: floorCadX, y: floorCadY };
 
@@ -162,8 +256,7 @@ export class SmartFrameDragController {
         const params = this._draggedParams || { szerokosc_mm: 1000, wysokosc_mm: 2200, glebokosc_mm: 600 };
         const ghost = this._ensureGhostMesh(scene, params.szerokosc_mm, params.wysokosc_mm, params.glebokosc_mm);
         if (ghost) {
-            // Podstawa szafki opiera się na podłodze (Y = 0), więc środek bryły leży na Y = height / 2
-            ghost.position.set(hitPoint.x, params.wysokosc_mm / 2, hitPoint.z);
+            ghost.position.set(floorCadX, baseZMm + params.wysokosc_mm / 2, floorCadY);
             ghost.isVisible = true;
         }
 
@@ -171,7 +264,7 @@ export class SmartFrameDragController {
     }
 
     /**
-     * Wywoływane z onDrop na canvasie — tworzy korpus w docelowym punkcie na ziemi.
+     * Wywoływane z onDrop na canvasie — tworzy korpus w docelowym punkcie na ziemi lub na warstwie Z.
      */
     onDropOnScene(docTarget?: any): boolean {
         if (!this._isDragging || !this._draggedZoneCount) {
@@ -189,6 +282,10 @@ export class SmartFrameDragController {
         const zoneCount = this._draggedZoneCount;
         const pos = this._lastGroundPointMm || { x: 0, y: 0 };
         const wysokoscMm = params.wysokosc_mm;
+        const snappedLevel = this._snappedDatumLevel;
+        const snappedZMm = snappedLevel
+            ? Math.max(50, Math.round(getDatumLevelZMm(snappedLevel)))
+            : 0;
 
         let bottomHeight = params.wysokosc_strefy_dolnej_mm ?? (zoneCount === 2 ? 2000 : 500);
         let middleHeight = params.wysokosc_strefy_srodkowej_mm ?? 1200;
@@ -213,11 +310,15 @@ export class SmartFrameDragController {
         }
 
         if (params.template) {
-            instantiateCabinetTemplate({
+            const created = instantiateCabinetTemplate({
                 template: params.template,
-                position: { x: pos.x, y: pos.y, z: 0 },
+                position: { x: pos.x, y: pos.y, z: snappedZMm },
                 overrideDims: { szerokosc_mm: params.szerokosc_mm, wysokosc_mm: wysokoscMm, glebokosc_mm: params.glebokosc_mm }
             }, doc);
+            const createdId = created?.id || doc.activeEntity?.id;
+            if (snappedLevel && createdId) {
+                this._bindBottomCornerToDatumLevel(doc, createdId, snappedLevel);
+            }
             this.endDrag();
             return true;
         }
@@ -231,7 +332,7 @@ export class SmartFrameDragController {
             wysokosc_strefy_dolnej_mm: bottomHeight,
             wysokosc_strefy_srodkowej_mm: middleHeight,
             cofniecie_plecow_mm: params.cofniecie_plecow_mm ?? 3,
-            position: { x: pos.x, y: pos.y, z: 0 },
+            position: { x: pos.x, y: pos.y, z: snappedZMm },
             typ_korpusu: params.typ_korpusu,
             szerokosc_blendy_mm: params.szerokosc_blendy_mm,
             strona_blendy: params.strona_blendy,
@@ -250,11 +351,36 @@ export class SmartFrameDragController {
             cmd.execute(doc);
         }
 
+        const createdId = doc.activeEntity?.id;
+        if (snappedLevel && createdId) {
+            this._bindBottomCornerToDatumLevel(doc, createdId, snappedLevel);
+        }
+
         if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
         }
 
         this.endDrag();
         return true;
+    }
+
+    private _bindBottomCornerToDatumLevel(doc: ProjectDocument, containerId: string, levelNode: CADNode): void {
+        const containerNode = doc.findNode(containerId);
+        if (!containerNode) return;
+
+        const cornerPt = resolveCornerLocalMm(containerNode, 0) ?? [0, 0, 0];
+        ConstraintStore.instance.add({
+            bindType: 'VERTEX_DATUM',
+            anchorA: makeAnchor({
+                nodeId: containerNode.id,
+                kind: 'VERTEX',
+                cornerIndex: 0,
+                sourceNodeId: undefined,
+                localPointMm: cornerPt,
+            }),
+            anchorB: makeDatumLevelAnchor(levelNode),
+            offsetMm: 0,
+        });
+        (ContextManager.instance as any)?.solverController?.solveNow?.();
     }
 }

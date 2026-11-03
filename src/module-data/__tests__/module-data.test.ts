@@ -291,6 +291,96 @@ describe('tree-context-menu', () => {
             expect(labels).toContain('Edytuj skos');
             expect(labels).not.toContain('Edytuj korpus');
             expect(labels).not.toContain('Edytuj formatkę');
+            expect(labels).not.toContain('Rozkrój');
+            expect(labels).not.toContain('Batch');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('shows unified wall context menu (Edytuj ścianę, Ukryj, no Rozkrój/CNC/Raport) for wall container and wall part', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const { CADNode } = await import('../../../A1_core/cad-node/cad-node.js');
+        const { NodeType } = await import('../../../A1_core/cad-node/node-type.js');
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        const wall = doc.createAssembly({ name: 'Pokój' }) as any;
+        wall.generatorParams = { type: 'smartwall', preset: 'rect' };
+        const wallPartModel = { id: 'wall_front_1', name: 'Ściana przód', role: 'WALL' };
+        const wallPartNode = CADNode.create(NodeType.PART, 'Ściana przód', 'wall_front_1');
+        wallPartNode.domainData = wallPartModel;
+        doc.addNode(wall.id, wallPartNode);
+        ContextManager.instance.document = doc;
+
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            // Pojedyncza ściana z 3D sceny (type: 'wall', id: wallPartModel.id)
+            showCadTreeContextMenu({
+                type: 'wall',
+                id: wallPartModel.id,
+                name: wallPartModel.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            let labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj ścianę');
+            expect(labels).toContain('Ukryj');
+            expect(labels).toContain('Pokaż tylko');
+            expect(labels).toContain('Pokaż wszystko');
+            expect(labels).toContain('Właściwości');
+            expect(labels).toContain('Zmień nazwę');
+            expect(labels).toContain('Zamroź ścianę');
+            // Podkomponent z silnika (pojedyncza ściana) NIE ma usuwania trwałego
+            expect(labels).not.toContain('Usuń');
+            expect(labels).not.toContain('Usuń ścianę');
+            // Bez narzędzi produkcyjnych i ramiaka ALU
+            expect(labels).not.toContain('Rozkrój');
+            expect(labels).not.toContain('CNC — edytor formatki');
+            expect(labels).not.toContain('Batch');
+            expect(labels).not.toContain('Raport z formatki');
+            expect(labels).not.toContain('Graf formatki (DAG)');
+            expect(labels).not.toContain('DXF');
+            expect(labels).not.toContain('Ramka ALU');
+
+            // Pojedyncza ściana z drzewa obiektów
+            showCadTreeContextMenu({
+                type: 'wall',
+                id: wallPartModel.id,
+                name: wallPartModel.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj ścianę');
+            expect(labels).toContain('Ukryj');
+            expect(labels).toContain('Zamroź ścianę');
+            expect(labels).not.toContain('Usuń');
+            expect(labels).not.toContain('Usuń ścianę');
+            expect(labels).not.toContain('Rozkrój');
+            expect(labels).not.toContain('Batch');
+
+            // Cały kontener SmartWall / Pokój MA usuwanie całego pomieszczenia
+            showCadTreeContextMenu({
+                type: 'wall',
+                id: wall.id,
+                name: wall.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj ścianę');
+            expect(labels).toContain('Ukryj');
+            expect(labels).toContain('Właściwości');
+            expect(labels).toContain('Usuń pomieszczenie');
+            expect(labels).not.toContain('Rozkrój');
+            expect(labels).not.toContain('Batch');
+            expect(labels).not.toContain('CNC');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
@@ -442,7 +532,7 @@ describe('tree-context-menu', () => {
 
             labels = labelsOf(shownItems);
             expect(labels).toContain('Edytuj formatkę');
-            expect(labels).not.toContain('Usuń');
+            expect(labels).toContain('Usuń formatkę');
             expect(labels).not.toContain('Ukryj / Pokaż');
             expect(labels).not.toContain('Zamroź formatkę');
             expect(labels).toContain('Raport z formatki');
@@ -573,6 +663,80 @@ describe('tree-context-menu', () => {
             labels = labelsOf(shownItems);
             expect(labels).toContain('Pokaż wszystko');
             expect(labels).not.toContain('Pokaż tylko');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('shows "Eksportuj formatkę do DXF" for panel nodes under PPM', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'part',
+                id: 'panel_1',
+                name: 'Bok Lewy',
+                clientX: 20,
+                clientY: 20,
+            });
+
+            const labels = labelsOf(shownItems);
+            expect(labels).toContain('Eksportuj formatkę do DXF');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('extracts default plane "Płaszczyzna 1" at 100mm under GLC in DrawingProjectExtractor and shows tree context menu', async () => {
+        const { DrawingProjectExtractor } = await import('../../../R2_rys/drawing-project-extractor');
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        const doc = new ProjectDocument({ name: 'Projekt Testowy' });
+        registerProjectDomain(doc);
+        ContextManager.instance.document = doc;
+
+        const tree = DrawingProjectExtractor.instance.extractProjectTree();
+        expect(tree.rootNode).toBeDefined();
+
+        // Pierwszym dzieckiem projektu jest Układ globalny (GLC)
+        const glcNode = tree.rootNode.children?.find((c: any) => c.type === 'GLC' || c.id === 'glc_origin');
+        expect(glcNode).toBeDefined();
+        expect(glcNode!.children).toBeDefined();
+        expect(glcNode!.children!.length).toBeGreaterThanOrEqual(1);
+
+        // Domyślna płaszczyzna ma nazwę "Płaszczyzna 1", wysokość 100 mm i typ DATUM_LEVEL
+        const defaultPlane = glcNode!.children!.find((c: any) => c.name === 'Płaszczyzna 1');
+        expect(defaultPlane).toBeDefined();
+        expect(defaultPlane!.type).toBe('DATUM_LEVEL');
+        expect(defaultPlane!.height).toBe(100);
+
+        // Test menu kontekstowego PPM dla płaszczyzny w drzewie
+        let shownItems: any[] = [];
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'datum_level',
+                id: defaultPlane!.id,
+                name: defaultPlane!.name,
+                clientX: 10,
+                clientY: 10,
+            });
+
+            const labels = labelsOf(shownItems);
+            expect(labels).toContain('Edytuj');
+            expect(labels).toContain('Ukryj');
+            expect(labels).toContain('Zmień nazwę');
+            expect(labels).toContain('Usuń poziom');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }

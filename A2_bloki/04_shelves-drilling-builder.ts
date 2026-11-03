@@ -74,10 +74,17 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
     };
     collectCabinetPanels(cabinetNode);
 
-    const getPanelWorldZ = (node: any): number => {
+    const getNodeCabinetPosMm = (node: any): { x: number; y: number; z: number } => {
+        if (cabinetNode && typeof cabinetNode.getWorldMatrix === 'function' && typeof node?.getWorldMatrix === 'function') {
+            const relPos = cabinetNode.getWorldMatrix().invert().multiply(node.getWorldMatrix()).decompose().translation;
+            return { x: nmToMm(relPos.x), y: nmToMm(relPos.y), z: nmToMm(relPos.z) };
+        }
         const worldPos = node.getWorldMatrix().decompose().translation;
-        return nmToMm(worldPos.z);
+        return { x: nmToMm(worldPos.x), y: nmToMm(worldPos.y), z: nmToMm(worldPos.z) };
     };
+
+    const getPanelWorldZ = (node: any): number => getNodeCabinetPosMm(node).z;
+    const getPanelCabinetX = (node: any): number => getNodeCabinetPosMm(node).x;
 
     /** Wysokość V na bokach (oś pionowa = world Z). */
     const getVForPanel = (targetNode: any, worldZ: number): number => {
@@ -91,11 +98,15 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
     };
 
     const findShelfPanel = (sbNode: any, shelfIndex: number): any | null => {
-        for (const child of sbNode?.children || []) {
-            const d = child.domainData;
-            if (d && (d.name === `Polka_${shelfIndex}` || child.name === `Polka_${shelfIndex}`)) return child;
-        }
-        return null;
+        const shelves = (sbNode?.children || [])
+            .filter((child: any) => {
+                const role = String(child.domainData?.role || '').toUpperCase();
+                return role === 'SHELF_PANEL' || role === 'SHELF';
+            })
+            .sort((a: any, b: any) =>
+                a.localMatrix.decompose().translation.z - b.localMatrix.decompose().translation.z
+            );
+        return shelves[shelfIndex - 1] || null;
     };
 
     const getZonePrefix = (tz: string) => {
@@ -162,8 +173,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
         // Gdy brak referencji w Bloku, znajdź boczny panel korpusu dotykający Bloku na wysokości worldZ lub w strefie zonePrefix
         if (allCabinetPanels.length > 0) {
             const sbWidth = nmToMm(sbNode.domainData?.width || 0);
-            const sbWorldPos = sbNode.getWorldMatrix().decompose().translation;
-            const sbCenterX = nmToMm(sbWorldPos.x);
+            const sbCenterX = getPanelCabinetX(sbNode);
             const sbLeftX = sbCenterX - sbWidth / 2;
             const sbRightX = sbCenterX + sbWidth / 2;
 
@@ -172,7 +182,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
             if (zonePrefix && zonePrefix !== 'FULL') {
                 const zoneMatches = allCabinetPanels.filter((pNode) => {
                     if (!isVerticalSidePanel(pNode)) return false;
-                    const panelX = nmToMm(pNode.getWorldMatrix().decompose().translation.x);
+                    const panelX = getPanelCabinetX(pNode);
                     if (side === 'left' ? (panelX > sbCenterX + 5) : (panelX < sbCenterX - 5)) return false;
                     return isPanelMatchingZone(pNode, zonePrefix);
                 });
@@ -191,7 +201,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                     const pZMax = centerZ + h / 2;
                     if (h > 0 && (worldZ !== undefined && (worldZ < pZMin - 10 || worldZ > pZMax + 10))) return false;
 
-                    const panelX = nmToMm(pNode.getWorldMatrix().decompose().translation.x);
+                    const panelX = getPanelCabinetX(pNode);
                     return side === 'left' ? (panelX <= sbCenterX + 5) : (panelX >= sbCenterX - 5);
                 });
             }
@@ -200,8 +210,8 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
 
             const targetRefX = side === 'left' ? sbLeftX : sbRightX;
             candidates.sort((a, b) => {
-                const distA = Math.abs(nmToMm(a.getWorldMatrix().decompose().translation.x) - targetRefX);
-                const distB = Math.abs(nmToMm(b.getWorldMatrix().decompose().translation.x) - targetRefX);
+                const distA = Math.abs(getPanelCabinetX(a) - targetRefX);
+                const distB = Math.abs(getPanelCabinetX(b) - targetRefX);
                 return distA - distB;
             });
 
@@ -289,13 +299,18 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                     ? Number(bpData.custom_properties.thickness_mm)
                     : (bpData.thickness !== undefined ? nmToMm(bpData.thickness) : (bpData.dim?.z ? nmToMm(bpData.dim.z) : undefined));
                 if (bpRawTh === undefined || isNaN(bpRawTh)) {
-                    throw new Error(
-                        `[shelves-drilling-builder] Brak zdefiniowanej grubości dla formatki dolnej (${bottomPanel.id}). ` +
-                        `CAD wymaga jawnych danych grubości bez sztywnego zgadywania.`
-                    );
+                    if (bpData.type === 'container' || bpData.generatorParams) {
+                        sbBottomZ = bpCenterZ;
+                    } else {
+                        throw new Error(
+                            `[shelves-drilling-builder] Brak zdefiniowanej grubości dla formatki dolnej (${bottomPanel.id}). ` +
+                            `CAD wymaga jawnych danych grubości bez sztywnego zgadywania.`
+                        );
+                    }
+                } else {
+                    const bpThickness = bpRawTh;
+                    sbBottomZ = bpCenterZ + bpThickness / 2;
                 }
-                const bpThickness = bpRawTh;
-                sbBottomZ = bpCenterZ + bpThickness / 2;
             }
         } else if (Math.abs(sbBottomZ) < 0.001 && zonePrefix && zonePrefix !== 'FULL') {
             const zonePanel = allCabinetPanels.find(pn => isPanelMatchingZone(pn, zonePrefix));

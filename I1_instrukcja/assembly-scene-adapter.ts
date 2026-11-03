@@ -407,3 +407,170 @@ export function pruneAssemblyViews(views: unknown, document: ProjectDocument | n
     }
     return out;
 }
+
+/**
+ * Filtruje snapshot projektu tak, aby w nowo otwartym oknie instrukcji montażu
+ * znajdował się WYŁĄCZNIE korpus wskazany przez targetContainerId (oraz jego dzieci: formatki i okucia).
+ *
+ * Wszystkie inne korpusy są usuwane z rootNode.children snapshotu, a pozycja korpusu
+ * docelowego zostaje zresetowana do [0, 0, 0], by mebel stał na środku sceny i widoku kamery.
+ */
+export function isolateContainerInSnapshot(snapshot: any, targetContainerId: string): any {
+    if (!snapshot || !snapshot.rootNode) return snapshot;
+
+    let targetNode: any = null;
+    const findNode = (node: any): boolean => {
+        if (!node) return false;
+        if (
+            node.id === targetContainerId ||
+            node.domainData?.id === targetContainerId ||
+            node.domainData?.smartId?.uid === targetContainerId
+        ) {
+            targetNode = node;
+            return true;
+        }
+        if (Array.isArray(node.children)) {
+            for (const child of node.children) {
+                if (findNode(child)) return true;
+            }
+        }
+        return false;
+    };
+    findNode(snapshot.rootNode);
+
+    if (!targetNode) {
+        console.warn(`[instrukcja] Nie znaleziono korpusu "${targetContainerId}" w snapshot projektu.`);
+        return snapshot;
+    }
+
+    // Zbierz wszystkie ID węzłów/formatek/okuć należących do tego korpusu
+    const targetNodeIds = new Set<string>();
+    const collectIds = (n: any) => {
+        if (!n) return;
+        if (n.id) targetNodeIds.add(String(n.id));
+        if (n.domainData?.id) targetNodeIds.add(String(n.domainData.id));
+        if (n.domainData?.smartId?.uid) targetNodeIds.add(String(n.domainData.smartId.uid));
+        if (Array.isArray(n.children)) {
+            for (const c of n.children) collectIds(c);
+        }
+    };
+    collectIds(targetNode);
+
+    // Klonujemy węzeł korpusu i zerujemy pozycję lokalną do [0, 0, 0], by stał w centrum
+    const clonedTarget = JSON.parse(JSON.stringify(targetNode));
+    if (Array.isArray(clonedTarget.translationNm)) {
+        clonedTarget.translationNm = [0, 0, 0];
+    }
+
+    // Filtrujemy rozszerzenia, by zachować tylko powiązane z tym korpusem
+    const scopedExtensions: Record<string, any> = { ...(snapshot.extensions || {}) };
+
+    // Connectors: tylko złącza łączące formatki tego korpusu
+    if (scopedExtensions.connectors?.groups && Array.isArray(scopedExtensions.connectors.groups)) {
+        scopedExtensions.connectors = {
+            ...scopedExtensions.connectors,
+            groups: scopedExtensions.connectors.groups.filter(
+                (g: any) => targetNodeIds.has(String(g.parentObjectId)) && targetNodeIds.has(String(g.otherObjectId)),
+            ),
+        };
+    }
+
+    // PMI: tylko adnotacje / pomiary na elementach tego korpusu
+    if (scopedExtensions.pmi) {
+        const pmi = scopedExtensions.pmi;
+        const filteredAnnotations = Array.isArray(pmi.annotations)
+            ? pmi.annotations.filter((a: any) => !a.panelId || targetNodeIds.has(String(a.panelId)))
+            : pmi.annotations;
+        const filteredMeasurements = Array.isArray(pmi.measurements)
+            ? pmi.measurements.filter((m: any) => !m.panelId || targetNodeIds.has(String(m.panelId)))
+            : pmi.measurements;
+        scopedExtensions.pmi = {
+            ...pmi,
+            annotations: filteredAnnotations,
+            measurements: filteredMeasurements,
+        };
+    }
+
+    return {
+        ...snapshot,
+        name: clonedTarget.name || clonedTarget.domainData?.name || snapshot.name,
+        rootNode: {
+            ...snapshot.rootNode,
+            children: [clonedTarget],
+        },
+        extensions: scopedExtensions,
+    };
+}
+
+/**
+ * Aktualizuje węzeł korpusu w pełnym snapshot projektu bez utraty pozostałych korpusów.
+ * Używane przy zapisie z podstrony instrukcji do CAD.
+ */
+export function mergeContainerIntoProjectSnapshot(
+    fullSnapshot: any,
+    scopedSnapshot: any,
+    targetContainerId: string,
+): any {
+    if (!fullSnapshot?.rootNode || !scopedSnapshot?.rootNode) return fullSnapshot;
+
+    let newContainerNode: any = null;
+    const findNewNode = (node: any): boolean => {
+        if (!node) return false;
+        if (
+            node.id === targetContainerId ||
+            node.domainData?.id === targetContainerId ||
+            node.domainData?.smartId?.uid === targetContainerId
+        ) {
+            newContainerNode = node;
+            return true;
+        }
+        if (Array.isArray(node.children)) {
+            for (const child of node.children) {
+                if (findNewNode(child)) return true;
+            }
+        }
+        return false;
+    };
+    findNewNode(scopedSnapshot.rootNode);
+    if (!newContainerNode) return fullSnapshot;
+
+    const updated = JSON.parse(JSON.stringify(fullSnapshot));
+    let replaced = false;
+
+    const replaceInTree = (node: any): boolean => {
+        if (!node || !Array.isArray(node.children)) return false;
+        for (let i = 0; i < node.children.length; i++) {
+            const child = node.children[i];
+            if (
+                child.id === targetContainerId ||
+                child.domainData?.id === targetContainerId ||
+                child.domainData?.smartId?.uid === targetContainerId
+            ) {
+                const preservedTranslation = child.translationNm;
+                const preservedRotation = child.rotationQuat;
+                const clonedNew = JSON.parse(JSON.stringify(newContainerNode));
+                if (preservedTranslation) clonedNew.translationNm = preservedTranslation;
+                if (preservedRotation) clonedNew.rotationQuat = preservedRotation;
+                node.children[i] = clonedNew;
+                replaced = true;
+                return true;
+            }
+            if (replaceInTree(child)) return true;
+        }
+        return false;
+    };
+
+    replaceInTree(updated.rootNode);
+    if (!replaced) return fullSnapshot;
+
+    // Przenieś ewentualne rozszerzenia (pmi itp.)
+    if (scopedSnapshot.extensions) {
+        updated.extensions = {
+            ...(updated.extensions || {}),
+            ...scopedSnapshot.extensions,
+        };
+    }
+
+    return updated;
+}
+

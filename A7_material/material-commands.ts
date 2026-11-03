@@ -375,7 +375,7 @@ export class SetEdgeBandingCommand implements Command {
     private edgeKey: string; // '+X', '-X', '+Y', '-Y' or 'ALL'
     private edgeConfig: any;
     private scope: MaterialScope;
-    private previousSnapshots: { panelId: string; edgeBanding: any }[] = [];
+    private previousSnapshots: { panelId: string; edgeBanding: any; userDefined: boolean }[] = [];
 
     constructor(targetNodeId: string, edgeKey: string, edgeConfig: any, scope: MaterialScope = 'SINGLE') {
         this.id = `set_edge_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -436,10 +436,12 @@ export class SetEdgeBandingCommand implements Command {
             this.affectedNodeIds.push(n.id);
             this.previousSnapshots.push({
                 panelId: n.id,
-                edgeBanding: p.edgeBanding ? JSON.parse(JSON.stringify(p.edgeBanding)) : {}
+                edgeBanding: p.edgeBanding ? JSON.parse(JSON.stringify(p.edgeBanding)) : {},
+                userDefined: (p as any).edgeBandingUserDefined === true
             });
 
             if (this.edgeKey === 'ALL') {
+                (p as any).edgeBandingUserDefined = true;
                 if (this.edgeConfig.active === false) {
                     if (typeof p.clearAllEdgeBanding === 'function') p.clearAllEdgeBanding();
                     else p.edgeBanding = {};
@@ -453,6 +455,7 @@ export class SetEdgeBandingCommand implements Command {
                     }
                 }
             } else {
+                (p as any).edgeBandingUserDefined = true;
                 if (this.edgeConfig.active === false) {
                     if (typeof p.removeEdgeBand === 'function') p.removeEdgeBand(this.edgeKey);
                     else if (p.edgeBanding) p.edgeBanding[this.edgeKey] = { active: false, type_id: 'none' };
@@ -478,6 +481,7 @@ export class SetEdgeBandingCommand implements Command {
             const node = document.findNode(snap.panelId);
             if (!node?.domainData || !isPanelModel(node.domainData)) continue;
             const p = node.domainData;
+            (p as any).edgeBandingUserDefined = snap.userDefined;
             if (typeof p.setEdgeBanding === 'function') {
                 p.setEdgeBanding(snap.edgeBanding);
             } else {

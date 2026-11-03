@@ -57,6 +57,30 @@ const DEFAULT_COFNIECIE_PLECOW_MM = 3;
 const DEFAULT_GRUBOSC_PLECOW_MM = 3;
 const DEFAULT_WPUSZCZENIE_PLECOW_MM = 10;
 
+function finiteCabinetParam(field: string, value: unknown): number {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+        throw new Error(`SmartFrame: parametr ${field} musi być skończoną liczbą.`);
+    }
+    return number;
+}
+
+function positiveDimension(field: string, value: unknown): number {
+    const dimension = finiteCabinetParam(field, value);
+    if (dimension <= 0) {
+        throw new Error(`SmartFrame: wymiar ${field} musi być większy od zera.`);
+    }
+    return dimension;
+}
+
+function nonNegativeDimension(field: string, value: unknown): number {
+    const dimension = finiteCabinetParam(field, value);
+    if (dimension < 0) {
+        throw new Error(`SmartFrame: wymiar ${field} nie może być ujemny.`);
+    }
+    return dimension;
+}
+
 /**
  * Czysta funkcja normalizująca parametry wejściowe korpusu do DTO z jawnymi jednostkami.
  *
@@ -69,10 +93,14 @@ export function normalizeCabinetParams(
 ): NormalizedCabinetParams {
     assertCanonicalCabinetParams(raw);
 
-    const szerokosc_mm = Number(raw.szerokosc_mm ?? DEFAULT_SZEROKOSC_MM);
-    const wysokosc_mm = Number(raw.wysokosc_mm ?? DEFAULT_WYSOKOSC_MM);
-    const glebokosc_mm = Number(raw.glebokosc_mm ?? DEFAULT_GLEBOKOSC_MM);
-    const liczba_stref = Math.max(1, Math.min(3, Number(raw.liczba_stref ?? 1))) as 1 | 2 | 3;
+    const szerokosc_mm = positiveDimension('szerokosc_mm', raw.szerokosc_mm ?? DEFAULT_SZEROKOSC_MM);
+    const wysokosc_mm = positiveDimension('wysokosc_mm', raw.wysokosc_mm ?? DEFAULT_WYSOKOSC_MM);
+    const glebokosc_mm = positiveDimension('glebokosc_mm', raw.glebokosc_mm ?? DEFAULT_GLEBOKOSC_MM);
+    const rawZoneCount = finiteCabinetParam('liczba_stref', raw.liczba_stref ?? 1);
+    if (!Number.isInteger(rawZoneCount) || rawZoneCount < 1 || rawZoneCount > 3) {
+        throw new Error('SmartFrame: liczba_stref musi być liczbą całkowitą z zakresu 1–3.');
+    }
+    const liczba_stref = rawZoneCount as 1 | 2 | 3;
 
     const typ_korpusu = raw.typ_korpusu ?? 'korpus3';
     const strona_blendy: 'LEFT' | 'RIGHT' = raw.strona_blendy === 'RIGHT' ? 'RIGHT' : 'LEFT';
@@ -84,43 +112,43 @@ export function normalizeCabinetParams(
         wysokosc_mm,
         glebokosc_mm,
         liczba_stref,
-        wysokosc_strefy_dolnej_mm: raw.wysokosc_strefy_dolnej_mm !== undefined
-            ? Number(raw.wysokosc_strefy_dolnej_mm)
+        wysokosc_strefy_dolnej_mm: (liczba_stref > 1 && raw.wysokosc_strefy_dolnej_mm !== undefined)
+            ? positiveDimension('wysokosc_strefy_dolnej_mm', raw.wysokosc_strefy_dolnej_mm)
             : (liczba_stref > 1 ? 300 : undefined),
-        wysokosc_strefy_srodkowej_mm: raw.wysokosc_strefy_srodkowej_mm !== undefined
-            ? Number(raw.wysokosc_strefy_srodkowej_mm)
+        wysokosc_strefy_srodkowej_mm: (liczba_stref === 3 && raw.wysokosc_strefy_srodkowej_mm !== undefined)
+            ? nonNegativeDimension('wysokosc_strefy_srodkowej_mm', raw.wysokosc_strefy_srodkowej_mm)
             : (liczba_stref === 3 ? 300 : undefined),
         cofniecie_plecow_mm: raw.cofniecie_plecow_mm !== undefined
-            ? Number(raw.cofniecie_plecow_mm)
+            ? finiteCabinetParam('cofniecie_plecow_mm', raw.cofniecie_plecow_mm)
             : DEFAULT_COFNIECIE_PLECOW_MM,
         grubosc_plecow_mm: raw.grubosc_plecow_mm !== undefined
-            ? Number(raw.grubosc_plecow_mm)
+            ? positiveDimension('grubosc_plecow_mm', raw.grubosc_plecow_mm)
             : DEFAULT_GRUBOSC_PLECOW_MM,
         wpuszczenie_plecow_mm: raw.wpuszczenie_plecow_mm !== undefined
-            ? Number(raw.wpuszczenie_plecow_mm)
+            ? nonNegativeDimension('wpuszczenie_plecow_mm', raw.wpuszczenie_plecow_mm)
             : DEFAULT_WPUSZCZENIE_PLECOW_MM,
         tryb_wienca_gornego,
         szerokosc_trawersu_mm: raw.szerokosc_trawersu_mm !== undefined
-            ? Number(raw.szerokosc_trawersu_mm)
+            ? positiveDimension('szerokosc_trawersu_mm', raw.szerokosc_trawersu_mm)
             : DEFAULT_SZEROKOSC_TRAWERSU_MM,
         szerokosc_blendy_mm: raw.szerokosc_blendy_mm !== undefined
-            ? Number(raw.szerokosc_blendy_mm)
+            ? positiveDimension('szerokosc_blendy_mm', raw.szerokosc_blendy_mm)
             : undefined,
         strona_blendy,
         glebokosc_boku_lewego_mm: raw.glebokosc_boku_lewego_mm !== undefined
-            ? Number(raw.glebokosc_boku_lewego_mm)
+            ? positiveDimension('glebokosc_boku_lewego_mm', raw.glebokosc_boku_lewego_mm)
             : undefined,
         glebokosc_boku_prawego_mm: raw.glebokosc_boku_prawego_mm !== undefined
-            ? Number(raw.glebokosc_boku_prawego_mm)
+            ? positiveDimension('glebokosc_boku_prawego_mm', raw.glebokosc_boku_prawego_mm)
             : undefined,
         szerokosc_listwy_naroznej_mm: raw.szerokosc_listwy_naroznej_mm !== undefined
-            ? Number(raw.szerokosc_listwy_naroznej_mm)
+            ? positiveDimension('szerokosc_listwy_naroznej_mm', raw.szerokosc_listwy_naroznej_mm)
             : undefined,
         typ_listwy_naroznej: raw.typ_listwy_naroznej === 'KATOWA_90' ? 'KATOWA_90' : 'POJEDYNCZA',
-        wysokosc_przod_mm: raw.wysokosc_przod_mm !== undefined ? Number(raw.wysokosc_przod_mm) : undefined,
-        wysokosc_tyl_mm: raw.wysokosc_tyl_mm !== undefined ? Number(raw.wysokosc_tyl_mm) : undefined,
-        wysokosc_lewy_mm: raw.wysokosc_lewy_mm !== undefined ? Number(raw.wysokosc_lewy_mm) : undefined,
-        wysokosc_prawy_mm: raw.wysokosc_prawy_mm !== undefined ? Number(raw.wysokosc_prawy_mm) : undefined,
+        wysokosc_przod_mm: raw.wysokosc_przod_mm !== undefined ? positiveDimension('wysokosc_przod_mm', raw.wysokosc_przod_mm) : undefined,
+        wysokosc_tyl_mm: raw.wysokosc_tyl_mm !== undefined ? positiveDimension('wysokosc_tyl_mm', raw.wysokosc_tyl_mm) : undefined,
+        wysokosc_lewy_mm: raw.wysokosc_lewy_mm !== undefined ? positiveDimension('wysokosc_lewy_mm', raw.wysokosc_lewy_mm) : undefined,
+        wysokosc_prawy_mm: raw.wysokosc_prawy_mm !== undefined ? positiveDimension('wysokosc_prawy_mm', raw.wysokosc_prawy_mm) : undefined,
         offsets: raw.offsets,
         container: raw.container
     };
@@ -336,9 +364,29 @@ export function computeCabinetZoneLayout(
     }
 
     if (fillZones.length > 0) {
-        const fillSize = Math.max(height - totalFixed, 0) / fillZones.length;
-        for (const fillKey of fillZones) {
-            sizes[fillKey] = fillSize;
+        if (height > totalFixed) {
+            const fillSize = (height - totalFixed) / fillZones.length;
+            for (const fillKey of fillZones) {
+                sizes[fillKey] = fillSize;
+            }
+        } else if (height > 0 && totalFixed > 0) {
+            const fixedCount = Math.max(1, activeKeys.length - fillZones.length);
+            const nominalFill = totalFixed / fixedCount;
+            const totalNominal = totalFixed + nominalFill * fillZones.length;
+            const scale = height / totalNominal;
+            for (const key of activeKeys) {
+                const rawSz = sizes[key] ?? nominalFill;
+                sizes[key] = rawSz * scale;
+            }
+        } else {
+            for (const fillKey of fillZones) {
+                sizes[fillKey] = 0;
+            }
+        }
+    } else if (height > 0 && totalFixed > height) {
+        const scale = height / totalFixed;
+        for (const key of activeKeys) {
+            sizes[key] = (sizes[key] ?? 0) * scale;
         }
     }
 
@@ -413,10 +461,11 @@ function flattenSingleZone(zoneNode: any): Record<string, any> {
     for (const [key, part] of Object.entries(zoneNode.subcomponents || {})) {
         const cleanKey = key.length > 2 && key[1] === "_" ? key.slice(2) : key;
         const partCopy = JSON.parse(JSON.stringify(part));
-        if (typeof partCopy.name === "string") {
+        const rawLabel = partCopy.name;
+        if (typeof rawLabel === "string") {
             for (const prefix of ["Dol_", "Srodek_", "Gora_"]) {
-                if (partCopy.name.startsWith(prefix)) {
-                    partCopy.name = partCopy.name.slice(prefix.length);
+                if (rawLabel.startsWith(prefix)) {
+                    partCopy.name = rawLabel.slice(prefix.length);
                     break;
                 }
             }

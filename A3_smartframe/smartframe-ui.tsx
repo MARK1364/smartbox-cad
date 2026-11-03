@@ -159,7 +159,7 @@ export function SmartFrameUI({ projectModel }: Props) {
                 return;
             }
 
-            setActiveKorpusName(container.name || 'Korpus');
+            setActiveKorpusName(container.name || container.id);
 
             const w = Math.round(nmToMm(container.width));
             const h = Math.round(nmToMm(container.height));

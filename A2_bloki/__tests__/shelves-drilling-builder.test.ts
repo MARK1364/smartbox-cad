@@ -6,6 +6,8 @@ import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { runEngineAndApply } from '../../A3_smartframe/smartframe-adapter.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
+import { Vec3 } from '../../A1_core/cad-math/vec3.js';
+import { Quat } from '../../A1_core/cad-math/quat.js';
 import { buildShelvesDrillings } from '../04_shelves-drilling-builder.js';
 import { findCabinetPanel } from '../../A1_core/panel-lookup.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
@@ -16,6 +18,55 @@ describe('Shelves Drilling Builder (buildShelvesDrillings)', () => {
     beforeEach(() => {
         doc = new ProjectDocument();
         ContextManager.instance.document = doc;
+    });
+
+    it('finds generated shelves by role and vertical order after their names change', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
+
+        const sb = doc.createAssembly({
+            name: 'Polki_SB',
+            width: mmToNm(764),
+            height: mmToNm(1964),
+            depth: mmToNm(560),
+        }, cabinet.id) as ContainerModel;
+        sb.generatorParams = {
+            type: 'blok_shelves',
+            liczba_polek: 2,
+            wzor_nawiercen: 'SINGLE',
+            targetZone: 'B',
+        };
+
+        const lowerShelf = doc.createPanel({
+            name: 'Nazwa zmieniona dolnej',
+            width: mmToNm(764),
+            height: mmToNm(560),
+            thickness: mmToNm(18),
+        }, sb.id) as PanelModel;
+        lowerShelf.role = 'SHELF_PANEL';
+        const lowerNode = doc.findNode(lowerShelf.id)!;
+        lowerNode.name = 'Dowolna nazwa';
+        lowerNode.setLocalTransform(new Vec3(0, 0, mmToNm(400)), Quat.IDENTITY);
+
+        const upperShelf = doc.createPanel({
+            name: 'Nazwa zmieniona górnej',
+            width: mmToNm(764),
+            height: mmToNm(560),
+            thickness: mmToNm(18),
+        }, sb.id) as PanelModel;
+        upperShelf.role = 'SHELF_PANEL';
+        const upperNode = doc.findNode(upperShelf.id)!;
+        upperNode.name = 'Inna dowolna nazwa';
+        upperNode.setLocalTransform(new Vec3(0, 0, mmToNm(1200)), Quat.IDENTITY);
+
+        const intents = buildShelvesDrillings(doc, cabinet.id);
+        const shelfDrivers = intents
+            .filter((intent) => intent.feature.drivenBy?.role === 'SHELF_PANEL')
+            .map((intent) => intent.feature.drivenBy?.nodeId);
+
+        expect(shelfDrivers).toContain(lowerShelf.id);
+        expect(shelfDrivers).toContain(upperShelf.id);
     });
 
     it('generates correct side drillings on LEFT_SIDE_PANEL and RIGHT_SIDE_PANEL for 1-zone cabinet', () => {

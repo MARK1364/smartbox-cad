@@ -168,7 +168,7 @@ function highlightAssignedPanelFace(ref: { partKey?: string; face?: string; pane
     const allPanels = typeof (doc as any).getPanels === 'function' ? (doc as any).getPanels() : [];
     const foundNode = allPanels.find((n: any) => {
         const d = n.domainData;
-        return n.id === pKey || (d && (d.id === pKey || d.name === pKey || (d as any).key === pKey || d.role === pKey));
+        return n.id === pKey || (d && (d.id === pKey || (d as any).key === pKey));
     });
     const targetPanel = foundNode ? foundNode.domainData : doc.findNode(pKey)?.domainData || null;
     if (!targetPanel) return;

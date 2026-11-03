@@ -79,11 +79,11 @@ export function instantiateCabinetTemplate(
     if (Array.isArray(template.submodules) && template.submodules.length > 0) {
         // ZnajdĹş Ĺ›ciany korpusu do dynamicznych referencji
         const allChildren = korpusNode.children || [];
-        const bokL = allChildren.find((c) => c.name?.includes('BOK_L') || c.name?.includes('Bok Lewy'));
-        const bokR = allChildren.find((c) => c.name?.includes('BOK_R') || c.name?.includes('Bok Prawy'));
-        const wieniecD = allChildren.find((c) => c.name?.includes('WIENIEC_D') || c.name?.includes('DĂłĹ‚'));
-        const wieniecG = allChildren.find((c) => c.name?.includes('WIENIEC_G') || c.name?.includes('GĂłra'));
-        const plecy = allChildren.find((c) => c.name?.includes('PLECY') || c.name?.includes('TyĹ‚'));
+        const bokL = allChildren.find((c) => (c.domainData as any)?.role === 'LEFT_SIDE_PANEL');
+        const bokR = allChildren.find((c) => (c.domainData as any)?.role === 'RIGHT_SIDE_PANEL');
+        const wieniecD = allChildren.find((c) => (c.domainData as any)?.role === 'BOTTOM_PANEL');
+        const wieniecG = allChildren.find((c) => (c.domainData as any)?.role === 'TOP_PANEL');
+        const plecy = allChildren.find((c) => (c.domainData as any)?.role === 'BACK_PANEL');
 
         const leftId = bokL?.id || korpusNode.id;
         const rightId = bokR?.id || korpusNode.id;

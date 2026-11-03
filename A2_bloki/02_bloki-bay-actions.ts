@@ -569,11 +569,31 @@ export function createBlokInDetectedBay(
     // 3. Pozycja lokalna TRS względem nadrzędnego korpusu (a nie ślepe współrzędne świata)
     // Ważne: w CAD i ContainerView lokalne Z=0 kontenera to jego spód (nie środek geometryczny wysokości).
     const parentNode = document.findNode(targetParentId);
-    const bottomZMm = bay.boundary?.bottom?.planeCoordMm ?? (bay.centerWorldMm.z - bay.boundsMm.height / 2);
-    let localPosNm = new Vec3(mmToNm(bay.centerWorldMm.x), mmToNm(bay.centerWorldMm.y), mmToNm(bottomZMm));
-    if (parentNode && parentNode.id !== document.rootNode.id) {
-        const parentWorldInv = parentNode.getWorldMatrix().invert();
-        localPosNm = parentWorldInv.transformPoint(localPosNm);
+    let localPosNm: Vec3;
+    if (
+        parentNode &&
+        parentNode.id !== document.rootNode.id &&
+        bay.boundary?.left?.planeCoordMm !== undefined &&
+        bay.boundary?.right?.planeCoordMm !== undefined &&
+        bay.boundary?.bottom?.planeCoordMm !== undefined
+    ) {
+        const leftX = bay.boundary.left.planeCoordMm;
+        const rightX = bay.boundary.right.planeCoordMm;
+        const bottomZ = bay.boundary.bottom.planeCoordMm;
+        const frontY = bay.boundary.front?.planeCoordMm ?? bay.boundary.frontPlaneYMm ?? 0;
+        const backY = bay.boundary.back?.planeCoordMm ?? 0;
+        localPosNm = new Vec3(
+            mmToNm((leftX + rightX) / 2),
+            mmToNm((frontY + backY) / 2),
+            mmToNm(bottomZ)
+        );
+    } else {
+        const bottomZMm = bay.boundary?.bottom?.planeCoordMm ?? (bay.centerWorldMm.z - bay.boundsMm.height / 2);
+        localPosNm = new Vec3(mmToNm(bay.centerWorldMm.x), mmToNm(bay.centerWorldMm.y), mmToNm(bottomZMm));
+        if (parentNode && parentNode.id !== document.rootNode.id) {
+            const parentWorldInv = parentNode.getWorldMatrix().invert();
+            localPosNm = parentWorldInv.transformPoint(localPosNm);
+        }
     }
     sbNode.setLocalTransform(localPosNm, Quat.IDENTITY);
 

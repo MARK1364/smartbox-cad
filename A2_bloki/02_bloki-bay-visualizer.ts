@@ -8,6 +8,10 @@
 
 import type { DetectedBay } from './02_bloki-bay-detector.js';
 import { ContextManager } from '../A1_core/context-manager.js';
+import { cadMatrixToRenderMatrix, cadToRender } from '../A1_core/cad-math/coord-system.js';
+import { Vec3 } from '../A1_core/cad-math/vec3.js';
+import { Mat4 } from '../A1_core/cad-math/mat4.js';
+import { nmToMm } from '../A1_core/cad-math/units.js';
 
 declare const BABYLON: any;
 
@@ -31,19 +35,46 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
 
     _clearOffsetPlanes();
 
-    const cx = bay.centerWorldMm.x;
-    const cy = bay.centerWorldMm.y;
-    const cz = bay.centerWorldMm.z;
-    const bw = Math.max(1, bay.boundsMm.width - 2);
-    const bh = Math.max(1, bay.boundsMm.height - 2);
-    const bd = Math.max(1, bay.boundsMm.depth - 2);
+    const doc = ContextManager.instance?.document;
+    const parentCab = doc && bay.parentCabinetId ? doc.findNode(bay.parentCabinetId) : null;
+    const canUseRootNode = !!(parentCab && typeof B.TransformNode === 'function');
+    const rootNode = canUseRootNode ? new B.TransformNode('blok_bay_root', scene) : null;
+    if (rootNode && parentCab) {
+        offsetPlaneMeshes.push(rootNode);
+        const { translation, rotation, scale } = parentCab.getWorldMatrix().decompose();
+        const translationMm = new Vec3(nmToMm(translation.x), nmToMm(translation.y), nmToMm(translation.z));
+        const bPos = cadToRender(translationMm);
+        rootNode.position.set(bPos.x, bPos.y, bPos.z);
+
+        const rotMat = cadMatrixToRenderMatrix(Mat4.fromQuaternion(rotation));
+        const { rotation: bRot } = rotMat.decompose();
+        if (B.Quaternion) {
+            rootNode.rotationQuaternion = new B.Quaternion(bRot.x, bRot.y, bRot.z, bRot.w);
+        } else {
+            rootNode.rotationQuaternion = { x: bRot.x, y: bRot.y, z: bRot.z, w: bRot.w };
+        }
+        rootNode.scaling.set(scale.x, scale.y, scale.z);
+    }
+    const hasCab = !!rootNode;
+
+    const leftX = bay.boundary?.left?.planeCoordMm ?? (bay.centerWorldMm.x - bay.boundsMm.width / 2);
+    const rightX = bay.boundary?.right?.planeCoordMm ?? (bay.centerWorldMm.x + bay.boundsMm.width / 2);
+    const bottomZ = bay.boundary?.bottom?.planeCoordMm ?? (bay.centerWorldMm.z - bay.boundsMm.height / 2);
+    const topZ = bay.boundary?.top?.planeCoordMm ?? (bay.centerWorldMm.z + bay.boundsMm.height / 2);
+    const frontY = bay.boundary?.frontPlaneYMm ?? (bay.boundary?.front?.planeCoordMm ?? (bay.centerWorldMm.y - bay.boundsMm.depth / 2));
+    const backY = bay.boundary?.back?.planeCoordMm ?? (bay.centerWorldMm.y + bay.boundsMm.depth / 2);
+
+    const cx = hasCab ? (leftX + rightX) / 2 : bay.centerWorldMm.x;
+    const cy = hasCab ? (frontY + backY) / 2 : bay.centerWorldMm.y;
+    const cz = hasCab ? (bottomZ + topZ) / 2 : bay.centerWorldMm.z;
+    const bw = Math.max(1, (hasCab ? Math.abs(rightX - leftX) : bay.boundsMm.width) - 2);
+    const bh = Math.max(1, (hasCab ? Math.abs(topZ - bottomZ) : bay.boundsMm.height) - 2);
+    const bd = Math.max(1, (hasCab ? Math.abs(backY - frontY) : bay.boundsMm.depth) - 2);
 
     const roofAngleDeg = bay.roofAngleDeg ?? bay.boundary?.top?.slopeAngleDeg;
     const isSlopedLR = (roofAngleDeg !== undefined && Math.abs(roofAngleDeg) > 0.05) || bay.heightLeftMm !== undefined;
     const tanBeta = roofAngleDeg ? Math.tan(((roofAngleDeg || 0) * Math.PI) / 180) : 0;
 
-    const bottomZ = bay.boundary?.bottom?.planeCoordMm ?? (cz - bh / 2);
-    const topZ = bay.boundary?.top?.planeCoordMm ?? (cz + bh / 2);
     const yBot = bottomZ + 1.5;
     const topZCenter = topZ - 1.5;
 
@@ -101,13 +132,17 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
             vertexData.normals = normals;
         }
         vertexData.applyToMesh(volumeMesh);
+        volumeMesh.parent = rootNode;
         volumeMesh.material = volMat;
         volumeMesh.isPickable = false;
         if (typeof volumeMesh.enableEdgesRendering === 'function') {
             volumeMesh.enableEdgesRendering(0.9999);
             volumeMesh.edgesWidth = 2.5;
             const ColorClass = B.Color4 || B.Color3;
-            volumeMesh.edgesColor = new ColorClass(1.0, 0.1, 0.85, 0.85);
+            volumeMesh.edgesColor = new ColorClass(1.0, 0.1, 0.85, 0.95);
+            if (volumeMesh.edgesRenderer?.lineShader) {
+                volumeMesh.edgesRenderer.lineShader.zOffset = -2.5;
+            }
         }
         offsetPlaneMeshes.push(volumeMesh);
     } else if (typeof B.MeshBuilder?.CreateBox === 'function') {
@@ -116,6 +151,7 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
             height: bh,
             depth: bd
         }, scene);
+        volumeBox.parent = rootNode;
         volumeBox.material = volMat;
         volumeBox.isPickable = false;
         volumeBox.position.x = cx;
@@ -125,7 +161,10 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
             volumeBox.enableEdgesRendering(0.9999);
             volumeBox.edgesWidth = 2.5;
             const ColorClass = B.Color4 || B.Color3;
-            volumeBox.edgesColor = new ColorClass(1.0, 0.1, 0.85, 0.85);
+            volumeBox.edgesColor = new ColorClass(1.0, 0.1, 0.85, 0.95);
+            if (volumeBox.edgesRenderer?.lineShader) {
+                volumeBox.edgesRenderer.lineShader.zOffset = -2.5;
+            }
         }
         offsetPlaneMeshes.push(volumeBox);
     }
@@ -141,6 +180,7 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
 
         const makePlane = (name: string, width: number, height: number, posX: number, posY: number, posZ: number, rotX: number, rotY: number) => {
             const p = B.MeshBuilder.CreatePlane(name, { width: Math.max(1, width), height: Math.max(1, height) }, scene);
+            p.parent = rootNode;
             p.material = planeMat;
             p.isPickable = false;
             p.position.x = posX;
@@ -163,6 +203,7 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
                 0, 2, 1, 0, 3, 2
             ];
             const planeMesh = new B.Mesh(name, scene);
+            planeMesh.parent = rootNode;
             const vertexData = new B.VertexData();
             vertexData.positions = positions;
             vertexData.indices = indices;
@@ -178,56 +219,57 @@ export function highlightBayInScene(scene: any, bay: DetectedBay): void {
         };
 
         // Dół (Bottom) — normalna skierowana w górę (+Y w Babylon)
-        if (bay.boundary.bottom?.planeCoordMm !== undefined) {
-            makePlane('blok_plane_bottom', bw, bd, cx, bay.boundary.bottom.planeCoordMm + 1.5, cy, Math.PI / 2, 0);
+        if (bottomZ !== undefined) {
+            makePlane('blok_plane_bottom', bw, bd, cx, bottomZ + 1.5, cy, Math.PI / 2, 0);
         }
 
         // Góra (Top) — normalna skierowana w dół (-Y w Babylon) lub skośna pod kątem dachu
-        if (bay.boundary.top?.planeCoordMm !== undefined) {
+        if (topZ !== undefined) {
             if (isSlopedLR && roofAngleDeg && typeof B.Quaternion?.RotationAxis === 'function') {
                 const betaRad = (roofAngleDeg * Math.PI) / 180;
                 const cosBeta = Math.abs(Math.cos(betaRad)) || 1;
                 const slopeW = bw / cosBeta;
                 const p = B.MeshBuilder.CreatePlane('blok_plane_top', { width: Math.max(1, slopeW), height: Math.max(1, bd) }, scene);
+                p.parent = rootNode;
                 p.material = planeMat;
                 p.isPickable = false;
                 p.position.x = cx;
-                p.position.y = bay.boundary.top.planeCoordMm - 1.5;
+                p.position.y = topZ - 1.5;
                 p.position.z = cy;
                 const qPitch = B.Quaternion.RotationAxis(new B.Vector3(1, 0, 0), -Math.PI / 2);
                 const qRoll = B.Quaternion.RotationAxis(new B.Vector3(0, 0, 1), betaRad);
                 p.rotationQuaternion = qRoll.multiply(qPitch);
                 offsetPlaneMeshes.push(p);
             } else {
-                makePlane('blok_plane_top', bw, bd, cx, bay.boundary.top.planeCoordMm - 1.5, cy, -Math.PI / 2, 0);
+                makePlane('blok_plane_top', bw, bd, cx, topZ - 1.5, cy, -Math.PI / 2, 0);
             }
         }
 
         // Bok Lewy (Left) — normalna skierowana w prawo (+X w Babylon, do wnętrza szafy)
-        if (bay.boundary.left?.planeCoordMm !== undefined) {
-            makePlane('blok_plane_left', bd, bhLeft, bay.boundary.left.planeCoordMm + 1.5, czLeft, cy, 0, -Math.PI / 2);
+        if (leftX !== undefined) {
+            makePlane('blok_plane_left', bd, bhLeft, leftX + 1.5, czLeft, cy, 0, -Math.PI / 2);
         }
 
         // Bok Prawy (Right) — normalna skierowana w lewo (-X w Babylon, do wnętrza szafy)
-        if (bay.boundary.right?.planeCoordMm !== undefined) {
-            makePlane('blok_plane_right', bd, bhRight, bay.boundary.right.planeCoordMm - 1.5, czRight, cy, 0, Math.PI / 2);
+        if (rightX !== undefined) {
+            makePlane('blok_plane_right', bd, bhRight, rightX - 1.5, czRight, cy, 0, Math.PI / 2);
         }
 
         // Plecy (Back) — docięte do skosu dachu jako trapez w szafkach skośnych lub prostokąt
-        if (bay.boundary.back?.planeCoordMm !== undefined) {
+        if (backY !== undefined) {
             if (isSlopedLR && typeof B.VertexData === 'function') {
-                makeTrapezoidPlane('blok_plane_back', bay.boundary.back.planeCoordMm - 1.5);
+                makeTrapezoidPlane('blok_plane_back', backY - 1.5);
             } else {
-                makePlane('blok_plane_back', bw, bh, cx, cz, bay.boundary.back.planeCoordMm - 1.5, 0, 0);
+                makePlane('blok_plane_back', bw, bh, cx, cz, backY - 1.5, 0, 0);
             }
         }
 
         // Przód (Front) — docięte do skosu dachu jako trapez w szafkach skośnych lub prostokąt
-        if (bay.boundary.frontPlaneYMm !== undefined) {
+        if (frontY !== undefined) {
             if (isSlopedLR && typeof B.VertexData === 'function') {
-                makeTrapezoidPlane('blok_plane_front', bay.boundary.frontPlaneYMm + 1.5);
+                makeTrapezoidPlane('blok_plane_front', frontY + 1.5);
             } else {
-                makePlane('blok_plane_front', bw, bh, cx, cz, bay.boundary.frontPlaneYMm + 1.5, 0, Math.PI);
+                makePlane('blok_plane_front', bw, bh, cx, cz, frontY + 1.5, 0, Math.PI);
             }
         }
     }

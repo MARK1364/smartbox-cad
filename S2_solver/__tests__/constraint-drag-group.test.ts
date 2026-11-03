@@ -287,7 +287,7 @@ describe('odejmowanie DOF podczas dragu (dokument CAD)', () => {
             makeSolverConstraint({
                 id: 'v',
                 bindType: 'VERTEX',
-                anchorA: makeAnchor({ nodeId: a.id, kind: 'VERTEX', cornerIndex: 0 }),
+                anchorA: makeAnchor({ nodeId: a.id, kind: 'VERTEX', cornerIndex: 0, localPointMm: [0, 0, 0] }),
                 anchorB: makeAnchor({ nodeId: b.id, kind: 'VERTEX', cornerIndex: 0 }),
             }),
         ];
@@ -645,6 +645,41 @@ describe('odejmowanie DOF podczas dragu (dokument CAD)', () => {
 
         const wb = worldMm(b);
         expect(wb.r.equals(rot45, 1e-4)).toBe(true);
+
+        drag.end();
+    });
+
+    it('VERTEX_DATUM klamruje tylko oś normalnej (Z), pozwalając na swobodne przesuwanie w płaszczyźnie XY', () => {
+        const document = new ProjectDocument();
+        const a = newCabinet(document);
+        a.setLocalTransform(new Vec3(0, 0, mmToNm(720)), Quat.IDENTITY);
+
+        const constraints = [
+            makeSolverConstraint({
+                id: 'vd_1',
+                bindType: 'VERTEX_DATUM',
+                anchorA: makeAnchor({ nodeId: a.id, kind: 'VERTEX', cornerIndex: 0, localPointMm: [0, 0, 0] }),
+                anchorB: {
+                    kind: 'DATUM',
+                    nodeId: '__DATUM__:Top',
+                    localPointMm: [0, 0, 720],
+                    localNormalMm: [0, 0, 1],
+                } as any,
+            }),
+        ];
+
+        const drag = ConstraintDragGroup.instance;
+        drag.begin(document, a.id, constraints);
+
+        // Przesunięcie w X o +150mm, Y o +80mm, Z o +50mm
+        translateWorldMm(a, 150, 80, 50);
+        drag.propagateTransform(document, a.id);
+
+        const wa = worldMm(a);
+        expect(wa.t.x).toBeCloseTo(150, 0);
+        expect(wa.t.y).toBeCloseTo(80, 0);
+        // Oś Z musi pozostać zaklamrowana na poziomie datum (720mm)
+        expect(wa.t.z).toBeCloseTo(720, 0);
 
         drag.end();
     });

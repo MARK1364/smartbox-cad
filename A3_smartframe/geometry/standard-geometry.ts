@@ -6,7 +6,7 @@
  */
 
 import { rulesMToMm } from '../../A1_core/cad-math/units.js';
-import { readBackEdgeOffset } from '../back-overlap.js';
+import { readBackEdgeOffset, readSurroundingPanelInwardShiftMm } from '../back-overlap.js';
 import { CabinetType, CabinetGeometryPart, BACK_OVERLAP_EPS_MM } from '../smartframe-types.js';
 import {
     resolveCabinetPartThickness,
@@ -90,6 +90,28 @@ export function resolveCabinetPartGeometry(
             const value = ctx.offsets[`${offsetName}_${suffix}`];
             if (value !== undefined && value !== null && Number.isFinite(Number(value))) {
                 return Number(value);
+            }
+        }
+        if (!ctx.offsets) return undefined;
+        const suffixUpper = `_${suffix}`.toUpperCase();
+        const candidateStems = new Set<string>();
+        for (const n of offsetNames) {
+            const u = n.toUpperCase();
+            candidateStems.add(u);
+            candidateStems.add(u.replace(/^(?:DOL_|SRODEK_|GORA_|B_|M_|T_)/, ''));
+            candidateStems.add(u.replace(/\.\d+$/, '').replace(/_\d+$/, ''));
+            candidateStems.add(u.replace(/^(?:DOL_|SRODEK_|GORA_|B_|M_|T_)/, '').replace(/\.\d+$/, '').replace(/_\d+$/, ''));
+        }
+        candidateStems.delete('');
+
+        for (const [k, v] of Object.entries(ctx.offsets)) {
+            if (v === undefined || v === null || !Number.isFinite(Number(v))) continue;
+            const kUpper = k.toUpperCase();
+            if (!kUpper.endsWith(suffixUpper)) continue;
+            const keyStem = kUpper.slice(0, -suffixUpper.length);
+            const cleanStem = keyStem.replace(/\.\d+$/, '').replace(/_\d+$/, '').replace(/^(?:DOL_|SRODEK_|GORA_|B_|M_|T_)/, '');
+            if (candidateStems.has(keyStem) || candidateStems.has(cleanStem)) {
+                return Number(v);
             }
         }
         return undefined;
@@ -300,8 +322,8 @@ export function resolveCabinetPartGeometry(
         const targetLocY = isShortened ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: H + pYPlus + pYMinus, y: targetD + pXMinus + pXPlus, z: thickness },
-            loc: { x: -W / 2 + thickness / 2 + shiftX, y: targetLocY + (pXPlus - pXMinus) / 2 + shiftY, z: H / 2 + (pYPlus - pYMinus) / 2 + shiftZ }
+            dim: { x: Math.max(1, H + pYPlus + pYMinus), y: Math.max(1, targetD + pXMinus + pXPlus), z: thickness },
+            loc: { x: -W / 2 + thickness / 2 - shiftX, y: targetLocY + (pXPlus - pXMinus) / 2 + shiftY, z: H / 2 + (pYPlus - pYMinus) / 2 + shiftZ }
         };
     }
     if (matchedKey === "BOK_P" || matchedKey === "SIDE_RIGHT" || role === "RIGHT_SIDE_PANEL") {
@@ -311,7 +333,7 @@ export function resolveCabinetPartGeometry(
         const targetLocY = isShortened ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: H + pYPlus + pYMinus, y: targetD + pXMinus + pXPlus, z: thickness },
+            dim: { x: Math.max(1, H + pYPlus + pYMinus), y: Math.max(1, targetD + pXMinus + pXPlus), z: thickness },
             loc: { x: W / 2 - thickness / 2 + shiftX, y: targetLocY + (pXPlus - pXMinus) / 2 + shiftY, z: H / 2 + (pYPlus - pYMinus) / 2 + shiftZ }
         };
     }
@@ -322,15 +344,18 @@ export function resolveCabinetPartGeometry(
         const targetLocY = isShortened ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: innerWidth + pYMinus + pYPlus, y: targetD + pXMinus + pXPlus, z: thickness },
+            dim: { x: Math.max(1, innerWidth + pYMinus + pYPlus), y: Math.max(1, targetD + pXMinus + pXPlus), z: thickness },
             loc: { x: midShift + (pYPlus - pYMinus) / 2, y: targetLocY + (pXPlus - pXMinus) / 2, z: thickness / 2 - shiftZ }
         };
     }
     if (matchedKey === "WIENIEC_S" || matchedKey === "SHELF" || role === "SHELF") {
+        const isShortened = (overlapBottom >= thickness - BACK_OVERLAP_EPS_MM || overlapTop >= thickness - BACK_OVERLAP_EPS_MM) && shortenedD > 0;
+        const targetD = isShortened ? shortenedD : D;
+        const targetLocY = isShortened ? shortenedLocY : 0;
         return {
             thickness,
-            dim: { x: innerWidth + pYMinus + pYPlus, y: D + pXMinus + pXPlus, z: thickness },
-            loc: { x: midShift + (pYPlus - pYMinus) / 2, y: (pXPlus - pXMinus) / 2, z: H / 2 + shiftZ }
+            dim: { x: Math.max(1, innerWidth + pYMinus + pYPlus), y: Math.max(1, targetD + pXMinus + pXPlus), z: thickness },
+            loc: { x: midShift + (pYPlus - pYMinus) / 2, y: targetLocY + (pXPlus - pXMinus) / 2, z: H / 2 + shiftZ }
         };
     }
     if (matchedKey === "WIENIEC_G" || matchedKey === "TOP" || role === "TOP_PANEL") {
@@ -340,10 +365,12 @@ export function resolveCabinetPartGeometry(
         if (mode === 'TRAVERSE_H') {
             const trWidth = ctx.szerokosc_trawersu_mm || 80;
             const isFront = !isWieniecGT2;
-            const baseY = isFront ? (-D / 2 + trWidth / 2) : (D / 2 - trWidth / 2);
+            const isRearShortened = !isFront && overlapTop >= thickness - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+            const rearBackY = isRearShortened ? (-D / 2 + shortenedD) : (D / 2);
+            const baseY = isFront ? (-D / 2 + trWidth / 2) : (rearBackY - trWidth / 2);
             return {
                 thickness,
-                dim: { x: innerWidth + pYMinus + pYPlus, y: trWidth + pXMinus + pXPlus, z: thickness },
+                dim: { x: Math.max(1, innerWidth + pYMinus + pYPlus), y: Math.max(1, trWidth + pXMinus + pXPlus), z: thickness },
                 loc: {
                     x: midShift + (pYPlus - pYMinus) / 2,
                     y: baseY + (pXPlus - pXMinus) / 2,
@@ -353,12 +380,14 @@ export function resolveCabinetPartGeometry(
         } else if (mode === 'TRAVERSE_V') {
             const trWidth = ctx.szerokosc_trawersu_mm || 80;
             const isFront = !isWieniecGT2;
-            const baseY = isFront ? (-D / 2 + thickness / 2) : (D / 2 - thickness / 2);
+            const isRearShortened = !isFront && overlapTop >= trWidth - BACK_OVERLAP_EPS_MM && shortenedD > 0;
+            const rearBackY = isRearShortened ? (-D / 2 + shortenedD) : (D / 2);
+            const baseY = isFront ? (-D / 2 + thickness / 2) : (rearBackY - thickness / 2);
             // pX (czerwone gizmo) → szerokość trawersu (dim.z), NIE grubość.
             // Po mapping Y←z, Z←y: thickness = dim.y — musi zostać czystą grubością płyty.
             return {
                 thickness,
-                dim: { x: innerWidth + pYMinus + pYPlus, y: thickness, z: trWidth + pXMinus + pXPlus },
+                dim: { x: Math.max(1, innerWidth + pYMinus + pYPlus), y: thickness, z: Math.max(1, trWidth + pXMinus + pXPlus) },
                 loc: {
                     x: midShift + (pYPlus - pYMinus) / 2,
                     y: baseY + shiftY,
@@ -368,6 +397,12 @@ export function resolveCabinetPartGeometry(
                     mapping: { X: 'x', Y: 'z', Z: 'y' },
                     rotation: [180, 0, 0],
                     faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
+                },
+                edge_banding: {
+                    '+X': { active: false, type_id: 'none' },
+                    '-X': { active: false, type_id: 'none' },
+                    '+Y': { active: true, type_id: '0.008x0.022' },
+                    '-Y': { active: false, type_id: 'none' }
                 }
             };
         } else {
@@ -378,7 +413,7 @@ export function resolveCabinetPartGeometry(
             const targetLocY = isShortened ? shortenedLocY : 0;
             return {
                 thickness,
-                dim: { x: innerWidth + pYMinus + pYPlus, y: targetD + pXMinus + pXPlus, z: thickness },
+                dim: { x: Math.max(1, innerWidth + pYMinus + pYPlus), y: Math.max(1, targetD + pXMinus + pXPlus), z: thickness },
                 loc: { x: midShift + (pYPlus - pYMinus) / 2, y: targetLocY + (pXPlus - pXMinus) / 2, z: H - thickness / 2 + shiftZ }
             };
         }
@@ -394,18 +429,27 @@ export function resolveCabinetPartGeometry(
         const topPlate    = requireCabinetPartThickness("TOP", pfx, ctx.thicknessLookup, ["WIENIEC_G"]);
         // FULL/TRAVERSE_H: wysokość = grubość płyty; TRAVERSE_V: wysokość = szerokość trawersu
         const topOccupy   = resolveTopOccupyHeightMm(ctx, topPlate);
-        const innerH      = H - bottomThick - topOccupy;
 
-        const backW       = innerWidth + overlapLeft + overlapRight;
-        const backH       = innerH + overlapBottom + overlapTop;
+        const inwardLeftMm   = readSurroundingPanelInwardShiftMm(ctx.offsets, '-X', pfx, name);
+        const inwardRightMm  = readSurroundingPanelInwardShiftMm(ctx.offsets, '+X', pfx, name);
+        const inwardBottomMm = readSurroundingPanelInwardShiftMm(ctx.offsets, '-Y', pfx, name);
+        const inwardTopMm    = readSurroundingPanelInwardShiftMm(ctx.offsets, '+Y', pfx, name);
+
+        const effectiveInnerW = innerWidth - inwardLeftMm - inwardRightMm;
+        const effectiveMidX   = midShift + (inwardLeftMm - inwardRightMm) / 2;
+        const effectiveInnerH = (H - bottomThick - topOccupy) - inwardBottomMm - inwardTopMm;
+        const zBottomInner    = bottomThick + inwardBottomMm;
+
+        const backW       = effectiveInnerW + overlapLeft + overlapRight;
+        const backH       = effectiveInnerH + overlapBottom + overlapTop;
         const backY       = D / 2 + thickness / 2 - backOffset + shiftY;
         return {
             thickness,
-            dim: { x: backW, y: thickness, z: backH },
+            dim: { x: Math.max(1, backW), y: thickness, z: Math.max(1, backH) },
             loc: {
-                x: midShift + (overlapRight - overlapLeft) / 2,
+                x: effectiveMidX + (overlapRight - overlapLeft) / 2,
                 y: backY,
-                z: bottomThick - overlapBottom + backH / 2
+                z: zBottomInner - overlapBottom + backH / 2
             }
         };
     }

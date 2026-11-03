@@ -641,6 +641,102 @@ function resolveLiveFaceAnchor(
  * Gdy kotwica ma `sourceNodeId` (kliknięta formatka), ściana jest liczona
  * na formatce i mapowana do LCS korpusu — solver rusza korpus, płyta zostaje.
  */
+function matchChildByGeometry(
+    node: CADNode,
+    candidates: CADNode[],
+    anchor: ConstraintAnchor,
+): CADNode | null {
+    if (!anchor.localNormalMm || !anchor.faceName || candidates.length === 0) {
+        return null;
+    }
+    const targetNormal = anchor.localNormalMm;
+    let bestChild: CADNode | null = null;
+    let bestDist = Infinity;
+    let secondBestDist = Infinity;
+
+    for (const child of candidates) {
+        const testLive = resolveLiveFaceAnchor(node, child, anchor.faceName, null);
+        if (!testLive || !testLive.localNormal) {
+            continue;
+        }
+        const dot =
+            testLive.localNormal[0] * targetNormal[0] +
+            testLive.localNormal[1] * targetNormal[1] +
+            testLive.localNormal[2] * targetNormal[2];
+        if (dot > 0.9) {
+            if (!anchor.localPointMm) {
+                if (bestChild) {
+                    return null;
+                }
+                bestChild = child;
+                continue;
+            }
+            const dist = Math.hypot(
+                testLive.localPointMm[0] - anchor.localPointMm[0],
+                testLive.localPointMm[1] - anchor.localPointMm[1],
+                testLive.localPointMm[2] - anchor.localPointMm[2],
+            );
+            if (dist < bestDist) {
+                secondBestDist = bestDist;
+                bestDist = dist;
+                bestChild = child;
+            } else if (dist < secondBestDist) {
+                secondBestDist = dist;
+            }
+        }
+    }
+
+    if (!anchor.localPointMm) {
+        return bestChild;
+    }
+
+    const TIE_TOLERANCE_MM = 1.0;
+    if (bestChild && secondBestDist === Infinity) {
+        return bestChild;
+    }
+    if (bestChild && secondBestDist - bestDist > TIE_TOLERANCE_MM) {
+        return bestChild;
+    }
+    return null;
+}
+
+export function recoverAnchorSource(node: CADNode, anchor: ConstraintAnchor): CADNode | null {
+    if (!anchor.sourceNodeId || anchor.sourceNodeId === node.id) {
+        return null;
+    }
+    const byId = findDescendant(node, anchor.sourceNodeId);
+    if (byId) {
+        return byId;
+    }
+
+    if (anchor.sourceKey) {
+        const byKey = node.children.find((c) => (c.domainData as any)?.key === anchor.sourceKey);
+        if (byKey) {
+            anchor.sourceNodeId = byKey.id;
+            return byKey;
+        }
+    }
+
+    if (anchor.sourceRole) {
+        const byRole = node.children.filter(
+            (c) => (c.domainData as any)?.role === anchor.sourceRole || (c as any).role === anchor.sourceRole,
+        );
+        if (byRole.length === 1) {
+            anchor.sourceNodeId = byRole[0].id;
+            return byRole[0];
+        }
+        if (byRole.length > 1) {
+            const matched = matchChildByGeometry(node, byRole, anchor);
+            if (matched) {
+                anchor.sourceNodeId = matched.id;
+                return matched;
+            }
+        }
+    }
+
+    return null;
+}
+
 export function resolveAnchor(
     node: CADNode | null,
     anchor: ConstraintAnchor,
@@ -650,7 +746,7 @@ export function resolveAnchor(
         return null;
     }
 
-    const source =
+    let source =
         geomNode && geomNode.id !== node.id
             ? geomNode
             : anchor.sourceNodeId && anchor.sourceNodeId !== node.id
@@ -664,6 +760,10 @@ export function resolveAnchor(
      * dałaby inną ścianę, obróconą względem wyboru użytkownika.
      */
     const declaresSource = Boolean(anchor.sourceNodeId) && anchor.sourceNodeId !== node.id;
+
+    if (!source && declaresSource) {
+        source = recoverAnchorSource(node, anchor);
+    }
 
     if (anchor.kind === 'OBJECT') {
         return { localPointMm: [0, 0, 0], localNormal: null };

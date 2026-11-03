@@ -399,7 +399,7 @@ export function calculateDrawersPlan(
 
     const frontY = -(layout.depth_mm / 2 + layout.grubosc_frontu_mm / 2);
     // Nałożenie L/P liczone od wewnętrznej ściany dystansu (nie od krawędzi Bloku).
-    const frontW = layout.swiatlo_wewnetrzne_mm + layout.nalozenie_lewe_mm + layout.nalozenie_prawe_mm;
+    const frontW = Math.max(10, layout.swiatlo_wewnetrzne_mm + layout.nalozenie_lewe_mm + layout.nalozenie_prawe_mm);
     const frontX = layout.przesuniecie_x_mm + (layout.nalozenie_prawe_mm - layout.nalozenie_lewe_mm) / 2;
 
     for (const slot of layout.slots) {

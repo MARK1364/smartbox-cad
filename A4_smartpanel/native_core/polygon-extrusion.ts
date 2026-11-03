@@ -1,3 +1,4 @@
+import earcut from 'earcut';
 import { computeFaceData, localTo3D } from './face-lcs.js';
 import { getGrooveParamsMm } from '../../A1_core/groove-params.js';
 import { nmToMm, mmToNm } from '../../A1_core/cad-math/units.js';
@@ -165,11 +166,15 @@ export function extractGrooveBoxes(features?: any[], plateW?: number): Extrusion
     for (const f of features) {
         if (!f || (f.type !== 'groove' && f.type !== 'pocket' && f.type !== 'cutout')) continue;
         const gp = getGrooveParamsMm(f.params);
-        const depth = gp.depth || 0;
+        const depth = Math.abs(gp.depth || 0);
         if (depth <= CAD_EPS) continue;
+        const uMin = Math.min(gp.u, gp.u + gp.width);
+        const uMax = Math.max(gp.u, gp.u + gp.width);
+        const vMin = Math.min(gp.v, gp.v + gp.length);
+        const vMax = Math.max(gp.v, gp.v + gp.length);
         const isPlus = !f.face || String(f.face).includes('PLUS');
-        const fu0 = isPlus || plateW === undefined ? gp.u : plateW - (gp.u + gp.width);
-        const fu1 = isPlus || plateW === undefined ? gp.u + gp.width : plateW - gp.u;
+        const fu0 = isPlus || plateW === undefined ? uMin : plateW - uMax;
+        const fu1 = isPlus || plateW === undefined ? uMax : plateW - uMin;
         let polygon: number[][] | undefined;
         if (Array.isArray(f.params?.polygon) && f.params.polygon.length >= 3) {
             polygon = isPlus || plateW === undefined
@@ -179,8 +184,8 @@ export function extractGrooveBoxes(features?: any[], plateW?: number): Extrusion
         boxes.push({
             fu0,
             fu1,
-            fv0: gp.v,
-            fv1: gp.v + gp.length,
+            fv0: vMin,
+            fv1: vMax,
             depth,
             isPlus,
             polygon
@@ -312,6 +317,114 @@ export interface OutlineCapVertices {
     bottomPts: number[][];
 }
 
+/**
+ * 2D-triangulacja wielokąta ściany bocznej formatki podzielonej na podsegmenty o różnych głębokościach wpustów.
+ * Buduje szczelną (2-manifold) siatkę trójkątów bez T-junctions i bez rozcięć współpłaszczyznowych.
+ */
+export function triangulateWallSubsegs(
+    u0: number, v0: number,
+    u1: number, v1: number,
+    thickness: number,
+    subsegs: OutlineSubSegment[],
+    localPointFn: (u: number, v: number, depth: number) => number[]
+): { positions: number[]; indices: number[]; vertices: number[][] } {
+    const L = Math.hypot(u1 - u0, v1 - v0);
+    if (L < 1e-4) return { positions: [], indices: [], vertices: [] };
+
+    if (subsegs.length === 1 && subsegs[0].depthPlus < 1e-4 && subsegs[0].depthMinus < 1e-4) {
+        const p0t = localPointFn(u0, v0, 0);
+        const p1t = localPointFn(u1, v1, 0);
+        const p1b = localPointFn(u1, v1, thickness);
+        const p0b = localPointFn(u0, v0, thickness);
+        return {
+            positions: [...p0t, ...p1t, ...p1b, ...p0b],
+            indices: [0, 2, 1, 0, 3, 2],
+            vertices: [p0t, p0b, p1t, p1b]
+        };
+    }
+
+    const poly2D: Array<[number, number]> = [];
+    const eps = 1e-4;
+
+    // 1. Profil górny (t: 0 -> L, wzdłuż lica Z+)
+    for (let s = 0; s < subsegs.length; s++) {
+        const sub = subsegs[s];
+        const t0 = Math.hypot(sub.u0 - u0, sub.v0 - v0);
+        const t1 = Math.hypot(sub.u1 - u0, sub.v1 - v0);
+        const dTop = Math.max(0, Math.min(thickness - eps, sub.depthPlus));
+
+        if (s > 0) {
+            const prevDTop = Math.max(0, Math.min(thickness - eps, subsegs[s - 1].depthPlus));
+            if (Math.abs(dTop - prevDTop) > eps) {
+                poly2D.push([t0, dTop]);
+            }
+        } else if (poly2D.length === 0) {
+            poly2D.push([t0, dTop]);
+        }
+        poly2D.push([t1, dTop]);
+    }
+
+    // 2. Uskok na prawym końcu: przejście z dTop_last do dBot_last
+    const lastSub = subsegs[subsegs.length - 1];
+    const lastDBot = Math.max(eps, Math.min(thickness, thickness - lastSub.depthMinus));
+    if (Math.abs(lastDBot - poly2D[poly2D.length - 1][1]) > eps) {
+        poly2D.push([L, lastDBot]);
+    }
+
+    // 3. Profil dolny (t: L -> 0, wstecz, wzdłuż lica Z-)
+    for (let s = subsegs.length - 1; s >= 0; s--) {
+        const sub = subsegs[s];
+        const t0 = Math.hypot(sub.u0 - u0, sub.v0 - v0);
+        const t1 = Math.hypot(sub.u1 - u0, sub.v1 - v0);
+        const dBot = Math.max(eps, Math.min(thickness, thickness - sub.depthMinus));
+
+        if (s < subsegs.length - 1) {
+            const nextDBot = Math.max(eps, Math.min(thickness, thickness - subsegs[s + 1].depthMinus));
+            if (Math.abs(dBot - nextDBot) > eps) {
+                poly2D.push([t1, dBot]);
+            }
+        }
+        poly2D.push([t0, dBot]);
+    }
+
+    const cleaned: Array<[number, number]> = [];
+    for (let i = 0; i < poly2D.length; i++) {
+        const pt = poly2D[i];
+        if (cleaned.length === 0) {
+            cleaned.push(pt);
+            continue;
+        }
+        const last = cleaned[cleaned.length - 1];
+        if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) > eps) {
+            cleaned.push(pt);
+        }
+    }
+    if (cleaned.length > 2 && Math.hypot(cleaned[0][0] - cleaned[cleaned.length - 1][0], cleaned[0][1] - cleaned[cleaned.length - 1][1]) < eps) {
+        cleaned.pop();
+    }
+
+    const flat2D: number[] = [];
+    const positions: number[] = [];
+    const vertices: number[][] = [];
+    for (const [t, d] of cleaned) {
+        flat2D.push(t, d);
+        const frac = L > eps ? t / L : 0;
+        const u = u0 + frac * (u1 - u0);
+        const v = v0 + frac * (v1 - v0);
+        const pt3D = localPointFn(u, v, d);
+        positions.push(...pt3D);
+        vertices.push(pt3D);
+    }
+
+    const rawIndices = earcut(flat2D);
+    const indices: number[] = [];
+    for (let i = 0; i < rawIndices.length; i += 3) {
+        indices.push(rawIndices[i], rawIndices[i + 2], rawIndices[i + 1]);
+    }
+
+    return { positions, indices, vertices };
+}
+
 export function computeOutlineCapVertices(
     outline2d: number[][],
     plateW: number,
@@ -354,35 +467,62 @@ function buildOutlineWalls(
         return splitSegmentByGrooves(u0, v0, u1, v1, grooveBoxes);
     });
 
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+    for (const [u, v] of normalizedOutline) {
+        if (u < minU) minU = u;
+        if (u > maxU) maxU = u;
+        if (v < minV) minV = v;
+        if (v > maxV) maxV = v;
+    }
+    const spanU = Math.max(CAD_EPS, maxU - minU);
+    const spanV = Math.max(CAD_EPS, maxV - minV);
+
     for (let i = 0; i < n; i++) {
         const next = (i + 1) % n;
         const [u0, v0] = normalizedOutline[i];
         const [u1, v1] = normalizedOutline[next];
-        const edgeKey = classifyOutlineSegmentEdge(u0, v0, u1, v1, plateW, plateD);
+        const edgeKey = classifyOutlineSegmentEdge(
+            u0 - minU,
+            v0 - minV,
+            u1 - minU,
+            v1 - minV,
+            spanU,
+            spanV
+        );
         const subsegs = allSubsegs[i];
 
         const prevIdx = (i - 1 + n) % n;
         const prevSubsegs = allSubsegs[prevIdx];
         const prevLastSub = prevSubsegs[prevSubsegs.length - 1];
 
-        const pos: number[] = [];
-        const ind: number[] = [];
-        let vertOffset = 0;
+        // 2D triangulacja ściany bocznej — szczelna siatka bez T-junctions
+        const wallMesh = triangulateWallSubsegs(
+            u0, v0, u1, v1, thickness, subsegs,
+            (u, v, d) => localTo3D(facePlus, u, v, d)
+        );
+        allVertices.push(...wallMesh.vertices);
+        sides[`OUTLINE_SIDE_${i}`] = {
+            positions: wallMesh.positions,
+            indices: wallMesh.indices,
+            edgeKey
+        };
 
-        for (let sIdx = 0; sIdx < subsegs.length; sIdx++) {
-            const sub = subsegs[sIdx];
-            const p0t = localTo3D(facePlus, sub.u0, sub.v0, sub.depthPlus);
-            const p1t = localTo3D(facePlus, sub.u1, sub.v1, sub.depthPlus);
-            const p0b = localTo3D(faceMinus, faceMinus.width - sub.u0, sub.v0, sub.depthMinus);
-            const p1b = localTo3D(faceMinus, faceMinus.width - sub.u1, sub.v1, sub.depthMinus);
-
-            pos.push(...p0t, ...p1t, ...p1b, ...p0b);
-            ind.push(vertOffset, vertOffset + 2, vertOffset + 1, vertOffset, vertOffset + 3, vertOffset + 2);
-            vertOffset += 4;
-
-            const suffix = subsegs.length > 1 ? `_${vertOffset}` : '';
-            
-            // Krawędzie górna (Z+) i dolna (Z-) z przypisanym sąsiedztwem ścian i stabilnymi aliasami
+        // Krawędzie górne (Z+) - scalanie podsegmentów o równej głębokości depthPlus
+        const topGroups: Array<{ u0: number; v0: number; u1: number; v1: number; depthPlus: number }> = [];
+        for (const sub of subsegs) {
+            const last = topGroups[topGroups.length - 1];
+            if (last && Math.abs(last.depthPlus - sub.depthPlus) <= CAD_EPS) {
+                last.u1 = sub.u1;
+                last.v1 = sub.v1;
+            } else {
+                topGroups.push({ u0: sub.u0, v0: sub.v0, u1: sub.u1, v1: sub.v1, depthPlus: sub.depthPlus });
+            }
+        }
+        for (let gIdx = 0; gIdx < topGroups.length; gIdx++) {
+            const grp = topGroups[gIdx];
+            const p0t = localTo3D(facePlus, grp.u0, grp.v0, grp.depthPlus);
+            const p1t = localTo3D(facePlus, grp.u1, grp.v1, grp.depthPlus);
+            const suffix = topGroups.length > 1 ? `_${gIdx + 1}` : '';
             const topEdgeData: BrepEdgeData = {
                 key: `outline_top_${i}${suffix}`,
                 points: [p0t, p1t],
@@ -394,7 +534,24 @@ function buildOutlineWalls(
             else if (edgeKey === '-X') topEdgeData.alias = 'przod_lewo';
             else if (edgeKey === '+X') topEdgeData.alias = 'przod_prawo';
             edges.push(topEdgeData);
+        }
 
+        // Krawędzie dolne (Z-) - scalanie podsegmentów o równej głębokości depthMinus
+        const botGroups: Array<{ u0: number; v0: number; u1: number; v1: number; depthMinus: number }> = [];
+        for (const sub of subsegs) {
+            const last = botGroups[botGroups.length - 1];
+            if (last && Math.abs(last.depthMinus - sub.depthMinus) <= CAD_EPS) {
+                last.u1 = sub.u1;
+                last.v1 = sub.v1;
+            } else {
+                botGroups.push({ u0: sub.u0, v0: sub.v0, u1: sub.u1, v1: sub.v1, depthMinus: sub.depthMinus });
+            }
+        }
+        for (let gIdx = 0; gIdx < botGroups.length; gIdx++) {
+            const grp = botGroups[gIdx];
+            const p0b = localTo3D(faceMinus, faceMinus.width - grp.u0, grp.v0, grp.depthMinus);
+            const p1b = localTo3D(faceMinus, faceMinus.width - grp.u1, grp.v1, grp.depthMinus);
+            const suffix = botGroups.length > 1 ? `_${gIdx + 1}` : '';
             const botEdgeData: BrepEdgeData = {
                 key: `outline_bottom_${i}${suffix}`,
                 points: [p0b, p1b],
@@ -406,88 +563,82 @@ function buildOutlineWalls(
             else if (edgeKey === '-X') botEdgeData.alias = 'tyl_lewo';
             else if (edgeKey === '+X') botEdgeData.alias = 'tyl_prawo';
             edges.push(botEdgeData);
-
-            // Krawędź pionowa narożnika obrysu: na wierzchołku narożnika (sIdx === 0)
-            if (sIdx === 0) {
-                let pCornerPoints: number[][];
-                if (prevLastSub) {
-                    const cornerDepthPlus = Math.max(prevLastSub.depthPlus, sub.depthPlus);
-                    const cornerDepthMinus = Math.max(prevLastSub.depthMinus, sub.depthMinus);
-                    const pCornert = localTo3D(facePlus, sub.u0, sub.v0, cornerDepthPlus);
-                    const pCornerb = localTo3D(faceMinus, faceMinus.width - sub.u0, sub.v0, cornerDepthMinus);
-                    pCornerPoints = [pCornert, pCornerb];
-                } else {
-                    pCornerPoints = [p0t, p0b];
-                }
-
-                // Sprawdzenie leżenia wierzchołka narożnika na jednym z 4 nominalnych rogów formatki
-                const isNearX0 = Math.abs(sub.u0) <= CAD_EPS_BOUND;
-                const isNearXW = Math.abs(sub.u0 - plateW) <= CAD_EPS_BOUND;
-                const isNearY0 = Math.abs(sub.v0) <= CAD_EPS_BOUND;
-                const isNearYH = Math.abs(sub.v0 - plateD) <= CAD_EPS_BOUND;
-
-                let vertAlias: string | undefined;
-                let vertFaces: [string, string] = [`OUTLINE_SIDE_${prevIdx}`, `OUTLINE_SIDE_${i}`];
-
-                if (isNearX0 && isNearY0) {
-                    vertAlias = 'dol_lewo';
-                    vertFaces = ['FACE_X_MINUS', 'FACE_Y_MINUS'];
-                } else if (isNearXW && isNearY0) {
-                    vertAlias = 'dol_prawo';
-                    vertFaces = ['FACE_X_PLUS', 'FACE_Y_MINUS'];
-                } else if (isNearX0 && isNearYH) {
-                    vertAlias = 'gora_lewo';
-                    vertFaces = ['FACE_X_MINUS', 'FACE_Y_PLUS'];
-                } else if (isNearXW && isNearYH) {
-                    vertAlias = 'gora_prawo';
-                    vertFaces = ['FACE_X_PLUS', 'FACE_Y_PLUS'];
-                }
-
-                edges.push({
-                    key: `outline_vert_${i}${suffix}`,
-                    points: pCornerPoints,
-                    faces: vertFaces,
-                    edgeKey,
-                    ...(vertAlias ? { alias: vertAlias } : {})
-                });
-            } else {
-                // Na wewnętrznym łączeniu podsegmentów (uskok schodka):
-                // Krawędź pionowa istnieje TYLKO wzdłuż uskoku (np. 11 mm od lica do dna wpustu).
-                const prevSub = subsegs[sIdx - 1];
-                const dPlus0 = Math.min(prevSub.depthPlus, sub.depthPlus);
-                const dPlus1 = Math.max(prevSub.depthPlus, sub.depthPlus);
-                if (dPlus1 - dPlus0 > CAD_EPS) {
-                    const pStepT0 = localTo3D(facePlus, sub.u0, sub.v0, dPlus0);
-                    const pStepT1 = localTo3D(facePlus, sub.u0, sub.v0, dPlus1);
-                    edges.push({
-                        key: `outline_step_top_${i}${suffix}`,
-                        points: [pStepT0, pStepT1],
-                        faces: ['FACE_Z_PLUS', `OUTLINE_SIDE_${i}`],
-                        edgeKey
-                    });
-                }
-                const dMinus0 = Math.min(prevSub.depthMinus, sub.depthMinus);
-                const dMinus1 = Math.max(prevSub.depthMinus, sub.depthMinus);
-                if (dMinus1 - dMinus0 > CAD_EPS) {
-                    const pStepB0 = localTo3D(faceMinus, faceMinus.width - sub.u0, sub.v0, dMinus0);
-                    const pStepB1 = localTo3D(faceMinus, faceMinus.width - sub.u0, sub.v0, dMinus1);
-                    edges.push({
-                        key: `outline_step_bot_${i}${suffix}`,
-                        points: [pStepB0, pStepB1],
-                        faces: ['FACE_Z_MINUS', `OUTLINE_SIDE_${i}`],
-                        edgeKey
-                    });
-                }
-            }
-
-            allVertices.push(p0t, p0b);
         }
 
-        sides[`OUTLINE_SIDE_${i}`] = {
-            positions: pos,
-            indices: ind,
-            edgeKey
-        };
+        // Krawędź pionowa narożnika obrysu: na wierzchołku narożnika
+        const firstSub = subsegs[0];
+        let pCornerPoints: number[][];
+        if (prevLastSub) {
+            const cornerDepthPlus = Math.max(prevLastSub.depthPlus, firstSub.depthPlus);
+            const cornerDepthMinus = Math.max(prevLastSub.depthMinus, firstSub.depthMinus);
+            const pCornert = localTo3D(facePlus, firstSub.u0, firstSub.v0, cornerDepthPlus);
+            const pCornerb = localTo3D(faceMinus, faceMinus.width - firstSub.u0, firstSub.v0, cornerDepthMinus);
+            pCornerPoints = [pCornert, pCornerb];
+        } else {
+            const p0t = localTo3D(facePlus, firstSub.u0, firstSub.v0, firstSub.depthPlus);
+            const p0b = localTo3D(faceMinus, faceMinus.width - firstSub.u0, firstSub.v0, firstSub.depthMinus);
+            pCornerPoints = [p0t, p0b];
+        }
+
+        const isNearX0 = Math.abs(firstSub.u0) <= CAD_EPS_BOUND;
+        const isNearXW = Math.abs(firstSub.u0 - plateW) <= CAD_EPS_BOUND;
+        const isNearY0 = Math.abs(firstSub.v0) <= CAD_EPS_BOUND;
+        const isNearYH = Math.abs(firstSub.v0 - plateD) <= CAD_EPS_BOUND;
+
+        let vertAlias: string | undefined;
+        let vertFaces: [string, string] = [`OUTLINE_SIDE_${prevIdx}`, `OUTLINE_SIDE_${i}`];
+
+        if (isNearX0 && isNearY0) {
+            vertAlias = 'dol_lewo';
+            vertFaces = ['FACE_X_MINUS', 'FACE_Y_MINUS'];
+        } else if (isNearXW && isNearY0) {
+            vertAlias = 'dol_prawo';
+            vertFaces = ['FACE_X_PLUS', 'FACE_Y_MINUS'];
+        } else if (isNearX0 && isNearYH) {
+            vertAlias = 'gora_lewo';
+            vertFaces = ['FACE_X_MINUS', 'FACE_Y_PLUS'];
+        } else if (isNearXW && isNearYH) {
+            vertAlias = 'gora_prawo';
+            vertFaces = ['FACE_X_PLUS', 'FACE_Y_PLUS'];
+        }
+
+        edges.push({
+            key: `outline_vert_${i}`,
+            points: pCornerPoints,
+            faces: vertFaces,
+            edgeKey,
+            ...(vertAlias ? { alias: vertAlias } : {})
+        });
+
+        // Uskoki schodka na łączeniach podsegmentów
+        for (let sIdx = 1; sIdx < subsegs.length; sIdx++) {
+            const prevSub = subsegs[sIdx - 1];
+            const sub = subsegs[sIdx];
+            const dPlus0 = Math.min(prevSub.depthPlus, sub.depthPlus);
+            const dPlus1 = Math.max(prevSub.depthPlus, sub.depthPlus);
+            if (dPlus1 - dPlus0 > CAD_EPS) {
+                const pStepT0 = localTo3D(facePlus, sub.u0, sub.v0, dPlus0);
+                const pStepT1 = localTo3D(facePlus, sub.u0, sub.v0, dPlus1);
+                edges.push({
+                    key: `outline_step_top_${i}_${sIdx}`,
+                    points: [pStepT0, pStepT1],
+                    faces: ['FACE_Z_PLUS', `OUTLINE_SIDE_${i}`],
+                    edgeKey
+                });
+            }
+            const dMinus0 = Math.min(prevSub.depthMinus, sub.depthMinus);
+            const dMinus1 = Math.max(prevSub.depthMinus, sub.depthMinus);
+            if (dMinus1 - dMinus0 > CAD_EPS) {
+                const pStepB0 = localTo3D(faceMinus, faceMinus.width - sub.u0, sub.v0, dMinus0);
+                const pStepB1 = localTo3D(faceMinus, faceMinus.width - sub.u0, sub.v0, dMinus1);
+                edges.push({
+                    key: `outline_step_bot_${i}_${sIdx}`,
+                    points: [pStepB0, pStepB1],
+                    faces: ['FACE_Z_MINUS', `OUTLINE_SIDE_${i}`],
+                    edgeKey
+                });
+            }
+        }
     }
 
     return { sides, edges, vertices: allVertices };
@@ -504,7 +655,8 @@ export interface PolygonExtrusionInput {
 }
 
 export function buildPolygonPanelTopology(input: PolygonExtrusionInput): Record<string, any> {
-    const { plateW, plateD, thickness, features, fillet_mm } = input;
+    const { plateW, plateD, features, fillet_mm } = input;
+    const thickness = Math.max(0.1, Math.abs(input.thickness));
     let outline2d = input.outline2d;
     if (input.outline2d_nm && Array.isArray(input.outline2d_nm) && input.outline2d_nm.length >= 3) {
         outline2d = input.outline2d_nm.map(([unm, vnm]) => [nmToMm(unm), nmToMm(vnm)]);

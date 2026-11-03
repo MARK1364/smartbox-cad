@@ -81,6 +81,7 @@ export class PanelModel {
     cncPrograms: any[];
     _nextId: number;
     _listeners: Set<Function>;
+    key?: string;
     zoneId?: string;
     zonePrefix?: string;
     type: string = 'part';
@@ -93,6 +94,10 @@ export class PanelModel {
     materialCode: string = 'W1100 ST9';
     color: { r: number; g: number; b: number; a?: number } = { r: 0.95, g: 0.95, b: 0.95 };
     edgeBanding: Record<string, any> = {};
+    /** Obrzeże nadane ręcznie (SetEdgeBandingCommand) — regeneracja korpusu go nie nadpisuje. */
+    edgeBandingUserDefined: boolean = false;
+    /** Nazwa nadana ręcznie przez użytkownika w drzewie sceny — regeneracja korpusu jej nie nadpisuje. */
+    nameUserDefined: boolean = false;
     custom_properties: Record<string, any> = {};
     /** Klasyfikacja raportowa z planu ('plyty' | 'akcesoria') — strukturalna, nie display. */
     report_type?: string;
@@ -123,6 +128,7 @@ export class PanelModel {
         materialCode = "W1100 ST9",
         color = { r: 0.95, g: 0.95, b: 0.95 },
         engineManaged = true,
+        key = undefined as string | undefined,
         zoneId = undefined as string | undefined,
         zonePrefix = undefined as string | undefined,
         id: providedId = undefined as string | undefined,
@@ -139,7 +145,8 @@ export class PanelModel {
         materialCode?: string;
         color?: { r: number; g: number; b: number };
         engineManaged?: boolean;
-        zoneId?: string;
+        key?: string;
+    zoneId?: string;
         zonePrefix?: string;
         id?: string;
     }) {
@@ -194,6 +201,7 @@ export class PanelModel {
             this.zoneId = zoneId;
             this.custom_properties.zone = zoneId;
         }
+        if (key !== undefined) this.key = key;
         if (zonePrefix !== undefined) this.zonePrefix = zonePrefix;
 
         this.name = name;
@@ -219,16 +227,19 @@ export class PanelModel {
 
     // ─── Dimensions ──────────────────────────────────
 
-    setDimensions(width, height, thickness) {
-        if (this.width === width && this.height === height && this.thickness === thickness) return;
-        this.width = width;
-        this.height = height;
-        this.thickness = thickness;
+    setDimensions(width: number, height: number, thickness: number) {
+        const safeW = Math.max(mmToNm(1), Number(width) || mmToNm(1));
+        const safeH = Math.max(mmToNm(1), Number(height) || mmToNm(1));
+        const safeT = Math.max(mmToNm(1), Number(thickness) || mmToNm(1));
+        if (this.width === safeW && this.height === safeH && this.thickness === safeT) return;
+        this.width = safeW;
+        this.height = safeH;
+        this.thickness = safeT;
         // Grubość geometryczna jest SSOT — nie zależy od SKU materiału.
         // custom_properties.thickness_mm trzymamy w sync (korpus/bloki czytają stąd).
         if (!this.custom_properties) this.custom_properties = {};
-        this.custom_properties.thickness_mm = nmToMm(thickness);
-        this._emit('dimensions', { width, height, thickness });
+        this.custom_properties.thickness_mm = nmToMm(safeT);
+        this._emit('dimensions', { width: safeW, height: safeH, thickness: safeT });
     }
 
     // ─── Native LCS (Local Coordinate System) ─────────
@@ -550,9 +561,14 @@ export class PanelModel {
             materialCode: this.materialCode,
             color: this.color,
             edgeBanding: this.edgeBanding,
+            ...(this.edgeBandingUserDefined ? { edgeBandingUserDefined: true } : {}),
+            ...(this.nameUserDefined ? { nameUserDefined: true } : {}),
             custom_properties: this.custom_properties,
             ...(this.report_type !== undefined ? { report_type: this.report_type } : {}),
             ...(this.library_id !== undefined ? { library_id: this.library_id } : {}),
+            ...(this.key !== undefined ? { key: this.key } : {}),
+            ...(this.zoneId !== undefined ? { zoneId: this.zoneId } : {}),
+            ...(this.zonePrefix !== undefined ? { zonePrefix: this.zonePrefix } : {}),
             engineManaged: this.engineManaged,
             associativeDims: this.associativeDims,
             panelForm: this.panelForm,
@@ -581,9 +597,18 @@ export class PanelModel {
 
     fromJSON(data: any) {
         if (!data) return;
-        if (data.width != null) this.width = data.width;
-        if (data.height != null) this.height = data.height;
-        if (data.thickness != null) this.thickness = data.thickness;
+        if (data.width != null) {
+            const w = Number(data.width);
+            this.width = (Number.isFinite(w) && w > 0) ? w : Math.max(mmToNm(10), Math.abs(w) || mmToNm(600));
+        }
+        if (data.height != null) {
+            const h = Number(data.height);
+            this.height = (Number.isFinite(h) && h > 0) ? h : Math.max(mmToNm(10), Math.abs(h) || mmToNm(720));
+        }
+        if (data.thickness != null) {
+            const t = Number(data.thickness);
+            this.thickness = (Number.isFinite(t) && t > 0) ? t : Math.max(mmToNm(1), Math.abs(t) || mmToNm(18));
+        }
         if (data.name != null) this.name = data.name;
         if (data.role != null) this.role = data.role;
         if (data.projectName != null) this.projectName = data.projectName;
@@ -592,9 +617,14 @@ export class PanelModel {
         if (data.materialCode != null) this.materialCode = data.materialCode;
         if (data.color != null) this.color = data.color;
         if (data.edgeBanding != null) this.edgeBanding = data.edgeBanding;
+        if (data.edgeBandingUserDefined != null) this.edgeBandingUserDefined = data.edgeBandingUserDefined === true;
+        if (data.nameUserDefined != null) this.nameUserDefined = data.nameUserDefined === true;
         if (data.custom_properties != null) this.custom_properties = data.custom_properties;
         if (data.report_type != null) this.report_type = data.report_type;
         if (data.library_id != null) this.library_id = data.library_id;
+        if (data.key != null) this.key = data.key;
+        if (data.zoneId != null) this.zoneId = data.zoneId;
+        if (data.zonePrefix != null) this.zonePrefix = data.zonePrefix;
         if (data.engineManaged != null) this.engineManaged = data.engineManaged !== false;
         if (data.associativeDims !== undefined) this.associativeDims = data.associativeDims;
         if (data.panelForm) this.panelForm = data.panelForm;
@@ -613,10 +643,20 @@ export class PanelModel {
     }
 
     static fromJSON(data: any) {
+        const rawW = typeof data?.width === 'number' && Number.isFinite(data.width) && data.width > 0
+            ? data.width
+            : Math.max(mmToNm(10), Math.abs(Number(data?.width) || 0) || mmToNm(600));
+        const rawH = typeof data?.height === 'number' && Number.isFinite(data.height) && data.height > 0
+            ? data.height
+            : Math.max(mmToNm(10), Math.abs(Number(data?.height) || 0) || mmToNm(720));
+        const rawT = typeof data?.thickness === 'number' && Number.isFinite(data.thickness) && data.thickness > 0
+            ? data.thickness
+            : Math.max(mmToNm(1), Math.abs(Number(data?.thickness) || 0) || mmToNm(18));
+
         const panel = new PanelModel({
-            width: data.width,
-            height: data.height,
-            thickness: data.thickness,
+            width: rawW,
+            height: rawH,
+            thickness: rawT,
             role: data.role,
             name: data.name,
             materialId: data.materialId,
@@ -625,7 +665,7 @@ export class PanelModel {
             color: data.color,
             id: data.id
         });
-        panel.fromJSON(data);
+        panel.fromJSON({ ...data, width: rawW, height: rawH, thickness: rawT });
         return panel;
     }
 
@@ -638,6 +678,7 @@ export class PanelModel {
         this.projectName = data.projectName || "Projekt";
         this.name = data.name || defaultPanelName();
         this.role = data.role || this.role;
+        this.nameUserDefined = data.nameUserDefined === true;
         this.width = data.width;
         this.height = data.height;
         this.thickness = data.thickness;
@@ -646,7 +687,11 @@ export class PanelModel {
         if (data.materialCode) this.materialCode = data.materialCode;
         if (data.color) this.color = data.color;
         if (data.edgeBanding) this.edgeBanding = data.edgeBanding;
+        this.edgeBandingUserDefined = data.edgeBandingUserDefined === true;
         if (data.custom_properties) this.custom_properties = data.custom_properties;
+        this.key = data.key;
+        this.zoneId = data.zoneId;
+        this.zonePrefix = data.zonePrefix;
         if (data.report_type !== undefined) this.report_type = data.report_type;
         if (data.library_id !== undefined) this.library_id = data.library_id;
         if (data.engineManaged != null) this.engineManaged = data.engineManaged !== false;
@@ -698,4 +743,22 @@ export class PanelModel {
 /** Type guard klasy PanelModel (A4) — nie mylić z A1 `isPanelLike`. */
 export function isPanelModel(data: any): data is PanelModel {
     return !!data && (data instanceof PanelModel || data.type === 'part' || data.type === 'panel');
+}
+
+export function computePanelFeaturesFingerprint(panel: any): string {
+    const f = panel?.features;
+    const fCount = f?.length || 0;
+    const featPart = fCount === 0
+        ? '0'
+        : `${fCount}_` + f.map((feat: any) => {
+            const p = feat.params;
+            return p
+                ? `${feat.id}_${p.u ?? p.x}_${p.v ?? p.y}_${p.width}_${p.length ?? p.height}_${p.depth}_${p.diameter}`
+                : feat.id;
+        }).join(';');
+    const outline = panel?.custom_properties?.outline2d;
+    const outlinePart = Array.isArray(outline) && outline.length > 0
+        ? `_o:${outline.map((pt: any) => Array.isArray(pt) ? `${pt[0]},${pt[1]}` : `${pt?.x},${pt?.y}`).join(';')}`
+        : '';
+    return featPart + outlinePart;
 }

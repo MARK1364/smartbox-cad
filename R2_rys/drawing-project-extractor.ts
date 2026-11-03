@@ -157,6 +157,7 @@ export class DrawingProjectExtractor {
 
         // 1. Odczyt z natywnego ProjectDocument
         if (doc && doc.rootNode) {
+            doc.ensureGlcNode();
             const projectName = doc.name || 'Projekt WebCAD';
 
             const childNodes: CADTreeNode[] = [];
@@ -319,11 +320,22 @@ export class DrawingProjectExtractor {
             domainData?.type === 'smartpart_cut';
         const isAssembly = cadNode.nodeType === NodeType.ASSEMBLY || domainData?.type === 'container';
         const isGroup = (cadNode as any).nodeType === 'GROUP' || domainData?.type === 'group';
+        const isGlc = cadNode.nodeType === NodeType.GLC_FRAME || domainData?.type === 'glc_frame';
+        const isDatumLevel = cadNode.nodeType === NodeType.DATUM_LEVEL || domainData?.type === 'datum_level';
 
         let icon = '📦';
         let type: CADTreeNode['type'] = 'CONTAINER';
 
-        if (isSmartPartCut) {
+        if (isGlc) {
+            icon = '🌐';
+            type = 'GLC';
+        } else if (isDatumLevel) {
+            icon = '⚪';
+            type = 'DATUM_LEVEL';
+            if (domainData?.z_nm !== undefined) {
+                height = modelNmToMm(domainData.z_nm, 0);
+            }
+        } else if (isSmartPartCut) {
             icon = domainData?.cutType === 'HOLE' ? '⚪' : '⬛';
             type = 'FEATURE';
         } else if (isHardware) {
@@ -387,7 +399,7 @@ export class DrawingProjectExtractor {
             }
         }
 
-        if (isHardware || isSmartPartCut) {
+        if (isHardware || isSmartPartCut || isGlc || isDatumLevel) {
             width = modelNmToMm(domainData?.width, width);
             height = modelNmToMm(domainData?.height, height);
             depth = modelNmToMm(domainData?.depth, depth);
@@ -418,6 +430,7 @@ export class DrawingProjectExtractor {
             holes: holes.length > 0 ? holes : undefined,
             grooves: grooves.length > 0 ? grooves : undefined,
             visible: domainData?.visible !== false,
+            visiblePlane: Boolean(domainData?.visiblePlane),
             frozen: !!domainData?.frozen,
             isManual: domainData?.engineManaged === false,
             engineManaged: domainData?.engineManaged !== false,

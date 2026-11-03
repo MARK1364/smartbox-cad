@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
+import { PanelModel } from '../../A4_smartpanel/panel-model.js';
+import { Vec3 } from '../../A1_core/cad-math/vec3.js';
+import { Quat } from '../../A1_core/cad-math/quat.js';
 import { runEngineAndApply } from '../../A3_smartframe/smartframe-adapter.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { buildCornerShelvesDrillings } from '../18_corner-shelves-drilling-builder.js';
@@ -69,6 +72,28 @@ describe('Corner Shelves Drilling Builder (buildCornerShelvesDrillings)', () => 
         // Sprawdź czy otwory są przypisane do BOK_L i BOK_P
         const targetIds = new Set(intents.map(i => i.targetNodeId));
         expect(targetIds.size).toBe(2);
+    });
+
+    it('znajduje półkę narożną po roli, niezależnie od zmienionej nazwy', () => {
+        const { cabinet, sb } = setupCornerCabinetAndBlock({
+            liczba_polek: 1,
+            wzor_nawiercen: 'SINGLE',
+        });
+        const shelf = doc.createPanel({
+            name: 'Półka po zmianie nazwy',
+            width: mmToNm(900),
+            height: mmToNm(900),
+            thickness: mmToNm(18),
+        }, sb.id) as PanelModel;
+        shelf.role = 'SHELF';
+        const shelfNode = doc.findNode(shelf.id)!;
+        shelfNode.name = 'Nowa nazwa użytkownika';
+        shelfNode.setLocalTransform(new Vec3(0, 0, mmToNm(250)), Quat.IDENTITY);
+
+        const intents = buildCornerShelvesDrillings(doc, cabinet.id);
+
+        expect(intents).toHaveLength(4);
+        expect(intents.every((intent) => intent.feature.drivenBy?.nodeId === shelf.id)).toBe(true);
     });
 
     it('generuje otwory w trybie TRIPLE (6 na BOK_L i 6 na BOK_P)', () => {

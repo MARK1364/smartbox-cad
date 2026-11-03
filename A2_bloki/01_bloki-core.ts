@@ -150,7 +150,6 @@ function findNodeByKey(root: any, partKey: string): any | null {
     const p = root.domainData;
     if (p && (
         (p as any).key === partKey ||
-        p.name === partKey ||
         p.id === partKey ||
         (p as any).smartId?.uid === partKey
     )) {
@@ -416,7 +415,7 @@ export function findPanelNodeByRef(refConfig: any, cabinetNode: any, doc: any): 
         panelNode = doc.findNode(refConfig.partKey);
         if (!panelNode && typeof doc.getPanels === 'function') {
             const allPanels = doc.getPanels();
-            panelNode = allPanels.find((n: any) => n.id === refConfig.partKey || n.domainData?.name === refConfig.partKey || n.domainData?.id === refConfig.partKey || (n.domainData as any)?.key === refConfig.partKey) || null;
+            panelNode = allPanels.find((n: any) => n.id === refConfig.partKey || n.domainData?.id === refConfig.partKey || (n.domainData as any)?.key === refConfig.partKey) || null;
         }
     }
     return panelNode;
@@ -544,6 +543,24 @@ function transformLocalDirToCabinet(
     cabinetNode: any,
     localDir: Vec3
 ): Vec3 | null {
+    // W SmartFrame (panel.lcs zdefiniowane) siatka PanelView ma oś grubości Z i oś wysokości Y,
+    // a SceneSyncAdapter nakłada COORD_CHANGE (zamiana Y↔Z) na macierz węzła CADNode.
+    // Dlatego wektor normalny ściany z lokalnego układu siatki (localDir) w przestrzeni lokalnej CADNode
+    // ma postać P * localDir = (localDir.x, localDir.z, localDir.y).
+    const cadLocalDir = panel?.lcs ? new Vec3(localDir.x, localDir.z, localDir.y) : localDir;
+
+    if (panelNode && cabinetNode && typeof cabinetNode.getWorldMatrix === 'function' && typeof panelNode.getWorldMatrix === 'function') {
+        const relMat = cabinetNode.getWorldMatrix().invert().multiply(panelNode.getWorldMatrix());
+        return relMat.transformDirection(cadLocalDir).normalize();
+    }
+
+    if (panelNode && cabinetNode && typeof cabinetNode.worldToLocal === 'function' && typeof panelNode.localToWorld === 'function') {
+        const localVecNm = new Vec3(mmToNm(cadLocalDir.x), mmToNm(cadLocalDir.y), mmToNm(cadLocalDir.z));
+        const p0 = cabinetNode.worldToLocal(panelNode.localToWorld(Vec3.ZERO));
+        const p1 = cabinetNode.worldToLocal(panelNode.localToWorld(localVecNm));
+        return new Vec3(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z).normalize();
+    }
+
     const view =
         ContextManager.instance.panelViews.get(panel) ||
         (panel?.id ? ContextManager.instance.panelViews.get(panel.id) : null);
@@ -558,18 +575,6 @@ function transformLocalDirToCabinet(
             return cabinetNode.getWorldMatrix().invert().transformDirection(cadWorld).normalize();
         }
         return cadWorld.normalize();
-    }
-
-    if (panelNode && cabinetNode && typeof cabinetNode.getWorldMatrix === 'function' && typeof panelNode.getWorldMatrix === 'function') {
-        const relMat = cabinetNode.getWorldMatrix().invert().multiply(panelNode.getWorldMatrix());
-        return relMat.transformDirection(localDir).normalize();
-    }
-
-    if (panelNode && cabinetNode && typeof cabinetNode.worldToLocal === 'function' && typeof panelNode.localToWorld === 'function') {
-        const localVecNm = new Vec3(mmToNm(localDir.x), mmToNm(localDir.y), mmToNm(localDir.z));
-        const p0 = cabinetNode.worldToLocal(panelNode.localToWorld(Vec3.ZERO));
-        const p1 = cabinetNode.worldToLocal(panelNode.localToWorld(localVecNm));
-        return new Vec3(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z).normalize();
     }
 
     return null;
@@ -683,42 +688,9 @@ export function getPanelFaceDominantAxis(
         if (fromPick) return dominantAxisFromDir(fromPick);
     }
 
-    if (isOutlineFaceName(faceName)) {
-        const seg = getOutlineSegmentCabinetMm(panel, panelNode, cabinetNode, faceName);
-        if (!seg) return null;
-        return dominantAxisFromDir(seg.normal);
-    }
-
-    const canonicalFace = normalizeFaceName(faceName);
-
-    const roleUpper = String((panel as any).role || '').toUpperCase();
-    if (roleUpper.includes('DIVIDER') || roleUpper.includes('PRZEGRODA')) {
-        if (canonicalFace === 'FACE_Z_PLUS' || canonicalFace === 'FACE_Z_MINUS') {
-            return 'x';
-        }
-    }
-
-    let nxLocal = 0;
-    let nyLocal = 0;
-    let nzLocal = 1;
-
-    if (canonicalFace === 'FACE_Z_PLUS') {
-        nzLocal = 1;
-    } else if (canonicalFace === 'FACE_Z_MINUS') {
-        nzLocal = -1;
-    } else if (canonicalFace === 'FACE_X_PLUS') {
-        nxLocal = 1; nzLocal = 0;
-    } else if (canonicalFace === 'FACE_X_MINUS') {
-        nxLocal = -1; nzLocal = 0;
-    } else if (canonicalFace === 'FACE_Y_PLUS') {
-        nyLocal = 1; nzLocal = 0;
-    } else if (canonicalFace === 'FACE_Y_MINUS') {
-        nyLocal = -1; nzLocal = 0;
-    }
-
-    const dir = transformLocalDirToCabinet(panel, panelNode, cabinetNode, new Vec3(nxLocal, nyLocal, nzLocal));
-    if (!dir) return null;
-    return dominantAxisFromDir(dir);
+    const norm = getPanelFaceNormalInCabinet(panel, panelNode, cabinetNode, faceName);
+    if (!norm) return null;
+    return dominantAxisFromDir(norm);
 }
 
 export type ReferenceValidationOptions = {
@@ -747,6 +719,38 @@ function getPanelFaceNormalInCabinet(
     }
 
     const canonicalFace = canonicalizeRefFaceName(faceName);
+
+    const roleUpper = String((panel as any)?.role || '').toUpperCase();
+    if (roleUpper.includes('DIVIDER') || roleUpper.includes('PRZEGRODA')) {
+        if (canonicalFace === 'FACE_Z_PLUS' || canonicalFace === 'FACE_Z_MINUS') {
+            return new Vec3(canonicalFace === 'FACE_Z_PLUS' ? 1 : -1, 0, 0);
+        }
+    }
+
+    // Jeśli formatka ma zdefiniowane lcs.mapping z reguł SmartFrame:
+    if (panel?.lcs?.mapping && (canonicalFace === 'FACE_Z_PLUS' || canonicalFace === 'FACE_Z_MINUS')) {
+        const isPlus = canonicalFace === 'FACE_Z_PLUS';
+        const roleUpper = String((panel as any)?.role || '').toUpperCase();
+        const map = panel.lcs.mapping;
+
+        // 1. Płyty o grubości w osi Y (np. Plecy Y, BOK_L w ramieniu Y korpusu rogowego)
+        if (map.Z === 'y' || (map.X === 'x' && map.Y === 'z')) {
+            const sign = (roleUpper.includes('BACK') || roleUpper.includes('PLECY')) ? -1 : 1;
+            return new Vec3(0, isPlus ? sign : -sign, 0);
+        }
+
+        // 2. Płyty o grubości w osi X (np. Boki lewy/prawy standardowe, BOK_P, przegrody, Plecy X)
+        if (map.X === 'y' && map.Y === 'x' && map.Z === 'z') {
+            const sign = (roleUpper.includes('RIGHT') || roleUpper.includes('BOK_P')) ? -1 : 1;
+            return new Vec3(isPlus ? sign : -sign, 0, 0);
+        }
+
+        // 3. Płyty o grubości w osi Z (np. Wieńce dolny/górny, półki)
+        if (map.X === 'x' && map.Y === 'y' && map.Z === 'z') {
+            const sign = (roleUpper.includes('TOP') || roleUpper.includes('WIENIEC_G')) ? -1 : 1;
+            return new Vec3(0, 0, isPlus ? sign : -sign);
+        }
+    }
 
     let nxLocal = 0;
     let nyLocal = 0;
@@ -1153,16 +1157,18 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         if (!refConfig) return null;
 
         const panelNode = findPanelNodeByRef(refConfig, foundCabinetNode, doc);
+        const isPanelFrozenOrHidden = !!(panelNode?.domainData?.frozen === true || panelNode?.domainData?.visible === false);
         const isCabinetSelf =
             !!foundCabinetNode &&
-            (panelNode?.id === foundCabinetNode.id || refConfig.panelId === foundCabinetNode.id);
+            (panelNode?.id === foundCabinetNode.id || refConfig.panelId === foundCabinetNode.id || refConfig.partKey === 'SmartFrame');
         const isRealWallPanel =
             panelNode &&
             panelNode.domainData &&
             panelNode.domainData.type !== 'container' &&
-            !isCabinetSelf;
+            !isCabinetSelf &&
+            !isPanelFrozenOrHidden;
 
-        // Gdy Przód/Tył ma prawdziwą ścianę (BOK_L, przegroda…) — zawsze lico tej ściany.
+        // Gdy dana strona ma prawdziwa sciane (BOK_L, przegroda, wieniec...) i nie jest zamrozona/ukryta - lico tej sciany.
         if (isRealWallPanel) {
             const coord = getPanelFaceCoordinate(
                 panelNode.domainData, panelNode, foundCabinetNode,
@@ -1171,24 +1177,40 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
             return isMax ? (coord - offsetVal) : (coord + offsetVal);
         }
 
-        // Pusty korpus bez ściany frontowej: yMin = zewnętrzna płaszczyzna −depth/2 (jak dotychczas).
-        if (sideKey === 'yMin') {
-            if (axis === 'x') {
-                const cabWidth = nmToMm(cabinet.width) || 600;
-                return cabWidth / 2 - offsetVal;
-            }
-            const cabDepth = nmToMm(cabinet.depth) || 600;
-            return -cabDepth / 2 + offsetVal;
+        // Gdy brak fizycznej sciany (panel nie istnieje, jest zamrozony/ukryty lub referencja wskazuje na SmartFrame)
+        // -> kaskadowe dziedziczenie referencji: idziemy POZIOM W HIERARCHII DO GORY i bierzemy plaszczyzne obwiedni SmartFrame (OUTER)
+        const cabWidth = nmToMm(cabinet.width) || (cabinet.generatorParams?.szerokosc_mm ?? 600);
+        const cabDepth = nmToMm(cabinet.depth) || (cabinet.generatorParams?.glebokosc_mm ?? 600);
+        const cabHeight = nmToMm(cabinet.height) || (cabinet.generatorParams?.wysokosc_mm ?? 720);
+
+        if (sideKey === 'zMin') {
+            return 0 + offsetVal;
         }
 
-        // Korpus SmartFrame jako referencja dla góry (zMax) — górna płaszczyzna SmartFrame (+height)
-        if (sideKey === 'zMax' && isCabinetSelf) {
-            const cabHeight = nmToMm(cabinet.height) || (cabinet.generatorParams?.wysokosc_mm ?? 720);
+        if (sideKey === 'zMax') {
             return cabHeight - offsetVal;
         }
 
-        if (sideKey === 'zMin' && isCabinetSelf) {
-            return 0 + offsetVal;
+        if (sideKey === 'xMin') {
+            return -cabWidth / 2 + offsetVal;
+        }
+
+        if (sideKey === 'xMax') {
+            return cabWidth / 2 - offsetVal;
+        }
+
+        if (sideKey === 'yMin') {
+            if (axis === 'x') {
+                return cabWidth / 2 - offsetVal;
+            }
+            return -cabDepth / 2 + offsetVal;
+        }
+
+        if (sideKey === 'yMax') {
+            if (axis === 'x') {
+                return -cabWidth / 2 + offsetVal;
+            }
+            return cabDepth / 2 - offsetVal;
         }
 
         return null;

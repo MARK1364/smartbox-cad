@@ -72,10 +72,10 @@ describe('Planar Feature Clipping (EffectiveFeature = FeaturePolygon ∩ OuterCo
         // 2. Pole lica FACE_Z_PLUS to pole trapezu (600 * (500 + 800) / 2 = 390_000) minus 2040 = 387_960 mm^2
         expect(meshArea3D(topo.FACE_Z_PLUS)).toBeCloseTo(390_000 - 2040, 0);
 
-        // 3. Ścianka boczna dachu (OUTLINE_SIDE_2: od (600,800) do (0,500)) została rozcięta przez wlot wpustu (3 podsegmenty = 12 wierzchołków = 36 współrzędnych)
+        // 3. Ścianka boczna dachu (OUTLINE_SIDE_2: od (600,800) do (0,500)) została rozcięta przez wlot wpustu (szczelna siatka 10 wierzchołków = 30 współrzędnych)
         const roofSide = topo.OUTLINE_SIDE_2;
         expect(roofSide).toBeDefined();
-        expect(roofSide.positions.length).toBe(36);
+        expect(roofSide.positions.length).toBe(30);
     });
 
     it('docina dno i ścianki wpustu wychodzącego w pustkę wcięcia L (brak geometrii wiszącej w powietrzu)', () => {

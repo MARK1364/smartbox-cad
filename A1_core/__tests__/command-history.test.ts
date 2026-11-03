@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ProjectDocument } from '../project-document.js';
 import { CommandHistory } from '../commands/command-history.js';
 import { TransformNodeCommand } from '../commands/transform-node-command.js';
@@ -261,5 +261,20 @@ describe('CommandHistory and CAD Commands', () => {
         expect(panel.features).toHaveLength(1);
         expect(history.canRedo).toBe(false);
         expect(history.undoStack).toHaveLength(5);
+    });
+
+    it('undo zachowuje komendę na stosie gdy command.undo() rzuci wyjątek', () => {
+        const failingCmd = {
+            label: 'Zepsuta komenda',
+            execute: () => {},
+            undo: () => { throw new Error('Błąd cofania'); }
+        };
+        history.execute(failingCmd as any);
+        expect(history.canUndo).toBe(true);
+        expect(() => history.undo()).toThrow('Błąd cofania');
+        // Komenda NIE przepadła ze stosu:
+        expect(history.canUndo).toBe(true);
+        expect(history.lastUndoLabel).toBe('Zepsuta komenda');
+        expect(history.canRedo).toBe(false);
     });
 });

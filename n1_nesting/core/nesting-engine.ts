@@ -19,7 +19,7 @@ import {
     NestingScope
 } from './nesting-types';
 import { BinPacker } from './bin-packer';
-import { packGuillotine, ShelfAxis, ShelfOrder, GuillotinePlacement } from './guillotine-packer';
+import { packGuillotine, ShelfAxis, ShelfOrder, GuillotinePlacement, AnchorPref } from './guillotine-packer';
 import { materialDatabase } from '../../A7_material/material-database';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units';
 
@@ -383,7 +383,7 @@ interface InternalRect {
             );
         }
 
-        const iterations = opts.iterations || 1;
+        const iterations = Math.max(opts.iterations || (opts.mode === 'pro' ? 2000 : 50), 30);
         let bestBoards: PackedBoard[] | null = null;
         let bestScore = Infinity;
 
@@ -405,6 +405,22 @@ interface InternalRect {
             } else if (iter === 2) {
                 // Heurystyka 3: Obwód malejąco
                 currentList.sort((a, b) => (b.w_nm + b.h_nm) - (a.w_nm + a.h_nm));
+            } else if (iter === 3) {
+                // Heurystyka 4: Krótszy bok malejąco
+                currentList.sort((a, b) => Math.min(b.w_nm, b.h_nm) - Math.min(a.w_nm, a.h_nm));
+            } else if (iter === 4) {
+                // Heurystyka 5: Smukłość (proporcje boków) malejąco
+                currentList.sort((a, b) => {
+                    const aspA = Math.max(a.w_nm, a.h_nm) / Math.max(1, Math.min(a.w_nm, a.h_nm));
+                    const aspB = Math.max(b.w_nm, b.h_nm) / Math.max(1, Math.min(b.w_nm, b.h_nm));
+                    return aspB - aspA;
+                });
+            } else if (iter === 5) {
+                // Heurystyka 6: Szerokość bez obrotu malejąco
+                currentList.sort((a, b) => b.w_nm - a.w_nm);
+            } else if (iter === 6) {
+                // Heurystyka 7: Wysokość bez obrotu malejąco
+                currentList.sort((a, b) => b.h_nm - a.h_nm);
             } else {
                 // Heurystyka losowa (Monte Carlo / Genetic Shuffle)
                 shuffleArray(currentList);
@@ -432,10 +448,17 @@ interface InternalRect {
                 startBoardIndex
             );
 
-            // Kryterium oceny: minimalizacja liczby płyt + maksymalizacja upakowania na ostatniej płycie
+            // Kryterium oceny:
+            // 1. Liczba arkuszy (waga 1e12) — nadrzędna minimalizacja zużycia płyt
+            // 2. Maksymalizacja wypełnienia wcześniejszych arkuszy (minimalizacja zużycia na ostatnim arkuszu)
+            // 3. Zwartość ułożenia na ostatnim arkuszu (minimalizacja obwiedni BBox, pozostawiająca największy jednolity odpad)
             const lastBoard = boards[boards.length - 1];
             const lastBoardUsed = lastBoard ? lastBoard.usedArea : 0;
-            const score = (boards.length * 1e8) + lastBoardUsed;
+            const lastLayout = lastBoard ? lastBoard.layout : [];
+            const maxW = lastLayout.length > 0 ? Math.max(...lastLayout.map((p) => p.x + p.w)) : 0;
+            const maxH = lastLayout.length > 0 ? Math.max(...lastLayout.map((p) => p.y + p.h)) : 0;
+            const bboxScore = maxW * maxH;
+            const score = (boards.length * 1e12) + (lastBoardUsed * 1e4) + bboxScore;
 
             if (score < bestScore) {
                 bestScore = score;
@@ -453,8 +476,8 @@ interface InternalRect {
 
     /**
      * Optymalizuje rozkrój PIŁY: 2-stopniowy gilotynowy (pasy first).
-     * W trybie PRO testuje wiele heurystyk kolejności oraz OBA kierunki pasów
-     * (auto: wybiera wariant z mniejszą liczbą arkuszy i lepszym upakowaniem).
+     * Testuje wielokrotne heurystyki kolejności, OBA kierunki pasów oraz preferencje orientacji kotwic,
+     * wybierając wariant o najmniejszej liczbie arkuszy i najściślejszym upakowaniu detali.
      */
     async function optimizeSawPacking(
         rects: InternalRect[],
@@ -468,16 +491,19 @@ interface InternalRect {
         machineType: MachineType,
         startBoardIndex: number
     ): Promise<PackedBoard[]> {
-        const bases: Array<{ axis: ShelfAxis; order: ShelfOrder; randomize: boolean }> = [];
+        const bases: Array<{ axis: ShelfAxis; order: ShelfOrder; anchorPref: AnchorPref; randomize: boolean }> = [];
         const axes: ShelfAxis[] = ['horizontal', 'vertical'];
-        const orders: ShelfOrder[] = ['stack', 'area', 'along', 'longest'];
+        const orders: ShelfOrder[] = ['longest', 'area', 'stack', 'perimeter', 'min_dim', 'along', 'aspect'];
+        const anchorPrefs: AnchorPref[] = ['auto', 'max_stack', 'min_stack'];
         for (const axis of axes) {
             for (const order of orders) {
-                bases.push({ axis, order, randomize: false });
+                for (const anchorPref of anchorPrefs) {
+                    bases.push({ axis, order, anchorPref, randomize: false });
+                }
             }
         }
 
-        const iterations = Math.max(bases.length, opts.iterations || 1);
+        const iterations = Math.max(bases.length, opts.iterations || (opts.mode === 'pro' ? 500 : 50));
 
         let bestBoards: PackedBoard[] | null = null;
         let bestScore = Infinity;
@@ -488,6 +514,7 @@ interface InternalRect {
                 : {
                     axis: (Math.random() > 0.5 ? 'horizontal' : 'vertical') as ShelfAxis,
                     order: 'random' as ShelfOrder,
+                    anchorPref: (['auto', 'max_stack', 'min_stack'] as AnchorPref[])[Math.floor(Math.random() * 3)],
                     randomize: true
                 };
 
@@ -497,7 +524,8 @@ interface InternalRect {
                 usableBoardH_nm,
                 base.axis,
                 base.order,
-                base.randomize
+                base.randomize,
+                base.anchorPref
             );
 
             const boards = buildSawBoards(
@@ -513,9 +541,17 @@ interface InternalRect {
                 base.axis
             );
 
-            // Minimalizuj liczbę arkuszy, następnie maksymalizuj upakowanie ostatniego arkusza.
+            // Kryterium oceny gilotyny:
+            // 1. Liczba arkuszy (waga 1e12)
+            // 2. Maksymalizacja wypełnienia wcześniejszych arkuszy (minimalizacja m2 na ostatnim)
+            // 3. Zwięzłość ułożenia na ostatnim arkuszu (odpad w jednym kawałku)
             const lastBoard = boards[boards.length - 1];
-            const score = (boards.length * 1e8) + (lastBoard ? lastBoard.usedArea : 0);
+            const lastBoardUsed = lastBoard ? lastBoard.usedArea : 0;
+            const lastLayout = lastBoard ? lastBoard.layout : [];
+            const maxW = lastLayout.length > 0 ? Math.max(...lastLayout.map((p) => p.x + p.w)) : 0;
+            const maxH = lastLayout.length > 0 ? Math.max(...lastLayout.map((p) => p.y + p.h)) : 0;
+            const bboxScore = maxW * maxH;
+            const score = (boards.length * 1e12) + (lastBoardUsed * 1e4) + bboxScore;
 
             if (score < bestScore) {
                 bestScore = score;
@@ -530,9 +566,6 @@ interface InternalRect {
         return bestBoards || [];
     }
 
-    /**
-     * Buduje obiekty PackedBoard na podstawie rozmieszczeń gilotynowych.
-     */
     function buildSawBoards(
         sheets: GuillotinePlacement[][],
         usableBoardW_nm: number,

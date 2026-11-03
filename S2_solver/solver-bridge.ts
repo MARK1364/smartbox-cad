@@ -29,6 +29,7 @@ import { Quat } from '../A1_core/cad-math/quat.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import { NodeType } from '../A1_core/cad-node/node-type.js';
+import { getCabinetModule } from '../A1_core/cabinet-port.js';
 import { isManualPanel } from '../A4_smartpanel/panel-model.js';
 import type { CADNode } from '../A1_core/cad-node/cad-node.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
@@ -38,9 +39,7 @@ import { resolveAnchor } from './constraint-geometry.js';
 import type { ConstraintAnchor, SolverConstraint } from './constraint-types.js';
 import {
     isDatumAnchor,
-    getDatumWorldPose,
-    datumNameFromNodeId,
-    type DatumPlaneName,
+    resolveDatumAnchorPose,
 } from './datum-planes.js';
 import {
     makeConstraintItem,
@@ -118,6 +117,140 @@ function anchorKey(anchor: ConstraintAnchor): string {
 }
 
 /**
+ * Jeśli ten sam kontener SmartFrame ma powiązane ZARÓWNO naroże dolne (0..3) JAK I górne (4..7)
+ * z poziomami wysokości Z (DATUM), przed przebiegiem bryły sztywnej dostosowujemy parametryczną
+ * wysokość kontenera `wysokosc_mm = zTop - zBottom`, aby oba naroża bezkonfliktowo zeszły się z płaszczyznami.
+ */
+export function applyParametricZSpanConstraints(
+    document: ProjectDocument,
+    constraints: SolverConstraint[],
+): void {
+    const spansByNode = new Map<string, {
+        bottomZMm?: number;
+        topZMm?: number;
+        zoneBottomZMm?: number;
+        zoneMiddleZMm?: number;
+    }>();
+
+    for (const c of constraints) {
+        if (!c.enabled || c.conflict || !c.anchorA || !c.anchorB) continue;
+        if (c.bindType !== 'VERTEX_DATUM' && c.bindType !== 'VERTEX') continue;
+
+        let vertAnchor = c.anchorA;
+        let datumAnchor = c.anchorB;
+        if (isDatumAnchor(vertAnchor) && !isDatumAnchor(datumAnchor)) {
+            vertAnchor = c.anchorB;
+            datumAnchor = c.anchorA;
+        }
+        if (vertAnchor.kind !== 'VERTEX' || !isDatumAnchor(datumAnchor)) continue;
+
+        const pose = resolveDatumAnchorPose(datumAnchor, document);
+        if (!pose) continue;
+        // Sprawdzamy, czy płaszczyzna jest pozioma (normalna ~ [0, 0, ±1])
+        if (Math.abs(pose.normalMm[2]) < 0.9) continue;
+
+        const targetZMm = pose.pointMm[2] + (c.offsetMm ?? 0) * Math.sign(pose.normalMm[2]);
+
+        let entry = spansByNode.get(vertAnchor.nodeId);
+        if (!entry) {
+            entry = {};
+            spansByNode.set(vertAnchor.nodeId, entry);
+        }
+
+        if (vertAnchor.cornerIndex === 8) {
+            // Wieniec dolny strefy (podział strefy 1↔2)
+            entry.zoneBottomZMm = targetZMm;
+        } else if (vertAnchor.cornerIndex === 16) {
+            // Wieniec górny strefy (podział strefy 2↔3)
+            entry.zoneMiddleZMm = targetZMm;
+        } else if (vertAnchor.cornerIndex >= 0 && vertAnchor.cornerIndex <= 7) {
+            const isTopCorner = (vertAnchor.cornerIndex & 4) !== 0;
+            if (isTopCorner) {
+                entry.topZMm = targetZMm;
+            } else {
+                entry.bottomZMm = targetZMm;
+            }
+        }
+    }
+
+    for (const [nodeId, span] of spansByNode.entries()) {
+        const node = document.findNode(nodeId);
+        if (!node || !isSmartFrameContainer(node)) continue;
+
+        const domain = node.domainData as any;
+        const gp = domain?.generatorParams || {};
+        const zoneCount = Number(gp.liczba_stref ?? 1);
+
+        const { translation, rotation, scale } = node.localMatrix.decompose();
+        let baseZMm = nmToMm(translation.z);
+
+        if (span.bottomZMm !== undefined) {
+            baseZMm = span.bottomZMm;
+            if (Math.abs(nmToMm(translation.z) - span.bottomZMm) > 0.5) {
+                node.setLocalTransform(new Vec3(translation.x, translation.y, mmToNm(span.bottomZMm)), rotation, scale);
+            }
+        }
+
+        const currentWidthMm = gp.szerokosc_mm ?? nmToMm(domain?.width ?? 600);
+        let currentHeightMm = gp.wysokosc_mm ?? nmToMm(domain?.height ?? 720);
+        const currentDepthMm = gp.glebokosc_mm ?? nmToMm(domain?.depth ?? 560);
+        let newBottomHMm = gp.wysokosc_strefy_dolnej_mm;
+        let newMiddleHMm = gp.wysokosc_strefy_srodkowej_mm;
+        let hasParamChange = false;
+
+        if (span.bottomZMm !== undefined && span.topZMm !== undefined) {
+            const targetHeightMm = Math.round(span.topZMm - span.bottomZMm);
+            if (targetHeightMm >= 100 && Math.abs(targetHeightMm - currentHeightMm) > 0.5) {
+                currentHeightMm = targetHeightMm;
+                hasParamChange = true;
+            }
+        }
+
+        if (span.zoneBottomZMm !== undefined && (zoneCount === 2 || zoneCount === 3)) {
+            const calcBottomH = Math.round(span.zoneBottomZMm - baseZMm);
+            if (calcBottomH >= 100 && calcBottomH < currentHeightMm - 50) {
+                if (Math.abs((newBottomHMm ?? 0) - calcBottomH) > 0.5) {
+                    newBottomHMm = calcBottomH;
+                    hasParamChange = true;
+                }
+            }
+        }
+
+        if (span.zoneMiddleZMm !== undefined && zoneCount === 3) {
+            const calcMidTopZ = Math.round(span.zoneMiddleZMm - baseZMm);
+            const curB = newBottomHMm ?? gp.wysokosc_strefy_dolnej_mm ?? 500;
+            const calcMiddleH = Math.round(calcMidTopZ - curB);
+            if (calcMiddleH >= 100 && calcMidTopZ < currentHeightMm - 50) {
+                if (Math.abs((newMiddleHMm ?? 0) - calcMiddleH) > 0.5) {
+                    newMiddleHMm = calcMiddleH;
+                    hasParamChange = true;
+                }
+            }
+        }
+
+        if (hasParamChange) {
+            const cabMod = getCabinetModule();
+            if (cabMod?.applyRealtimeUpdate && domain) {
+                cabMod.applyRealtimeUpdate(document, {
+                    szerokosc_mm: currentWidthMm,
+                    wysokosc_mm: currentHeightMm,
+                    glebokosc_mm: currentDepthMm,
+                    wysokosc_strefy_dolnej_mm: newBottomHMm,
+                    wysokosc_strefy_srodkowej_mm: zoneCount === 3 ? newMiddleHMm : undefined,
+                }, domain);
+            } else if (domain) {
+                domain.height = mmToNm(currentHeightMm);
+                if (domain.generatorParams) {
+                    domain.generatorParams.wysokosc_mm = currentHeightMm;
+                    if (newBottomHMm !== undefined) domain.generatorParams.wysokosc_strefy_dolnej_mm = newBottomHMm;
+                    if (newMiddleHMm !== undefined) domain.generatorParams.wysokosc_strefy_srodkowej_mm = newMiddleHMm;
+                }
+            }
+        }
+    }
+}
+
+/**
  * Buduje wejście dla rdzenia solvera. Więzy z nieaktualnymi kotwicami (usunięty
  * węzeł, nieistniejąca ściana) są pomijane i raportowane, a nie wyrzucane —
  * o ich usunięciu decyduje `ConstraintStore.pruneMissingNodes`.
@@ -126,6 +259,8 @@ export function buildSolverInput(
     document: ProjectDocument,
     constraints: SolverConstraint[],
 ): SolverInput {
+    applyParametricZSpanConstraints(document, constraints);
+
     const states = new Map<string, ObjectState>();
     const nodes = new Map<string, CADNode>();
     const localBefore = new Map<string, Mat4>();
@@ -194,11 +329,11 @@ export function buildSolverInput(
             continue;
         }
 
-        // Ściana↔datum: zawsze licz ruchomą ścianę jako A
+        // Element↔datum: zawsze licz ruchomy element jako A, a datum jako B
         let workA = constraint.anchorA;
         let workB = constraint.anchorB;
         if (
-            (constraint.bindType === 'COPLANAR' || constraint.bindType === 'FLUSH') &&
+            constraint.bindType !== 'GROUND' &&
             workB &&
             isDatumAnchor(workA) &&
             !isDatumAnchor(workB)
@@ -259,7 +394,7 @@ export function buildSolverInput(
                 });
             }
         } else {
-            // Więzy relatywne: VERTEX / COPLANAR / FLUSH (B może być datum WCS).
+            // Więzy relatywne: VERTEX / VERTEX_DATUM / COPLANAR / FLUSH (B może być datum WCS / DATUM_LEVEL).
             if (!workB) {
                 continue;
             }
@@ -268,11 +403,38 @@ export function buildSolverInput(
             const anchorB = workB;
             const datumB = isDatumAnchor(anchorB);
 
-            if (constraint.bindType === 'VERTEX') {
-                if (datumB) {
-                    warnings.push(`Więz ${constraint.id}: VERTEX nie obsługuje datum.`);
+            if (constraint.bindType === 'VERTEX_DATUM' || (constraint.bindType === 'VERTEX' && datumB)) {
+                if (anchorA.kind !== 'VERTEX' || !datumB) {
+                    warnings.push(
+                        `Więz ${constraint.id}: VERTEX_DATUM wymaga narożnika (A) oraz płaszczyzny / poziomu Z (B).`,
+                    );
                     continue;
                 }
+                const pose = resolveDatumAnchorPose(anchorB, document);
+                if (!pose) {
+                    warnings.push(`Więz ${constraint.id}: nie udało się rozwiązać poziomu datum (${anchorB.nodeId}).`);
+                    continue;
+                }
+                const datumId = anchorB.nodeId;
+                let datumState = states.get(datumId);
+                if (!datumState) {
+                    datumState = makeObjectState({
+                        id: datumId,
+                        location: [0, 0, 0],
+                        rotation: [...IDENTITY_QUAT] as SolverQuat,
+                    });
+                    datumState.localFaces.set(DATUM_FACE_INDEX, [
+                        [...pose.pointMm] as SolverVec3,
+                        vec3Normalize([...pose.normalMm] as SolverVec3),
+                    ]);
+                    states.set(datumId, datumState);
+                    anchorIndex.set(datumId, new Map());
+                }
+                item.bindType = 'VERTEX_DATUM';
+                item.objBId = datumId;
+                item.vertA = indexA;
+                item.faceB = DATUM_FACE_INDEX;
+            } else if (constraint.bindType === 'VERTEX') {
                 const nodeB = document.findNode(anchorB.nodeId);
                 if (!nodeB) {
                     warnings.push(`Więz ${constraint.id}: brak węzła ${anchorB.nodeId}.`);
@@ -308,20 +470,11 @@ export function buildSolverInput(
                 }
 
                 if (datumB) {
-                    const name =
-                        (anchorB.faceName as DatumPlaneName) ||
-                        datumNameFromNodeId(anchorB.nodeId);
-                    if (!name) {
+                    const pose = resolveDatumAnchorPose(anchorB, document);
+                    if (!pose) {
                         warnings.push(`Więz ${constraint.id}: nieznany datum.`);
                         continue;
                     }
-                    const pose =
-                        anchorB.localPointMm && anchorB.localNormalMm
-                            ? {
-                                  pointMm: anchorB.localPointMm as SolverVec3,
-                                  normalMm: anchorB.localNormalMm as SolverVec3,
-                              }
-                            : getDatumWorldPose(name);
                     const datumId = anchorB.nodeId;
                     let datumState = states.get(datumId);
                     if (!datumState) {
@@ -390,8 +543,6 @@ export function isBlokiContainer(node: CADNode | null): boolean {
     const isCustomSb = Boolean((node as any).customData?.bloki || data?.customData?.bloki);
     return (
         genType.startsWith('blok_') ||
-        node.name?.startsWith('blok_') ||
-        node.name?.endsWith('_SB') ||
         isCustomSb
     );
 }
@@ -524,7 +675,7 @@ export function computeReferenceLockedIds(
 
     if (document) {
         for (const node of document.rootNode.findAll()) {
-            if (isSmartFrameEngineComponent(node) || isBlokiComponent(node)) {
+            if (isSmartFrameEngineComponent(node) || isBlokiComponent(node) || node.nodeType === NodeType.DATUM_LEVEL) {
                 locked.add(node.id);
             }
         }

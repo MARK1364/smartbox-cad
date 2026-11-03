@@ -35,7 +35,7 @@ function findRogowyPanel(cabinetNode: any, ...candidates: string[]): any | null 
             if (isBlokiSubtree(node)) return;
             const d = node.domainData as any;
             if (d && (d.type === 'panel' || d.type === 'part' || d.role)) {
-                const key = String(d.key || node.name || '').toUpperCase();
+                const key = String(d.key || '').toUpperCase();
                 const role = String(d.role || '').toUpperCase();
                 if (key === upperCand || key.endsWith(`_${upperCand}`) || role === upperCand || key.includes(upperCand)) {
                     found = node;
@@ -117,11 +117,15 @@ export function buildCornerShelvesDrillings(
     };
 
     const findShelfPanel = (containerNode: any, shelfIndex: number): any | null => {
-        for (const child of containerNode?.children || []) {
-            const d = child.domainData;
-            if (d && (d.name === `Polka_${shelfIndex}` || child.name === `Polka_${shelfIndex}`)) return child;
-        }
-        return null;
+        const shelves = (containerNode?.children || [])
+            .filter((child: any) => {
+                const role = String(child.domainData?.role || '').toUpperCase();
+                return role === 'SHELF_PANEL' || role === 'SHELF';
+            })
+            .sort((a: any, b: any) =>
+                a.localMatrix.decompose().translation.z - b.localMatrix.decompose().translation.z
+            );
+        return shelves[shelfIndex - 1] || null;
     };
 
     // 4. Dla każdego kontenera wylicz nawiercenia na bokach

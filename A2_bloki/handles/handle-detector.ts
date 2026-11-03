@@ -60,7 +60,7 @@ export function probePanelSurfaceFromRay(
     }
 
     // Fallback: mesh istniejącego uchwytu → formatka z generatorParams.targetPanelId
-    if (!panelNode && (meta.type === 'smartpart_handle' || String(pickedMesh.name || '').startsWith('handle_mesh_'))) {
+    if (!panelNode && meta.type === 'smartpart_handle') {
         const handleNode = meta.nodeId ? document.findNode(meta.nodeId) : null;
         const targetPanelId = handleNode?.domainData?.generatorParams?.targetPanelId
             || meta.params?.targetPanelId;

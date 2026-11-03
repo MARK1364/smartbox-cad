@@ -25,7 +25,7 @@ import {
 } from './constraint-geometry.js';
 import { makeAnchor, type AnchorKind, type ConstraintAnchor } from './constraint-types.js';
 import type { Vec3 as SolverVec3 } from './core/math3d.js';
-import { makeDatumAnchor, parseDatumPlaneName } from './datum-planes.js';
+import { makeDatumAnchor, makeDatumLevelAnchor, parseDatumPlaneName } from './datum-planes.js';
 import { ConstraintHighlightOverlay } from './constraint-highlight.js';
 
 export interface ActiveConstraintPicker {
@@ -83,10 +83,14 @@ export function bindAnchorToRigidBody(geomNode: CADNode, anchor: ConstraintAncho
         anchor.localPointMm ?? [0, 0, 0],
         anchor.localNormalMm ?? null,
     );
+    const domain = geomNode.domainData as any;
     return makeAnchor({
         ...anchor,
         nodeId: body.id,
         sourceNodeId: geomNode.id,
+        sourceRole: domain?.role || (geomNode as any).role,
+        sourceKey: domain?.key,
+        sourceName: geomNode.name,
         localPointMm: mapped.localPointMm,
         localNormalMm: mapped.localNormalMm ?? undefined,
         localUAxisMm: anchor.localUAxisMm
@@ -109,6 +113,18 @@ function cameraViewDirCad(): [number, number, number] | null {
     }
     const cad = renderToCAD(new Vec3(fwd.x, fwd.y, fwd.z)).normalize();
     return [cad.x, cad.y, cad.z];
+}
+
+function cameraViewDirLocal(node: CADNode): [number, number, number] | null {
+    const camera = ContextManager.instance.viewport?.camera;
+    const fwd = camera?.getForwardRay?.()?.direction;
+    if (!fwd) {
+        return null;
+    }
+    const cadWorldDir = renderToCAD(new Vec3(fwd.x, fwd.y, fwd.z)).normalize();
+    const { rotation } = node.getWorldMatrix().decompose();
+    const localDir = rotation.inverse().rotateVec3(cadWorldDir).normalize();
+    return [localDir.x, localDir.y, localDir.z];
 }
 
 function matrixNormal(m: number[], x: number, y: number, z: number): { x: number; y: number; z: number } {
@@ -194,11 +210,17 @@ function buildFaceAnchor(targetNode: CADNode, data: any): ConstraintAnchor | nul
 
     // Bez aliasów: nierozpoznana nazwa → brak anchoru (null), nie cichy fallback.
     let faceName: string | null = null;
-    if (data.face) {
+    const rawFace = data.face || data.mesh?.metadata?.faceName;
+    if (rawFace) {
         try {
-            faceName = normalizeFaceName(String(data.face));
+            faceName = normalizeFaceName(String(rawFace));
         } catch {
-            faceName = null;
+            const edgeKey = data.mesh?.metadata?.outlineEdgeKey ?? (data.mesh?.metadata as any)?.edgeKey;
+            if (edgeKey === '-X') faceName = 'FACE_X_MINUS';
+            else if (edgeKey === '+X') faceName = 'FACE_X_PLUS';
+            else if (edgeKey === '-Y') faceName = 'FACE_Y_MINUS';
+            else if (edgeKey === '+Y') faceName = 'FACE_Y_PLUS';
+            else faceName = null;
         }
     }
 
@@ -250,7 +272,7 @@ function buildFaceAnchor(targetNode: CADNode, data: any): ConstraintAnchor | nul
         targetNode,
         'FACE',
         localPointMm,
-        cameraViewDirCad(),
+        cameraViewDirLocal(targetNode),
         localNormalMm,
     );
     if (!snapped) {
@@ -369,9 +391,8 @@ export function startConstraintPick(picker: ActiveConstraintPicker): void {
     if (facePicker && picker.expectedKind === 'VERTEX') {
         facePicker.targetSubgeometryType = 'vertex';
         facePicker.setVertexPickPreview(true);
-    } else if (facePicker && picker.expectedKind === 'FACE') {
-        // Ściana formatki albo krawędź — kotwica na klikniętym komponencie.
-        facePicker.targetSubgeometryType = null;
+    } else if (facePicker && (picker.expectedKind === 'FACE' || picker.expectedKind === 'DATUM')) {
+        facePicker.targetSubgeometryType = 'face';
         facePicker.setVertexPickPreview(false);
     } else if (facePicker) {
         facePicker.targetSubgeometryType = null;
@@ -434,7 +455,40 @@ export function handleConstraintPickEvent(type: string, data: any): boolean {
         return true;
     }
 
+    if (picker.expectedKind === 'DATUM') {
+        const meta = data?.mesh?.metadata;
+        if (meta?.type === 'datum_level' || meta?.type === 'datum_level_plane') {
+            const doc = ContextManager.instance.document;
+            const levelNode = meta.node ?? doc?.findNode?.(meta.id);
+            if (levelNode) {
+                finish(makeDatumLevelAnchor(levelNode));
+                return true;
+            }
+        }
+        if (data?.datumLevelNode) {
+            finish(makeDatumLevelAnchor(data.datumLevelNode));
+            return true;
+        }
+        if (data?.datumPlane) {
+            const name = parseDatumPlaneName(data.datumPlane);
+            if (name) {
+                finish(makeDatumAnchor(name));
+                return true;
+            }
+        }
+        return false;
+    }
+
     if (picker.expectedKind === 'FACE') {
+        const meta = data?.mesh?.metadata;
+        if (meta?.type === 'datum_level' || meta?.type === 'datum_level_plane') {
+            const doc = ContextManager.instance.document;
+            const levelNode = meta.node ?? doc?.findNode?.(meta.id);
+            if (levelNode) {
+                finish(makeDatumLevelAnchor(levelNode));
+                return true;
+            }
+        }
         const isDatum = type === 'select' && data?.datumPlane;
         const isFace = type === 'select' && (data?.face || data?.worldPoint);
         const isEdge = type === 'select-edge' && data?.worldPoint;
@@ -471,6 +525,26 @@ export function handleConstraintPickEvent(type: string, data: any): boolean {
     }
 
     if (picker.expectedKind === 'VERTEX') {
+        const meta = data?.mesh?.metadata;
+        if (meta?.isCornerGizmo && meta?.containerNode) {
+            const containerNode = meta.containerNode as CADNode;
+            const cornerIndex = Number(meta.cornerIdx ?? 0);
+            const snapped = snapPickToSmartFrame(containerNode, 'VERTEX', [
+                cornerIndex & 1 ? 1000 : -1000,
+                cornerIndex & 2 ? 1000 : -1000,
+                cornerIndex & 4 ? 1000 : 0,
+            ]);
+            finish(
+                makeAnchor({
+                    nodeId: containerNode.id,
+                    kind: 'VERTEX',
+                    cornerIndex,
+                    sourceNodeId: undefined,
+                    localPointMm: snapped?.localPointMm,
+                }),
+            );
+            return true;
+        }
         if (type !== 'select-vertex' || !data?.worldPoint) {
             return false;
         }
@@ -479,6 +553,26 @@ export function handleConstraintPickEvent(type: string, data: any): boolean {
         if (!target) {
             ContextManager.instance.appAPI?.setStatus?.('Wskaż narożnik formatki albo korpusu.', true);
             return true;
+        }
+        // Dla korpusu SmartFrame wiążemy bezpośrednio do naroża kontenera ASSEMBLY (bez sourceNodeId),
+        // dzięki czemu offsety formatek (niebieskie gizmo) nie psują relacji kontenera.
+        const rigid = resolveRigidBody(target);
+        if (rigid && rigid.nodeType === NodeType.ASSEMBLY) {
+            const wp = data.worldPoint;
+            const { localPointMm } = babylonPickToLocalMm(rigid, { x: wp.x, y: wp.y, z: wp.z });
+            const snapped = snapPickToSmartFrame(rigid, 'VERTEX', localPointMm);
+            if (snapped) {
+                finish(
+                    makeAnchor({
+                        nodeId: rigid.id,
+                        kind: 'VERTEX',
+                        cornerIndex: snapped.cornerIndex,
+                        sourceNodeId: undefined,
+                        localPointMm: snapped.localPointMm,
+                    }),
+                );
+                return true;
+            }
         }
         const anchor = buildVertexAnchor(target, data);
         if (!anchor) {

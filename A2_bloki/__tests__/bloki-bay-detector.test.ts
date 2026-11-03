@@ -6,9 +6,11 @@ import { runEngineAndApply } from '../../A3_smartframe/smartframe-adapter.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
-import { probeBayFromCADPoint, probeBayFromSceneRay, isBayDividingPanel } from '../02_bloki-bay-detector.js';
+import { probeBayFromCADPoint, probeBayFromSceneRay, isBayDividingPanel, detectCabinetOuterHull } from '../02_bloki-bay-detector.js';
 import { createBlokInDetectedBay } from '../02_bloki-bay-actions.js';
 import { registerBlokiModule } from '../01_register.js';
+import { update_bloki_core, getPanelFaceDominantAxis, validateReferenceFaceOrientation, resolveManualReferenceFace } from '../01_bloki-core.js';
+import { buildShelvesDrillings } from '../04_shelves-drilling-builder.js';
 import { highlightBayInScene, clearBayHighlight } from '../02_bloki-bay-visualizer.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';
@@ -517,8 +519,7 @@ describe('Bloki Bay Detector (3D Geometric Probe)', () => {
         expect(isBayDividingPanel('DIVIDER_PLATE')).toBe(true);
         expect(isBayDividingPanel('VERTICAL_DIVIDER')).toBe(true);
         expect(isBayDividingPanel('SHELF_BOARD')).toBe(true);
-        expect(isBayDividingPanel(undefined, 'Przegroda_1')).toBe(true);
-        expect(isBayDividingPanel(undefined, 'Wieniec_konstrukcyjny')).toBe(true);
+        expect(isBayDividingPanel(undefined)).toBe(false);
 
         expect(isBayDividingPanel('FRONT')).toBe(false);
         expect(isBayDividingPanel('SHELF_PANEL')).toBe(false);
@@ -695,5 +696,175 @@ describe('Bloki Bay Detector (3D Geometric Probe)', () => {
             (globalThis as any).BABYLON = prevBabylon;
         }
     });
-});
 
+    it('hierarchical level-up to SmartFrame when bottom panel is frozen or missing', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus z zamrozonym wiencem' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
+
+        // 1. Sprawdz stan standardowy (wieniec dolny obecny)
+        const bayNormal = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 1000 });
+        expect(bayNormal).not.toBeNull();
+        expect(bayNormal!.boundsMm.height).toBeCloseTo(1964, 0); // 2000 - 2*18
+        expect(bayNormal!.boundary.bottom.planeCoordMm).toBeCloseTo(18, 0);
+
+        // 2. Zamrazamy wieniec dolny (WIENIEC_D)
+        const wieniecD = (doc.findNode(cabinet.id)!.children).find(c => String((c.domainData as any)?.role || '').toUpperCase().includes('BOTTOM_PANEL') || c.name.toLowerCase().includes('wieniec_d'));
+        expect(wieniecD).toBeDefined();
+        (wieniecD!.domainData as any).frozen = true;
+        (wieniecD!.domainData as any).visible = false;
+
+        // 3. Po zamrozeniu: bay detector nie rzuca null, tylko idzie poziom wyzej do SmartFrame!
+        const bayFrozen = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 1000 });
+        expect(bayFrozen).not.toBeNull();
+        // Dolna sciana wneki opada do Z = 0 (SmartFrame outer bottom plane)
+        expect(bayFrozen!.boundary.bottom.planeCoordMm).toBeCloseTo(0, 0);
+        expect(bayFrozen!.boundary.bottom.nodeId).toBe(cabinet.id);
+        // Wysokosc wneki zwieksza sie o 18 mm (od 0 do 1982 = 1982 mm)
+        expect(bayFrozen!.boundsMm.height).toBeCloseTo(1982, 0);
+
+        // 4. Utworzenie Bloku w wykrytej wnece
+        const blokNode = createBlokInDetectedBay(doc, bayFrozen!, {
+            id: 'SHELVES',
+            type: 'blok_shelves',
+            category: 'internal',
+            label: 'Polki',
+            icon: 'box',
+            description: 'Polki'
+        })!;
+        expect(blokNode).not.toBeNull();
+        const blokContainer = blokNode.domainData as any;
+        expect(nmToMm(blokContainer.height)).toBeCloseTo(1982, 0);
+        expect(nmToMm(blokNode.localMatrix.decompose().translation.z)).toBeCloseTo(0, 0);
+
+        // 5. Test istniejacego Bloku: gdy referencja wskazywala wczesniej na wieniec dolny,
+        // a nastepnie wieniec zostal zamrozony, update_bloki_core kaskadowo cofa sie do SmartFrame (Z = 0)
+        blokContainer.generatorParams.customReferences.zMin = {
+            panelId: wieniecD!.id,
+            partKey: wieniecD!.name,
+            face: 'FACE_Z_PLUS'
+        };
+        const updated = update_bloki_core(blokContainer, doc);
+        expect(updated).toBe(true);
+        expect(nmToMm(blokContainer.height)).toBeCloseTo(1982, 0);
+        expect(nmToMm(blokNode.localMatrix.decompose().translation.z)).toBeCloseTo(0, 0);
+    });
+
+    it('correctly detects bay and inserts blok in a cabinet rotated by 90 degrees', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus Obrocony 90st' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
+
+        const cabNode = doc.findNode(cabinet.id)!;
+        expect(cabNode).toBeDefined();
+
+        // Obrot korpusu o 90 stopni wokol osi CAD Z (yaw) i przesuniecie w swiecie
+        cabNode.setLocalTransform(
+            new Vec3(mmToNm(500), mmToNm(1000), 0),
+            Quat.fromEulerXYZ(0, 0, Math.PI / 2)
+        );
+
+        // Punkt probkujacy w swiecie CAD:
+        // Lokalnie wewnatrz korpusu: X=0, Y=0, Z=1000 mm.
+        // Po transformacji swiatowej korpusu:
+        const localPtNm = new Vec3(0, 0, mmToNm(1000));
+        const worldPtNm = cabNode.getWorldMatrix().transformPoint(localPtNm);
+        const probePtMm = {
+            x: nmToMm(worldPtNm.x),
+            y: nmToMm(worldPtNm.y),
+            z: nmToMm(worldPtNm.z)
+        };
+
+        // 1. Sprawdz czy probeBayFromCADPoint poprawnie wykrywa wneke obroconego korpusu
+        const bay = probeBayFromCADPoint(doc, probePtMm);
+        expect(bay).not.toBeNull();
+        expect(bay!.boundsMm.width).toBeCloseTo(764, 0); // 800 - 2*18
+        expect(bay!.boundsMm.height).toBeCloseTo(1964, 0); // 2000 - 2*18
+        expect(bay!.boundsMm.depth).toBeCloseTo(600, 0);
+
+        // Sciany referencyjne lewo/prawo to boki korpusu
+        expect(bay!.boundary.left.nodeName).toContain('Bok_L');
+        expect(bay!.boundary.right.nodeName).toContain('Bok_P');
+        expect(bay!.boundary.bottom.nodeName).toContain('Wieniec_D');
+        expect(bay!.boundary.top.nodeName).toContain('Wieniec_G');
+
+        // Granice w ukladzie lokalnym korpusu (planeCoordMm)
+        expect(bay!.boundary.left.planeCoordMm).toBeCloseTo(-382, 0);
+        expect(bay!.boundary.right.planeCoordMm).toBeCloseTo(382, 0);
+        expect(bay!.boundary.bottom.planeCoordMm).toBeCloseTo(18, 0);
+        expect(bay!.boundary.top.planeCoordMm).toBeCloseTo(1982, 0);
+
+        // 2. Utworzenie Bloku we wnece obroconego korpusu
+        const blokNode = createBlokInDetectedBay(doc, bay!, {
+            id: 'SHELVES',
+            type: 'blok_shelves',
+            category: 'internal',
+            label: 'Polki',
+            icon: 'books',
+            description: 'Polki z nawiertami'
+        }, {
+            liczba_polek: 2
+        });
+
+        expect(blokNode).not.toBeNull();
+        expect(blokNode!.parent?.id).toBe(cabNode.id);
+
+        // Blok w ukladzie korpusu:
+        const blokPosLocal = blokNode!.localMatrix.decompose().translation;
+        expect(nmToMm(blokPosLocal.x)).toBeCloseTo(0, 0);
+        expect(nmToMm(blokPosLocal.y)).toBeCloseTo(0, 0);
+        expect(nmToMm(blokPosLocal.z)).toBeCloseTo(18, 0); // Spod bloku opiera sie na dnie wneki (Z = 18 mm)
+
+        // Rozmiary bloku
+        const blokContainer = blokNode!.domainData as any;
+        expect(nmToMm(blokContainer.width)).toBeCloseTo(764, 0);
+        expect(nmToMm(blokContainer.height)).toBeCloseTo(1964, 0);
+
+        // Polki zostaly wygenerowane
+        expect(blokNode!.children.length).toBeGreaterThanOrEqual(2);
+
+        // 3. Walidacja scian referencyjnych dla obroconego korpusu:
+        // Sciana lewa wykryta przez detektor musi miec w przestrzeni korpusu os 'x' (szerokosc), a nie 'y'!
+        const bokLNode = cabNode.children.find(c => c.name.includes('Bok_L'))!;
+        expect(bokLNode).toBeDefined();
+        const leftFace = bay!.boundary.left.face;
+        const bokLAxis = getPanelFaceDominantAxis(bokLNode.domainData, bokLNode, cabNode, leftFace);
+        expect(bokLAxis).toBe('x');
+
+        // Ręczny wybór ścian w UI dla obróconego korpusu musi przejść walidację
+        const valRes = validateReferenceFaceOrientation(
+            bokLNode.domainData,
+            bokLNode,
+            cabNode,
+            leftFace,
+            'xMin',
+            undefined,
+            { manualPick: true }
+        );
+        expect(valRes.valid).toBe(true);
+
+        // Ręczny klik w wąską krawędź poziomą (FACE_Y_PLUS) boku lewego musi zmapować na lico FACE_Z_PLUS
+        const resolvedEdge = resolveManualReferenceFace(
+            bokLNode.domainData,
+            bokLNode,
+            cabNode,
+            'FACE_Y_PLUS',
+            'xMin'
+        );
+        expect(resolvedEdge.face).toBe('FACE_Z_PLUS');
+        expect(resolvedEdge.mapped).toBe(true);
+
+        // Nawiercenia pod podpórki półek w obróconym korpusie muszą wygenerować otwory na obu bokach
+        const drillings = buildShelvesDrillings(doc, cabNode.id);
+        expect(drillings.length).toBeGreaterThanOrEqual(8);
+
+        // Detekcja zewnętrznego gabarytu (outer hull) dla obróconego korpusu
+        const outerHull = detectCabinetOuterHull(doc, { x: 1000, y: 2000, z: 1000 });
+        expect(outerHull).not.toBeNull();
+        expect(outerHull!.parentCabinetId).toBe(cabNode.id);
+        expect(outerHull!.boundary.left.nodeName).toContain('Bok_L');
+        expect(outerHull!.boundary.right.nodeName).toContain('Bok_P');
+        expect(outerHull!.boundary.left.planeCoordMm).toBeCloseTo(-400, 0);
+        expect(outerHull!.boundary.right.planeCoordMm).toBeCloseTo(400, 0);
+    });
+});

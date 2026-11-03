@@ -294,6 +294,124 @@ describe('buildBackGrooves overlap depth', () => {
         // Bok prawy skrócony — brak wpustu na boku prawym (plecy nakładane):
         expect(rightGroove).toBeUndefined();
     });
+
+    it('przesunięcie wieńca dolnego w górę niebieskim gizmem (Wieniec_D_shiftZ) zostawia plecy na swojej długości, przelicza margines dolny pleców i docina wieniec', async () => {
+        const { korpusOffsetGizmoHandler } = await import('../korpus-offset-gizmo.js');
+        const container: any = {
+            id: 'cnt_desk',
+            width: mmToNm(1000),
+            height: mmToNm(750),
+            depth: mmToNm(550),
+            generatorParams: {
+                type: 'korpus3',
+                typ_korpusu: 'korpus3',
+                liczba_stref: 1,
+                cofniecie_plecow_mm: 20,
+                offsets: {}
+            }
+        };
+
+        // Przesuwamy wieniec dolny o 150 mm w górę (shiftZ = -150)
+        korpusOffsetGizmoHandler.previewOffset(container, 'Wieniec_D_shiftZ', -150);
+
+        // Margines dolny pleców przeliczył się z 11 mm na 11 + 150 = 161 mm:
+        expect(container.generatorParams.offsets['Plecy_-Y']).toBe(161);
+        expect(korpusOffsetGizmoHandler.readOffsetMm(container, 'Plecy_-Y', 'BACK_PANEL')).toBe(161);
+
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 750,
+            glebokosc_mm: 550,
+            liczba_stref: 1,
+            cofniecie_plecow_mm: 20,
+            offsets: container.generatorParams.offsets
+        });
+
+        const botPart = plan.parts.find((p) => p.role === 'BOTTOM_PANEL')!;
+        const backPart = plan.parts.find((p) => p.role === 'BACK_PANEL')!;
+
+        // 1. Plecy zostały na swojej pierwotnej długości (750 - 36 + 22 = 736 mm) i wysokości (loc.z = 375 mm):
+        expect(backPart.dim.z).toBeCloseTo(736, 1);
+        expect(backPart.loc.z).toBeCloseTo(375, 1);
+
+        // 2. Wieniec dolny na nowej wysokości (9 + 150 = 159 mm) został docięty przez plecy (550 - 20 = 530 mm):
+        expect(botPart.loc.z).toBeCloseTo(159, 1);
+        expect(botPart.dim.y).toBeCloseTo(530, 1);
+
+        // 3. Brak wpustu na dociętym wieńcu dolnym:
+        const panels = panelStatesFromPlan(plan, container.generatorParams.offsets);
+        const intents = buildBackGrooves(panels);
+        const botGroove = intents.find((i) => i.targetNodeId === botPart.key || i.targetNodeId === botPart.name);
+        expect(botGroove).toBeUndefined();
+
+        // 4. Gdy użytkownik następnie wpisze na zielonym gizmie pleców Plecy_-Y = 18 (na równo ze spodem podniesionego wieńca):
+        korpusOffsetGizmoHandler.previewOffset(container, 'Plecy_-Y', 18);
+        const planFlush = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 750,
+            glebokosc_mm: 550,
+            liczba_stref: 1,
+            cofniecie_plecow_mm: 20,
+            offsets: container.generatorParams.offsets
+        });
+        const backFlush = planFlush.parts.find((p) => p.role === 'BACK_PANEL')!;
+        const botFlush = planFlush.parts.find((p) => p.role === 'BOTTOM_PANEL')!;
+        // Dolna krawędź pleców leży teraz na Z = 150 mm (spód podniesionego wieńca), góra na Z = 743 mm -> wysokość 593 mm:
+        expect(backFlush.dim.z).toBeCloseTo(743 - 150, 1);
+        expect(backFlush.loc.z - backFlush.dim.z / 2).toBeCloseTo(150, 1);
+        expect(botFlush.dim.y).toBeCloseTo(530, 1);
+    });
+
+    it('przesunięcie boku lewego do środka (Bok_L_shiftX = -50) pozostawia wieńce niezależne, zachowuje długość pleców i docina bok lewy przez plecy', async () => {
+        const { korpusOffsetGizmoHandler } = await import('../korpus-offset-gizmo.js');
+        const container: any = {
+            id: 'cnt_side_shift',
+            width: mmToNm(1000),
+            height: mmToNm(750),
+            depth: mmToNm(550),
+            generatorParams: {
+                type: 'korpus3',
+                typ_korpusu: 'korpus3',
+                liczba_stref: 1,
+                cofniecie_plecow_mm: 20,
+                offsets: {}
+            }
+        };
+
+        // Przesuwamy lewy bok o 50 mm do środka (+X w CAD -> przy sign = -1 wartość shiftX = -50)
+        korpusOffsetGizmoHandler.previewOffset(container, 'Bok_L_shiftX', -50);
+
+        // Margines lewy pleców przeliczył się z 11 mm na 11 + 50 = 61 mm:
+        expect(container.generatorParams.offsets['Plecy_-X']).toBe(61);
+
+        const plan = planCabinet({
+            szerokosc_mm: 1000,
+            wysokosc_mm: 750,
+            glebokosc_mm: 550,
+            liczba_stref: 1,
+            cofniecie_plecow_mm: 20,
+            offsets: container.generatorParams.offsets
+        });
+
+        const leftPart = plan.parts.find((p) => p.role === 'LEFT_SIDE_PANEL')!;
+        const botPart = plan.parts.find((p) => p.role === 'BOTTOM_PANEL')!;
+        const topPart = plan.parts.find((p) => p.role === 'TOP_PANEL')!;
+        const backPart = plan.parts.find((p) => p.role === 'BACK_PANEL')!;
+
+        // 1. Bok lewy przesunął się o +50 mm w prawo (-500 + 9 + 50 = -441 mm) i został docięty przez plecy (550 - 20 = 530 mm):
+        expect(leftPart.loc.x).toBeCloseTo(-441, 1);
+        expect(leftPart.dim.y).toBeCloseTo(530, 1);
+
+        // 2. Wieńce dolny i górny są niezależne od shiftX boków (nie docinają się, zostają na 964 mm, loc.x = 0):
+        expect(botPart.dim.x).toBeCloseTo(964, 1);
+        expect(botPart.loc.x).toBeCloseTo(0, 1);
+        expect(topPart.dim.x).toBeCloseTo(964, 1);
+        expect(topPart.loc.x).toBeCloseTo(0, 1);
+
+        // 3. Plecy zachowały swoją pierwotną szerokość (964 + 22 = 986 mm) i pozycję (loc.x = 0):
+        expect(backPart.dim.x).toBeCloseTo(986, 1);
+        expect(backPart.loc.x).toBeCloseTo(0, 1);
+    });
 });
 
 

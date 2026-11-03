@@ -93,7 +93,10 @@ export function readBackEdgeOffset(
         }
         const keyUpper = key.toUpperCase();
         for (const [k, v] of Object.entries(offsets)) {
-            if (k.toUpperCase() === keyUpper && v !== undefined && v !== null && !Number.isNaN(Number(v))) {
+            const kUpper = k.toUpperCase();
+            const cleanKUpper = kUpper.replace(/\.\d+(_[+-][XY])$/, '$1').replace(/_\d+(_[+-][XY])$/, '$1');
+            const cleanKeyUpper = keyUpper.replace(/\.\d+(_[+-][XY])$/, '$1').replace(/_\d+(_[+-][XY])$/, '$1');
+            if ((kUpper === keyUpper || cleanKUpper === keyUpper || kUpper === cleanKeyUpper || cleanKUpper === cleanKeyUpper) && v !== undefined && v !== null && !Number.isNaN(Number(v))) {
                 return Number(v);
             }
         }
@@ -119,7 +122,7 @@ export function readBackEdgeOffset(
             const v = findInOffsets(k);
             if (v !== undefined) return v;
         }
-        return defaultMm;
+        return defaultMm + readSurroundingPanelInwardShiftMm(offsets, suffix, 'M_', panelName);
     }
 
     // 3. Strefa Górna (T / Gora) — izolacja strefy T
@@ -129,7 +132,7 @@ export function readBackEdgeOffset(
             const v = findInOffsets(k);
             if (v !== undefined) return v;
         }
-        return defaultMm;
+        return defaultMm + readSurroundingPanelInwardShiftMm(offsets, suffix, 'T_', panelName);
     }
 
     // 4. Strefa Dolna (B / Dol)
@@ -146,5 +149,201 @@ export function readBackEdgeOffset(
         if (v !== undefined) return v;
     }
 
-    return defaultMm;
+    return defaultMm + readSurroundingPanelInwardShiftMm(offsets, suffix, zonePrefix, panelName);
+}
+
+/**
+ * Zwraca przesunięcie sąsiadującej formatki (wieńca dolnego, górnego, boku lewego lub prawego)
+ * DO ŚRODKA wnęki korpusu [mm] dla danej krawędzi pleców:
+ *  - `-Y` (dół pleców ↔ Wieniec_D): wieniec ma `loc.z = T/2 - shiftZ`, więc ruch w górę (+Z) to `-shiftZ`
+ *  - `+Y` (góra pleców ↔ Wieniec_G): wieniec ma `loc.z = H - T/2 + shiftZ`, więc ruch w dół (-Z) to `-shiftZ`
+ *  - `-X` (lewo pleców ↔ Bok_L): bok ma `loc.x = -W/2 + T/2 - shiftX`, więc ruch w prawo (+X) to `-shiftX`
+ *  - `+X` (prawo pleców ↔ Bok_P): bok ma `loc.x = W/2 - T/2 + shiftX`, więc ruch w lewo (-X) to `-shiftX`
+ */
+export function readSurroundingPanelInwardShiftMm(
+    offsets: Record<string, number> | undefined,
+    suffix: '+X' | '-X' | '+Y' | '-Y',
+    zonePrefix?: string,
+    panelName?: string
+): number {
+    if (!offsets) return 0;
+
+    const nameUpper = String(panelName || '').toUpperCase();
+    // W korpusie narożnym 90° krawędzie boczne PLECY_X / PLECY_Y mają własną semantykę styku w narożniku
+    if ((nameUpper.includes('PLECY_X') || nameUpper.includes('BACK_X') || nameUpper.includes('PLECY_Y') || nameUpper.includes('BACK_Y')) &&
+        (suffix === '-X' || suffix === '+X')) {
+        return 0;
+    }
+
+    const findInOffsets = (key: string): number | undefined => {
+        if (offsets[key] !== undefined && offsets[key] !== null && !Number.isNaN(Number(offsets[key]))) {
+            return Number(offsets[key]);
+        }
+        const keyUpper = key.toUpperCase();
+        for (const [k, v] of Object.entries(offsets)) {
+            const kUpper = k.toUpperCase();
+            const cleanKUpper = kUpper.replace(/\.\d+(_[+-][XY])$/, '$1').replace(/_\d+(_[+-][XY])$/, '$1');
+            const cleanKeyUpper = keyUpper.replace(/\.\d+(_[+-][XY])$/, '$1').replace(/_\d+(_[+-][XY])$/, '$1');
+            if ((kUpper === keyUpper || cleanKUpper === keyUpper || kUpper === cleanKeyUpper || cleanKUpper === cleanKeyUpper) && v !== undefined && v !== null && !Number.isNaN(Number(v))) {
+                return Number(v);
+            }
+        }
+        return undefined;
+    };
+
+    const pfxUpper = String(zonePrefix || '').toUpperCase();
+    const isZoneM = pfxUpper.startsWith('M') || nameUpper.startsWith('M_') || nameUpper.startsWith('SRODEK');
+    const isZoneT = pfxUpper.startsWith('T') || nameUpper.startsWith('T_') || nameUpper.startsWith('GORA');
+
+    const buildZoneKeys = (stems: string[], shiftSuffix: 'shiftZ' | 'shiftX'): string[] => {
+        if (isZoneM) {
+            return stems.flatMap(s => [`Srodek_${s}_${shiftSuffix}`, `M_${s}_${shiftSuffix}`]);
+        }
+        if (isZoneT) {
+            return stems.flatMap(s => [`Gora_${s}_${shiftSuffix}`, `T_${s}_${shiftSuffix}`]);
+        }
+        return [
+            ...stems.flatMap(s => [`Dol_${s}_${shiftSuffix}`, `B_${s}_${shiftSuffix}`]),
+            ...stems.map(s => `${s}_${shiftSuffix}`)
+        ];
+    };
+
+    if (suffix === '-Y') {
+        const keys = buildZoneKeys(['Wieniec_D', 'WIENIEC_D', 'BOTTOM_PANEL', 'BOTTOM'], 'shiftZ');
+        for (const k of keys) {
+            const v = findInOffsets(k);
+            if (v !== undefined) return -v;
+        }
+        return 0;
+    }
+    if (suffix === '+Y') {
+        const keys = buildZoneKeys(['Wieniec_G', 'WIENIEC_G', 'TOP_PANEL', 'TOP'], 'shiftZ');
+        for (const k of keys) {
+            const v = findInOffsets(k);
+            if (v !== undefined) return -v;
+        }
+        return 0;
+    }
+    if (suffix === '-X') {
+        const keys = buildZoneKeys(['Bok_L', 'BOK_L', 'LEFT_SIDE_PANEL', 'SIDE_LEFT'], 'shiftX');
+        for (const k of keys) {
+            const v = findInOffsets(k);
+            if (v !== undefined) return -v;
+        }
+        return 0;
+    }
+    if (suffix === '+X') {
+        const keys = buildZoneKeys(['Bok_P', 'BOK_P', 'RIGHT_SIDE_PANEL', 'SIDE_RIGHT'], 'shiftX');
+        for (const k of keys) {
+            const v = findInOffsets(k);
+            if (v !== undefined) return -v;
+        }
+        return 0;
+    }
+    return 0;
+}
+
+function matchPanelShiftToBackEdge(paramName: string): {
+    suffix: '+X' | '-X' | '+Y' | '-Y';
+    zonePrefix: '' | 'B_' | 'M_' | 'T_';
+    backPanelName: string;
+} | null {
+    if (!paramName) return null;
+    const m = paramName.match(/^(?:(Dol_|B_|Srodek_|M_|Gora_|T_))?(.+)_(shiftZ|shiftX)$/i);
+    if (!m) return null;
+
+    const rawPfx = (m[1] || '').toUpperCase();
+    const stem = (m[2] || '').toUpperCase().replace(/\.\d+$/, '').replace(/_\d+$/, '');
+    const shiftKind = (m[3] || '');
+
+    let zonePrefix: '' | 'B_' | 'M_' | 'T_' = '';
+    let backPanelName = 'Plecy';
+    if (rawPfx === 'M_' || rawPfx === 'SRODEK_') {
+        zonePrefix = 'M_';
+        backPanelName = 'Srodek_Plecy';
+    } else if (rawPfx === 'T_' || rawPfx === 'GORA_') {
+        zonePrefix = 'T_';
+        backPanelName = 'Gora_Plecy';
+    } else if (rawPfx === 'B_' || rawPfx === 'DOL_') {
+        zonePrefix = 'B_';
+        backPanelName = 'Dol_Plecy';
+    }
+
+    if (shiftKind.toLowerCase() === 'shiftz') {
+        if (stem === 'WIENIEC_D' || stem === 'BOTTOM_PANEL' || stem === 'BOTTOM') {
+            return { suffix: '-Y', zonePrefix, backPanelName };
+        }
+        if (stem === 'WIENIEC_G' || stem === 'TOP_PANEL' || stem === 'TOP') {
+            return { suffix: '+Y', zonePrefix, backPanelName };
+        }
+    } else if (shiftKind.toLowerCase() === 'shiftx') {
+        if (stem === 'BOK_L' || stem === 'LEFT_SIDE_PANEL' || stem === 'SIDE_LEFT') {
+            return { suffix: '-X', zonePrefix, backPanelName };
+        }
+        if (stem === 'BOK_P' || stem === 'RIGHT_SIDE_PANEL' || stem === 'SIDE_RIGHT') {
+            return { suffix: '+X', zonePrefix, backPanelName };
+        }
+    }
+    return null;
+}
+
+/**
+ * Zapisuje offset w `offsets` i jeśli zmieniany parametr jest przesunięciem (shiftZ/shiftX)
+ * wieńca lub boku, automatycznie przelicza odpowiadający margines pleców (`Plecy_-Y`, `+Y`, `-X`, `+X`),
+ * tak aby plecy zachowały swoją fizyczną długość w przestrzeni i docięły przesuniętą formatkę.
+ */
+export function applyKorpusOffsetWithBackMarginSync(
+    offsets: Record<string, number>,
+    paramName: string,
+    newValue: number,
+    rules?: any,
+    cabinetType?: string
+): void {
+    const match = matchPanelShiftToBackEdge(paramName);
+    if (!match) {
+        offsets[paramName] = newValue;
+        return;
+    }
+
+    const { suffix, zonePrefix, backPanelName } = match;
+    const defMm = defaultBackEdgeOverlapMm(`${backPanelName}_${suffix}`, cabinetType, rules);
+    const oldInward = readSurroundingPanelInwardShiftMm(offsets, suffix, zonePrefix, backPanelName);
+    const oldOverlap = readBackEdgeOffset(offsets, backPanelName, suffix, defMm, zonePrefix);
+
+    offsets[paramName] = newValue;
+
+    const newInward = readSurroundingPanelInwardShiftMm(offsets, suffix, zonePrefix, backPanelName);
+    const deltaInward = newInward - oldInward;
+    if (Math.abs(deltaInward) <= 1e-9) return;
+
+    const newOverlap = Math.round((oldOverlap + deltaInward) * 100) / 100;
+
+    // Aktualizuj istniejące klucze tej krawędzi pleców w danej strefie, jeśli były już zapisane
+    const targetCandidates = zonePrefix === 'M_'
+        ? [`Srodek_Plecy_${suffix}`, `M_Plecy_${suffix}`, `M_BACK_${suffix}`]
+        : zonePrefix === 'T_'
+        ? [`Gora_Plecy_${suffix}`, `T_Plecy_${suffix}`, `T_BACK_${suffix}`]
+        : [
+            `Dol_Plecy_${suffix}`, `B_Plecy_${suffix}`, `B_BACK_${suffix}`,
+            `Plecy_${suffix}`, `BACK_PANEL_${suffix}`, `BACK_${suffix}`,
+            ...(suffix === '-Y' || suffix === '+Y'
+                ? [`PLECY_Y_${suffix}`, `B_PLECY_Y_${suffix}`, `Dol_Plecy_Y_${suffix}`, `PLECY_X_${suffix}`, `B_PLECY_X_${suffix}`, `Dol_Plecy_X_${suffix}`]
+                : [])
+        ];
+
+    let updatedAny = false;
+    for (const existingKey of Object.keys(offsets)) {
+        if (targetCandidates.some(c => c.toUpperCase() === existingKey.toUpperCase())) {
+            offsets[existingKey] = newOverlap;
+            updatedAny = true;
+        }
+    }
+    if (!updatedAny) {
+        offsets[`${backPanelName}_${suffix}`] = newOverlap;
+        const isRogowy90 = String(cabinetType || '').toLowerCase().includes('rogowy90') || String(cabinetType || '').toLowerCase().includes('rogowy_90');
+        if (isRogowy90 && (suffix === '-Y' || suffix === '+Y')) {
+            offsets[`PLECY_Y_${suffix}`] = newOverlap;
+            offsets[`PLECY_X_${suffix}`] = newOverlap;
+        }
+    }
 }

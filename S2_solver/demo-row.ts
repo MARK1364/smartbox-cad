@@ -217,8 +217,13 @@ export function generateWardrobeDemo(options?: {
         }
 
         // 6. Konwersja frontów na ramki aluminiowe ze szkłem (Z1_BLACK) oraz dodanie 2 uchwytów Easty 160
-        const leftDoorNode = panelNodes.find(p => p.name === 'Drzwi_Lewe');
-        const rightDoorNode = panelNodes.find(p => p.name === 'Drzwi_Prawe');
+        const frontPanels = panelNodes
+            .filter((panel) => (panel.domainData as any)?.role === 'FRONT')
+            .sort((a, b) =>
+                a.localMatrix.decompose().translation.x - b.localMatrix.decompose().translation.x
+            );
+        const leftDoorNode = frontPanels[0];
+        const rightDoorNode = frontPanels[frontPanels.length - 1];
         if (leftDoorNode && rightDoorNode) {
             const leftDoorModel = leftDoorNode.domainData as PanelModel;
             const rightDoorModel = rightDoorNode.domainData as PanelModel;

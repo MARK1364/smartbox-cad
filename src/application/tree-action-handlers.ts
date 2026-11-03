@@ -15,6 +15,12 @@ import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
 import type { BootstrapContext } from './scene-bootstrap.js';
 import { getAllContainers, getAllPanels } from './document-queries.js';
+import { ConstraintStore } from '../../S2_solver/constraint-store.js';
+import { ConnectorStore } from '../../C2_connectors/connector-store.js';
+import { PMIStore } from '../../A8_pmi/pmi-data.js';
+import { LedChannelStore } from '../../A2_bloki/15_led-external-channel-store.js';
+import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
+import { closeCadFloatingEdit } from '../floating-edit/cad-edit-entity.js';
 
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
@@ -125,6 +131,10 @@ export function registerTreeActionHandlers(
         getAllPanels(ctx.document).find((p: any) => p.id === data.id || p.smartId?.uid === data.uuid) ||
         getAllContainers(ctx.document).find((c: any) => c.id === data.id);
       if (entity) {
+        if (entity.frozen || entity.params?.frozen) {
+          ctx.ui.setStatus?.(tx(srcTekst, 'tree.unfreeze_op', TX_NS) || 'Element jest zamrożony. Odmroź go, aby pokazać.', true);
+          return;
+        }
         entity.visible = entity.visible === false ? true : false;
         rebuildGeometry();
         ctx.document.emitChange('all');
@@ -172,10 +182,12 @@ export function registerTreeActionHandlers(
         keepIds.has(ent.id) || keepIds.has(ent.smartId?.uid) || (targetNode && ent === targetNode.domainData);
 
       for (const p of panels) {
-        p.visible = keep(p);
+        const isFrozen = Boolean(p.frozen || p.params?.frozen || doc.findNode(p.id)?.frozen);
+        p.visible = isFrozen ? false : keep(p);
       }
       for (const c of containers) {
-        c.visible = keep(c);
+        const isFrozen = Boolean(c.frozen || c.params?.frozen || doc.findNode(c.id)?.frozen);
+        c.visible = isFrozen ? false : keep(c);
       }
       const hwNodes = doc.getNodesByType ? doc.getNodesByType(NodeType.HARDWARE) : [];
       for (const hw of hwNodes) {
@@ -184,7 +196,8 @@ export function registerTreeActionHandlers(
         } else if (typeof (hw.domainData as any).toJSON !== 'function') {
           hw.domainData = HardwareModel.fromJSON(hw.domainData);
         }
-        (hw.domainData as any).visible = keepIds.has(hw.id);
+        const isFrozen = Boolean(hw.frozen || (hw.domainData as any)?.frozen);
+        (hw.domainData as any).visible = isFrozen ? false : keepIds.has(hw.id);
       }
 
       rebuildGeometry();
@@ -194,10 +207,20 @@ export function registerTreeActionHandlers(
     } else if (action === 'show-all') {
       const doc = ctx.document;
       for (const p of getAllPanels(doc)) {
-        p.visible = true;
+        const isFrozen = Boolean(p.frozen || p.params?.frozen || doc.findNode(p.id)?.frozen);
+        if (!isFrozen) {
+          p.visible = true;
+        } else {
+          p.visible = false;
+        }
       }
       for (const c of getAllContainers(doc)) {
-        c.visible = true;
+        const isFrozen = Boolean(c.frozen || c.params?.frozen || doc.findNode(c.id)?.frozen);
+        if (!isFrozen) {
+          c.visible = true;
+        } else {
+          c.visible = false;
+        }
       }
       const hwNodes = doc.getNodesByType ? doc.getNodesByType(NodeType.HARDWARE) : [];
       for (const hw of hwNodes) {
@@ -206,7 +229,12 @@ export function registerTreeActionHandlers(
         } else if (typeof (hw.domainData as any).toJSON !== 'function') {
           hw.domainData = HardwareModel.fromJSON(hw.domainData);
         }
-        (hw.domainData as any).visible = true;
+        const isFrozen = Boolean(hw.frozen || (hw.domainData as any)?.frozen);
+        if (!isFrozen) {
+          (hw.domainData as any).visible = true;
+        } else {
+          (hw.domainData as any).visible = false;
+        }
       }
       rebuildGeometry();
       doc.emitChange('all');
@@ -268,6 +296,11 @@ export function registerTreeActionHandlers(
         } else if (typeof (hwNode.domainData as any).toJSON !== 'function') {
           hwNode.domainData = HardwareModel.fromJSON(hwNode.domainData);
         }
+        const isFrozen = Boolean(hwNode.frozen || (hwNode.domainData as any).frozen);
+        if (isFrozen) {
+          ctx.ui.setStatus?.('Okucie jest zamrożone. Odmroź je (ikona śnieżynki), aby pokazać.', true);
+          return;
+        }
         const curVis = (hwNode.domainData as any).visible !== false;
         const nextVis = !curVis;
         (hwNode.domainData as any).visible = nextVis;
@@ -302,6 +335,8 @@ export function registerTreeActionHandlers(
         const curFrozen = !!(hwNode.domainData as any).frozen;
         const newFrozen = !curFrozen;
         (hwNode.domainData as any).frozen = newFrozen;
+        (hwNode.domainData as any).visible = !newFrozen;
+        hwNode.frozen = newFrozen;
 
         const panels = getAllPanels(doc);
         for (const panel of panels) {
@@ -309,7 +344,11 @@ export function registerTreeActionHandlers(
             for (const feat of panel.features) {
               if (matchesHardware(feat, data.id, hwNode.domainData)) {
                 feat.frozen = newFrozen;
-                if (feat.params) feat.params.frozen = newFrozen;
+                feat.visible = !newFrozen;
+                if (feat.params) {
+                  feat.params.frozen = newFrozen;
+                  feat.params.visible = !newFrozen;
+                }
               }
             }
           }
@@ -340,6 +379,7 @@ export function registerTreeActionHandlers(
       if (action === 'delete-container') {
         const container = getAllContainers(doc).find((c: any) => c.id === data.id);
         if (container) {
+          closeCadFloatingEdit();
           const cadNodeId = container.id;
           if (cmdHist && doc && doc.findNode(cadNodeId)) {
             cmdHist.execute(
@@ -371,10 +411,17 @@ export function registerTreeActionHandlers(
           }
           rebuildGeometry(tx(srcTekst, 'cadapp.remove_panel', TX_NS));
           ctx.document.emitChange('all');
-        } else {
-          console.warn(
-            '[SmartFrame] Pojedyncze formatki wewnątrz zespołu SmartFrame nie mogą być usuwane indywidualnie. Aby usunąć mebel, usuń cały kontener SmartFrame.',
+        } else if (panel && isEngineChild) {
+          // Podkomponenty generowane z silnika nie mogą być usuwane trwale — zamrożenie
+          const newFrozen = !panel.frozen;
+          panel.frozen = newFrozen;
+          panel.visible = !newFrozen;
+          rebuildGeometry(
+            newFrozen
+              ? tx(srcTekst, 'cadapp.freeze_panel', TX_NS)
+              : tx(srcTekst, 'cadapp.unfreeze_panel', TX_NS),
           );
+          ctx.document.emitChange('all');
         }
       }
     } else if (action === 'delete-feature') {
@@ -404,22 +451,58 @@ export function registerTreeActionHandlers(
       action === 'rename-feature' ||
       action === 'rename-project'
     ) {
+      const notifyAllStoresAndUi = (affectedId?: string) => {
+        ctx.document.notifyDocumentChanged(affectedId ? [affectedId] : undefined);
+        try { ConstraintStore.instance.notifyChanged(); } catch {}
+        try { ConnectorStore.instance.notifyChanged(); } catch {}
+        try { PMIStore.instance.notifyChanged(); } catch {}
+        try { LedChannelStore.instance.notifyChanged(); } catch {}
+        try { DrawingProjectExtractor.instance.syncLiveSceneTree(); } catch {}
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          window.dispatchEvent(new CustomEvent('bloki-project-changed'));
+          if (window.document) {
+            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+          }
+        }
+      };
+
       if (action === 'rename-project') {
         ctx.document.name = data.name;
-        ctx.document.emitChange('all');
+        notifyAllStoresAndUi();
       } else if (action === 'rename-part') {
         const panel = getAllPanels(ctx.document).find(
           (p: any) => p.id === data.id || p.smartId?.uid === data.uuid,
         );
         if (panel) {
-          panel.name = data.name;
-          ctx.document.emitChange('all');
+          const uniqueName = ctx.document.ensureUniqueNodeName(data.name, panel.id);
+          panel.name = uniqueName;
+          panel.nameUserDefined = true;
+          const node = ctx.document.findNode(panel.id);
+          if (node) {
+            node.name = uniqueName;
+          }
+          const views = ContextManager.instance.panelViews;
+          const view = views?.get?.(panel) || (panel.id ? views?.get?.(panel.id) : null);
+          if (view?.root) {
+            view.root.name = uniqueName;
+          }
+          notifyAllStoresAndUi(panel.id);
         }
       } else if (action === 'rename-container') {
         const container = getAllContainers(ctx.document).find((c: any) => c.id === data.id);
         if (container) {
-          container.name = data.name;
-          ctx.document.emitChange('all');
+          const uniqueName = ctx.document.ensureUniqueNodeName(data.name, container.id);
+          container.name = uniqueName;
+          const node = ctx.document.findNode(container.id);
+          if (node) {
+            node.name = uniqueName;
+          }
+          const cntViews = ContextManager.instance.containerViews;
+          const cntView = cntViews?.get?.(container) || (container.id ? cntViews?.get?.(container.id) : null);
+          if (cntView?.rootNode) {
+            cntView.rootNode.name = uniqueName;
+          }
+          notifyAllStoresAndUi(container.id);
         }
       } else if (action === 'rename-feature') {
         for (const panel of getAllPanels(ctx.document)) {
@@ -427,6 +510,7 @@ export function registerTreeActionHandlers(
           if (feature) {
             feature.name = data.name;
             panel._notify('features');
+            notifyAllStoresAndUi(panel.id);
             break;
           }
         }

@@ -1,6 +1,6 @@
 import { planCabinet } from './smartframe-engine.js';
 import { applyAllAssociativeDims } from '../A4_smartpanel/associative-dim.js';
-import { isManualPanel, PanelModel } from '../A4_smartpanel/panel-model.js';
+import { isManualPanel, PanelModel, computePanelFeaturesFingerprint } from '../A4_smartpanel/panel-model.js';
 import { mergeEngineAndLibraryFeatures, refreshLibraryOperationsOnPanel } from '../o1_operacji/operacje-apply.js';
 import { ContainerModel } from '../A1_core/container-model.js';
 import { HardwareModel } from '../A1_core/hardware-model.js';
@@ -48,6 +48,19 @@ export function resolveBlindPanelEdgeBanding(blindSide?: string): Record<string,
     };
 }
 
+/**
+ * Obrzeże ABS trawersu pionowego (TRAVERSE_V) na dolnej krawędzi (+Y),
+ * a nie górnej (-Y pod blatem).
+ */
+export function resolveTraverseVEdgeBanding(): Record<string, { active: boolean; type_id: string }> {
+    return {
+        '+X': NO_EDGE,
+        '-X': NO_EDGE,
+        '+Y': ABS_EDGE,
+        '-Y': NO_EDGE
+    };
+}
+
 export type AdapterCabinetType = 'korpus3' | 'korpus_rogowy1' | 'korpus_rogowy90' | 'korpus_skosny' | 'korpus_skosny_dach' | 'korpus_skosny_lr' | 'korpus_skosny_lr_uc';
 
 export function resolveCabinetType(raw?: string): AdapterCabinetType {
@@ -68,7 +81,7 @@ export function getActiveContainer(docTarget: any): any | null {
     const ae = doc.activeEntity;
     if (!ae) return null;
     if (ae.type === 'container') {
-        const pType = ae.generatorParams?.type || '';
+        const pType = ae.generatorParams?.typ_korpusu || ae.generatorParams?.type || '';
         if (pType.startsWith('blok_')) {
             const node = doc.findNode(ae.id);
             if (node && node.parent && node.parent.domainData?.type === 'container') {
@@ -81,11 +94,11 @@ export function getActiveContainer(docTarget: any): any | null {
     const node = doc.findNode(ae.id);
     if (node && node.parent && node.parent.domainData?.type === 'container') {
         const parentData = node.parent.domainData as any;
-        const pType = parentData.generatorParams?.type || '';
+        const pType = parentData.generatorParams?.typ_korpusu || parentData.generatorParams?.type || '';
         if (pType.startsWith('blok_')) {
-             if (node.parent.parent && node.parent.parent.domainData?.type === 'container') {
-                 return node.parent.parent.domainData;
-             }
+            if (node.parent.parent && node.parent.parent.domainData?.type === 'container') {
+                return node.parent.parent.domainData;
+            }
         }
         return parentData;
     }
@@ -152,7 +165,51 @@ function rebuildPanelView(panel: any) {
     const views = ContextManager.instance.panelViews;
     if (!views || !panel) return;
     const view = views.get(panel) || (panel.id ? views.get(panel.id) : null);
-    if (view && typeof view.rebuildGeometry === 'function') view.rebuildGeometry();
+    if (!view) return;
+    const fp = computePanelFeaturesFingerprint(panel);
+    const isDimsDirty =
+        view.lastWidth !== panel.width ||
+        view.lastHeight !== panel.height ||
+        view.lastThickness !== panel.thickness;
+    const isFeaturesDirty = view.lastFeaturesFingerprint !== fp;
+    if (isDimsDirty || isFeaturesDirty) {
+        if (typeof view.rebuildGeometry === 'function') view.rebuildGeometry();
+    } else {
+        if (typeof view._updateTransform === 'function') view._updateTransform();
+        if (typeof view._updateMaterialAppearance === 'function') view._updateMaterialAppearance();
+    }
+}
+
+function setContainerPanelsSuppressEvents(container: any, suppress: boolean) {
+    const doc = ContextManager.instance.document;
+    const cntNode = (doc && container?.id) ? doc.findNode(container.id) : null;
+    if (!cntNode) return;
+    const visit = (node: any) => {
+        for (const child of node.children || []) {
+            if (child.domainData?.type === 'container') {
+                visit(child);
+            } else if (child.domainData) {
+                (child.domainData as any)._suppressViewEvents = suppress;
+            }
+        }
+    };
+    visit(cntNode);
+}
+
+function syncContainerPanelViews(container: any) {
+    const doc = ContextManager.instance.document;
+    const cntNode = (doc && container?.id) ? doc.findNode(container.id) : null;
+    if (!cntNode) return;
+    const visit = (node: any) => {
+        for (const child of node.children || []) {
+            if (child.domainData?.type === 'container') {
+                visit(child);
+            } else if (child.domainData && !isManualPanel(child.domainData)) {
+                rebuildPanelView(child.domainData);
+            }
+        }
+    };
+    visit(cntNode);
 }
 
 function assignPlanFeatures(panel: any, engineFeatures: any[], preserveLibrary: boolean, containerId?: string) {
@@ -181,28 +238,55 @@ function assignPlanFeatures(panel: any, engineFeatures: any[], preserveLibrary: 
     refreshLibraryOperationsOnPanel(panel);
 }
 
-const lcsCache = new Map<string, any>();
+const lcsCache = new WeakMap<object, Map<string, any>>();
 
-function findLcsInModelTree(modelTree: any, role?: string, name?: string): any {
-    const key = `${role || ''}|${name || ''}`;
-    if (lcsCache.has(key)) return lcsCache.get(key);
+function findLcsInModelTree(modelTree: any, role?: string, partKey?: string): any {
+    if (!modelTree || typeof modelTree !== 'object') return null;
+    let treeCache = lcsCache.get(modelTree);
+    if (!treeCache) {
+        treeCache = new Map<string, any>();
+        lcsCache.set(modelTree, treeCache);
+    }
+    const cacheKey = `${partKey || ''}|${role || ''}`;
+    if (treeCache.has(cacheKey)) return treeCache.get(cacheKey);
 
-    const search = (obj: any): any => {
+    const searchByKey = (obj: any): any => {
+        if (!partKey) return null;
         for (const k in obj) {
             const val = obj[k];
             if (typeof val === 'object' && val !== null) {
-                if ((role && val.role === role) || (name && val.name === name)) {
+                if (k === partKey || val.key === partKey) {
                     if (val.lcs) return val.lcs;
                 }
-                const res = search(val);
+                const res = searchByKey(val);
                 if (res) return res;
             }
         }
         return null;
     };
 
-    const found = search(modelTree);
-    lcsCache.set(key, found);
+    const searchByRole = (obj: any): any => {
+        if (!role) return null;
+        for (const k in obj) {
+            const val = obj[k];
+            if (typeof val === 'object' && val !== null) {
+                if (val.role === role) {
+                    if (val.lcs) return val.lcs;
+                }
+                const res = searchByRole(val);
+                if (res) return res;
+            }
+        }
+        return null;
+    };
+
+    // Jawna hierarchia priorytetów SSOT:
+    // 1. Klucz techniczny formatki (part_key)
+    // 2. Rola techniczna formatki (role)
+    let found = searchByKey(modelTree);
+    if (!found) found = searchByRole(modelTree);
+
+    treeCache.set(cacheKey, found);
     return found;
 }
 
@@ -248,7 +332,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             }
         };
         collectPanels(cntNode);
-        
+
         for (const p of candidatePanels) {
             if (isManualPanel(p)) continue;
             if (p.features && p.features.length > 0) {
@@ -282,17 +366,17 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
 
         // Pobierz lcs z konfiguracji JSON (przekazane przez silnik w part.lcs lub bezpośrednio w node)
         // part.lcs zostało dodane do modelu
-        const rules = resolveCabinetRulesForType(container?.generatorParams?.type);
+        const rules = resolveCabinetRulesForType(container?.generatorParams?.typ_korpusu || container?.generatorParams?.type);
         let lcs = part.lcs;
         if (!lcs && rules?.model_tree) {
-            lcs = findLcsInModelTree(rules.model_tree, part.role, part.name);
+            lcs = findLcsInModelTree(rules.model_tree, part.role, part.key);
         }
 
         if (lcs && lcs.mapping) {
             bbWidth = part.dim[lcs.mapping.X];
             bbHeight = part.dim[lcs.mapping.Y];
             bbThickness = part.dim[lcs.mapping.Z];
-            
+
             if (lcs.rotation) {
                 rotQuat = Quat.fromEulerXYZ(
                     lcs.rotation[0] * Math.PI / 180,
@@ -302,17 +386,33 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             }
         }
 
+        bbWidth = Math.max(1, Number(bbWidth) || 1);
+        bbHeight = Math.max(1, Number(bbHeight) || 1);
+        bbThickness = Math.max(1, Number(bbThickness) || 1);
+
         const rot = rotQuat.toEulerXYZ();
 
         const cornerX = part.loc.x;
         const cornerY = part.loc.y;
         const cornerZ = part.loc.z;
 
-        let panel = cntNode.children.map((c: any) => c.domainData).find((p: any) => 
-            p && !isManualPanel(p) && ((part.key && (p as any).key === part.key) ||
-            (p.name === part.name && (!part.zonePrefix || p.zonePrefix === part.zonePrefix)) || 
-            (p.role === part.role && p.name?.replace(/\s+/g, '_') === part.name?.replace(/\s+/g, '_') && (!part.zonePrefix || p.zonePrefix === part.zonePrefix)))
-        );
+        let panel = cntNode.children.map((c: any) => c.domainData).find((p: any) => {
+            if (!p || isManualPanel(p)) return false;
+            const panelId = p.smartId?.fullPath || p.id;
+            if (activePanelIds.has(panelId)) return false;
+            // 1. Ścisłe dopasowanie po kluczu technicznym formatki w korpusie (np. 'B_BOK_L')
+            if (part.key && (p as any).key === part.key) return true;
+            // 2. Dopasowanie po roli w tej samej strefie tylko gdy jest jednoznaczna (dokładnie 1 część)
+            const sameZone = !part.zonePrefix || p.zonePrefix === part.zonePrefix;
+            if (p.role && p.role === part.role && sameZone) {
+                const candidateParts = operationPlan.parts.filter((pt: any) => pt.role === part.role && (!part.zonePrefix || pt.zonePrefix === part.zonePrefix));
+                const existingWithRole = cntNode.children
+                    .map((c: any) => c.domainData)
+                    .filter((ep: any) => ep && !isManualPanel(ep) && ep.role === part.role && (!part.zonePrefix || ep.zonePrefix === part.zonePrefix));
+                if (candidateParts.length === 1 && existingWithRole.length === 1) return true;
+            }
+            return false;
+        });
         let panelNode: any = panel ? doc?.findNode(panel.id) : null;
 
         // Pobierz domyślne okleinowanie z reguł dla danej roli jeśli panel nie ma jeszcze własnego
@@ -321,18 +421,25 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
         // BLIND_PANEL: ABS tylko od strony światła — zależne od blindSide
         if (part.role === 'BLIND_PANEL') {
             defaultEdgeBanding = resolveBlindPanelEdgeBanding(container?.generatorParams?.strona_blendy);
+        } else if (part.role === 'TOP_PANEL' && (part.edge_banding || container?.generatorParams?.topPanelMode === 'TRAVERSE_V' || container?.generatorParams?.tryb_wienca_gornego === 'TRAVERSE_V')) {
+            defaultEdgeBanding = part.edge_banding || resolveTraverseVEdgeBanding();
         }
 
         if (panel && panelNode) {
-            if (panel.frozen) {
-                panel.visible = false;
+            if (!panel.nameUserDefined) {
+                const baseName = part.name ?? part.key ?? part.role ?? 'Part';
+                const currentName = panelNode.name;
+                const matchesBase = currentName && (currentName === baseName || currentName.startsWith(baseName + '.'));
+                const targetName = matchesBase ? currentName : baseName;
+                const uniqueName = doc ? doc.ensureUniqueNodeName(targetName, panelNode.id) : targetName;
+                panel.name = uniqueName;
+                panelNode.name = uniqueName;
             }
-            panel.name = part.name;
             panel.role = part.role;
             applyPartCustomProperties(panel, part);
             applyPartClassification(panel, part);
             panel.setDimensions(mmToNm(bbWidth), mmToNm(bbHeight), mmToNm(bbThickness));
-            
+
             panelNode.setLocalTransform(
                 new Vec3(mmToNm(cornerX), mmToNm(cornerY), mmToNm(cornerZ)),
                 rotQuat
@@ -349,7 +456,22 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
                 part.role === 'FRONT_PANEL' ||
                 part.role === 'BOTTOM_PANEL' ||
                 part.role === 'TOP_PANEL';
-            if (defaultEdgeBanding && syncEdgeFromRules) {
+            // Obrzeże nadane ręcznie przez użytkownika ma pierwszeństwo przed regułami —
+            // regeneracja korpusu (zmiana wymiaru, gizmo) dopisuje tylko brakujące krawędzie.
+            const isUserEdgeBanding = (panel as any).edgeBandingUserDefined === true;
+            if (isUserEdgeBanding) {
+                if (defaultEdgeBanding) {
+                    const merged = { ...(panel.edgeBanding || {}) };
+                    let changed = false;
+                    for (const [k, v] of Object.entries(defaultEdgeBanding)) {
+                        if (merged[k] === undefined) {
+                            merged[k] = v;
+                            changed = true;
+                        }
+                    }
+                    if (changed) panel.setEdgeBanding(merged);
+                }
+            } else if (defaultEdgeBanding && syncEdgeFromRules) {
                 panel.setEdgeBanding(defaultEdgeBanding);
             } else {
                 const hasActiveEdgeBanding = panel.edgeBanding && Object.values(panel.edgeBanding).some((e: any) => e?.active);
@@ -374,7 +496,9 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             assignPlanFeatures(panel, part.features || [], true, container.id);
             // Zawsze przebuduj mesh — przy skosnym LR zmiana heightLeft musi odświeżyć bok
             // (setDimensions emituje event, ale outline/custom też wymaga jawnego rebuildu).
-            rebuildPanelView(panel);
+            if (!(container as any)?._deferViewSync) {
+                rebuildPanelView(panel);
+            }
         } else {
             const rawMat = part.material;
             const isLegacyOrEmpty = !rawMat || rawMat === 'MDF_SUROWY_18' || rawMat === 'HDF_3' || rawMat === 'PLYTY_18';
@@ -382,17 +506,20 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             const initialMatName = isLegacyOrEmpty ? undefined : part.materialName;
             const initialMatCode = isLegacyOrEmpty ? undefined : part.materialCode;
 
+            const uniquePartName = doc ? doc.ensureUniqueNodeName(part.name) : part.name;
             panel = new PanelModel({
                 width: mmToNm(bbWidth),
                 height: mmToNm(bbHeight),
                 thickness: mmToNm(bbThickness),
                 role: part.role,
-                name: part.name,
+                name: uniquePartName,
+                key: part.key,
+                zonePrefix: part.zonePrefix,
+                zoneId: part.zoneId,
                 ...(initialMatId ? { materialId: initialMatId } : {}),
                 ...(initialMatName ? { materialName: initialMatName } : {}),
                 ...(initialMatCode ? { materialCode: initialMatCode } : {})
             });
-            panel.name = part.name;
             panel.role = part.role;
             (panel as any).key = part.key;
             panel.zonePrefix = part.zonePrefix;
@@ -420,7 +547,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
                 new Vec3(mmToNm(cornerX), mmToNm(cornerY), mmToNm(cornerZ)),
                 rotQuat
             );
-            
+
             if (doc) doc.addNode(container.id, panelNode);
             else cntNode.addChild(panelNode);
         }
@@ -478,7 +605,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
             activeHardwareIds.add(hwNode.id);
         }
     }
-    
+
     if (doc) {
         const currentChildren = [...cntNode.children];
         for (const childNode of currentChildren) {
@@ -528,7 +655,7 @@ export function runEngineAndApply(
     // Wyjątek gizmo: `topPanelMode` / `traverseWidth` są własnością gizma wienca.
     const tryb_wienca_gornego = (gp.topPanelMode || 'FULL') as 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V';
     const szerokosc_trawersu_mm = gp.traverseWidth || 80;
-    const cabinetType = resolveCabinetType(gp.type);
+    const cabinetType = resolveCabinetType(gp.typ_korpusu || gp.type);
     const isCorner = cabinetType === 'korpus_rogowy1' || cabinetType === 'korpus_rogowy90';
     const isSkosny = cabinetType === 'korpus_skosny' || cabinetType === 'korpus_skosny_dach' || cabinetType === 'korpus_skosny_lr' || cabinetType === 'korpus_skosny_lr_uc';
     // Skośny: wysokość kontenera zawsze = max stron [mm].
@@ -562,8 +689,8 @@ export function runEngineAndApply(
         wysokosc_mm: h_mm,
         glebokosc_mm: glebokosc_mm,
         liczba_stref: effectiveZoneCount as 1 | 2 | 3,
-        wysokosc_strefy_dolnej_mm,
-        wysokosc_strefy_srodkowej_mm,
+        wysokosc_strefy_dolnej_mm: effectiveZoneCount > 1 && wysokosc_strefy_dolnej_mm > 0 ? wysokosc_strefy_dolnej_mm : undefined,
+        wysokosc_strefy_srodkowej_mm: effectiveZoneCount === 3 && wysokosc_strefy_srodkowej_mm > 0 ? wysokosc_strefy_srodkowej_mm : undefined,
         cofniecie_plecow_mm: bOffset,
         offsets: offsets ?? gp.offsets,
         container: cntNode || container,
@@ -581,12 +708,20 @@ export function runEngineAndApply(
         wysokosc_lewy_mm: gp.wysokosc_lewy_mm,
         wysokosc_prawy_mm: gp.wysokosc_prawy_mm
     });
-    applyPlanToContainer(container, plan);
+    if (container) (container as any)._deferViewSync = true;
+    setContainerPanelsSuppressEvents(container, true);
+    try {
+        applyPlanToContainer(container, plan);
 
-    // Po zastosowaniu planu węzły istnieją w dokumencie. Wyliczamy rowki matematycznie na podstawie macierzy:
-    if (doc) {
-        new SyncBackGroovesCommand(container.id).execute(doc);
-        notifyKorpusRebuilt(doc, container.id);
+        // Po zastosowaniu planu węzły istnieją w dokumencie. Wyliczamy rowki matematycznie na podstawie macierzy:
+        if (doc) {
+            new SyncBackGroovesCommand(container.id).execute(doc);
+            notifyKorpusRebuilt(doc, container.id);
+        }
+    } finally {
+        if (container) (container as any)._deferViewSync = false;
+        setContainerPanelsSuppressEvents(container, false);
+        syncContainerPanelViews(container);
     }
 }
 
@@ -610,9 +745,9 @@ export function rebuildSmartFrameContainer(container: any): boolean {
 
     runEngineAndApply(
         container,
-        nmToMm(container.width),
-        nmToMm(container.height),
-        nmToMm(container.depth),
+        Number.isFinite(container.width) ? nmToMm(container.width) : (gp.szerokosc_mm ?? 600),
+        Number.isFinite(container.height) ? nmToMm(container.height) : (gp.wysokosc_mm ?? 720),
+        Number.isFinite(container.depth) ? nmToMm(container.depth) : (gp.glebokosc_mm ?? 560),
         zCount,
         bHeight,
         mHeight,
@@ -622,7 +757,7 @@ export function rebuildSmartFrameContainer(container: any): boolean {
 
     const rebuild = (typeof window !== 'undefined') ? (window as any).__rebuildGeometry : null;
     if (typeof rebuild === 'function') {
-        try { rebuild(); } catch {}
+        try { rebuild(); } catch { }
     }
 
     if (typeof window !== 'undefined' && window.document) {
@@ -631,7 +766,7 @@ export function rebuildSmartFrameContainer(container: any): boolean {
 
     const doc = ContextManager.instance.document;
     if (doc) {
-        doc.notifyDocumentChanged();
+        if (!(typeof window !== 'undefined' && (window as any).__glcGizmoActive)) doc.notifyDocumentChanged();
     }
 
     return true;
@@ -741,9 +876,9 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
     if (!docTarget) return;
     const doc = docTarget.document || docTarget;
 
-    const w_mm = params.szerokosc_mm ?? 600;
-    const h_mm = params.wysokosc_mm ?? 720;
-    const d_mm = params.glebokosc_mm ?? 560;
+    const w_mm = params.szerokosc_mm ?? targetContainer?.generatorParams?.szerokosc_mm ?? (targetContainer?.width ? nmToMm(targetContainer.width) : 600);
+    const h_mm = params.wysokosc_mm ?? targetContainer?.generatorParams?.wysokosc_mm ?? (targetContainer?.height ? nmToMm(targetContainer.height) : 720);
+    const d_mm = params.glebokosc_mm ?? targetContainer?.generatorParams?.glebokosc_mm ?? (targetContainer?.depth ? nmToMm(targetContainer.depth) : 560);
 
     if (w_mm < 150 || h_mm < 150 || d_mm < 150) return;
 
@@ -752,7 +887,7 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
 
     const gp = container.generatorParams || {};
     // Zabezpieczenie: Typ i liczba stref istniejącego korpusu są ściśle niezmienne (immutable)
-    const existingType = gp.type ? resolveCabinetType(gp.type) : undefined;
+    const existingType = (gp.type || gp.typ_korpusu) ? resolveCabinetType(gp.type || gp.typ_korpusu) : undefined;
     const cabinetType = existingType || params.typ_korpusu || 'korpus3';
     const isRogowy1 = cabinetType === 'korpus_rogowy1';
     const isRogowy90 = cabinetType === 'korpus_rogowy90';
@@ -764,17 +899,17 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
     const zoneCount = ((isCorner || isSkosny) ? 1 : (existingZoneCount ?? params.liczba_stref ?? 3)) as 1 | 2 | 3;
     const typeStr = cabinetType === 'korpus_skosny_lr_uc' ? 'korpus_skosny_lr_uc'
         : cabinetType === 'korpus_skosny_lr' ? 'korpus_skosny_lr'
-        : cabinetType === 'korpus_skosny_dach' ? 'korpus_skosny_dach'
-        : cabinetType === 'korpus_skosny' ? 'korpus_skosny'
-        : isRogowy90 ? 'korpus_rogowy90'
-        : isRogowy1 ? 'korpus_rogowy1'
-        : (gp.type || 'korpus3_2');
+            : cabinetType === 'korpus_skosny_dach' ? 'korpus_skosny_dach'
+                : cabinetType === 'korpus_skosny' ? 'korpus_skosny'
+                    : isRogowy90 ? 'korpus_rogowy90'
+                        : isRogowy1 ? 'korpus_rogowy1'
+                            : (gp.type || 'korpus3_2');
 
     const skos_hF_mm = params.wysokosc_przod_mm ?? gp.wysokosc_przod_mm ?? h_mm;
     const skos_hB_mm = params.wysokosc_tyl_mm ?? gp.wysokosc_tyl_mm ?? 1000;
     const skos_hL_mm = params.wysokosc_lewy_mm ?? gp.wysokosc_lewy_mm ?? 1000;
     const skos_hR_mm = params.wysokosc_prawy_mm ?? gp.wysokosc_prawy_mm ?? h_mm;
-    const skos_h_mm = isSkosnyLr ? Math.max(skos_hL_mm, skos_hR_mm, h_mm) : Math.max(skos_hF_mm, skos_hB_mm, h_mm);
+    const skos_h_mm = isSkosnyLr ? Math.max(skos_hL_mm, skos_hR_mm) : Math.max(skos_hF_mm, skos_hB_mm);
     const bottomHeight = params.wysokosc_strefy_dolnej_mm ?? gp.wysokosc_strefy_dolnej_mm ?? (isSkosny ? skos_h_mm : h_mm);
     const middleHeight = params.wysokosc_strefy_srodkowej_mm ?? gp.wysokosc_strefy_srodkowej_mm ?? 0;
     const blindWidth = params.szerokosc_blendy_mm ?? gp.szerokosc_blendy_mm ?? 400;
@@ -785,10 +920,13 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
     const typListwy = params.typ_listwy_naroznej ?? gp.typ_listwy_naroznej;
     // Wyjątek gizmo: A1_core/gizmo-controller zapisuje tu `backOffset`.
     const bOffset = params.cofniecie_plecow_mm ?? gp.cofniecie_plecow_mm ?? gp.backOffset ?? 3;
+    const effectiveOffsets = params.offsets !== undefined
+        ? { ...(gp.offsets || {}), ...(params.offsets || {}) }
+        : { ...(gp.offsets || {}) };
 
-    container.width  = mmToNm(w_mm);
+    container.width = mmToNm(w_mm);
     container.height = mmToNm(isSkosny ? skos_h_mm : h_mm);
-    container.depth  = mmToNm(d_mm);
+    container.depth = mmToNm(d_mm);
     if (!container.generatorParams) container.generatorParams = {};
     Object.assign(container.generatorParams, buildCabinetGeneratorParams({
         type: typeStr,
@@ -797,10 +935,10 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
         wysokosc_mm: isSkosny ? skos_h_mm : h_mm,
         glebokosc_mm: d_mm,
         liczba_stref: zoneCount,
-        wysokosc_strefy_dolnej_mm: (isCorner || isSkosny) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeight,
-        wysokosc_strefy_srodkowej_mm: (isCorner || isSkosny) ? 0 : middleHeight,
+        wysokosc_strefy_dolnej_mm: (isCorner || isSkosny || zoneCount === 1) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeight,
+        wysokosc_strefy_srodkowej_mm: (isCorner || isSkosny || zoneCount === 1) ? 0 : middleHeight,
         cofniecie_plecow_mm: bOffset,
-        offsets: params.offsets,
+        offsets: effectiveOffsets,
         ...(isSkosny && !isSkosnyLr ? { wysokosc_przod_mm: skos_hF_mm, wysokosc_tyl_mm: skos_hB_mm } : {}),
         ...(isSkosnyLr ? { wysokosc_lewy_mm: skos_hL_mm, wysokosc_prawy_mm: skos_hR_mm } : {}),
         ...(isRogowy1 ? { szerokosc_blendy_mm: blindWidth, strona_blendy: blindSide } : {}),
@@ -815,16 +953,19 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
         container,
         w_mm, isSkosny ? skos_h_mm : h_mm, d_mm,
         zoneCount,
-        (isCorner || isSkosny) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeight,
-        (isCorner || isSkosny) ? 0 : middleHeight,
-        bOffset, { ...(params.offsets || {}) }
+        (isCorner || isSkosny || zoneCount === 1) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeight,
+        (isCorner || isSkosny || zoneCount === 1) ? 0 : middleHeight,
+        bOffset, effectiveOffsets
     );
     const rebuild = (typeof window !== 'undefined') ? (window as any).__rebuildGeometry : null;
     if (typeof rebuild === 'function') {
-        try { rebuild('SmartFrame realtime update'); } catch {}
+        try { rebuild('SmartFrame realtime update'); } catch { }
     }
-    if (typeof window !== 'undefined' && window.document) {
-        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('bloki-project-changed', { detail: { containerId: container.id } }));
+        if (window.document) {
+            window.document.dispatchEvent(new CustomEvent('bloki-project-changed', { detail: { containerId: container.id } }));
+        }
     }
     if (doc) {
         doc.notifyDocumentChanged();

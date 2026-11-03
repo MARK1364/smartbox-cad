@@ -43,6 +43,12 @@ export interface ConstraintAnchor {
      * Solver rusza korpus; geometria liczona jest z tej formatki.
      */
     sourceNodeId?: string;
+    /** Rola formatki źródłowej (np. 'RIGHT_SIDE_PANEL') do stabilnego re-linku po regeneracji. */
+    sourceRole?: string;
+    /** Klucz reguł formatki (np. 'B_BOK_P'). */
+    sourceKey?: string;
+    /** Nazwa formatki źródłowej. */
+    sourceName?: string;
     /**
      * Snapshot geometrii w LCS bryły sztywnej [mm] (po mapowaniu z formatki).
      * Dla żywej geometrii punkt jest rzutowany na aktualną nazwaną ścianę, więc
@@ -74,7 +80,7 @@ export interface SolverConstraint {
     groundPosMm: Vec3 | null;
     /** Normalna uziemienia [WCS] dla trybu FACE. `null` — jak wyżej. */
     groundNormal: Vec3 | null;
-    /** Dystans między płaszczyznami dla COPLANAR/FLUSH [mm]. */
+    /** Dystans między płaszczyznami dla COPLANAR/FLUSH/VERTEX_DATUM [mm]. */
     offsetMm: number;
     /** Runtime: więz wygaszony jako sprzeczny. Nie jest serializowany. */
     conflict: boolean;
@@ -114,13 +120,13 @@ export function constraintHasGeometry(constraint: SolverConstraint): boolean {
     return Boolean(constraint.anchorA && constraint.anchorB);
 }
 
-/** Zbiera identyfikatory węzłów, do których odwołuje się więz (bez virtuali DATUM). */
+/** Zbiera identyfikatory węzłów dokumentu, do których odwołuje się więz (bez virtuali __DATUM__:). */
 export function constraintNodeIds(constraint: SolverConstraint): string[] {
     const ids: string[] = [];
-    if (constraint.anchorA && constraint.anchorA.kind !== 'DATUM') {
+    if (constraint.anchorA && !String(constraint.anchorA.nodeId || '').startsWith('__DATUM__:')) {
         ids.push(constraint.anchorA.nodeId);
     }
-    if (constraint.anchorB && constraint.anchorB.kind !== 'DATUM') {
+    if (constraint.anchorB && !String(constraint.anchorB.nodeId || '').startsWith('__DATUM__:')) {
         ids.push(constraint.anchorB.nodeId);
     }
     return ids;

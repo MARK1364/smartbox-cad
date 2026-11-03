@@ -1,5 +1,6 @@
 import type { ModuleId, AnyModulePayload } from './types';
 import { storageAdapter } from '../storage/storage-adapter.js';
+export { storageAdapter };
 
 export const MODULE_SESSION_KEYS: Record<ModuleId, string> = {
     report: 'CAD_MODULE_REPORT',

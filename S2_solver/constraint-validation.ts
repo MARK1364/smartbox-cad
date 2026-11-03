@@ -5,11 +5,10 @@
  */
 
 import type { ProjectDocument } from '../A1_core/project-document.js';
-import { Vec3 } from '../A1_core/cad-math/vec3.js';
-import { resolveAnchor } from './constraint-geometry.js';
+import { resolveAnchor, recoverAnchorSource } from './constraint-geometry.js';
 import type { ConstraintAnchor, SolverConstraint } from './constraint-types.js';
 import { constraintNodeIds } from './constraint-types.js';
-import { isDatumAnchor } from './datum-planes.js';
+import { isDatumAnchor, isDatumNodeId, resolveDatumAnchorPose } from './datum-planes.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 
@@ -17,16 +16,16 @@ export interface ConstraintValidationIssue {
     constraintId: string;
     severity: ValidationSeverity;
     code:
-        | 'SELF_BIND'
-        | 'DUPLICATE_GROUND'
-        | 'DUPLICATE_VERTEX'
-        | 'DUPLICATE_FACE'
-        | 'MISSING_NODE'
-        | 'MISSING_GEOMETRY'
-        | 'STALE_SOURCE'
-        | 'PLANE_DIRECTION_CONFLICT'
-        | 'NON_PARALLEL_PLANES'
-        | 'BRIDGE_WARNING';
+    | 'SELF_BIND'
+    | 'DUPLICATE_GROUND'
+    | 'DUPLICATE_VERTEX'
+    | 'DUPLICATE_FACE'
+    | 'MISSING_NODE'
+    | 'MISSING_GEOMETRY'
+    | 'STALE_SOURCE'
+    | 'PLANE_DIRECTION_CONFLICT'
+    | 'NON_PARALLEL_PLANES'
+    | 'BRIDGE_WARNING';
     message: string;
 }
 
@@ -103,7 +102,17 @@ function hasStaleSource(
     if (!document || !anchor?.sourceNodeId || anchor.sourceNodeId === anchor.nodeId) {
         return false;
     }
-    return !document.findNode(anchor.sourceNodeId);
+    if (document.findNode(anchor.sourceNodeId)) {
+        return false;
+    }
+    const body = document.findNode(anchor.nodeId);
+    if (body) {
+        const recovered = recoverAnchorSource(body, anchor);
+        if (recovered) {
+            return false;
+        }
+    }
+    return true;
 }
 
 function anchorResolves(
@@ -114,7 +123,7 @@ function anchorResolves(
         return false;
     }
     if (isDatumAnchor(anchor)) {
-        return Boolean(anchor.localNormalMm || anchor.faceName);
+        return resolveDatumAnchorPose(anchor, document) !== null || Boolean(anchor.localNormalMm || anchor.faceName);
     }
     if (!document) {
         return true;
@@ -182,8 +191,8 @@ export function validateConstraints(
             continue;
         }
         if (document) {
-            const missingA = !isDatumAnchor(c.anchorA) && !document.findNode(c.anchorA.nodeId);
-            const missingB = !isDatumAnchor(c.anchorB) && !document.findNode(c.anchorB.nodeId);
+            const missingA = !isDatumNodeId(c.anchorA.nodeId) && !document.findNode(c.anchorA.nodeId);
+            const missingB = !isDatumNodeId(c.anchorB.nodeId) && !document.findNode(c.anchorB.nodeId);
             if (missingA || missingB) {
                 issues.push({
                     constraintId: c.id,
@@ -245,7 +254,7 @@ export function validateConstraints(
             if (skipIds.has(b.id) || a.bindType !== b.bindType) {
                 continue;
             }
-            if (a.bindType === 'VERTEX' && samePair(a, b) && sameVertexGeometry(a, b)) {
+            if ((a.bindType === 'VERTEX' || a.bindType === 'VERTEX_DATUM') && samePair(a, b) && sameVertexGeometry(a, b)) {
                 issues.push({
                     constraintId: b.id,
                     severity: 'error',

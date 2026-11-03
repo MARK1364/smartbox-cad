@@ -93,11 +93,12 @@ export class CommandHistory {
      */
     undo(): boolean {
         if (!this.canUndo || this._isExecuting) return false;
-        const command = this._undoStack.pop()!;
+        const command = this._undoStack[this._undoStack.length - 1];
         this._isExecuting = true;
 
         try {
             command.undo(this._document);
+            this._undoStack.pop();
             this._redoStack.push(command);
             this._notify();
             return true;
@@ -111,7 +112,7 @@ export class CommandHistory {
      */
     redo(): boolean {
         if (!this.canRedo || this._isExecuting) return false;
-        const command = this._redoStack.pop()!;
+        const command = this._redoStack[this._redoStack.length - 1];
         this._isExecuting = true;
 
         try {
@@ -120,6 +121,7 @@ export class CommandHistory {
             } else {
                 command.execute(this._document);
             }
+            this._redoStack.pop();
             this._undoStack.push(command);
             this._notify();
             return true;

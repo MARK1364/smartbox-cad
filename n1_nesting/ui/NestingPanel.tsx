@@ -663,7 +663,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         try {
             const nestingResult = await runNesting(activeParts, config, {
                 mode,
-                iterations: mode === 'pro' ? 2000 : 1,
+                iterations: mode === 'pro' ? 2000 : 50,
                 selectedMaterial: selectedMaterialFilter,
                 machineType,
                 scope: 'PROJECT',

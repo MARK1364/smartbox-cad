@@ -421,6 +421,28 @@ describe('machining-sync — syncMachiningHoles', () => {
         expect(isOwnedHole(frozen, 'isDoorDrilling')).toBe(true);
     });
 
+    it('does not duplicate a frozen feature when a new intent has the same ID', () => {
+        const { doc, panelA, panels, oldFeatures } = makeSyncFixture();
+        const originalFrozen = panelA.features.find((f: any) => f.id === 'frozen_door');
+        const intent = buildHoleMachiningIntent({
+            targetNodeId: 'p_a',
+            id: 'frozen_door',
+            face: 'FACE_Z_PLUS',
+            u: 100,
+            v: 200,
+            diameter: 12,
+            depth: 20,
+            ownerTag: 'isDoorDrilling',
+        });
+
+        syncMachiningHoles(doc, [intent], panels, 'isDoorDrilling', oldFeatures);
+
+        const matchingFeatures = panelA.features.filter((f: any) => f.id === 'frozen_door');
+        expect(matchingFeatures).toHaveLength(1);
+        expect(matchingFeatures[0]).toBe(originalFrozen);
+        expect(matchingFeatures[0].params.frozen).toBe(true);
+    });
+
     it('emit / restore: undo odtwarza pierwotne features i emituje (setFeatures)', () => {
         const { doc, panels, oldFeatures } = makeSyncFixture();
         // Pierwszy sync na docelowe (p_b) — snapshot p_b, upsert; emit spy via setFeatures

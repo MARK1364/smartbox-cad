@@ -2434,6 +2434,11 @@
     "en": "Generate CNC programs for whole project",
     "de": "CNC-Programme für Gesamtprojekt erzeugen"
   },
+  "ctxmenu.export_dxf": {
+    "pl": "Eksportuj formatkę do DXF",
+    "en": "Export panel to DXF",
+    "de": "Platte nach DXF exportieren"
+  },
   "cncval.synced": {
     "pl": "Pomyślnie zsynchronizowano utworzone programy CNC z modelem CAD!",
     "en": "Successfully synced CNC programs with CAD model!",

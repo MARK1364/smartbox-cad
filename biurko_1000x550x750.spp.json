@@ -1,0 +1,1718 @@
+{
+  "format": "smartpanel-project",
+  "version": 4,
+  "domainUnit": "nm",
+  "id": "doc_1793387226866_791",
+  "name": "Biurko 1000x550x750",
+  "metadata": {
+    "appVersion": "0.0.0"
+  },
+  "rootNode": {
+    "id": "root_room",
+    "name": "Pokój",
+    "nodeType": "ROOM",
+    "translationNm": [
+      0,
+      0,
+      0
+    ],
+    "rotationQuat": [
+      0,
+      0,
+      0,
+      1
+    ],
+    "scale": [
+      1,
+      1,
+      1
+    ],
+    "children": [
+      {
+        "id": "container_1793387226868_1_14455",
+        "name": "Korpus 1",
+        "nodeType": "ASSEMBLY",
+        "translationNm": [
+          0,
+          0,
+          0
+        ],
+        "rotationQuat": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "children": [
+          {
+            "id": "panel_1",
+            "name": "Dol_Bok_L",
+            "nodeType": "PART",
+            "translationNm": [
+              -491000000,
+              0,
+              296000000
+            ],
+            "rotationQuat": [
+              0,
+              0,
+              -0.7071067811865475,
+              0.7071067811865476
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Dol_Bok_L",
+              "role": "LEFT_SIDE_PANEL",
+              "width": 550000000,
+              "height": 592000000,
+              "thickness": 18000000,
+              "materialId": "W1100_ST9_18",
+              "materialName": "Biały Alpejski",
+              "materialCode": "W1100 ST9",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                },
+                "-X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "+Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                },
+                "-Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                }
+              },
+              "custom_properties": {
+                "material": "W1100_ST9_18",
+                "material_name": "Biały Alpejski",
+                "material_code": "W1100 ST9",
+                "thickness_mm": 18,
+                "edge_banding": {
+                  "+X": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  },
+                  "-X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "+Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  },
+                  "-Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": [
+                {
+                  "id": "feat_back_groove_panel_1",
+                  "type": "groove",
+                  "name": "Wpust",
+                  "face": "FACE_Z_PLUS",
+                  "params": {
+                    "isBackGroove": true,
+                    "u": 77,
+                    "v": 274,
+                    "width": 3,
+                    "length": 311,
+                    "depth": 11,
+                    "u_nm": 77000000,
+                    "v_nm": 274000000,
+                    "width_nm": 3000000,
+                    "length_nm": 311000000,
+                    "depth_nm": 11000000
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "panel_2",
+            "name": "Dol_Bok_P",
+            "nodeType": "PART",
+            "translationNm": [
+              491000000,
+              0,
+              296000000
+            ],
+            "rotationQuat": [
+              0,
+              0,
+              0.7071067811865475,
+              0.7071067811865476
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Dol_Bok_P",
+              "role": "RIGHT_SIDE_PANEL",
+              "width": 550000000,
+              "height": 592000000,
+              "thickness": 18000000,
+              "materialId": "W1100_ST9_18",
+              "materialName": "Biały Alpejski",
+              "materialCode": "W1100 ST9",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-X": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                },
+                "+Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                },
+                "-Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                }
+              },
+              "custom_properties": {
+                "material": "W1100_ST9_18",
+                "material_name": "Biały Alpejski",
+                "material_code": "W1100 ST9",
+                "thickness_mm": 18,
+                "edge_banding": {
+                  "+X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-X": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  },
+                  "+Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  },
+                  "-Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": [
+                {
+                  "id": "feat_back_groove_panel_2",
+                  "type": "groove",
+                  "name": "Wpust",
+                  "face": "FACE_Z_PLUS",
+                  "params": {
+                    "isBackGroove": true,
+                    "u": 470,
+                    "v": 274,
+                    "width": 3,
+                    "length": 311,
+                    "depth": 11,
+                    "u_nm": 470000000,
+                    "v_nm": 274000000,
+                    "width_nm": 3000000,
+                    "length_nm": 311000000,
+                    "depth_nm": 11000000
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "panel_3",
+            "name": "Dol_Wieniec_D",
+            "nodeType": "PART",
+            "translationNm": [
+              0,
+              0,
+              9000000
+            ],
+            "rotationQuat": [
+              4.3297802811774664e-17,
+              0.7071067811865476,
+              0.7071067811865475,
+              4.329780281177467e-17
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Dol_Wieniec_D",
+              "role": "BOTTOM_PANEL",
+              "width": 964000000,
+              "height": 550000000,
+              "thickness": 18000000,
+              "materialId": "W1100_ST9_18",
+              "materialName": "Biały Alpejski",
+              "materialCode": "W1100 ST9",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "+Y": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                }
+              },
+              "custom_properties": {
+                "material": "W1100_ST9_18",
+                "material_name": "Biały Alpejski",
+                "material_code": "W1100 ST9",
+                "thickness_mm": 18,
+                "edge_banding": {
+                  "+X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "+Y": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": []
+            }
+          },
+          {
+            "id": "panel_4",
+            "name": "Dol_Wieniec_G",
+            "nodeType": "PART",
+            "translationNm": [
+              0,
+              0,
+              583000000
+            ],
+            "rotationQuat": [
+              -0.7071067811865475,
+              0,
+              0,
+              0.7071067811865476
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Dol_Wieniec_G",
+              "role": "TOP_PANEL",
+              "width": 964000000,
+              "height": 550000000,
+              "thickness": 18000000,
+              "materialId": "W1100_ST9_18",
+              "materialName": "Biały Alpejski",
+              "materialCode": "W1100 ST9",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "+Y": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                }
+              },
+              "custom_properties": {
+                "material": "W1100_ST9_18",
+                "material_name": "Biały Alpejski",
+                "material_code": "W1100 ST9",
+                "thickness_mm": 18,
+                "edge_banding": {
+                  "+X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "+Y": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": [
+                {
+                  "id": "feat_back_groove_panel_4",
+                  "type": "groove",
+                  "name": "Wpust",
+                  "face": "FACE_Z_PLUS",
+                  "params": {
+                    "isBackGroove": true,
+                    "u": 0,
+                    "v": 470,
+                    "width": 964,
+                    "length": 3,
+                    "depth": 11,
+                    "u_nm": 0,
+                    "v_nm": 470000000,
+                    "width_nm": 964000000,
+                    "length_nm": 3000000,
+                    "depth_nm": 11000000
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "panel_5",
+            "name": "Dol_Plecy",
+            "nodeType": "PART",
+            "translationNm": [
+              0,
+              196500000,
+              429500000
+            ],
+            "rotationQuat": [
+              1,
+              0,
+              0,
+              6.123233995736766e-17
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Dol_Plecy",
+              "role": "BACK_PANEL",
+              "width": 986000000,
+              "height": 311000000,
+              "thickness": 3000000,
+              "materialId": "HDF_BIALY_3",
+              "materialName": "HDF Biały 3mm",
+              "materialCode": "HDF_WHITE_3",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "+Y": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-Y": {
+                  "active": false,
+                  "type_id": "none"
+                }
+              },
+              "custom_properties": {
+                "material": "HDF_BIALY_3",
+                "material_name": "HDF Biały 3mm",
+                "material_code": "HDF_WHITE_3",
+                "thickness_mm": 3,
+                "edge_banding": {
+                  "+X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "+Y": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-Y": {
+                    "active": false,
+                    "type_id": "none"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": []
+            }
+          },
+          {
+            "id": "panel_6",
+            "name": "Gora_Bok_L",
+            "nodeType": "PART",
+            "translationNm": [
+              -491000000,
+              0,
+              671000000
+            ],
+            "rotationQuat": [
+              0,
+              0,
+              -0.7071067811865475,
+              0.7071067811865476
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Gora_Bok_L",
+              "role": "LEFT_SIDE_PANEL",
+              "width": 550000000,
+              "height": 158000000,
+              "thickness": 18000000,
+              "materialId": "W1100_ST9_18",
+              "materialName": "Biały Alpejski",
+              "materialCode": "W1100 ST9",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                },
+                "-X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "+Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                },
+                "-Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                }
+              },
+              "custom_properties": {
+                "material": "W1100_ST9_18",
+                "material_name": "Biały Alpejski",
+                "material_code": "W1100 ST9",
+                "thickness_mm": 18,
+                "edge_banding": {
+                  "+X": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  },
+                  "-X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "+Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  },
+                  "-Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": [
+                {
+                  "id": "feat_back_groove_panel_6",
+                  "type": "groove",
+                  "name": "Wpust",
+                  "face": "FACE_Z_PLUS",
+                  "params": {
+                    "isBackGroove": true,
+                    "u": 77,
+                    "v": 7,
+                    "width": 3,
+                    "length": 144,
+                    "depth": 11,
+                    "u_nm": 77000000,
+                    "v_nm": 7000000,
+                    "width_nm": 3000000,
+                    "length_nm": 144000000,
+                    "depth_nm": 11000000
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "panel_7",
+            "name": "Gora_Bok_P",
+            "nodeType": "PART",
+            "translationNm": [
+              491000000,
+              0,
+              671000000
+            ],
+            "rotationQuat": [
+              0,
+              0,
+              0.7071067811865475,
+              0.7071067811865476
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Gora_Bok_P",
+              "role": "RIGHT_SIDE_PANEL",
+              "width": 550000000,
+              "height": 158000000,
+              "thickness": 18000000,
+              "materialId": "W1100_ST9_18",
+              "materialName": "Biały Alpejski",
+              "materialCode": "W1100 ST9",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-X": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                },
+                "+Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                },
+                "-Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                }
+              },
+              "custom_properties": {
+                "material": "W1100_ST9_18",
+                "material_name": "Biały Alpejski",
+                "material_code": "W1100 ST9",
+                "thickness_mm": 18,
+                "edge_banding": {
+                  "+X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-X": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  },
+                  "+Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  },
+                  "-Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": [
+                {
+                  "id": "feat_back_groove_panel_7",
+                  "type": "groove",
+                  "name": "Wpust",
+                  "face": "FACE_Z_PLUS",
+                  "params": {
+                    "isBackGroove": true,
+                    "u": 470,
+                    "v": 7,
+                    "width": 3,
+                    "length": 144,
+                    "depth": 11,
+                    "u_nm": 470000000,
+                    "v_nm": 7000000,
+                    "width_nm": 3000000,
+                    "length_nm": 144000000,
+                    "depth_nm": 11000000
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "panel_8",
+            "name": "Gora_Wieniec_D",
+            "nodeType": "PART",
+            "translationNm": [
+              0,
+              0,
+              601000000
+            ],
+            "rotationQuat": [
+              4.3297802811774664e-17,
+              0.7071067811865476,
+              0.7071067811865475,
+              4.329780281177467e-17
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Gora_Wieniec_D",
+              "role": "BOTTOM_PANEL",
+              "width": 964000000,
+              "height": 550000000,
+              "thickness": 18000000,
+              "materialId": "W1100_ST9_18",
+              "materialName": "Biały Alpejski",
+              "materialCode": "W1100 ST9",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "+Y": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                }
+              },
+              "custom_properties": {
+                "material": "W1100_ST9_18",
+                "material_name": "Biały Alpejski",
+                "material_code": "W1100 ST9",
+                "thickness_mm": 18,
+                "edge_banding": {
+                  "+X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "+Y": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": [
+                {
+                  "id": "feat_back_groove_panel_8",
+                  "type": "groove",
+                  "name": "Wpust",
+                  "face": "FACE_Z_PLUS",
+                  "params": {
+                    "isBackGroove": true,
+                    "u": 0,
+                    "v": 470,
+                    "width": 964,
+                    "length": 3,
+                    "depth": 11,
+                    "u_nm": 0,
+                    "v_nm": 470000000,
+                    "width_nm": 964000000,
+                    "length_nm": 3000000,
+                    "depth_nm": 11000000
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "panel_9",
+            "name": "Gora_Wieniec_G",
+            "nodeType": "PART",
+            "translationNm": [
+              0,
+              0,
+              741000000
+            ],
+            "rotationQuat": [
+              -0.7071067811865475,
+              0,
+              0,
+              0.7071067811865476
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Gora_Wieniec_G",
+              "role": "TOP_PANEL",
+              "width": 964000000,
+              "height": 550000000,
+              "thickness": 18000000,
+              "materialId": "W1100_ST9_18",
+              "materialName": "Biały Alpejski",
+              "materialCode": "W1100 ST9",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "+Y": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-Y": {
+                  "active": true,
+                  "type_id": "0.008x0.022"
+                }
+              },
+              "custom_properties": {
+                "material": "W1100_ST9_18",
+                "material_name": "Biały Alpejski",
+                "material_code": "W1100 ST9",
+                "thickness_mm": 18,
+                "edge_banding": {
+                  "+X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "+Y": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-Y": {
+                    "active": true,
+                    "type_id": "0.008x0.022"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": [
+                {
+                  "id": "feat_back_groove_panel_9",
+                  "type": "groove",
+                  "name": "Wpust",
+                  "face": "FACE_Z_PLUS",
+                  "params": {
+                    "isBackGroove": true,
+                    "u": 0,
+                    "v": 470,
+                    "width": 964,
+                    "length": 3,
+                    "depth": 11,
+                    "u_nm": 0,
+                    "v_nm": 470000000,
+                    "width_nm": 964000000,
+                    "length_nm": 3000000,
+                    "depth_nm": 11000000
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "panel_10",
+            "name": "Gora_Plecy",
+            "nodeType": "PART",
+            "translationNm": [
+              0,
+              196500000,
+              671000000
+            ],
+            "rotationQuat": [
+              1,
+              0,
+              0,
+              6.123233995736766e-17
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [],
+            "domainData": {
+              "projectName": "Projekt",
+              "name": "Gora_Plecy",
+              "role": "BACK_PANEL",
+              "width": 986000000,
+              "height": 144000000,
+              "thickness": 3000000,
+              "materialId": "HDF_BIALY_3",
+              "materialName": "HDF Biały 3mm",
+              "materialCode": "HDF_WHITE_3",
+              "color": {
+                "r": 0.95,
+                "g": 0.95,
+                "b": 0.95
+              },
+              "edgeBanding": {
+                "+X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-X": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "+Y": {
+                  "active": false,
+                  "type_id": "none"
+                },
+                "-Y": {
+                  "active": false,
+                  "type_id": "none"
+                }
+              },
+              "custom_properties": {
+                "material": "HDF_BIALY_3",
+                "material_name": "HDF Biały 3mm",
+                "material_code": "HDF_WHITE_3",
+                "thickness_mm": 3,
+                "edge_banding": {
+                  "+X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-X": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "+Y": {
+                    "active": false,
+                    "type_id": "none"
+                  },
+                  "-Y": {
+                    "active": false,
+                    "type_id": "none"
+                  }
+                },
+                "is_bloki_child": true
+              },
+              "engineManaged": true,
+              "associativeDims": null,
+              "panelForm": "SOLID",
+              "features": []
+            }
+          },
+          {
+            "id": "container_1793387226919_2_839694",
+            "name": "blok_szuflady",
+            "nodeType": "ASSEMBLY",
+            "translationNm": [
+              0,
+              -40000000,
+              610000000
+            ],
+            "rotationQuat": [
+              0,
+              0,
+              0,
+              1
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "children": [
+              {
+                "id": "panel_11",
+                "name": "Front_1",
+                "nodeType": "PART",
+                "translationNm": [
+                  0,
+                  -244000000,
+                  61000000
+                ],
+                "rotationQuat": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "children": [],
+                "domainData": {
+                  "projectName": "Projekt",
+                  "name": "Front_1",
+                  "role": "FRONT",
+                  "width": 994000000,
+                  "height": 152000000,
+                  "thickness": 18000000,
+                  "materialId": "W1100_ST9_18",
+                  "materialName": "Biały Alpejski",
+                  "materialCode": "W1100 ST9",
+                  "color": {
+                    "r": 0.95,
+                    "g": 0.95,
+                    "b": 0.95
+                  },
+                  "edgeBanding": {
+                    "+X": {
+                      "active": true,
+                      "type_id": "0.008x0.022"
+                    },
+                    "-X": {
+                      "active": true,
+                      "type_id": "0.008x0.022"
+                    },
+                    "+Y": {
+                      "active": true,
+                      "type_id": "0.008x0.022"
+                    },
+                    "-Y": {
+                      "active": true,
+                      "type_id": "0.008x0.022"
+                    }
+                  },
+                  "custom_properties": {
+                    "material": "W1100_ST9_18",
+                    "material_name": "Biały Alpejski",
+                    "material_code": "W1100 ST9",
+                    "thickness_mm": 18,
+                    "edge_banding": {
+                      "+X": {
+                        "active": true,
+                        "type_id": "0.008x0.022"
+                      },
+                      "-X": {
+                        "active": true,
+                        "type_id": "0.008x0.022"
+                      },
+                      "+Y": {
+                        "active": true,
+                        "type_id": "0.008x0.022"
+                      },
+                      "-Y": {
+                        "active": true,
+                        "type_id": "0.008x0.022"
+                      }
+                    }
+                  },
+                  "engineManaged": true,
+                  "associativeDims": null,
+                  "panelForm": "SOLID",
+                  "features": [
+                    {
+                      "id": "drawer_1_front_L_0",
+                      "type": "hole",
+                      "face": "FACE_Z_PLUS",
+                      "side": "FACE_Z_PLUS",
+                      "name": "Otwór montażowy szuflady 2 (L)",
+                      "drivenBy": {
+                        "nodeId": "container_1793387226919_2_839694_drawer_1_rail_L",
+                        "role": "HARDWARE",
+                        "hardwareType": "RAIL",
+                        "containerId": "container_1793387226919_2_839694"
+                      },
+                      "rule": "screw",
+                      "generatedBy": "blok_drawers",
+                      "params": {
+                        "u": 31,
+                        "v": 35,
+                        "u_mm": 31,
+                        "v_mm": 35,
+                        "diameter": 3,
+                        "diameter_mm": 3,
+                        "depth": 10,
+                        "depth_mm": 10,
+                        "sourcePartId": "drawer_1_rail_L",
+                        "template_id": "STANDARD_DRAWER_DRILL",
+                        "isDrawerFrontHole": true
+                      },
+                      "smartId": "sb:main_11/part:ozs1qp45ez/feat:drawer_1_front_L_0"
+                    },
+                    {
+                      "id": "drawer_1_front_R_0",
+                      "type": "hole",
+                      "face": "FACE_Z_PLUS",
+                      "side": "FACE_Z_PLUS",
+                      "name": "Otwór montażowy szuflady 2 (R)",
+                      "drivenBy": {
+                        "nodeId": "container_1793387226919_2_839694_drawer_1_rail_R",
+                        "role": "HARDWARE",
+                        "hardwareType": "RAIL",
+                        "containerId": "container_1793387226919_2_839694"
+                      },
+                      "rule": "screw",
+                      "generatedBy": "blok_drawers",
+                      "params": {
+                        "u": 963,
+                        "v": 35,
+                        "u_mm": 963,
+                        "v_mm": 35,
+                        "diameter": 3,
+                        "diameter_mm": 3,
+                        "depth": 10,
+                        "depth_mm": 10,
+                        "sourcePartId": "drawer_1_rail_R",
+                        "template_id": "STANDARD_DRAWER_DRILL",
+                        "isDrawerFrontHole": true
+                      },
+                      "smartId": "sb:main_11/part:ozs1qp45ez/feat:drawer_1_front_R_0"
+                    },
+                    {
+                      "id": "drawer_1_front_L_1",
+                      "type": "hole",
+                      "face": "FACE_Z_PLUS",
+                      "side": "FACE_Z_PLUS",
+                      "name": "Otwór montażowy szuflady 2 (L)",
+                      "drivenBy": {
+                        "nodeId": "container_1793387226919_2_839694_drawer_1_rail_L",
+                        "role": "HARDWARE",
+                        "hardwareType": "RAIL",
+                        "containerId": "container_1793387226919_2_839694"
+                      },
+                      "rule": "screw",
+                      "generatedBy": "blok_drawers",
+                      "params": {
+                        "u": 31,
+                        "v": 89,
+                        "u_mm": 31,
+                        "v_mm": 89,
+                        "diameter": 3,
+                        "diameter_mm": 3,
+                        "depth": 10,
+                        "depth_mm": 10,
+                        "sourcePartId": "drawer_1_rail_L",
+                        "template_id": "STANDARD_DRAWER_DRILL",
+                        "isDrawerFrontHole": true
+                      },
+                      "smartId": "sb:main_11/part:ozs1qp45ez/feat:drawer_1_front_L_1"
+                    },
+                    {
+                      "id": "drawer_1_front_R_1",
+                      "type": "hole",
+                      "face": "FACE_Z_PLUS",
+                      "side": "FACE_Z_PLUS",
+                      "name": "Otwór montażowy szuflady 2 (R)",
+                      "drivenBy": {
+                        "nodeId": "container_1793387226919_2_839694_drawer_1_rail_R",
+                        "role": "HARDWARE",
+                        "hardwareType": "RAIL",
+                        "containerId": "container_1793387226919_2_839694"
+                      },
+                      "rule": "screw",
+                      "generatedBy": "blok_drawers",
+                      "params": {
+                        "u": 963,
+                        "v": 89,
+                        "u_mm": 963,
+                        "v_mm": 89,
+                        "diameter": 3,
+                        "diameter_mm": 3,
+                        "depth": 10,
+                        "depth_mm": 10,
+                        "sourcePartId": "drawer_1_rail_R",
+                        "template_id": "STANDARD_DRAWER_DRILL",
+                        "isDrawerFrontHole": true
+                      },
+                      "smartId": "sb:main_11/part:ozs1qp45ez/feat:drawer_1_front_R_1"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "panel_12",
+                "name": "Dno_1",
+                "nodeType": "PART",
+                "translationNm": [
+                  0,
+                  -22000000,
+                  8000000
+                ],
+                "rotationQuat": [
+                  0.7071067811865475,
+                  0,
+                  0,
+                  0.7071067811865476
+                ],
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "children": [],
+                "domainData": {
+                  "projectName": "Projekt",
+                  "name": "Dno_1",
+                  "role": "DRAWER_BOTTOM",
+                  "width": 889000000,
+                  "height": 426000000,
+                  "thickness": 16000000,
+                  "materialId": "W1100_ST9_16",
+                  "materialName": "Biały Alpejski 16mm",
+                  "materialCode": "W1100 ST9",
+                  "color": {
+                    "r": 0.95,
+                    "g": 0.95,
+                    "b": 0.95
+                  },
+                  "edgeBanding": {
+                    "+X": {
+                      "active": false,
+                      "type_id": "none"
+                    },
+                    "-X": {
+                      "active": false,
+                      "type_id": "none"
+                    },
+                    "+Y": {
+                      "active": false,
+                      "type_id": "none"
+                    },
+                    "-Y": {
+                      "active": false,
+                      "type_id": "none"
+                    }
+                  },
+                  "custom_properties": {
+                    "material": "W1100_ST9_16",
+                    "material_name": "Biały Alpejski 16mm",
+                    "material_code": "W1100 ST9",
+                    "thickness_mm": 16,
+                    "edge_banding": {
+                      "+X": {
+                        "active": false,
+                        "type_id": "none"
+                      },
+                      "-X": {
+                        "active": false,
+                        "type_id": "none"
+                      },
+                      "+Y": {
+                        "active": false,
+                        "type_id": "none"
+                      },
+                      "-Y": {
+                        "active": false,
+                        "type_id": "none"
+                      }
+                    }
+                  },
+                  "engineManaged": true,
+                  "associativeDims": null,
+                  "panelForm": "SOLID",
+                  "features": []
+                }
+              },
+              {
+                "id": "panel_13",
+                "name": "Plecy_1",
+                "nodeType": "PART",
+                "translationNm": [
+                  0,
+                  183000000,
+                  42000000
+                ],
+                "rotationQuat": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "children": [],
+                "domainData": {
+                  "projectName": "Projekt",
+                  "name": "Plecy_1",
+                  "role": "DRAWER_BACK",
+                  "width": 877000000,
+                  "height": 84000000,
+                  "thickness": 16000000,
+                  "materialId": "W1100_ST9_16",
+                  "materialName": "Biały Alpejski 16mm",
+                  "materialCode": "W1100 ST9",
+                  "color": {
+                    "r": 0.95,
+                    "g": 0.95,
+                    "b": 0.95
+                  },
+                  "edgeBanding": {
+                    "+X": {
+                      "active": false,
+                      "type_id": "none"
+                    },
+                    "-X": {
+                      "active": false,
+                      "type_id": "none"
+                    },
+                    "+Y": {
+                      "active": true,
+                      "type_id": "0.008x0.022"
+                    },
+                    "-Y": {
+                      "active": false,
+                      "type_id": "none"
+                    }
+                  },
+                  "custom_properties": {
+                    "material": "W1100_ST9_16",
+                    "material_name": "Biały Alpejski 16mm",
+                    "material_code": "W1100 ST9",
+                    "thickness_mm": 16,
+                    "edge_banding": {
+                      "+X": {
+                        "active": false,
+                        "type_id": "none"
+                      },
+                      "-X": {
+                        "active": false,
+                        "type_id": "none"
+                      },
+                      "+Y": {
+                        "active": true,
+                        "type_id": "0.008x0.022"
+                      },
+                      "-Y": {
+                        "active": false,
+                        "type_id": "none"
+                      }
+                    }
+                  },
+                  "engineManaged": true,
+                  "associativeDims": null,
+                  "panelForm": "SOLID",
+                  "features": []
+                }
+              },
+              {
+                "id": "container_1793387226919_2_839694_drawer_1_rail_L",
+                "name": "Prowadnica 1L [Antaro 94mm]",
+                "nodeType": "HARDWARE",
+                "translationNm": [
+                  -455000000,
+                  -235000000,
+                  0
+                ],
+                "rotationQuat": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "children": [],
+                "domainData": {
+                  "type": "hardware",
+                  "id": "container_1793387226919_2_839694_drawer_1_rail_L",
+                  "name": "Prowadnica 1L [Antaro 94mm]",
+                  "role": "PROWADNICA",
+                  "nodeType": "HARDWARE",
+                  "hardwareType": "RAIL",
+                  "visible": true,
+                  "frozen": false,
+                  "hardwareId": "BLUM_ANTARO_M_L",
+                  "side": "left",
+                  "loc": {
+                    "x": -455,
+                    "y": -235,
+                    "z": 0
+                  },
+                  "params": {
+                    "drawerIndex": 1,
+                    "railId": "M94",
+                    "side": "left",
+                    "lengthMm": 450,
+                    "corpusHeight": 94,
+                    "zInternalBottom": 0
+                  },
+                  "custom_properties": {
+                    "library_id": "M94",
+                    "shape": "RAIL"
+                  }
+                }
+              },
+              {
+                "id": "container_1793387226919_2_839694_drawer_1_rail_R",
+                "name": "Prowadnica 1P [Antaro 94mm]",
+                "nodeType": "HARDWARE",
+                "translationNm": [
+                  455000000,
+                  -235000000,
+                  0
+                ],
+                "rotationQuat": [
+                  0,
+                  0,
+                  0,
+                  1
+                ],
+                "scale": [
+                  1,
+                  1,
+                  1
+                ],
+                "children": [],
+                "domainData": {
+                  "type": "hardware",
+                  "id": "container_1793387226919_2_839694_drawer_1_rail_R",
+                  "name": "Prowadnica 1P [Antaro 94mm]",
+                  "role": "PROWADNICA",
+                  "nodeType": "HARDWARE",
+                  "hardwareType": "RAIL",
+                  "visible": true,
+                  "frozen": false,
+                  "hardwareId": "BLUM_ANTARO_M_L",
+                  "side": "right",
+                  "loc": {
+                    "x": 455,
+                    "y": -235,
+                    "z": 0
+                  },
+                  "params": {
+                    "drawerIndex": 1,
+                    "railId": "M94",
+                    "side": "right",
+                    "lengthMm": 450,
+                    "corpusHeight": 94,
+                    "zInternalBottom": 0
+                  },
+                  "custom_properties": {
+                    "library_id": "M94",
+                    "shape": "RAIL"
+                  }
+                }
+              }
+            ],
+            "domainData": {
+              "type": "container",
+              "name": "blok_szuflady",
+              "width": 964000000,
+              "height": 122000000,
+              "depth": 470000000,
+              "generatorParams": {
+                "parentContainerId": "container_1793387226868_1_14455",
+                "boundary": {
+                  "left": {
+                    "nodeId": "panel_1",
+                    "nodeName": "Dol_Bok_L",
+                    "face": "FACE_Z_PLUS",
+                    "faceName": "FACE_Z_PLUS",
+                    "worldPointMm": {
+                      "x": -482,
+                      "y": -40,
+                      "z": 671
+                    },
+                    "planeCoordMm": -482
+                  },
+                  "right": {
+                    "nodeId": "panel_2",
+                    "nodeName": "Dol_Bok_P",
+                    "face": "FACE_Z_PLUS",
+                    "faceName": "FACE_Z_PLUS",
+                    "worldPointMm": {
+                      "x": 482,
+                      "y": -40,
+                      "z": 671
+                    },
+                    "planeCoordMm": 482
+                  },
+                  "bottom": {
+                    "nodeId": "panel_8",
+                    "nodeName": "Gora_Wieniec_D",
+                    "face": "FACE_Z_PLUS",
+                    "faceName": "FACE_Z_PLUS",
+                    "worldPointMm": {
+                      "x": 0,
+                      "y": -40,
+                      "z": 610
+                    },
+                    "planeCoordMm": 610
+                  },
+                  "top": {
+                    "nodeId": "panel_9",
+                    "nodeName": "Gora_Wieniec_G",
+                    "face": "FACE_Z_PLUS",
+                    "faceName": "FACE_Z_PLUS",
+                    "worldPointMm": {
+                      "x": 0,
+                      "y": -40,
+                      "z": 732
+                    },
+                    "planeCoordMm": 732
+                  },
+                  "back": {
+                    "nodeId": "panel_5",
+                    "nodeName": "Dol_Plecy",
+                    "face": "FACE_Z_PLUS",
+                    "faceName": "FACE_Z_PLUS",
+                    "worldPointMm": {
+                      "x": 0,
+                      "y": 195,
+                      "z": 671
+                    },
+                    "planeCoordMm": 195
+                  },
+                  "front": {
+                    "nodeId": "container_1793387226868_1_14455",
+                    "nodeName": "Przód Korpusu",
+                    "face": "FACE_Y_MINUS",
+                    "faceName": "FACE_Y_MINUS",
+                    "worldPointMm": {
+                      "x": 0,
+                      "y": -275,
+                      "z": 671
+                    },
+                    "planeCoordMm": -275
+                  },
+                  "frontPlaneYMm": -275
+                },
+                "detectedBay": {
+                  "boundsMm": {
+                    "width": 964,
+                    "height": 122,
+                    "depth": 470
+                  },
+                  "boundsNm": {
+                    "width": 964000000,
+                    "height": 122000000,
+                    "depth": 470000000
+                  },
+                  "centerWorldMm": {
+                    "x": 0,
+                    "y": -40,
+                    "z": 671
+                  },
+                  "parentCabinetId": "container_1793387226868_1_14455"
+                },
+                "side_references_bloki": "INNER",
+                "customReferences": {
+                  "xMin": {
+                    "partKey": "Dol_Bok_L",
+                    "face": "FACE_Z_PLUS",
+                    "panelId": "panel_1"
+                  },
+                  "xMax": {
+                    "partKey": "Dol_Bok_P",
+                    "face": "FACE_Z_PLUS",
+                    "panelId": "panel_2"
+                  },
+                  "zMin": {
+                    "partKey": "Gora_Wieniec_D",
+                    "face": "FACE_Z_PLUS",
+                    "panelId": "panel_8"
+                  },
+                  "zMax": {
+                    "partKey": "Gora_Wieniec_G",
+                    "face": "FACE_Z_PLUS",
+                    "panelId": "panel_9"
+                  },
+                  "yMin": {
+                    "partKey": "Przód Korpusu",
+                    "face": "FACE_Y_MINUS",
+                    "panelId": "container_1793387226868_1_14455"
+                  },
+                  "yMax": {
+                    "partKey": "Dol_Plecy",
+                    "face": "FACE_Z_PLUS",
+                    "panelId": "panel_5"
+                  }
+                },
+                "disabledReferences": {},
+                "cornerAt": "innerL_wieniec",
+                "offsets": {
+                  "xMin": 0,
+                  "xMax": 0,
+                  "yMin": 0,
+                  "yMax": 0,
+                  "zMin": 0,
+                  "zMax": 0
+                },
+                "width_mm": 964,
+                "depth_mm": 470,
+                "height_mm": 122,
+                "boxType": "DRAWERS",
+                "type": "blok_drawers",
+                "liczba_szuflad": 1,
+                "szczelina_wspolna_mm": 3
+              }
+            }
+          }
+        ],
+        "domainData": {
+          "type": "container",
+          "name": "Korpus 1",
+          "width": 1000000000,
+          "height": 750000000,
+          "depth": 550000000,
+          "generatorParams": {
+            "type": "korpus3_2",
+            "typ_korpusu": "korpus3",
+            "szerokosc_mm": 1000,
+            "wysokosc_mm": 750,
+            "glebokosc_mm": 550,
+            "liczba_stref": 2,
+            "wysokosc_strefy_dolnej_mm": 592,
+            "wysokosc_strefy_srodkowej_mm": 0,
+            "cofniecie_plecow_mm": 80,
+            "offsets": {
+              "Wieniec_G_+X": 30,
+              "Wieniec_G_+Y": 38,
+              "Wieniec_G_-Y": 38,
+              "Dol_Plecy_-Y": -256
+            }
+          }
+        }
+      }
+    ]
+  },
+  "extensions": {}
+}

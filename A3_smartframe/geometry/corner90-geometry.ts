@@ -9,7 +9,7 @@
  *  - Dwie pojedyncze płyty kątowe L (wieniec górny i dolny) z konturem 2D (outline2d)
  */
 
-import { readBackEdgeOffset } from '../back-overlap.js';
+import { readBackEdgeOffset, readSurroundingPanelInwardShiftMm } from '../back-overlap.js';
 import { rulesMToMm } from '../../A1_core/cad-math/units.js';
 import { CabinetGeometryPart, BACK_OVERLAP_EPS_MM } from '../smartframe-types.js';
 import {
@@ -92,7 +92,9 @@ export function resolveCorner90Geometry(
         const candidates = [`${pfx}${stem}`, stem, `B_${stem}`].map(c => `${c}_${suffix}`.toUpperCase());
         if (offsets) {
             for (const [k, v] of Object.entries(offsets)) {
-                if (candidates.includes(k.toUpperCase()) && v !== undefined && v !== null && Number.isFinite(Number(v))) {
+                const kUpper = k.toUpperCase();
+                const cleanKUpper = kUpper.replace(/\.\d+(_SHIFTX|_SHIFTY)$/, '$1').replace(/_\d+(_SHIFTX|_SHIFTY)$/, '$1');
+                if ((candidates.includes(kUpper) || candidates.includes(cleanKUpper)) && v !== undefined && v !== null && Number.isFinite(Number(v))) {
                     return Number(v);
                 }
             }
@@ -111,11 +113,15 @@ export function resolveCorner90Geometry(
         const overlapBottom = readBackEdgeOffset(offsets, name, '-Y', defOverlap, pfx);
         const overlapTop    = readBackEdgeOffset(offsets, name, '+Y', defOverlap, pfx);
 
+        const inwardBottomMm = readSurroundingPanelInwardShiftMm(offsets, '-Y', pfx, name);
+        const inwardTopMm    = readSurroundingPanelInwardShiftMm(offsets, '+Y', pfx, name);
+        const zBottomInner   = bottomThick + inwardBottomMm;
+
         // Lewy koniec pleców Y = lico wewnętrzne pleców X (styk w narożniku).
         const innerW = Math.max(1, W - insetX_mm - bokPTh);
-        const innerH = Math.max(1, H - bottomThick - topThick);
+        const innerH = (H - bottomThick - topThick) - inwardBottomMm - inwardTopMm;
         const backW = innerW + overlapLeft + overlapRight;
-        const backH = innerH + overlapBottom + overlapTop;
+        const backH = Math.max(1, innerH + overlapBottom + overlapTop);
         const midX = (-W / 2 + insetX_mm + W / 2 - bokPTh) / 2;
 
         return {
@@ -124,7 +130,7 @@ export function resolveCorner90Geometry(
             loc: {
                 x: midX + (overlapRight - overlapLeft) / 2 + shiftX,
                 y: D / 2 + thickness / 2 - insetY_mm,
-                z: bottomThick - overlapBottom + backH / 2 + shiftZ
+                z: zBottomInner - overlapBottom + backH / 2 + shiftZ
             }
         };
     }
@@ -136,10 +142,14 @@ export function resolveCorner90Geometry(
         const overlapFront  = readBackEdgeOffset(offsets, name, '-X', defOverlap, pfx);
         const overlapBack   = readBackEdgeOffset(offsets, name, '+X', cornerOverlap, pfx);
 
-        const innerH = Math.max(1, H - bottomThick - topThick);
+        const inwardBottomMm = readSurroundingPanelInwardShiftMm(offsets, '-Y', pfx, name);
+        const inwardTopMm    = readSurroundingPanelInwardShiftMm(offsets, '+Y', pfx, name);
+        const zBottomInner   = bottomThick + inwardBottomMm;
+
+        const innerH = (H - bottomThick - topThick) - inwardBottomMm - inwardTopMm;
         // Tylny koniec pleców X = lico wewnętrzne pleców Y (styk w narożniku).
         const innerD = Math.max(1, D - insetY_mm - bokLTh);
-        const backH = innerH + overlapBottom + overlapTop;
+        const backH = Math.max(1, innerH + overlapBottom + overlapTop);
         const backD = innerD + overlapFront + overlapBack;
         const midY = (-D / 2 + bokLTh + D / 2 - insetY_mm) / 2;
 
@@ -149,7 +159,7 @@ export function resolveCorner90Geometry(
             loc: {
                 x: -W / 2 - thickness / 2 + insetX_mm,
                 y: midY + (overlapBack - overlapFront) / 2 + shiftY,
-                z: bottomThick - overlapBottom + backH / 2 + shiftZ
+                z: zBottomInner - overlapBottom + backH / 2 + shiftZ
             }
         };
     }
@@ -247,7 +257,7 @@ export function resolveCorner90Geometry(
         const effBokP = bok_prawy - cutY;
         return {
             thickness,
-            dim: { x: H + pYPlus + pYMinus, y: effBokP + pXMinus + pXPlus, z: thickness },
+            dim: { x: Math.max(1, H + pYPlus + pYMinus), y: Math.max(1, effBokP + pXMinus + pXPlus), z: thickness },
             loc: {
                 x: W / 2 - thickness / 2 + shiftX,
                 y: (D / 2 - cutY) - effBokP / 2 + (pXPlus - pXMinus) / 2 + shiftY,
@@ -263,7 +273,7 @@ export function resolveCorner90Geometry(
         const effBokL = bok_lewy - cutX;
         return {
             thickness,
-            dim: { x: effBokL + pXMinus + pXPlus, y: thickness, z: H + pYPlus + pYMinus },
+            dim: { x: Math.max(1, effBokL + pXMinus + pXPlus), y: thickness, z: Math.max(1, H + pYPlus + pYMinus) },
             loc: {
                 x: (-W / 2 + cutX) + effBokL / 2 + (pXPlus - pXMinus) / 2 + shiftX,
                 y: -D / 2 + thickness / 2 + shiftY,
@@ -282,14 +292,21 @@ export function resolveCorner90Geometry(
         matchedKey === "WIENIEC_G" || matchedKey === "TOP" || role === "TOP_PANEL"
     ) {
         const isBottom = matchedKey === "WIENIEC_D" || matchedKey === "BOTTOM" || role === "BOTTOM_PANEL";
-        const plateW = W;
-        const plateD = D;
-        const locX = (pXPlus - pXMinus) / 2 + shiftX;
-        const locY = (pYPlus - pYMinus) / 2 + shiftY;
-        const x0 = locX - plateW / 2;
-        const x1 = locX + plateW / 2;
-        const y0 = locY - plateD / 2;
-        const y1 = locY + plateD / 2;
+        const plateW = Math.max(1, W + pYMinus + pYPlus);
+        const plateD = Math.max(1, D + pXMinus + pXPlus);
+        const locX = (pYPlus - pYMinus) / 2 + shiftX;
+        const locY = (pXPlus - pXMinus) / 2 + shiftY;
+        const baseX0 = -W / 2 + shiftX;
+        const baseX1 = W / 2 + shiftX;
+        const baseY0 = -D / 2 + shiftY;
+        const baseY1 = D / 2 + shiftY;
+
+
+
+
+
+
+
 
         const edgeSuf = isBottom ? '-Y' : '+Y';
         const overlapY = readBackEdgeOffset(offsets, 'PLECY_Y', edgeSuf, defOverlap, pfx);
@@ -306,15 +323,20 @@ export function resolveCorner90Geometry(
             cutX = insetX_mm;
         }
 
-        const effectiveX0 = x0 + cutX;
-        const effectiveY1 = y1 - cutY;
+        const effectiveX0 = baseX0 + cutX - pYMinus;
+        const effectiveX1 = baseX1 - bokPTh + pYPlus;
+        const effectiveY0 = baseY0 + bokLTh - pXMinus;
+        const effectiveY1 = baseY1 - cutY + pXPlus;
+        const notchX = baseX0 + bok_lewy;
+        const notchY = baseY1 - bok_prawy;
+
 
         const worldL: [number, number][] = [
-            [effectiveX0, y0 + bokLTh],
-            [x0 + bok_lewy, y0 + bokLTh],
-            [x0 + bok_lewy, y1 - bok_prawy],
-            [x1 - bokPTh, y1 - bok_prawy],
-            [x1 - bokPTh, effectiveY1],
+            [effectiveX0, effectiveY0],
+            [notchX, effectiveY0],
+            [notchX, notchY],
+            [effectiveX1, notchY],
+            [effectiveX1, effectiveY1],
             [effectiveX0, effectiveY1]
         ];
 

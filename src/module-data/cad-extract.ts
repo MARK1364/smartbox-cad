@@ -7,6 +7,7 @@ import { ContextManager } from '../../A1_core/context-manager.js';
 import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer.js';
 import { resolveMaterialName } from '../../n1_nesting/core/nesting-engine.js';
 import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
+import { isolateContainerInSnapshot } from '../../I1_instrukcja/assembly-scene-adapter.js';
 import { persistProjectSnapshot, readProjectSnapshot } from './session';
 import { filterPanelsByScope, filterAccessoriesByScope, filterNestingPartsByScope } from './scope-filter';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
@@ -437,6 +438,11 @@ export function extractDagPayload(scope: ModuleScope, document?: any): DagModule
 export function extractInstrukcjaPayload(scope: ModuleScope, document?: any): InstrukcjaModulePayload {
     const doc = getDocument(document);
     persistProjectSnapshot(doc);
+    const fullSnap = typeof doc?.serialize === 'function' ? doc.serialize() : null;
+    let isolatedSnap = fullSnap;
+    if (fullSnap && (scope.type === 'CONTAINER' || scope.type === 'BLOKI')) {
+        isolatedSnap = isolateContainerInSnapshot(fullSnap, scope.id);
+    }
     return {
         meta: {
             module: 'instrukcja',
@@ -445,5 +451,6 @@ export function extractInstrukcjaPayload(scope: ModuleScope, document?: any): In
             originLabel: scope.name || tx(srcTekst, 'moddata.instrukcja_origin', TX_NS),
         },
         scope,
+        snapshot: isolatedSnap || undefined,
     };
 }

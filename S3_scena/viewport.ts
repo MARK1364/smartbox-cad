@@ -13,6 +13,8 @@ import { probePanelSurfaceFromRay } from '../A2_bloki/handles/handle-detector.js
 import { WORLD_Y_UP, type CameraUp } from './named-camera-view.js';
 import { parseFeatureFaceKey } from '../A4_smartpanel/native_core/cap-machining.js';
 import { openCadEditEntity } from '../src/floating-edit/cad-edit-entity.js';
+import { InteractiveGlcAxis } from '../S1_sketcher/interactive-glc-axis.js';
+import { UIController } from '../A1_core/ui-controller.js';
 
 declare const BABYLON: any;
 
@@ -41,6 +43,7 @@ export class Viewport {
     gridLines: any[] = [];
     axes: any[] = [];
     datumPlanes: any[] = [];
+    glcAxis: InteractiveGlcAxis | null = null;
     _orthoZoomObserver: any = null;
     private _lastCubeAlpha: number | null = null;
     private _lastCubeBeta: number | null = null;
@@ -333,6 +336,34 @@ export class Viewport {
                         // Zablokuj menu kontekstowe po przeciągnięciu widoku
                         this._suppressContextMenuUntil = Date.now() + 200;
                         evt.preventDefault();
+                    } else if (!this.shouldSuppressContextMenu()) {
+                        const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY);
+                        if (pick && pick.hit && pick.pickedMesh) {
+                            const m = pick.pickedMesh;
+                            const isGlcAxisMesh = m.metadata?.type === 'glc_axis' || m.metadata?.type === 'glc_axis_tip' || m.name?.startsWith('glc_axis_') || m.name === 'glc_base_disk' || m.name === 'glc_tip_sphere';
+                            if (isGlcAxisMesh) {
+                                UIController.instance?.emitTree('contextmenu-tree-node', {
+                                    type: 'glc',
+                                    id: 'glc_origin',
+                                    name: 'Układ globalny (GLC)',
+                                    clientX: evt.clientX,
+                                    clientY: evt.clientY,
+                                });
+                                evt.preventDefault();
+                                evt.stopPropagation();
+                            } else if (m.metadata?.type === 'datum_level') {
+                                const meta = m.metadata;
+                                UIController.instance?.emitTree('contextmenu-tree-node', {
+                                    type: 'datum_level',
+                                    id: meta.id,
+                                    name: meta.name,
+                                    clientX: evt.clientX,
+                                    clientY: evt.clientY,
+                                });
+                                evt.preventDefault();
+                                evt.stopPropagation();
+                            }
+                        }
                     }
                     isRmbPending = false;
                     isRmbPanning = false;
@@ -742,24 +773,22 @@ export class Viewport {
             head.parent = root;
 
             if (dir === 'X') {
-                root.rotation.z = -Math.PI / 2;
+                root.rotation.z = -Math.PI / 2; // +X w prawo (szerokość)
             } else if (dir === 'Y') {
-                // y is up by default
+                root.rotation.x = Math.PI / 2;  // +Y w głąb sceny (głębokość w CAD / Blenderze — Babylon +Z)
             } else if (dir === 'Z') {
-                root.rotation.x = Math.PI / 2;
+                // +Z pionowo w górę (wysokość — Babylon +Y)
             }
             return root;
         };
 
-        const axisX = createArrow('axisX', new BABYLON.Color3(0.9, 0.2, 0.2), 'X');
-        const axisY = createArrow('axisY', new BABYLON.Color3(0.2, 0.4, 0.9), 'Y'); // Blue (pion / Z w Blenderze)
-        const axisZ = createArrow('axisZ', new BABYLON.Color3(0.5, 0.8, 0.2), 'Z'); // Green (głębokość / Y w Blenderze)
+        const axisX = createArrow('axisX', new BABYLON.Color3(0.9, 0.2, 0.2), 'X'); // Czerwona: X (szerokość)
+        const axisY = createArrow('axisY', new BABYLON.Color3(0.5, 0.8, 0.2), 'Y'); // Zielona: Y (głębokość w CAD)
 
         // Płaszczyzny bazowe (Datum Planes) — jak Front / Top / Right w SolidWorks
         const planeSize = 500;
 
         const markDatum = (mesh: any, label: string) => {
-            // Osobny materiał na każdą płaszczyznę — hover nie podświetla wszystkich naraz
             const mat = new BABYLON.StandardMaterial(`datumMat_${label}`, this.scene);
             mat.diffuseColor = new BABYLON.Color3(0.45, 0.62, 0.95);
             mat.emissiveColor = new BABYLON.Color3(0.08, 0.14, 0.28);
@@ -783,17 +812,27 @@ export class Viewport {
         const topPlane = BABYLON.MeshBuilder.CreatePlane('TopPlane', { size: planeSize }, this.scene);
         topPlane.rotation.x = Math.PI / 2;
         markDatum(topPlane, 'Top');
+        topPlane.setEnabled(false);
+        topPlane.isVisible = false;
 
         const frontPlane = BABYLON.MeshBuilder.CreatePlane('FrontPlane', { size: planeSize }, this.scene);
         markDatum(frontPlane, 'Front');
+        frontPlane.setEnabled(false);
+        frontPlane.isVisible = false;
 
         const rightPlane = BABYLON.MeshBuilder.CreatePlane('RightPlane', { size: planeSize }, this.scene);
         rightPlane.rotation.y = Math.PI / 2;
         markDatum(rightPlane, 'Right');
+        rightPlane.setEnabled(false);
+        rightPlane.isVisible = false;
 
         this.gridLines = grid;
-        this.axes = [axisX, axisY, axisZ];
+        this.axes = [axisX, axisY];
         this.datumPlanes = [topPlane, frontPlane, rightPlane];
+
+        // ─── Standardowa Niebieska Oś Z (GLC) ze sferą na czubku i poziomami ───
+        this.glcAxis = new InteractiveGlcAxis(this);
+        this.glcAxis.init();
 
         ground.dispose(); // nie potrzebujemy fizycznego ground, mamy linie
     }
@@ -819,6 +858,24 @@ export class Viewport {
                 p.isVisible = visible;
             });
         }
+    }
+
+    /**
+     * Włącza lub wyłącza widoczność całego układu odniesienia GLC (osie X, Y oraz pionowy maszt Z z poziomami).
+     */
+    setGlcVisible(visible: boolean): void {
+        if (this.axes) {
+            this.axes.forEach(axis => {
+                if (axis) {
+                    axis.setEnabled(visible);
+                    axis.isVisible = visible;
+                }
+            });
+        }
+        if (this.glcAxis) {
+            this.glcAxis.setVisible(visible);
+        }
+        this.requestRender();
     }
 
     /**

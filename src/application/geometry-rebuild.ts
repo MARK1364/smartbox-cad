@@ -8,6 +8,7 @@ import type { GizmoController } from '../../A1_core/gizmo-controller.js';
 import { createContainerView, createPanelView, notifyBeforeRebuildGeometry } from '../../A1_core/view-port.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { isCylindricalPart } from '../../A1_core/cad-node/part-shape.js';
+import { computePanelFeaturesFingerprint } from '../../A4_smartpanel/panel-view.js';
 import { syncSelectionHighlights } from '../../A1_core/selection-highlight.js';
 import { HardwareLoader } from '../../B1_biblioteka/hardware-loader.js';
 import { syncHangerMeshesFromDocument } from '../../A2_bloki/hangers/hanger-mesh.js';
@@ -118,7 +119,8 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           view.lastWidth !== panel.width ||
           view.lastHeight !== panel.height ||
           view.lastThickness !== panel.thickness;
-        const isFeaturesDirty = view.lastFeaturesFingerprint !== fp;
+        const fullFp = computePanelFeaturesFingerprint(panel);
+        const isFeaturesDirty = view.lastFeaturesFingerprint !== fullFp;
 
         const colorKey = panel.color
           ? `${panel.color.r.toFixed(3)}_${panel.color.g.toFixed(3)}_${panel.color.b.toFixed(3)}`
@@ -128,16 +130,21 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
         if (isNewView || isDimsDirty || isFeaturesDirty) {
           anyGeometryRebuilt = true;
           if (!isCylindricalPart(panel)) {
+            if (panel.width <= 0 || panel.height <= 0 || panel.thickness <= 0) {
+              panel.width = Math.max(10_000_000, Math.abs(panel.width) || 10_000_000);
+              panel.height = Math.max(10_000_000, Math.abs(panel.height) || 10_000_000);
+              panel.thickness = Math.max(1_000_000, Math.abs(panel.thickness) || 18_000_000);
+            }
             const meshData = panelBuilder.build(panel);
             view.updateMesh(meshData);
           }
           view.lastWidth = panel.width;
           view.lastHeight = panel.height;
           view.lastThickness = panel.thickness;
-          view.lastFeaturesFingerprint = fp;
+          view.lastFeaturesFingerprint = fullFp;
           (view as any).lastColorKey = colorKey;
 
-          if (typeof (view as any).renderFeatures === 'function') (view as any).renderFeatures();
+          if (isCylindricalPart(panel) && typeof (view as any).renderFeatures === 'function') (view as any).renderFeatures();
         } else if (isColorDirty) {
           (view as any).lastColorKey = colorKey;
           if (typeof (view as any)._updateMaterialAppearance === 'function') {
@@ -147,7 +154,8 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
 
         if (view._updateTransform) view._updateTransform();
 
-        const isPanelVis = panel.visible !== false;
+        const isPanelFrozen = Boolean(panel.frozen || panel.params?.frozen);
+        const isPanelVis = panel.visible !== false && !isPanelFrozen;
         if (typeof (view as any).setPanelVisible === 'function') {
           (view as any).setPanelVisible(isPanelVis);
         } else if (view.root) {
@@ -281,7 +289,8 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
             hwMesh.rotation.set(0, 0, Math.PI / 2);
           }
 
-          const isVisible = hw.visible !== false && parentContainer.visible !== false;
+          const isHwFrozen = Boolean(hw.frozen || hwNode.frozen);
+          const isVisible = hw.visible !== false && parentContainer.visible !== false && !isHwFrozen;
           hwMesh.setEnabled(isVisible);
           hwLoader.setHardwareFrozen(hwMesh, !!hw.frozen);
           hwMesh.metadata = {

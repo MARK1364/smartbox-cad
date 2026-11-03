@@ -33,17 +33,23 @@ describe('corner doors references (rogowy90)', () => {
         return doc.findNode(cabinet.id)!;
     }
 
+    function expectStableRef(ref: { partKey: string; panelId: string }) {
+        const node = doc.findNode(ref.panelId)!;
+        expect(ref.partKey).not.toBe(node.name);
+        expect(ref.partKey).toBe((node.domainData as any)?.key || node.id);
+    }
+
     it('domyślne refs (4+2): xMin/yMax automatycznie ze ścianek NOTCH wieńca dolnego', () => {
         const refs = buildRogowy90CornerDoorsReferences(buildCab());
         expect(refs).not.toBeNull();
         expect(refs!.xMin).toBeDefined();
         expect(refs!.yMax).toBeDefined();
-        expect(refs!.xMin!.partKey.toUpperCase()).toMatch(/WIENIEC_D/);
-        expect(refs!.yMax!.partKey.toUpperCase()).toMatch(/WIENIEC_D/);
+        expectStableRef(refs!.xMin!);
+        expectStableRef(refs!.yMax!);
         expect(refs!.xMin!.face).toMatch(/^OUTLINE_SIDE_\d+$/);
         expect(refs!.yMax!.face).toMatch(/^OUTLINE_SIDE_\d+$/);
-        expect(refs!.xMax.partKey.toUpperCase()).toMatch(/BOK_P/);
-        expect(refs!.yMin.partKey.toUpperCase()).toMatch(/BOK_L/);
+        expectStableRef(refs!.xMax);
+        expectStableRef(refs!.yMin);
         expect(refs!.zMin.face).toBe('FACE_Z_PLUS');
         expect(refs!.zMax.face).toBe('FACE_Z_PLUS'); // INNER spód wieńca góry
     });
@@ -70,10 +76,27 @@ describe('corner doors references (rogowy90)', () => {
         panel.custom_properties.outline2d = orig.map(([u, v]) => [u * 1_000_000, v * 1_000_000]);
 
         const refs = buildRogowy90CornerDoorsReferences(cabNode);
-        expect(refs?.xMin?.partKey.toUpperCase()).toMatch(/WIENIEC_D/);
-        expect(refs?.yMax?.partKey.toUpperCase()).toMatch(/WIENIEC_D/);
+        expectStableRef(refs!.xMin!);
+        expectStableRef(refs!.yMax!);
         expect(refs?.xMin?.face).toMatch(/^OUTLINE_SIDE_\d+$/);
         expect(refs?.yMax?.face).toMatch(/^OUTLINE_SIDE_\d+$/);
+    });
+
+    it('does not choose an arbitrary panel when role fallback is ambiguous', () => {
+        const cabNode = buildCab();
+        const leftPanel = cabNode.children.find(
+            (child: any) => child.domainData?.role === 'LEFT_SIDE_PANEL',
+        )!;
+        delete (leftPanel.domainData as any).key;
+        doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            role: 'LEFT_SIDE_PANEL',
+            name: 'Duplicate left role',
+        }, cabNode.id);
+
+        expect(buildRogowy90CornerDoorsReferences(cabNode)).toBeNull();
     });
 
     it('applyCornerDoorsDefaultRefs → innerL_wieniec z automatycznym wcięciem L', () => {
@@ -81,8 +104,8 @@ describe('corner doors references (rogowy90)', () => {
         expect(applied?.cornerAt).toBe('innerL_wieniec');
         expect(applied?.customReferences.xMin?.face).toMatch(/^OUTLINE_SIDE_\d+$/);
         expect(applied?.customReferences.yMax?.face).toMatch(/^OUTLINE_SIDE_\d+$/);
-        expect(applied?.customReferences.yMin.partKey.toUpperCase()).toMatch(/BOK_L/);
-        expect(applied?.customReferences.xMax.partKey.toUpperCase()).toMatch(/BOK_P/);
+        expectStableRef(applied!.customReferences.yMin);
+        expectStableRef(applied!.customReferences.xMax);
         expect(applied?.customReferences.zMax.face).toBe('FACE_Z_PLUS');
     });
 
@@ -102,8 +125,8 @@ describe('corner doors references (rogowy90)', () => {
         expect(patch).not.toBeNull();
         expect(patch!.customReferences.xMin!.face).toMatch(/^OUTLINE_SIDE_\d+$/);
         expect(patch!.customReferences.yMax!.face).toMatch(/^OUTLINE_SIDE_\d+$/);
-        expect(patch!.customReferences.xMax.partKey.toUpperCase()).toMatch(/BOK_P/);
-        expect(patch!.customReferences.yMin.partKey.toUpperCase()).toMatch(/BOK_L/);
+        expectStableRef(patch!.customReferences.xMax);
+        expectStableRef(patch!.customReferences.yMin);
         expect(patch!.customReferences.zMax.partKey).not.toBe('STARY');
         expect(patch!.disabledReferences.xMin).toBeUndefined();
         expect(patch!.disabledReferences.yMax).toBeUndefined();

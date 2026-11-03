@@ -4,7 +4,7 @@
 
 import { registerCabinetModule, registerKorpusRebuiltListener, CabinetModule, KorpusCreateParams } from '../A1_core/cabinet-port.js';
 import { registerKorpusOffsetGizmo } from './korpus-offset-gizmo.js';
-import { rebuildSmartFrameContainer, initializeSmartFrameEngine } from './smartframe-adapter.js';
+import { rebuildSmartFrameContainer, initializeSmartFrameEngine, applyRealtimeUpdate } from './smartframe-adapter.js';
 import { CreateKorpusCommand } from './commands/create-korpus-command.js';
 import { SyncBackGroovesCommand } from './commands/sync-back-grooves-command.js';
 import { SetKorpusTopPanelConfigCommand } from './commands/set-korpus-top-panel-config-command.js';
@@ -29,6 +29,9 @@ export const smartFrameCabinetModule: CabinetModule = {
     },
     createSetTopPanelConfigCommand(containerId: string, oldConfig: any, newConfig: any): Command {
         return new SetKorpusTopPanelConfigCommand(containerId, oldConfig, newConfig);
+    },
+    applyRealtimeUpdate(docTarget: any, params: any, targetContainer?: any): void {
+        applyRealtimeUpdate(docTarget, params, targetContainer);
     }
 };
 

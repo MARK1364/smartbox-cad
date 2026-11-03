@@ -35,6 +35,28 @@
     color: var(--text-secondary, #a1a1aa);
 }
 
+.c2-box__head-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.c2-box__cancel-link {
+    background: transparent;
+    border: none;
+    color: #60a5fa;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 0 4px;
+}
+
+.c2-box__cancel-link:hover {
+    color: #93c5fd;
+    text-decoration: underline;
+}
+
 .c2-box__head {
     display: flex;
     align-items: center;
@@ -338,6 +360,15 @@
     font-size: 12px;
 }
 
+.c2-editor-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.c2-editor-actions .c2-btn {
+    flex: 1;
+}
+
 .c2-preset-tools {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -357,7 +388,7 @@
     gap: 1px;
     min-width: 0;
     min-height: 42px;
-    padding: 6px 18px 5px 6px;
+    padding: 6px 40px 5px 6px;
     border-radius: 5px;
     border: 1px solid #333338;
     background: #222226;
@@ -383,6 +414,11 @@
     border-color: #4ade80;
     background: #14532d;
     box-shadow: 0 0 8px rgba(74, 222, 128, 0.35);
+}
+
+.c2-preset-tool.is-editing {
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.35);
 }
 
 .c2-preset-tool__body {
@@ -412,6 +448,48 @@
 .c2-preset-tool.is-active .c2-preset-tool__meta,
 .c2-preset-tool.is-picking .c2-preset-tool__meta {
     color: rgba(255, 255, 255, 0.75);
+}
+
+.c2-preset-tool__actions {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.c2-preset-tool__btn {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #71717a;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.12s ease, background 0.12s ease;
+}
+
+.c2-preset-tool__btn:hover {
+    color: #fafafa;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.c2-preset-tool__btn--edit:hover,
+.c2-preset-tool.is-editing .c2-preset-tool__btn--edit {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.2);
+}
+
+.c2-preset-tool__btn--del:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.25);
 }
 
 .c2-preset-tool__del {

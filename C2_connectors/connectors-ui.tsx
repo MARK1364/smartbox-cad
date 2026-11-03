@@ -29,6 +29,24 @@ interface Props {
     projectModel: any;
 }
 
+function PencilIcon() {
+    return (
+        <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+        >
+            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+        </svg>
+    );
+}
+
 function openDrzewoZlaczaTab() {
     window.dispatchEvent(new CustomEvent(DRZEWO_TAB_EVENT, { detail: { tab: 'zlacza' } }));
 }
@@ -56,6 +74,7 @@ export function ConnectorsUI({ projectModel }: Props) {
     const [picking, setPicking] = useState(false);
     const [presetName, setPresetName] = useState('');
     const [editorOpen, setEditorOpen] = useState(false);
+    const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
 
     const document = projectModel?.document ?? projectModel ?? ContextManager.instance.document;
 
@@ -116,10 +135,77 @@ export function ConnectorsUI({ projectModel }: Props) {
         refresh();
     };
 
+    const onStartEditPreset = (preset: ConnectorPreset, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (editingPresetId === preset.id) {
+            setEditingPresetId(null);
+            setPresetName('');
+            setEditorOpen(false);
+            return;
+        }
+        if (isConnectorPickActive()) {
+            stopConnectorPick();
+            setPicking(false);
+        }
+        setEditingPresetId(preset.id);
+        setPresetName(preset.name);
+        store.placementRule = preset.placementRule;
+        store.firstOffsetMm = preset.firstOffsetMm;
+        store.positionsActive = [...preset.positionsActive];
+        store.positionTypes = [...preset.positionTypes];
+        store.activePresetId = preset.id;
+        setEditorOpen(true);
+        store.notifyChanged();
+        refresh();
+    };
+
+    const onCancelEdit = () => {
+        setEditingPresetId(null);
+        setPresetName('');
+        setEditorOpen(false);
+        refresh();
+    };
+
+    const onDeletePreset = (preset: ConnectorPreset, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (store.activePresetId === preset.id) {
+            store.activePresetId = '';
+            if (picking) {
+                stopConnectorPick();
+                setPicking(false);
+            }
+        }
+        if (editingPresetId === preset.id) {
+            setEditingPresetId(null);
+            setPresetName('');
+            setEditorOpen(false);
+        }
+        presetStore.remove(preset.id);
+        refresh();
+    };
+
     const onSavePreset = () => {
         const name = presetName.trim()
             || getPlacementRuleDefinition(store.placementRule)?.name
             || 'Preset';
+
+        if (editingPresetId) {
+            presetStore.update(editingPresetId, {
+                name,
+                placementRule: store.placementRule,
+                firstOffsetMm: store.firstOffsetMm,
+                positionsActive: store.positionsActive,
+                positionTypes: store.positionTypes,
+            });
+            store.activePresetId = editingPresetId;
+            setEditingPresetId(null);
+            setPresetName('');
+            setEditorOpen(false);
+            store.notifyChanged();
+            refresh();
+            return;
+        }
+
         const preset = presetStore.add({
             name,
             placementRule: store.placementRule,
@@ -137,15 +223,34 @@ export function ConnectorsUI({ projectModel }: Props) {
     return (
         <div className="c2-panel">
             <div className="c2-box">
-                <button
-                    type="button"
-                    className="c2-box__head"
-                    onClick={() => setEditorOpen((v) => !v)}
-                    aria-expanded={editorOpen}
-                >
-                    <span className={`c2-box__chevron${editorOpen ? ' is-open' : ''}`} aria-hidden />
-                    <span className="c2-box__title">+ Nowy preset</span>
-                </button>
+                <div className="c2-box__head-bar">
+                    <button
+                        type="button"
+                        className="c2-box__head"
+                        onClick={() => setEditorOpen((v) => !v)}
+                        aria-expanded={editorOpen}
+                    >
+                        <span className={`c2-box__chevron${editorOpen ? ' is-open' : ''}`} aria-hidden />
+                        <span className="c2-box__title">
+                            {editingPresetId ? 'Edycja presetu' : '+ Nowy preset'}
+                        </span>
+                    </button>
+                    {editingPresetId && (
+                        <button
+                            type="button"
+                            className="c2-box__cancel-link"
+                            title="Przełącz na tworzenie nowego presetu"
+                            onClick={() => {
+                                setEditingPresetId(null);
+                                setPresetName('');
+                                store.activePresetId = '';
+                                refresh();
+                            }}
+                        >
+                            + Nowy
+                        </button>
+                    )}
+                </div>
 
                 {editorOpen && (
                     <div className="c2-box__body">
@@ -166,7 +271,9 @@ export function ConnectorsUI({ projectModel }: Props) {
                                 value={store.placementRule}
                                 onChange={(e) => {
                                     store.setPlacementRule(e.target.value);
-                                    store.activePresetId = '';
+                                    if (!editingPresetId) {
+                                        store.activePresetId = '';
+                                    }
                                     refresh();
                                 }}
                                 disabled={picking}
@@ -191,7 +298,9 @@ export function ConnectorsUI({ projectModel }: Props) {
                                         const n = Number(e.target.value);
                                         if (!Number.isFinite(n)) return;
                                         store.firstOffsetMm = n;
-                                        store.activePresetId = '';
+                                        if (!editingPresetId) {
+                                            store.activePresetId = '';
+                                        }
                                         store.notifyChanged();
                                         refresh();
                                     }}
@@ -211,24 +320,49 @@ export function ConnectorsUI({ projectModel }: Props) {
                             disabled={picking}
                             onToggle={(index) => {
                                 store.togglePosition(index);
-                                store.activePresetId = '';
+                                if (!editingPresetId) {
+                                    store.activePresetId = '';
+                                }
                                 refresh();
                             }}
                             onChangeType={(index, type) => {
                                 store.setPositionType(index, type);
-                                store.activePresetId = '';
+                                if (!editingPresetId) {
+                                    store.activePresetId = '';
+                                }
                                 refresh();
                             }}
                         />
 
-                        <button
-                            type="button"
-                            className="c2-btn c2-btn--primary"
-                            disabled={picking}
-                            onClick={onSavePreset}
-                        >
-                            Zapisz preset
-                        </button>
+                        {editingPresetId ? (
+                            <div className="c2-editor-actions">
+                                <button
+                                    type="button"
+                                    className="c2-btn c2-btn--primary"
+                                    disabled={picking}
+                                    onClick={onSavePreset}
+                                >
+                                    Zapisz zmiany
+                                </button>
+                                <button
+                                    type="button"
+                                    className="c2-btn"
+                                    disabled={picking}
+                                    onClick={onCancelEdit}
+                                >
+                                    Anuluj
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                className="c2-btn c2-btn--primary"
+                                disabled={picking}
+                                onClick={onSavePreset}
+                            >
+                                Zapisz preset
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -241,11 +375,12 @@ export function ConnectorsUI({ projectModel }: Props) {
                     <div className="c2-preset-tools">
                         {presets.map((preset) => {
                             const active = store.activePresetId === preset.id;
+                            const isEditing = editingPresetId === preset.id;
                             const ruleName = getPlacementRuleDefinition(preset.placementRule)?.name || preset.placementRule;
                             return (
                                 <div
                                     key={preset.id}
-                                    className={`c2-preset-tool${active ? ' is-active' : ''}${picking && active ? ' is-picking' : ''}`}
+                                    className={`c2-preset-tool${active ? ' is-active' : ''}${picking && active ? ' is-picking' : ''}${isEditing ? ' is-editing' : ''}`}
                                     title={`${preset.name}\n${ruleName} · ${preset.firstOffsetMm} mm · ${summarizePresetMask(preset)}\nKliknij, aby wstawiać złącza`}
                                     onClick={() => activatePresetTool(preset)}
                                 >
@@ -255,25 +390,24 @@ export function ConnectorsUI({ projectModel }: Props) {
                                             {ruleName} · {summarizePresetMask(preset)} · {preset.firstOffsetMm} mm
                                         </span>
                                     </span>
-                                    <button
-                                        type="button"
-                                        className="c2-preset-tool__del"
-                                        title="Usuń preset"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (store.activePresetId === preset.id) {
-                                                store.activePresetId = '';
-                                                if (picking) {
-                                                    stopConnectorPick();
-                                                    setPicking(false);
-                                                }
-                                            }
-                                            presetStore.remove(preset.id);
-                                            refresh();
-                                        }}
-                                    >
-                                        ×
-                                    </button>
+                                    <div className="c2-preset-tool__actions">
+                                        <button
+                                            type="button"
+                                            className="c2-preset-tool__btn c2-preset-tool__btn--edit"
+                                            title="Edytuj preset"
+                                            onClick={(e) => onStartEditPreset(preset, e)}
+                                        >
+                                            <PencilIcon />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="c2-preset-tool__btn c2-preset-tool__btn--del"
+                                            title="Usuń preset"
+                                            onClick={(e) => onDeletePreset(preset, e)}
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
                                 </div>
                             );
                         })}

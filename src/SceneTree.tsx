@@ -29,7 +29,9 @@ import { canReparentManualPanel, reparentManualPanel } from './application/cad-a
 import { CAD_EDIT_LIBRARY_OPERATION } from '../o1_operacji';
 import { CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
 import { openCadEditEntity } from './floating-edit/cad-edit-entity.js';
+import { isWallPart } from '../S4_sciany/smartwall-types.js';
 import { LedChannelStore, type LedChannelDefinition } from '../A2_bloki';
+import { getLevelColorTheme } from '../S1_sketcher/datum-types';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
@@ -192,6 +194,14 @@ export const isFeatureNode = (node: CADTreeNode): boolean => {
     (node as any).role === 'SMARTPART_CUT' ||
     (node as any).generatorParams?.type === 'smartpart_cut'
   );
+};
+
+export const isGlcTreeItem = (node: CADTreeNode): boolean => {
+  return node.type === 'GLC' || (node as any).nodeType === 'GLC_FRAME';
+};
+
+export const isDatumLevelTreeItem = (node: CADTreeNode): boolean => {
+  return node.type === 'DATUM_LEVEL' || (node as any).nodeType === 'DATUM_LEVEL';
 };
 
 export const isBlokiTreeItem = (container: CADTreeNode): boolean => {
@@ -680,6 +690,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const isManual = panel.isManual === true;
     const isFrozen = panel.frozen === true;
     const isSmartPartPart = isHandleTreeItem(panel) || isCustomSmartPartTreeItem(panel);
+    const isWall = isWallPart(panel) || (panel as any).role === 'WALL' || (panel as any).role === 'WALL_PILLAR' || (panel as any).role === 'FLOOR' || (panel as any).role === 'SKOS';
 
     const opCount = (panel.holes?.length || 0) + (panel.grooves?.length || 0);
     const cncPrograms = (CAMStateStore as any)?.instance?.getPrograms ? (CAMStateStore as any).instance.getPrograms(panel.id) : [];
@@ -727,10 +738,10 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.stopPropagation();
               UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.id });
               UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: isSmartPartPart ? 'handle' : 'part',
+                type: isSmartPartPart ? 'handle' : (isWall ? 'wall' : 'part'),
                 id: panel.id,
                 uuid: panel.id,
-                name: panel.name || (isSmartPartPart ? 'SmartPart' : 'Formatka'),
+                name: panel.name || (isSmartPartPart ? 'SmartPart' : (isWall ? 'Ściana' : 'Formatka')),
                 isManual,
                 frozen: isFrozen,
                 clientX: e.clientX,
@@ -1063,6 +1074,240 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     );
   };
 
+  const renderDatumLevelNode = (levelNode: CADTreeNode, index: number = 0) => {
+    const isSelected = selectedNodeId === levelNode.id ? 'selected' : '';
+    const isEditing = editingNode?.type === 'datum_level' && editingNode.id === levelNode.id;
+    const isVisible = levelNode.visible !== false;
+    const isPlaneVisible = Boolean((levelNode as any).visiblePlane);
+    const theme = getLevelColorTheme(index);
+
+    return (
+      <div
+        key={levelNode.id}
+        className={`tree-node ${isSelected}`}
+        style={{
+          cursor: 'pointer',
+          paddingLeft: '4px',
+          opacity: !isVisible ? 0.45 : 1,
+        }}
+      >
+        <div
+          className="tree-node-content"
+          onClick={() => {
+            setSelectedNodeId(levelNode.id);
+            onSelectNode?.(levelNode);
+          }}
+          onContextMenu={(e) => {
+            if (isDrawMode) return;
+            e.preventDefault();
+            e.stopPropagation();
+            UIController.instance?.emitTree('contextmenu-tree-node', {
+              type: 'datum_level',
+              id: levelNode.id,
+              name: levelNode.name,
+              clientX: e.clientX,
+              clientY: e.clientY,
+            });
+          }}
+          onDoubleClick={() => {
+            if (isDrawMode) return;
+            setEditingNode({ type: 'datum_level', id: levelNode.id });
+            setEditValue(levelNode.name || 'Poziom');
+          }}
+        >
+          <span style={{ width: '8px', display: 'inline-block', flexShrink: 0 }} />
+          <span style={{ color: isVisible ? theme.hex : '#94a3b8', display: 'inline-flex', alignItems: 'center', fontSize: '13px', marginRight: '4px' }}>
+            ●
+          </span>
+          {isEditing ? (
+            <input
+              type="text"
+              value={editValue}
+              className="node-name-input"
+              style={{ background: '#2a2a2a', color: '#fff', border: `1px solid ${theme.hex}`, outline: 'none' }}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => finishRename(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') finishRename(true);
+                if (e.key === 'Escape') finishRename(false);
+              }}
+              autoFocus
+            />
+          ) : (
+            <span className="node-name-text" style={{ fontWeight: 500, color: isVisible ? '#f1f5f9' : '#94a3b8' }}>
+              {levelNode.name}
+            </span>
+          )}
+          <span style={{ color: theme.hex, fontSize: '11px', marginLeft: '6px', fontWeight: 600, opacity: isVisible ? 1 : 0.6 }}>
+            Z: {levelNode.height} mm
+          </span>
+        </div>
+
+        {!isDrawMode && (
+          <div className="tree-node-actions">
+            <button
+              type="button"
+              className="tree-action-btn"
+              title={isPlaneVisible ? 'Ukryj płaszczyznę' : 'Pokaż płaszczyznę'}
+              style={{ color: isPlaneVisible ? theme.hex : undefined }}
+              onClick={(e) => {
+                e.stopPropagation();
+                const doc = ContextManager.instance?.document as ProjectDocument | null;
+                const node = doc?.findNode(levelNode.id);
+                if (node && node.domainData) {
+                  const nextVisible = !isPlaneVisible;
+                  (node.domainData as any).visiblePlane = nextVisible;
+                  (levelNode as any).visiblePlane = nextVisible;
+                  const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+                  glcAxis?.syncFromDocument?.();
+                  doc.emitChange('structure', [node.id]);
+                  (doc as any).markDirty?.();
+                  doc.notifyDocumentChanged();
+                }
+              }}
+            >
+              {!isPlaneVisible ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
+            </button>
+            <button
+              type="button"
+              className="tree-action-btn btn-delete"
+              title="Usuń poziom"
+              onClick={(e) => {
+                e.stopPropagation();
+                const doc = ContextManager.instance?.document as ProjectDocument | null;
+                if (doc) {
+                  doc.removeNode(levelNode.id);
+                  const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+                  glcAxis?.syncFromDocument?.();
+                  (doc as any).markDirty?.();
+                  doc.notifyDocumentChanged();
+                }
+              }}
+            >
+              {TREE_ICONS.trash}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderGlcNode = (glcNode: CADTreeNode) => {
+    const isSelected = selectedNodeId === glcNode.id ? 'selected' : '';
+    const isCollapsed = isNodeCollapsed(glcNode.id, false);
+    const hasChildren = glcNode.children && glcNode.children.length > 0;
+    const isEditing = editingNode?.type === 'glc' && editingNode.id === glcNode.id;
+    const isVisible = glcNode.visible !== false;
+
+    return (
+      <div key={glcNode.id} className="tree-node-group">
+        <div
+          className={`tree-node ${isSelected}`}
+          style={{
+            cursor: 'pointer',
+            background: isSelected ? undefined : 'rgba(56, 189, 248, 0.05)',
+            opacity: !isVisible ? 0.45 : 1,
+          }}
+        >
+          <div
+            className="tree-node-content"
+            onClick={() => {
+              setSelectedNodeId(glcNode.id);
+              onSelectNode?.(glcNode);
+            }}
+            onContextMenu={(e) => {
+              if (isDrawMode) return;
+              e.preventDefault();
+              e.stopPropagation();
+              UIController.instance?.emitTree('contextmenu-tree-node', {
+                type: 'glc',
+                id: glcNode.id,
+                name: glcNode.name,
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
+            }}
+            onDoubleClick={() => {
+              if (isDrawMode) return;
+              setEditingNode({ type: 'wcs', id: glcNode.id });
+              setEditValue(glcNode.name || 'Układ globalny (GLC)');
+            }}
+          >
+            <span
+              className="tree-chevron"
+              style={{ visibility: hasChildren ? 'visible' : 'hidden' }}
+              onClick={(e) => toggleCollapse(glcNode.id, e, false)}
+            >
+              {isCollapsed ? TREE_ICONS.chevronRight : TREE_ICONS.chevronDown}
+            </span>
+            <span style={{ color: isVisible ? '#38bdf8' : '#94a3b8', display: 'inline-flex', alignItems: 'center', fontSize: '14px', marginRight: '4px' }}>
+              🌐
+            </span>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editValue}
+                className="node-name-input"
+                style={{ background: '#2a2a2a', color: '#fff', border: '1px solid #38bdf8', outline: 'none' }}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => finishRename(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') finishRename(true);
+                  if (e.key === 'Escape') finishRename(false);
+                }}
+                autoFocus
+              />
+            ) : (
+              <strong className="node-name-text" style={{ color: isVisible ? '#38bdf8' : '#94a3b8' }}>
+                {glcNode.name || 'Układ globalny (GLC)'}
+              </strong>
+            )}
+            {hasChildren && (
+              <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '6px' }}>
+                ({glcNode.children!.length} {glcNode.children!.length === 1 ? 'poziom' : 'poziomy'})
+              </span>
+            )}
+          </div>
+
+          {!isDrawMode && (
+            <div className="tree-node-actions">
+              <button
+                type="button"
+                className="tree-action-btn"
+                title={isVisible ? 'Ukryj układ GLC' : 'Pokaż układ GLC'}
+                style={{ color: isVisible ? '#38bdf8' : undefined }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const doc = ContextManager.instance?.document as ProjectDocument | null;
+                  const node = doc?.findNode(glcNode.id);
+                  if (node && node.domainData) {
+                    const nextVisible = !isVisible;
+                    (node.domainData as any).visible = nextVisible;
+                    (glcNode as any).visible = nextVisible;
+                    const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+                    glcAxis?.syncFromDocument?.();
+                    (ContextManager.instance?.viewport as any)?.setGlcVisible?.(nextVisible);
+                    doc.emitChange('structure', [node.id]);
+                    (doc as any).markDirty?.();
+                    doc.notifyDocumentChanged();
+                  }
+                }}
+              >
+                {!isVisible ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {!isCollapsed && hasChildren && (
+          <div className="tree-children" style={{ marginLeft: '16px' }}>
+            {glcNode.children!.map((child, idx) => renderDatumLevelNode(child, idx))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderContainerNode = (container: CADTreeNode) => {
     const isHandle = isHandleTreeItem(container);
     const isSink = isSinkTreeItem(container);
@@ -1070,6 +1315,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const isSmartPartLike = isHandle || isCustomSp || isSink;
     const isAgd = isApplianceTreeItem(container);
     const isBlok = isBlokiTreeItem(container);
+    const isWall = isSmartWallTreeItem(container);
     // SmartWall domyślnie rozwinięty — widać ściany-dzieci; uchwyt / zlew / custom SP domyślnie zwinięty
     const defaultCollapsed = isSmartPartLike ? true : !isSmartWallTreeItem(container);
     const isContainerCollapsed = isNodeCollapsed(container.id, defaultCollapsed);
@@ -1079,7 +1325,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
       ? 'Zlew'
       : (isHandle
         ? 'Uchwyt'
-        : (isCustomSp ? 'SmartPart' : (isAgd ? 'AGD' : (isBlok ? 'Bloki' : 'Korpus'))));
+        : (isCustomSp ? 'SmartPart' : (isAgd ? 'AGD' : (isBlok ? 'Bloki' : (isWall ? 'Ściana' : 'Korpus')))));
 
     return (
       <div key={container.id} className="tree-children">
@@ -1140,7 +1386,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               e.stopPropagation();
               UIController.instance?.emitTree('select-container', { id: container.id });
               UIController.instance?.emitTree('contextmenu-tree-node', {
-                type: isSink ? 'smartpart' : (isSmartPartLike ? 'handle' : (isAgd ? 'agd' : (isBlok ? 'bloki' : 'container'))),
+                type: isSink ? 'smartpart' : (isSmartPartLike ? 'handle' : (isAgd ? 'agd' : (isBlok ? 'bloki' : (isWall ? 'wall' : 'container')))),
                 id: container.id,
                 name: container.name || treeTypeLabel,
                 clientX: e.clientX,
@@ -1504,6 +1750,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         {!isProjectCollapsed &&
           treeRoot.children &&
           treeRoot.children.map((child: CADTreeNode) => {
+            if (isGlcTreeItem(child)) {
+              return renderGlcNode(child);
+            }
+            if (isDatumLevelTreeItem(child)) {
+              return renderDatumLevelNode(child);
+            }
             if (isFeatureNode(child)) {
               return renderFeatureNode(child);
             }

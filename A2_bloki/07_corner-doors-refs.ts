@@ -24,6 +24,17 @@ export type CornerDoorsCustomReferences = {
     zMax: CornerDoorsRefSlot;
 };
 
+const CORNER_PANEL_ROLE_BY_KEY: Record<string, string> = {
+    BOK_L: 'LEFT_SIDE_PANEL',
+    BOK_Y: 'LEFT_SIDE_PANEL',
+    BOK_P: 'RIGHT_SIDE_PANEL',
+    BOK_X: 'RIGHT_SIDE_PANEL',
+    WIENIEC_D: 'BOTTOM_PANEL',
+    BOTTOM: 'BOTTOM_PANEL',
+    WIENIEC_G: 'TOP_PANEL',
+    TOP: 'TOP_PANEL',
+};
+
 function isBlokiSubtree(node: CADNode): boolean {
     const d = node.domainData as any;
     const gp = d?.generatorParams;
@@ -36,26 +47,30 @@ function isBlokiSubtree(node: CADNode): boolean {
 }
 
 function findRogowyPanel(cabinetNode: CADNode, ...keySuffixes: string[]): CADNode | null {
-    for (const keySuffix of keySuffixes) {
-        let found: CADNode | null = null;
-        const suffix = keySuffix.toUpperCase();
-        const walk = (node: CADNode) => {
-            if (found) return;
-            if (isBlokiSubtree(node)) return;
-            const d = node.domainData as any;
-            if (d && (d.type === 'panel' || d.type === 'part')) {
-                const key = String(d.key || node.name || '').toUpperCase();
-                if (key === suffix || key.endsWith(`_${suffix}`) || key.endsWith(suffix)) {
-                    found = node;
-                    return;
-                }
-            }
-            for (const child of node.children) walk(child);
-        };
-        walk(cabinetNode);
-        if (found) return found;
-    }
-    return null;
+    const panels: CADNode[] = [];
+    const walk = (node: CADNode) => {
+        if (isBlokiSubtree(node)) return;
+        const d = node.domainData as any;
+        if (d && (d.type === 'panel' || d.type === 'part')) panels.push(node);
+        for (const child of node.children) walk(child);
+    };
+    walk(cabinetNode);
+
+    const suffixes = keySuffixes.map((suffix) => suffix.toUpperCase());
+    const keyMatches = panels.filter((node) => {
+        const key = String((node.domainData as any)?.key || '').toUpperCase();
+        return suffixes.some((suffix) =>
+            key === suffix || key.endsWith(`_${suffix}`) || key.endsWith(suffix)
+        );
+    });
+    if (keyMatches.length === 1) return keyMatches[0];
+    if (keyMatches.length > 1) return null;
+
+    const expectedRoles = new Set(suffixes.map((suffix) => CORNER_PANEL_ROLE_BY_KEY[suffix] || suffix));
+    const roleMatches = panels.filter((node) =>
+        expectedRoles.has(String((node.domainData as any)?.role || '').toUpperCase())
+    );
+    return roleMatches.length === 1 ? roleMatches[0] : null;
 }
 
 export function isRogowy90Cabinet(node: CADNode): boolean {
@@ -65,8 +80,9 @@ export function isRogowy90Cabinet(node: CADNode): boolean {
 }
 
 function makeRef(panelNode: CADNode, face: FaceName = 'FACE_Z_PLUS'): CornerDoorsRefSlot {
+    const panelData = panelNode.domainData as any;
     return {
-        partKey: panelNode.name,
+        partKey: String(panelData?.key || panelNode.id),
         face,
         panelId: panelNode.id,
     };

@@ -13,6 +13,8 @@ import {
     assemblyScopeFingerprint,
     collectAssemblyPartRefs,
     isPlanStale,
+    isolateContainerInSnapshot,
+    mergeContainerIntoProjectSnapshot,
 } from '../assembly-scene-adapter.js';
 import { buildAssemblySequence } from '../assembly-sequence-engine.js';
 import type { AssemblyPlan } from '../assembly-sequence-engine.js';
@@ -92,5 +94,67 @@ describe('instrukcja — scope pojedynczego korpusu', () => {
 
         doc.removeNode(cabA.id);
         expect(isPlanStale(plan, doc)).toBe(true);
+    });
+
+    it('isolateContainerInSnapshot izoluje TYLKO wskazany korpus ze snapshotu projektu', () => {
+        const fullSnap = doc.serialize();
+        expect(fullSnap.rootNode.children.length).toBe(2);
+
+        const isolatedSnap = isolateContainerInSnapshot(fullSnap, cabA.id);
+        expect(isolatedSnap.rootNode.children.length).toBe(1);
+        expect(isolatedSnap.rootNode.children[0].id).toBe(cabA.id);
+        // Pozycja lokalna zostaje zresetowana do zera, by stał w centrum
+        expect(isolatedSnap.rootNode.children[0].translationNm).toEqual([0, 0, 0]);
+
+        // Po załadowaniu do nowego dokumentu: obecny tylko Korpus A i jego formatki
+        const isolatedDoc = new ProjectDocument({ name: 'Isolated' });
+        isolatedDoc.load(isolatedSnap);
+
+        expect(isolatedDoc.rootNode.children.length).toBe(1);
+        expect(isolatedDoc.findNode(cabA.id)).toBeDefined();
+        expect(isolatedDoc.findNode(cabB.id)).toBeNull();
+        expect(isolatedDoc.findNode(aDno)).toBeDefined();
+        expect(isolatedDoc.findNode(aWieniec)).toBeDefined();
+        expect(isolatedDoc.findNode(bDno)).toBeNull();
+    });
+
+    it('mergeContainerIntoProjectSnapshot aktualizuje tylko ten korpus bez utraty pozostałych', () => {
+        const fullSnap = doc.serialize();
+        const isolatedSnap = isolateContainerInSnapshot(fullSnap, cabA.id);
+
+        const isolatedDoc = new ProjectDocument({ name: 'Isolated' });
+        isolatedDoc.load(isolatedSnap);
+
+        // Dodaj nową formatkę w edytowanym korpusie w instrukcji
+        const newPanelId = addPanel(isolatedDoc, cabA.id, 'Nowa Półka', 'polka');
+
+        const scopedSnap = isolatedDoc.serialize();
+        const mergedSnap = mergeContainerIntoProjectSnapshot(fullSnap, scopedSnap, cabA.id);
+
+        // Pełny snapshot nadal posiada Korpus B
+        const mergedDoc = new ProjectDocument({ name: 'Merged' });
+        mergedDoc.load(mergedSnap);
+
+        expect(mergedDoc.findNode(cabB.id)).toBeDefined();
+        expect(mergedDoc.findNode(bDno)).toBeDefined();
+        expect(mergedDoc.findNode(cabA.id)).toBeDefined();
+        expect(mergedDoc.findNode(newPanelId)).toBeDefined();
+    });
+    it('extractInstrukcjaPayload przygotowuje wyizolowany snapshot tylko dla wskazanego korpusu', async () => {
+        const { extractInstrukcjaPayload } = await import('../../src/module-data/cad-extract.js');
+        const payload = extractInstrukcjaPayload(
+            { type: 'CONTAINER', id: cabA.id, name: 'Korpus A' },
+            doc,
+        );
+
+        expect(payload.snapshot).toBeDefined();
+        expect(payload.snapshot.rootNode.children.length).toBe(1);
+        expect(payload.snapshot.rootNode.children[0].id).toBe(cabA.id);
+
+        const isolatedDoc = new ProjectDocument({ name: 'Loaded from payload' });
+        isolatedDoc.load(payload.snapshot);
+
+        expect(isolatedDoc.findNode(cabA.id)).toBeDefined();
+        expect(isolatedDoc.findNode(cabB.id)).toBeNull();
     });
 });

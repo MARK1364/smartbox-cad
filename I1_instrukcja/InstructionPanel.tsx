@@ -19,13 +19,18 @@ import { ContextManager } from '../A1_core/context-manager.js';
 import {
     readModuleSession,
     persistProjectSnapshot,
+    readProjectSnapshot,
+    storageAdapter,
+    PROJECT_SNAPSHOT_KEY,
     returnToCad,
     CAD_BRIDGE_CHANNEL,
     MODULE_SYNC_MSG,
+    MODULE_SESSION_UPDATED_MSG,
 } from '../src/module-data/session';
 import type { InstrukcjaModulePayload, ModuleScope } from '../src/module-data/types';
 import {
     assemblyPlanFromScene,
+    mergeContainerIntoProjectSnapshot,
 } from './assembly-scene-adapter';
 import { AssemblyAnimPlayer } from './assembly-anim';
 import {
@@ -100,8 +105,21 @@ const btn: React.CSSProperties = {
 
 export function InstructionPanel(): React.ReactElement {
     useLocale();
-    const payload = useMemo<InstrukcjaModulePayload | null>(() =>
-        readModuleSession<InstrukcjaModulePayload>('instrukcja'), []);
+    const [payload, setPayload] = useState<InstrukcjaModulePayload | null>(() =>
+        readModuleSession<InstrukcjaModulePayload>('instrukcja'));
+
+    useEffect(() => {
+        try {
+            const channel = new BroadcastChannel(CAD_BRIDGE_CHANNEL);
+            channel.onmessage = (ev) => {
+                if (ev.data?.type === MODULE_SESSION_UPDATED_MSG && ev.data?.module === 'instrukcja') {
+                    setPayload(readModuleSession<InstrukcjaModulePayload>('instrukcja'));
+                }
+            };
+            return () => { channel.close(); };
+        } catch { /* ignore */ }
+    }, []);
+
     const scope = payload?.scope || null;
     const containerId = scopeContainerId(scope);
 
@@ -380,10 +398,21 @@ export function InstructionPanel(): React.ReactElement {
     const handleSyncToCad = useCallback(() => {
         const d = ContextManager.instance?.document;
         if (!d) return;
-        persistProjectSnapshot(d);
+        if (containerId) {
+            const fullSnapshot = readProjectSnapshot();
+            if (fullSnapshot) {
+                const scopedSnap = d.serialize();
+                const merged = mergeContainerIntoProjectSnapshot(fullSnapshot, scopedSnap, containerId);
+                storageAdapter.setItem(PROJECT_SNAPSHOT_KEY, JSON.stringify(merged));
+            } else {
+                persistProjectSnapshot(d);
+            }
+        } else {
+            persistProjectSnapshot(d);
+        }
         notifyCadSync();
         showStatus('Zapisano projekt do CAD (PMI, kamera, zmiany).');
-    }, [showStatus]);
+    }, [containerId, showStatus]);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>

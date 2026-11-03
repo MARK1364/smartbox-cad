@@ -160,8 +160,8 @@ export class FacePicker {
                 this._lastHoverTime = now;
 
                 // Priorytet 1: Narożniki, krawędzie, cechy CAM (z tolerancją próbkowania ekranowego 18px)
-                // Referencja Bloki: tylko ściany (wcięcie L = OUTLINE_SIDE, nie krawędź B-rep).
-                let pickResult = (this.targetSubgeometryType === 'face' || isPickingReference())
+                // Gdy wybierana jest ściana (pipeta FACE relacji lub referencja Bloki) — omijamy krawędzie B-rep.
+                let pickResult = this.isPickingFace()
                     ? null
                     : this._pickSubgeometryWithTolerance(this.scene.pointerX, this.scene.pointerY);
 
@@ -173,25 +173,13 @@ export class FacePicker {
                 ) {
                     const pickingDatumFace =
                         ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
-                    const faceHits = this.scene.multiPick(
+                    const validFaceHits = this._multiPickFacesWithTolerance(
                         this.scene.pointerX,
                         this.scene.pointerY,
-                        (mesh: any) => {
-                            if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata) return false;
-                            if (pickingDatumFace && mesh.metadata.type === 'datum_plane') {
-                                return mesh.isPickable !== false;
-                            }
-                            if (!mesh.metadata.faceName) return false;
-                            const pVis = mesh.metadata.panelModel ? mesh.metadata.panelModel.visible !== false : true;
-                            const mVis = mesh.metadata.model ? mesh.metadata.model.visible !== false : true;
-                            return pVis && mVis;
-                        }
+                        pickingDatumFace
                     );
-                    if (faceHits && faceHits.length > 0) {
-                        const validFaceHits = faceHits.filter((h: any) => h.hit && h.pickedMesh);
-                        if (validFaceHits.length > 0) {
-                            pickResult = sortFaceHitsForPick(validFaceHits)[0];
-                        }
+                    if (validFaceHits.length > 0) {
+                        pickResult = sortFaceHitsForPick(validFaceHits)[0];
                     }
                 }
 
@@ -354,7 +342,22 @@ export class FacePicker {
             return;
         }
 
-        // Ignoruj tylko kulki przesuwania CAD (nie ignoruj bazy WCS ani formatki)
+        // Ignoruj kulki gizmo CAD (w tym narożne gizma kontenera, które leżą w tym samym miejscu co wierzchołki c0..c7)
+        const gizmoPick = this.scene.pick?.(pointerX, pointerY, (m: any) => Boolean(
+            m?.isPickable && (
+                m?.metadata?.isCornerGizmo ||
+                m?.metadata?.type === 'glc_axis_tip' ||
+                m?.metadata?.type === 'datum_level' ||
+                m?.name?.startsWith('faceGizmoSphere_') ||
+                m?.name === 'freeDragSphere' ||
+                m?.name?.startsWith('freeDragCenterSphere') ||
+                m?.name?.startsWith('groove_dim_handle_') ||
+                m?.metadata?.type === 'edge-dim-handle'
+            )
+        ));
+        if (gizmoPick && gizmoPick.hit && gizmoPick.pickedMesh) {
+            return;
+        }
         const directPick = this.scene.pick(pointerX, pointerY);
         if (directPick && directPick.hit && directPick.pickedMesh) {
             const name = directPick.pickedMesh.name || "";
@@ -387,7 +390,8 @@ export class FacePicker {
         }
 
         // Priorytet 1: Narożniki, krawędzie, cechy CAM (z tolerancją próbkowania ekranowego 18px)
-        let pickResult = (this.targetSubgeometryType === 'face' || isPickingReference())
+        // Gdy wybierana jest ściana (pipeta FACE relacji lub referencja Bloki) — omijamy krawędzie B-rep.
+        let pickResult = this.isPickingFace()
             ? null
             : this._pickSubgeometryWithTolerance(pointerX, pointerY);
 
@@ -396,38 +400,22 @@ export class FacePicker {
             this.targetSubgeometryType !== 'edge' &&
             this.targetSubgeometryType !== 'vertex'
         ) {
-            const faceHits = this.scene.multiPick(
+            const pickingDatum =
+                ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
+            const validFaceHits = this._multiPickFacesWithTolerance(
                 pointerX,
                 pointerY,
-                (mesh: any) => {
-                    if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata) return false;
-                    if (isPickingReference() && mesh.metadata.type === 'feature') return false;
-                    const isDatum =
-                        mesh.metadata.type === 'datum_plane' &&
-                        ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
-                    if (isDatum) return mesh.isPickable !== false;
-                    const isFace = !!mesh.metadata.faceName;
-                    const isFeature = mesh.metadata.type === 'feature';
-                    if (!isFace && !isFeature) return false;
-                    const pVis = mesh.metadata.panelModel ? mesh.metadata.panelModel.visible !== false : true;
-                    const mVis = mesh.metadata.model ? mesh.metadata.model.visible !== false : true;
-                    return pVis && mVis;
-                }
+                pickingDatum
             );
-            if (faceHits && faceHits.length > 0) {
-                const validFaceHits = faceHits.filter((h: any) => h.hit && h.pickedMesh);
-                if (validFaceHits.length > 0) {
-                    const pickingDatum =
-                        ContextManager.instance.activeConstraintPicker?.expectedKind === 'FACE';
-                    if (pickingDatum) {
-                        // Najbliższy hit — datum albo ściana (bez preferowania datum z tyłu)
-                        pickResult = sortFaceHitsForPick(validFaceHits)[0];
-                    } else {
-                        const nonDatum = validFaceHits.filter(
-                            (h: any) => h.pickedMesh?.metadata?.type !== 'datum_plane'
-                        );
-                        pickResult = sortFaceHitsForPick(nonDatum.length ? nonDatum : validFaceHits)[0];
-                    }
+            if (validFaceHits.length > 0) {
+                if (pickingDatum) {
+                    // Najbliższy hit — datum albo ściana (bez preferowania datum z tyłu)
+                    pickResult = sortFaceHitsForPick(validFaceHits)[0];
+                } else {
+                    const nonDatum = validFaceHits.filter(
+                        (h: any) => h.pickedMesh?.metadata?.type !== 'datum_plane'
+                    );
+                    pickResult = sortFaceHitsForPick(nonDatum.length ? nonDatum : validFaceHits)[0];
                 }
             }
         }
@@ -1052,6 +1040,60 @@ export class FacePicker {
             }
         }
         ContextManager.instance.viewport?.requestRender(2);
+    }
+
+    /** Sprawdza czy użytkownik jest w trybie wskazywania ściany (pipeta relacji FACE/DATUM lub referencja Bloki). */
+    public isPickingFace(): boolean {
+        const cm = ContextManager.instance;
+        return Boolean(
+            this.targetSubgeometryType === 'face' ||
+            isPickingReference() ||
+            cm.activeConstraintPicker?.expectedKind === 'FACE' ||
+            cm.activeConstraintPicker?.expectedKind === 'DATUM'
+        );
+    }
+
+    /**
+     * Raycast dla ścian 3D formatki z tolerancją ekranową (ring sampling wokół kursora).
+     * Kluczowe dla wąskich, częściowo zakrytych pasków formatek (np. 2mm widoczny rąbek boku korpusu przy nałożonym froncie).
+     */
+    private _multiPickFacesWithTolerance(pointerX: number, pointerY: number, pickingDatumFace: boolean): any[] {
+        const predicate = (mesh: any) => {
+            if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata) return false;
+            if (isPickingReference() && mesh.metadata.type === 'feature') return false;
+            if (pickingDatumFace && mesh.metadata.type === 'datum_plane') {
+                return mesh.isPickable !== false;
+            }
+            if (!mesh.metadata.faceName) return false;
+            const pVis = mesh.metadata.panelModel ? mesh.metadata.panelModel.visible !== false : true;
+            const mVis = mesh.metadata.model ? mesh.metadata.model.visible !== false : true;
+            return pVis && mVis;
+        };
+
+        // 1. Bezpośredni raycast w punkt kursora
+        const directHits = this.scene.multiPick(pointerX, pointerY, predicate);
+        const validDirect = directHits ? directHits.filter((h: any) => h.hit && h.pickedMesh) : [];
+        if (validDirect.length > 0) {
+            return validDirect;
+        }
+
+        // 2. Próbkowanie tolerancji ekranowej wokół kursora dla wąskich pasków płaszczyzn (2mm, 4mm, 6mm, 8mm)
+        const ring = [
+            [-2, 0], [2, 0], [0, -2], [0, 2],
+            [-4, 0], [4, 0], [0, -4], [0, 4],
+            [-2, -2], [2, 2], [-2, 2], [2, -2],
+            [-6, 0], [6, 0], [0, -6], [0, 6],
+            [-8, 0], [8, 0], [0, -8], [0, 8]
+        ];
+        for (const [dx, dy] of ring) {
+            const hits = this.scene.multiPick(pointerX + dx, pointerY + dy, predicate);
+            const valid = hits ? hits.filter((h: any) => h.hit && h.pickedMesh) : [];
+            if (valid.length > 0) {
+                return valid;
+            }
+        }
+
+        return [];
     }
 
     /**

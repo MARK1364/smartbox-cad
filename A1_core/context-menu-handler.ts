@@ -13,7 +13,7 @@ import { findFacesAlongRay } from './quick-pick/quick-pick-detector.js';
 import { openQuickPick } from './quick-pick/quick-pick-events.js';
 import { closeCadFloatingEdit } from '../src/floating-edit/cad-edit-entity.js';
 import { isDimensionToolActive, getDimensionTool } from '../A8_pmi/pmi-tool-activate.js';
-import { isSmartWallContainer } from '../S4_sciany/smartwall-types.js';
+import { isSmartWallContainer, isWallPart } from '../S4_sciany/smartwall-types.js';
 import { showCadTreeContextMenu, type TreeContextMenuData } from '../src/module-data/tree-context-menu.js';
 
 export class ContextMenuHandler {
@@ -121,6 +121,9 @@ export class ContextMenuHandler {
                     return { id: curr.id, model: d, isSkos: d.generatorParams?.preset === 'skos' };
                 }
                 curr = curr.parent;
+            }
+            if (isWallPart(selfData)) {
+                return { id: node.id, model: selfData, isSkos: (selfData as any)?.role === 'SKOS' };
             }
             return null;
         };
@@ -280,6 +283,43 @@ export class ContextMenuHandler {
                 }
             }
 
+            const glcOrDatumPick = viewport.scene.pick(
+                viewport.scene.pointerX,
+                viewport.scene.pointerY,
+                (mesh: any) => Boolean(
+                    mesh?.isPickable && (
+                        mesh?.metadata?.type === 'datum_level' ||
+                        mesh?.metadata?.type === 'glc_axis' ||
+                        mesh?.metadata?.type === 'glc_axis_tip'
+                    )
+                )
+            );
+            if (glcOrDatumPick && glcOrDatumPick.hit && glcOrDatumPick.pickedMesh) {
+                const m = glcOrDatumPick.pickedMesh;
+                if (m.metadata?.type === 'datum_level') {
+                    showCadTreeContextMenu({
+                        type: 'datum_level',
+                        id: m.metadata.id,
+                        name: m.metadata.name,
+                        clientX: e.clientX,
+                        clientY: e.clientY,
+                    });
+                    return;
+                }
+                if (m.metadata?.type === 'glc_axis' || m.metadata?.type === 'glc_axis_tip') {
+                    const pickedZ_mm = glcOrDatumPick.pickedPoint ? Math.round(glcOrDatumPick.pickedPoint.y) : undefined;
+                    showCadTreeContextMenu({
+                        type: 'glc',
+                        id: 'glc_origin',
+                        name: 'Układ globalny (GLC)',
+                        pickedZ_mm,
+                        clientX: e.clientX,
+                        clientY: e.clientY,
+                    } as any);
+                    return;
+                }
+            }
+
             const generalPick = viewport.scene.pick(
                 viewport.scene.pointerX,
                 viewport.scene.pointerY
@@ -308,25 +348,26 @@ export class ContextMenuHandler {
 
             const quickPickCandidates = findFacesAlongRay(viewport.scene, viewport.scene.pointerX, viewport.scene.pointerY);
 
+            const effectiveMesh = clickedFaceMesh || pickedMesh;
             let inspected: any = null;
-            if (pickedMesh) {
-                inspected = propertiesManager?.inspectMesh?.(pickedMesh, doc, ContextManager.instance.panelViews, getAllPanels, false);
+            if (effectiveMesh) {
+                inspected = propertiesManager?.inspectMesh?.(effectiveMesh, doc, ContextManager.instance.panelViews, getAllPanels, false);
             }
 
-            const smartPart = this.resolveSmartPartHandle(pickedMesh, doc);
+            const smartPart = this.resolveSmartPartHandle(effectiveMesh, doc);
             let libraryOp: any = null;
             if (!smartPart) {
                 libraryOp = this.resolveLibraryOperation(
-                    pickedMesh,
+                    effectiveMesh,
                     doc,
                     getAllPanels,
                     clickedFaceName,
                 );
             }
 
-            const applianceTarget = this.resolveApplianceTarget(pickedMesh, doc, inspected);
-            const wallTarget = this.resolveWallTarget(pickedMesh, doc, inspected);
-            const containerTarget = this.resolveContainerTarget(pickedMesh, doc, inspected);
+            const applianceTarget = this.resolveApplianceTarget(effectiveMesh, doc, inspected);
+            const wallTarget = this.resolveWallTarget(effectiveMesh, doc, inspected);
+            const containerTarget = this.resolveContainerTarget(effectiveMesh, doc, inspected);
 
             let data: TreeContextMenuData;
 
@@ -378,18 +419,42 @@ export class ContextMenuHandler {
                     quickPickCandidates: quickPickCandidates.length > 1 ? quickPickCandidates : undefined,
                 };
             } else if (wallTarget) {
-                const wNode = doc.findNode?.(wallTarget.id);
-                if (wNode?.domainData) doc.setActiveEntity?.(wNode.domainData);
-                UIController.instance?.emitTree?.('select-container', { id: wallTarget.id });
-                data = {
-                    type: 'wall',
-                    id: wallTarget.id,
-                    name: wallTarget.model?.name,
-                    clientX: e.clientX,
-                    clientY: e.clientY,
-                    quickPickCandidates: quickPickCandidates.length > 1 ? quickPickCandidates : undefined,
-                };
-            } else if (pickedMesh?.metadata?.type === 'hardware' || inspected?.hardwareId) {
+                const wallPanel = effectiveMesh?.metadata?.panelModel
+                    || (inspected?.panelId ? doc.findNode?.(inspected.panelId)?.domainData : null)
+                    || (effectiveMesh?.metadata?.panelId ? doc.findNode?.(effectiveMesh.metadata.panelId)?.domainData : null)
+                    || (effectiveMesh?.metadata?.id ? doc.findNode?.(effectiveMesh.metadata.id)?.domainData : null);
+
+                const isWallPanelPart = wallPanel && isWallPart(wallPanel);
+                if (isWallPanelPart) {
+                    doc.setActiveEntity?.(wallPanel);
+                    UIController.instance?.emitTree?.('select-part', { id: wallPanel.id, uuid: wallPanel.id });
+                    data = {
+                        type: 'wall',
+                        id: wallPanel.id,
+                        uuid: wallPanel.id,
+                        name: wallPanel.name,
+                        containerId: wallTarget.id,
+                        isManual: false,
+                        frozen: !!wallPanel.frozen,
+                        clientX: e.clientX,
+                        clientY: e.clientY,
+                        quickPickCandidates: quickPickCandidates.length > 1 ? quickPickCandidates : undefined,
+                    };
+                } else {
+                    const wNode = doc.findNode?.(wallTarget.id);
+                    if (wNode?.domainData) doc.setActiveEntity?.(wNode.domainData);
+                    UIController.instance?.emitTree?.('select-container', { id: wallTarget.id });
+                    data = {
+                        type: 'wall',
+                        id: wallTarget.id,
+                        name: wallTarget.model?.name,
+                        containerId: wallTarget.id,
+                        clientX: e.clientX,
+                        clientY: e.clientY,
+                        quickPickCandidates: quickPickCandidates.length > 1 ? quickPickCandidates : undefined,
+                    };
+                }
+            } else if (effectiveMesh?.metadata?.type === 'hardware' || inspected?.hardwareId) {
                 const hwId = pickedMesh?.metadata?.id || inspected?.id || inspected?.hardwareId;
                 UIController.instance?.emitTree?.('select-hardware', { id: hwId });
                 data = {

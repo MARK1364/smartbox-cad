@@ -6,6 +6,7 @@
  */
 
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
+import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
 import { SMARTWALL_TYPE } from '../../S4_sciany/smartwall-types.js';
@@ -56,6 +57,23 @@ export function hydrateContainer(raw: any, nodeJson: any): ContainerModel {
 }
 
 export function hydratePanel(raw: any, nodeJson: any): PanelModel {
+    if (raw) {
+        if (typeof raw.width === 'number' && (raw.width <= 0 || !Number.isFinite(raw.width))) {
+            const repaired = Math.max(mmToNm(10), Math.abs(raw.width) || mmToNm(600));
+            console.warn(`[hydratePanel] Naprawiono nieprawidłowy wymiar width formatki "${nodeJson?.id || raw?.id}": ${raw.width} nm -> ${repaired} nm.`);
+            raw.width = repaired;
+        }
+        if (typeof raw.height === 'number' && (raw.height <= 0 || !Number.isFinite(raw.height))) {
+            const repaired = Math.max(mmToNm(10), Math.abs(raw.height) || mmToNm(720));
+            console.warn(`[hydratePanel] Naprawiono nieprawidłowy wymiar height formatki "${nodeJson?.id || raw?.id}": ${raw.height} nm -> ${repaired} nm.`);
+            raw.height = repaired;
+        }
+        if (typeof raw.thickness === 'number' && (raw.thickness <= 0 || !Number.isFinite(raw.thickness))) {
+            const repaired = Math.max(mmToNm(1), Math.abs(raw.thickness) || mmToNm(18));
+            console.warn(`[hydratePanel] Naprawiono nieprawidłowy wymiar thickness formatki "${nodeJson?.id || raw?.id}": ${raw.thickness} nm -> ${repaired} nm.`);
+            raw.thickness = repaired;
+        }
+    }
     const panel = PanelModel.fromJSON(raw);
     panel.id = nodeJson.id;
     if (!panel.name) panel.name = nodeJson.name;

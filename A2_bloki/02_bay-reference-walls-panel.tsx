@@ -154,16 +154,16 @@ export function BayReferenceWallsPanel({
                     allPanels.find((n: any) =>
                         n.id === panelId ||
                         n.id === refData.partKey ||
-                        n.domainData?.name === refData.partKey ||
                         n.domainData?.id === refData.partKey ||
                         (n.domainData as any)?.key === refData.partKey,
                     );
                 const targetPanel = refData.panelModel || targetNode?.domainData || null;
                 const partKey =
-                    targetNode?.name ||
                     (targetPanel as any)?.key ||
-                    targetPanel?.name ||
+                    targetNode?.id ||
+                    targetPanel?.id ||
                     refData.partKey;
+                const partLabel = targetNode?.name ?? targetPanel?.name ?? partKey;
 
                 const resolvedFace = targetPanel && targetNode && cabinetNode
                     ? resolveManualReferenceFace(
@@ -229,7 +229,7 @@ export function BayReferenceWallsPanel({
                 if (appApi?.setStatus) {
                     const mappedHint = resolvedFace.mapped ? ' (lico wewn.)' : '';
                     appApi.setStatus(
-                        `Przypisano odniesienie ${SIDE_LABELS[sideKey as BlokiRefSideKey]} -> ${partKey}${mappedHint}`,
+                        `Przypisano odniesienie ${SIDE_LABELS[sideKey as BlokiRefSideKey]} -> ${partLabel}${mappedHint}`,
                         false,
                     );
                 }
@@ -303,7 +303,13 @@ export function BayReferenceWallsPanel({
         let border = '1px solid #3f3f46';
         let color = '#ffffff';
         // Pusty slot po skasowaniu / bez custom — bez żółtego „Wybierz ścianę”.
-        let labelText = isCustom && !isDisabled ? customRefs[sideKey].partKey : '';
+        const reference = customRefs[sideKey];
+        const referenceNode = reference?.panelId
+            ? ContextManager.instance.document?.findNode(reference.panelId)
+            : null;
+        let labelText = isCustom && !isDisabled
+            ? referenceNode?.name ?? reference.partKey
+            : '';
 
         if (isPicking) {
             bg = '#eab308';

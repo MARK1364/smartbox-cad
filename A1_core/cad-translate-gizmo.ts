@@ -21,6 +21,7 @@ export class CadTranslateGizmo {
     readonly zGizmo: any;
 
     private readonly _utilityLayer: any;
+    private _isDragging: boolean = false;
 
     constructor(scene: any) {
         this._utilityLayer = new BABYLON.UtilityLayerRenderer(scene);
@@ -48,9 +49,18 @@ export class CadTranslateGizmo {
                 g.updateGizmoPositionToMatchAttachedMesh = true;
                 if (g.dragBehavior) {
                     g.dragBehavior.dragDeltaRatio = 1.0;
+                    g.dragBehavior.onDragStartObservable?.add(() => { this._isDragging = true; });
+                    g.dragBehavior.onDragEndObservable?.add(() => { this._isDragging = false; });
                 }
             }
         }
+    }
+
+    get isDragging(): boolean {
+        return this._isDragging ||
+            Boolean(this.xGizmo?.dragBehavior?.dragging) ||
+            Boolean(this.yGizmo?.dragBehavior?.dragging) ||
+            Boolean(this.zGizmo?.dragBehavior?.dragging);
     }
 
     get utilityLayer(): any {

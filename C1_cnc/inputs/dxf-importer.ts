@@ -62,8 +62,8 @@ export type DxfEntity = DxfCircle | DxfLine | DxfPolyline | DxfArc;
 export interface DxfParseResult {
     entities: DxfEntity[];
     layers: Set<string>;
-    headerExtMin?: { x: number; y: number };
-    headerExtMax?: { x: number; y: number };
+    headerExtMin?: { x: number; y: number; z?: number };
+    headerExtMax?: { x: number; y: number; z?: number };
 }
 
 export interface DxfImportOptions {
@@ -106,12 +106,16 @@ export function parseDxfLayerParams(layer: string, panelThicknessMm?: number) {
     }
 
     const widthMatch = extractNumberFromLayer(layer, /(?:W|SZER|WIDTH)[_=-]?(\d+(?:\.\d+)?)/i);
-    const isThrough = depthMatch !== null &&
+    const hasThroughTag = /(?:THROUGH|PRZELOT)/i.test(layer);
+    const hasBlindDepthTag = /(?:_Z|DEPTH|GLEBOKOSC)[_=-]?\d+/i.test(layer);
+    const isThrough = hasThroughTag || (
+        depthMatch !== null &&
         typeof panelThicknessMm === 'number' &&
         Number.isFinite(panelThicknessMm) &&
-        panelThicknessMm > 0
-        ? depthMatch >= panelThicknessMm - 0.5
-        : false;
+        panelThicknessMm > 0 &&
+        !hasBlindDepthTag &&
+        depthMatch >= panelThicknessMm - 0.5
+    );
 
     return {
         depth: depthMatch,
@@ -177,32 +181,34 @@ export function parseDxfAscii(dxfContent: string): DxfParseResult {
     const records: DxfRecord[] = [];
     let curRecord: DxfRecord | null = null;
 
-    let headerExtMin: { x: number; y: number } | undefined;
-    let headerExtMax: { x: number; y: number } | undefined;
+    let headerExtMin: { x: number; y: number; z?: number } | undefined;
+    let headerExtMax: { x: number; y: number; z?: number } | undefined;
 
     for (let k = 0; k < pairs.length; k++) {
         const pair = pairs[k];
 
         // Wykrywanie wymiarów z nagłówka ($EXTMIN / $EXTMAX)
         if (pair.code === 9 && pair.value.toUpperCase() === '$EXTMIN') {
-            let x = 0, y = 0;
+            let x = 0, y = 0, z = 0;
             while (k + 1 < pairs.length && pairs[k + 1].code !== 9 && pairs[k + 1].code !== 0) {
                 k++;
                 if (pairs[k].code === 10) x = parseFloat(pairs[k].value) || 0;
                 if (pairs[k].code === 20) y = parseFloat(pairs[k].value) || 0;
+                if (pairs[k].code === 30) z = parseFloat(pairs[k].value) || 0;
             }
-            headerExtMin = { x, y };
+            headerExtMin = { x, y, z };
             continue;
         }
 
         if (pair.code === 9 && pair.value.toUpperCase() === '$EXTMAX') {
-            let x = 0, y = 0;
+            let x = 0, y = 0, z = 0;
             while (k + 1 < pairs.length && pairs[k + 1].code !== 9 && pairs[k + 1].code !== 0) {
                 k++;
                 if (pairs[k].code === 10) x = parseFloat(pairs[k].value) || 0;
                 if (pairs[k].code === 20) y = parseFloat(pairs[k].value) || 0;
+                if (pairs[k].code === 30) z = parseFloat(pairs[k].value) || 0;
             }
-            headerExtMax = { x, y };
+            headerExtMax = { x, y, z };
             continue;
         }
 
@@ -360,7 +366,8 @@ export function importDxfToWorkpiece(
     fileName: string,
     options: DxfImportOptions = {}
 ): CncModulePayload {
-    const defaultThickness = options.defaultThicknessMm ?? options.defaultThickness;
+    const summary = inspectDxf(dxfContent);
+    const defaultThickness = options.defaultThicknessMm ?? options.defaultThickness ?? summary.suggestedThicknessMm;
     if (typeof defaultThickness !== 'number' || !Number.isFinite(defaultThickness) || defaultThickness <= 0) {
         throw new Error(
             '[C1_cnc/dxf-importer] Wymagane defaultThicknessMm (> 0). ' +
@@ -482,12 +489,14 @@ export function importDxfToWorkpiece(
             const depth = lp.depth ?? (lp.isThrough ? defaultThickness : defaultDrillDepth);
             const x = Math.round((ent.x - offsetX) * 10) / 10;
             const y = Math.round((ent.y - offsetY) * 10) / 10;
+            const hasBlindDepthTag = /(?:_Z|DEPTH|GLEBOKOSC)[_=-]?\d+/i.test(ent.layer);
+            const isThrough = lp.isThrough || (!hasBlindDepthTag && depth >= defaultThickness - 0.5);
 
             features.push({
                 id: `hole_dxf_${featureIndex++}`,
                 type: 'hole',
                 face: 'FACE_Z_PLUS',
-                name: `Otwór ⌀${dia}x${depth}`,
+                name: isThrough ? `Otwór przelotowy ⌀${dia}` : `Otwór ⌀${dia}x${depth}`,
                 params: {
                     diameter: dia,
                     depth,
@@ -495,7 +504,7 @@ export function importDxfToWorkpiece(
                     v: y,
                     x,
                     y,
-                    through: depth >= defaultThickness - 0.5
+                    through: isThrough
                 }
             });
         } else if (ent.type === 'LINE') {
@@ -517,6 +526,25 @@ export function importDxfToWorkpiece(
 
             const width = lp.width ?? defaultGrooveWidth;
             const depth = lp.depth ?? defaultGrooveDepth;
+            const dx = Math.abs(x2 - x1);
+            const dy = Math.abs(y2 - y1);
+            const len = Math.round(Math.hypot(x2 - x1, y2 - y1) * 10) / 10;
+
+            // Konwencja cechy CAD: prostokąt u,v + width (wzdłuż U) + length (wzdłuż V).
+            let u: number, v: number, boxWidth: number, boxLength: number;
+            if (dx >= dy) {
+                // Poziomy wpust: rozpiętość wzdłuż U, szerokość frezu wzdłuż V
+                u = Math.min(x1, x2);
+                v = (y1 + y2) / 2 - width / 2;
+                boxWidth = len;
+                boxLength = width;
+            } else {
+                // Pionowy wpust: szerokość frezu wzdłuż U, rozpiętość wzdłuż V
+                u = (x1 + x2) / 2 - width / 2;
+                v = Math.min(y1, y2);
+                boxWidth = width;
+                boxLength = len;
+            }
 
             features.push({
                 id: `groove_dxf_${featureIndex++}`,
@@ -524,10 +552,11 @@ export function importDxfToWorkpiece(
                 face: 'FACE_Z_PLUS',
                 name: `Wpust_${featureIndex - 1}`,
                 params: {
-                    width,
+                    width: boxWidth,
                     depth,
-                    u: x1,
-                    v: y1,
+                    u: Math.round(u * 10) / 10,
+                    v: Math.round(v * 10) / 10,
+                    length: boxLength,
                     x1,
                     y1,
                     x2,
@@ -538,6 +567,10 @@ export function importDxfToWorkpiece(
             });
         } else if (ent.type === 'LWPOLYLINE' || ent.type === 'POLYLINE') {
             if (lp.isOutline && ent.vertices.length >= 3) continue;
+            // Pomijamy prostokątny obrys wpustu na warstwie wpustu, aby nie tworzyć zdublowanego profilu
+            if (lp.isGroove && ent.closed && ent.vertices.length === 4) continue;
+            // Pomijamy pomocnicze linie obrysu rowka (_OUTLINE lub _BOUNDARY)
+            if (/(?:_OUTLINE|_BOUNDARY)$/i.test(ent.layer)) continue;
 
             const depth = lp.depth ?? defaultThickness;
             const points = ent.vertices.map(v => ({
@@ -696,11 +729,29 @@ export function inspectDxf(dxfContent: string): DxfMetadataSummary {
     let contoursCount = 0;
     let suggestedThicknessMm: number | null = null;
 
+    if (parsed.headerExtMax?.z && parsed.headerExtMax.z > 0) {
+        const minZ = parsed.headerExtMin?.z || 0;
+        const th = parsed.headerExtMax.z - minZ;
+        if (th >= 2 && th <= 100) {
+            suggestedThicknessMm = Math.round(th * 10) / 10;
+        }
+    }
+
+    if (!suggestedThicknessMm) {
+        for (const l of layers) {
+            const m = l.match(/(?:PANEL|FORMATKA|PLYTA|BOARD|OUTLINE|OBRYS|THICKNESS|GRUBO[SŚ][CĆ]|_T)[_=-]?(\d+(?:\.\d+)?)/i);
+            if (m) {
+                const val = parseFloat(m[1]);
+                if (val >= 3 && val <= 60) {
+                    suggestedThicknessMm = val;
+                    break;
+                }
+            }
+        }
+    }
+
     for (const ent of entities) {
         const lp = parseDxfLayerParams(ent.layer);
-        if (lp.depth && lp.depth >= 3 && lp.depth <= 50) {
-            suggestedThicknessMm = lp.depth;
-        }
 
         if (ent === outlinePolyline) continue;
 

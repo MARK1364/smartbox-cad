@@ -113,6 +113,46 @@ export class SolverController {
      * Natychmiastowy przebieg solvera. Zwraca true, gdy coś zostało przesunięte.
      * `nodeIds` zawęża solve do spójnego komponentu (po gizmo); brak = cały dokument.
      */
+    solveInteractive(): boolean {
+        const document = this._document;
+        if (!document || this._solving) {
+            return false;
+        }
+        const enabled = this._store.constraints.filter((c) => c.enabled);
+        if (enabled.length === 0) {
+            return false;
+        }
+
+        this._solving = true;
+        this._suppressAutoSolve = true;
+        try {
+            const input = buildSolverInput(document, enabled);
+            if (input.contract.constraints.length === 0) {
+                return false;
+            }
+
+            input.contract.groundDistanceMap = this._computeGroundDistances(enabled, document);
+            solveWithConflictResolution(
+                input.contract,
+                input.states,
+                40,
+                RESIDUAL_TOLERANCE,
+            );
+
+            const deltas = collectTransformDeltas(input);
+            for (const delta of deltas) {
+                const node = document.findNode(delta.nodeId);
+                if (node) {
+                    node.setLocalMatrix(delta.localAfter.clone());
+                }
+            }
+            return deltas.length > 0;
+        } finally {
+            this._solving = false;
+            this._suppressAutoSolve = false;
+        }
+    }
+
     solveNow(scope?: {
         nodeIds?: Set<string>;
         onCommand?: (deltas: NodeTransformDelta[]) => Command | null;
@@ -215,7 +255,7 @@ export class SolverController {
         if (this._suppressAutoSolve || this._solving || this._interactiveTransformDepth > 0) {
             return;
         }
-        if (event.type === 'structure') {
+        if (event.type === 'structure' || event.type === 'all' || event.type === 'loaded') {
             const document = this._document;
             if (document) {
                 this._pruneDeadConstraints(document);

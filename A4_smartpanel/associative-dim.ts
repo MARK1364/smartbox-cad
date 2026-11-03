@@ -56,11 +56,22 @@ export function planeRefLabel(ref: AssocPlaneRef | null): string {
     return `${name} · ${faceShortLabel(ref.face)}`;
 }
 
+function resolvePlaneFaceName(node: any, rawFace: string): string {
+    const raw = String(rawFace || '').trim();
+    const lcsFaces = node?.domainData?.lcs?.faces;
+    if (lcsFaces && typeof lcsFaces === 'object') {
+        const mapped = lcsFaces[raw] || lcsFaces[raw.toUpperCase()];
+        if (mapped) return mapped;
+    }
+    return raw;
+}
+
 function resolvePlaneWorld(doc: any, ref: AssocPlaneRef | null): { point: Vec3; normal: Vec3 } | null {
     if (!doc || !ref?.nodeId || !ref.face) return null;
     const node = doc.findNode(ref.nodeId);
     if (!node) return null;
-    const face = namedFaceFromPick(node, ref.face);
+    const faceName = resolvePlaneFaceName(node, ref.face);
+    const face = namedFaceFromPick(node, faceName);
     if (!face) return null;
     const point = localMmToWorldMm(node, face.localPointMm);
     const { rotation } = node.getWorldMatrix().decompose();
@@ -107,20 +118,31 @@ export function applyAssociativeDim(doc: any, panel: PanelModel, axis: AssocAxis
     return true;
 }
 
-export function applyAllAssociativeDims(doc: any): void {
-    if (!doc || typeof doc.getPanels !== 'function') return;
-    let changed = false;
-    for (const item of doc.getPanels()) {
-        const panel = (item as any).domainData || item;
-        if (!panel?.associativeDims) continue;
-        if (applyAssociativeDim(doc, panel, 'width')) changed = true;
-        if (applyAssociativeDim(doc, panel, 'height')) changed = true;
-    }
-    if (changed) {
-        doc.emitChange?.('dimensions');
-        if (typeof window !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('bloki-panel-changed'));
+let isApplyingAssociativeDims = false;
+
+export function applyAllAssociativeDims(doc: any): boolean {
+    if (isApplyingAssociativeDims) return false;
+    if (!doc || typeof doc.getPanels !== 'function') return false;
+    isApplyingAssociativeDims = true;
+    try {
+        let changed = false;
+        for (const item of doc.getPanels()) {
+            const panel = (item as any).domainData || item;
+            if (!panel?.associativeDims) continue;
+            if (applyAssociativeDim(doc, panel, 'width')) changed = true;
+            if (applyAssociativeDim(doc, panel, 'height')) changed = true;
         }
-        resyncSolver();
+        if (changed) {
+            doc.emitChange?.('dimensions');
+            if (typeof window !== 'undefined') {
+                window.document.dispatchEvent(new CustomEvent('bloki-panel-changed'));
+                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                (window as any).__rebuildGeometry?.();
+            }
+            resyncSolver();
+        }
+        return changed;
+    } finally {
+        isApplyingAssociativeDims = false;
     }
 }

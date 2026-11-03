@@ -21,6 +21,7 @@ import {
     collectTransformDeltas,
     computeReferenceLockedIds,
     getNodeGroundingPriority,
+    isBlokiContainer,
 } from '../solver-bridge.js';
 
 let seq = 0;
@@ -29,6 +30,21 @@ function constraint(init: Partial<SolverConstraint> & { bindType: SolverConstrai
 }
 
 describe('Bloki / SmartFrame Grounding Priority & Locking', () => {
+    it('klasyfikuje Bloki po danych domenowych, a nie po nazwie węzła', () => {
+        const doc = new ProjectDocument();
+        const bloki = doc.createAssembly({ name: 'Moja półka' });
+        bloki.generatorParams = { type: 'blok_shelves' };
+        const blokiNode = doc.findNode(bloki.id)!;
+
+        const cabinet = doc.createAssembly({ name: 'Zwykły kontener' });
+        cabinet.generatorParams = { type: 'korpus3_2' };
+        const cabinetNode = doc.findNode(cabinet.id)!;
+        cabinetNode.name = 'Custom_SB';
+
+        expect(isBlokiContainer(blokiNode)).toBe(true);
+        expect(isBlokiContainer(cabinetNode)).toBe(false);
+    });
+
     it('poprawnie przypisuje priorytety uziemienia (Grounding Priority)', () => {
         const doc = new ProjectDocument();
 

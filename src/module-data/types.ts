@@ -149,6 +149,8 @@ export interface InstrukcjaPlanPayload {
 export interface InstrukcjaModulePayload {
     meta: ModuleSessionMeta;
     scope: ModuleScope;
+    /** Wyizolowany snapshot projektu zawierający wyłącznie ten korpus (dla niezależnego okna instrukcji). */
+    snapshot?: any;
     /** Opcjonalny plan z chwili otwarcia (diagnostyka); podstrona liczy go na żywo. */
     plan?: InstrukcjaPlanPayload;
 }

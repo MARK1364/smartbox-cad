@@ -532,8 +532,8 @@ export function calculateSkosneDoorsPlan(
 
     if (rodzaj_drzwi === 'DOUBLE') {
         const baza_szerokosc_mm = (szerokosc_strefy_mm - szczelina_mm) / 2;
-        const szerokosc_lewe_mm = baza_szerokosc_mm + nalozenie_lewe_mm;
-        const szerokosc_prawe_mm = baza_szerokosc_mm + nalozenie_prawe_mm;
+        const szerokosc_lewe_mm = Math.max(10, baza_szerokosc_mm + nalozenie_lewe_mm);
+        const szerokosc_prawe_mm = Math.max(10, baza_szerokosc_mm + nalozenie_prawe_mm);
 
         const pozycja_lewe_x_mm = -szerokosc_strefy_mm / 2 - nalozenie_lewe_mm + szerokosc_lewe_mm / 2;
         const pozycja_prawe_x_mm = szerokosc_strefy_mm / 2 + nalozenie_prawe_mm - szerokosc_prawe_mm / 2;
@@ -611,7 +611,7 @@ export function calculateSkosneDoorsPlan(
         generateHardwareForSide('left', szerokosc_lewe_mm, pozycja_lewe_x_mm, wnetka_lewa_mm);
         generateHardwareForSide('right', szerokosc_prawe_mm, pozycja_prawe_x_mm, wnetka_prawa_mm);
     } else {
-        const szerokosc_drzwi_mm = szerokosc_strefy_mm + nalozenie_lewe_mm + nalozenie_prawe_mm;
+        const szerokosc_drzwi_mm = Math.max(10, szerokosc_strefy_mm + nalozenie_lewe_mm + nalozenie_prawe_mm);
         const pozycja_x_mm = (nalozenie_prawe_mm - nalozenie_lewe_mm) / 2;
 
         const wysokosc_lewa_drzwi_mm = skosneDoorHeightAt(

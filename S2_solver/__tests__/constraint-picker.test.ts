@@ -186,5 +186,30 @@ describe('bindAnchorToRigidBody', () => {
         delete (globalThis as any).window;
         delete (globalThis as any).document;
     });
+
+    it('ustawia targetSubgeometryType na face w FacePicker przy expectedKind: FACE', async () => {
+        const { ContextManager } = await import('../../A1_core/context-manager.js');
+        const mockFacePicker = {
+            targetSubgeometryType: null as string | null,
+            setVertexPickPreview: () => {},
+            clearSelection: () => {},
+            resetAllFaceHighlights: () => {},
+        };
+        ContextManager.instance.facePicker = mockFacePicker as any;
+
+        const { startConstraintPick, stopConstraintPick } = await import('../constraint-picker.js');
+        startConstraintPick({
+            label: 'Wybierz ścianę',
+            expectedKind: 'FACE',
+            onPick: () => {},
+        });
+
+        expect(mockFacePicker.targetSubgeometryType).toBe('face');
+
+        stopConstraintPick();
+        expect(mockFacePicker.targetSubgeometryType).toBeNull();
+
+        ContextManager.instance.facePicker = null;
+    });
 });
 

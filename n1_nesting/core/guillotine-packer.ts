@@ -33,7 +33,9 @@ export interface GuillotineRect {
 export type ShelfAxis = 'horizontal' | 'vertical';
 
 /** Heurystyka kolejności formatek przed rozkrojem. */
-export type ShelfOrder = 'stack' | 'area' | 'along' | 'longest' | 'random';
+export type ShelfOrder = 'stack' | 'area' | 'along' | 'longest' | 'perimeter' | 'min_dim' | 'aspect' | 'random';
+
+export type AnchorPref = 'auto' | 'max_stack' | 'min_stack';
 
 export interface GuillotinePlacement {
     rect: GuillotineRect;
@@ -70,14 +72,16 @@ function shuffle<T>(arr: T[]): void {
 
 /**
  * Dobiera orientację formatki tak, aby zmieściła się w polu (maxAlong x maxStack).
- * Zwraca null, gdy formatka nie mieści się w żadnej orientacji.
+ * Gdy targetStack jest określony, preferuje orientację minimalizującą odpad wysokości w pasie.
  */
 function orient(
     rect: GuillotineRect,
     axis: ShelfAxis,
     maxAlong: number,
     maxStack: number,
-    randomize: boolean
+    randomize: boolean,
+    targetStack?: number,
+    anchorPref: AnchorPref = 'auto'
 ): Oriented | null {
     // 'horizontal': pas biegnie wzdłuż X (along = szerokość, stack = wysokość)
     // 'vertical':   pas biegnie wzdłuż Y (along = wysokość,  stack = szerokość)
@@ -92,7 +96,23 @@ function orient(
     const rotatedFits = rect.canRotate && rotated.along <= maxAlong && rotated.stack <= maxStack;
 
     if (normalFits && rotatedFits) {
-        return randomize && Math.random() > 0.5 ? rotated : normal;
+        if (randomize && Math.random() > 0.5) return rotated;
+        if (targetStack !== undefined) {
+            // Dopasowanie do istniejącego pasa: minimalizuj pustą przestrzeń w pasie (shelfStack - stack)
+            const diffNormal = Math.abs(targetStack - normal.stack);
+            const diffRotated = Math.abs(targetStack - rotated.stack);
+            if (diffRotated < diffNormal) return rotated;
+            if (diffNormal < diffRotated) return normal;
+            // Przy remisie: wybierz tę orientację, która zajmuje mniej długości pasa (oszczędza X dla kolejnych detali)
+            return rotated.along <= normal.along ? rotated : normal;
+        }
+        if (anchorPref === 'min_stack') {
+            return normal.stack <= rotated.stack ? normal : rotated;
+        }
+        if (anchorPref === 'max_stack') {
+            return normal.stack >= rotated.stack ? normal : rotated;
+        }
+        return normal;
     }
     if (normalFits) return normal;
     if (rotatedFits) return rotated;
@@ -115,6 +135,19 @@ function sortRects(rects: GuillotineRect[], axis: ShelfAxis, order: ShelfOrder):
         case 'longest':
             arr.sort((a, b) => Math.max(b.w_nm, b.h_nm) - Math.max(a.w_nm, a.h_nm));
             break;
+        case 'perimeter':
+            arr.sort((a, b) => (b.w_nm + b.h_nm) - (a.w_nm + a.h_nm));
+            break;
+        case 'min_dim':
+            arr.sort((a, b) => Math.min(b.w_nm, b.h_nm) - Math.min(a.w_nm, a.h_nm));
+            break;
+        case 'aspect':
+            arr.sort((a, b) => {
+                const aspectA = Math.max(a.w_nm, a.h_nm) / Math.max(1, Math.min(a.w_nm, a.h_nm));
+                const aspectB = Math.max(b.w_nm, b.h_nm) / Math.max(1, Math.min(b.w_nm, b.h_nm));
+                return aspectB - aspectA;
+            });
+            break;
         case 'random':
             shuffle(arr);
             break;
@@ -132,7 +165,8 @@ export function packGuillotine(
     usableH_nm: number,
     axis: ShelfAxis,
     order: ShelfOrder,
-    randomize: boolean
+    randomize: boolean,
+    anchorPref: AnchorPref = 'auto'
 ): GuillotinePlacement[][] {
     if (rects.length === 0) return [];
 
@@ -149,11 +183,11 @@ export function packGuillotine(
         let band = 0;
 
         while (remaining.length > 0) {
-            // Wybierz formatkę-kotwicę pasa: najwyższą, która zmieści się w reszcie wysokości.
+            // Wybierz formatkę-kotwicę pasa
             let anchorIdx = -1;
             let anchorOrient: Oriented | null = null;
             for (let k = 0; k < remaining.length; k++) {
-                const o = orient(remaining[k], axis, usableAlong, usableStack - usedStack, randomize);
+                const o = orient(remaining[k], axis, usableAlong, usableStack - usedStack, randomize, undefined, anchorPref);
                 if (o) {
                     anchorIdx = k;
                     anchorOrient = o;
@@ -177,23 +211,45 @@ export function packGuillotine(
             });
             remaining.splice(anchorIdx, 1);
 
-            // Dopełnij pas kolejnymi formatkami, które zmieszczą się na pozostałej długości.
-            for (let i = 0; i < remaining.length;) {
-                const o = orient(remaining[i], axis, usableAlong - usedAlong, shelfStack, randomize);
-                if (o) {
+            // Dopełnij pas kolejnymi formatkami przy użyciu Best-Fit (najlepsze dopasowanie do wysokości pasa i długości)
+            let shelfDone = false;
+            while (!shelfDone && remaining.length > 0) {
+                let bestIdx = -1;
+                let bestOrient: Oriented | null = null;
+                let bestScore = Infinity;
+
+                for (let i = 0; i < remaining.length; i++) {
+                    const o = orient(remaining[i], axis, usableAlong - usedAlong, shelfStack, randomize, shelfStack);
+                    if (o) {
+                        const heightWaste = shelfStack - o.stack;
+                        // Score: minimalizuj stratę wysokości pasa, a przy zbliżonej stracie preferuj lepsze wypełnienie długości
+                        const lengthLeft = usableAlong - usedAlong - o.along;
+                        const score = heightWaste * 1000000 + lengthLeft;
+                        if (score < bestScore) {
+                            bestScore = score;
+                            bestIdx = i;
+                            bestOrient = o;
+                            if (heightWaste === 0 && lengthLeft === 0) {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (bestIdx !== -1 && bestOrient) {
                     placements.push({
-                        rect: remaining[i],
+                        rect: remaining[bestIdx],
                         posAlong: usedAlong,
                         posStack: usedStack,
-                        alongSize: o.along,
-                        stackSize: o.stack,
-                        rotated: o.rotated,
+                        alongSize: bestOrient.along,
+                        stackSize: bestOrient.stack,
+                        rotated: bestOrient.rotated,
                         band
                     });
-                    usedAlong += o.along;
-                    remaining.splice(i, 1);
+                    usedAlong += bestOrient.along;
+                    remaining.splice(bestIdx, 1);
                 } else {
-                    i++;
+                    shelfDone = true;
                 }
             }
 
@@ -224,6 +280,7 @@ function toPlacement(p: RawPlacement, axis: ShelfAxis): GuillotinePlacement {
             band: p.band
         };
     }
+
     return {
         rect: p.rect,
         x_nm: p.posStack,

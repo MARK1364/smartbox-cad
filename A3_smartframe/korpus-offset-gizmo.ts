@@ -11,7 +11,7 @@ import {
 } from '../A1_core/offset-gizmo-port.js';
 import { rebuildSmartFrameContainer } from './smartframe-adapter.js';
 import { SetKorpusOffsetCommand } from './commands/set-korpus-offset-command.js';
-import { readOffsetMm } from './back-overlap.js';
+import { readOffsetMm, applyKorpusOffsetWithBackMarginSync } from './back-overlap.js';
 
 /** Klucze to kanoniczne FaceName — `normalizeFaceName` nie przyjmuje aliasów. */
 const FACE_MAPPING: Record<string, Record<string, string>> = {
@@ -20,7 +20,7 @@ const FACE_MAPPING: Record<string, Record<string, string>> = {
     RIGHT_SIDE_PANEL: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
     SIDE_RIGHT: { FACE_Y_MINUS: '-Y', FACE_Y_PLUS: '+Y', FACE_X_PLUS: '+X', FACE_X_MINUS: '-X' },
     // [90,180,0]: Ry=180 lustrzy lokalne ±X względem starego [90,0,0]
-    BOTTOM_PANEL: { FACE_Y_MINUS: '-X', FACE_Y_PLUS: '+X', FACE_X_MINUS: '-Y', FACE_X_PLUS: '+Y' },
+    BOTTOM_PANEL: { FACE_Y_MINUS: '-X', FACE_Y_PLUS: '+X', FACE_X_MINUS: '+Y', FACE_X_PLUS: '-Y' },
     TOP_PANEL: { FACE_Y_MINUS: '-X', FACE_Y_PLUS: '+X', FACE_X_MINUS: '-Y', FACE_X_PLUS: '+Y' },
     BACK_PANEL: { FACE_Y_PLUS: '-Y', FACE_Y_MINUS: '+Y', FACE_X_MINUS: '-X', FACE_X_PLUS: '+X', FACE_Z_PLUS: 'shiftY' }
 };
@@ -112,7 +112,8 @@ export function findOwningKorpus(doc: any, entityId: string): any | null {
     let node = doc.findNode(entityId);
     while (node) {
         const data = node.domainData as any;
-        const t = String(data?.generatorParams?.type || '');
+        const gp = data?.generatorParams;
+        const t = String(gp?.typ_korpusu || gp?.type || '');
         if (data?.type === 'container' && (t.startsWith('korpus') || t === 'smartframe' || t.startsWith('KORPUS'))) {
             return data;
         }
@@ -192,7 +193,8 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
         const isBackShift = paramName.endsWith('_shiftY') || paramName.endsWith('_shiftX');
         if (isBackShift && (role === 'BACK_PANEL' || paramName.toLowerCase().includes('plecy') || paramName.toLowerCase().includes('back'))) {
             const offsets = container?.generatorParams?.offsets;
-            const customVal = offsets?.[paramName];
+            const cleanKey = paramName.replace(/\.\d+(_shift[XY])$/, '$1').replace(/_\d+(_shift[XY])$/, '$1');
+            const customVal = offsets?.[paramName] ?? offsets?.[cleanKey];
             if (customVal !== undefined && customVal !== null && !Number.isNaN(Number(customVal))) {
                 return Number(customVal);
             }
@@ -204,7 +206,7 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
             paramName,
             role,
             undefined,
-            container?.generatorParams?.type
+            container?.generatorParams?.typ_korpusu || container?.generatorParams?.type
         );
     },
 
@@ -214,24 +216,35 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
             container.generatorParams.cofniecie_plecow_mm = value;
             container.generatorParams.backOffset = value;
         }
-        ensureOffsets(container)[paramName] = value;
+        applyKorpusOffsetWithBackMarginSync(
+            ensureOffsets(container),
+            paramName,
+            value,
+            undefined,
+            container?.generatorParams?.typ_korpusu || container?.generatorParams?.type
+        );
         rebuildSmartFrameContainer(container);
     },
 
     commitOffset(container: any, paramName: string, oldValue: number, newValue: number) {
-        if (oldValue === newValue) return;
         if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
             if (!container.generatorParams) container.generatorParams = {};
             container.generatorParams.cofniecie_plecow_mm = newValue;
             container.generatorParams.backOffset = newValue;
         }
-        ensureOffsets(container)[paramName] = newValue;
+        applyKorpusOffsetWithBackMarginSync(
+            ensureOffsets(container),
+            paramName,
+            newValue,
+            undefined,
+            container?.generatorParams?.typ_korpusu || container?.generatorParams?.type
+        );
         const history = ContextManager.instance.commandHistory;
-        if (!history) {
+        if (!history || oldValue === newValue) {
             rebuildSmartFrameContainer(container);
             return;
         }
-        history.execute(new SetKorpusOffsetCommand(container.id, paramName, oldValue, newValue));
+        history.execute(new SetKorpusOffsetCommand(container.id, paramName, oldValue, newValue, container));
     }
 };
 

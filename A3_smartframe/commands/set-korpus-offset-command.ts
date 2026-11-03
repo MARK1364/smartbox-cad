@@ -6,6 +6,7 @@
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
 import { rebuildSmartFrameContainer } from '../smartframe-adapter.js';
+import { applyKorpusOffsetWithBackMarginSync } from '../back-overlap.js';
 
 export class SetKorpusOffsetCommand implements Command {
     readonly id: string;
@@ -17,7 +18,8 @@ export class SetKorpusOffsetCommand implements Command {
         readonly containerId: string,
         readonly paramName: string,
         readonly oldValue: number,
-        readonly newValue: number
+        readonly newValue: number,
+        readonly containerRef?: any
     ) {
         this.id = `cmd_korpus_offset_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
         this.label = `Offset ${paramName}`;
@@ -34,8 +36,8 @@ export class SetKorpusOffsetCommand implements Command {
     }
 
     private _apply(document: ProjectDocument, value: number): void {
-        const node = document.findNode(this.containerId);
-        const data = node?.domainData as any;
+        const node = document?.findNode?.(this.containerId);
+        const data = (node?.domainData as any) || this.containerRef;
         if (!data) return;
         if (!data.generatorParams) data.generatorParams = {};
         if (this.paramName === 'backOffset' || this.paramName === 'cofniecie_plecow_mm') {
@@ -43,7 +45,30 @@ export class SetKorpusOffsetCommand implements Command {
             data.generatorParams.backOffset = value;
         }
         if (!data.generatorParams.offsets) data.generatorParams.offsets = {};
-        data.generatorParams.offsets[this.paramName] = value;
+        applyKorpusOffsetWithBackMarginSync(
+            data.generatorParams.offsets,
+            this.paramName,
+            value,
+            undefined,
+            data.generatorParams.type
+        );
         rebuildSmartFrameContainer(data);
+
+        if (typeof window !== 'undefined') {
+            const rebuild = (window as any).__rebuildGeometry;
+            if (typeof rebuild === 'function') {
+                try { rebuild('SetKorpusOffsetCommand'); } catch {}
+            }
+            window.dispatchEvent(new CustomEvent('bloki-project-changed', { detail: { containerId: this.containerId } }));
+            if (window.document) {
+                window.document.dispatchEvent(new CustomEvent('bloki-project-changed', { detail: { containerId: this.containerId } }));
+            }
+            window.dispatchEvent(new CustomEvent('cad-edit-entity', {
+                detail: { entityId: this.containerId, kind: 'korpus' }
+            }));
+        }
+        if (document) {
+            document.notifyDocumentChanged();
+        }
     }
 }

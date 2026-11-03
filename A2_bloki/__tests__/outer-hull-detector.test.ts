@@ -42,6 +42,24 @@ describe('Bloki Outer Hull Detector & External Insertion Tool', () => {
         expect(outerBay!.boundary.right.face).toBe('FACE_Z_MINUS');
         expect(outerBay!.boundary.left.planeCoordMm).toBeCloseTo(-400, 0);
         expect(outerBay!.boundary.right.planeCoordMm).toBeCloseTo(400, 0);
+
+        const sides = ['left', 'right', 'top', 'bottom', 'back', 'front'];
+        const boundaryIds = sides.map((side) => (outerBay!.boundary as any)[side].nodeId);
+        const renamePanels = (node: any) => {
+            if (node.domainData?.type === 'panel' || node.domainData?.type === 'part') {
+                node.name = `Renamed_${node.id}`;
+            }
+            node.children.forEach(renamePanels);
+        };
+        renamePanels(doc.rootNode);
+        const renamedBay = detectCabinetOuterHull(doc, cabinet.id);
+        expect(renamedBay).not.toBeNull();
+        expect(sides.map((side) => (renamedBay!.boundary as any)[side].nodeId)).toEqual(boundaryIds);
+
+        expect(detectCabinetOuterHull(doc, cabinet.name)).toBeNull();
+        expect(detectCabinetOuterHull(doc, 'missing-node-id')).toBeNull();
+        expect(detectCabinetOuterHull(doc, cabinet.name)).toBeNull();
+        expect(detectCabinetOuterHull(doc, 'missing-node-id')).toBeNull();
     });
 
     it('BlokiBayController supports both internal and external picker and drag modes', () => {

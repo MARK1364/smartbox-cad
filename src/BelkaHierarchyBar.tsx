@@ -17,7 +17,7 @@ import { PropertiesManager } from '../A1_core/properties.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
-import { isSmartWallContainer } from '../S4_sciany/smartwall-types.js';
+import { isSmartWallContainer, isWallPart } from '../S4_sciany/smartwall-types.js';
 import srcTekstRaw from './src_tekst.json';
 
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
@@ -220,7 +220,7 @@ function openCrumbContextMenu(crumb: Crumb, clientX: number, clientY: number) {
         const panel = panelNode?.domainData as any;
         ui.emitTree('select-part', { id: crumb.id, uuid: crumb.id });
         ui.emitTree('contextmenu-tree-node', {
-            type: 'part',
+            type: isWallPart(panel) ? 'wall' : 'part',
             id: crumb.id,
             uuid: crumb.id,
             name: crumb.label,

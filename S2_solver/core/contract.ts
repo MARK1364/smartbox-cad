@@ -10,7 +10,7 @@
 
 import type { Quat, Vec3 } from './math3d.js';
 
-export type BindType = 'VERTEX' | 'COPLANAR' | 'FLUSH' | 'GROUND';
+export type BindType = 'VERTEX' | 'VERTEX_DATUM' | 'COPLANAR' | 'FLUSH' | 'GROUND';
 export type GroundMode = 'OBJECT' | 'VERTEX' | 'FACE';
 
 /** Reszta błędu więzu — składniki w osobnych jednostkach, nigdy nie mieszane. */
@@ -38,7 +38,7 @@ export interface ConstraintItem {
     groundMode: GroundMode;
     groundPos: Vec3;
     groundNormal: Vec3;
-    /** Dystans między płaszczyznami dla COPLANAR/FLUSH [mm]. */
+    /** Dystans między płaszczyznami dla COPLANAR/FLUSH/VERTEX_DATUM [mm]. */
     offset: number;
     /** Auto-wygaszone przez solver jako sprzeczne z więzem o wyższym priorytecie. */
     conflict: boolean;

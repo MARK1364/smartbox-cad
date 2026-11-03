@@ -30,6 +30,10 @@ function persist(panel: PanelModel, axis: AssocAxis, next: AssociativeDim | null
     doc?.emitChange?.('dimensions');
     window.document.dispatchEvent(new CustomEvent('bloki-panel-changed', { detail: { panelModel: panel } }));
     if (resized) {
+        if (typeof window !== 'undefined') {
+            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+            (window as any).__rebuildGeometry?.();
+        }
         (ContextManager.instance as any)?.solverController?.solveNow?.();
     }
 }
@@ -96,10 +100,10 @@ export function AssociativeDimInputs({ panel, axis }: Props) {
                     [slot === 'A' ? 'planeA' : 'planeB']: ref,
                 };
                 persist(panel, axis, next);
-                stopPick();
                 if (!isAssocComplete(next)) {
                     startPick(slot === 'A' ? 'B' : 'A');
                 } else {
+                    stopPick();
                     const mm = measureAssocDimMm(ContextManager.instance.document, next);
                     ContextManager.instance.appAPI?.setStatus?.(
                         `Przypisano ${axisLabel}: ${mm != null ? `${mm.toFixed(1)} mm` : 'brak odległości'}`,

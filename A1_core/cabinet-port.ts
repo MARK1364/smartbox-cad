@@ -44,6 +44,7 @@ export interface CabinetModule {
         oldConfig: { mode: TopPanelMode; width: number },
         newConfig: { mode: TopPanelMode; width: number }
     ): Command;
+    applyRealtimeUpdate?(docTarget: any, params: any, targetContainer?: any): void;
 }
 
 let cabinetModule: CabinetModule | null = null;

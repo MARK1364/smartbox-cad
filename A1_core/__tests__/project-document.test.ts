@@ -57,11 +57,15 @@ describe('ProjectDocument', () => {
 
         expect(doc.findNode(child.id)).toBe(childNode);
 
+        doc.setActiveEntity(parent);
+        expect(doc.activeEntity).toBe(parent);
+
         doc.removeNode(parent.id);
 
         expect(doc.findNode(parent.id)).toBeNull();
         expect(doc.findNode(child.id)).toBeNull();
         expect(doc.rootNode.children).toHaveLength(0);
+        expect(doc.activeEntity).toBeNull();
     });
 
     it('should reparent node keeping world transform', () => {
@@ -507,6 +511,147 @@ describe('ProjectDocument', () => {
         expect((restoredHw!.domainData as HardwareModel).side).toBe('left');
     });
 
+    it('addNode rejects duplicate node ID without mutating parent children', () => {
+        const container = doc.createAssembly({ name: 'Szafa' });
+        const cntNode = doc.findNode(container.id);
+        const initialChildrenCount = cntNode.children.length;
+        const duplicateNode = new CADNode(container.id, 'Zdublowany węzeł', NodeType.PART);
+        expect(() => {
+            doc.addNode(cntNode.id, duplicateNode);
+        }).toThrow(/duplicate node ID/i);
+        expect(cntNode.children.length).toBe(initialChildrenCount);
+        expect(duplicateNode.parent).toBeNull();
+    });
+
+    it('load preserves current document state if deserialization fails (rollback)', () => {
+        const c1 = doc.createAssembly({ name: 'Oryginalna Szafa' });
+        const originalDocId = doc.id;
+        const originalName = doc.name;
+        const corruptedData = {
+            format: 'CAD_PROJECT',
+            version: 4,
+            rootNode: {
+                id: 'root_room',
+                name: 'Pokój',
+                nodeType: 'ROOM',
+                children: [
+                    { id: 'broken_node', name: 'Zepsuty', nodeType: 'UNKNOWN_TYPE_THAT_THROWS' }
+                ]
+            }
+        };
+        expect(() => {
+            doc.load(corruptedData);
+        }).toThrow();
+        expect(doc.id).toBe(originalDocId);
+        expect(doc.name).toBe(originalName);
+        expect(doc.findNode(c1.id)).toBeDefined();
+    });
+
+    it('addNode rejects duplicate node ID within subtree being added and leaves index clean', () => {
+        const root = doc.rootNode;
+        const initialCount = root.children.length;
+
+        const branch = new CADNode('branch_node', 'Branch', NodeType.ASSEMBLY);
+        const child1 = new CADNode('dup_child_id', 'Child 1', NodeType.PART);
+        const child2 = new CADNode('dup_child_id', 'Child 2', NodeType.PART);
+        branch.addChild(child1);
+        branch.addChild(child2);
+
+        expect(() => {
+            doc.addNode(root.id, branch);
+        }).toThrow(/within subtree being added/i);
+
+        expect(root.children.length).toBe(initialCount);
+        expect(branch.parent).toBeNull();
+        expect(doc.findNode('branch_node')).toBeNull();
+        expect(doc.findNode('dup_child_id')).toBeNull();
+    });
+
+    it('load rollback restores activeEntity and extension states when extension fails', () => {
+        const c1 = doc.createAssembly({ name: 'Szafa Z Rozszerzeniem' });
+        doc.setActiveEntity(c1);
+
+        let extState = 'initial_state';
+        doc.registerExtension('mock_ext', {
+            serialize: () => ({ state: extState }),
+            load: (data: any) => {
+                if (data?.throwError) {
+                    extState = 'corrupted_partial_state';
+                    throw new Error('Awaria rozszerzenia!');
+                }
+                extState = data?.state ?? 'default';
+            },
+        });
+
+        const originalDocId = doc.id;
+        const originalActive = doc.activeEntity;
+
+        const badData = {
+            format: 'smartpanel-project',
+            version: 4,
+            domainUnit: 'nm',
+            rootNode: { id: 'root_room', name: 'Pokój', nodeType: 'ROOM' },
+            extensions: {
+                mock_ext: { throwError: true },
+            },
+        };
+
+        expect(() => {
+            doc.load(badData);
+        }).toThrow(/Awaria rozszerzenia!/i);
+
+        // activeEntity zostało przywrócone
+        expect(doc.activeEntity).toBe(originalActive);
+        expect(doc.id).toBe(originalDocId);
+        // Stan rozszerzenia został cofnięty
+        expect(extState).toBe('initial_state');
+    });
+
+    it('aborts load before changing the document when an extension cannot be snapshotted', () => {
+        const container = doc.createAssembly({ name: 'Stan przed load' });
+        doc.registerExtension('unsnapshotable', {
+            serialize: () => {
+                throw new Error('snapshot unavailable');
+            },
+            load: () => {},
+        });
+        const originalId = doc.id;
+        const data = {
+            format: 'smartpanel-project',
+            version: 4,
+            domainUnit: 'nm',
+            id: 'replacement',
+            name: 'Nowy projekt',
+            rootNode: { id: 'root_room', name: 'Pokój', nodeType: 'ROOM' },
+        };
+
+        expect(() => doc.load(data)).toThrow(/rozszerzenia "unsnapshotable".*snapshot unavailable/i);
+        expect(doc.id).toBe(originalId);
+        expect(doc.findNode(container.id)).not.toBeNull();
+    });
+
+    it('reports extension restoration failures during rollback', () => {
+        let failEveryLoad = false;
+        doc.registerExtension('unstable', {
+            serialize: () => ({ state: 'saved' }),
+            load: (data: any) => {
+                if (failEveryLoad || data?.fail) {
+                    throw new Error('restore failed');
+                }
+            },
+        });
+        const data = {
+            format: 'smartpanel-project',
+            version: 4,
+            domainUnit: 'nm',
+            rootNode: { id: 'root_room', name: 'Pokój', nodeType: 'ROOM' },
+            extensions: { unstable: { fail: true } },
+        };
+        failEveryLoad = true;
+
+        expect(() => doc.load(data)).toThrow(/rollback rozszerzeń nie powiódł się: "unstable": restore failed/i);
+    });
+
     it('auto-promotes plain object domainData on NodeType.HARDWARE during serialize', () => {
         const container = doc.createAssembly({ name: 'Szafka_Polki' }) as ContainerModel;
         const hwNode = CADNode.create(NodeType.HARDWARE, 'Podpórka 1 (Prawy Tył)', 'shelf_1_pin_RB');
@@ -532,4 +677,3 @@ describe('ProjectDocument', () => {
         expect((restoredHw!.domainData as HardwareModel).hardwareId).toBe('PODPORKA_FI5');
     });
 });
-

@@ -10,6 +10,7 @@ import { UIController } from '../../A1_core/ui-controller.js';
 import { PropertiesManager } from '../../A1_core/properties.js';
 import { openReportFromCad, openNestingFromCad, openCncFromCad, openDrawFromCad, openDagFromCad, openInstrukcjaFromCad } from './open-modules';
 import { CncBatchController } from './cnc-batch-controller';
+import { downloadPanelDxf } from '../../C1_cnc/exporters/dxf-panel-exporter.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
@@ -17,8 +18,13 @@ import srcTekstRaw from '../src_tekst.json';
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
 import { openCadEditEntity } from '../floating-edit/cad-edit-entity.js';
+import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { isSmartWallContainer, isWallPart } from '../../S4_sciany/smartwall-types.js';
 import { openQuickPick } from '../../A1_core/quick-pick/quick-pick-events.js';
+import { DEFAULT_KITCHEN_DATUM_PRESETS } from '../../S1_sketcher/datum-types.js';
+import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
+import { Vec3 } from '../../A1_core/cad-math/vec3.js';
+import { Quat } from '../../A1_core/cad-math/quat.js';
 import type { ModuleScope, ModuleScopeType } from './types';
 
 export const CAD_TREE_START_RENAME = 'cad-tree-start-rename';
@@ -28,6 +34,7 @@ export interface TreeContextMenuData {
     id: string;
     name?: string;
     uuid?: string;
+    containerId?: string;
     panelId?: string;
     libraryId?: string;
     face?: string;
@@ -47,6 +54,7 @@ const ICONS = {
     report: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="18" x2="8" y2="14"/><line x1="12" y1="18" x2="12" y2="11"/><line x1="16" y1="18" x2="16" y2="15"/></svg>',
     nesting: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><rect x="5" y="5" width="6" height="8"/><rect x="13" y="5" width="6" height="5"/><rect x="13" y="12" width="6" height="7"/></svg>',
     cnc: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v5"/><path d="M9 7h6v4a3 3 0 0 1-6 0V7z"/><path d="M12 14v4"/><path d="M10 21l2-3 2 3h-4z"/></svg>',
+    dxf: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h2a2 2 0 0 0 0-4H9v8"/><path d="M14 17l3-8"/></svg>',
     draw: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
     dag: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="6" y1="9" x2="12" y2="15"/><line x1="18" y1="9" x2="12" y2="15"/></svg>',
     instrukcja: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
@@ -133,9 +141,24 @@ function isWallNode(data: TreeContextMenuData): any | null {
     const id = String(data.id || data.uuid || '');
     if (!id) return null;
     const node = doc.findNode(id);
-    if (!node) return null;
+    if (!node) {
+        const c = findContainer(id);
+        if (c && isSmartWallContainer(c)) return c;
+        const p = findPanel(id);
+        if (p && isWallPart(p)) {
+            const pNode = doc.findNode(p.id);
+            if (pNode?.parent && isSmartWallContainer(pNode.parent.domainData)) return pNode.parent.domainData;
+            return p;
+        }
+        return null;
+    }
     if (isSmartWallContainer(node.domainData)) return node.domainData;
-    if (node.parent && isSmartWallContainer(node.parent.domainData)) return node.parent.domainData;
+    let curr = node.parent;
+    while (curr && curr !== doc.root && curr.id !== 'root') {
+        if (isSmartWallContainer(curr.domainData)) return curr.domainData;
+        curr = curr.parent;
+    }
+    if (isWallPart(node.domainData)) return node.domainData;
     return null;
 }
 
@@ -204,6 +227,7 @@ function resolveScopeType(rawType: string, id?: string): ModuleScopeType | null 
 }
 
 function scopeFromData(data: TreeContextMenuData): ModuleScope | null {
+    if (isWallNode(data)) return null;
     const type = resolveScopeType(data.type, data.id || data.uuid);
     if (!type) return null;
     const id = type === 'PROJECT' ? 'ALL' : String(data.id || data.uuid || '');
@@ -239,7 +263,7 @@ function findContainer(id: string): any | null {
     return doc.findNode?.(id)?.domainData || null;
 }
 
-function resolveParentContainer(id: string): { id: string; model: any; isBlok: boolean } | null {
+export function resolveParentContainer(id: string): { id: string; model: any; isBlok: boolean } | null {
     const doc = getDoc();
     if (!doc || !id) return null;
     const node = doc.findNode(id);
@@ -258,6 +282,21 @@ function resolveParentContainer(id: string): { id: string; model: any; isBlok: b
         curr = curr.parent;
     }
     return null;
+}
+
+function exportPanelDxfFromScope(scope: ModuleScope): void {
+    try {
+        const doc = getDoc();
+        const panel = findPanel(scope.id) || doc?.findNode?.(scope.id)?.domainData;
+        if (!panel) {
+            throw new Error(`Nie znaleziono formatki o ID: ${scope.id}`);
+        }
+        const { filename } = downloadPanelDxf(panel);
+        const pName = panel.name || panel.role || 'formatka';
+        UIController.instance?.setStatus?.(`Wyeksportowano formatkę "${pName}" do DXF (${filename})`);
+    } catch (e: any) {
+        alert(e?.message || 'Błąd eksportu do DXF');
+    }
 }
 
 function getAllPanels(): any[] {
@@ -312,33 +351,70 @@ function openProperties(data: TreeContextMenuData): void {
 }
 
 function toggleVisibility(data: TreeContextMenuData): void {
+    if (nodeKind(data.type) === 'datum_level') {
+        toggleDatumLevelVisibility(data);
+        return;
+    }
+    const doc = getDoc();
+    const id = String(data.id || data.uuid || '');
+    const node = doc?.findNode?.(id);
     const kind = nodeKind(data.type);
-    if (kind === 'part' || kind === 'panel') {
-        UIController.instance?.emitTree('toggle-part-visibility', { id: data.id, uuid: data.uuid || data.id });
+    const isPart = kind === 'part' || kind === 'panel' || (node && node.nodeType === NodeType.PART) || (node && isWallPart(node.domainData));
+    if (isPart) {
+        UIController.instance?.emitTree('toggle-part-visibility', { id, uuid: data.uuid || id });
     } else if (kind === 'feature') {
-        UIController.instance?.emitTree('toggle-visibility', { id: data.id, panelId: data.panelId });
+        UIController.instance?.emitTree('toggle-visibility', { id, panelId: data.panelId });
     } else if (kind !== 'project' && kind !== 'root') {
-        UIController.instance?.emitTree('toggle-container-visibility', { id: data.id });
+        UIController.instance?.emitTree('toggle-container-visibility', { id });
     }
 }
 
 function deleteNode(data: TreeContextMenuData): void {
+    if (nodeKind(data.type) === 'datum_level') {
+        const doc = getDoc();
+        if (doc && data.id) {
+            doc.removeNode(data.id);
+            const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+            glcAxis?.syncFromDocument?.();
+            doc.markDirty?.();
+        }
+        return;
+    }
+    const doc = getDoc();
+    const id = String(data.id || data.uuid || '');
+    const node = doc?.findNode?.(id);
     const kind = nodeKind(data.type);
-    if (kind === 'part' || kind === 'panel') {
-        UIController.instance?.emitTree('delete-part', { id: data.id, uuid: data.uuid || data.id });
+    const isPart = kind === 'part' || kind === 'panel' || (node && node.nodeType === NodeType.PART) || (node && isWallPart(node.domainData));
+    if (isPart) {
+        const isManual = data.isManual === true || (node?.domainData && (node.domainData as any).engineManaged === false);
+        if (!isManual) {
+            // Podkomponenty generowane z silnika nie mogą być usuwane trwale — zamrażanie
+            toggleFreeze(data);
+            return;
+        }
+        UIController.instance?.emitTree('delete-part', { id, uuid: data.uuid || id });
     } else if (kind === 'feature') {
-        UIController.instance?.emitTree('delete-feature', { id: data.id, panelId: data.panelId });
+        const isSmart = data.isSmart === true || data.source === 'library' || !!data.libraryId;
+        if (!isSmart) {
+            toggleFreeze(data);
+            return;
+        }
+        UIController.instance?.emitTree('delete-feature', { id, panelId: data.panelId });
     } else if (kind !== 'project' && kind !== 'root') {
-        UIController.instance?.emitTree('delete-container', { id: data.id });
+        UIController.instance?.emitTree('delete-container', { id });
     }
 }
 
 function toggleFreeze(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    const id = String(data.id || data.uuid || '');
+    const node = doc?.findNode?.(id);
     const kind = nodeKind(data.type);
-    if (kind === 'part' || kind === 'panel') {
-        UIController.instance?.emitTree('toggle-freeze-part', { id: data.id, uuid: data.uuid || data.id });
+    const isPart = kind === 'part' || kind === 'panel' || (node && node.nodeType === NodeType.PART) || (node && isWallPart(node.domainData));
+    if (isPart) {
+        UIController.instance?.emitTree('toggle-freeze-part', { id, uuid: data.uuid || id });
     } else if (kind === 'feature') {
-        UIController.instance?.emitTree('toggle-freeze-feature', { id: data.id, panelId: data.panelId });
+        UIController.instance?.emitTree('toggle-freeze-feature', { id, panelId: data.panelId });
     }
 }
 
@@ -412,9 +488,22 @@ function editWall(data: TreeContextMenuData): void {
     if (!doc) return;
     const target = isWallNode(data);
     if (target) {
-        doc.setActiveEntity(target);
-        UIController.instance?.emitTree('select-container', { id: target.id });
-        openCadEditEntity({ entityId: target.id, kind: 'wall' });
+        let container = isSmartWallContainer(target) ? target : null;
+        if (!container && target.id) {
+            const node = doc.findNode(target.id);
+            let curr = node?.parent;
+            while (curr && curr !== doc.root && curr.id !== 'root') {
+                if (isSmartWallContainer(curr.domainData)) {
+                    container = curr.domainData;
+                    break;
+                }
+                curr = curr.parent;
+            }
+        }
+        const wallContainer = container || target;
+        doc.setActiveEntity(wallContainer);
+        UIController.instance?.emitTree('select-container', { id: wallContainer.id });
+        openCadEditEntity({ entityId: wallContainer.id, kind: 'wall' });
     }
 }
 
@@ -511,15 +600,228 @@ function showAll(_data?: TreeContextMenuData): void {
     });
 }
 
+
+function addDatumLevelToGlc(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    if (!doc) return;
+    const pickedZ = (data as any)?.pickedZ_mm;
+    let initialZ = (typeof pickedZ === 'number' && isFinite(pickedZ) && pickedZ >= 50)
+        ? Math.round(pickedZ)
+        : 860;
+    if (!(typeof pickedZ === 'number' && isFinite(pickedZ) && pickedZ >= 50)) {
+        const glc = doc.getGlcNode?.();
+        const existingZs = (glc?.children ?? [])
+            .map((c: any) => Math.round(nmToMm(c.domainData?.z_nm ?? c.localMatrix?.translation?.z ?? 0)))
+            .filter((z: number) => z > 0);
+        while (existingZs.includes(initialZ)) {
+            initialZ += 200;
+        }
+    }
+    const levelNode = doc.addDatumLevel(initialZ, `Poziom ${initialZ} mm`);
+    const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+    if (glcAxis) {
+        glcAxis.syncFromDocument();
+        glcAxis.openFloatingInputForLevel(levelNode.id);
+    }
+}
+
+function applyKitchenPresetsToGlc(_data: TreeContextMenuData): void {
+    const doc = getDoc();
+    if (!doc) return;
+    for (const p of DEFAULT_KITCHEN_DATUM_PRESETS) {
+        doc.addDatumLevel(p.z_mm, p.name);
+    }
+    const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+    glcAxis?.syncFromDocument?.();
+}
+
+function toggleDatumPlanes(_data: TreeContextMenuData): void {
+    const vp = ContextManager.instance?.viewport;
+    if (vp && vp.datumPlanes) {
+        const anyVisible = vp.datumPlanes.some((p: any) => p && p.isVisible);
+        const nextState = !anyVisible;
+        vp.datumPlanes.forEach((p: any) => {
+            if (p) {
+                p.setEnabled(nextState);
+                p.isVisible = nextState;
+            }
+        });
+    }
+}
+
+function editDatumLevelHeight(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    if (!doc || !data.id) return;
+    const node = doc.findNode(data.id);
+    if (!node) return;
+    const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+    if (glcAxis && typeof glcAxis.openFloatingInputForLevel === 'function') {
+        glcAxis.openFloatingInputForLevel(node.id);
+        return;
+    }
+    const currentZ = (node.domainData as any)?.z_nm !== undefined ? nmToMm((node.domainData as any).z_nm) : 0;
+    const input = window.prompt(`Nowa wysokość poziomu "${node.name}" w mm:`, String(currentZ));
+    if (input === null) return;
+    const val = Math.max(50, parseFloat(input));
+    if (isNaN(val)) return;
+
+    const z_nm = mmToNm(val);
+    node.setLocalTransform(new Vec3(0, 0, z_nm), Quat.IDENTITY);
+    if (node.domainData) {
+        (node.domainData as any).z_nm = z_nm;
+    }
+    doc.emitChange('structure', [node.id]);
+}
+
+function toggleDatumLevelVisibility(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    if (!doc || !data.id) return;
+    const node = doc.findNode(data.id);
+    if (!node) return;
+    if (node.domainData) {
+        const cur = (node.domainData as any).visible !== false;
+        (node.domainData as any).visible = !cur;
+    }
+    const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+    if (glcAxis) {
+        glcAxis.syncFromDocument();
+    }
+    doc.emitChange('structure', [node.id]);
+    doc.markDirty?.();
+}
+
 export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     const kind = nodeKind(data.type);
+
+    if (kind === 'glc') {
+        const wcsTools: any[] = [
+            {
+                label: 'Dodaj poziom Z (sferę)',
+                caption: 'Nowy poziom',
+                icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
+                action: 'add-datum-level',
+            },
+            {
+                label: 'Wstaw zestaw kuchenny (Preset)',
+                caption: 'Preset kuchni',
+                icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+                action: 'apply-kitchen-presets',
+            },
+            {
+                label: 'Przełącz widoczność płaszczyzn',
+                caption: 'Płaszczyzny',
+                icon: ICONS.eye,
+                action: 'toggle-datum-planes',
+            },
+        ];
+        const wcsItems: any[] = [{ section: 'Układ Globalny (GLC)', toolbar: wcsTools }];
+
+        wcsItems.push({
+            section: 'Obiekt',
+            toolbar: [
+                {
+                    label: tx(srcTekst, 'ctxmenu.rename', TX_NS),
+                    caption: 'Nazwa',
+                    icon: ICONS.rename,
+                    action: 'rename',
+                },
+            ],
+        });
+
+        treeMenu.onAction((action: string) => {
+            if (action === 'add-datum-level') addDatumLevelToGlc(data);
+            else if (action === 'apply-kitchen-presets') applyKitchenPresetsToGlc(data);
+            else if (action === 'toggle-datum-planes') toggleDatumPlanes(data);
+            else if (action === 'rename') startRename(data);
+        });
+
+        treeMenu.show(data.clientX, data.clientY, wcsItems);
+        return;
+    }
+
+    if (kind === 'datum_level') {
+        const doc = getDoc();
+        const levelNode = data.id ? doc?.findNode(data.id) : null;
+        const isVisible = (levelNode?.domainData as any)?.visible !== false;
+
+        const levelTools: any[] = [
+            {
+                label: 'Edytuj',
+                caption: 'Edytuj',
+                icon: ICONS.editOperation,
+                action: 'edit-datum-height',
+            },
+            {
+                label: isVisible ? 'Ukryj' : 'Pokaż',
+                caption: isVisible ? 'Ukryj' : 'Pokaż',
+                icon: isVisible ? ICONS.eyeOff : ICONS.eye,
+                action: 'toggle-level-visibility',
+            },
+            {
+                label: 'Zmień nazwę',
+                caption: 'Nazwa',
+                icon: ICONS.rename,
+                action: 'rename',
+            },
+            {
+                label: 'Usuń poziom',
+                caption: 'Usuń',
+                icon: ICONS.trash,
+                action: 'delete',
+            },
+        ];
+        const levelItems: any[] = [{ section: 'Poziom Z', toolbar: levelTools }];
+
+        treeMenu.onAction((action: string) => {
+            if (action === 'edit-datum-height') editDatumLevelHeight(data);
+            else if (action === 'toggle-level-visibility') toggleDatumLevelVisibility(data);
+            else if (action === 'rename') startRename(data);
+            else if (action === 'delete') deleteNode(data);
+        });
+
+        treeMenu.show(data.clientX, data.clientY, levelItems);
+        return;
+    }
+
+    if (false) {
+        const levelTools: any[] = [
+            {
+                label: 'Edytuj wysokość Z',
+                caption: 'Wysokość Z',
+                icon: ICONS.editOperation,
+                action: 'edit-datum-height',
+            },
+            {
+                label: 'Zmień nazwę',
+                caption: 'Nazwa',
+                icon: ICONS.rename,
+                action: 'rename',
+            },
+            {
+                label: 'Usuń poziom',
+                caption: 'Usuń',
+                icon: ICONS.trash,
+                action: 'delete',
+            },
+        ];
+        const levelItems: any[] = [{ section: 'Poziom Z', toolbar: levelTools }];
+
+        treeMenu.onAction((action: string) => {
+            if (action === 'edit-datum-height') editDatumLevelHeight(data);
+            else if (action === 'rename') startRename(data);
+            else if (action === 'delete') deleteNode(data);
+        });
+
+        treeMenu.show(data.clientX, data.clientY, levelItems);
+        return;
+    }
     const scope = scopeFromData(data);
     const items: any[] = [];
 
     // Instrukcja montażu: klik na korpusie/bloku → ten kontener; klik na formatce →
     // korpus-rodzic (instrukcja zawsze dotyczy korpusu, nie pojedynczej formatki).
     const instrukcjaParent = scope?.type === 'PANEL' ? resolveParentContainer(scope.id) : null;
-    const instrukcjaScope: ModuleScope | null = !scope
+    let instrukcjaScope: ModuleScope | null = !scope
         ? null
         : scope.type !== 'PANEL'
             ? scope
@@ -530,6 +832,28 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
                     name: instrukcjaParent.model?.name || instrukcjaParent.id,
                 }
                 : null;
+
+    if (!instrukcjaScope || instrukcjaScope.type === 'PROJECT') {
+        const active = getDoc()?.activeEntity;
+        if (active) {
+            if (active.type === 'container') {
+                instrukcjaScope = {
+                    type: 'CONTAINER',
+                    id: active.id,
+                    name: active.name || active.id,
+                };
+            } else if (active.type === 'panel' || active.type === 'part') {
+                const parent = resolveParentContainer(active.id);
+                if (parent) {
+                    instrukcjaScope = {
+                        type: parent.isBlok ? 'BLOKI' : 'CONTAINER',
+                        id: parent.id,
+                        name: parent.model?.name || parent.id,
+                    };
+                }
+            }
+        }
+    }
 
     // Gdy pod kursorem na scenie 3D jest więcej nakładających się płaszczyzn
     const quickPickCandidates = data.quickPickCandidates;
@@ -548,6 +872,11 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
 
     // Edycja na samej górze — SmartPart / AGD / ściana / formatka / blok / korpus / operacja
     const wallTarget = isWallNode(data);
+    const doc = getDoc();
+    const currentNode = doc?.findNode?.(String(data.id || data.uuid || ''));
+    const isSingleWallPart = currentNode ? (currentNode.nodeType === NodeType.PART || isWallPart(currentNode.domainData)) : false;
+    const isWall = !!wallTarget || kind === 'wall' || isSingleWallPart;
+
     if (isSmartPartNode(data)) {
         items.push({ label: 'Edytuj', icon: ICONS.editOperation, action: 'edit-smartpart' });
         items.push({ separator: true });
@@ -600,25 +929,46 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
             action: 'rename',
         },
     ];
-    if (kind !== 'project' && kind !== 'root') {
+    const isPartLike = kind === 'part' || kind === 'panel' || isSingleWallPart || (currentNode && currentNode.nodeType === NodeType.PART);
+    const isManualPart = isPartLike && (data.isManual === true || (currentNode?.domainData && (currentNode.domainData as any).engineManaged === false));
+    const isEngineChild = isPartLike && !isManualPart;
+    const isEngineFeature = kind === 'feature' && !(data.isSmart === true || data.source === 'library' || !!data.libraryId);
+
+    // Podkomponenty generowane z silnika (pojedyncze ściany, formatki korpusu/bloku, otwory silnikowe)
+    // NIE mogą być usuwane trwale — zamiast tego podlegają zamrażaniu (toggle-freeze).
+    const canDelete = kind !== 'project' && kind !== 'root' && !isEngineChild && !isEngineFeature;
+
+    if (canDelete) {
+        const deleteLabel = isWall
+            ? 'Usuń pomieszczenie'
+            : (isManualPart ? tx(srcTekst, 'tree.delete_panel', TX_NS) : tx(srcTekst, 'tree.delete_box', TX_NS));
         objectTools.push({
-            label: tx(srcTekst, 'tree.delete_panel', TX_NS),
+            label: deleteLabel,
             caption: 'Usuń',
             icon: ICONS.trash,
             action: 'delete',
         });
     }
-    if (kind === 'part' || kind === 'panel') {
-        const isManual = data.isManual === true;
-        if (!isManual) {
-            const isFrozen = data.frozen === true;
-            objectTools.push({
-                label: isFrozen ? tx(srcTekst, 'ctxmenu.unfreeze_panel', TX_NS) : tx(srcTekst, 'ctxmenu.freeze_panel', TX_NS),
-                caption: isFrozen ? 'Odmroź' : 'Zamroź',
-                icon: ICONS.freeze,
-                action: 'toggle-freeze',
-            });
-        }
+
+    if (isEngineChild) {
+        const isFrozen = data.frozen === true || (currentNode?.domainData as any)?.frozen === true;
+        const freezeLabel = isWall
+            ? (isFrozen ? 'Odmroź ścianę' : 'Zamroź ścianę')
+            : (isFrozen ? tx(srcTekst, 'ctxmenu.unfreeze_panel', TX_NS) : tx(srcTekst, 'ctxmenu.freeze_panel', TX_NS));
+        objectTools.push({
+            label: freezeLabel,
+            caption: isFrozen ? 'Odmroź' : 'Zamroź',
+            icon: ICONS.freeze,
+            action: 'toggle-freeze',
+        });
+    } else if (isEngineFeature) {
+        const isFrozen = data.frozen === true;
+        objectTools.push({
+            label: isFrozen ? tx(srcTekst, 'ctxmenu.unfreeze_op', TX_NS) : tx(srcTekst, 'ctxmenu.freeze_op', TX_NS),
+            caption: isFrozen ? 'Odmroź' : 'Zamroź',
+            icon: ICONS.freeze,
+            action: 'toggle-freeze',
+        });
     }
     items.push({ section: 'Obiekt', toolbar: objectTools });
 
@@ -626,7 +976,7 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     const canIsolate =
         kind === 'part' || kind === 'panel' || kind === 'container' || kind === 'assembly'
         || kind === 'korpus' || kind === 'bloki' || kind === 'drawers' || kind === 'shelves'
-        || kind === 'handle' || kind === 'agd' || kind === 'appliance';
+        || kind === 'handle' || kind === 'agd' || kind === 'appliance' || kind === 'wall' || isWall;
     const canRevealScope =
         canIsolate || kind === 'project' || kind === 'root' || kind === 'hardware';
 
@@ -658,8 +1008,7 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     }
 
     // Osobna sekcja: ramka ALU (nie mieszać z widokiem / produkcją)
-    if (kind === 'part' || kind === 'panel') {
-        const doc = getDoc();
+    if ((kind === 'part' || kind === 'panel') && !isWall) {
         const panelId = String(data.id || data.uuid || '');
         const node = doc?.findNode(panelId);
         const panel = node?.domainData || findPanel(panelId);
@@ -673,7 +1022,7 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         }
     }
 
-    if (scope) {
+    if (scope && !isWall) {
         items.push({ separator: true });
         const prodTools: any[] = [
             {
@@ -718,6 +1067,15 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         ];
 
         // Instrukcja montażu = korpus / blok (dla formatki: jej korpus-rodzic).
+        if (scope.type === 'PANEL') {
+            prodTools.push({
+                label: tx(srcTekst, 'ctxmenu.export_dxf', TX_NS),
+                caption: 'DXF',
+                icon: ICONS.dxf,
+                action: 'export-dxf',
+            });
+        }
+
         if (instrukcjaScope) {
             const instrukcjaTool = {
                 label: instrukcjaScope.type === 'BLOKI' ? 'Instrukcja montażu bloku'
@@ -775,6 +1133,7 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         else if (action === 'open-instrukcja' && instrukcjaScope) openInstrukcjaFromCad(instrukcjaScope);
         else if (action === 'open-draw' && scope) openDrawFromCad(scope);
         else if (action === 'open-dag' && scope) openDagFromCad(scope);
+        else if (action === 'export-dxf' && scope) exportPanelDxfFromScope(scope);
     });
 
     treeMenu.show(data.clientX, data.clientY, items);

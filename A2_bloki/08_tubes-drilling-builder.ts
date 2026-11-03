@@ -64,10 +64,17 @@ export function buildTubesDrillings(document: ProjectDocument, cabinetContainerI
         ? allPanels.filter((p: any) => p.parent?.id === cabinetNode.id || p.domainData?.cabinetId === cabinetNode.id)
         : allPanels;
 
-    const getPanelWorldZ = (node: any): number => {
+    const getNodeCabinetPosMm = (node: any): { x: number; y: number; z: number } => {
+        if (cabinetNode && typeof cabinetNode.getWorldMatrix === 'function' && typeof node?.getWorldMatrix === 'function') {
+            const relPos = cabinetNode.getWorldMatrix().invert().multiply(node.getWorldMatrix()).decompose().translation;
+            return { x: nmToMm(relPos.x), y: nmToMm(relPos.y), z: nmToMm(relPos.z) };
+        }
         const pos = node.getWorldMatrix().decompose().translation;
-        return nmToMm(pos.z);
+        return { x: nmToMm(pos.x), y: nmToMm(pos.y), z: nmToMm(pos.z) };
     };
+
+    const getPanelWorldZ = (node: any): number => getNodeCabinetPosMm(node).z;
+    const getPanelCabinetX = (node: any): number => getNodeCabinetPosMm(node).x;
 
     const getVForPanel = (targetNode: any, worldZ: number): number => {
         if (!targetNode) return worldZ;
@@ -116,8 +123,7 @@ export function buildTubesDrillings(document: ProjectDocument, cabinetContainerI
 
         // Priorytet 3: dopasowanie geometryczne
         const sbWidth = dimToMm(sbNode.domainData?.width, 600);
-        const sbWorldPos = sbNode.getWorldMatrix().decompose().translation;
-        const sbCenterX = nmToMm(sbWorldPos.x);
+        const sbCenterX = getPanelCabinetX(sbNode);
         const sbLeftX = sbCenterX - sbWidth / 2;
         const sbRightX = sbCenterX + sbWidth / 2;
 
@@ -131,7 +137,7 @@ export function buildTubesDrillings(document: ProjectDocument, cabinetContainerI
             const pZMax = centerZ + h / 2;
             if (h > 0 && (worldZ !== undefined && (worldZ < pZMin - 10 || worldZ > pZMax + 10))) return false;
 
-            const panelX = nmToMm(pNode.getWorldMatrix().decompose().translation.x);
+            const panelX = getPanelCabinetX(pNode);
             return side === 'left' ? (panelX <= sbCenterX + 5) : (panelX >= sbCenterX - 5);
         });
 
@@ -139,8 +145,8 @@ export function buildTubesDrillings(document: ProjectDocument, cabinetContainerI
 
         const targetRefX = side === 'left' ? sbLeftX : sbRightX;
         candidates.sort((a, b) => {
-            const distA = Math.abs(nmToMm(a.getWorldMatrix().decompose().translation.x) - targetRefX);
-            const distB = Math.abs(nmToMm(b.getWorldMatrix().decompose().translation.x) - targetRefX);
+            const distA = Math.abs(getPanelCabinetX(a) - targetRefX);
+            const distB = Math.abs(getPanelCabinetX(b) - targetRefX);
             return distA - distB;
         });
 

@@ -2,7 +2,9 @@
  * scripts/audit-display-name-logic.mjs
  * Strażnik reguły: "Logika nigdy nie czyta stringów wyświetlanych".
  * Szuka w C1_cnc / R1_reports / E1_export miejsc, gdzie logika dotyka `.name`
- * albo polskich literałów w warunkach. Do odpalania przed migracją i w CI.
+ * albo polskich literałów w warunkach. Całe A2_bloki i S2_solver są dodatkowo
+ * sprawdzane pod kątem porównań nazw używanych jako tożsamość w logice.
+ * Do odpalania przed migracją i w CI.
  *
  * Dodatkowo (v4): LEGACY-PARAM-ALIAS — wycofane nazwy parametrów korpusu
  * w modułach, które po migracji mają kontrakt wyłącznie kanoniczny.
@@ -32,8 +34,16 @@ function requirePath(rel, kind = 'plik') {
     return abs;
 }
 
-const DIRS = ['C1_cnc', 'R1_reports', 'E1_export', 'A8_pmi', 'A4_smartpanel'];
+const DIRS = ['C1_cnc', 'R1_reports', 'E1_export', 'A8_pmi', 'A4_smartpanel', 'A3_smartframe'];
 const EXT = new Set(['.ts', '.tsx', '.js']);
+const IDENTITY_DIRS = ['A2_bloki', 'S2_solver'];
+const IDENTITY_RULES = [
+    /\b\w+\??\.name\s*===/,
+    /===\s*\w+\??\.name\b/,
+    /\b\w+\??\.name\s*==(?!=)/,
+    /\.name\s*&&[^;\n]*\.name/,
+    /\b(?:role|key)\s*\|\|\s*\w+\??\.name\b/,
+];
 
 // Moduły z kanonicznym kontraktem parametrów korpusu (zero aliasów od wersji pliku 4).
 const CANONICAL_PARAM_DIRS = ['A1_core', 'A2_bloki', 'A3_smartframe', 'B1_biblioteka', 'src', 'A8_pmi'];
@@ -131,6 +141,7 @@ function walkTests(dir, out = []) {
 }
 
 let findings = 0;
+let blockingFindings = 0;
 for (const d of DIRS) {
     const abs = requirePath(d, 'katalog');
     const files = walk(abs);
@@ -147,9 +158,29 @@ for (const d of DIRS) {
             for (const r of RULES) {
                 if (r.res.some((re) => re.test(line))) {
                     findings++;
+                    if (r.id !== 'NAME-FALLBACK-LITERAL') blockingFindings++;
                     console.log(`  [${r.id}] ${rel}:${i + 1}: ${t.slice(0, 140)}`);
                     break;
                 }
+            }
+        });
+    }
+}
+
+console.log('\n## MATCH-BY-NAME (całe A2_bloki / S2_solver, bez testów)');
+for (const d of IDENTITY_DIRS) {
+    const abs = requirePath(d, 'katalog');
+    for (const f of walk(abs)) {
+        const rel = path.relative(webRoot, f);
+        if (rel.split(path.sep).includes('__tests__')) continue;
+        const lines = fs.readFileSync(f, 'utf8').split(/\r?\n/);
+        lines.forEach((line, i) => {
+            const t = line.trim();
+            if (!t || t.startsWith('//') || t.startsWith('*')) return;
+            if (IDENTITY_RULES.some((re) => re.test(line))) {
+                findings++;
+                blockingFindings++;
+                console.log(`  [MATCH-BY-NAME] ${rel}:${i + 1}: ${t.slice(0, 140)}`);
             }
         });
     }
@@ -204,7 +235,7 @@ console.log(`Znalezionych aliasów parametrów: ${paramFindings}`);
 console.log('Legenda fixów:');
 for (const r of RULES) console.log(`  ${r.id}: ${r.fix}`);
 console.log('  LEGACY-PARAM-ALIAS: -> klucze kanoniczne *_mm (SSOT: A3_smartframe/smartframe-types.ts)');
-if (paramFindings > 0) process.exitCode = 1;
+if (blockingFindings > 0 || paramFindings > 0) process.exitCode = 1;
 
 // ─── Strażnik drzwi narożnych: zero aliasów w kontrakcie corner-doors ───
 const CORNER_DOORS_LEGACY = [
@@ -482,7 +513,3 @@ for (const file of allSourceFiles) {
 }
 console.log(`  → ${zeroForbiddenFindings}`);
 if (zeroForbiddenFindings > 0) process.exitCode = 1;
-
-
-
-

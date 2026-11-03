@@ -169,5 +169,33 @@ describe('AssignMaterialCommand & SetEdgeBandingCommand', () => {
         // Undo
         setCmd.undo(doc);
         expect(panel.edgeBanding['+X']).toBeUndefined();
+        expect(panel.edgeBandingUserDefined).toBe(false);
+    });
+
+    it('regeneracja korpusu (zmiana wymiaru) nie usuwa ręcznie nadanych obrzeży', () => {
+        const container = doc.createAssembly({ name: 'Szafka' });
+        container.width = mmToNm(1000);
+        container.height = mmToNm(2000);
+        container.depth = mmToNm(600);
+        container.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        rebuildSmartFrameContainer(container);
+
+        const cntNode = doc.findNode(container.id)!;
+        const sideChild = cntNode.children.find((c: any) => c.domainData?.role === 'LEFT_SIDE_PANEL')!;
+        const bottomChild = cntNode.children.find((c: any) => c.domainData?.role === 'BOTTOM_PANEL')!;
+        const sidePanel = sideChild.domainData as PanelModel;
+        const bottomPanel = bottomChild.domainData as PanelModel;
+
+        new SetEdgeBandingCommand(sideChild.id, '-Y', { active: true, type_id: 'ABS_2x22', thickness_mm: 2 }, 'SINGLE').execute(doc);
+        new SetEdgeBandingCommand(bottomChild.id, 'ALL', { active: false }, 'SINGLE').execute(doc);
+
+        // Zmiana wymiaru korpusu → pełna regeneracja
+        container.width = mmToNm(800);
+        rebuildSmartFrameContainer(container);
+
+        expect(sidePanel.edgeBanding['-Y']?.active).toBe(true);
+        expect(sidePanel.edgeBanding['-Y']?.type_id).toBe('ABS_2x22');
+        expect(Object.values(bottomPanel.edgeBanding).some((e: any) => e?.active)).toBe(false);
+        expect(bottomPanel.width).toBe(mmToNm(764));
     });
 });

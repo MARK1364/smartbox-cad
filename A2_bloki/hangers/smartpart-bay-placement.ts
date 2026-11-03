@@ -849,9 +849,9 @@ export function computeSmartPartCutIntents(
     for (let i = 0; i < cuts.length; i++) {
         const cut = cuts[i];
         // Cięcie BEZ Parta lądowałoby refZ CENTER → środek wnęki w Z. Zawsze bierz Part (TOP ze Studia).
-        const part = (cut?.partId
-            ? parts.find((p: any) => p?.id === cut.partId) || parts.find((p: any) => p?.name && cut.partId.includes?.(p.name))
-            : null) || parts[0] || null;
+        const part = cut?.partId
+            ? parts.find((p: any) => p?.id === cut.partId) || null
+            : parts.length === 1 ? parts[0] : null;
         if (!part) continue;
         // Zamrożone (panel aplikacji → check → frozen): bez CNC / wycięć
         if (cut?.frozen === true || part?.frozen === true) continue;

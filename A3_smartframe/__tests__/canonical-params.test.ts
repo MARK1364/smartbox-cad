@@ -60,4 +60,57 @@ describe('Kontrakt parametrów korpusu — zero kompatybilności wstecznej', () 
         expect(norm.strona_blendy).toBe('LEFT');
         expect(norm.tryb_wienca_gornego).toBe('FULL');
     });
+
+    it('odrzuca niefinitywne, nienumeryczne i niedodatnie wymiary korpusu przed planowaniem', () => {
+        for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 'abc', -1, 0]) {
+            expect(() => normalizeCabinetParams({ szerokosc_mm: value as any }))
+                .toThrow(/szerokosc_mm/);
+            expect(() => planCabinet({ szerokosc_mm: value as any }))
+                .toThrow(/szerokosc_mm/);
+        }
+
+        expect(() => normalizeCabinetParams({ wysokosc_mm: Number.NEGATIVE_INFINITY }))
+            .toThrow(/wysokosc_mm/);
+        expect(() => normalizeCabinetParams({ glebokosc_mm: 'abc' as any }))
+            .toThrow(/glebokosc_mm/);
+    });
+
+    it('odrzuca nieprawidłową liczbę stref i zachowuje poprawny zakres całkowity', () => {
+        for (const value of [Number.NaN, Number.POSITIVE_INFINITY, 'abc', 0, -1, 1.5, 4]) {
+            expect(() => normalizeCabinetParams({ liczba_stref: value as any }))
+                .toThrow(/liczba_stref/);
+        }
+
+        expect(normalizeCabinetParams({ liczba_stref: 1 }).liczba_stref).toBe(1);
+        expect(normalizeCabinetParams({ liczba_stref: 3 }).liczba_stref).toBe(3);
+    });
+
+    it('waliduje jawne wymiary stref i zachowuje dozwolone zera', () => {
+        expect(() => normalizeCabinetParams({ glebokosc_boku_lewego_mm: Number.NaN }))
+            .toThrow(/glebokosc_boku_lewego_mm/);
+        for (const value of [-1, 0]) {
+            expect(() => normalizeCabinetParams({ liczba_stref: 2, wysokosc_strefy_dolnej_mm: value }))
+                .toThrow(/wysokosc_strefy_dolnej_mm/);
+            expect(() => normalizeCabinetParams({ grubosc_plecow_mm: value }))
+                .toThrow(/grubosc_plecow_mm/);
+        }
+        const zeroAllowedValues = normalizeCabinetParams({
+            liczba_stref: 3,
+            wysokosc_strefy_dolnej_mm: 500,
+            wysokosc_strefy_srodkowej_mm: 0,
+            cofniecie_plecow_mm: 0,
+            wpuszczenie_plecow_mm: 0,
+        });
+        expect(zeroAllowedValues.wysokosc_strefy_dolnej_mm).toBe(500);
+        expect(zeroAllowedValues.wysokosc_strefy_srodkowej_mm).toBe(0);
+        expect(zeroAllowedValues.cofniecie_plecow_mm).toBe(0);
+        expect(zeroAllowedValues.wpuszczenie_plecow_mm).toBe(0);
+    });
+
+    it('odrzuca niekończoną grubość pleców i dolną wysokość strefy', () => {
+        expect(() => normalizeCabinetParams({ liczba_stref: 2, wysokosc_strefy_dolnej_mm: Number.NaN }))
+            .toThrow(/wysokosc_strefy_dolnej_mm/);
+        expect(() => normalizeCabinetParams({ grubosc_plecow_mm: Number.POSITIVE_INFINITY }))
+            .toThrow(/grubosc_plecow_mm/);
+    });
 });

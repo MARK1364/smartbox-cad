@@ -61,7 +61,7 @@ export class ContextManager {
     public solverController: any = null;
     
     // Zmienne używane z poziomu Reacta i UI
-    private _activeTab = 'tab-a4-smartpanel';
+    private _activeTab = 'tab-a3-smartframe';
 
     public get activeTab(): string {
         return this._activeTab;

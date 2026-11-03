@@ -16,13 +16,19 @@ export interface AddButtonDef {
     icon: string;
 }
 
-/** Kolejność typów więzów: VERTEX, COPLANAR, FLUSH, GROUND. */
+/** Kolejność typów więzów: VERTEX, VERTEX_DATUM, COPLANAR, FLUSH, GROUND. */
 export const ADD_BUTTONS: AddButtonDef[] = [
     {
         bindType: 'VERTEX',
         label: 'Połącz narożnikami',
         title: 'Vertex Bind — dwa wierzchołki w tej samej pozycji',
         icon: '⬡',
+    },
+    {
+        bindType: 'VERTEX_DATUM',
+        label: 'Naroże do płaszczyzny',
+        title: 'Vertex-Datum — narożnik kontenera do płaszczyzny / poziomu Z',
+        icon: '⊥',
     },
     {
         bindType: 'COPLANAR',
@@ -46,6 +52,7 @@ export const ADD_BUTTONS: AddButtonDef[] = [
 
 export const BIND_TYPE_ICON: Record<BindType, string> = {
     VERTEX: '⬡',
+    VERTEX_DATUM: '⊥',
     COPLANAR: '⇉',
     FLUSH: '⇆',
     GROUND: '⚓',
@@ -53,6 +60,7 @@ export const BIND_TYPE_ICON: Record<BindType, string> = {
 
 export const BIND_TYPE_LABEL: Record<BindType, string> = {
     VERTEX: 'Vertex',
+    VERTEX_DATUM: 'Naroże–Poziom',
     COPLANAR: 'Coplanar',
     FLUSH: 'Flush',
     GROUND: 'Ground',

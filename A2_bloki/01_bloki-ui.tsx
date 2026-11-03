@@ -518,15 +518,14 @@ export function BlokiUI({ projectModel }: Props) {
                     allPanels.find((n: any) =>
                         n.id === panelId ||
                         n.id === refData.partKey ||
-                        n.domainData?.name === refData.partKey ||
                         n.domainData?.id === refData.partKey ||
                         (n.domainData as any)?.key === refData.partKey
                     );
                 const targetPanel = refData.panelModel || targetNode?.domainData || null;
                 const partKey =
-                    targetNode?.name ||
                     (targetPanel as any)?.key ||
-                    targetPanel?.name ||
+                    targetNode?.id ||
+                    targetPanel?.id ||
                     refData.partKey;
 
                 const resolvedFace = targetPanel && targetNode && cabinetNode

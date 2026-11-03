@@ -66,6 +66,10 @@ export class LedChannelStore implements DocumentExtension {
         }
     }
 
+    notifyChanged(): void {
+        this._notify();
+    }
+
     get channels(): readonly LedChannelDefinition[] {
         return this._channels;
     }

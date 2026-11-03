@@ -217,7 +217,9 @@ EOF
             // Wpust W=4 Z=8, znormalizowany o offset (100, 100)
             const groove = wp.features.find(f => f.type === 'groove') as any;
             expect(groove).toBeDefined();
-            expect(groove.params.width).toBe(4);
+            // Poziomy wpust: width = rozpiętość wzdłuż U (700), length = szerokość frezu wzdłuż V (4)
+            expect(groove.params.width).toBe(700);
+            expect(groove.params.length).toBe(4);
             expect(groove.params.depth).toBe(8);
             expect(groove.params.u).toBe(50);
             expect(groove.params.startPoint.x).toBe(50);

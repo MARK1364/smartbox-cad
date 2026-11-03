@@ -101,6 +101,12 @@ describe('SmartFrame Top Panel & Traverses Engine', () => {
         // Pozycje w Z: H - 100/2 = 2000 - 50 = 1950
         expect(front.loc.z).toBeCloseTo(1950);
         expect(rear.loc.z).toBeCloseTo(1950);
+
+        // Obrzeze na dolnej krawedzi (+Y), a nie pod blatem (-Y)
+        expect(front.edge_banding?.['+Y']?.active).toBe(true);
+        expect(front.edge_banding?.['-Y']?.active).toBe(false);
+        expect(rear.edge_banding?.['+Y']?.active).toBe(true);
+        expect(rear.edge_banding?.['-Y']?.active).toBe(false);
     });
 
     it('TRAVERSE_V: czerwone gizmo (pX) zmienia szerokość trawersu, nie grubość', () => {

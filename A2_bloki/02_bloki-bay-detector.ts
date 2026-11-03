@@ -12,6 +12,7 @@ import { PanelModel, normalizeFaceName, type FaceName } from '../A4_smartpanel/p
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { Mat4 } from '../A1_core/cad-math/mat4.js';
+import { cadToRender } from '../A1_core/cad-math/coord-system.js';
 
 export interface FaceHitRef {
     nodeId: string;
@@ -191,6 +192,60 @@ function findKorpusContainer(start: CADNode | null, document: ProjectDocument): 
     return korpusContainer || anyContainer;
 }
 
+export function findCabinetForCADPoint(
+    document: ProjectDocument,
+    probeMm: { x: number; y: number; z: number }
+): CADNode | null {
+    const candidates: Array<{ node: CADNode; inside: boolean; distSq: number }> = [];
+    const scan = (node: CADNode) => {
+        const dd = node.domainData as any;
+        if (dd?.type === 'container' || dd?.generatorParams) {
+            const t = String(dd.generatorParams?.typ_korpusu || dd.generatorParams?.type || '').toLowerCase();
+            if (t.includes('korpus') || t.includes('smartframe') || dd.generatorParams?.typ_korpusu || dd.generatorParams?.typ) {
+                const inv = node.getWorldMatrix().invert();
+                const local = inv.transformPoint(new Vec3(mmToNm(probeMm.x), mmToNm(probeMm.y), mmToNm(probeMm.z)));
+                const lx = nmToMm(local.x);
+                const ly = nmToMm(local.y);
+                const lz = nmToMm(local.z);
+
+                const gp = dd.generatorParams;
+                const w = gp?.szerokosc_mm ?? (dd.width ? nmToMm(dd.width) : 600);
+                const d = gp?.glebokosc_mm ?? (dd.depth ? nmToMm(dd.depth) : 600);
+                const h = gp?.wysokosc_mm ?? (dd.height ? nmToMm(dd.height) : 720);
+
+                const tol = 150;
+                const inside =
+                    lx >= -w / 2 - tol && lx <= w / 2 + tol &&
+                    ly >= -d / 2 - tol && ly <= d / 2 + tol &&
+                    lz >= -tol && lz <= h + tol;
+
+                const centerLocalZ = h / 2;
+                const distSq = lx * lx + ly * ly + Math.pow(lz - centerLocalZ, 2);
+                candidates.push({ node, inside, distSq });
+            }
+        }
+        for (const child of node.children) scan(child);
+    };
+    scan(document.rootNode);
+
+    if (candidates.length === 0) {
+        for (const child of document.rootNode.children) {
+            const found = findKorpusContainer(child, document);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    const insideCandidates = candidates.filter(c => c.inside);
+    if (insideCandidates.length > 0) {
+        insideCandidates.sort((a, b) => a.distSq - b.distSq);
+        return insideCandidates[0].node;
+    }
+
+    candidates.sort((a, b) => a.distSq - b.distSq);
+    return candidates[0].node;
+}
+
 function isNodeUnderCabinet(node: CADNode | null, cabinetId: string | undefined): boolean {
     if (!node || !cabinetId) return false;
     let curr: CADNode | null = node;
@@ -237,17 +292,14 @@ function smartFrameFrontPlaneYMm(cabNode: CADNode, depthMm: number): number {
  * Sprawdza czy formatka pełni rolę elementu dzielącego wnękę meblową
  * (np. pionowa przegroda DIVIDER_PLATE lub stały wieniec konstrukcyjny SHELF_BOARD).
  */
-export function isBayDividingPanel(role?: string, name?: string): boolean {
+export function isBayDividingPanel(role?: string): boolean {
     const r = String(role || '').toUpperCase();
-    const n = String(name || '').toUpperCase();
     return r === 'DIVIDER_PLATE' ||
         r === 'VERTICAL_DIVIDER' ||
         r === 'SHELF_BOARD' ||
         r.includes('DIVIDER') ||
         r.includes('PRZEGRODA') ||
-        r.includes('WIENIEC') ||
-        n.includes('PRZEGRODA') ||
-        n.includes('WIENIEC');
+        r.includes('WIENIEC');
 }
 
 /**
@@ -257,7 +309,7 @@ export function isBayDividingPanel(role?: string, name?: string): boolean {
  * - Pozycje i orientacje ścian w świecie są liczone w 100% matematycznie
  *   przez macierz świata node.getWorldMatrix() (bez zgadywania ról i bez zamiany osi).
  */
-function collectScenePanelFaces(document: ProjectDocument): PanelFaceInfo[] {
+function collectScenePanelFaces(document: ProjectDocument, targetCabinet?: CADNode | null): PanelFaceInfo[] {
     const list: PanelFaceInfo[] = [];
     if (!document) return list;
 
@@ -272,11 +324,12 @@ function collectScenePanelFaces(document: ProjectDocument): PanelFaceInfo[] {
         const d = node.domainData;
         if (!d || (d.type !== 'panel' && d.type !== 'part')) continue;
         const panel = d as PanelModel;
+        if ((panel as any).frozen === true || panel.visible === false) continue;
         const role = String((panel as any).role || '').toUpperCase();
         // Pomiń elementy Bloku, z wyjątkiem stałych przegród i półek/wieńców dzielących wnęki
         const parent = node.parent;
         const gp = (parent?.domainData as any)?.generatorParams;
-        const isStructural = isBayDividingPanel(role, node.name) ||
+        const isStructural = isBayDividingPanel(role) ||
             role.includes('SHELF') || role.includes('WIENIEC') || role.includes('POLKA');
         if (gp && (String(gp.type || '').startsWith('blok_') || gp.boxType) && !isStructural) {
             continue;
@@ -737,9 +790,13 @@ function collectScenePanelFaces(document: ProjectDocument): PanelFaceInfo[] {
         // Dla paneli korpusu transformacją do świata jest pozycja lokalna (cornerX, cornerY, cornerZ) przetransformowana przez rodzica (korpus)
         const parentNode = node.parent;
         const isCabinetPanel = !!(role && parentNode && parentNode.id !== document.rootNode.id);
-        const transformMat = isCabinetPanel
+        let transformMat = isCabinetPanel
             ? (parentNode?.getWorldMatrix() || Mat4.identity()).multiply(Mat4.fromTranslation(localTx, localTy, localTz))
             : node.getWorldMatrix();
+
+        if (targetCabinet) {
+            transformMat = targetCabinet.getWorldMatrix().invert().multiply(transformMat);
+        }
 
         for (const fc of facesConfig) {
             const worldCenterNm = transformMat.transformPoint(fc.centerLocal);
@@ -780,11 +837,18 @@ export function probeBayFromCADPoint(
     options?: { maxDistanceMm?: number }
 ): DetectedBay | null {
     const maxDist = options?.maxDistanceMm || 3000;
-    const px = probePointMm.x;
-    const py = probePointMm.y;
-    const pz = probePointMm.z;
+    const parentCabinet = findCabinetForCADPoint(document, probePointMm);
+    if (!parentCabinet) return null;
 
-    const faces = collectScenePanelFaces(document);
+    const cabMat = parentCabinet.getWorldMatrix();
+    const invCab = cabMat.invert();
+
+    const localProbeNm = invCab.transformPoint(new Vec3(mmToNm(probePointMm.x), mmToNm(probePointMm.y), mmToNm(probePointMm.z)));
+    const px = nmToMm(localProbeNm.x);
+    const py = nmToMm(localProbeNm.y);
+    const pz = nmToMm(localProbeNm.z);
+
+    const faces = collectScenePanelFaces(document, parentCabinet);
     if (faces.length === 0) return null;
 
     let hitLeft: { info: PanelFaceInfo; dist: number } | null = null;
@@ -870,19 +934,100 @@ export function probeBayFromCADPoint(
         }
     }
 
+    const parentCabinetId = parentCabinet.id;
+    const gp = (parentCabinet.domainData as any)?.generatorParams;
+    const rawCabDepth = (parentCabinet.domainData as any)?.depth;
+    const rawCabWidth = (parentCabinet.domainData as any)?.width;
+    const rawCabHeight = (parentCabinet.domainData as any)?.height;
+
+    const cabinetWidthMm = gp?.szerokosc_mm ?? (rawCabWidth ? nmToMm(rawCabWidth) : 600);
+    const cabinetDepthMm = gp?.glebokosc_mm ?? (rawCabDepth ? nmToMm(rawCabDepth) : 600);
+    const cabinetHeightMm = gp?.wysokosc_mm ?? (rawCabHeight ? nmToMm(rawCabHeight) : 720);
+
+    const cabMinX = -cabinetWidthMm / 2;
+    const cabMaxX = cabinetWidthMm / 2;
+    const cabMinY = -cabinetDepthMm / 2;
+    const cabMaxY = cabinetDepthMm / 2;
+    const cabMinZ = 0;
+    const cabMaxZ = cabinetHeightMm;
+
+    // Gdy brakuje fizycznej ściany (np. zamrożony wieniec dolny/górny lub brak boku)
+    // -> kaskadowe dziedziczenie referencji: idziemy POZIOM W HIERARCHII DO GÓRY i bierzemy płaszczyznę SmartFrame korpusu!
+    if (parentCabinet) {
+        if (!hitBottom) {
+            hitBottom = {
+                info: {
+                    node: parentCabinet,
+                    panel: parentCabinet.domainData as any,
+                    face: 'FACE_Z_PLUS',
+                    worldCenterMm: new Vec3(px, py, cabMinZ),
+                    worldNormal: new Vec3(0, 0, 1),
+                    minBoundsMm: new Vec3(cabMinX, cabMinY, cabMinZ),
+                    maxBoundsMm: new Vec3(cabMaxX, cabMaxY, cabMinZ),
+                },
+                dist: Math.max(0, pz - cabMinZ)
+            };
+        }
+        if (!hitTop) {
+            hitTop = {
+                info: {
+                    node: parentCabinet,
+                    panel: parentCabinet.domainData as any,
+                    face: 'FACE_Z_MINUS',
+                    worldCenterMm: new Vec3(px, py, cabMaxZ),
+                    worldNormal: new Vec3(0, 0, -1),
+                    minBoundsMm: new Vec3(cabMinX, cabMinY, cabMaxZ),
+                    maxBoundsMm: new Vec3(cabMaxX, cabMaxY, cabMaxZ),
+                },
+                dist: Math.max(0, cabMaxZ - pz)
+            };
+        }
+        if (!hitLeft) {
+            hitLeft = {
+                info: {
+                    node: parentCabinet,
+                    panel: parentCabinet.domainData as any,
+                    face: 'FACE_Z_PLUS',
+                    worldCenterMm: new Vec3(cabMinX, py, pz),
+                    worldNormal: new Vec3(1, 0, 0),
+                    minBoundsMm: new Vec3(cabMinX, cabMinY, cabMinZ),
+                    maxBoundsMm: new Vec3(cabMinX, cabMaxY, cabMaxZ),
+                },
+                dist: Math.max(0, px - cabMinX)
+            };
+        }
+        if (!hitRight) {
+            hitRight = {
+                info: {
+                    node: parentCabinet,
+                    panel: parentCabinet.domainData as any,
+                    face: 'FACE_Z_MINUS',
+                    worldCenterMm: new Vec3(cabMaxX, py, pz),
+                    worldNormal: new Vec3(-1, 0, 0),
+                    minBoundsMm: new Vec3(cabMaxX, cabMinY, cabMinZ),
+                    maxBoundsMm: new Vec3(cabMaxX, cabMaxY, cabMaxZ),
+                },
+                dist: Math.max(0, cabMaxX - px)
+            };
+        }
+    }
+
     if (!hitLeft || !hitRight || !hitBottom || !hitTop) {
         return null; // Wnęka musi być co najmniej ograniczona z 4 stron (lewo, prawo, dół, góra)
     }
 
     // Zabezpieczenie przed kliknięciem na pojedynczą formatkę od zewnątrz:
     // Wnęka musi być przestrzenią pomiędzy osobnymi formatkami (lewa !== prawa, dół !== góra)
-    if (hitLeft.info.node.id === hitRight.info.node.id || hitBottom.info.node.id === hitTop.info.node.id) {
+    if (hitLeft.info.node.id === hitRight.info.node.id && hitLeft.info.node.id !== parentCabinetId) {
         return null;
     }
-    if (hitLeft.info.node.id === hitBottom.info.node.id || hitLeft.info.node.id === hitTop.info.node.id) {
+    if (hitBottom.info.node.id === hitTop.info.node.id && hitBottom.info.node.id !== parentCabinetId) {
         return null;
     }
-    if (hitRight.info.node.id === hitBottom.info.node.id || hitRight.info.node.id === hitTop.info.node.id) {
+    if ((hitLeft.info.node.id === hitBottom.info.node.id || hitLeft.info.node.id === hitTop.info.node.id) && hitLeft.info.node.id !== parentCabinetId) {
+        return null;
+    }
+    if ((hitRight.info.node.id === hitBottom.info.node.id || hitRight.info.node.id === hitTop.info.node.id) && hitRight.info.node.id !== parentCabinetId) {
         return null;
     }
 
@@ -891,16 +1036,8 @@ export function probeBayFromCADPoint(
     const bottomZ = hitBottom.info.worldCenterMm.z;
     let topZ = hitTop.info.worldCenterMm.z;
 
-    // Korekta lica SKOŚNEGO wieńca górnego:
-    // Wieniec górny skośny jest pozycjonowany w loc.z = z_top_center - (tTop/2)*cosBeta.
-    // transformMat w collectScenePanelFaces nie uwzględnia obrotu panelu (tylko translację),
-    // więc worldCenterMm.z dla FACE_Z_PLUS wynosi localTz - grubosc_wienca/2.
-    // Zewnętrzna krawędź dachu w osi wnęki (x=0) leży na z_gora_dachu = localTz + (grubosc/2)*cos(beta).
-    // Pełna grubość wieńca w pionie to grubosc / cos(beta).
-    // Prawdziwe dolne lico wieńca (sufit wnęki) w osi wnęki leży na:
-    // z_dol_wienca = z_gora_dachu - grubosc / cos(beta).
-    // Korekta odejmowana od worldCenterMm.z to: (grubosc / cos(beta)) - (grubosc / 2) * (1 + cos(beta)).
-    {
+    // Korekta lica SKOŚNEGO wieńca górnego (tylko gdy hitTop to fizyczny panel skośny):
+    if (hitTop.info.node.id !== parentCabinetId) {
         const topNode: any = (hitTop.info as any).node;
         const topPanel: any = (hitTop.info as any).panel;
         const obrot_dachu_deg = Number(topNode?.domainData?.lcs?.rotation?.[2]);
@@ -914,7 +1051,6 @@ export function probeBayFromCADPoint(
         let grubosc_wienca_gornego_mm = 0;
         const surowa_grubosc = topPanel?.thickness ?? topNode?.domainData?.thickness;
         if (surowa_grubosc != null && Number.isFinite(Number(surowa_grubosc)) && Number(surowa_grubosc) > 0) {
-            // PanelModel.thickness jest w nm (jak width/height); grubość wieńca < 100 mm.
             const grubosc_nm = Number(surowa_grubosc);
             grubosc_wienca_gornego_mm = grubosc_nm > 1000 ? nmToMm(grubosc_nm) : grubosc_nm;
         }
@@ -924,24 +1060,6 @@ export function probeBayFromCADPoint(
             if (korekta_pionowa_wienca_mm > 0 && korekta_pionowa_wienca_mm < 100) topZ -= korekta_pionowa_wienca_mm;
         }
     }
-
-    // Korpus z boków wnęki — blok działa w zakresie jednego korpusu
-    let parentCabinet = findKorpusContainer(hitLeft.info.node, document)
-        || findKorpusContainer(hitRight.info.node, document)
-        || findKorpusContainer(hitBottom.info.node, document)
-        || findKorpusContainer(hitTop.info.node, document);
-    if (!parentCabinet && document) {
-        for (const child of document.rootNode.children) {
-            const found = findKorpusContainer(child, document);
-            if (found) {
-                parentCabinet = found;
-                break;
-            }
-        }
-    }
-    const parentCabinetId = parentCabinet?.id;
-    const rawCabDepth = (parentCabinet?.domainData as any)?.depth;
-    const cabinetDepthMm = rawCabDepth ? nmToMm(rawCabDepth) : undefined;
 
     // Odrzuć „przód” z innego korpusu (szafa stojąca przed wnęką bez płyty frontowej)
     if (hitFront && parentCabinetId && !isNodeUnderCabinet(hitFront.info.node, parentCabinetId)) {
@@ -957,7 +1075,7 @@ export function probeBayFromCADPoint(
     if (hitFront) {
         frontPlaneY = hitFront.info.worldCenterMm.y;
     } else if (parentCabinet && cabinetDepthMm !== undefined) {
-        frontPlaneY = smartFrameFrontPlaneYMm(parentCabinet, cabinetDepthMm);
+        frontPlaneY = -cabinetDepthMm / 2;
     } else {
         frontPlaneY = Math.min(hitLeft.info.minBoundsMm.y, hitRight.info.minBoundsMm.y, hitBottom.info.minBoundsMm.y);
     }
@@ -1013,7 +1131,6 @@ export function probeBayFromCADPoint(
 
     let slopeAxis: 'X' | undefined;
 
-    const gp = (parentCabinet?.domainData as any)?.generatorParams;
     const cabType = String(
         gp?.typ_korpusu ||
         gp?.type ||
@@ -1025,16 +1142,13 @@ export function probeBayFromCADPoint(
     const isSkosnyLr = cabType.includes('skosny_lr') || (cabType.includes('skosny') && (gp?.wysokosc_lewy_mm != null || gp?.wysokosc_prawy_mm != null));
     const isSkosnyFb = !isSkosnyLr && (cabType.includes('skosny') || gp?.wysokosc_przod_mm != null || gp?.wysokosc_tyl_mm != null);
 
-    const originNm = parentCabinet?.getWorldMatrix().transformPoint(new Vec3(0, 0, 0));
-    const cabBaseZMm = originNm ? nmToMm(originNm.z) : 0;
-
-    let topRefNode = hitTop.info.node;
-    let topRefFace: FaceName = hitTop.info.face;
+    let topRefNode = (hitTop.info.node.id === parentCabinetId && parentCabinet) ? parentCabinet : hitTop.info.node;
+    let topRefFace: FaceName = hitTop.info.node.id === parentCabinetId ? 'FACE_Z_MINUS' : hitTop.info.face;
 
     if (isSkosnyFb) {
         // Górna płaszczyzna SmartFrame — pozioma płaszczyzna góry korpusu
         const cabHeightMm = gp?.wysokosc_przod_mm ?? gp?.wysokosc_mm ?? ((parentCabinet?.domainData as any)?.height ? nmToMm((parentCabinet.domainData as any).height) : 2200);
-        topZ = cabBaseZMm + cabHeightMm;
+        topZ = cabHeightMm;
         centerZ = (bottomZ + topZ) / 2;
         slopeAxis = undefined;
         roofAngleDeg = undefined;
@@ -1058,10 +1172,15 @@ export function probeBayFromCADPoint(
 
     const effectiveHeight = Math.max(10, topZ - bottomZ);
 
+    const toWorldPoint = (lx: number, ly: number, lz: number): { x: number; y: number; z: number } => {
+        const ptNm = cabMat.transformPoint(new Vec3(mmToNm(lx), mmToNm(ly), mmToNm(lz)));
+        return { x: nmToMm(ptNm.x), y: nmToMm(ptNm.y), z: nmToMm(ptNm.z) };
+    };
+
     return {
         boundsMm: { width, height: effectiveHeight, depth },
         boundsNm: { width: mmToNm(width), height: mmToNm(effectiveHeight), depth: mmToNm(depth) },
-        centerWorldMm: { x: centerX, y: centerY, z: centerZ },
+        centerWorldMm: toWorldPoint(centerX, centerY, centerZ),
         parentCabinetId,
         roofAngleDeg,
         slopeAxis,
@@ -1073,7 +1192,7 @@ export function probeBayFromCADPoint(
                 nodeName: hitLeft.info.node.name,
                 face: hitLeft.info.face,
                 faceName: hitLeft.info.face,
-                worldPointMm: { x: leftX, y: centerY, z: centerZ },
+                worldPointMm: toWorldPoint(leftX, centerY, centerZ),
                 planeCoordMm: leftX
             },
             right: {
@@ -1081,7 +1200,7 @@ export function probeBayFromCADPoint(
                 nodeName: hitRight.info.node.name,
                 face: hitRight.info.face,
                 faceName: hitRight.info.face,
-                worldPointMm: { x: rightX, y: centerY, z: centerZ },
+                worldPointMm: toWorldPoint(rightX, centerY, centerZ),
                 planeCoordMm: rightX
             },
             bottom: {
@@ -1089,7 +1208,7 @@ export function probeBayFromCADPoint(
                 nodeName: hitBottom.info.node.name,
                 face: hitBottom.info.face,
                 faceName: hitBottom.info.face,
-                worldPointMm: { x: centerX, y: centerY, z: bottomZ },
+                worldPointMm: toWorldPoint(centerX, centerY, bottomZ),
                 planeCoordMm: bottomZ
             },
             top: {
@@ -1097,7 +1216,7 @@ export function probeBayFromCADPoint(
                 nodeName: topRefNode.name,
                 face: topRefFace,
                 faceName: topRefFace,
-                worldPointMm: { x: centerX, y: centerY, z: topZ },
+                worldPointMm: toWorldPoint(centerX, centerY, topZ),
                 planeCoordMm: topZ,
                 slopeAngleDeg: roofAngleDeg
             },
@@ -1106,7 +1225,7 @@ export function probeBayFromCADPoint(
                 nodeName: hitBack ? hitBack.info.node.name : 'Tylna krawędź',
                 face: backFaceName,
                 faceName: backFaceName,
-                worldPointMm: { x: centerX, y: backY, z: centerZ },
+                worldPointMm: toWorldPoint(centerX, backY, centerZ),
                 planeCoordMm: backY
             },
             front: {
@@ -1114,7 +1233,7 @@ export function probeBayFromCADPoint(
                 nodeName: hitFront ? hitFront.info.node.name : 'Przód Korpusu',
                 face: frontFaceName,
                 faceName: frontFaceName,
-                worldPointMm: { x: centerX, y: frontPlaneY, z: centerZ },
+                worldPointMm: toWorldPoint(centerX, frontPlaneY, centerZ),
                 planeCoordMm: frontPlaneY
             },
             frontPlaneYMm: frontPlaneY
@@ -1143,18 +1262,17 @@ export function detectCabinetOuterHull(
     let cabinetNode: CADNode | null = null;
 
     if (typeof target === 'string') {
-        const found = document.findNode(target) || allNodes.find(n => n.name === target || n.id === target);
-        if (found) {
-            let curr: CADNode | null = found;
-            while (curr && curr.id !== document.rootNode.id) {
-                if (curr.domainData?.type === 'container' || (curr.domainData as any)?.generatorParams) {
-                    cabinetNode = curr;
-                    break;
-                }
-                curr = curr.parent;
+        const found = document.findNode(target);
+        if (!found) return null;
+        let curr: CADNode | null = found;
+        while (curr && curr.id !== document.rootNode.id) {
+            if (curr.domainData?.type === 'container' || (curr.domainData as any)?.generatorParams) {
+                cabinetNode = curr;
+                break;
             }
-            if (!cabinetNode) cabinetNode = found;
+            curr = curr.parent;
         }
+        if (!cabinetNode) cabinetNode = found;
     } else if (target && typeof (target as any).id === 'string' && (target as any).children) {
         let curr: CADNode | null = target as CADNode;
         while (curr && curr.id !== document.rootNode.id) {
@@ -1167,9 +1285,6 @@ export function detectCabinetOuterHull(
         if (!cabinetNode) cabinetNode = target as CADNode;
     }
 
-    const faces = collectScenePanelFaces(document);
-    if (faces.length === 0) return null;
-
     // Zbierz wszystkie kontenery korpusów w scenie
     const containers = allNodes.filter(n =>
         n.domainData?.type === 'container' &&
@@ -1180,31 +1295,35 @@ export function detectCabinetOuterHull(
     if (!cabinetNode) {
         if (target && typeof (target as any).x === 'number') {
             const pt = target as { x: number; y: number; z: number };
-            let bestDist = Infinity;
-            for (const c of containers) {
-                const cFaces = faces.filter(f => {
-                    let p: CADNode | null = f.node;
-                    while (p) {
-                        if (p.id === c.id) return true;
-                        p = p.parent;
-                    }
-                    return false;
-                });
-                if (cFaces.length === 0) continue;
-                const minX = Math.min(...cFaces.map(f => f.minBoundsMm.x));
-                const maxX = Math.max(...cFaces.map(f => f.maxBoundsMm.x));
-                const minY = Math.min(...cFaces.map(f => f.minBoundsMm.y));
-                const maxY = Math.max(...cFaces.map(f => f.maxBoundsMm.y));
-                const minZ = Math.min(...cFaces.map(f => f.minBoundsMm.z));
-                const maxZ = Math.max(...cFaces.map(f => f.maxBoundsMm.z));
+            cabinetNode = findCabinetForCADPoint(document, pt);
+            if (!cabinetNode) {
+                const worldFaces = collectScenePanelFaces(document);
+                let bestDist = Infinity;
+                for (const c of containers) {
+                    const cFaces = worldFaces.filter(f => {
+                        let p: CADNode | null = f.node;
+                        while (p) {
+                            if (p.id === c.id) return true;
+                            p = p.parent;
+                        }
+                        return false;
+                    });
+                    if (cFaces.length === 0) continue;
+                    const minX = Math.min(...cFaces.map(f => f.minBoundsMm.x));
+                    const maxX = Math.max(...cFaces.map(f => f.maxBoundsMm.x));
+                    const minY = Math.min(...cFaces.map(f => f.minBoundsMm.y));
+                    const maxY = Math.max(...cFaces.map(f => f.maxBoundsMm.y));
+                    const minZ = Math.min(...cFaces.map(f => f.minBoundsMm.z));
+                    const maxZ = Math.max(...cFaces.map(f => f.maxBoundsMm.z));
 
-                const cX = (minX + maxX) / 2;
-                const cY = (minY + maxY) / 2;
-                const cZ = (minZ + maxZ) / 2;
-                const dist = Math.hypot(pt.x - cX, pt.y - cY, pt.z - cZ);
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    cabinetNode = c;
+                    const cX = (minX + maxX) / 2;
+                    const cY = (minY + maxY) / 2;
+                    const cZ = (minZ + maxZ) / 2;
+                    const dist = Math.hypot(pt.x - cX, pt.y - cY, pt.z - cZ);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        cabinetNode = c;
+                    }
                 }
             }
         }
@@ -1213,6 +1332,9 @@ export function detectCabinetOuterHull(
             cabinetNode = containers[0];
         }
     }
+
+    const faces = collectScenePanelFaces(document, cabinetNode);
+    if (faces.length === 0) return null;
 
     // Filtruj ściany tylko dla wybranego korpusu (lub wszystkie sceny jeśli brak kontenera)
     const targetFaces = cabinetNode
@@ -1249,19 +1371,14 @@ export function detectCabinetOuterHull(
     // Priorytet: rola formatki (BOTTOM/SIDE/TOP), potem geometria —
     // inaczej dół łapie krawędź boku (minZ + normalna −Z) zamiast wieńca.
     const roleOf = (f: PanelFaceInfo) => String(f.panel.role || '').toUpperCase();
-    const nameOf = (f: PanelFaceInfo) => String(f.node.name || '').toUpperCase();
     const isBottomRole = (f: PanelFaceInfo) =>
-        roleOf(f) === 'BOTTOM_PANEL' || roleOf(f) === 'WIENIEC_D' ||
-        nameOf(f).includes('WIENIEC_D') || nameOf(f).includes('WIENIEC DOLNY') || nameOf(f).includes('DNO');
+        roleOf(f) === 'BOTTOM_PANEL' || roleOf(f) === 'WIENIEC_D';
     const isTopRole = (f: PanelFaceInfo) =>
-        roleOf(f) === 'TOP_PANEL' || roleOf(f) === 'WIENIEC_G' ||
-        nameOf(f).includes('WIENIEC_G') || nameOf(f).includes('WIENIEC GOR');
+        roleOf(f) === 'TOP_PANEL' || roleOf(f) === 'WIENIEC_G';
     const isLeftRole = (f: PanelFaceInfo) =>
-        roleOf(f) === 'LEFT_SIDE_PANEL' || roleOf(f) === 'SIDE_LEFT' || roleOf(f) === 'BOK_L' ||
-        nameOf(f).includes('BOK_L') || nameOf(f).includes('BOK LEWY');
+        roleOf(f) === 'LEFT_SIDE_PANEL' || roleOf(f) === 'SIDE_LEFT' || roleOf(f) === 'BOK_L';
     const isRightRole = (f: PanelFaceInfo) =>
-        roleOf(f) === 'RIGHT_SIDE_PANEL' || roleOf(f) === 'SIDE_RIGHT' || roleOf(f) === 'BOK_P' ||
-        nameOf(f).includes('BOK_P') || nameOf(f).includes('BOK PRAW');
+        roleOf(f) === 'RIGHT_SIDE_PANEL' || roleOf(f) === 'SIDE_RIGHT' || roleOf(f) === 'BOK_P';
 
     // Lewy bok: formatka przy minX, lico zewnętrzne (normalna −X)
     let leftFace =
@@ -1313,10 +1430,16 @@ export function detectCabinetOuterHull(
             ? (frontFace.face as FaceName)
             : 'FACE_Y_MINUS';
 
+    const toWorldPoint = (lx: number, ly: number, lz: number): { x: number; y: number; z: number } => {
+        if (!cabinetNode) return { x: lx, y: ly, z: lz };
+        const wNm = cabinetNode.getWorldMatrix().transformPoint(new Vec3(mmToNm(lx), mmToNm(ly), mmToNm(lz)));
+        return { x: nmToMm(wNm.x), y: nmToMm(wNm.y), z: nmToMm(wNm.z) };
+    };
+
     return {
         boundsMm: { width, height, depth },
         boundsNm: { width: mmToNm(width), height: mmToNm(height), depth: mmToNm(depth) },
-        centerWorldMm: { x: centerX, y: centerY, z: centerZ },
+        centerWorldMm: toWorldPoint(centerX, centerY, centerZ),
         parentCabinetId: cabinetNode?.id,
         boundary: {
             left: {
@@ -1324,7 +1447,7 @@ export function detectCabinetOuterHull(
                 nodeName: leftFace.node.name || 'Bok Lewy (Zewnętrzny)',
                 face: 'FACE_Z_MINUS',
                 faceName: 'FACE_Z_MINUS',
-                worldPointMm: { x: minX, y: centerY, z: centerZ },
+                worldPointMm: toWorldPoint(minX, centerY, centerZ),
                 planeCoordMm: minX
             },
             right: {
@@ -1332,7 +1455,7 @@ export function detectCabinetOuterHull(
                 nodeName: rightFace.node.name || 'Bok Prawy (Zewnętrzny)',
                 face: 'FACE_Z_MINUS',
                 faceName: 'FACE_Z_MINUS',
-                worldPointMm: { x: maxX, y: centerY, z: centerZ },
+                worldPointMm: toWorldPoint(maxX, centerY, centerZ),
                 planeCoordMm: maxX
             },
             bottom: {
@@ -1340,7 +1463,7 @@ export function detectCabinetOuterHull(
                 nodeName: bottomFace.node.name || 'Dół (Zewnętrzny)',
                 face: 'FACE_Z_MINUS',
                 faceName: 'FACE_Z_MINUS',
-                worldPointMm: { x: centerX, y: centerY, z: minZ },
+                worldPointMm: toWorldPoint(centerX, centerY, minZ),
                 planeCoordMm: minZ
             },
             top: {
@@ -1348,7 +1471,7 @@ export function detectCabinetOuterHull(
                 nodeName: topFace.node.name || 'Góra (Zewnętrzny)',
                 face: 'FACE_Z_MINUS',
                 faceName: 'FACE_Z_MINUS',
-                worldPointMm: { x: centerX, y: centerY, z: maxZ },
+                worldPointMm: toWorldPoint(centerX, centerY, maxZ),
                 planeCoordMm: maxZ
             },
             back: {
@@ -1356,7 +1479,7 @@ export function detectCabinetOuterHull(
                 nodeName: backFace.node.name || 'Tył (Zewnętrzny)',
                 face: backFaceName,
                 faceName: backFaceName,
-                worldPointMm: { x: centerX, y: maxY, z: centerZ },
+                worldPointMm: toWorldPoint(centerX, maxY, centerZ),
                 planeCoordMm: maxY
             },
             front: {
@@ -1364,7 +1487,7 @@ export function detectCabinetOuterHull(
                 nodeName: frontFace.node.name || 'Przód (Zewnętrzny)',
                 face: frontFaceName,
                 faceName: frontFaceName,
-                worldPointMm: { x: centerX, y: minY, z: centerZ },
+                worldPointMm: toWorldPoint(centerX, minY, centerZ),
                 planeCoordMm: minY
             },
             frontPlaneYMm: minY
@@ -1387,9 +1510,18 @@ export function probeBayFromSceneRay(
     document: ProjectDocument,
     mode: 'internal' | 'external' = 'internal'
 ): DetectedBay | null {
+    const resolvePanelNode = (mesh: any): CADNode | null => {
+        const panel = mesh?.metadata?.panelModel || mesh?.metadata?.model ||
+            mesh?.parent?.metadata?.panelModel || mesh?.parent?.metadata?.model;
+        const nodeId = panel?.id || mesh?.metadata?.nodeId || mesh?.parent?.metadata?.nodeId;
+        return nodeId ? document.findNode(nodeId) : null;
+    };
+
     if (mode === 'external') {
         const pickedMesh = pickResult?.pickedMesh;
-        const targetId = pickedMesh?.metadata?.panelModel?.id || pickedMesh?.parent?.name || pickedMesh?.name;
+        const targetId = resolvePanelNode(pickedMesh)?.id ||
+            pickedMesh?.metadata?.panelModel?.id ||
+            pickedMesh?.metadata?.nodeId;
         const targetPoint = pickResult?.pickedPoint ? {
             x: pickResult.pickedPoint.x,
             y: pickResult.pickedPoint.z, // Babylon Z = CAD Y
@@ -1439,17 +1571,13 @@ export function probeBayFromSceneRay(
                 if (nodeRole) role = nodeRole;
             }
         }
-        if (!docNode && m.parent && document) {
-            const allPanels = typeof (document as any).getPanels === 'function' ? (document as any).getPanels() : [];
-            const found = allPanels.find((n: any) => n.name === m.parent.name || n.id === m.parent.name);
-            if (found) {
-                docNode = found;
-                const nodeRole = String((found.domainData as any)?.role || '').toUpperCase();
-                if (nodeRole) role = nodeRole;
-            }
+        if (!docNode) {
+            docNode = resolvePanelNode(m);
+            const nodeRole = String((docNode?.domainData as any)?.role || '').toUpperCase();
+            if (nodeRole) role = nodeRole;
         }
 
-        const isDividing = isBayDividingPanel(role, name || docNode?.name);
+        const isDividing = isBayDividingPanel(role);
 
         if (!isDividing && (name.endsWith('_SB') || name.includes('bloki'))) {
             return false;
@@ -1500,15 +1628,12 @@ export function probeBayFromSceneRay(
                 role = String(m.metadata.panelModel.role || '');
             }
         }
-        if (!id && m.parent) {
-            name = m.parent.name || '';
-            if (document) {
-                const allPanels = typeof (document as any).getPanels === 'function' ? (document as any).getPanels() : [];
-                const found = allPanels.find((n: any) => n.name === name || n.id === name);
-                if (found) {
-                    id = found.id;
-                    role = String((found.domainData as any)?.role || '');
-                }
+        if (!id) {
+            const node = resolvePanelNode(m);
+            if (node) {
+                id = node.id;
+                name = node.name;
+                role = String((node.domainData as any)?.role || '');
             }
         }
         if (!role && m.metadata?.role) {
@@ -1533,52 +1658,34 @@ export function probeBayFromSceneRay(
                 }
             }
         } else {
-            const isDivider = isBayDividingPanel(role, name) &&
-                (role.toUpperCase().includes('DIVIDER') || name.toUpperCase().includes('PRZEGRODA'));
+            const isDivider = isBayDividingPanel(role) && role.toUpperCase().includes('DIVIDER');
             if (isDivider && dir === 'LEFT') {
                 face = 'FACE_Z_MINUS';
             } else {
                 face = fallbackFace;
             }
         }
-        return { id: id || m.id || '', name: name || m.name || '', face };
+        return { id: id || m.metadata?.nodeId || '', name: name || m.name || '', face };
     };
 
-    const maxDist = 3500;
-    let hitLeft = scene.pickWithRay(new B.Ray(origin, new B.Vector3(-1, 0, 0), maxDist), predicate, false);
-    let hitRight = scene.pickWithRay(new B.Ray(origin, new B.Vector3(1, 0, 0), maxDist), predicate, false);
-    let hitBottom = scene.pickWithRay(new B.Ray(origin, new B.Vector3(0, -1, 0), maxDist), predicate, false);
-    let hitBack = scene.pickWithRay(new B.Ray(origin, new B.Vector3(0, 0, 1), maxDist), predicate, false);
-    let hitFront = scene.pickWithRay(new B.Ray(origin, new B.Vector3(0, 0, -1), maxDist), predicate, false);
-
-    // Fallback gdy punkt leżał na dnie lub ściance i odsunięcie poszło w stronę ściany
-    if (!hitBottom?.hit || !hitLeft?.hit || !hitRight?.hit) {
-        const altOrigin = p.subtract(norm.scale(6));
-        const altHitLeft = !hitLeft?.hit ? scene.pickWithRay(new B.Ray(altOrigin, new B.Vector3(-1, 0, 0), maxDist), predicate, false) : hitLeft;
-        const altHitRight = !hitRight?.hit ? scene.pickWithRay(new B.Ray(altOrigin, new B.Vector3(1, 0, 0), maxDist), predicate, false) : hitRight;
-        const altHitBottom = !hitBottom?.hit ? scene.pickWithRay(new B.Ray(altOrigin, new B.Vector3(0, -1, 0), maxDist), predicate, false) : hitBottom;
-
-        if (altHitLeft?.hit) hitLeft = altHitLeft;
-        if (altHitRight?.hit) hitRight = altHitRight;
-        if (altHitBottom?.hit) hitBottom = altHitBottom;
+    // 1. Zidentyfikuj korpus szafki przed raycastem, aby wyznaczyć lokalny układ współrzędnych i kierunki promieni
+    const pickedMesh = pickResult?.pickedMesh;
+    let initialNode: CADNode | null = null;
+    if (pickedMesh?.metadata?.panelModel && document) {
+        initialNode = document.findNode(pickedMesh.metadata.panelModel.id);
     }
-
-    if (!hitLeft?.hit || !hitRight?.hit || !hitBottom?.hit) {
-        return null;
+    if (!initialNode && pickedMesh?.parent && document) {
+        initialNode = resolvePanelNode(pickedMesh);
     }
-
-    const leftInfo = resolveNode(hitLeft, 'FACE_Z_PLUS', 'LEFT');
-    const rightInfo = resolveNode(hitRight, 'FACE_Z_PLUS', 'RIGHT');
-    const bottomInfo = resolveNode(hitBottom, 'FACE_Z_PLUS', 'BOTTOM');
-    const backInfo = resolveNode(hitBack, 'FACE_Z_PLUS', 'BACK');
-    const frontInfo = resolveNode(hitFront, 'FACE_Y_MINUS', 'FRONT');
-
-    // Korpus z boków wnęki — blok w zakresie jednego korpusu
-    const sideNode = (leftInfo.id ? document.findNode(leftInfo.id) : null)
-        || (rightInfo.id ? document.findNode(rightInfo.id) : null)
-        || (bottomInfo.id ? document.findNode(bottomInfo.id) : null)
-        || (pickResult?.pickedMesh?.metadata?.panelModel?.id ? document.findNode(pickResult.pickedMesh.metadata.panelModel.id) : null);
-    let parentCabinet = findKorpusContainer(sideNode, document);
+    let parentCabinet = findKorpusContainer(initialNode, document);
+    if (!parentCabinet && document && pickResult.pickedPoint) {
+        const cadPtMm = {
+            x: pickResult.pickedPoint.x,
+            y: pickResult.pickedPoint.z, // Babylon Z = CAD Y
+            z: pickResult.pickedPoint.y  // Babylon Y = CAD Z
+        };
+        parentCabinet = findCabinetForCADPoint(document, cadPtMm);
+    }
     if (!parentCabinet && document) {
         for (const child of document.rootNode.children) {
             const found = findKorpusContainer(child, document);
@@ -1588,8 +1695,117 @@ export function probeBayFromSceneRay(
             }
         }
     }
+
     const parentCabinetId = parentCabinet?.id;
+    const cabMat = parentCabinet ? parentCabinet.getWorldMatrix() : Mat4.identity();
+    const invCab = cabMat.invert();
+
+    const toRenderDir = (localDir: Vec3) => {
+        const cadWorldDir = cabMat.transformDirection(localDir).normalize();
+        const r = cadToRender(cadWorldDir).normalize();
+        return new B.Vector3(r.x, r.y, r.z);
+    };
+
+    const dirLeft = toRenderDir(new Vec3(-1, 0, 0));
+    const dirRight = toRenderDir(new Vec3(1, 0, 0));
+    const dirBottom = toRenderDir(new Vec3(0, 0, -1));
+    const dirTop = toRenderDir(new Vec3(0, 0, 1));
+    const dirBack = toRenderDir(new Vec3(0, 1, 0));
+    const dirFront = toRenderDir(new Vec3(0, -1, 0));
+
+    const babylonToCabLocal = (bp: { x: number; y: number; z: number }): Vec3 => {
+        const cadPtNm = new Vec3(mmToNm(bp.x), mmToNm(bp.z), mmToNm(bp.y));
+        const localNm = invCab.transformPoint(cadPtNm);
+        return new Vec3(nmToMm(localNm.x), nmToMm(localNm.y), nmToMm(localNm.z));
+    };
+
+    const toWorldPoint = (lx: number, ly: number, lz: number): { x: number; y: number; z: number } => {
+        const ptNm = cabMat.transformPoint(new Vec3(mmToNm(lx), mmToNm(ly), mmToNm(lz)));
+        return { x: nmToMm(ptNm.x), y: nmToMm(ptNm.y), z: nmToMm(ptNm.z) };
+    };
+
+    const maxDist = 3500;
+    let hitLeft = scene.pickWithRay(new B.Ray(origin, dirLeft, maxDist), predicate, false);
+    let hitRight = scene.pickWithRay(new B.Ray(origin, dirRight, maxDist), predicate, false);
+    let hitBottom = scene.pickWithRay(new B.Ray(origin, dirBottom, maxDist), predicate, false);
+    let hitBack = scene.pickWithRay(new B.Ray(origin, dirBack, maxDist), predicate, false);
+    let hitFront = scene.pickWithRay(new B.Ray(origin, dirFront, maxDist), predicate, false);
+
+    // Fallback gdy punkt leżał na dnie lub ściance i odsunięcie poszło w stronę ściany
+    if (!hitBottom?.hit || !hitLeft?.hit || !hitRight?.hit) {
+        const altOrigin = p.subtract(norm.scale(6));
+        const altHitLeft = !hitLeft?.hit ? scene.pickWithRay(new B.Ray(altOrigin, dirLeft, maxDist), predicate, false) : hitLeft;
+        const altHitRight = !hitRight?.hit ? scene.pickWithRay(new B.Ray(altOrigin, dirRight, maxDist), predicate, false) : hitRight;
+        const altHitBottom = !hitBottom?.hit ? scene.pickWithRay(new B.Ray(altOrigin, dirBottom, maxDist), predicate, false) : hitBottom;
+
+        if (altHitLeft?.hit) hitLeft = altHitLeft;
+        if (altHitRight?.hit) hitRight = altHitRight;
+        if (altHitBottom?.hit) hitBottom = altHitBottom;
+    }
+
     const gp = (parentCabinet?.domainData as any)?.generatorParams;
+    const rawCabDepth = (parentCabinet?.domainData as any)?.depth;
+    const rawCabWidth = (parentCabinet?.domainData as any)?.width;
+    const rawCabHeight = (parentCabinet?.domainData as any)?.height;
+
+    const cabinetWidthMm = gp?.szerokosc_mm ?? (rawCabWidth ? nmToMm(rawCabWidth) : 600);
+    const cabinetDepthMm = gp?.glebokosc_mm ?? (rawCabDepth ? nmToMm(rawCabDepth) : 600);
+    const cabinetHeightMm = gp?.wysokosc_przod_mm ?? gp?.wysokosc_mm ?? (rawCabHeight ? nmToMm(rawCabHeight) : 720);
+
+    let leftX: number;
+    let rightX: number;
+    let bottomZ: number;
+
+    let leftInfo: { id: string; name: string; face: FaceName };
+    let rightInfo: { id: string; name: string; face: FaceName };
+    let bottomInfo: { id: string; name: string; face: FaceName };
+
+    if (hitLeft?.hit) {
+        leftX = babylonToCabLocal(hitLeft.pickedPoint).x;
+        leftInfo = resolveNode(hitLeft, 'FACE_Z_PLUS', 'LEFT');
+    } else if (parentCabinet) {
+        leftX = -cabinetWidthMm / 2;
+        leftInfo = { id: parentCabinetId || '', name: parentCabinet.name || 'Bok Lewy Korpusu', face: 'FACE_Z_PLUS' };
+    } else {
+        return null;
+    }
+
+    if (hitRight?.hit) {
+        rightX = babylonToCabLocal(hitRight.pickedPoint).x;
+        rightInfo = resolveNode(hitRight, 'FACE_Z_PLUS', 'RIGHT');
+    } else if (parentCabinet) {
+        rightX = cabinetWidthMm / 2;
+        rightInfo = { id: parentCabinetId || '', name: parentCabinet.name || 'Bok Prawy Korpusu', face: 'FACE_Z_MINUS' };
+    } else {
+        return null;
+    }
+
+    if (leftX > rightX) {
+        const tmpX = leftX; leftX = rightX; rightX = tmpX;
+        const tmpInfo = leftInfo; leftInfo = rightInfo; rightInfo = tmpInfo;
+    }
+
+    if (hitBottom?.hit) {
+        const initialBottom = babylonToCabLocal(hitBottom.pickedPoint);
+        const bayCenterX = (leftX + rightX) / 2;
+        const safeStartLocal = new Vec3(bayCenterX, initialBottom.y, initialBottom.z + 10);
+        const safeStartCadNm = cabMat.transformPoint(new Vec3(mmToNm(safeStartLocal.x), mmToNm(safeStartLocal.y), mmToNm(safeStartLocal.z)));
+        const safeStartRender = cadToRender(new Vec3(nmToMm(safeStartCadNm.x), nmToMm(safeStartCadNm.y), nmToMm(safeStartCadNm.z)));
+        const centerOrigin = new B.Vector3(safeStartRender.x, safeStartRender.y, safeStartRender.z);
+        const centerHitBottom = scene.pickWithRay(new B.Ray(centerOrigin, dirBottom, maxDist), predicate, false);
+        if (centerHitBottom?.hit) hitBottom = centerHitBottom;
+        bottomZ = babylonToCabLocal(hitBottom.pickedPoint).z;
+        bottomInfo = resolveNode(hitBottom, 'FACE_Z_PLUS', 'BOTTOM');
+    } else if (parentCabinet) {
+        bottomZ = 0;
+        bottomInfo = { id: parentCabinetId || '', name: parentCabinet.name || 'Dół Korpusu', face: 'FACE_Z_PLUS' };
+    } else {
+        return null;
+    }
+
+    const backInfo = resolveNode(hitBack, 'FACE_Z_PLUS', 'BACK');
+    const frontInfo = resolveNode(hitFront, 'FACE_Y_MINUS', 'FRONT');
+
     const cabType = String(
         gp?.typ_korpusu ||
         gp?.type ||
@@ -1601,23 +1817,8 @@ export function probeBayFromSceneRay(
     const isSkosnyLr = cabType.includes('skosny_lr') || (cabType.includes('skosny') && (gp?.wysokosc_lewy_mm != null || gp?.wysokosc_prawy_mm != null));
     const isSkosnyFb = !isSkosnyLr && (cabType.includes('skosny') || gp?.wysokosc_przod_mm != null || gp?.wysokosc_tyl_mm != null);
 
-    const leftX = hitLeft.pickedPoint.x;
-    const rightX = hitRight.pickedPoint.x;
-    const bayCenterX = (leftX + rightX) / 2;
-
-    const initialBottomY = hitBottom.pickedPoint.y;
-    const safeStartY = initialBottomY + 10;
-    const centerOrigin = new B.Vector3(bayCenterX, safeStartY, origin.z);
-
-    const centerHitBottom = scene.pickWithRay(new B.Ray(centerOrigin, new B.Vector3(0, -1, 0), maxDist), predicate, false);
-    if (centerHitBottom?.hit) hitBottom = centerHitBottom;
-    const bottomY = hitBottom.pickedPoint.y;
-
-    const cabOriginNm = parentCabinet?.getWorldMatrix().transformPoint(new Vec3(0, 0, 0));
-    const cabBaseYMm = cabOriginNm ? nmToMm(cabOriginNm.z) : 0; // Babylon Y = CAD Z
-
     let hitTop: any = null;
-    let topY: number;
+    let topZ: number;
     let topInfo: { id: string; name: string; face: FaceName };
     let heightLeftMm: number | undefined;
     let heightRightMm: number | undefined;
@@ -1626,52 +1827,71 @@ export function probeBayFromSceneRay(
     if (isSkosnyFb) {
         // Dla skosu w głąb: ZERO raycastu do skośnego wieńca! Na sztywno bierzemy top SmartFrame.
         const cabHeightMm = gp?.wysokosc_przod_mm ?? gp?.wysokosc_mm ?? ((parentCabinet?.domainData as any)?.height ? nmToMm((parentCabinet.domainData as any).height) : 2200);
-        topY = cabBaseYMm + cabHeightMm;
+        topZ = cabHeightMm;
         topInfo = {
             id: parentCabinetId || '',
             name: parentCabinet?.name || 'Góra Korpusu',
             face: 'FACE_Z_MINUS'
         };
     } else {
-        hitTop = scene.pickWithRay(new B.Ray(origin, new B.Vector3(0, 1, 0), maxDist), predicate, false);
+        const bayCenterX = (leftX + rightX) / 2;
+        const localOrigin = babylonToCabLocal(origin);
+        const safeStartLocal = new Vec3(bayCenterX, localOrigin.y, bottomZ + 10);
+        const safeStartCadNm = cabMat.transformPoint(new Vec3(mmToNm(safeStartLocal.x), mmToNm(safeStartLocal.y), mmToNm(safeStartLocal.z)));
+        const safeStartRender = cadToRender(new Vec3(nmToMm(safeStartCadNm.x), nmToMm(safeStartCadNm.y), nmToMm(safeStartCadNm.z)));
+        const centerOrigin = new B.Vector3(safeStartRender.x, safeStartRender.y, safeStartRender.z);
+
+        hitTop = scene.pickWithRay(new B.Ray(origin, dirTop, maxDist), predicate, false);
         if (!hitTop?.hit) {
             const altOrigin = p.subtract(norm.scale(6));
-            const altHitTop = scene.pickWithRay(new B.Ray(altOrigin, new B.Vector3(0, 1, 0), maxDist), predicate, false);
+            const altHitTop = scene.pickWithRay(new B.Ray(altOrigin, dirTop, maxDist), predicate, false);
             if (altHitTop?.hit) hitTop = altHitTop;
         }
-        if (!hitTop?.hit) {
+        if (hitTop?.hit) {
+            const centerHitTop = scene.pickWithRay(new B.Ray(centerOrigin, dirTop, maxDist), predicate, false);
+            if (centerHitTop?.hit) hitTop = centerHitTop;
+            topZ = babylonToCabLocal(hitTop.pickedPoint).z;
+
+            // Dokładny pomiar wysokości dachu przy lewej i prawej ścianie wnęki (dla skosu LR)
+            const probeMargin = Math.min(20, Math.max(5, (rightX - leftX) * 0.05));
+            const pLeftLocal = new Vec3(leftX + probeMargin, safeStartLocal.y, safeStartLocal.z);
+            const pRightLocal = new Vec3(rightX - probeMargin, safeStartLocal.y, safeStartLocal.z);
+            const pLeftCadNm = cabMat.transformPoint(new Vec3(mmToNm(pLeftLocal.x), mmToNm(pLeftLocal.y), mmToNm(pLeftLocal.z)));
+            const pRightCadNm = cabMat.transformPoint(new Vec3(mmToNm(pRightLocal.x), mmToNm(pRightLocal.y), mmToNm(pRightLocal.z)));
+            const rLeft = cadToRender(new Vec3(nmToMm(pLeftCadNm.x), nmToMm(pLeftCadNm.y), nmToMm(pLeftCadNm.z)));
+            const rRight = cadToRender(new Vec3(nmToMm(pRightCadNm.x), nmToMm(pRightCadNm.y), nmToMm(pRightCadNm.z)));
+
+            const rayLeft = new B.Ray(new B.Vector3(rLeft.x, rLeft.y, rLeft.z), dirTop, maxDist);
+            const rayRight = new B.Ray(new B.Vector3(rRight.x, rRight.y, rRight.z), dirTop, maxDist);
+            const hitTopLeft = scene.pickWithRay(rayLeft, predicate, false);
+            const hitTopRight = scene.pickWithRay(rayRight, predicate, false);
+
+            if (hitTopLeft?.hit && hitTopRight?.hit) {
+                const zLeftMeasured = babylonToCabLocal(hitTopLeft.pickedPoint).z;
+                const zRightMeasured = babylonToCabLocal(hitTopRight.pickedPoint).z;
+                const dx = (rightX - probeMargin) - (leftX + probeMargin);
+                const dz = zRightMeasured - zLeftMeasured;
+                const slope = dx !== 0 ? dz / dx : 0;
+                const zTopLeftMeasured = zLeftMeasured - probeMargin * slope;
+                const zTopRightMeasured = zRightMeasured + probeMargin * slope;
+                heightLeftMm = Math.max(10, zTopLeftMeasured - bottomZ);
+                heightRightMm = Math.max(10, zTopRightMeasured - bottomZ);
+                if (Math.abs(dz) > 1) {
+                    measuredAngleDeg = (Math.atan(slope) * 180) / Math.PI;
+                }
+            }
+
+            topInfo = resolveNode(hitTop, 'FACE_Z_MINUS', 'TOP');
+        } else if (parentCabinet) {
+            topZ = cabinetHeightMm;
+            topInfo = { id: parentCabinetId || '', name: parentCabinet.name || 'Góra Korpusu', face: 'FACE_Z_MINUS' };
+        } else {
             return null;
         }
-
-        const centerHitTop = scene.pickWithRay(new B.Ray(centerOrigin, new B.Vector3(0, 1, 0), maxDist), predicate, false);
-        if (centerHitTop?.hit) hitTop = centerHitTop;
-        topY = hitTop.pickedPoint.y;
-
-        // Dokładny pomiar wysokości dachu przy lewej i prawej ścianie wnęki (dla skosu LR)
-        const probeMargin = Math.min(20, Math.max(5, (rightX - leftX) * 0.05));
-        const rayLeft = new B.Ray(new B.Vector3(leftX + probeMargin, safeStartY, origin.z), new B.Vector3(0, 1, 0), maxDist);
-        const rayRight = new B.Ray(new B.Vector3(rightX - probeMargin, safeStartY, origin.z), new B.Vector3(0, 1, 0), maxDist);
-        const hitTopLeft = scene.pickWithRay(rayLeft, predicate, false);
-        const hitTopRight = scene.pickWithRay(rayRight, predicate, false);
-
-        if (hitTopLeft?.hit && hitTopRight?.hit) {
-            const dx = (rightX - probeMargin) - (leftX + probeMargin);
-            const dy = hitTopRight.pickedPoint.y - hitTopLeft.pickedPoint.y;
-            const slope = dx !== 0 ? dy / dx : 0;
-            const yTopLeftMeasured = hitTopLeft.pickedPoint.y - probeMargin * slope;
-            const yTopRightMeasured = hitTopRight.pickedPoint.y + probeMargin * slope;
-            heightLeftMm = Math.max(10, yTopLeftMeasured - bottomY);
-            heightRightMm = Math.max(10, yTopRightMeasured - bottomY);
-            if (Math.abs(dy) > 1) {
-                measuredAngleDeg = (Math.atan(slope) * 180) / Math.PI;
-            }
-        }
-
-        topInfo = resolveNode(hitTop, 'FACE_Z_MINUS', 'TOP');
     }
 
     // Minimalne wymiary wnęki (min 60 mm szerokości i wysokości)
-    if (Math.abs(rightX - leftX) < 60 || Math.abs(topY - bottomY) < 60) {
+    if (Math.abs(rightX - leftX) < 60 || Math.abs(topZ - bottomZ) < 60) {
         return null;
     }
 
@@ -1679,18 +1899,18 @@ export function probeBayFromSceneRay(
     if (!leftInfo.id || !rightInfo.id || !bottomInfo.id || !topInfo.id) {
         return null;
     }
-    if (leftInfo.id === rightInfo.id || bottomInfo.id === topInfo.id) {
+    if (leftInfo.id === rightInfo.id && leftInfo.id !== parentCabinetId) {
         return null;
     }
-    if (leftInfo.id === bottomInfo.id || leftInfo.id === topInfo.id) {
+    if (bottomInfo.id === topInfo.id && bottomInfo.id !== parentCabinetId) {
         return null;
     }
-    if (rightInfo.id === bottomInfo.id || rightInfo.id === topInfo.id) {
+    if ((leftInfo.id === bottomInfo.id || leftInfo.id === topInfo.id) && leftInfo.id !== parentCabinetId) {
         return null;
     }
-
-    const rawCabDepth = (parentCabinet?.domainData as any)?.depth;
-    const cabinetDepthMm = rawCabDepth ? nmToMm(rawCabDepth) : undefined;
+    if ((rightInfo.id === bottomInfo.id || rightInfo.id === topInfo.id) && rightInfo.id !== parentCabinetId) {
+        return null;
+    }
 
     // Odrzuć trafienie przodu/tyłu spoza tego korpusu (np. szafa stojąca przed wnęką)
     const frontNode = frontInfo.id ? document.findNode(frontInfo.id) : null;
@@ -1698,38 +1918,35 @@ export function probeBayFromSceneRay(
     const frontInCabinet = !!(hitFront?.hit && isNodeUnderCabinet(frontNode, parentCabinetId));
     const backInCabinet = !!(hitBack?.hit && isNodeUnderCabinet(backNode, parentCabinetId));
 
-    const refMesh = hitLeft.pickedMesh || hitRight.pickedMesh;
-    const refBb = refMesh?.getBoundingInfo()?.boundingBox;
-
-    let backZ = backInCabinet ? hitBack.pickedPoint.z : (refBb ? refBb.maximumWorld.z : p.z + 300);
-    let frontZ: number;
+    let backY = backInCabinet ? babylonToCabLocal(hitBack.pickedPoint).y : (cabinetDepthMm / 2);
+    let frontPlaneY: number;
     let frontFace: FaceName = frontInfo.face;
     if (frontInCabinet) {
-        frontZ = hitFront.pickedPoint.z;
+        frontPlaneY = babylonToCabLocal(hitFront.pickedPoint).y;
     } else if (parentCabinet && cabinetDepthMm !== undefined) {
         // Brak płyty frontowej w tym korpusie → płaszczyzna ze SmartFrame (−D/2)
-        frontZ = smartFrameFrontPlaneYMm(parentCabinet, cabinetDepthMm);
+        frontPlaneY = -cabinetDepthMm / 2;
         frontFace = 'FACE_Y_MINUS';
     } else {
-        frontZ = refBb ? refBb.minimumWorld.z : p.z - 300;
+        frontPlaneY = -cabinetDepthMm / 2;
         frontFace = 'FACE_Y_MINUS';
     }
 
-    if (frontZ > backZ) {
-        const tmp = frontZ;
-        frontZ = backZ;
-        backZ = tmp;
+    if (frontPlaneY > backY) {
+        const tmp = frontPlaneY;
+        frontPlaneY = backY;
+        backY = tmp;
     }
 
     const width = Math.max(10, Math.abs(rightX - leftX));
-    const depth = Math.max(10, Math.abs(backZ - frontZ));
+    const depth = Math.max(10, Math.abs(backY - frontPlaneY));
+    const effectiveHeight = Math.max(10, topZ - bottomZ);
 
     const centerX = (leftX + rightX) / 2;
-    let centerY = (bottomY + topY) / 2; // Babylon Y = CAD Z (wysokość)
-    const centerZ = (frontZ + backZ) / 2; // Babylon Z = CAD Y (głębokość)
+    const centerY = (frontPlaneY + backY) / 2;
+    const centerZ = (bottomZ + topZ) / 2;
 
     const slopeAxis: 'X' | undefined = (isSkosnyLr && heightLeftMm !== undefined && heightRightMm !== undefined && Math.abs(heightRightMm - heightLeftMm) > 1) ? 'X' : undefined;
-    const effectiveHeight = Math.max(10, topY - bottomY);
 
     const frontRefId = frontInCabinet ? frontInfo.id : (parentCabinetId || frontInfo.id || leftInfo.id);
     const frontRefName = frontInCabinet ? (frontInfo.name || 'Przód') : 'Przód Korpusu';
@@ -1742,7 +1959,8 @@ export function probeBayFromSceneRay(
     if (hitTop?.getNormal) {
         const bn = hitTop.getNormal(true);
         if (bn) {
-            topNormalCAD = new Vec3(bn.x, bn.z, bn.y);
+            const cadWorldNorm = new Vec3(bn.x, bn.z, bn.y);
+            topNormalCAD = invCab.transformDirection(cadWorldNorm).normalize();
         }
     }
     const roofAngleDeg = isSkosnyFb ? undefined : (extractRoofAngleDeg(topNode, parentCabinet, topNormalCAD) ?? measuredAngleDeg);
@@ -1754,7 +1972,7 @@ export function probeBayFromSceneRay(
     return {
         boundsMm: { width, height: effectiveHeight, depth },
         boundsNm: { width: mmToNm(width), height: mmToNm(effectiveHeight), depth: mmToNm(depth) },
-        centerWorldMm: { x: centerX, y: centerZ, z: centerY },
+        centerWorldMm: toWorldPoint(centerX, centerY, centerZ),
         parentCabinetId,
         roofAngleDeg,
         slopeAxis,
@@ -1766,7 +1984,7 @@ export function probeBayFromSceneRay(
                 nodeName: leftInfo.name || 'Bok Lewy',
                 face: leftInfo.face,
                 faceName: leftInfo.face,
-                worldPointMm: { x: leftX, y: centerZ, z: centerY },
+                worldPointMm: toWorldPoint(leftX, centerY, centerZ),
                 planeCoordMm: leftX
             },
             right: {
@@ -1774,7 +1992,7 @@ export function probeBayFromSceneRay(
                 nodeName: rightInfo.name || 'Bok Prawy',
                 face: rightInfo.face,
                 faceName: rightInfo.face,
-                worldPointMm: { x: rightX, y: centerZ, z: centerY },
+                worldPointMm: toWorldPoint(rightX, centerY, centerZ),
                 planeCoordMm: rightX
             },
             bottom: {
@@ -1782,16 +2000,16 @@ export function probeBayFromSceneRay(
                 nodeName: bottomInfo.name || 'Dół',
                 face: bottomInfo.face,
                 faceName: bottomInfo.face,
-                worldPointMm: { x: centerX, y: centerZ, z: bottomY },
-                planeCoordMm: bottomY
+                worldPointMm: toWorldPoint(centerX, centerY, bottomZ),
+                planeCoordMm: bottomZ
             },
             top: {
                 nodeId: topRefId,
                 nodeName: topRefName,
                 face: topFaceName,
                 faceName: topFaceName,
-                worldPointMm: { x: centerX, y: centerZ, z: topY },
-                planeCoordMm: topY,
+                worldPointMm: toWorldPoint(centerX, centerY, topZ),
+                planeCoordMm: topZ,
                 slopeAngleDeg: roofAngleDeg
             },
             back: {
@@ -1799,18 +2017,18 @@ export function probeBayFromSceneRay(
                 nodeName: backRefName,
                 face: backFace,
                 faceName: backFace,
-                worldPointMm: { x: centerX, y: backZ, z: centerY },
-                planeCoordMm: backZ
+                worldPointMm: toWorldPoint(centerX, backY, centerZ),
+                planeCoordMm: backY
             },
             front: {
                 nodeId: frontRefId,
                 nodeName: frontRefName,
                 face: frontFace,
                 faceName: frontFace,
-                worldPointMm: { x: centerX, y: frontZ, z: centerY },
-                planeCoordMm: frontZ
+                worldPointMm: toWorldPoint(centerX, frontPlaneY, centerZ),
+                planeCoordMm: frontPlaneY
             },
-            frontPlaneYMm: frontZ
+            frontPlaneYMm: frontPlaneY
         }
     };
 }

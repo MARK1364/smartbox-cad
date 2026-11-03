@@ -44,6 +44,7 @@ export async function bootstrapScene(): Promise<BootstrapContext> {
 
     const document = new ProjectDocument();
     registerProjectDomain(document);
+    document.ensureGlcNode();
     const propertiesManager = PropertiesManager.instance;
 
     // Bezpieczne zwolnienie poprzedniego silnika w przypadku ponownego uruchomienia (HMR)

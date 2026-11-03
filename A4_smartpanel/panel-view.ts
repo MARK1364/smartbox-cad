@@ -131,6 +131,24 @@ function getOrCreatePanelTexture(url: string, scene: any, onFailed?: () => void)
     }
 }
 
+export function computePanelFeaturesFingerprint(panel: any): string {
+    const f = panel?.features;
+    const fCount = f?.length || 0;
+    const featPart = fCount === 0
+        ? '0'
+        : `${fCount}_` + f.map((feat: any) => {
+            const p = feat.params;
+            return p
+                ? `${feat.id}_${p.u ?? p.x}_${p.v ?? p.y}_${p.width}_${p.length ?? p.height}_${p.depth}_${p.diameter}`
+                : feat.id;
+        }).join(';');
+    const outline = panel?.custom_properties?.outline2d;
+    const outlinePart = Array.isArray(outline) && outline.length > 0
+        ? `_o:${outline.map((pt: any) => Array.isArray(pt) ? `${pt[0]},${pt[1]}` : `${pt?.x},${pt?.y}`).join(';')}`
+        : '';
+    return featPart + outlinePart;
+}
+
 export class PanelView {
     scene: any;
     model: any;
@@ -179,6 +197,7 @@ export class PanelView {
         }
 
         this._modelChangeHandler = (type, data) => {
+            if ((this.model as any)?._suppressViewEvents) return;
             if (type === 'dimensions' || type === 'panelFormChanged') {
                 this._rebuildMeshes();
                 this._updateTransform();
@@ -364,7 +383,7 @@ export class PanelView {
                 mesh.edgesWidth = 1.5;
                 mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                 if (mesh.edgesRenderer?.lineShader) {
-                    mesh.edgesRenderer.lineShader.zOffset = 0.0;
+                    mesh.edgesRenderer.lineShader.zOffset = -1.5;
                 }
             }
 
@@ -391,7 +410,7 @@ export class PanelView {
                 mat.specularPower = 64;
                 mat.backFaceCulling = false;
                 mat.twoSidedLighting = true;
-                mat.zOffset = 0.0;
+                mat.zOffset = 1.0;
                 this.faceMaterials[faceName] = mat;
             }
             
@@ -442,7 +461,7 @@ export class PanelView {
                     : data.edgeKey === '+Y' ? 'FACE_Y_PLUS'
                     : data.edgeKey === '-Y' ? 'FACE_Y_MINUS'
                     : null;
-                if (mappedFace && !this.faceMeshes[mappedFace]) {
+                if (mappedFace) {
                     this.faceMeshes[mappedFace] = mesh;
                     this.faceMaterials[mappedFace] = mat;
                 }
@@ -476,9 +495,9 @@ export class PanelView {
                 }, this.scene);
                 edgeMesh.color = this._isSelected
                     ? new BABYLON.Color3(0.2, 1.0, 0.4)
-                    : (this.model?.frozen ? new BABYLON.Color3(0.2, 0.65, 0.95) : new BABYLON.Color3(0.1, 0.1, 0.1));
+                    : (this.model?.frozen ? new BABYLON.Color3(0.2, 0.65, 0.95) : new BABYLON.Color3(0.08, 0.08, 0.08));
                 if (edgeMesh.material) {
-                    edgeMesh.material.zOffset = this._isSelected ? -2.0 : 0.0;
+                    edgeMesh.material.zOffset = this._isSelected ? -2.5 : -1.5;
                 }
                 edgeMesh.intersectionThreshold = 1.5; // Fizyczny margines 1.5mm (zostawia 15mm luzu na formatce 18mm)
 
@@ -588,7 +607,7 @@ export class PanelView {
         // Zapisz fingerprint po przebudowie, by nadrzędny geometry-rebuild nie powielał przebudowy
         const f = this.model?.features;
         const fCount = f?.length || 0;
-        (this as any).lastFeaturesFingerprint = fCount === 0 ? '0' : `${fCount}_${f[0]?.id}_${f[fCount - 1]?.id}`;
+        (this as any).lastFeaturesFingerprint = computePanelFeaturesFingerprint(this.model);
         (this as any).lastWidth = this.model?.width;
         (this as any).lastHeight = this.model?.height;
         (this as any).lastThickness = this.model?.thickness;
@@ -780,14 +799,14 @@ export class PanelView {
                     mat.diffuseColor = new BABYLON.Color3(edgeColor.r, edgeColor.g, edgeColor.b);
                     mat.alpha = alpha;
                     mat.specularPower = 56;
-                    mesh.edgesColor = new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
+                    mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                     if (mat.diffuseTexture) mat.diffuseTexture = null;
                 } else {
                     // Krawędź nieoklejona w trybie meblowym CAD — ciemny brązowy surowy rdzeń płyty wiórowej
                     mat.diffuseColor = new BABYLON.Color3(0.32, 0.20, 0.12);
                     mat.alpha = 1.0;
                     mat.specularPower = 4;
-                    mesh.edgesColor = new BABYLON.Color4(0.22, 0.14, 0.08, 0.85);
+                    mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                     if (mat.diffuseTexture) mat.diffuseTexture = null;
                 }
             } else {
@@ -813,13 +832,16 @@ export class PanelView {
                 }
                 mat.alpha = alpha;
                 mat.specularPower = specularPower;
-                mesh.edgesColor = isCnc ? new BABYLON.Color4(0.05, 0.05, 0.05, 1.0) : new BABYLON.Color4(0.2, 0.2, 0.2, 0.8);
-                if (isCnc) mesh.edgesWidth = 1.5;
+                mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                mesh.edgesWidth = 1.5;
                 if (matData?.isTransparent) {
                     mat.backFaceCulling = false;
                 }
             }
             
+            if (mesh.edgesRenderer?.lineShader) {
+                mesh.edgesRenderer.lineShader.zOffset = this._isSelected ? -2.5 : -1.5;
+            }
             if (mesh.metadata) {
                 mesh.metadata.baseDiffuse = mat.diffuseColor.clone();
             }
@@ -861,7 +883,10 @@ export class PanelView {
             if (typeof cylinderMesh.enableEdgesRendering === 'function') {
                 cylinderMesh.enableEdgesRendering();
                 cylinderMesh.edgesWidth = 1.5;
-                cylinderMesh.edgesColor = new BABYLON.Color4(0.15, 0.15, 0.15, 0.9);
+                cylinderMesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                if (cylinderMesh.edgesRenderer?.lineShader) {
+                    cylinderMesh.edgesRenderer.lineShader.zOffset = -1.5;
+                }
             }
             
             const mat = new BABYLON.StandardMaterial(`mat_cyl_${this.model.id}`, this.scene);
@@ -958,7 +983,10 @@ export class PanelView {
             if (typeof mesh.enableEdgesRendering === 'function') {
                 mesh.enableEdgesRendering();
                 mesh.edgesWidth = 1.5;
-                mesh.edgesColor = new BABYLON.Color4(0.12, 0.12, 0.12, 0.85);
+                mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                if (mesh.edgesRenderer?.lineShader) {
+                    mesh.edgesRenderer.lineShader.zOffset = -1.5;
+                }
             }
 
             const smartId = idMgr.register(EntityType.FACE, this.model.smartId?.fullPath || this.model.id, conf.faceKey);
@@ -2029,17 +2057,18 @@ export class PanelView {
         if (this._edgeMeshes && this._edgeMeshes.length > 0) {
             const defaultLineColor = this.model?.frozen
                 ? new BABYLON.Color3(0.2, 0.65, 0.95)
-                : new BABYLON.Color3(0.1, 0.1, 0.1);
+                : new BABYLON.Color3(0.08, 0.08, 0.08);
             for (const em of this._edgeMeshes) {
                 if (!em || em.isDisposed()) continue;
                 em.color = isSelected ? selColor3 : defaultLineColor;
                 if (em.material) {
-                    em.material.zOffset = isSelected ? -2.0 : 0.0;
+                    em.material.zOffset = isSelected ? -2.5 : -1.5;
                 }
             }
         }
 
         // 2. Krawędzie pod-siatek (enableEdgesRendering) oraz bezwzględne wyłączenie renderOutline
+        const isOutlinePanel = Object.keys(this.faceMeshes).some((k) => k.startsWith('OUTLINE_SIDE_'));
         const seen = new Set();
         for (const faceName in this.faceMeshes) {
             if (faceName.startsWith('feature_')) continue;
@@ -2050,18 +2079,21 @@ export class PanelView {
             mesh.renderOutline = false;
 
             if (isSelected) {
-                if (typeof mesh.enableEdgesRendering === 'function') {
+                if (!isOutlinePanel && typeof mesh.enableEdgesRendering === 'function') {
                     mesh.enableEdgesRendering();
                     mesh.edgesColor = selColor4;
                     mesh.edgesWidth = 2.5;
                     if (mesh.edgesRenderer?.lineShader) {
-                        mesh.edgesRenderer.lineShader.zOffset = -2.0;
+                        mesh.edgesRenderer.lineShader.zOffset = -2.5;
                     }
                 }
             } else {
-                mesh.edgesWidth = 1.5;
-                if (mesh.edgesRenderer?.lineShader) {
-                    mesh.edgesRenderer.lineShader.zOffset = 0.0;
+                if (!isOutlinePanel && typeof mesh.enableEdgesRendering === 'function') {
+                    mesh.edgesWidth = 1.5;
+                    mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                    if (mesh.edgesRenderer?.lineShader) {
+                        mesh.edgesRenderer.lineShader.zOffset = -1.5;
+                    }
                 }
             }
         }

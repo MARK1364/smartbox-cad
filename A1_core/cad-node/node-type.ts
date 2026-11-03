@@ -18,8 +18,17 @@ export enum NodeType {
     /** Operacja na formatce: otwór, rowek, frez, kieszeń */
     FEATURE = 'FEATURE',
 
-    /** Układ bazowy maszyny CNC (Work Coordinate System) */
+    /** Układ bazowy maszyny CNC formatki (Work Coordinate System) */
     WCS_FRAME = 'WCS_FRAME',
+
+    /** Globalny układ odniesienia sceny / poziomów mebli (Global Layout / Level Coordinates) */
+    GLC_FRAME = 'GLC_FRAME',
+
+    /** Poziom odniesienia wysokości Z (Datum Level / Sfera Z) */
+    DATUM_LEVEL = 'DATUM_LEVEL',
+
+    /** Płaszczyzna lub element szkicu parametrycznego */
+    SKETCH = 'SKETCH',
 
     /** Okucie meblowe: zawias, uchwyt, prowadnica, nóżka, siłownik */
     HARDWARE = 'HARDWARE',
