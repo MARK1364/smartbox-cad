@@ -149,5 +149,19 @@ describe('export-view-state', () => {
         expect(restoreExportNodeVisibility(doc, [])).toEqual([]);
         expect(restoreExportNodeVisibility(doc, null)).toEqual([]);
     });
-});
 
+    it('ExportEngine does not have legacy projectPMIToSvg method', () => {
+        const engine = new ExportEngine();
+        expect((engine as any).projectPMIToSvg).toBeUndefined();
+    });
+
+    it('takes titleBlock project title from document.name in tree', () => {
+        const doc = new ProjectDocument({ name: 'Biurko Narożne' });
+        ContextManager.instance.document = doc;
+        const engine = new ExportEngine();
+        expect(engine.getProjectTitle()).toBe('Biurko Narożne');
+
+        const view = engine.saveCurrentView('Kadr 1');
+        expect(view.titleBlock.projectName).toBe('Biurko Narożne');
+    });
+});

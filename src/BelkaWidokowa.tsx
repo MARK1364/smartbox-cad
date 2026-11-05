@@ -26,6 +26,7 @@ export interface BelkaWidokowaProps {
   projection: string;
   gridVisible: boolean;
   lcsVisible: boolean;
+  pmiVisible?: boolean;
   isPanActive: boolean;
   isZoomWindowActive: boolean;
   hidePanZoom?: boolean;
@@ -43,6 +44,7 @@ export interface BelkaWidokowaProps {
   onRenderModeChange: (mode: string) => void;
   onToggleGrid: () => void;
   onToggleLcs: (next: boolean) => void;
+  onTogglePmi?: (next: boolean) => void;
   onProjectionChange: (next: string) => void;
   onTogglePan: () => void;
   onToggleZoomWindow: () => void;
@@ -56,6 +58,7 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
     projection,
     gridVisible,
     lcsVisible,
+    pmiVisible = true,
     isPanActive,
     isZoomWindowActive,
     hidePanZoom,
@@ -73,6 +76,7 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
     onRenderModeChange,
     onToggleGrid,
     onToggleLcs,
+    onTogglePmi,
     onProjectionChange,
     onTogglePan,
     onToggleZoomWindow,
@@ -191,6 +195,26 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
                 style={{ cursor: 'pointer' }}
               />
               LCS
+            </label>
+
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                color: '#e2e8f0',
+                fontSize: '0.8rem',
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={pmiVisible}
+                onChange={() => onTogglePmi?.(!pmiVisible)}
+                style={{ cursor: 'pointer' }}
+              />
+              PMI
             </label>
           </div>
         )}

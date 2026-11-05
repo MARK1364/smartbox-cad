@@ -4,6 +4,7 @@
 
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
+import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { rebuildSmartWall } from '../smartwall-core.js';
 import type { SmartWallFillMm, SmartWallPreset } from '../smartwall-types.js';
@@ -76,6 +77,95 @@ function writeSnapshotNm(container: any, snap: SmartWallParamsSnapshotMm): void 
     }
 }
 
+function cloneValue<T>(value: T): T {
+    if (Array.isArray(value)) return value.map(cloneValue) as T;
+    if (!value || typeof value !== 'object') return value;
+    const copy = Object.create(Object.getPrototypeOf(value));
+    for (const key of Reflect.ownKeys(value)) {
+        copy[key] = cloneValue((value as any)[key]);
+    }
+    return copy;
+}
+
+const PANEL_FIELDS = [
+    'name', 'role', 'key', 'lcs', 'width', 'height', 'thickness',
+    'edgeBanding', 'color', 'visible', 'custom_properties',
+] as const;
+
+interface SmartWallStateSnapshot {
+    container: {
+        width: number;
+        height: number;
+        depth: number;
+        generatorParams: any;
+    };
+    children: Array<{
+        node: CADNode;
+        name: string;
+        localMatrix: ReturnType<CADNode['localMatrix']['clone']>;
+        domainData: any;
+    }>;
+}
+
+function captureSmartWallState(container: any, containerNode: CADNode): SmartWallStateSnapshot {
+    return {
+        container: {
+            width: container.width,
+            height: container.height,
+            depth: container.depth,
+            generatorParams: cloneValue(container.generatorParams),
+        },
+        children: containerNode.children.map((node) => {
+            const domainData: Record<string, unknown> = {};
+            for (const field of PANEL_FIELDS) {
+                domainData[field] = cloneValue((node.domainData as any)?.[field]);
+            }
+            return {
+                node,
+                name: node.name,
+                localMatrix: node.localMatrix.clone(),
+                domainData,
+            };
+        }),
+    };
+}
+
+function restoreSmartWallState(
+    document: ProjectDocument,
+    container: any,
+    containerNode: CADNode,
+    snapshot: SmartWallStateSnapshot,
+): void {
+    const originalNodes = new Set(snapshot.children.map(({ node }) => node));
+    for (const child of [...containerNode.children]) {
+        if (!originalNodes.has(child)) document.removeNode(child.id);
+    }
+
+    snapshot.children.forEach(({ node }, index) => {
+        if (document.findNode(node.id) !== node) {
+            document.addNode(containerNode.id, node, index);
+        }
+    });
+
+    container.width = snapshot.container.width;
+    container.height = snapshot.container.height;
+    container.depth = snapshot.container.depth;
+    container.generatorParams = cloneValue(snapshot.container.generatorParams);
+
+    for (const { node, name, localMatrix, domainData } of snapshot.children) {
+        node.name = name;
+        node.setLocalMatrix(localMatrix.clone());
+        if (node.domainData) {
+            Object.assign(node.domainData, cloneValue(domainData));
+            (node.domainData as any)._emit?.('dimensions', {
+                width: (node.domainData as any).width,
+                height: (node.domainData as any).height,
+                thickness: (node.domainData as any).thickness,
+            });
+        }
+    }
+}
+
 export class SetSmartWallParamsCommand implements Command {
     readonly id: string;
     readonly label: string;
@@ -102,13 +192,16 @@ export class SetSmartWallParamsCommand implements Command {
 
     private apply(document: ProjectDocument, snap: SmartWallParamsSnapshotMm): void {
         const node = document.findNode(this.containerId);
-        const container = node?.domainData as any;
-        if (!container) return;
-        writeSnapshotNm(container, snap);
-        rebuildSmartWall(container, document);
-        if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-        }
+        if (!node?.domainData) return;
+        const container = node.domainData as any;
+        const snapshot = captureSmartWallState(container, node);
+        document.transaction(() => {
+            writeSnapshotNm(container, snap);
+            rebuildSmartWall(container, document);
+            if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+            }
+        }, () => restoreSmartWallState(document, container, node, snapshot));
     }
 
     execute(document: ProjectDocument): void {

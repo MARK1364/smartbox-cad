@@ -17,6 +17,7 @@ export interface OffsetGizmoHandler {
     getShift(role: string, panel?: any): OffsetShiftSpec | null;
     resolveContainer(doc: any, panel: any): any | null;
     resolveFrontParam?(panel: any): { kind: string; paramName: string } | null;
+    clampOffset?(container: any, paramName: string, value: number): number;
     readOffsetMm(container: any, paramName: string, role?: string): number;
     previewOffset(container: any, paramName: string, value: number): void;
     commitOffset(container: any, paramName: string, oldValue: number, newValue: number): void;

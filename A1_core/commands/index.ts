@@ -7,3 +7,4 @@ export * from './remove-node-command.js';
 export * from './reparent-node-command.js';
 export * from './feature-commands.js';
 export * from './macro-command.js';
+export * from './set-grain-direction-command.js';

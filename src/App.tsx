@@ -141,6 +141,15 @@ export default function App({
   const [gridVisible, setGridVisible] = useState(true);
   const [projection, setProjection] = useState('ortho');
   const [lcsVisible, setLcsVisible] = useState(false);
+  const [pmiVisible, setPmiVisible] = useState(() => ContextManager.instance.pmiVisible);
+  useEffect(() => {
+    const onPmiVisChange = (e: Event) => {
+      const vis = (e as CustomEvent)?.detail?.visible;
+      if (typeof vis === 'boolean') setPmiVisible(vis);
+    };
+    window.addEventListener('cad-pmi-visibility-changed', onPmiVisChange);
+    return () => window.removeEventListener('cad-pmi-visibility-changed', onPmiVisChange);
+  }, []);
   const [isPanActive, setIsPanActive] = useState(false);
   const [isZoomWindowActive, setIsZoomWindowActive] = useState(false);
   const [zoomBox, setZoomBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -1369,6 +1378,7 @@ export default function App({
         projection={projection}
         gridVisible={gridVisible}
         lcsVisible={lcsVisible}
+        pmiVisible={pmiVisible}
         isPanActive={isPanActive}
         isZoomWindowActive={isZoomWindowActive}
         activeTab={activeTab}
@@ -1389,6 +1399,10 @@ export default function App({
         onToggleLcs={(nextVal) => {
           setLcsVisible(nextVal);
           callAPI('setLcsVisible', nextVal);
+        }}
+        onTogglePmi={(nextVal) => {
+          setPmiVisible(nextVal);
+          ContextManager.instance.setPmiVisible(nextVal);
         }}
         onProjectionChange={setProjection}
         onTogglePan={togglePanMode}
@@ -1869,6 +1883,13 @@ export default function App({
                 role: 'MANUAL_PANEL',
                 engineManaged: false,
               });
+              while (typeof doc.findNode === 'function' && doc.findNode(newPanel.id)) {
+                newPanel.id = new PanelModel({
+                  width: mmToNm(pWidth),
+                  height: mmToNm(pHeight),
+                  thickness: mmToNm(pThickness),
+                }).id;
+              }
 
               const pNode = CADNode.create(NodeType.PART, newPanel.name, newPanel.id);
               pNode.domainData = newPanel;

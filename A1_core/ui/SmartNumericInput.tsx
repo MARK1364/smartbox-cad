@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { evaluateMathExpression } from '../cad-math/math-eval.js';
 
 export interface SmartNumericInputProps {
     value: number | string;
@@ -23,9 +24,11 @@ export interface SmartNumericInputProps {
  * Cechy:
  * 1. Płynny stan lokalny (zero zacięć klawiatury przy pisaniu)
  * 2. Inteligentny debouncing (domyślnie 120ms) przed wywołaniem ciężkiego przeliczania 3D
- * 3. Natychmiastowe zatwierdzenie wartości klawiszem Enter lub przy opuszczeniu pola (onBlur)
- * 4. Pomiary i ochrona przed niekompletnymi wartościami cząstkowymi
- * 5. Precyzja do 2 miejsc po przecinku (decimals) oraz obsługa przecinka dziesiętnego
+ * 3. Obsługa wyrażeń matematycznych (+, -, *, /, nawiasy, przecinek/kropka)
+ * 4. Natychmiastowe zatwierdzenie wyniku operacji klawiszem Enter lub przy opuszczeniu pola (onBlur)
+ * 5. Pomiary i ochrona przed niekompletnymi wartościami cząstkowymi
+ * 6. Obsługa strzałek góra/dół (ArrowUp/ArrowDown) z uwzględnieniem step
+ * 7. Precyzja do zadanej liczby miejsc po przecinku (decimals)
  */
 export function SmartNumericInput({
     value,
@@ -74,14 +77,9 @@ export function SmartNumericInput({
         }
     }, [value, isFocused, decimals]);
 
-    const parseNum = (str: string): number => {
-        const sanitized = str.replace(',', '.');
-        return parseFloat(sanitized);
-    };
-
     const flush = (valStr: string, isFinal: boolean = false) => {
-        const parsed = parseNum(valStr);
-        if (!isNaN(parsed)) {
+        const parsed = evaluateMathExpression(valStr, decimals);
+        if (parsed !== null) {
             let clamped = parsed;
             if (isFinal) {
                 if (min !== undefined) clamped = Math.max(min, clamped);
@@ -145,17 +143,29 @@ export function SmartNumericInput({
             }
             setLocalVal(formatVal(value));
             (e.target as HTMLInputElement).blur();
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const stepNum = typeof effectiveStep === 'number' ? effectiveStep : (parseFloat(String(effectiveStep)) || 1);
+            const delta = e.key === 'ArrowUp' ? stepNum : -stepNum;
+            const parsed = evaluateMathExpression(localVal, decimals) ?? (typeof value === 'number' ? value : 0);
+            let nextVal = parsed + delta;
+            if (min !== undefined) nextVal = Math.max(min, nextVal);
+            if (max !== undefined) nextVal = Math.min(max, nextVal);
+            if (decimals !== undefined && decimals >= 0) {
+                const factor = Math.pow(10, decimals);
+                nextVal = Math.round(nextVal * factor) / factor;
+            }
+            setLocalVal(formatVal(nextVal));
+            onChange(nextVal);
         }
     };
 
     const inputElement = (
         <input
             id={id}
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={localVal}
-            step={effectiveStep}
-            min={min}
-            max={max}
             disabled={disabled}
             readOnly={readOnly}
             placeholder={placeholder}

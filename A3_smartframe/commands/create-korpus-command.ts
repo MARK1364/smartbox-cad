@@ -11,7 +11,9 @@ import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
 import type { KorpusCreateParams } from '../../A1_core/cabinet-port.js';
+import type { DomainData } from '../../A1_core/domain-data.js';
 import { runEngineAndApply } from '../smartframe-adapter.js';
+import { planCabinet } from '../smartframe-engine.js';
 
 export class CreateKorpusCommand implements Command {
     readonly id: string;
@@ -21,6 +23,8 @@ export class CreateKorpusCommand implements Command {
     readonly params: KorpusCreateParams;
 
     private createdId: string | null = null;
+    private previousActiveEntity: DomainData | null = null;
+    private hasPreviousActiveEntity = false;
 
     constructor(params: KorpusCreateParams) {
         this.params = params;
@@ -54,6 +58,34 @@ export class CreateKorpusCommand implements Command {
         const skosH = isSkosnyLr
             ? Math.max(hLeft, hRight)
             : isSkosny ? Math.max(hFront, hBack) : hMm;
+
+        planCabinet({
+            szerokosc_mm: wMm,
+            wysokosc_mm: skosH,
+            glebokosc_mm: dMm,
+            typ_korpusu: ctype,
+            liczba_stref: zoneCount,
+            wysokosc_strefy_dolnej_mm: zoneCount > 1 ? (bHeight ?? hMm) : undefined,
+            wysokosc_strefy_srodkowej_mm: zoneCount === 3 ? mHeight : undefined,
+            cofniecie_plecow_mm: bOffset,
+            offsets: p.offsets,
+            ...(isRogowy1
+                ? { szerokosc_blendy_mm: p.szerokosc_blendy_mm ?? 400, strona_blendy: p.strona_blendy ?? 'LEFT' as const }
+                : {}),
+            ...(isRogowy90
+                ? {
+                    glebokosc_boku_lewego_mm: p.glebokosc_boku_lewego_mm ?? 600,
+                    glebokosc_boku_prawego_mm: p.glebokosc_boku_prawego_mm ?? 600,
+                }
+                : {}),
+            ...(isSkosny && !isSkosnyLr
+                ? { wysokosc_przod_mm: hFront, wysokosc_tyl_mm: hBack }
+                : {}),
+            ...(isSkosnyLr
+                ? { wysokosc_lewy_mm: hLeft, wysokosc_prawy_mm: hRight }
+                : {}),
+        });
+
         const nc = new ContainerModel({
             width: mmToNm(wMm),
             height: mmToNm(skosH),
@@ -108,30 +140,47 @@ export class CreateKorpusCommand implements Command {
                 Quat.IDENTITY
             );
         }
-        document.addNode(document.rootNode.id, ncNode);
-        this.createdId = nc.id;
-        this.affectedNodeIds.splice(0, this.affectedNodeIds.length, nc.id);
+        const previousActiveEntity = document.activeEntity;
+        document.transaction(() => {
+            document.addNode(document.rootNode.id, ncNode);
+            this.createdId = nc.id;
+            this.affectedNodeIds.splice(0, this.affectedNodeIds.length, nc.id);
 
-        runEngineAndApply(
-            nc,
-            wMm,
-            skosH,
-            dMm,
-            zoneCount,
-            (isCorner || isSkosny) ? skosH : (bHeight ?? hMm),
-            (isCorner || isSkosny) ? 0 : mHeight,
-            bOffset,
-            { ...(p.offsets || {}) }
-        );
+            runEngineAndApply(
+                nc,
+                wMm,
+                skosH,
+                dMm,
+                zoneCount,
+                (isCorner || isSkosny) ? skosH : (bHeight ?? hMm),
+                (isCorner || isSkosny) ? 0 : mHeight,
+                bOffset,
+                { ...(p.offsets || {}) }
+            );
 
-        document.setActiveEntity(nc);
+            document.setActiveEntity(nc);
+        }, () => {
+            this.createdId = null;
+            this.affectedNodeIds.length = 0;
+            if (document.findNode(nc.id)) document.removeNode(nc.id);
+            document.setActiveEntity(previousActiveEntity);
+        });
+        if (!this.hasPreviousActiveEntity) {
+            this.previousActiveEntity = previousActiveEntity;
+            this.hasPreviousActiveEntity = true;
+        }
         if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
         }
     }
 
     undo(document: ProjectDocument): void {
-        if (this.createdId) document.removeNode(this.createdId);
+        if (this.createdId) {
+            document.removeNode(this.createdId);
+            const previousId = this.previousActiveEntity?.id;
+            const previousNode = previousId ? document.findNode(previousId) : null;
+            document.setActiveEntity(previousNode?.domainData ?? null);
+        }
         if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
         }

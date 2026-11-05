@@ -13,6 +13,28 @@ describe('Egger decor textures and thumbnails', () => {
         expect(mat?.hexColor).toBe('#b89e7a');
     });
 
+    it('finds materials flexibly by name, base code without thickness, or normalized key', () => {
+        // By exact Polish name
+        const byName = materialDatabase.getMaterialById('Dąb Halifax naturalny');
+        expect(byName).toBeDefined();
+        expect(byName?.texture_path).toBe('/textures/egger/H1180_ST37_Albedo.png');
+
+        // By code without thickness suffix
+        const byBaseCode = materialDatabase.getMaterialById('H1180_ST37');
+        expect(byBaseCode).toBeDefined();
+        expect(byBaseCode?.texture_path).toBe('/textures/egger/H1180_ST37_Albedo.png');
+
+        // By code with space
+        const byCode = materialDatabase.getMaterialById('H1180 ST37');
+        expect(byCode).toBeDefined();
+        expect(byCode?.texture_path).toBe('/textures/egger/H1180_ST37_Albedo.png');
+
+        // By normalized lowercase name
+        const byNormName = materialDatabase.getMaterialById('dab halifax naturalny');
+        expect(byNormName).toBeDefined();
+        expect(byNormName?.texture_path).toBe('/textures/egger/H1180_ST37_Albedo.png');
+    });
+
     it('loads H1181 ST37 and H1344 ST32 correctly', () => {
         const h1181 = materialDatabase.getMaterialById('H1181_ST37_18');
         expect(h1181).toBeDefined();

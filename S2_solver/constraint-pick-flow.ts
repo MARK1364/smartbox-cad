@@ -130,7 +130,7 @@ export function beginConstraintSlotPick(opts: {
                     onCommand: (deltas: NodeTransformDelta[]) => {
                         const finalC = store.get(opts.constraintId);
                         if (!finalC || finalC.conflict) return null;
-                        return new AddConstraintCommand(finalC, deltas);
+                        return new AddConstraintCommand(finalC, deltas, 'Dodanie relacji', store);
                     },
                 });
                 ContextManager.instance.appAPI?.setStatus?.(

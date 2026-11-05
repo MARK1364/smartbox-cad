@@ -2180,7 +2180,8 @@ body, html {
     background: rgba(255, 255, 255, 0.08);
 }
 
-.export-settings-gear-btn[aria-expanded="true"] {
+.export-settings-gear-btn[aria-expanded="true"],
+.export-settings-gear-btn[aria-pressed="true"] {
     color: #60a5fa;
     border-color: rgba(59, 130, 246, 0.45);
     background: rgba(59, 130, 246, 0.12);

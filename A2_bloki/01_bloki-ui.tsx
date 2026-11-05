@@ -27,6 +27,7 @@ import { updateSmartPartHangersGroup } from './hangers/hanger-apply.js';
 import { customReferencesFromDetectedBay } from './hangers/smartpart-bay-placement.js';
 import { resolveDetectedBay } from './02_bloki-bay-detector.js';
 import { buildCornerDoorsAutoRefsPatch } from './07_corner-doors-refs.js';
+import { flushBlokiPreview } from './bloki-transaction.js';
 import './01_smartparts-ui.css';
 
 interface Props {
@@ -302,31 +303,41 @@ export function BlokiUI({ projectModel }: Props) {
             cancelAnimationFrame(rafIdRef.current);
             rafIdRef.current = null;
         }
-        const updates = { ...pendingParamsRef.current };
-        pendingParamsRef.current = {};
-
-        container.generatorParams = {
-            ...container.generatorParams,
-            ...updates
-        };
-
         const doc = projectModel?.document || projectModel || ContextManager.instance.document;
+        const node = doc?.findNode?.(container.id);
+        if (!doc || !node) {
+            console.error('[BlokiUI] Cannot update a container that is not in the active document.');
+            return;
+        }
+
+        try {
+            flushBlokiPreview(doc, node, container, pendingParamsRef.current, () => {
+                if (isHangersGroupContainer(container)) {
+                    updateSmartPartHangersGroup(node, doc);
+                } else {
+                    update_bloki_core(container, doc);
+                }
+            });
+        } catch (error) {
+            console.error('[BlokiUI] Failed to apply queued module parameters:', error);
+            return;
+        }
+
         if (isHangersGroupContainer(container)) {
-            const node = doc?.findNode?.(container.id);
-            if (node) updateSmartPartHangersGroup(node, doc);
-            // Offset ściany musi przebudować Part + otwory (sam CAD bez rebuild = Part „stoi”, kontener się kurczy)
-            if (typeof doc?.notifyDocumentChanged === 'function') doc.notifyDocumentChanged();
+            if (typeof doc.notifyDocumentChanged === 'function') doc.notifyDocumentChanged();
             if (typeof window !== 'undefined' && typeof (window as any).__rebuildGeometry === 'function') {
-                (window as any).__rebuildGeometry('SmartPart offset');
+                try {
+                    (window as any).__rebuildGeometry('SmartPart offset');
+                } catch (error) {
+                    console.error('[BlokiUI] Geometry refresh failed after parameter update:', error);
+                }
             }
-        } else {
-            update_bloki_core(container, projectModel);
         }
         
-        if (typeof projectModel._notify === 'function') {
+        if (typeof doc._notify === 'function') {
+            doc._notify();
+        } else if (typeof projectModel?._notify === 'function') {
             projectModel._notify();
-        } else if (ContextManager.instance.document && typeof (ContextManager.instance.document as any)._notify === 'function') {
-            (ContextManager.instance.document as any)._notify();
         }
 
         document.dispatchEvent(new CustomEvent('bloki-project-changed'));
@@ -337,11 +348,6 @@ export function BlokiUI({ projectModel }: Props) {
 
         pendingParamsRef.current = {
             ...pendingParamsRef.current,
-            ...updatedParams
-        };
-
-        container.generatorParams = {
-            ...container.generatorParams,
             ...updatedParams
         };
 
@@ -381,6 +387,7 @@ export function BlokiUI({ projectModel }: Props) {
             'DOORS': 'blok_doors',
             'SKOSNE_DOORS': 'blok_skosne_drzwi',
             'CORNER_DOORS': 'blok_corner_doors',
+            'SLIDING_DOORS': 'blok_sliding_doors',
             'SHELF': 'blok_shelf',
             'DRAWERS': 'blok_drawers',
             'DIVIDERS': 'blok_dividers',

@@ -27,6 +27,7 @@ import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
 import { getAllPanels } from './document-queries.js';
+import { findHiddenEntityAlongRay } from '../../A1_core/quick-pick/quick-pick-detector.js';
 import { createRebuildGeometry } from './geometry-rebuild.js';
 import { applyAllAssociativeDims } from '../../A4_smartpanel/associative-dim.js';
 import { generate10CabinetsRow, expandCabinet, generateWardrobeDemo } from '../../S2_solver/demo-row.js';
@@ -137,6 +138,7 @@ async function main() {
                     const payload = {
                         partKey: (panelModel as any).key || panelModel.id,
                         face: data.face,
+                        outlineEdgeKey: data.mesh?.metadata?.outlineEdgeKey ?? data.mesh?.metadata?.edgeKey ?? null,
                         panelModel,
                         nodeId: panelModel.id,
                         panelId: panelModel.id,
@@ -315,6 +317,84 @@ async function main() {
             e.preventDefault();
             if (ctx && ctx.viewport) {
                 ctx.viewport.toggleInspector();
+            }
+        }
+
+        // SolidWorks Tab (Ukryj pod kursorem) / Shift+Tab (Pokaż ukryty pod kursorem)
+        if (!isInputActive && e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const scene = ctx?.viewport?.scene;
+            if (!scene) return;
+
+            if (e.shiftKey) {
+                // Shift+Tab: Pokaż ukryty komponent pod kursorem
+                const hiddenHit = findHiddenEntityAlongRay(
+                    scene,
+                    scene.pointerX,
+                    scene.pointerY,
+                    ctx.document,
+                    ctx.panelViews,
+                    ContextManager.instance.hardwareViews
+                );
+                if (hiddenHit) {
+                    if (hiddenHit.entity.frozen || hiddenHit.entity.params?.frozen) {
+                        ctx.ui?.setStatus?.('Element jest zamrożony. Odmroź go, aby pokazać.', true);
+                        return;
+                    }
+                    hiddenHit.entity.visible = true;
+                    const node = ctx.document.findNode(hiddenHit.id);
+                    let curr = node?.parent;
+                    while (curr && curr !== ctx.document.rootNode) {
+                        if (curr.domainData && (curr.domainData as any).visible === false) {
+                            (curr.domainData as any).visible = true;
+                        }
+                        curr = curr.parent;
+                    }
+                    rebuildGeometry('Pokazano element');
+                    ctx.document.emitChange('all');
+                    ctx.ui?.setStatus?.(`Pokazano: ${hiddenHit.name} (Shift+Tab)`, true);
+                }
+            } else {
+                // Tab: Ukryj widoczny komponent pod kursorem
+                const pick = scene.pick(
+                    scene.pointerX,
+                    scene.pointerY,
+                    (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.includes('blok_bay') && !m.name?.includes('blok_plane')
+                );
+                if (pick && pick.hit && pick.pickedMesh) {
+                    const m = pick.pickedMesh;
+                    const meta = m.metadata;
+                    const panel = meta?.panelModel
+                        || (meta?.panelId ? ctx.document.findNode?.(meta.panelId)?.domainData : null)
+                        || (meta?.id ? ctx.document.findNode?.(meta.id)?.domainData : null);
+
+                    if (panel) {
+                        panel.visible = false;
+                        rebuildGeometry('Ukryto formatkę');
+                        ctx.document.emitChange('all');
+                        ctx.ui?.setStatus?.(`Ukryto: ${panel.name || 'formatka'} (Shift+Tab aby przywrócić)`, true);
+                    } else if (meta?.type === 'hardware' || meta?.hardwareId) {
+                        const hwId = meta.id || meta.hardwareId;
+                        const hwNode = ctx.document.findNode?.(hwId);
+                        if (hwNode?.domainData) {
+                            (hwNode.domainData as any).visible = false;
+                            rebuildGeometry('Ukryto okucie');
+                            ctx.document.emitChange('all');
+                            ctx.ui?.setStatus?.(`Ukryto: ${hwNode.name || 'okucie'} (Shift+Tab aby przywrócić)`, true);
+                        }
+                    } else if (meta?.containerId || meta?.model?.type === 'container') {
+                        const cId = meta.containerId || meta.model?.id;
+                        const cNode = ctx.document.findNode?.(cId);
+                        if (cNode?.domainData) {
+                            (cNode.domainData as any).visible = false;
+                            rebuildGeometry('Ukryto korpus');
+                            ctx.document.emitChange('all');
+                            ctx.ui?.setStatus?.(`Ukryto: ${cNode.name || 'korpus'} (Shift+Tab aby przywrócić)`, true);
+                        }
+                    }
+                }
             }
         }
     });

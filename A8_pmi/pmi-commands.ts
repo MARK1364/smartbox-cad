@@ -41,7 +41,7 @@ function notifyDocumentChanged(document?: ProjectDocument, affectedNodeIds?: str
 export function deleteActiveDimension(store: PMIStore = PMIStore.instance): boolean {
     const mIdx = store.activeMeasurementIndex;
     if (mIdx >= 0 && mIdx < store.measurements.length) {
-        executePMICommand(new RemoveMeasurementCommand(store, store.measurements[mIdx].id));
+        store.removeMeasurement(store.measurements[mIdx].id);
         return true;
     }
     const idx = store.activeIndex;

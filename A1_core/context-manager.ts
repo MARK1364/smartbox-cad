@@ -32,6 +32,7 @@ export interface IAppAPI {
     setSelectionMode?: (mode: 'object' | 'subgeometry') => void;
     setStatus?: (status: string, highlight?: boolean, kind?: 'info' | 'error') => void;
     setLcsVisible?: (visible: boolean) => void;
+    setPmiVisible?: (visible: boolean) => void;
     [key: string]: any;
 }
 
@@ -76,13 +77,25 @@ export class ContextManager {
         this.syncPmiVisibility();
     }
 
-    /** Ustawiane przez ExportEngine - opcja "Dolacz linie wymiarowe". */
+    /** Globalny przełącznik widoczności wymiarów PMI w belce widokowej (Podgląd -> PMI). */
+    public pmiVisible: boolean = true;
+
+    /** Ustawiane przez ExportEngine - opcja "Dołącz linie wymiarowe". */
     public exportIncludesPmi = true;
 
-    /** Wymiary sa widoczne w zakladce Wymiary oraz w Eksporcie przy wlaczonej opcji dolaczenia. */
+    public setPmiVisible(visible: boolean): void {
+        this.pmiVisible = visible;
+        this.syncPmiVisibility();
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('cad-pmi-visibility-changed', { detail: { visible } }));
+        }
+    }
+
+    /** Wymiary są widoczne globalnie gdy pmiVisible=true (oraz w Eksporcie zgodnie z exportIncludesPmi), z zachowaniem widoczności szczegółowej w drzewie. */
     public syncPmiVisibility(): void {
-        const show = this._activeTab === 'tab-a8-pmi'
-            || (this._activeTab === 'tab-e1-export' && this.exportIncludesPmi);
+        const show = this._activeTab === 'tab-e1-export'
+            ? (this.pmiVisible && this.exportIncludesPmi)
+            : this.pmiVisible;
         this.pmiRenderer?.setVisible?.(show);
         if (show) this.pmiRenderer?.renderAll?.(PMIStore.instance);
     }
@@ -92,7 +105,7 @@ export class ContextManager {
         deactivateAllPmiTools(this.stateMachine);
         this.pmiRenderer?.clearPreview?.();
         this.pmiRenderer?.clearMeasurePreview?.();
-        this.pmiRenderer?.setVisible?.(false);
+        this.syncPmiVisibility();
     }
 
     public activeReferencePicker: any = null;

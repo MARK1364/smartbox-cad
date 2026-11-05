@@ -5,7 +5,10 @@
 
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
-import { rebuildSmartFrameContainer } from '../smartframe-adapter.js';
+import {
+    rebuildSmartFrameContainer,
+    withSmartFrameContainerTransaction
+} from '../smartframe-adapter.js';
 
 export type TopPanelMode = 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V';
 
@@ -43,9 +46,11 @@ export class SetKorpusTopPanelConfigCommand implements Command {
         const node = document.findNode(this.containerId);
         const data = node?.domainData as any;
         if (!data) return;
-        if (!data.generatorParams) data.generatorParams = {};
-        data.generatorParams.topPanelMode = config.mode;
-        data.generatorParams.traverseWidth = config.width;
-        rebuildSmartFrameContainer(data);
+        withSmartFrameContainerTransaction(data, () => {
+            if (!data.generatorParams) data.generatorParams = {};
+            data.generatorParams.topPanelMode = config.mode;
+            data.generatorParams.traverseWidth = config.width;
+            rebuildSmartFrameContainer(data);
+        });
     }
 }

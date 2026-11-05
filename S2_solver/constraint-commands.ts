@@ -22,16 +22,19 @@ export class AddConstraintCommand implements Command {
 
     private readonly _constraint: SolverConstraint;
     private readonly _deltas: NodeTransformDelta[];
+    private readonly _store: ConstraintStore;
 
     constructor(
         constraint: SolverConstraint,
         deltas: NodeTransformDelta[] = [],
         label: string = 'Dodanie relacji',
+        store: ConstraintStore = ConstraintStore.instance,
     ) {
         this.id = `cmd_add_cst_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
         this.label = label;
         this.timestamp = Date.now();
         this._constraint = { ...constraint };
+        this._store = store;
         this._deltas = deltas.map((d) => ({
             nodeId: d.nodeId,
             localBefore: d.localBefore.clone(),
@@ -45,20 +48,20 @@ export class AddConstraintCommand implements Command {
     }
 
     execute(document: ProjectDocument): void {
-        ConstraintStore.instance.add(this._constraint);
+        this._store.add(this._constraint);
         this._applyTransforms(document, 'localAfter');
         ConstraintHighlightOverlay.instance.refresh();
     }
 
     undo(document: ProjectDocument): void {
-        ConstraintStore.instance.remove(this._constraint.id);
+        this._store.remove(this._constraint.id);
         this._applyTransforms(document, 'localBefore');
         ConstraintHighlightOverlay.instance.refresh();
         ContextManager.instance.viewport?.requestRender?.(2);
     }
 
     redo(document: ProjectDocument): void {
-        ConstraintStore.instance.add(this._constraint);
+        this._store.add(this._constraint);
         this._applyTransforms(document, 'localAfter');
         ConstraintHighlightOverlay.instance.refresh();
         ContextManager.instance.viewport?.requestRender?.(2);
@@ -85,32 +88,45 @@ export class RemoveConstraintCommand implements Command {
     readonly affectedNodeIds: string[];
 
     private readonly _constraint: SolverConstraint;
+    private readonly _store: ConstraintStore;
 
-    constructor(constraint: SolverConstraint, label: string = 'Usunięcie relacji') {
+    constructor(
+        constraint: SolverConstraint,
+        label: string = 'Usunięcie relacji',
+        store: ConstraintStore = ConstraintStore.instance,
+    ) {
         this.id = `cmd_rm_cst_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
         this.label = label;
         this.timestamp = Date.now();
         this._constraint = { ...constraint };
+        this._store = store;
         const nodes = new Set<string>();
         if (constraint.anchorA?.nodeId) nodes.add(constraint.anchorA.nodeId);
         if (constraint.anchorB?.nodeId) nodes.add(constraint.anchorB.nodeId);
         this.affectedNodeIds = Array.from(nodes);
     }
 
-    execute(_document: ProjectDocument): void {
-        ConstraintStore.instance.remove(this._constraint.id);
-        ConstraintHighlightOverlay.instance.refresh();
+    execute(document: ProjectDocument): void {
+        this._store.remove(this._constraint.id);
+        this._scheduleVisualRefresh(document, false);
     }
 
-    undo(_document: ProjectDocument): void {
-        ConstraintStore.instance.add(this._constraint);
-        ConstraintHighlightOverlay.instance.refresh();
-        ContextManager.instance.viewport?.requestRender?.(2);
+    undo(document: ProjectDocument): void {
+        this._store.add(this._constraint);
+        this._scheduleVisualRefresh(document, true);
     }
 
-    redo(_document: ProjectDocument): void {
-        ConstraintStore.instance.remove(this._constraint.id);
-        ConstraintHighlightOverlay.instance.refresh();
-        ContextManager.instance.viewport?.requestRender?.(2);
+    redo(document: ProjectDocument): void {
+        this._store.remove(this._constraint.id);
+        this._scheduleVisualRefresh(document, true);
+    }
+
+    private _scheduleVisualRefresh(document: ProjectDocument, requestRender: boolean): void {
+        document.afterCommit(() => {
+            ConstraintHighlightOverlay.instance.refresh();
+            if (requestRender) {
+                ContextManager.instance.viewport?.requestRender?.(2);
+            }
+        });
     }
 }

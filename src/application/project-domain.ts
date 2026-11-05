@@ -8,7 +8,7 @@
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
-import { PanelModel } from '../../A4_smartpanel/panel-model.js';
+import { PanelModel, bumpPanelIdSeqFromId } from '../../A4_smartpanel/panel-model.js';
 import { SMARTWALL_TYPE } from '../../S4_sciany/smartwall-types.js';
 import {
     registerDefaultFactory,
@@ -53,6 +53,10 @@ export function hydrateContainer(raw: any, nodeJson: any): ContainerModel {
     const container = ContainerModel.fromJSON(raw);
     container.id = nodeJson.id;
     if (!container.name) container.name = nodeJson.name;
+    if (nodeJson?.frozen || raw?.frozen) {
+        container.frozen = true;
+        container.visible = false;
+    }
     return container;
 }
 
@@ -74,9 +78,19 @@ export function hydratePanel(raw: any, nodeJson: any): PanelModel {
             raw.thickness = repaired;
         }
     }
-    const panel = PanelModel.fromJSON(raw);
-    panel.id = nodeJson.id;
+    const resolvedId = nodeJson?.id || raw?.id;
+    if (resolvedId) {
+        bumpPanelIdSeqFromId(resolvedId);
+    }
+    const panel = PanelModel.fromJSON(resolvedId ? { ...raw, id: resolvedId } : raw);
+    if (resolvedId) {
+        panel.id = resolvedId;
+    }
     if (!panel.name) panel.name = nodeJson.name;
+    if (nodeJson?.frozen || raw?.frozen) {
+        panel.frozen = true;
+        panel.visible = false;
+    }
     return panel;
 }
 

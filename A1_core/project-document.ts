@@ -59,6 +59,13 @@ export interface DocumentChangeEvent {
 
 export type DocumentChangeSubscriber = (event: DocumentChangeEvent) => void;
 
+interface DocumentChangeTransaction {
+    changes: Array<{ type: DocumentChangeType; affectedNodeIds?: string[] }>;
+    beforeCommitEffects: Array<() => void>;
+    afterCommitEffects: Array<() => void>;
+    rollbackHandlers: Array<(error: unknown) => void>;
+}
+
 export interface ProjectDocumentOptions {
     id?: string;
     name?: string;
@@ -96,6 +103,7 @@ export class ProjectDocument {
     private _nodeIndex: Map<string, CADNode> = new Map();
     private _revision: number = 0;
     private _savedRevision: number = 0;
+    private _changeTransactions: DocumentChangeTransaction[] = [];
     private _extensions: Map<string, DocumentExtension> = new Map();
     /** Sekcje z pliku, dla których nie było zarejestrowanego rozszerzenia przy load. */
     private _orphanExtensions: Record<string, any> = {};
@@ -696,6 +704,106 @@ export class ProjectDocument {
     }
 
     emitChange(type: DocumentChangeType, affectedNodeIds?: string[]): void {
+        const transaction = this._changeTransactions[this._changeTransactions.length - 1];
+        if (transaction) {
+            transaction.changes.push({
+                type,
+                affectedNodeIds: affectedNodeIds ? [...affectedNodeIds] : undefined,
+            });
+            return;
+        }
+        this._publishChange(type, affectedNodeIds);
+    }
+
+    /**
+     * Buffers document notifications until the operation succeeds.
+     * A failed operation discards its events without advancing the revision.
+     */
+    transaction<T>(operation: () => T, onRollback?: (error: unknown) => void): T {
+        const transaction: DocumentChangeTransaction = {
+            changes: [],
+            beforeCommitEffects: [],
+            afterCommitEffects: [],
+            rollbackHandlers: onRollback ? [onRollback] : [],
+        };
+        this._changeTransactions.push(transaction);
+        try {
+            const result = operation();
+            const parent = this._changeTransactions[this._changeTransactions.length - 2];
+            if (parent) {
+                this._changeTransactions.pop();
+                parent.changes.push(...transaction.changes);
+                parent.beforeCommitEffects.push(...transaction.beforeCommitEffects);
+                parent.afterCommitEffects.push(...transaction.afterCommitEffects);
+                parent.rollbackHandlers.push(...transaction.rollbackHandlers);
+            } else {
+                this.flushBeforeCommitEffects(transaction);
+                this._changeTransactions.pop();
+                for (const change of transaction.changes) {
+                    this._publishChange(change.type, change.affectedNodeIds);
+                }
+                this.flushAfterCommitEffects(transaction);
+            }
+            return result;
+        } catch (error) {
+            if (this._changeTransactions[this._changeTransactions.length - 1] === transaction) {
+                let rollbackError: unknown = null;
+                for (const rollback of [...transaction.rollbackHandlers].reverse()) {
+                    try {
+                        rollback(error);
+                    } catch (failure) {
+                        rollbackError = rollbackError === null
+                            ? failure
+                            : new Error(`${String(rollbackError)}; ${String(failure)}`);
+                    }
+                }
+                this._changeTransactions.pop();
+                if (rollbackError !== null) {
+                    const originalMessage = error instanceof Error ? error.message : String(error);
+                    const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+                    throw new Error(`Document transaction failed: ${originalMessage}. Rollback also failed: ${rollbackMessage}`);
+                }
+            }
+            throw error;
+        }
+    }
+
+    beforeCommit(effect: () => void): void {
+        const transaction = this._changeTransactions[this._changeTransactions.length - 1];
+        if (transaction) {
+            transaction.beforeCommitEffects.push(effect);
+        } else {
+            effect();
+        }
+    }
+
+    afterCommit(effect: () => void): void {
+        const transaction = this._changeTransactions[this._changeTransactions.length - 1];
+        if (transaction) {
+            transaction.afterCommitEffects.push(effect);
+        } else {
+            effect();
+        }
+    }
+
+    private flushBeforeCommitEffects(transaction: DocumentChangeTransaction): void {
+        while (transaction.beforeCommitEffects.length > 0) {
+            transaction.beforeCommitEffects.shift()!();
+        }
+    }
+
+    private flushAfterCommitEffects(transaction: DocumentChangeTransaction): void {
+        while (transaction.afterCommitEffects.length > 0) {
+            const effect = transaction.afterCommitEffects.shift()!;
+            try {
+                effect();
+            } catch (error) {
+                console.error('ProjectDocument afterCommit effect failed:', error);
+            }
+        }
+    }
+
+    private _publishChange(type: DocumentChangeType, affectedNodeIds?: string[]): void {
         this._revision++;
         const event: DocumentChangeEvent = {
             type,
@@ -793,6 +901,7 @@ export class ProjectDocument {
 
     private _serializeNode(node: CADNode): Record<string, any> {
         const { translation, rotation, scale } = node.localMatrix.decompose();
+        const isFrozen = Boolean(node.frozen || (node.domainData as any)?.frozen);
         const json: Record<string, any> = {
             id: node.id,
             name: node.name,
@@ -800,11 +909,16 @@ export class ProjectDocument {
             translationNm: [translation.x, translation.y, translation.z],
             rotationQuat: [rotation.x, rotation.y, rotation.z, rotation.w],
             scale: [scale.x, scale.y, scale.z],
+            ...(isFrozen ? { frozen: true } : {}),
             children: node.children.map(c => this._serializeNode(c))
         };
 
         if (node.domainData) {
             let data = node.domainData as any;
+            if (isFrozen) {
+                data.frozen = true;
+                data.visible = false;
+            }
             if (typeof data.toJSON !== 'function') {
                 if (node.nodeType === NodeType.HARDWARE && data && typeof data === 'object') {
                     data = HardwareModel.fromJSON(data);
@@ -946,6 +1060,9 @@ export class ProjectDocument {
     private _deserializeNode(nodeJson: any): CADNode {
         const type = nodeJson.nodeType as NodeType;
         const node = new CADNode(nodeJson.id, nodeJson.name || '', type);
+        if (nodeJson.frozen !== undefined) {
+            node.frozen = Boolean(nodeJson.frozen);
+        }
 
         if (nodeJson.translationNm && nodeJson.rotationQuat) {
             const t = new Vec3(nodeJson.translationNm[0], nodeJson.translationNm[1], nodeJson.translationNm[2]);
@@ -955,6 +1072,14 @@ export class ProjectDocument {
         }
 
         this._hydrateDomainData(node, nodeJson);
+        if (node.domainData) {
+            const d = node.domainData as any;
+            if (node.frozen || d.frozen || d.params?.frozen) {
+                node.frozen = true;
+                d.frozen = true;
+                d.visible = false;
+            }
+        }
 
         this._registerSubtree(node);
 

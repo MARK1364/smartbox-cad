@@ -240,8 +240,13 @@ export class AppCommands {
         const fileIO = new ProjectFileIO();
         ContextManager.instance.projectFileIO = fileIO;
 
-        const applyLoadedProject = (data: any, status = tx(srcTekst, 'cmd.project_loaded', TX_NS)) => {
+        const applyLoadedProject = (
+            data: any,
+            status = tx(srcTekst, 'cmd.project_loaded', TX_NS),
+            onLoaded?: () => void
+        ) => {
             document.load(data);
+            onLoaded?.();
             clearEditHistory();
             rebuildGeometry(status);
         };
@@ -322,7 +327,7 @@ export class AppCommands {
             if (!confirmDiscardUnsaved()) return;
             try {
                 const result = await fileIO.openFromFile(file);
-                applyLoadedProject(result.data);
+                applyLoadedProject(result.data, undefined, result.commit);
             } catch (err) {
                 console.error(err);
                 ui.setStatus(tx(srcTekst, 'cmd.load_error', TX_NS), true, 'error');
@@ -334,7 +339,7 @@ export class AppCommands {
             try {
                 const result = await fileIO.open();
                 if (!result) return;
-                applyLoadedProject(result.data);
+                applyLoadedProject(result.data, undefined, result.commit);
             } catch (err) {
                 if (isUserAbort(err)) return;
                 console.error(err);
@@ -390,6 +395,11 @@ export class AppCommands {
             rebuildGeometry();
         };
 
+        const setPmiVisible = (visible: boolean) => {
+            ContextManager.instance.setPmiVisible(visible);
+            viewport.requestRender?.(4);
+        };
+
         const api: IAppAPI = {
             addSmartPanel,
             addSmartFrame,
@@ -406,6 +416,7 @@ export class AppCommands {
             zoomFit,
             setView: handleViewCubeClick,
             setLcsVisible,
+            setPmiVisible,
             undo: () => {
                 const cmdHist = ContextManager.instance.commandHistory;
                 if (!cmdHist?.canUndo) return;

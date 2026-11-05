@@ -6,6 +6,7 @@
  */
 
 import { IDManager, EntityType } from '../A1_core/id-manager.js';
+import { ContextManager } from '../A1_core/context-manager.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { Quat } from '../A1_core/cad-math/quat.js';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
@@ -30,9 +31,28 @@ export { isManualPanel } from '../A1_core/panel-like.js';
 /** Monotoniczny licznik id paneli — bez Math.random (deterministyczny w sesji). */
 let _panelIdSeq = 0;
 
-function allocPanelId(): string {
-    _panelIdSeq += 1;
-    return `panel_${_panelIdSeq}`;
+export function bumpPanelIdSeqFromId(rawId: unknown): void {
+    if (typeof rawId !== 'string') return;
+    const m = /^panel_(\d+)$/i.exec(rawId.trim());
+    if (m) {
+        const n = Number(m[1]);
+        if (Number.isFinite(n) && n > _panelIdSeq) {
+            _panelIdSeq = n;
+        }
+    }
+}
+
+export function allocPanelId(isIdTaken?: (id: string) => boolean): string {
+    const doc = ContextManager.instance?.document;
+    let candidate = '';
+    do {
+        _panelIdSeq += 1;
+        candidate = `panel_${_panelIdSeq}`;
+    } while (
+        (typeof isIdTaken === 'function' && isIdTaken(candidate)) ||
+        (doc && typeof doc.findNode === 'function' && doc.findNode(candidate) !== null)
+    );
+    return candidate;
 }
 
 // ─── Face definitions ────────────────────────────────────────
@@ -87,7 +107,7 @@ export class PanelModel {
     type: string = 'part';
     visible: boolean = true;
     /** Zamrozenie: ukryty i wylaczony z obliczen; show-all tego nie cofa. */
-    declare frozen?: boolean;
+    frozen: boolean = false;
     lcsVisible: boolean = true;
     materialId: string = 'W1100_ST9_18';
     /** Alias kompatybilności z JSON / Blender (materialId). */
@@ -116,6 +136,8 @@ export class PanelModel {
     panelForm: 'SOLID' | 'ALU_FRAME' = 'SOLID';
     /** ID wybranego szablonu ramki alu (np. Z1_BLACK, Z9_WIDE_BLACK). */
     frameTemplateId?: string;
+    /** Kierunek usłojenia: false = standardowe (wzdłuż), true = obrócone o 90° (w poprzek). */
+    rotate_grain: boolean = false;
 
     constructor({ 
         width, 
@@ -134,6 +156,8 @@ export class PanelModel {
         zoneId = undefined as string | undefined,
         zonePrefix = undefined as string | undefined,
         id: providedId = undefined as string | undefined,
+        visible = true,
+        frozen = false,
     }: {
         width: number;
         height: number;
@@ -151,6 +175,8 @@ export class PanelModel {
     zoneId?: string;
         zonePrefix?: string;
         id?: string;
+        visible?: boolean;
+        frozen?: boolean;
     }) {
         validatePanelDimensionsNm({ width, height, thickness, name }, 'PanelModel');
 
@@ -188,6 +214,8 @@ export class PanelModel {
         this.thickness = thickness;
         this.role = role;
         this.engineManaged = engineManaged !== false;
+        this.frozen = Boolean(frozen);
+        this.visible = this.frozen ? false : (visible !== false);
         this.materialId = materialId;
         this.materialName = materialName;
         this.materialCode = materialCode;
@@ -198,6 +226,11 @@ export class PanelModel {
             material_code: materialCode,
             thickness_mm: thicknessMm,
         };
+
+        if ((arguments[0] as any)?.rotate_grain !== undefined) {
+            this.rotate_grain = !!(arguments[0] as any).rotate_grain;
+            this.custom_properties.rotate_grain = this.rotate_grain;
+        }
         
         if (zoneId !== undefined) {
             this.zoneId = zoneId;
@@ -210,7 +243,12 @@ export class PanelModel {
         this.projectName = "Projekt";
         
         // ID od twórcy / hydratora; inaczej monotoniczny alokator (bez Math.random).
-        this.id = (typeof providedId === 'string' && providedId.length > 0) ? providedId : allocPanelId();
+        if (typeof providedId === 'string' && providedId.length > 0) {
+            bumpPanelIdSeqFromId(providedId);
+            this.id = providedId;
+        } else {
+            this.id = allocPanelId();
+        }
         
         // Inicjalizacja Głównego ID
         const idMgr = IDManager.getInstance();
@@ -289,6 +327,19 @@ export class PanelModel {
         this.frameTemplateId = undefined;
         this._emit('panelFormChanged', { panelForm: 'SOLID' });
         this._emit('dimensions', { width: this.width, height: this.height, thickness: this.thickness });
+    }
+
+    setRotateGrain(rotate: boolean): boolean {
+        const next = Boolean(rotate);
+        this.rotate_grain = next;
+        if (!this.custom_properties) this.custom_properties = {};
+        this.custom_properties.rotate_grain = next;
+        this._emit('grainChanged', { rotate_grain: next });
+        return this.rotate_grain;
+    }
+
+    toggleGrainDirection(): boolean {
+        return this.setRotateGrain(!this.rotate_grain);
     }
 
     getFrameComponents(): AluFrameComponent[] {
@@ -572,6 +623,9 @@ export class PanelModel {
             ...(this.zoneId !== undefined ? { zoneId: this.zoneId } : {}),
             ...(this.zonePrefix !== undefined ? { zonePrefix: this.zonePrefix } : {}),
             engineManaged: this.engineManaged,
+            visible: this.frozen ? false : (this.visible !== false),
+            frozen: Boolean(this.frozen),
+            ...(this.rotate_grain ? { rotate_grain: true } : {}),
             associativeDims: this.associativeDims,
             panelForm: this.panelForm,
             frameTemplateId: this.frameTemplateId,
@@ -628,6 +682,15 @@ export class PanelModel {
         if (data.zoneId != null) this.zoneId = data.zoneId;
         if (data.zonePrefix != null) this.zonePrefix = data.zonePrefix;
         if (data.engineManaged != null) this.engineManaged = data.engineManaged !== false;
+        if (data.frozen !== undefined || data.params?.frozen !== undefined) {
+            this.frozen = Boolean(data.frozen || data.params?.frozen);
+        }
+        if (this.frozen) {
+            this.visible = false;
+        } else if (data.visible !== undefined) {
+            this.visible = data.visible !== false;
+        }
+        if (data.rotate_grain !== undefined) this.rotate_grain = data.rotate_grain === true;
         if (data.associativeDims !== undefined) this.associativeDims = data.associativeDims;
         if (data.panelForm) this.panelForm = data.panelForm;
         if (data.frameTemplateId !== undefined) this.frameTemplateId = data.frameTemplateId;
@@ -697,6 +760,15 @@ export class PanelModel {
         if (data.report_type !== undefined) this.report_type = data.report_type;
         if (data.library_id !== undefined) this.library_id = data.library_id;
         if (data.engineManaged != null) this.engineManaged = data.engineManaged !== false;
+        if (data.frozen !== undefined || data.params?.frozen !== undefined) {
+            this.frozen = Boolean(data.frozen || data.params?.frozen);
+        }
+        if (this.frozen) {
+            this.visible = false;
+        } else if (data.visible !== undefined) {
+            this.visible = data.visible !== false;
+        }
+        if (data.rotate_grain !== undefined) this.rotate_grain = data.rotate_grain === true;
         if (data.associativeDims !== undefined) this.associativeDims = data.associativeDims;
         if (data.panelForm) this.panelForm = data.panelForm;
         if (data.frameTemplateId !== undefined) this.frameTemplateId = data.frameTemplateId;
@@ -762,5 +834,6 @@ export function computePanelFeaturesFingerprint(panel: any): string {
     const outlinePart = Array.isArray(outline) && outline.length > 0
         ? `_o:${outline.map((pt: any) => Array.isArray(pt) ? `${pt[0]},${pt[1]}` : `${pt?.x},${pt?.y}`).join(';')}`
         : '';
-    return featPart + outlinePart;
+    const grainPart = (panel?.rotate_grain || panel?.custom_properties?.rotate_grain) ? '_g1' : '';
+    return featPart + outlinePart + grainPart;
 }

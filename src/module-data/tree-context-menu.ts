@@ -20,6 +20,8 @@ const TX_NS = 'src';
 import { openCadEditEntity } from '../floating-edit/cad-edit-entity.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { isSmartWallContainer, isWallPart } from '../../S4_sciany/smartwall-types.js';
+import { isPanelModel } from '../../A4_smartpanel/panel-model.js';
+import { SetGrainDirectionCommand } from '../../A1_core/commands/set-grain-direction-command.js';
 import { openQuickPick } from '../../A1_core/quick-pick/quick-pick-events.js';
 import { DEFAULT_KITCHEN_DATUM_PRESETS } from '../../S1_sketcher/datum-types.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
@@ -42,9 +44,17 @@ export interface TreeContextMenuData {
     source?: string;
     isManual?: boolean;
     frozen?: boolean;
+    visible?: boolean;
     clientX: number;
     clientY: number;
     quickPickCandidates?: any[];
+    hiddenUnderCursor?: {
+        id: string;
+        uuid?: string;
+        name: string;
+        type: 'part' | 'container' | 'hardware';
+        entity?: any;
+    };
 }
 
 const ICONS = {
@@ -65,6 +75,7 @@ const ICONS = {
     eyeOff: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
     trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
     aluFrame: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10"/></svg>',
+    rotateGrain: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><polyline points="21 3 21 8 16 8"/></svg>',
 };
 
 const treeMenu = new ContextMenu();
@@ -350,6 +361,40 @@ function openProperties(data: TreeContextMenuData): void {
     if (inspected) pm.showProperties(inspected);
 }
 
+function hideElement(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    const id = String(data.id || data.uuid || '');
+    const node = doc?.findNode?.(id);
+    const kind = nodeKind(data.type);
+    const isPart = kind === 'part' || kind === 'panel' || (node && node.nodeType === NodeType.PART) || (node && isWallPart(node.domainData));
+    if (isPart) {
+        UIController.instance?.emitTree('hide-part', { id, uuid: data.uuid || id });
+    } else if (kind === 'feature') {
+        UIController.instance?.emitTree('hide-feature', { id, panelId: data.panelId });
+    } else if (kind === 'hardware') {
+        UIController.instance?.emitTree('hide-hardware', { id });
+    } else if (kind !== 'project' && kind !== 'root') {
+        UIController.instance?.emitTree('hide-container', { id });
+    }
+}
+
+function showElement(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    const id = String(data.id || data.uuid || '');
+    const node = doc?.findNode?.(id);
+    const kind = nodeKind(data.type);
+    const isPart = kind === 'part' || kind === 'panel' || (node && node.nodeType === NodeType.PART) || (node && isWallPart(node.domainData));
+    if (isPart) {
+        UIController.instance?.emitTree('show-part', { id, uuid: data.uuid || id });
+    } else if (kind === 'feature') {
+        UIController.instance?.emitTree('show-feature', { id, panelId: data.panelId });
+    } else if (kind === 'hardware') {
+        UIController.instance?.emitTree('show-hardware', { id });
+    } else if (kind !== 'project' && kind !== 'root') {
+        UIController.instance?.emitTree('show-container', { id });
+    }
+}
+
 function toggleVisibility(data: TreeContextMenuData): void {
     if (nodeKind(data.type) === 'datum_level') {
         toggleDatumLevelVisibility(data);
@@ -555,6 +600,70 @@ function toggleAluFrame(data: TreeContextMenuData, toAlu: boolean, templateId: s
         doc.notifyDocumentChanged?.();
         doc.emitChange?.('all');
         UIController.instance?.setStatus?.(toAlu ? tx(srcTekst, 'ctxmenu.alu_done', TX_NS) : tx(srcTekst, 'ctxmenu.alu_reverted', TX_NS), true);
+    }
+}
+
+function toggleGrainDirection(data: TreeContextMenuData): void {
+    const doc = getDoc();
+    const targetId = String(data.id || data.uuid || '');
+    if (!doc || !targetId) return;
+    const node = doc.findNode(targetId);
+    const entity = node?.domainData || findPanel(targetId) || findContainer(targetId);
+    if (!entity && !node) return;
+
+    // A) Pojedyncza formatka
+    if (entity && isPanelModel(entity)) {
+        const panelId = String(entity.id || targetId);
+        const nextState = !entity.rotate_grain;
+        const cmd = new SetGrainDirectionCommand(panelId, nextState, undefined, [entity]);
+        const cmdHist = ContextManager.instance.commandHistory;
+        if (cmdHist) {
+            cmdHist.execute(cmd);
+        } else {
+            cmd.execute(doc);
+        }
+        const isRot = !!entity.rotate_grain;
+        UIController.instance?.setStatus?.(
+            isRot ? 'Usłojenie formatki obrócone o 90° (poprzeczne)' : 'Usłojenie formatki przywrócone (wzdłużne)',
+            true
+        );
+        return;
+    }
+
+    // B) Kontener / szafka / drzwi / szuflady -> obróć usłojenie frontów lub płyt
+    const panelsToRotate: any[] = [];
+    if (node) {
+        const collect = (n: any) => {
+            if (n.domainData && isPanelModel(n.domainData)) {
+                panelsToRotate.push(n.domainData);
+            }
+            if (n.children) {
+                for (const c of n.children) collect(c);
+            }
+        };
+        collect(node);
+    }
+    if (panelsToRotate.length > 0) {
+        const fronts = panelsToRotate.filter(p => String(p.role || '').toUpperCase().includes('FRONT'));
+        const targetList = fronts.length > 0 ? fronts : panelsToRotate;
+        const nextState = !targetList[0]?.rotate_grain;
+        const targetIds = targetList.map(p => String(p.id || '')).filter(Boolean);
+        const cmd = new SetGrainDirectionCommand(
+            targetIds.length > 0 ? targetIds : [targetId],
+            nextState,
+            `Obrót usłojenia 90° (${targetList.length})`,
+            targetList
+        );
+        const cmdHist = ContextManager.instance.commandHistory;
+        if (cmdHist) {
+            cmdHist.execute(cmd);
+        } else {
+            cmd.execute(doc);
+        }
+        UIController.instance?.setStatus?.(
+            nextState ? `Obrócono usłojenie o 90° (${targetList.length} formatek)` : `Przywrócono usłojenie wzdłużne (${targetList.length} formatek)`,
+            true
+        );
     }
 }
 
@@ -870,65 +979,84 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         items.push({ separator: true });
     }
 
-    // Edycja na samej górze — SmartPart / AGD / ściana / formatka / blok / korpus / operacja
+    // Edycja obiektu — SmartPart / AGD / ściana / formatka / blok / korpus / operacja jako standardowy mały przycisk w toolbarze
     const wallTarget = isWallNode(data);
     const doc = getDoc();
     const currentNode = doc?.findNode?.(String(data.id || data.uuid || ''));
-    const isSingleWallPart = currentNode ? (currentNode.nodeType === NodeType.PART || isWallPart(currentNode.domainData)) : false;
+    const isSingleWallPart = currentNode ? (currentNode.nodeType === NodeType.PART && isWallPart(currentNode.domainData)) : false;
     const isWall = !!wallTarget || kind === 'wall' || isSingleWallPart;
 
+    let editTool: any = null;
+
     if (isSmartPartNode(data)) {
-        items.push({ label: 'Edytuj', icon: ICONS.editOperation, action: 'edit-smartpart' });
-        items.push({ separator: true });
+        editTool = { label: 'Edytuj', caption: 'Edytuj', icon: ICONS.editOperation, action: 'edit-smartpart' };
     } else if (isApplianceNode(data)) {
-        items.push({ label: 'Edytuj AGD', icon: ICONS.editKorpus, action: 'edit-agd' });
+        editTool = { label: 'Edytuj AGD', caption: 'Edytuj', icon: ICONS.editKorpus, action: 'edit-agd' };
     } else if (wallTarget) {
         const isSkos = wallTarget.generatorParams?.preset === 'skos';
-        items.push({ label: isSkos ? 'Edytuj skos' : 'Edytuj ścianę', icon: ICONS.editKorpus, action: 'edit-wall' });
+        editTool = { label: isSkos ? 'Edytuj skos' : 'Edytuj ścianę', caption: 'Edytuj', icon: ICONS.editKorpus, action: 'edit-wall' };
     } else if (kind === 'feature') {
         const isSmart = data.isSmart === true || data.source === 'library' || !!data.libraryId;
         if (isSmart) {
-            items.push({ label: 'Edytuj', icon: ICONS.editOperation, action: 'edit-operation' });
-        } else {
-            const isFrozen = data.frozen === true;
-            items.push({
-                label: isFrozen ? tx(srcTekst, 'ctxmenu.unfreeze_op', TX_NS) : tx(srcTekst, 'ctxmenu.freeze_op', TX_NS),
-                icon: ICONS.freeze,
-                action: 'toggle-freeze',
-            });
+            editTool = { label: 'Edytuj', caption: 'Edytuj', icon: ICONS.editOperation, action: 'edit-operation' };
         }
     } else if (isManualEditablePanel(data)) {
-        items.push({ label: tx(srcTekst, 'ctxmenu.edit_panel', TX_NS), icon: ICONS.editOperation, action: 'edit-panel' });
+        editTool = { label: tx(srcTekst, 'ctxmenu.edit_panel', TX_NS), caption: 'Edytuj', icon: ICONS.editOperation, action: 'edit-panel' };
     } else if (kind === 'part' || kind === 'panel') {
         const parentC = resolveParentContainer(String(data.id || data.uuid || ''));
         if (parentC) {
             if (parentC.isBlok) {
-                items.push({ label: 'Edytuj blok', icon: ICONS.editKorpus, action: 'edit-bloki' });
+                editTool = { label: 'Edytuj blok', caption: 'Edytuj', icon: ICONS.editKorpus, action: 'edit-bloki' };
             } else {
-                items.push({ label: 'Edytuj korpus', icon: ICONS.editKorpus, action: 'edit-korpus' });
+                editTool = { label: 'Edytuj korpus', caption: 'Edytuj', icon: ICONS.editKorpus, action: 'edit-korpus' };
             }
         }
     } else if (isBlokiContainer(data.id, data.type) || kind === 'bloki' || kind === 'drawers' || kind === 'shelves') {
-        items.push({ label: 'Edytuj blok', icon: ICONS.editKorpus, action: 'edit-bloki' });
+        editTool = { label: 'Edytuj blok', caption: 'Edytuj', icon: ICONS.editKorpus, action: 'edit-bloki' };
     } else if (isKorpusNode(data)) {
-        items.push({ label: 'Edytuj korpus', icon: ICONS.editKorpus, action: 'edit-korpus' });
+        editTool = { label: 'Edytuj korpus', caption: 'Edytuj', icon: ICONS.editKorpus, action: 'edit-korpus' };
     }
 
-    // Obiekt: zębatka Właściwości + Zmień nazwę (małe przyciski z podpisem)
-    const objectTools: any[] = [
-        {
-            label: tx(srcTekst, 'ctxmenu.props', TX_NS),
-            caption: 'Właściwości',
-            icon: ICONS.properties,
-            action: 'open-properties',
-        },
-        {
-            label: tx(srcTekst, 'ctxmenu.rename', TX_NS),
-            caption: 'Nazwa',
-            icon: ICONS.rename,
-            action: 'rename',
-        },
-    ];
+    // Obiekt: pasek narzędzi (małe przyciski z ikoną i podpisem)
+    const objectTools: any[] = [];
+    if (editTool) {
+        objectTools.push(editTool);
+    }
+    objectTools.push({
+        label: tx(srcTekst, 'ctxmenu.props', TX_NS),
+        caption: 'Właściwości',
+        icon: ICONS.properties,
+        action: 'open-properties',
+    });
+    objectTools.push({
+        label: tx(srcTekst, 'ctxmenu.rename', TX_NS),
+        caption: 'Nazwa',
+        icon: ICONS.rename,
+        action: 'rename',
+    });
+
+    // Usłojenie (90°) jako mały przycisk w pasku Obiekt
+    if ((kind === 'part' || kind === 'panel') && !isWall) {
+        const panelId = String(data.id || data.uuid || '');
+        const node = doc?.findNode(panelId);
+        const panel = node?.domainData || findPanel(panelId);
+        if (panel && panel.panelForm !== 'ALU_FRAME') {
+            const isRot = !!(panel.rotate_grain || panel.grain_direction === 'CROSS' || panel.custom_properties?.rotate_grain);
+            objectTools.push({
+                label: isRot ? 'Przywróć usłojenie (wzdłużne)' : 'Obróć usłojenie o 90° (poprzeczne)',
+                caption: '90° Usłój',
+                icon: ICONS.rotateGrain,
+                action: 'toggle-grain-direction',
+            });
+        }
+    } else if ((kind === 'container' || kind === 'assembly' || kind === 'korpus' || kind === 'bloki' || kind === 'drawers' || kind === 'shelves') && !isWall) {
+        objectTools.push({
+            label: 'Obróć usłojenie frontów o 90°',
+            caption: '90° Fronty',
+            icon: ICONS.rotateGrain,
+            action: 'toggle-grain-direction',
+        });
+    }
     const isPartLike = kind === 'part' || kind === 'panel' || isSingleWallPart || (currentNode && currentNode.nodeType === NodeType.PART);
     const isManualPart = isPartLike && (data.isManual === true || (currentNode?.domainData && (currentNode.domainData as any).engineManaged === false));
     const isEngineChild = isPartLike && !isManualPart;
@@ -976,18 +1104,52 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
     const canIsolate =
         kind === 'part' || kind === 'panel' || kind === 'container' || kind === 'assembly'
         || kind === 'korpus' || kind === 'bloki' || kind === 'drawers' || kind === 'shelves'
-        || kind === 'handle' || kind === 'agd' || kind === 'appliance' || kind === 'wall' || isWall;
+        || kind === 'handle' || kind === 'agd' || kind === 'appliance' || kind === 'wall' || isWall
+        || kind === 'hardware';
     const canRevealScope =
         canIsolate || kind === 'project' || kind === 'root' || kind === 'hardware';
 
+    const isHidden = (() => {
+        if (data.visible === false) return true;
+        const doc = getDoc();
+        const id = String(data.id || data.uuid || '');
+        if (!doc || !id) return false;
+        const node = doc.findNode?.(id);
+        if (node) {
+            if ((node as any).visible === false) return true;
+            if (node.domainData && (node.domainData as any).visible === false) return true;
+        }
+        const panel = findPanel(id);
+        if (panel && (panel as any).visible === false) return true;
+        return false;
+    })();
+
     const viewTools: any[] = [];
     if (canIsolate) {
-        viewTools.push({
-            label: 'Ukryj',
-            caption: 'Ukryj',
-            icon: ICONS.eyeOff,
-            action: 'toggle-visibility',
-        });
+        if (isHidden) {
+            viewTools.push({
+                label: 'Pokaż',
+                caption: 'Pokaż',
+                icon: ICONS.eye,
+                action: 'show-element',
+            });
+        } else {
+            viewTools.push({
+                label: 'Ukryj',
+                caption: 'Ukryj',
+                icon: ICONS.eyeOff,
+                action: 'hide-element',
+            });
+            // Jeśli za widocznym elementem znajduje się ukryta formatka / okucie:
+            if (data.hiddenUnderCursor) {
+                viewTools.push({
+                    label: data.hiddenUnderCursor.name ? `Pokaż: ${data.hiddenUnderCursor.name}` : 'Pokaż ukryty',
+                    caption: 'Pokaż',
+                    icon: ICONS.eye,
+                    action: 'show-hidden-under-cursor',
+                });
+            }
+        }
         viewTools.push({
             label: tx(srcTekst, 'ctxmenu.show_only', TX_NS),
             caption: 'Tylko',
@@ -1013,6 +1175,7 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         const node = doc?.findNode(panelId);
         const panel = node?.domainData || findPanel(panelId);
         const isAlu = panel?.panelForm === 'ALU_FRAME' || (typeof panel?.isAluFrame === 'function' && panel.isAluFrame());
+
         items.push({ separator: true });
         items.push({ section: 'Ramka ALU' });
         if (isAlu) {
@@ -1120,12 +1283,25 @@ export function showCadTreeContextMenu(data: TreeContextMenuData): void {
         else if (action === 'rename') startRename(data);
         else if (action === 'delete') deleteNode(data);
         else if (action === 'open-properties') openProperties(data);
+        else if (action === 'hide-element') hideElement(data);
+        else if (action === 'show-element') showElement(data);
+        else if (action === 'show-hidden-under-cursor' && data.hiddenUnderCursor) {
+            const h = data.hiddenUnderCursor;
+            if (h.type === 'part') {
+                UIController.instance?.emitTree('show-part', { id: h.id, uuid: h.uuid || h.id });
+            } else if (h.type === 'hardware') {
+                UIController.instance?.emitTree('show-hardware', { id: h.id });
+            } else {
+                UIController.instance?.emitTree('show-container', { id: h.id });
+            }
+        }
         else if (action === 'toggle-visibility') toggleVisibility(data);
         else if (action === 'show-only') showOnly(data);
         else if (action === 'show-all') showAll(data);
         else if (action === 'toggle-freeze') toggleFreeze(data);
         else if (action === 'convert-to-alu-frame') toggleAluFrame(data, true);
         else if (action === 'convert-to-solid') toggleAluFrame(data, false);
+        else if (action === 'toggle-grain-direction') toggleGrainDirection(data);
         else if (action === 'open-report' && scope) openReportFromCad(scope);
         else if (action === 'open-nesting' && scope) openNestingFromCad(scope);
         else if (action === 'batch-cnc' && scope) CncBatchController.instance.openModal(scope);

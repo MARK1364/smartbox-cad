@@ -183,7 +183,47 @@ class MaterialDatabase {
 
     public getMaterialById(id: string): MaterialItem | undefined {
         if (!id) return undefined;
-        return this.materials.find(m => m.id === id || m.id.toLowerCase() === id.toLowerCase() || m.code.toLowerCase() === id.toLowerCase());
+        const cleaned = id.trim();
+        const lower = cleaned.toLowerCase();
+
+        // 1. Bezpośrednie dopasowanie po ID lub kodzie (dokładne i bez wielkości liter)
+        const direct = this.materials.find(m => 
+            m.id === id || 
+            m.id.toLowerCase() === lower || 
+            (m.code && (m.code.toLowerCase() === lower || m.code.toLowerCase() === lower.replace(/_/g, ' ')))
+        );
+        if (direct) return direct;
+
+        // 2. Dopasowanie po nazwie materiału (np. "Dąb Halifax naturalny")
+        const byName = this.materials.find(m => 
+            m.name.toLowerCase() === lower || 
+            m.name.replace(/\s+\d+(\.\d+)?\s*mm$/i, '').trim().toLowerCase() === lower
+        );
+        if (byName) return byName;
+
+        // Helper do czyszczenia znaków diakrytycznych (np. ą -> a, ł -> l)
+        const stripDiacritics = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l').replace(/Ł/g, 'l');
+
+        // 3. Dopasowanie znormalizowane (ignorujące spacje, podkreślenia, myślniki i polskie ogonki)
+        const normalized = stripDiacritics(lower).replace(/[\s_-]+/g, '');
+        const byNormalized = this.materials.find(m => {
+            const mIdNorm = stripDiacritics(m.id.toLowerCase()).replace(/[\s_-]+/g, '');
+            const mCodeNorm = m.code ? stripDiacritics(m.code.toLowerCase()).replace(/[\s_-]+/g, '') : '';
+            const mNameNorm = stripDiacritics(m.name.toLowerCase()).replace(/[\s_-]+/g, '');
+            return mIdNorm === normalized || mCodeNorm === normalized || mNameNorm === normalized;
+        });
+        if (byNormalized) return byNormalized;
+
+        // 4. Dopasowanie bazy dekoru bez sufiksu grubości (np. "H1180_ST37" -> "H1180_ST37_18")
+        const baseKey = lower.replace(/_\d+(?:\.\d+)?$/, '');
+        const byBase = this.materials.find(m => {
+            const mBase = m.id.toLowerCase().replace(/_\d+(?:\.\d+)?$/, '');
+            const mCodeBase = m.code ? m.code.toLowerCase().replace(/\s+/g, '_') : '';
+            return mBase === baseKey || mCodeBase === baseKey;
+        });
+        if (byBase) return byBase;
+
+        return undefined;
     }
 
     /**

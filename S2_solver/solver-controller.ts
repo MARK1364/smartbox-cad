@@ -19,6 +19,8 @@ import type { Command } from '../A1_core/commands/command.js';
 import type { SolverConstraint } from './constraint-types.js';
 import { constraintNodeIds } from './constraint-types.js';
 import { validateConstraints, type ConstraintValidationIssue } from './constraint-validation.js';
+import { registerNodeCleanupHandler } from '../A1_core/node-cleanup-port.js';
+import { RemoveConstraintCommand } from './constraint-commands.js';
 
 const DEBOUNCE_MS = 150;
 
@@ -44,6 +46,22 @@ export class SolverController {
         this._history = history;
 
         this._disposers.push(this._store.attachTo(document));
+        this._disposers.push(registerNodeCleanupHandler({
+            id: 'S2_solver_constraints',
+            collectIds: (node) => {
+                const removedNodeIds = new Set([node.id, ...node.findAll().map((entry) => entry.id)]);
+                return this._store.constraints
+                    .filter((constraint) => constraintNodeIds(constraint).some((id) => removedNodeIds.has(id)))
+                    .map((constraint) => constraint.id);
+            },
+            createClearCommand: (id) => {
+                const constraint = this._store.get(id);
+                if (!constraint) {
+                    throw new Error(`Solver cleanup: constraint "${id}" no longer exists.`);
+                }
+                return new RemoveConstraintCommand(constraint, 'Usunięcie relacji z usuniętym węzłem', this._store);
+            },
+        }));
         this._disposers.push(
             document.onDocumentChanged((event) => this._onDocumentChanged(event)),
         );

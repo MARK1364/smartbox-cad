@@ -365,3 +365,33 @@ export function isHingeEnabled(raw: object, index: number, defaultEnabled: boole
     if (value === undefined) return defaultEnabled;
     return value !== false;
 }
+
+export const LEGACY_SLIDING_DOORS_PARAM_ALIASES: Readonly<Record<string, string>> = {
+    ...SHARED_FRONT_MM,
+    leaf_count: 'liczba_skrzydel',
+    leafCount: 'liczba_skrzydel',
+    door_count: 'liczba_skrzydel',
+    roller_type: 'typ_rolki',
+    rollerType: 'typ_rolki',
+    roller_brand: 'producent_rolek',
+    rollerBrand: 'producent_rolek',
+    track_height: 'tor_gorny_wysokosc_mm',
+    track_depth: 'tor_gorny_glebokosc_mm',
+    track_setback: 'tor_gorny_cofniecie_mm',
+    guide_height: 'tor_dolny_wysokosc_mm',
+    guide_depth: 'tor_dolny_glebokosc_mm',
+    guide_setback: 'tor_dolny_cofniecie_mm',
+    bottom_track_height: 'tor_dolny_wysokosc_mm',
+    bottom_track_depth: 'tor_dolny_glebokosc_mm',
+    bottom_track_setback: 'tor_dolny_cofniecie_mm',
+    track_spacing: 'rozstaw_torow_mm',
+    handle_width: 'szerokosc_raczki_mm',
+    handle_thickness: 'grubosc_raczki_mm',
+    overlap_mm: 'zakladka_mm',
+    show_rollers: 'pokaz_rolki',
+    show_handles: 'pokaz_raczki',
+};
+
+export function assertCanonicalSlidingDoorsParams(raw: object | null | undefined): void {
+    assertNoLegacyKeys(raw, LEGACY_SLIDING_DOORS_PARAM_ALIASES, 'sliding_doors');
+}

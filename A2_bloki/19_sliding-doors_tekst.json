@@ -1,0 +1,152 @@
+{
+  "panel.label": {
+    "pl": "Drzwi Przesuwne",
+    "en": "Sliding Doors",
+    "de": "Schiebetüren"
+  },
+  "leaves.title": {
+    "pl": "Skrzydła:",
+    "en": "Door leaves:",
+    "de": "Türblätter:"
+  },
+  "leaf_count.label": {
+    "pl": "Liczba skrzydeł:",
+    "en": "Number of leaves:",
+    "de": "Anzahl Türblätter:"
+  },
+  "leaf_thickness.label": {
+    "pl": "Grubość płyty:",
+    "en": "Board thickness:",
+    "de": "Plattendicke:"
+  },
+  "overlap_mm.label": {
+    "pl": "Zakładka skrzydeł:",
+    "en": "Leaf overlap:",
+    "de": "Überlappung:"
+  },
+  "overlaps.title": {
+    "pl": "Nałożenia:",
+    "en": "Overlaps:",
+    "de": "Überlappungen:"
+  },
+  "ov_top.label": {
+    "pl": "Góra:",
+    "en": "Top:",
+    "de": "Oben:"
+  },
+  "ov_bottom.label": {
+    "pl": "Dół:",
+    "en": "Bottom:",
+    "de": "Unten:"
+  },
+  "ov_left.label": {
+    "pl": "Lewo:",
+    "en": "Left:",
+    "de": "Links:"
+  },
+  "ov_right.label": {
+    "pl": "Prawo:",
+    "en": "Right:",
+    "de": "Rechts:"
+  },
+  "track.title": {
+    "pl": "Tory jezdne (Sevroll):",
+    "en": "Tracks (Sevroll):",
+    "de": "Laufschienen (Sevroll):"
+  },
+  "roller_type.label": {
+    "pl": "Typ systemu:",
+    "en": "System type:",
+    "de": "Systemtyp:"
+  },
+  "roller_type.TOP": {
+    "pl": "Górny (zawieszany)",
+    "en": "Top-hung",
+    "de": "Hängesystem"
+  },
+  "roller_type.BOTTOM": {
+    "pl": "Dolny (Sevroll)",
+    "en": "Bottom-running (Sevroll)",
+    "de": "Bodensystem (Sevroll)"
+  },
+  "roller_type.BOTH": {
+    "pl": "Górny + dolny",
+    "en": "Top + bottom",
+    "de": "Oben + unten"
+  },
+  "track_top_height.label": {
+    "pl": "Wysokość toru górnego:",
+    "en": "Top track height:",
+    "de": "Höhe der oberen Schiene:"
+  },
+  "track_top_depth.label": {
+    "pl": "Głębokość toru górnego:",
+    "en": "Top track depth:",
+    "de": "Tiefe der oberen Schiene:"
+  },
+  "track_top_setback.label": {
+    "pl": "Cofnięcie toru górnego:",
+    "en": "Top track setback:",
+    "de": "Rücksprung der oberen Schiene:"
+  },
+  "track_bottom_height.label": {
+    "pl": "Wysokość toru dolnego:",
+    "en": "Bottom track height:",
+    "de": "Höhe der unteren Schiene:"
+  },
+  "track_bottom_depth.label": {
+    "pl": "Głębokość toru dolnego:",
+    "en": "Bottom track depth:",
+    "de": "Tiefe der unteren Schiene:"
+  },
+  "track_bottom_setback.label": {
+    "pl": "Cofnięcie toru dolnego:",
+    "en": "Bottom track setback:",
+    "de": "Rücksprung der unteren Schiene:"
+  },
+  "track_spacing.label": {
+    "pl": "Rozstaw torów (Y):",
+    "en": "Track spacing (Y):",
+    "de": "Schienenabstand (Y):"
+  },
+  "handles.title": {
+    "pl": "Rączki aluminiowe (Sevroll):",
+    "en": "Handle profiles (Sevroll):",
+    "de": "Griffprofile (Sevroll):"
+  },
+  "handle_width.label": {
+    "pl": "Szerokość rączki:",
+    "en": "Handle profile width:",
+    "de": "Griffprofilbreite:"
+  },
+  "handle_thickness.label": {
+    "pl": "Grubość rączki:",
+    "en": "Handle profile thickness:",
+    "de": "Griffprofildicke:"
+  },
+  "hardware.title": {
+    "pl": "Okucia i widoczność:",
+    "en": "Hardware & visibility:",
+    "de": "Beschläge & Sichtbarkeit:"
+  },
+  "show_rollers.label": {
+    "pl": "Pokaż wózki / rolki:",
+    "en": "Show rollers / carriages:",
+    "de": "Rollen / Laufwagen anzeigen:"
+  },
+  "show_handles.label": {
+    "pl": "Pokaż profile rączek:",
+    "en": "Show handle profiles:",
+    "de": "Griffprofile anzeigen:"
+  },
+  "roller_id.label": {
+    "pl": "ID wózka:",
+    "en": "Roller ID:",
+    "de": "Rollen-ID:"
+  },
+  "handle_id.label": {
+    "pl": "ID profilu rączki:",
+    "en": "Handle ID:",
+    "de": "Griff-ID:"
+  }
+}

@@ -80,6 +80,27 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
 
       let anyGeometryRebuilt = false;
       for (const panel of currentPanels) {
+        const cadNode = ctx.document.findNode(panel.id);
+        const parentNode = cadNode?.parent;
+        const isParentFrozen = Boolean(parentNode?.frozen || (parentNode?.domainData as any)?.frozen);
+        const isPanelFrozen = Boolean(panel.frozen || panel.params?.frozen || cadNode?.frozen || isParentFrozen);
+        if (isPanelFrozen) {
+          if (panel.frozen || cadNode?.frozen) {
+            panel.frozen = true;
+            panel.visible = false;
+          }
+          const existingView = panelViews.get(panel);
+          if (existingView) {
+            try {
+              existingView.dispose();
+            } catch {
+              /* ignore */
+            }
+            panelViews.delete(panel);
+          }
+          continue;
+        }
+
         let view = panelViews.get(panel);
         const isNewView = !view;
         if (!view) {
@@ -87,8 +108,6 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           panelViews.set(panel, view);
         }
 
-        const cadNode = ctx.document.findNode(panel.id);
-        const parentNode = cadNode?.parent;
         if (parentNode && parentNode.domainData) {
           const parentContainer = parentNode.domainData;
           const containerView = containerViews.get(parentContainer);
@@ -154,7 +173,6 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
 
         if (view._updateTransform) view._updateTransform();
 
-        const isPanelFrozen = Boolean(panel.frozen || panel.params?.frozen);
         const isPanelVis = panel.visible !== false && !isPanelFrozen;
         if (typeof (view as any).setPanelVisible === 'function') {
           (view as any).setPanelVisible(isPanelVis);

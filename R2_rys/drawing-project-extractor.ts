@@ -431,7 +431,7 @@ export class DrawingProjectExtractor {
             grooves: grooves.length > 0 ? grooves : undefined,
             visible: domainData?.visible !== false,
             visiblePlane: Boolean(domainData?.visiblePlane),
-            frozen: !!domainData?.frozen,
+            frozen: !!(domainData?.frozen || (cadNode as any).frozen),
             isManual: domainData?.engineManaged === false,
             engineManaged: domainData?.engineManaged !== false,
             panelForm: domainData?.panelForm,
@@ -588,7 +588,7 @@ export class DrawingProjectExtractor {
                 const parts: PartDrawingGeometry[] = [];
                 if (node.children) {
                     for (const ch of node.children) {
-                        if (ch.type === 'PART') {
+                        if (ch.type === 'PART' && !ch.frozen) {
                             parts.push({
                                 id: ch.id,
                                 name: ch.name,

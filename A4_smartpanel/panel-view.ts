@@ -113,7 +113,7 @@ function getOrCreatePanelTexture(url: string, scene: any, onFailed?: () => void)
             onLoad,
             () => {
                 console.warn(`[PanelView] Tekstura "${url}" nie mogła zostać załadowana, przywracam kolor bazowy.`);
-                panelTextureCache.set(key, null);
+                panelTextureCache.delete(key);
                 try { tex.dispose(); } catch {}
                 if (typeof onFailed === 'function') {
                     onFailed();
@@ -131,23 +131,8 @@ function getOrCreatePanelTexture(url: string, scene: any, onFailed?: () => void)
     }
 }
 
-export function computePanelFeaturesFingerprint(panel: any): string {
-    const f = panel?.features;
-    const fCount = f?.length || 0;
-    const featPart = fCount === 0
-        ? '0'
-        : `${fCount}_` + f.map((feat: any) => {
-            const p = feat.params;
-            return p
-                ? `${feat.id}_${p.u ?? p.x}_${p.v ?? p.y}_${p.width}_${p.length ?? p.height}_${p.depth}_${p.diameter}`
-                : feat.id;
-        }).join(';');
-    const outline = panel?.custom_properties?.outline2d;
-    const outlinePart = Array.isArray(outline) && outline.length > 0
-        ? `_o:${outline.map((pt: any) => Array.isArray(pt) ? `${pt[0]},${pt[1]}` : `${pt?.x},${pt?.y}`).join(';')}`
-        : '';
-    return featPart + outlinePart;
-}
+import { computePanelFeaturesFingerprint } from './panel-model.js';
+export { computePanelFeaturesFingerprint };
 
 export class PanelView {
     scene: any;
@@ -197,8 +182,8 @@ export class PanelView {
         }
 
         this._modelChangeHandler = (type, data) => {
-            if ((this.model as any)?._suppressViewEvents) return;
-            if (type === 'dimensions' || type === 'panelFormChanged') {
+            if ((this.model as any)?._suppressViewEvents || this.model?.frozen || (this.model as any)?.params?.frozen) return;
+            if (type === 'dimensions' || type === 'panelFormChanged' || type === 'grainChanged') {
                 this._rebuildMeshes();
                 this._updateTransform();
                 this._buildLCSNode();
@@ -255,6 +240,7 @@ export class PanelView {
 
     /** Przebudowuje geometrię meshy i renderuje opisy cech po zmianie wymiarów/rowków. */
     rebuildGeometry() {
+        if (this.model?.frozen || (this.model as any)?.params?.frozen) return;
         this._rebuildMeshes();
         this._updateTransform();
         this.renderFeatures();
@@ -324,7 +310,8 @@ export class PanelView {
 
             const SHEET_W = 2070.0;
             const SHEET_H = 2800.0;
-            const isHorizontalGrain = pW > pH;
+            const isGrainRotated = !!(this.model?.rotate_grain || (this.model as any)?.grain_direction === 'CROSS' || (this.model as any)?.custom_properties?.rotate_grain);
+            const isHorizontalGrain = isGrainRotated ? (pW <= pH) : (pW > pH);
 
             for (let vi = 0; vi < posLen; vi += 3) {
                 const vx = positions[vi];
@@ -433,7 +420,7 @@ export class PanelView {
             } else {
                 const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
                 const vp = ContextManager.instance?.viewport;
-                const isMaterialMode = vp?.currentRenderMode === 'shaded';
+                const isMaterialMode = vp?.currentRenderMode === 'shaded' || (vp?.currentRenderMode as string) === 'edges' || !vp?.currentRenderMode;
                 const defaultCncGray = { r: 0.70, g: 0.72, b: 0.75 };
                 const defaultFastCadGray = { r: 0.90, g: 0.90, b: 0.91 };
                 const rawCol = this.model?.color || FACE_COLORS[faceName] || baseAlpineWhite;
@@ -724,7 +711,7 @@ export class PanelView {
         
         const vp = ContextManager.instance?.viewport;
         const currentRenderMode = (vp?.currentRenderMode as string) || 'edges';
-        const isMaterialMode = currentRenderMode === 'shaded';
+        const isMaterialMode = currentRenderMode === 'shaded' || currentRenderMode === 'edges';
 
         const isCnc = (ContextManager.instance as any)?.activeTab === 'tab-c1-cnc';
         const isArchWall =

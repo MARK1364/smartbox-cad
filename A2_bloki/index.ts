@@ -39,6 +39,13 @@ export {
     skosneDoorHeightAt
 } from './06_skosne-doors-engine.js';
 export {
+    calculateSlidingDoorsPlan,
+    normalizeSlidingDoorsParams,
+    calculateDefaultSlidingDoorsCount,
+    assertCanonicalSlidingDoorsParams,
+    LEGACY_SLIDING_DOORS_PARAM_ALIASES
+} from './19_sliding-doors-engine.js';
+export {
     calculateCornerDoorsPlan,
     normalizeCornerDoorsParams,
     assertCanonicalCornerDoorsParams,
@@ -85,6 +92,8 @@ export type {
     ShelvesPlanParams,
     SkosneDoorType,
     SkosneDoorsPlanParams,
+    SlidingDoorsPlanParams,
+    SlidingRollerType,
     BlokiGeneratorMetadata,
     BlokiGeneratorParams,
     BlokiGeneratorParamsPatch,
@@ -103,6 +112,7 @@ export { ShelvesSubModule, buildShelvesPlan } from './04_shelves-adapter.js';
 export { ShelfSubModule, buildShelfPlan } from './03_shelf-adapter.js';
 export { DoorsSubModule, buildDoorsPlan } from './05_doors-adapter.js';
 export { SkosneDoorsSubModule, buildSkosneDoorsPlan } from './06_skosne-doors-adapter.js';
+export { SlidingDoorsSubModule, buildSlidingDoorsPlan } from './19_sliding-doors-adapter.js';
 export { CornerDoorsSubModule, buildCornerDoorsPlan, normalizeCornerOtwieranie } from './07_corner-doors-adapter.js';
 export type { CornerOtwieranie } from './07_corner-doors-adapter.js';
 export { CornerShelvesSubModule, buildCornerShelvesPlan } from './18_corner-shelves-adapter.js';

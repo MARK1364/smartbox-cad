@@ -64,7 +64,7 @@ export function syncMachiningHoles(
         const targetNode = typeof (document as any)?.findNode === 'function'
             ? (document as any).findNode(intent.targetNodeId)
             : null;
-        if (!targetNode || !targetNode.domainData) continue;
+        if (!targetNode || !targetNode.domainData || targetNode.frozen || (targetNode.domainData as any).frozen) continue;
 
         const data = targetNode.domainData as any;
         if (!data.features) data.features = [];
@@ -132,7 +132,7 @@ export function emitMachiningFeatures(
     for (const panelNode of panels) {
         if (!panelNode || !changedNodeIds.has(panelNode.id)) continue;
         const data = panelNode.domainData as any;
-        if (!data) continue;
+        if (!data || panelNode.frozen || data.frozen) continue;
         if (typeof data.setFeatures === 'function') {
             data.setFeatures(data.features);
         } else if (typeof data._emit === 'function') {

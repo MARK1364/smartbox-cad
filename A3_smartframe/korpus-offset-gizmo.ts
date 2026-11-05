@@ -9,7 +9,11 @@ import {
     type OffsetGizmoHandler,
     type OffsetShiftSpec
 } from '../A1_core/offset-gizmo-port.js';
-import { rebuildSmartFrameContainer } from './smartframe-adapter.js';
+import {
+    rebuildSmartFrameContainer,
+    planKorpusPartsForOffsets,
+    withSmartFrameContainerTransaction
+} from './smartframe-adapter.js';
 import { SetKorpusOffsetCommand } from './commands/set-korpus-offset-command.js';
 import { readOffsetMm, applyKorpusOffsetWithBackMarginSync } from './back-overlap.js';
 
@@ -157,6 +161,61 @@ function ensureOffsets(container: any): Record<string, number> {
     return container.generatorParams.offsets;
 }
 
+/** Minimalny wymiar formatki [mm], poniżej którego offset krawędzi z gizma jest obcinany. */
+export const MIN_PANEL_DIM_MM = 1;
+
+const EDGE_PARAM_RE = /_(\+X|-X|\+Y|-Y)$/;
+const PROBE_MM = 10000;
+
+/**
+ * Ogranicza wartość offsetu krawędzi tak, aby żadna formatka nie spadła poniżej MIN_PANEL_DIM_MM.
+ *
+ * Wymiar formatki jest liniowy względem offsetu krawędzi (nachylenie ±1) poza obcięciem silnika,
+ * więc granice wyznaczamy z dwóch sond poza zakresem obcięcia — bez dopasowywania po nazwach
+ * formatek (wpływ offsetu odczytujemy z samej zmiany wymiarów planu).
+ */
+export function clampEdgeOffsetMm(container: any, paramName: string, value: number): number {
+    if (!Number.isFinite(value) || !EDGE_PARAM_RE.test(paramName)) return value;
+    const base = container?.generatorParams?.offsets || {};
+
+    const dimsAt = (v: number): number[] => {
+        const parts = planKorpusPartsForOffsets(container, { ...base, [paramName]: v });
+        return parts.flatMap((p: any) => [p.dim?.x, p.dim?.y, p.dim?.z].map(Number));
+    };
+
+    let lower = -Infinity;
+    let upper = Infinity;
+    try {
+        // Offset rośnie → formatka rośnie (nachylenie +1): dolna granica wartości.
+        const hi0 = dimsAt(PROBE_MM);
+        const hi1 = dimsAt(2 * PROBE_MM);
+        // Offset maleje → formatka rośnie (nachylenie -1, np. krawędzie pleców): górna granica wartości.
+        const lo0 = dimsAt(-PROBE_MM);
+        const lo1 = dimsAt(-2 * PROBE_MM);
+        if (hi0.length !== hi1.length || lo0.length !== lo1.length) return value;
+
+        for (let i = 0; i < hi0.length; i++) {
+            const slope = (hi1[i] - hi0[i]) / PROBE_MM;
+            if (Math.abs(slope - 1) < 1e-6) {
+                lower = Math.max(lower, PROBE_MM - (hi0[i] - MIN_PANEL_DIM_MM));
+            }
+        }
+        for (let i = 0; i < lo0.length; i++) {
+            const slope = (lo1[i] - lo0[i]) / -PROBE_MM;
+            if (Math.abs(slope + 1) < 1e-6) {
+                upper = Math.min(upper, lo0[i] - MIN_PANEL_DIM_MM - PROBE_MM);
+            }
+        }
+    } catch {
+        return value;
+    }
+
+    if (lower > upper) return value;
+    const lo = Math.ceil(lower * 100) / 100;
+    const up = Math.floor(upper * 100) / 100;
+    return Math.min(Math.max(value, lo), up);
+}
+
 export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
     id: 'A3_korpus',
 
@@ -210,41 +269,61 @@ export const korpusOffsetGizmoHandler: OffsetGizmoHandler = {
         );
     },
 
+    clampOffset(container: any, paramName: string, value: number): number {
+        return clampEdgeOffsetMm(container, paramName, value);
+    },
+
     previewOffset(container: any, paramName: string, value: number) {
-        if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
-            if (!container.generatorParams) container.generatorParams = {};
-            container.generatorParams.cofniecie_plecow_mm = value;
-            container.generatorParams.backOffset = value;
-        }
-        applyKorpusOffsetWithBackMarginSync(
-            ensureOffsets(container),
-            paramName,
-            value,
-            undefined,
-            container?.generatorParams?.typ_korpusu || container?.generatorParams?.type
-        );
-        rebuildSmartFrameContainer(container);
+        const effective = clampEdgeOffsetMm(container, paramName, value);
+        withSmartFrameContainerTransaction(container, () => {
+            const committedParams = container.generatorParams || {};
+            container.generatorParams = {
+                ...committedParams,
+                offsets: { ...(committedParams.offsets || {}) }
+            };
+            try {
+                if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
+                    container.generatorParams.cofniecie_plecow_mm = effective;
+                    container.generatorParams.backOffset = effective;
+                }
+                applyKorpusOffsetWithBackMarginSync(
+                    ensureOffsets(container),
+                    paramName,
+                    effective,
+                    undefined,
+                    container?.generatorParams?.typ_korpusu || container?.generatorParams?.type
+                );
+                rebuildSmartFrameContainer(container);
+            } finally {
+                container.generatorParams = committedParams;
+            }
+        });
     },
 
     commitOffset(container: any, paramName: string, oldValue: number, newValue: number) {
-        if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
-            if (!container.generatorParams) container.generatorParams = {};
-            container.generatorParams.cofniecie_plecow_mm = newValue;
-            container.generatorParams.backOffset = newValue;
-        }
-        applyKorpusOffsetWithBackMarginSync(
-            ensureOffsets(container),
-            paramName,
-            newValue,
-            undefined,
-            container?.generatorParams?.typ_korpusu || container?.generatorParams?.type
-        );
+        const effective = clampEdgeOffsetMm(container, paramName, newValue);
         const history = ContextManager.instance.commandHistory;
-        if (!history || oldValue === newValue) {
+        const document = ContextManager.instance.document;
+        if (!document) {
+            if (!container.generatorParams) container.generatorParams = {};
+            if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
+                container.generatorParams.cofniecie_plecow_mm = effective;
+                container.generatorParams.backOffset = effective;
+            }
+            applyKorpusOffsetWithBackMarginSync(
+                ensureOffsets(container),
+                paramName,
+                effective,
+                undefined,
+                container?.generatorParams?.typ_korpusu || container?.generatorParams?.type
+            );
             rebuildSmartFrameContainer(container);
             return;
         }
-        history.execute(new SetKorpusOffsetCommand(container.id, paramName, oldValue, newValue, container));
+        const command = new SetKorpusOffsetCommand(container.id, paramName, oldValue, effective, container);
+        if (oldValue === effective) return;
+        if (history) history.execute(command);
+        else command.execute(document);
     }
 };
 

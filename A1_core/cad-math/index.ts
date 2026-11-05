@@ -32,4 +32,4 @@ export {
     rulesMToNm,
     rulesMToMm,
 } from './units.js';
-
+export { evaluateMathExpression } from './math-eval.js';

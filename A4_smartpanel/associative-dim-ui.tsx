@@ -6,6 +6,7 @@ import {
     isAssocComplete,
     measureAssocDimMm,
     planeRefLabel,
+    resolvePlaneFaceName,
     type AssocAxis,
     type AssociativeDim,
     type AssocPlaneRef,
@@ -28,10 +29,15 @@ function persist(panel: PanelModel, axis: AssocAxis, next: AssociativeDim | null
         resized = applyAssociativeDim(doc, panel, axis);
     }
     doc?.emitChange?.('dimensions');
-    window.document.dispatchEvent(new CustomEvent('bloki-panel-changed', { detail: { panelModel: panel } }));
+    if (typeof window !== 'undefined') {
+        const detail = { panel, panelModel: panel, panelId: panel.id };
+        window.dispatchEvent(new CustomEvent('bloki-panel-changed', { detail }));
+        window.document?.dispatchEvent?.(new CustomEvent('bloki-panel-changed', { detail }));
+    }
     if (resized) {
         if (typeof window !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+            window.dispatchEvent(new CustomEvent('bloki-project-changed'));
+            window.document?.dispatchEvent?.(new CustomEvent('bloki-project-changed'));
             (window as any).__rebuildGeometry?.();
         }
         (ContextManager.instance as any)?.solverController?.solveNow?.();
@@ -85,10 +91,12 @@ export function AssociativeDimInputs({ panel, axis }: Props) {
         );
         ContextManager.instance.activeReferencePicker = {
             source: `assoc-${panel.id}-${axis}`,
-            onSelect: (refData: { nodeId?: string; face?: string; panelModel?: any; partKey?: string }) => {
+            onSelect: (refData: { nodeId?: string; face?: string; outlineEdgeKey?: string | null; panelModel?: any; partKey?: string }) => {
                 const nodeId = refData.nodeId || refData.panelModel?.id;
-                const face = refData.face;
-                if (!nodeId || !face) return;
+                const rawFace = refData.face;
+                if (!nodeId || !rawFace) return;
+                const targetNode = ContextManager.instance.document?.findNode?.(nodeId);
+                const face = resolvePlaneFaceName(targetNode, rawFace, refData.outlineEdgeKey);
                 const ref: AssocPlaneRef = {
                     nodeId,
                     face,

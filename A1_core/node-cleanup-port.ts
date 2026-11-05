@@ -1,6 +1,6 @@
 /**
- * Port sprzątania przy usuwaniu węzła — Core nie zna Bloku.
- * A2 rejestruje handler: zbierz ID, stwórz komendę czyszczenia nawierceń.
+ * Port sprzątania przy usuwaniu węzła — Core nie zna domenowych zasobów.
+ * Moduły rejestrują handlery, które zwracają odwracalne komendy czyszczenia.
  */
 
 import type { CADNode } from './cad-node/cad-node.js';
@@ -14,10 +14,14 @@ export interface NodeCleanupHandler {
 
 const handlers: NodeCleanupHandler[] = [];
 
-export function registerNodeCleanupHandler(handler: NodeCleanupHandler): void {
+export function registerNodeCleanupHandler(handler: NodeCleanupHandler): () => void {
     const idx = handlers.findIndex((h) => h.id === handler.id);
     if (idx >= 0) handlers[idx] = handler;
     else handlers.push(handler);
+    return () => {
+        const registeredIndex = handlers.indexOf(handler);
+        if (registeredIndex !== -1) handlers.splice(registeredIndex, 1);
+    };
 }
 
 export function collectNodeCleanupCommands(node: CADNode): Command[] {

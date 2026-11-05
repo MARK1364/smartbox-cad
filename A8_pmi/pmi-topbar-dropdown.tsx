@@ -110,7 +110,7 @@ export function PmiTopbarDropdown({ activeTab, onTabChange }: PmiTopbarDropdownP
             } else {
                 closeCadFloatingEdit();
                 activateTab();
-                ContextManager.instance.pmiRenderer?.setVisible(true);
+                ContextManager.instance.setPmiVisible(true);
                 activateMeasureTool(sm);
                 setActiveTool('MEASURE');
                 ContextManager.instance.pmiRenderer?.renderAll(store);
@@ -132,7 +132,7 @@ export function PmiTopbarDropdown({ activeTab, onTabChange }: PmiTopbarDropdownP
         } else {
             closeCadFloatingEdit();
             activateTab();
-            ContextManager.instance.pmiRenderer?.setVisible(true);
+            ContextManager.instance.setPmiVisible(true);
             store.toolAxisSpace = mode;
             if (isDimensionToolActive(sm)) {
                 getDimensionTool(sm)?.setAxisSpace(mode);

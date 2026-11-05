@@ -11,11 +11,15 @@ import { isPanelModel } from '../A4_smartpanel/panel-model.js';
 
 interface PanelMaterialSnapshot {
     panelId: string;
-    materialId: string;
+    materialId: string | undefined;
+    material: string | undefined;
     materialName: string;
     materialCode: string;
+    width: number;
+    height: number;
     thickness: number; // in nm
-    color: { r: number; g: number; b: number; a?: number };
+    color: { r: number; g: number; b: number; a?: number } | undefined;
+    customProperties: Record<string, any> | undefined;
 }
 
 /** Bloki drzwi/klapy/fronty szuflad — grubość siedzi w generatorParams, nie w custom_properties. */
@@ -43,9 +47,15 @@ function isBlokiFrontModule(gp: Record<string, any> | undefined | null): boolean
 
 function isFrontLikePanel(p: { role?: string; name?: string }): boolean {
     const role = String(p.role || '').toUpperCase();
-    if (role === 'FRONT' || role === 'DOOR' || role === 'FLAP') return true;
+    if (role) return role === 'FRONT' || role === 'FRONT_PANEL' || role === 'DOOR' || role === 'FLAP';
     const name = String(p.name || '').toUpperCase();
     return name.includes('DRZWI') || name.startsWith('FRONT') || name.includes('KLAPA');
+}
+
+function isBackPanel(p: { role?: string; name?: string }): boolean {
+    const role = String(p.role || '').toUpperCase();
+    if (role) return role === 'BACK_PANEL';
+    return String(p.name || '').toUpperCase().includes('PLECY');
 }
 
 export class AssignMaterialCommand implements Command {
@@ -85,8 +95,7 @@ export class AssignMaterialCommand implements Command {
         }
         const targetThNm = targetPanel.thickness;
         const targetMatId = targetPanel.materialId || targetPanel.material || 'W1100_ST9_18';
-        const targetRole = (targetPanel.role || '').toUpperCase();
-        const isTargetBack = targetRole === 'BACK_PANEL' || (targetPanel.name && targetPanel.name.toUpperCase().includes('PLECY'));
+        const isTargetBack = isBackPanel(targetPanel);
 
         const isMatchingSourcePanel = (candidateNode: CADNode): boolean => {
             if (!candidateNode.domainData) return false;
@@ -97,8 +106,7 @@ export class AssignMaterialCommand implements Command {
 
             const cMatId = p.materialId || p.material || 'W1100_ST9_18';
             const cThNm = p.thickness;
-            const cRole = (p.role || '').toUpperCase();
-            const isCandBack = cRole === 'BACK_PANEL' || (p.name && p.name.toUpperCase().includes('PLECY'));
+            const isCandBack = isBackPanel(p);
 
             // Plecy (Back panel) nigdy nie dopasowują się do boku ani wieńca (i odwrotnie)!
             if (isTargetBack !== isCandBack) {
@@ -188,99 +196,167 @@ export class AssignMaterialCommand implements Command {
             this.affectedNodeIds.push(n.id);
             this.previousSnapshots.push({
                 panelId: n.id,
-                materialId: p.materialId || p.material || '',
+                materialId: p.materialId,
+                material: p.material,
                 materialName: p.materialName || '',
                 materialCode: p.materialCode || '',
+                width: p.width,
+                height: p.height,
                 thickness: p.thickness,
-                color: p.color ? { ...p.color } : { r: 0.8, g: 0.8, b: 0.8 }
+                color: p.color ? { ...p.color } : undefined,
+                customProperties: p.custom_properties ? { ...p.custom_properties } : undefined
             });
+        }
 
-            // Zastosuj nowe właściwości
-            p.materialId = this.newMaterial.id;
-            p.material = this.newMaterial.id;
-            p.materialName = this.newMaterial.name;
-            p.materialCode = this.newMaterial.code;
-            p.color = { ...this.newMaterial.color };
+        document.transaction(() => {
+            for (const n of nodesToUpdate) {
+                const p = n.domainData;
+                if (!p || !isPanelModel(p)) continue;
 
-            if (!p.custom_properties) p.custom_properties = {};
-            p.custom_properties.material = this.newMaterial.id;
-            p.custom_properties.material_name = this.newMaterial.name;
-            p.custom_properties.material_code = this.newMaterial.code;
-            p.custom_properties.thickness_mm = this.newMaterial.thickness_mm;
+                // Zastosuj nowe właściwości
+                p.materialId = this.newMaterial.id;
+                p.material = this.newMaterial.id;
+                p.materialName = this.newMaterial.name;
+                p.materialCode = this.newMaterial.code;
+                p.color = { ...this.newMaterial.color };
 
-            // Dla formatek wolnostojących (bez kontenera) zmieniamy wymiary od razu
-            if (this.affectedContainerIds.size === 0) {
-                if (typeof p.setDimensions === 'function') {
-                    p.setDimensions(p.width, p.height, newThNm);
-                } else {
-                    p.thickness = newThNm;
+                if (!p.custom_properties) p.custom_properties = {};
+                p.custom_properties.material = this.newMaterial.id;
+                p.custom_properties.material_name = this.newMaterial.name;
+                p.custom_properties.material_code = this.newMaterial.code;
+                p.custom_properties.thickness_mm = this.newMaterial.thickness_mm;
+
+                // Dla formatek wolnostojących (bez kontenera) zmieniamy wymiary od razu
+                if (this.affectedContainerIds.size === 0) {
+                    if (typeof p.setDimensions === 'function') {
+                        p.setDimensions(p.width, p.height, newThNm);
+                    } else {
+                        p.thickness = newThNm;
+                    }
+                }
+
+                // Powiadom widok o zmianie materiału
+                if (typeof p._emit === 'function') {
+                    p._emit('material', { material: this.newMaterial });
                 }
             }
 
-            // Powiadom widok o zmianie materiału
-            if (typeof p._emit === 'function') {
-                p._emit('material', { material: this.newMaterial });
+            // Drzwi / klapy / fronty szuflad: silnik czyta generatorParams, nie custom_properties
+            this.syncBlokiFrontThickness(document, nodesToUpdate, newThMm);
+
+            // Przelicz powiązane kontenery SmartFrame / Bloki
+            this.rebuildAffectedContainers(document);
+
+            if (typeof document.notifyDocumentChanged === 'function') {
+                document.notifyDocumentChanged();
             }
-        }
-
-        // Drzwi / klapy / fronty szuflad: silnik czyta generatorParams, nie custom_properties
-        this.syncBlokiFrontThickness(document, nodesToUpdate, newThMm);
-
-        // Przelicz powiązane kontenery SmartFrame / Bloki
-        this.rebuildAffectedContainers(document);
-
-        if (typeof document.notifyDocumentChanged === 'function') {
-            document.notifyDocumentChanged();
-        }
+        }, () => {
+            this.restoreMaterialSnapshots(document);
+            this.restoreFrontThickness(document);
+            this.rebuildAffectedContainers(document);
+            this.previousSnapshots = [];
+            this.previousFrontThickness = [];
+            this.affectedNodeIds.length = 0;
+            this.affectedContainerIds.clear();
+        });
     }
 
     undo(document: ProjectDocument): void {
         if (!document || this.previousSnapshots.length === 0) return;
 
-        for (const snap of this.previousSnapshots) {
+        const appliedSnapshots = this.captureMaterialSnapshots(document, this.previousSnapshots.map((snap) => snap.panelId));
+        const appliedFrontThickness = this.captureFrontThickness(document, this.previousFrontThickness.map((snap) => snap.containerId));
+
+        document.transaction(() => {
+            this.restoreMaterialSnapshots(document);
+            this.restoreFrontThickness(document);
+            this.rebuildAffectedContainers(document);
+
+            if (typeof document.notifyDocumentChanged === 'function') {
+                document.notifyDocumentChanged();
+            }
+        }, () => {
+            this.restoreMaterialSnapshots(document, appliedSnapshots);
+            this.restoreFrontThickness(document, appliedFrontThickness);
+            this.rebuildAffectedContainers(document);
+        });
+    }
+
+    private captureMaterialSnapshots(document: ProjectDocument, panelIds: string[]): PanelMaterialSnapshot[] {
+        const snapshots: PanelMaterialSnapshot[] = [];
+        for (const panelId of panelIds) {
+            const node = document.findNode(panelId);
+            if (!node?.domainData || !isPanelModel(node.domainData)) continue;
+            const p = node.domainData;
+            snapshots.push({
+                panelId,
+                materialId: p.materialId,
+                material: p.material,
+                materialName: p.materialName || '',
+                materialCode: p.materialCode || '',
+                width: p.width,
+                height: p.height,
+                thickness: p.thickness,
+                color: p.color ? { ...p.color } : undefined,
+                customProperties: p.custom_properties ? { ...p.custom_properties } : undefined
+            });
+        }
+        return snapshots;
+    }
+
+    private captureFrontThickness(document: ProjectDocument, containerIds: string[]): BlokiFrontThicknessSnapshot[] {
+        const snapshots: BlokiFrontThicknessSnapshot[] = [];
+        for (const containerId of containerIds) {
+            const node = document.findNode(containerId);
+            if (!node?.domainData || !isContainerModel(node.domainData)) continue;
+            snapshots.push({
+                containerId,
+                grubosc_frontu_mm: node.domainData.generatorParams?.grubosc_frontu_mm
+            });
+        }
+        return snapshots;
+    }
+
+    private restoreMaterialSnapshots(
+        document: ProjectDocument,
+        snapshots: PanelMaterialSnapshot[] = this.previousSnapshots
+    ): void {
+        for (const snap of snapshots) {
             const node = document.findNode(snap.panelId);
             if (!node?.domainData || !isPanelModel(node.domainData)) continue;
 
             const p = node.domainData;
             p.materialId = snap.materialId;
-            p.material = snap.materialId;
+            p.material = snap.material;
             p.materialName = snap.materialName;
             p.materialCode = snap.materialCode;
-            p.color = { ...snap.color };
-
-            const oldThMm = nmToMm(snap.thickness);
-            if (!p.custom_properties) p.custom_properties = {};
-            p.custom_properties.material = snap.materialId;
-            p.custom_properties.material_name = snap.materialName;
-            p.custom_properties.material_code = snap.materialCode;
-            p.custom_properties.thickness_mm = oldThMm;
-
-            if (this.affectedContainerIds.size === 0) {
-                if (typeof p.setDimensions === 'function') {
-                    p.setDimensions(p.width, p.height, snap.thickness);
-                } else {
-                    p.thickness = snap.thickness;
-                }
+            p.color = snap.color ? { ...snap.color } : undefined;
+            p.custom_properties = snap.customProperties ? { ...snap.customProperties } : undefined;
+            if (typeof p.setDimensions === 'function') {
+                p.setDimensions(snap.width, snap.height, snap.thickness);
+            } else {
+                p.width = snap.width;
+                p.height = snap.height;
+                p.thickness = snap.thickness;
             }
 
             if (typeof p._emit === 'function') {
                 p._emit('material', { material: snap });
             }
         }
+    }
 
-        for (const snap of this.previousFrontThickness) {
+    private restoreFrontThickness(
+        document: ProjectDocument,
+        snapshots: BlokiFrontThicknessSnapshot[] = this.previousFrontThickness
+    ): void {
+        for (const snap of snapshots) {
             const cNode = document.findNode(snap.containerId);
             if (!cNode?.domainData || !isContainerModel(cNode.domainData)) continue;
             const gp = cNode.domainData.generatorParams;
             if (!gp) continue;
             if (snap.grubosc_frontu_mm === undefined) delete gp.grubosc_frontu_mm;
             else gp.grubosc_frontu_mm = snap.grubosc_frontu_mm;
-        }
-
-        this.rebuildAffectedContainers(document);
-
-        if (typeof document.notifyDocumentChanged === 'function') {
-            document.notifyDocumentChanged();
         }
     }
 

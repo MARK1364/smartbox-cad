@@ -21,8 +21,6 @@ import {
 } from './export-types';
 import { DrawingSheet } from './drawing-sheet';
 import { ContextManager } from '../A1_core/context-manager';
-import { PMIStore } from '../A8_pmi/pmi-data';
-import { resolveAnchorWorld } from '../A8_pmi/pmi-id-bridge';
 import { TOP_BETA, BOTTOM_BETA } from '../S3_scena/named-camera-view.js';
 import { NodeType } from '../A1_core/cad-node/node-type.js';
 import { clearLegacyExportStorage } from '../A1_core/export-session-storage.js';
@@ -95,6 +93,11 @@ export class ExportEngineV3 {
 
         if (typeof window !== 'undefined') {
             window.addEventListener('resize', () => {
+                if (this.showBounds && ContextManager.instance?.activeTab === 'tab-e3-export') {
+                    this.updatePassepartout();
+                }
+            });
+            window.addEventListener('cad-panel-resized', () => {
                 if (this.showBounds && ContextManager.instance?.activeTab === 'tab-e3-export') {
                     this.updatePassepartout();
                 }
@@ -265,17 +268,51 @@ export class ExportEngineV3 {
         const paperH = dims.height;
         const sheetAspect = paperW / paperH;
 
-        const screenW = window.innerWidth;
-        const screenH = window.innerHeight;
-        const sidebarW = 346;
-        const topBarH = 50;
-        const marginX = 30;
-        const marginY = 30;
+        // Dostępny obszar na ekranie (z uwzględnieniem lewego drzewa obiektów i prawego panelu edycji)
+        const screenW = typeof window !== 'undefined' ? window.innerWidth : 1920;
+        const screenH = typeof window !== 'undefined' ? window.innerHeight : 1080;
 
-        const usableLeft = marginX;
-        const usableTop = topBarH + marginY;
-        const usableWidth = Math.max(300, screenW - sidebarW - 2 * marginX);
-        const usableHeight = Math.max(300, screenH - topBarH - 2 * marginY);
+        // Domyślne granice paneli bocznych (drzewo obiektów po lewej, panel edycji po prawej)
+        let leftBoundary = 296; // domyślnie szerokość drzewa 280px + margines 16px
+        let rightBoundary = screenW - 362; // domyślnie szerokość panelu edycji 346px + margines 16px
+        let topBoundary = 50; // pasek górny
+
+        if (typeof document !== 'undefined') {
+            const treeEl = document.getElementById('drzewo-obiektow');
+            if (treeEl) {
+                const rect = treeEl.getBoundingClientRect();
+                if (rect.width > 0 && rect.right > 0) {
+                    leftBoundary = rect.right;
+                } else if (treeEl.classList.contains('is-collapsed')) {
+                    leftBoundary = 48;
+                }
+            }
+            const editEl = document.getElementById('panel-edycji');
+            if (editEl) {
+                const rect = editEl.getBoundingClientRect();
+                if (rect.width > 0 && rect.left > 0 && rect.left < screenW) {
+                    rightBoundary = rect.left;
+                } else if (editEl.classList.contains('is-collapsed')) {
+                    rightBoundary = screenW - 48;
+                }
+            }
+            const topBarEl = document.querySelector('.topbar') || document.querySelector('.menu-bar');
+            if (topBarEl) {
+                const rect = topBarEl.getBoundingClientRect();
+                if (rect.height > 0) {
+                    topBoundary = rect.bottom;
+                }
+            }
+        }
+
+        const marginX = 24;
+        const marginY = 24;
+
+        const usableLeft = leftBoundary + marginX;
+        const usableRight = rightBoundary - marginX;
+        const usableWidth = Math.max(300, usableRight - usableLeft);
+        const usableTop = topBoundary + marginY;
+        const usableHeight = Math.max(300, screenH - usableTop - marginY);
 
         let sheetPixelW = usableWidth;
         let sheetPixelH = usableWidth / sheetAspect;
@@ -499,6 +536,12 @@ export class ExportEngineV3 {
         }
 
         try {
+            if (ContextManager.instance) {
+                ContextManager.instance.exportIncludesPmi = this.includePMI;
+                ContextManager.instance.pmiRenderer?.clearPreview?.();
+                ContextManager.instance.pmiRenderer?.clearMeasurePreview?.();
+                ContextManager.instance.syncPmiVisibility();
+            }
             this.applyVisualSettings();
 
             const canvas = viewport.canvas;
@@ -590,105 +633,6 @@ export class ExportEngineV3 {
         }
     }
 
-    public projectPMIToSvg(sheet: DrawingSheet): void {
-        if (!this.includePMI) return;
-
-        try {
-            const store = PMIStore.instance;
-            if (!store) return;
-
-            const annotations = (store.annotations || []).filter((a) => a.visible !== false);
-            if (annotations.length === 0) return;
-
-            const area = sheet.getAvailableDrawingArea();
-            const viewport = ContextManager.instance?.viewport;
-            if (!viewport?.scene || !viewport.camera) return;
-
-            const scene = viewport.scene;
-            const camera = viewport.camera;
-            const canvas = viewport.canvas;
-            if (!canvas) return;
-
-            const layout = this.calculateSheetLayout();
-            const rect = canvas.getBoundingClientRect();
-
-            const svgElements: string[] = [];
-
-            const processPoints = (w1: { x: number; y: number; z: number }, w2: { x: number; y: number; z: number }, text: string) => {
-                const p1 = new BABYLON.Vector3(w1.x, w1.y, w1.z);
-                const p2 = new BABYLON.Vector3(w2.x, w2.y, w2.z);
-
-                const scr1 = BABYLON.Vector3.Project(
-                    p1,
-                    BABYLON.Matrix.Identity(),
-                    scene.getTransformMatrix(),
-                    camera.viewport.toGlobal(canvas.width, canvas.height)
-                );
-
-                const scr2 = BABYLON.Vector3.Project(
-                    p2,
-                    BABYLON.Matrix.Identity(),
-                    scene.getTransformMatrix(),
-                    camera.viewport.toGlobal(canvas.width, canvas.height)
-                );
-
-                if (scr1.z > 1.0 || scr2.z > 1.0) return;
-
-                const screenX1 = (scr1.x / canvas.width) * rect.width;
-                const screenY1 = (scr1.y / canvas.height) * rect.height;
-                const screenX2 = (scr2.x / canvas.width) * rect.width;
-                const screenY2 = (scr2.y / canvas.height) * rect.height;
-
-                const relX1 = (screenX1 - (layout.drawPixelX - rect.left)) / layout.drawPixelW;
-                const relY1 = (screenY1 - (layout.drawPixelY - rect.top)) / layout.drawPixelH;
-                const relX2 = (screenX2 - (layout.drawPixelX - rect.left)) / layout.drawPixelW;
-                const relY2 = (screenY2 - (layout.drawPixelY - rect.top)) / layout.drawPixelH;
-
-                if (relX1 < 0 || relX1 > 1 || relY1 < 0 || relY1 > 1) return;
-
-                const svgX1 = area.x + relX1 * area.width;
-                const svgY1 = area.y + relY1 * area.height;
-                const svgX2 = area.x + relX2 * area.width;
-                const svgY2 = area.y + relY2 * area.height;
-
-                const midX = (svgX1 + svgX2) / 2;
-                const midY = (svgY1 + svgY2) / 2;
-
-                svgElements.push(
-                    `<line x1="${svgX1.toFixed(2)}" y1="${svgY1.toFixed(2)}" x2="${svgX2.toFixed(2)}" y2="${svgY2.toFixed(2)}" stroke="#2563eb" stroke-width="0.35" stroke-dasharray="1,1"/>`
-                );
-                svgElements.push(
-                    `<circle cx="${svgX1.toFixed(2)}" cy="${svgY1.toFixed(2)}" r="0.6" fill="#2563eb"/>`
-                );
-                svgElements.push(
-                    `<circle cx="${svgX2.toFixed(2)}" cy="${svgY2.toFixed(2)}" r="0.6" fill="#2563eb"/>`
-                );
-                svgElements.push(
-                    `<rect x="${(midX - 8).toFixed(2)}" y="${(midY - 2.5).toFixed(2)}" width="16" height="4.5" fill="#ffffff" stroke="#2563eb" stroke-width="0.2" rx="0.5"/>`
-                );
-                svgElements.push(
-                    `<text x="${midX.toFixed(2)}" y="${midY.toFixed(2)}" font-size="2.2" font-weight="bold" fill="#1e293b" text-anchor="middle" dominant-baseline="middle">${text}</text>`
-                );
-            };
-
-            annotations.forEach((ann) => {
-                const w1 = resolveAnchorWorld(scene, ann.anchor1);
-                const w2 = resolveAnchorWorld(scene, ann.anchor2);
-                if (!w1 || !w2) return;
-                const label = ann.text || (ann.distanceMM ? `${ann.distanceMM.toFixed(1)} mm` : '');
-                processPoints(w1, w2, label);
-            });
-
-
-
-            if (svgElements.length > 0) {
-                sheet.addSvgOverlay(svgElements.join('\n'));
-            }
-        } catch (err) {
-            console.warn('Błąd podczas rzutowania PMI:', err);
-        }
-    }
-
     public extractBOMRows(): BOMRow[] {
         const doc = ContextManager.instance?.document;
         if (!doc) return [];
@@ -733,10 +677,6 @@ export class ExportEngineV3 {
 
         const croppedSnapshot = await this.captureCroppedViewport(sheet);
         sheet.setViewportImage(croppedSnapshot);
-
-        if (this.includePMI) {
-            this.projectPMIToSvg(sheet);
-        }
 
         if (this.includeBOM) {
             const bomRows = this.extractBOMRows();

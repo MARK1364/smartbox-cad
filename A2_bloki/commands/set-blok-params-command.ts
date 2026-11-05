@@ -4,6 +4,7 @@
 
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
+import { withBlokiTransaction } from '../bloki-transaction.js';
 import { update_bloki_core } from '../01_bloki-core.js';
 
 function cloneParams(params: any): Record<string, any> {
@@ -15,6 +16,7 @@ export class SetBlokiParamsCommand implements Command {
     readonly label: string;
     readonly timestamp: number;
     readonly affectedNodeIds: string[];
+    private isApplied = false;
 
     constructor(
         readonly containerId: string,
@@ -28,18 +30,30 @@ export class SetBlokiParamsCommand implements Command {
     }
 
     execute(document: ProjectDocument): void {
-        this._apply(document, this.newParams);
+        if (this.isApplied) return;
+        this._apply(document, this.newParams, true);
     }
 
     undo(document: ProjectDocument): void {
-        this._apply(document, this.oldParams);
+        if (!this.isApplied) return;
+        this._apply(document, this.oldParams, false);
     }
 
-    private _apply(document: ProjectDocument, params: Record<string, any>): void {
+    redo(document: ProjectDocument): void {
+        this.execute(document);
+    }
+
+    private _apply(document: ProjectDocument, params: Record<string, any>, appliedAfterSuccess: boolean): void {
         const node = document.findNode(this.containerId);
         const data = node?.domainData as any;
         if (!data) return;
-        data.generatorParams = cloneParams(params);
-        update_bloki_core(data, document);
+        const previousAppliedState = this.isApplied;
+        withBlokiTransaction(document, node, () => {
+            data.generatorParams = cloneParams(params);
+            update_bloki_core(data, document);
+        }, () => {
+            this.isApplied = previousAppliedState;
+        });
+        this.isApplied = appliedAfterSuccess;
     }
 }

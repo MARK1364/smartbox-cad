@@ -152,5 +152,28 @@ describe('Uniwersalna reguła: Automatyczne wyjście z narzędzi PMI', () => {
         expect(modalTransform.activeMode).toBe('none');
         expect(mockSm.getCurrentStateName()).toBe('DIMENSION_TOOL');
     });
-});
 
+    it('setPmiVisible globalnie steruje widocznością PMI na wszystkich zakładkach, a deactivatePmiToolsIfActive zachowuje ten stan', () => {
+        let lastVisible: boolean | null = null;
+        let renderCount = 0;
+        ContextManager.instance.pmiRenderer = {
+            setVisible: (v: boolean) => { lastVisible = v; },
+            renderAll: () => { renderCount++; },
+            clearPreview: () => {},
+            clearMeasurePreview: () => {},
+        };
+
+        ContextManager.instance.activeTab = 'tab-a3-smartframe';
+        ContextManager.instance.setPmiVisible(true);
+        expect(lastVisible).toBe(true);
+        expect(renderCount).toBeGreaterThan(0);
+
+        // Dezaktywacja narzędzia PMI nie ukrywa wymiarów, jeśli globalny przełącznik PMI jest włączony
+        ContextManager.instance.deactivatePmiToolsIfActive();
+        expect(lastVisible).toBe(true);
+
+        // Wyłączenie globalnego przełącznika PMI w Podglądzie ukrywa wymiary
+        ContextManager.instance.setPmiVisible(false);
+        expect(lastVisible).toBe(false);
+    });
+});

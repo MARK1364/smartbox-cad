@@ -3,6 +3,7 @@ import { ProjectDocument } from '../../A1_core/project-document.js';
 import { CommandHistory } from '../../A1_core/commands/command-history.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { PMIAnnotationInit, PMIStore } from '../pmi-data.js';
+import { deactivateAllPmiTools } from '../pmi-tool-activate.js';
 import {
     AddDimensionCommand,
     AddMeasurementCommand,
@@ -14,6 +15,7 @@ import {
     SetDimensionTextShiftCommand,
     SetDimensionVisibilityCommand,
     SetMeasurementVisibilityCommand,
+    deleteActiveDimension,
 } from '../pmi-commands.js';
 import { v3 } from '../dimension-solver.js';
 import type { PMIAnchorRef } from '../pmi-id-bridge.js';
@@ -188,6 +190,49 @@ describe('Komendy PMI w historii Undo/Redo', () => {
         expect(store.measurements).toHaveLength(0);
         history.undo();
         expect(store.measurements[0].id).toBe(createdId);
+    });
+
+    it('zastąpienie szybkiej miarki nie tworzy wpisu Undo/Redo i usuwa poprzednią', () => {
+        const first = store.replaceWithEphemeralMeasurement({
+            anchor1: anchor('panel_a', 0),
+            anchor2: anchor('panel_a', 400),
+        });
+        const second = store.replaceWithEphemeralMeasurement({
+            anchor1: anchor('panel_b', 0),
+            anchor2: anchor('panel_b', 250),
+        });
+
+        expect(store.measurements).toEqual([second]);
+        expect(store.measurements[0].id).not.toBe(first.id);
+        expect(history.canUndo).toBe(false);
+        expect(history.canRedo).toBe(false);
+
+        deactivateAllPmiTools({
+            getCurrentStateName: () => 'MEASURE_TOOL',
+            changeState: () => {},
+        } as any);
+        expect(store.measurements).toHaveLength(0);
+        expect(history.redo()).toBe(false);
+        expect(store.measurements).toHaveLength(0);
+    });
+
+    it('usunięcie szybkiej miarki, a potem wyjście z narzędzia nie pozwala przywrócić jej przez Undo', () => {
+        store.replaceWithEphemeralMeasurement({
+            anchor1: anchor('panel_a', 0),
+            anchor2: anchor('panel_a', 400),
+        });
+
+        expect(deleteActiveDimension(store)).toBe(true);
+        expect(store.measurements).toHaveLength(0);
+        expect(history.canUndo).toBe(false);
+
+        deactivateAllPmiTools({
+            getCurrentStateName: () => 'MEASURE_TOOL',
+            changeState: () => {},
+        } as any);
+
+        expect(history.undo()).toBe(false);
+        expect(store.measurements).toHaveLength(0);
     });
 
     it('ukrywa i przywraca widoczność pomiaru', () => {

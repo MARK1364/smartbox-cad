@@ -131,3 +131,126 @@ export function findFacesAlongRay(scene: any, pointerX: number, pointerY: number
 
     return candidates;
 }
+
+export interface HiddenEntityHit {
+    type: 'part' | 'container' | 'hardware';
+    id: string;
+    uuid?: string;
+    name: string;
+    distance: number;
+    entity: any;
+    parentContainerId?: string;
+}
+
+/**
+ * Wykrywa ukryte elementy (formatki, korpusy, okucia) leżące wzdłuż promienia pod kursorem myszy.
+ * Używane dla przycisku "Pokaż" w menu kontekstowym PPM oraz skrótu Shift+Tab (SolidWorks style).
+ */
+export function findHiddenEntityAlongRay(
+    scene: any,
+    pointerX: number,
+    pointerY: number,
+    doc: any,
+    panelViews: Map<any, any>,
+    hardwareViews?: Map<string, any>
+): HiddenEntityHit | null {
+    if (!scene || !scene.activeCamera) return null;
+    const ray = typeof scene.createPickingRay === 'function'
+        ? scene.createPickingRay(pointerX, pointerY, null, scene.activeCamera)
+        : null;
+    if (!ray || typeof ray.intersectsMesh !== 'function') return null;
+
+    const hits: HiddenEntityHit[] = [];
+    const seenIds = new Set<string>();
+
+    // 1. Sprawdź ukryte formatki (panele)
+    if (panelViews && panelViews.size > 0) {
+        for (const [panelOrId, view] of panelViews.entries()) {
+            const panel = view?.model || (typeof panelOrId === 'object' ? panelOrId : null)
+                || (typeof panelOrId === 'string' && doc?.findNode ? doc.findNode(panelOrId)?.domainData : null);
+            if (!panel || !view || seenIds.has(panel.id)) continue;
+
+            const node = doc?.findNode ? doc.findNode(panel.id) : null;
+            const parentContainerNode = node?.parent;
+            const isParentHidden = parentContainerNode?.domainData && parentContainerNode.domainData.visible === false;
+            const isPanelHidden = panel.visible === false || isParentHidden;
+
+            if (!isPanelHidden) continue;
+
+            const faceMeshes = view.faceMeshes ? Object.values(view.faceMeshes) : [];
+            const meshesToTest = faceMeshes.length > 0
+                ? faceMeshes
+                : (view.root?.getChildMeshes ? view.root.getChildMeshes() : []);
+
+            for (const mesh of meshesToTest as any[]) {
+                if (!mesh) continue;
+                try {
+                    mesh.computeWorldMatrix?.(true);
+                    const hit = ray.intersectsMesh(mesh, false);
+                    if (hit && hit.hit && typeof hit.distance === 'number') {
+                        seenIds.add(panel.id);
+                        hits.push({
+                            type: 'part',
+                            id: panel.id,
+                            uuid: panel.id,
+                            name: panel.name || 'Formatka',
+                            distance: hit.distance,
+                            entity: panel,
+                            parentContainerId: parentContainerNode?.id,
+                        });
+                        break;
+                    }
+                } catch {
+                    // ignoruj pojedyncze błędy geometrii
+                }
+            }
+        }
+    }
+
+    // 2. Sprawdź ukryte okucia (hardware)
+    if (hardwareViews && hardwareViews.size > 0 && doc?.getNodesByType) {
+        const hwNodes = doc.getNodesByType('HARDWARE') || [];
+        for (const hwNode of hwNodes) {
+            const hw = hwNode.domainData;
+            if (!hw || seenIds.has(hwNode.id)) continue;
+            const isParentHidden = hwNode.parent?.domainData && hwNode.parent.domainData.visible === false;
+            const isHwHidden = hw.visible === false || hwNode.visible === false || isParentHidden;
+            if (!isHwHidden) continue;
+
+            const hwView = hardwareViews.get(hwNode.id);
+            if (!hwView || !hwView.rootNode) continue;
+
+            const meshes = typeof hwView.rootNode.getChildMeshes === 'function'
+                ? hwView.rootNode.getChildMeshes()
+                : [];
+            for (const mesh of meshes) {
+                if (!mesh) continue;
+                try {
+                    mesh.computeWorldMatrix?.(true);
+                    const hit = ray.intersectsMesh(mesh, false);
+                    if (hit && hit.hit && typeof hit.distance === 'number') {
+                        seenIds.add(hwNode.id);
+                        hits.push({
+                            type: 'hardware',
+                            id: hwNode.id,
+                            uuid: hwNode.id,
+                            name: hwNode.name || hw.name || 'Okucie',
+                            distance: hit.distance,
+                            entity: hw,
+                            parentContainerId: hwNode.parent?.id,
+                        });
+                        break;
+                    }
+                } catch {
+                    // ignoruj
+                }
+            }
+        }
+    }
+
+    if (hits.length === 0) return null;
+
+    // Najbliższy trafiony element (najmniejszy dystans od kamery)
+    hits.sort((a, b) => a.distance - b.distance);
+    return hits[0];
+}

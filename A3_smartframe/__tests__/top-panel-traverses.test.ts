@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { planCabinet } from '../smartframe-engine.js';
 import { SetKorpusTopPanelConfigCommand } from '../commands/set-korpus-top-panel-config-command';
 import { ProjectDocument } from '../../A1_core/project-document';
@@ -8,6 +8,8 @@ import { NodeType } from '../../A1_core/cad-node/node-type';
 import { mmToNm } from '../../A1_core/cad-math/units';
 import { ContextManager } from '../../A1_core/context-manager';
 import { runEngineAndApply } from '../smartframe-adapter';
+import * as smartFrameAdapter from '../smartframe-adapter';
+import { CommandHistory } from '../../A1_core/commands/command-history';
 
 describe('SmartFrame Top Panel & Traverses Engine', () => {
     it('generates FULL top panel by default', () => {
@@ -206,6 +208,47 @@ describe('SmartFrame Top Panel & Traverses Engine', () => {
         cmd.undo(doc);
         expect(container.generatorParams.topPanelMode).toBe('FULL');
         expect(container.generatorParams.traverseWidth).toBe(80);
+    });
+
+    it('rolls back a failed top-panel rebuild without adding history', () => {
+        const doc = new ProjectDocument();
+        const previousDocument = ContextManager.instance.document;
+        const previousHistory = ContextManager.instance.commandHistory;
+        const container = doc.createAssembly({ name: 'Atomic top panel config' }) as ContainerModel;
+        container.generatorParams = {
+            type: 'korpus3_2',
+            topPanelMode: 'FULL',
+            traverseWidth: 80
+        };
+        const history = new CommandHistory(doc);
+        ContextManager.instance.document = doc;
+        ContextManager.instance.commandHistory = history;
+        const originalWidth = container.width;
+        const originalRevision = doc.revision;
+        const rebuild = vi.spyOn(smartFrameAdapter, 'rebuildSmartFrameContainer').mockImplementation((target: any) => {
+            target.generatorParams.topPanelMode = 'TRAVERSE_V';
+            target.width = 123;
+            throw new Error('top-panel rebuild failed');
+        });
+        const command = new SetKorpusTopPanelConfigCommand(
+            container.id,
+            { mode: 'FULL', width: 80 },
+            { mode: 'TRAVERSE_H', width: 100 }
+        );
+
+        try {
+            expect(() => history.execute(command)).toThrow('top-panel rebuild failed');
+            expect(container.generatorParams.topPanelMode).toBe('FULL');
+            expect(container.generatorParams.traverseWidth).toBe(80);
+            expect(container.width).toBe(originalWidth);
+            expect(doc.revision).toBe(originalRevision);
+            expect(history.undoStack).toHaveLength(0);
+            expect(history.redoStack).toHaveLength(0);
+        } finally {
+            rebuild.mockRestore();
+            ContextManager.instance.document = previousDocument;
+            ContextManager.instance.commandHistory = previousHistory;
+        }
     });
 
     it('integrates with runEngineAndApply and cuts back groove on rear traverse only', () => {

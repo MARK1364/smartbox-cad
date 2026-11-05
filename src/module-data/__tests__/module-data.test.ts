@@ -421,6 +421,7 @@ describe('tree-context-menu', () => {
             const labels = labelsOf(shownItems);
             expect(labels).toContain('Edytuj korpus');
             expect(labels).not.toContain('Edytuj formatkę');
+            expect(labels).toContain('Obróć usłojenie o 90° (poprzeczne)');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
@@ -739,6 +740,82 @@ describe('tree-context-menu', () => {
             expect(labels).toContain('Usuń poziom');
         } finally {
             ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('shows "Edytuj" and "90° Usłój" as toolbar buttons for panel and toggles grain direction via action', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        ContextManager.instance.document = doc;
+
+        const panelNode = doc.createPanel({
+            name: 'Front Mebla',
+            width: 400_000_000,
+            height: 720_000_000,
+            thickness: 18_000_000,
+            role: 'FRONT',
+            engineManaged: false,
+        });
+        const panelModel = (panelNode as any).domainData || panelNode;
+
+        let shownItems: any[] = [];
+        let actionCallback: ((action: string, item: any) => void) | null = null;
+        const originalShow = ContextMenu.prototype.show;
+        const originalOnAction = ContextMenu.prototype.onAction;
+
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+        ContextMenu.prototype.onAction = function (cb: any) {
+            actionCallback = cb;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'part',
+                id: (panelNode as any).id,
+                name: (panelNode as any).name,
+                clientX: 20,
+                clientY: 20,
+            });
+
+            // Sprawdzenie obecności sekcji Obiekt z toolbar
+            const objectSection = shownItems.find((i) => i.section === 'Obiekt');
+            expect(objectSection).toBeDefined();
+            expect(Array.isArray(objectSection.toolbar)).toBe(true);
+
+            const toolCaptions = objectSection.toolbar.map((t: any) => t.caption);
+            expect(toolCaptions).toContain('Edytuj');
+            expect(toolCaptions).toContain('90° Usłój');
+
+            // Wywołanie akcji toggle-grain-direction — brak błędu ReferenceError: isPanelModel is not defined
+            const { CommandHistory } = await import('../../../A1_core/commands/command-history.js');
+            const cmdHist = new CommandHistory(doc);
+            ContextManager.instance.commandHistory = cmdHist;
+
+            expect(panelModel.rotate_grain).toBeFalsy();
+            expect(actionCallback).toBeDefined();
+            actionCallback!('toggle-grain-direction', {});
+            expect(panelModel.rotate_grain).toBe(true);
+            expect(cmdHist.canUndo).toBe(true);
+
+            // Cofnięcie przez Ctrl+Z (Undo)
+            cmdHist.undo();
+            expect(panelModel.rotate_grain).toBe(false);
+
+            // Ponowienie przez Ctrl+Y (Redo)
+            cmdHist.redo();
+            expect(panelModel.rotate_grain).toBe(true);
+
+            // Kolejne wywołanie przywraca wzdłużne
+            actionCallback!('toggle-grain-direction', {});
+            expect(panelModel.rotate_grain).toBe(false);
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+            ContextMenu.prototype.onAction = originalOnAction;
         }
     });
 });

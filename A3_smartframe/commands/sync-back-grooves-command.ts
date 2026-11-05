@@ -104,7 +104,7 @@ export class SyncBackGroovesCommand implements Command {
 
         for (const intent of intents) {
             const node = document.findNode(intent.targetNodeId);
-            if (!node || !node.domainData) continue;
+            if (!node || !node.domainData || node.frozen || (node.domainData as any).frozen) continue;
 
             const data = node.domainData as any;
             let changed = false;
@@ -178,7 +178,7 @@ export class SyncBackGroovesCommand implements Command {
     undo(document: ProjectDocument): void {
         for (const [nodeId, state] of this.oldState) {
             const node = document.findNode(nodeId);
-            if (!node || !node.domainData) continue;
+            if (!node || !node.domainData || node.frozen || (node.domainData as any).frozen) continue;
             const data = node.domainData as any;
             data.width = state.width;
             data.height = state.height;

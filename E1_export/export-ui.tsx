@@ -209,19 +209,37 @@ export const ExportUI: React.FC = () => {
                         </svg>
                         Eksport Rysunków
                     </h2>
-                    <button
-                        type="button"
-                        className="export-settings-gear-btn"
-                        onClick={() => setShowSettings((v) => !v)}
-                        title="Opcje arkusza"
-                        aria-label="Opcje arkusza"
-                        aria-expanded={showSettings}
-                    >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                        </svg>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                            type="button"
+                            className="export-settings-gear-btn"
+                            onClick={() => engine.setIncludePMI(!engine.includePMI)}
+                            title={engine.includePMI ? 'Linie wymiarowe 3D (PMI): Włączone — kliknij, aby wyłączyć' : 'Linie wymiarowe 3D (PMI): Wyłączone — kliknij, aby dołączyć'}
+                            aria-label="Dołącz linie wymiarowe 3D (PMI)"
+                            aria-pressed={engine.includePMI}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="3" y1="4" x2="3" y2="20" />
+                                <line x1="21" y1="4" x2="21" y2="20" />
+                                <line x1="3" y1="12" x2="21" y2="12" />
+                                <polyline points="7 9 3 12 7 15" />
+                                <polyline points="17 9 21 12 17 15" />
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
+                            className="export-settings-gear-btn"
+                            onClick={() => setShowSettings((v) => !v)}
+                            title="Opcje arkusza"
+                            aria-label="Opcje arkusza"
+                            aria-expanded={showSettings}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <p className="subtitle" style={{ marginTop: '4px' }}>
                     Menedżer arkuszy wykonawczych
@@ -259,33 +277,15 @@ export const ExportUI: React.FC = () => {
                             </select>
                         </div>
 
-                        <label className="export-checkbox-label" style={{ marginBottom: '12px' }}>
-                            <input
-                                type="checkbox"
-                                checked={engine.includePMI}
-                                onChange={(e) => engine.setIncludePMI(e.target.checked)}
-                            />
-                            <span>Dołącz linie wymiarowe 3D (PMI)</span>
-                        </label>
-
                         <div className="export-settings-divider">Tabela</div>
                         <div className="export-titleblock-box" style={{ marginTop: 0 }}>
                             <div className="input-row">
                                 <label>Projekt:</label>
                                 <input
                                     type="text"
-                                    value={engine.titleBlock.projectName}
-                                    onChange={(e) => engine.setTitleBlock({ projectName: e.target.value })}
-                                    placeholder="Nazwa projektu"
-                                />
-                            </div>
-                            <div className="input-row">
-                                <label>Mebel:</label>
-                                <input
-                                    type="text"
-                                    value={engine.titleBlock.furnitureName}
-                                    onChange={(e) => engine.setTitleBlock({ furnitureName: e.target.value })}
-                                    placeholder="Nazwa mebla"
+                                    value={engine.getProjectTitle()}
+                                    onChange={(e) => engine.setTitleBlock({ projectName: e.target.value, furnitureName: e.target.value })}
+                                    placeholder="Nazwa projektu (z drzewa)"
                                 />
                             </div>
                             <div className="input-row">

@@ -322,10 +322,11 @@ const BLOKI_MODULE_FILES = [
     'A2_bloki/13_led-internal-engine.ts', 'A2_bloki/13_led-internal-adapter.tsx',
     'A2_bloki/14_led-external-engine.ts', 'A2_bloki/14_led-external-adapter.tsx',
     'A2_bloki/16_led-engine.ts',
+    'A2_bloki/19_sliding-doors-engine.ts', 'A2_bloki/19_sliding-doors-adapter.tsx',
     'A2_bloki/02_bloki-bay-actions.ts', 'A2_bloki/01_bloki-ui.tsx',
     'A7_material/material-commands.ts',
 ];
-const BLOKI_CONTRACT_LINE = /(?:pushUpdate|triggerUpdate|generatorParams\s*=|\b(?:gp|generatorParams)\s*[.[]|\b(?:normalize(?:Doors|SkosneDoors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal)|build(?:Doors|SkosneDoors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal|Led))(?:Plan|Params)\()/;
+const BLOKI_CONTRACT_LINE = /(?:pushUpdate|triggerUpdate|generatorParams\s*=|\b(?:gp|generatorParams)\s*[.[]|\b(?:normalize(?:Doors|SkosneDoors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal|SlidingDoors)|build(?:Doors|SkosneDoors|Drawers|Flaps|Shelves|Shelf|Dividers|Panels|Tubes|LedInternal|LedExternal|Led|SlidingDoors))(?:Plan|Params)\()/;
 let blokiModuleFindings = 0;
 console.log(`\n## BLOKI-MODULE-LEGACY (wszystkie moduły A2 — tylko kanoniczne klucze)`);
 for (const rel of BLOKI_MODULE_FILES) {

@@ -17,6 +17,8 @@ export interface BlokiDimensions_mm {
 
 export type BlokiPartRole =
     | 'FRONT'              // Front meblowy (drzwi, front szuflady)
+    | 'SLIDING_DOOR'       // Skrzydło drzwi przesuwanych (FRONT subset)
+    | 'SLIDING_TRACK'      // Tor / prowadnica drzwi przesuwanych
     | 'FLAP'               // Klapa uchylna
     /** @deprecated alias detektora — kanon: SHELF_PANEL / SHELF_BOARD */
     | 'SHELF'
@@ -70,7 +72,7 @@ export interface BlokiHardware {
     id: string;
     name: string;
     role?: string;
-    hardwareType: 'HINGE' | 'RAIL' | 'TUBE' | 'FLAP' | 'SHELF_PIN' | 'HANDLE' | 'HANGER' | 'OTHER';
+    hardwareType: 'HINGE' | 'RAIL' | 'TUBE' | 'FLAP' | 'SHELF_PIN' | 'HANDLE' | 'HANGER' | 'ROLLER' | 'TRACK' | 'SLIDING_GUIDE' | 'OTHER';
     hardwareId: string;
     side?: 'left' | 'right' | 'center';
     loc: { x: number; y: number; z: number }; // pozycja lokalna w mm

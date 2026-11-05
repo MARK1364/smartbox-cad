@@ -1,4 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ProjectDocument } from '../../A1_core/project-document';
+import { ContextManager } from '../../A1_core/context-manager';
+import { CommandHistory } from '../../A1_core/commands/command-history';
+import * as smartFrameAdapter from '../smartframe-adapter';
 import {
     findOffsetGizmoHandler,
     registerOffsetGizmoHandler,
@@ -10,7 +14,9 @@ import {
     resolveBackPanelFaceMapping,
     resolveTopPanelFaceMapping,
     isTraverseVPanel,
-    findOwningKorpus
+    findOwningKorpus,
+    clampEdgeOffsetMm,
+    MIN_PANEL_DIM_MM
 } from '../korpus-offset-gizmo';
 import { blokiOffsetGizmoHandler } from '../../A2_bloki/02_bloki-offset-gizmo';
 
@@ -173,9 +179,9 @@ describe('offset gizmo roles', () => {
         expect(handler.readOffsetMm(container, 'cofniecie_plecow_mm')).toBe(5);
 
         handler.previewOffset(container, 'backOffset', 15);
-        expect((container.generatorParams as any).cofniecie_plecow_mm).toBe(15);
-        expect((container.generatorParams as any).backOffset).toBe(15);
-        expect((container.generatorParams as any).offsets?.backOffset).toBe(15);
+        expect((container.generatorParams as any).cofniecie_plecow_mm).toBe(5);
+        expect((container.generatorParams as any).backOffset).toBeUndefined();
+        expect((container.generatorParams as any).offsets?.backOffset).toBeUndefined();
 
         handler.commitOffset(container, 'backOffset', 15, 20);
         expect((container.generatorParams as any).cofniecie_plecow_mm).toBe(20);
@@ -278,4 +284,160 @@ describe('offset gizmo roles', () => {
     });
 });
 
+describe('clampEdgeOffsetMm & minimum 1mm protection', () => {
+    it('MIN_PANEL_DIM_MM is 1 mm', () => {
+        expect(MIN_PANEL_DIM_MM).toBe(1);
+    });
 
+    it('clamps negative edge offset when dimension would drop below 1mm (case from biurko.spp.json)', () => {
+        // Biurko: korpus_standard, D=600, cofniecie_plecow=68 z wpuszczeniem pleców (targetD = 600 - 68 = 532 mm)
+        const container = {
+            id: 'c_biurko',
+            generatorParams: {
+                typ_korpusu: 'korpus_standard',
+                szerokosc_mm: 800,
+                wysokosc_mm: 720,
+                glebokosc_mm: 600,
+                cofniecie_plecow_mm: 68,
+                offsets: {
+                    'Plecy_-X': 18,
+                    'Bok_L_+X': -18
+                }
+            }
+        };
+
+        // Base Bok_L depth = 532 - 18 = 514 mm.
+        // Offsetting Bok_L_-X by -537 would give 514 - 537 = -23 mm!
+        // clampEdgeOffsetMm must clamp it to -513 so depth = 1 mm.
+        const clamped = clampEdgeOffsetMm(container, 'Bok_L_-X', -537);
+        expect(clamped).toBe(-513);
+
+        // A safe offset like -20 should remain -20
+        expect(clampEdgeOffsetMm(container, 'Bok_L_-X', -20)).toBe(-20);
+
+        // Positive offset should remain untouched
+        expect(clampEdgeOffsetMm(container, 'Bok_L_-X', 100)).toBe(100);
+    });
+
+    it('korpusOffsetGizmoHandler.clampOffset exposes clamping', () => {
+        const container = {
+            id: 'c_test',
+            generatorParams: {
+                typ_korpusu: 'korpus_standard',
+                szerokosc_mm: 800,
+                wysokosc_mm: 720,
+                glebokosc_mm: 600,
+                offsets: {}
+            }
+        };
+        // Base Bok_L depth = 600 mm.
+        // Offset -1000 would collapse Bok_L -> clamped to -599 (giving 1 mm).
+        const result = korpusOffsetGizmoHandler.clampOffset!(container, 'Bok_L_-X', -1000);
+        expect(result).toBe(-599);
+    });
+
+    it('previewOffset and commitOffset clamp value to prevent negative dimensions', () => {
+        const container = {
+            id: 'c_test_preview',
+            generatorParams: {
+                typ_korpusu: 'korpus_standard',
+                szerokosc_mm: 800,
+                wysokosc_mm: 720,
+                glebokosc_mm: 600,
+                offsets: {}
+            }
+        };
+
+        korpusOffsetGizmoHandler.previewOffset(container, 'Bok_L_-X', -1000);
+        expect(container.generatorParams.offsets['Bok_L_-X']).toBeUndefined();
+
+        korpusOffsetGizmoHandler.commitOffset(container, 'Bok_L_-X', 0, -9999);
+        expect(container.generatorParams.offsets['Bok_L_-X']).toBe(-599);
+    });
+
+    it('preview keeps committed params and rolls back a failed rebuild', () => {
+        const doc = new ProjectDocument();
+        const previousDocument = ContextManager.instance.document;
+        const previousHistory = ContextManager.instance.commandHistory;
+        const container = doc.createAssembly({ name: 'Preview rollback' }) as any;
+        container.generatorParams = { type: 'korpus_standard', offsets: { 'Bok_L_-X': 2 } };
+        ContextManager.instance.document = doc;
+
+        const originalWidth = container.width;
+        const originalRevision = doc.revision;
+        const rebuild = vi.spyOn(smartFrameAdapter, 'rebuildSmartFrameContainer').mockImplementation((target: any) => {
+            expect(target.generatorParams.offsets['Bok_L_-X']).toBe(20);
+            target.width = 123;
+            throw new Error('rebuild failed');
+        });
+
+        try {
+            expect(() => korpusOffsetGizmoHandler.previewOffset(container, 'Bok_L_-X', 20)).toThrow('rebuild failed');
+            expect(container.generatorParams.offsets['Bok_L_-X']).toBe(2);
+            expect(container.width).toBe(originalWidth);
+            expect(doc.revision).toBe(originalRevision);
+        } finally {
+            rebuild.mockRestore();
+            ContextManager.instance.document = previousDocument;
+            ContextManager.instance.commandHistory = previousHistory;
+        }
+    });
+
+    it('offset command rolls back failed rebuild without adding history', () => {
+        const doc = new ProjectDocument();
+        const previousDocument = ContextManager.instance.document;
+        const previousHistory = ContextManager.instance.commandHistory;
+        const container = doc.createAssembly({ name: 'Offset rollback' }) as any;
+        container.generatorParams = { type: 'korpus_standard', offsets: { 'Bok_L_-X': 2 } };
+        const history = new CommandHistory(doc);
+        ContextManager.instance.document = doc;
+        ContextManager.instance.commandHistory = history;
+
+        const originalWidth = container.width;
+        const originalRevision = doc.revision;
+        const rebuild = vi.spyOn(smartFrameAdapter, 'rebuildSmartFrameContainer').mockImplementation((target: any) => {
+            target.width = 456;
+            throw new Error('rebuild failed');
+        });
+
+        try {
+            expect(() => korpusOffsetGizmoHandler.commitOffset(container, 'Bok_L_-X', 2, 20)).toThrow('rebuild failed');
+            expect(container.generatorParams.offsets['Bok_L_-X']).toBe(2);
+            expect(container.width).toBe(originalWidth);
+            expect(doc.revision).toBe(originalRevision);
+            expect(history.undoStack).toHaveLength(0);
+            expect(history.redoStack).toHaveLength(0);
+        } finally {
+            rebuild.mockRestore();
+            ContextManager.instance.document = previousDocument;
+            ContextManager.instance.commandHistory = previousHistory;
+        }
+    });
+
+    it('commits one history command with working undo and redo', () => {
+        const doc = new ProjectDocument();
+        const previousDocument = ContextManager.instance.document;
+        const previousHistory = ContextManager.instance.commandHistory;
+        const container = doc.createAssembly({ name: 'Offset history' }) as any;
+        container.generatorParams = { type: 'korpus_standard', offsets: { 'Bok_L_-X': 2 } };
+        const history = new CommandHistory(doc);
+        ContextManager.instance.document = doc;
+        ContextManager.instance.commandHistory = history;
+        const rebuild = vi.spyOn(smartFrameAdapter, 'rebuildSmartFrameContainer').mockReturnValue(true);
+
+        try {
+            korpusOffsetGizmoHandler.commitOffset(container, 'Bok_L_-X', 2, 20);
+            expect(container.generatorParams.offsets['Bok_L_-X']).toBe(20);
+            expect(history.undoStack).toHaveLength(1);
+            expect(history.undo()).toBe(true);
+            expect(container.generatorParams.offsets['Bok_L_-X']).toBe(2);
+            expect(history.redo()).toBe(true);
+            expect(container.generatorParams.offsets['Bok_L_-X']).toBe(20);
+            expect(rebuild).toHaveBeenCalledTimes(3);
+        } finally {
+            rebuild.mockRestore();
+            ContextManager.instance.document = previousDocument;
+            ContextManager.instance.commandHistory = previousHistory;
+        }
+    });
+});

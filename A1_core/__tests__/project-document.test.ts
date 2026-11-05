@@ -98,6 +98,110 @@ describe('ProjectDocument', () => {
         expect(eventCount).toBe(1);
     });
 
+    it('buffers document changes until commit and discards them when a transaction fails', () => {
+        const events: Array<{ type: string; revision: number }> = [];
+        const deferredEffect = vi.fn();
+        doc.onDocumentChanged((event) => events.push({ type: event.type, revision: event.revision }));
+        const initialRevision = doc.revision;
+
+        expect(() => doc.transaction(() => {
+            doc.emitChange('structure', ['temporary']);
+            doc.emitChange('dimensions', ['temporary']);
+            doc.afterCommit(deferredEffect);
+            expect(doc.revision).toBe(initialRevision);
+            expect(events).toHaveLength(0);
+            throw new Error('transaction failure');
+        })).toThrow('transaction failure');
+
+        expect(doc.revision).toBe(initialRevision);
+        expect(events).toEqual([]);
+        expect(deferredEffect).not.toHaveBeenCalled();
+    });
+
+    it('publishes buffered document changes in order only after a successful transaction', () => {
+        const events: Array<{ type: string; revision: number }> = [];
+        const beforeCommitEffect = vi.fn(() => {
+            expect(events).toHaveLength(0);
+            expect(doc.revision).toBe(initialRevision);
+        });
+        const afterCommitEffect = vi.fn(() => {
+            expect(events).toHaveLength(2);
+            expect(doc.revision).toBe(initialRevision + 2);
+        });
+        doc.onDocumentChanged((event) => events.push({ type: event.type, revision: event.revision }));
+        const initialRevision = doc.revision;
+
+        doc.transaction(() => {
+            doc.emitChange('structure', ['node']);
+            doc.beforeCommit(beforeCommitEffect);
+            doc.afterCommit(afterCommitEffect);
+            doc.transaction(() => doc.emitChange('dimensions', ['node']));
+            expect(doc.revision).toBe(initialRevision);
+            expect(events).toHaveLength(0);
+        });
+
+        expect(events).toEqual([
+            { type: 'structure', revision: initialRevision + 1 },
+            { type: 'dimensions', revision: initialRevision + 2 },
+        ]);
+        expect(doc.revision).toBe(initialRevision + 2);
+        expect(beforeCommitEffect).toHaveBeenCalledOnce();
+        expect(afterCommitEffect).toHaveBeenCalledOnce();
+    });
+
+    it('keeps the transaction committed when a post-commit UI effect fails', () => {
+        const events: Array<{ type: string; revision: number }> = [];
+        const rollback = vi.fn(() => doc.emitChange('structure', ['restored']));
+        doc.onDocumentChanged((event) => events.push({ type: event.type, revision: event.revision }));
+        const initialRevision = doc.revision;
+        const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        expect(doc.transaction(() => {
+            doc.emitChange('dimensions', ['changed']);
+            doc.afterCommit(() => { throw new Error('post-commit UI failure'); });
+        }, rollback)).toBeUndefined();
+
+        expect(rollback).not.toHaveBeenCalled();
+        expect(doc.revision).toBe(initialRevision + 1);
+        expect(events).toEqual([{ type: 'dimensions', revision: initialRevision + 1 }]);
+        expect(logError).toHaveBeenCalledWith(
+            'ProjectDocument afterCommit effect failed:',
+            expect.objectContaining({ message: 'post-commit UI failure' })
+        );
+        logError.mockRestore();
+    });
+
+    it('continues running remaining afterCommit effects after one fails', () => {
+        const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const firstEffect = vi.fn(() => { throw new Error('geometry refresh failed'); });
+        const nextEffect = vi.fn();
+
+        try {
+            doc.transaction(() => {
+                doc.afterCommit(firstEffect);
+                doc.afterCommit(nextEffect);
+            });
+            expect(firstEffect).toHaveBeenCalledOnce();
+            expect(nextEffect).toHaveBeenCalledOnce();
+            expect(logError).toHaveBeenCalledOnce();
+        } finally {
+            logError.mockRestore();
+        }
+    });
+
+    it('runs nested rollback handlers in reverse order when the outer commit effect fails', () => {
+        const rollbackOrder: string[] = [];
+
+        expect(() => doc.transaction(() => {
+            doc.transaction(
+                () => doc.beforeCommit(() => { throw new Error('nested commit effect failure'); }),
+                () => rollbackOrder.push('nested')
+            );
+        }, () => rollbackOrder.push('outer'))).toThrow('nested commit effect failure');
+
+        expect(rollbackOrder).toEqual(['nested', 'outer']);
+    });
+
     it('should serialize to v4 JSON format and load back identically', () => {
         const container = doc.createAssembly({ name: 'Szafa Test' }) as ContainerModel;
         const panel = doc.createPanel({ width: mmToNm(600), height: mmToNm(720), thickness: mmToNm(18), name: 'Bok' }, container.id);
@@ -277,6 +381,85 @@ describe('ProjectDocument', () => {
         expect(stamped.metadata?.savedAt).toMatch(/^\d{4}-/);
         expect(stamped.metadata?.appVersion).toBe(PROJECT_APP_VERSION);
         expect(PROJECT_APP_VERSION).toBe(appPackage.version);
+    });
+
+    it('does not replace the current native handle until a project open is committed', async () => {
+        const previousWindow = (globalThis as any).window;
+        const createHandle = (name: string, text: string) => ({
+            name,
+            getFile: async () => ({ name, text: async () => text }),
+        });
+        const firstHandle = createHandle('first.spp.json', '{"name":"first"}');
+        const nextHandle = createHandle('next.spp.json', JSON.stringify({
+            format: 'smartpanel-project',
+            version: PROJECT_FORMAT_VERSION + 1,
+        }));
+        const validHandle = createHandle('valid.spp.json', JSON.stringify(doc.serialize()));
+        (globalThis as any).window = {
+            showOpenFilePicker: vi.fn()
+                .mockResolvedValueOnce([firstHandle])
+                .mockResolvedValueOnce([nextHandle])
+                .mockResolvedValueOnce([validHandle])
+                .mockResolvedValueOnce([createHandle('invalid.spp.json', '{broken')]),
+        };
+
+        try {
+            const io = new ProjectFileIO();
+            const first = await io.open();
+            expect(first).not.toBeNull();
+            first!.commit();
+            expect(io.currentFileName).toBe('first.spp.json');
+
+            const next = await io.open();
+            expect(next?.data.version).toBe(PROJECT_FORMAT_VERSION + 1);
+            expect(io.currentFileName).toBe('first.spp.json');
+
+            expect(() => doc.load(next!.data)).toThrow();
+            expect(io.currentFileName).toBe('first.spp.json');
+
+            const valid = await io.open();
+            doc.load(valid!.data);
+            valid!.commit();
+            expect(io.currentFileName).toBe('valid.spp.json');
+
+            await expect(io.open()).rejects.toThrow();
+            expect(io.currentFileName).toBe('valid.spp.json');
+        } finally {
+            (globalThis as any).window = previousWindow;
+        }
+    });
+
+    it('openFromFile keeps the existing handle on parse or document load failure', async () => {
+        const previousWindow = (globalThis as any).window;
+        (globalThis as any).window = {};
+        try {
+            const io = new ProjectFileIO();
+            const nativeHandle = {
+                name: 'current.spp.json',
+                getFile: async () => ({ name: 'current.spp.json', text: async () => '{"name":"current"}' }),
+            };
+            (globalThis as any).window.showOpenFilePicker = vi.fn().mockResolvedValue([nativeHandle]);
+            const nativeOpen = await io.open();
+            nativeOpen!.commit();
+
+            const invalidFile = { name: 'invalid.spp.json', text: async () => '{broken' } as File;
+            await expect(io.openFromFile(invalidFile)).rejects.toThrow();
+            expect(io.currentFileName).toBe('current.spp.json');
+
+            const validFile = { name: 'valid.spp.json', text: async () => '{"name":"valid"}' } as File;
+            const pendingOpen = await io.openFromFile(validFile);
+            expect(io.currentFileName).toBe('current.spp.json');
+            expect(() => doc.load({
+                format: 'smartpanel-project',
+                version: PROJECT_FORMAT_VERSION + 1,
+            })).toThrow();
+            expect(io.currentFileName).toBe('current.spp.json');
+
+            pendingOpen.commit();
+            expect(io.currentFileName).toBeNull();
+        } finally {
+            (globalThis as any).window = previousWindow;
+        }
     });
 
     it('odrzuca plik nowszy niz obslugiwany zamiast go clampowac', () => {

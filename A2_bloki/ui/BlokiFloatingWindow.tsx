@@ -22,6 +22,7 @@ import { ShelfSubModule } from '../03_shelf-adapter.js';
 import { DoorsSubModule } from '../05_doors-adapter.js';
 import { SkosneDoorsSubModule } from '../06_skosne-doors-adapter.js';
 import { CornerDoorsSubModule } from '../07_corner-doors-adapter.js';
+import { SlidingDoorsSubModule } from '../19_sliding-doors-adapter.js';
 import { TubesSubModule } from '../08_tubes-adapter.js';
 import { DrawersSubModule } from '../09_drawers-adapter.js';
 import { DividersSubModule } from '../10_dividers-adapter.js';
@@ -40,6 +41,7 @@ import {
 import { HEIGHT_H_LOCKED_HINT, isBlokiHeightHLocked } from '../01_bloki-height-h.js';
 import { resolveDetectedBay } from '../02_bloki-bay-detector.js';
 import { buildCornerDoorsAutoRefsPatch } from '../07_corner-doors-refs.js';
+import { flushBlokiPreview, scheduleBlokiPreviewCommitBeforeRefresh } from '../bloki-transaction.js';
 
 export const MODULE_TYPES: Record<string, { type: string; label: string; category?: 'internal' | 'external' | 'panel' }> = {
     'EMPTY': { type: 'blok_empty', label: 'Wybierz moduł...' },
@@ -48,6 +50,7 @@ export const MODULE_TYPES: Record<string, { type: string; label: string; categor
     'DOORS': { type: 'blok_doors', label: 'Drzwi', category: 'internal' },
     'SKOSNE_DOORS': { type: 'blok_skosne_drzwi', label: 'Drzwi skośne', category: 'internal' },
     'CORNER_DOORS': { type: 'blok_corner_doors', label: 'Drzwi narożne', category: 'internal' },
+    'SLIDING_DOORS': { type: 'blok_sliding_doors', label: 'Drzwi przesuwne', category: 'internal' },
     'DRAWERS': { type: 'blok_drawers', label: 'Szuflady', category: 'internal' },
     'FLAPS': { type: 'blok_flaps', label: 'Klapy', category: 'internal' },
     'TUBES': { type: 'blok_tubes', label: 'Drążek', category: 'internal' },
@@ -58,7 +61,7 @@ export const MODULE_TYPES: Record<string, { type: string; label: string; categor
     'LED_EXTERNAL': { type: 'blok_led_external', label: 'LED zewnętrzny (kanał)', category: 'external' },
     'HANDLES': { type: 'blok_handle', label: 'Uchwyty', category: 'panel' },
     'SINKS': { type: 'blok_sink', label: 'Zlew', category: 'panel' },
-    'HANGERS': { type: 'smartpart_hangers', label: 'Zawieszki', category: 'internal' }
+    'HANGERS': { type: 'smartpart_hangers', label: 'Zawieszki', category: 'panel' }
 };
 
 export const INTERNAL_MODULE_TYPES = Object.entries(MODULE_TYPES).filter(([_, v]) => v.category === 'internal');
@@ -205,29 +208,29 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
             cancelAnimationFrame(rafIdRef.current);
             rafIdRef.current = null;
         }
-        const updates = { ...pendingParamsRef.current };
-        pendingParamsRef.current = {};
-
-        container.generatorParams = {
-            ...container.generatorParams,
-            ...updates
-        };
-
         const doc = ContextManager.instance.document || projectModel;
+        const node = doc?.findNode(container.id);
+        if (!doc || !node) throw new Error('Bloki preview: container is not part of the active document.');
         isPreviewingRef.current = true;
-        update_bloki_core(container, doc);
-        isPreviewingRef.current = false;
-
-        if (typeof (window as any).__rebuildGeometry === 'function') {
-            (window as any).__rebuildGeometry('Bloki update');
-        } else if (typeof doc?._notify === 'function') {
-            doc._notify();
-        } else if (doc?.emitChange) {
-            doc.emitChange('all');
+        try {
+            flushBlokiPreview(doc, node, container, pendingParamsRef.current, () => {
+                update_bloki_core(container, doc);
+            });
+        } finally {
+            isPreviewingRef.current = false;
         }
 
+        scheduleBlokiPreviewCommitBeforeRefresh(scheduleCommit, () => {
+            if (typeof (window as any).__rebuildGeometry === 'function') {
+                (window as any).__rebuildGeometry('Bloki update');
+            } else if (typeof doc?._notify === 'function') {
+                doc._notify();
+            } else if (doc?.emitChange) {
+                doc.emitChange('all');
+            }
+        });
+
         window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-        scheduleCommit();
     }, [container, projectModel, scheduleCommit]);
 
     const triggerUpdateEx = useCallback((updatedParams: any, immediate: boolean = false) => {
@@ -235,11 +238,6 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
 
         pendingParamsRef.current = {
             ...pendingParamsRef.current,
-            ...updatedParams
-        };
-
-        container.generatorParams = {
-            ...container.generatorParams,
             ...updatedParams
         };
 
@@ -811,6 +809,7 @@ export function BlokiFloatingWindow({ container, projectModel, onClose, isDocked
                                 {boxType === 'DOORS' && <DoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'SKOSNE_DOORS' && <SkosneDoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'CORNER_DOORS' && <CornerDoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
+                                {boxType === 'SLIDING_DOORS' && <SlidingDoorsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'DRAWERS' && <DrawersSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'FLAPS' && <FlapsSubModule container={container} triggerUpdate={triggerUpdateEx} />}
                                 {boxType === 'TUBES' && <TubesSubModule container={container} triggerUpdate={triggerUpdateEx} />}

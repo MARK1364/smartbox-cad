@@ -27,7 +27,8 @@ export class CreateSmartFloorCommand implements Command {
     readonly affectedNodeIds: string[];
     readonly params: CreateSmartFloorParamsMm;
 
-    private createdId: string | null = null;
+    private createdNode: CADNode | null = null;
+    private previousActiveEntity: ProjectDocument['activeEntity'] = null;
 
     constructor(params: CreateSmartFloorParamsMm) {
         this.params = params;
@@ -68,21 +69,57 @@ export class CreateSmartFloorCommand implements Command {
                 Quat.IDENTITY,
             );
         }
-        // Bezpośrednio pod ROOM (root) — obok SmartWall.
-        document.addNode(document.rootNode.id, node);
-        this.createdId = model.id;
+        const previousActiveEntity = document.activeEntity;
+        document.transaction(() => {
+            // Bezpośrednio pod ROOM (root) — obok SmartWall.
+            document.addNode(document.rootNode.id, node);
+            rebuildSmartFloor(model, document);
+            document.setActiveEntity(model);
+            document.afterCommit(() => this.dispatchProjectChanged());
+        }, () => {
+            if (document.findNode(model.id)) document.removeNode(model.id);
+            document.setActiveEntity(previousActiveEntity);
+        });
+
+        this.createdNode = node;
+        this.previousActiveEntity = previousActiveEntity;
         this.affectedNodeIds.splice(0, this.affectedNodeIds.length, model.id);
+    }
 
-        rebuildSmartFloor(model, document);
-        document.setActiveEntity(model);
-
-        if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+    redo(document: ProjectDocument): void {
+        const node = this.createdNode;
+        if (!node) {
+            this.execute(document);
+            return;
         }
+        const model = node.domainData;
+        if (!model) throw new Error(`CreateSmartFloorCommand: missing domain data for "${node.id}".`);
+        const previousActiveEntity = document.activeEntity;
+        document.transaction(() => {
+            document.addNode(document.rootNode.id, node);
+            document.setActiveEntity(model);
+            document.afterCommit(() => this.dispatchProjectChanged());
+        }, () => {
+            if (document.findNode(node.id)) document.removeNode(node.id);
+            document.setActiveEntity(previousActiveEntity);
+        });
     }
 
     undo(document: ProjectDocument): void {
-        if (this.createdId) document.removeNode(this.createdId);
+        const node = this.createdNode;
+        if (!node || document.findNode(node.id) !== node) return;
+        const activeEntity = document.activeEntity;
+        document.transaction(() => {
+            document.removeNode(node.id);
+            document.setActiveEntity(this.previousActiveEntity);
+            document.afterCommit(() => this.dispatchProjectChanged());
+        }, () => {
+            if (!document.findNode(node.id)) document.addNode(document.rootNode.id, node);
+            document.setActiveEntity(activeEntity);
+        });
+    }
+
+    private dispatchProjectChanged(): void {
         if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
         }

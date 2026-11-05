@@ -99,7 +99,8 @@ export function ensure_bloki_name(container: any, docTarget?: any) {
         'blok_led_external': 'blok_led_podszafkowy',
         'blok_led_internal': 'blok_led_szafowy',
         'smartpart_hangers': 'blok_zawieszki',
-        'blok_hangers': 'blok_zawieszki'
+        'blok_hangers': 'blok_zawieszki',
+        'blok_sliding_doors': 'blok_drzwi_przesuwne'
     };
 
     const type = container.generatorParams.type || 'blok_empty';
@@ -1116,7 +1117,8 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         blok_led_external: 'LED_EXTERNAL',
         blok_led_internal: 'LED_INTERNAL',
         blok_hangers: 'HANGERS',
-        smartpart_hangers: 'HANGERS'
+        smartpart_hangers: 'HANGERS',
+        blok_sliding_doors: 'SLIDING_DOORS'
     };
     const boxType = params.boxType || typeToBox[params.type] || 'SHELVES';
 

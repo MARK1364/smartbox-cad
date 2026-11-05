@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ProjectDocument } from '../project-document.js';
 import { CommandHistory } from '../commands/command-history.js';
 import { TransformNodeCommand } from '../commands/transform-node-command.js';
 import { SetDimensionsCommand } from '../commands/set-dimensions-command.js';
 import { AddNodeCommand } from '../commands/add-node-command.js';
 import { RemoveNodeCommand } from '../commands/remove-node-command.js';
+import { MacroCommand } from '../commands/macro-command.js';
+import { registerNodeCleanupHandler, resetNodeCleanupHandlersForTests } from '../node-cleanup-port.js';
 import { AddFeatureCommand, RemoveFeatureCommand, UpdateFeatureCommand } from '../commands/feature-commands.js';
 import { Mat4 } from '../cad-math/mat4.js';
 import { Vec3 } from '../cad-math/vec3.js';
@@ -16,8 +18,13 @@ describe('CommandHistory and CAD Commands', () => {
     let history: CommandHistory;
 
     beforeEach(() => {
+        resetNodeCleanupHandlersForTests();
         doc = new ProjectDocument({ name: 'History Test' });
         history = new CommandHistory(doc, { maxEntries: 10 });
+    });
+
+    afterEach(() => {
+        resetNodeCleanupHandlersForTests();
     });
 
     it('should track undo and redo stack state', () => {
@@ -135,6 +142,170 @@ describe('CommandHistory and CAD Commands', () => {
 
         expect(doc.findNode(panel.id)).toBe(panelNode);
         expect(panelNode.parent).toBe(containerNode);
+    });
+
+    it('RemoveNodeCommand rolls back successful cleanup when a later cleanup fails', () => {
+        const container = doc.createAssembly({ name: 'Korpus' });
+        const panel = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Panel zewnętrzny',
+        }) as any;
+        const containerNode = doc.findNode(container.id)!;
+        const panelNode = doc.findNode(panel.id)!;
+        const originalFeatures = [...panel.features];
+        const initialRevision = doc.revision;
+        const publishedChanges: unknown[] = [];
+        doc.onDocumentChanged((change) => publishedChanges.push(change));
+
+        registerNodeCleanupHandler({
+            id: 'command-history-atomicity-test',
+            collectIds: () => ['first', 'second'],
+            createClearCommand: (id) => ({
+                id: `cleanup-${id}`,
+                label: `Cleanup ${id}`,
+                timestamp: 0,
+                affectedNodeIds: [panel.id],
+                execute: (document) => {
+                    if (id === 'second') throw new Error('Second cleanup failed');
+                    panel.features.push({ id: 'temporary', type: 'hole' });
+                    document.emitChange('features', [panel.id]);
+                },
+                undo: (document) => {
+                    panel.features.splice(0, panel.features.length, ...originalFeatures);
+                    document.emitChange('features', [panel.id]);
+                },
+            }),
+        });
+
+        const command = new RemoveNodeCommand(doc, container.id);
+        expect(() => history.execute(command)).toThrow('Second cleanup failed');
+
+        expect(doc.findNode(container.id)).toBe(containerNode);
+        expect(containerNode.parent).toBe(doc.rootNode);
+        expect(panel.features).toEqual(originalFeatures);
+        expect(doc.revision).toBe(initialRevision);
+        expect(publishedChanges).toEqual([]);
+        expect(history.undoStack).toEqual([]);
+        expect(history.redoStack).toEqual([]);
+    });
+
+    it('MacroCommand rolls back completed commands when a later command fails', () => {
+        const container = doc.createAssembly({ name: 'Korpus' });
+        const node = doc.findNode(container.id)!;
+        const originalMatrix = node.localMatrix.clone();
+        const nextMatrix = Mat4.fromTRS(new Vec3(mmToNm(120), 0, 0), Quat.IDENTITY);
+        const initialRevision = doc.revision;
+        const publishedChanges: unknown[] = [];
+        doc.onDocumentChanged((change) => publishedChanges.push(change));
+        const failingCommand = {
+            id: 'failing-command',
+            label: 'Fail',
+            timestamp: 0,
+            affectedNodeIds: [container.id],
+            execute: () => { throw new Error('Later command failed'); },
+            undo: () => {},
+        };
+
+        const macro = new MacroCommand([
+            new TransformNodeCommand(container.id, originalMatrix, nextMatrix),
+            failingCommand,
+        ]);
+        expect(() => history.execute(macro)).toThrow('Later command failed');
+
+        expect(node.localMatrix.equals(originalMatrix)).toBe(true);
+        expect(doc.revision).toBe(initialRevision);
+        expect(publishedChanges).toEqual([]);
+        expect(history.undoStack).toEqual([]);
+        expect(history.redoStack).toEqual([]);
+    });
+
+    it('MacroCommand does not compensate RemoveNodeCommand twice after nested transaction rollback', () => {
+        const container = doc.createAssembly({ name: 'Korpus' });
+        const containerNode = doc.findNode(container.id)!;
+        const cleanupState = ['linked-hole'];
+        let cleanupUndoCalls = 0;
+        const initialRevision = doc.revision;
+        const publishedChanges: unknown[] = [];
+        doc.onDocumentChanged((change) => publishedChanges.push(change));
+
+        registerNodeCleanupHandler({
+            id: 'macro-remove-node-atomicity-test',
+            collectIds: () => ['linked-hole'],
+            createClearCommand: (id) => ({
+                id: `cleanup-${id}`,
+                label: `Cleanup ${id}`,
+                timestamp: 0,
+                affectedNodeIds: [container.id],
+                execute: (document) => {
+                    cleanupState.splice(cleanupState.indexOf(id), 1);
+                    document.emitChange('features', [container.id]);
+                },
+                undo: (document) => {
+                    cleanupUndoCalls++;
+                    cleanupState.push(id);
+                    document.emitChange('features', [container.id]);
+                },
+            }),
+        });
+        const failingCommand = {
+            id: 'failing-command',
+            label: 'Fail',
+            timestamp: 0,
+            affectedNodeIds: [container.id],
+            execute: () => { throw new Error('Later macro step failed'); },
+            undo: () => {},
+        };
+        const macro = new MacroCommand([
+            new RemoveNodeCommand(doc, container.id),
+            failingCommand,
+        ]);
+
+        expect(() => history.execute(macro)).toThrow('Later macro step failed');
+
+        expect(doc.findNode(container.id)).toBe(containerNode);
+        expect(cleanupState).toEqual(['linked-hole']);
+        expect(cleanupUndoCalls).toBe(1);
+        expect(doc.revision).toBe(initialRevision);
+        expect(publishedChanges).toEqual([]);
+        expect(history.undoStack).toEqual([]);
+        expect(history.redoStack).toEqual([]);
+    });
+
+    it('nested MacroCommand restores a removed feature exactly once after outer rollback', () => {
+        const panel = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Panel z cechą',
+        }) as any;
+        const feature = { id: 'hole-to-restore', type: 'hole', diameter: 8, depth: 14 };
+        panel.features.push(feature);
+        const initialRevision = doc.revision;
+        const publishedChanges: unknown[] = [];
+        doc.onDocumentChanged((change) => publishedChanges.push(change));
+        const innerMacro = new MacroCommand([
+            new RemoveFeatureCommand(doc, panel.id, feature.id),
+        ]);
+        const failingCommand = {
+            id: 'failing-command',
+            label: 'Fail',
+            timestamp: 0,
+            affectedNodeIds: [panel.id],
+            execute: () => { throw new Error('Later outer step failed'); },
+            undo: () => {},
+        };
+        const outerMacro = new MacroCommand([innerMacro, failingCommand]);
+
+        expect(() => history.execute(outerMacro)).toThrow('Later outer step failed');
+
+        expect(panel.features).toEqual([feature]);
+        expect(panel.features.filter((item: any) => item.id === feature.id)).toHaveLength(1);
+        expect(doc.revision).toBe(initialRevision);
+        expect(publishedChanges).toEqual([]);
+        expect(history.undoStack).toEqual([]);
+        expect(history.redoStack).toEqual([]);
     });
 
     it('should handle feature commands (hole, groove)', () => {

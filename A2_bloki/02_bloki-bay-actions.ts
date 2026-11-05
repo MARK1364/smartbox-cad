@@ -19,6 +19,7 @@ import { applyCornerDoorsDefaultRefs } from './07_corner-doors-refs.js';
 import doorsRules from './05_doors_3_rules_V1.json';
 import skosneDoorsRules from './06_skosne-doors_3_rules_V1.json';
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
+import { calculateDefaultSlidingDoorsCount } from './19_sliding-doors-engine.js';
 import type {
     CornerDoorsPlanParams,
     LedInternalVariant,
@@ -56,13 +57,13 @@ export const BLOKI_INTERNAL_OPTIONS: BlokiOption[] = [
     { id: 'DOORS', type: 'blok_doors', label: 'Drzwi', category: 'internal' },
     { id: 'SKOSNE_DOORS', type: 'blok_skosne_drzwi', label: 'Drzwi skośne', category: 'internal' },
     { id: 'CORNER_DOORS', type: 'blok_corner_doors', label: 'Drzwi narożne', category: 'internal' },
+    { id: 'SLIDING_DOORS', type: 'blok_sliding_doors', label: 'Drzwi przesuwne', category: 'internal' },
     { id: 'DRAWERS', type: 'blok_drawers', label: 'Szuflady', category: 'internal' },
     { id: 'FLAPS', type: 'blok_flaps', label: 'Klapy', category: 'internal' },
     { id: 'DIVIDERS', type: 'blok_dividers', label: 'Przegrody', category: 'internal' },
     { id: 'TUBES', type: 'blok_tubes', label: 'Drążek', category: 'internal' },
     { id: 'SHELF', type: 'blok_shelf', label: 'Wieniec', category: 'internal' },
-    { id: 'LED_INTERNAL', type: 'blok_led_internal', label: 'LED wewnętrzny', category: 'internal' },
-    { id: 'HANGERS', type: 'smartpart_hangers', label: 'Zawieszki', category: 'internal' }
+    { id: 'LED_INTERNAL', type: 'blok_led_internal', label: 'LED wewnętrzny', category: 'internal' }
 ];
 
 export const BLOKI_EXTERNAL_OPTIONS: BlokiOption[] = [
@@ -71,7 +72,8 @@ export const BLOKI_EXTERNAL_OPTIONS: BlokiOption[] = [
 ];
 
 export const BLOKI_PANEL_OPTIONS: BlokiOption[] = [
-    { id: 'HANDLES', type: 'blok_handle', label: 'Uchwyty', category: 'panel' }
+    { id: 'HANDLES', type: 'blok_handle', label: 'Uchwyty', category: 'panel' },
+    { id: 'HANGERS', type: 'smartpart_hangers', label: 'Zawieszki', category: 'panel' }
 ];
 
 export const BLOKI_ALL_OPTIONS: BlokiOption[] = [
@@ -151,6 +153,36 @@ function createBlokiGeneratorParams(
                 ...cornerDoorsParams,
                 otwieranie: params?.otwieranie ?? cornerDoorsParams.otwieranie ?? 'jednostronna'
             };
+        case 'SLIDING_DOORS': {
+            const defaultLeaves = calculateDefaultSlidingDoorsCount(metadata.width_mm ?? 1000);
+            return {
+                ...metadata, boxType: id, type: 'blok_sliding_doors',
+                liczba_skrzydel: params?.liczba_skrzydel ?? defaultLeaves,
+                grubosc_frontu_mm: params?.grubosc_frontu_mm ?? 18,
+                szczelina_mm: params?.szczelina_mm ?? 4,
+                zaklad: params?.zaklad ?? 1,
+                zakladka_mm: params?.zakladka_mm ?? 30,
+                nalozenie_gora_mm: params?.nalozenie_gora_mm ?? 0,
+                nalozenie_dol_mm: params?.nalozenie_dol_mm ?? 0,
+                nalozenie_lewe_mm: params?.nalozenie_lewe_mm ?? 0,
+                nalozenie_prawe_mm: params?.nalozenie_prawe_mm ?? 0,
+                typ_rolki: params?.typ_rolki ?? 'BOTTOM',
+                producent_rolek: params?.producent_rolek ?? 'SEVROLL',
+                roller_id: params?.roller_id ?? 'SEVROLL_GEMINI_ROLLER',
+                handle_id: params?.handle_id ?? 'SEVROLL_ALFA_HANDLE',
+                tor_gorny_wysokosc_mm: params?.tor_gorny_wysokosc_mm ?? 40,
+                tor_gorny_glebokosc_mm: params?.tor_gorny_glebokosc_mm ?? 75,
+                tor_gorny_cofniecie_mm: params?.tor_gorny_cofniecie_mm ?? 0,
+                tor_dolny_wysokosc_mm: params?.tor_dolny_wysokosc_mm ?? params?.prowadnica_dolna_wysokosc_mm ?? 10,
+                tor_dolny_glebokosc_mm: params?.tor_dolny_glebokosc_mm ?? params?.prowadnica_dolna_glebokosc_mm ?? 60,
+                tor_dolny_cofniecie_mm: params?.tor_dolny_cofniecie_mm ?? params?.prowadnica_dolna_cofniecie_mm ?? 0,
+                rozstaw_torow_mm: params?.rozstaw_torow_mm ?? 35,
+                szerokosc_raczki_mm: params?.szerokosc_raczki_mm ?? 25,
+                grubosc_raczki_mm: params?.grubosc_raczki_mm ?? 28,
+                pokaz_rolki: params?.pokaz_rolki ?? true,
+                pokaz_raczki: params?.pokaz_raczki ?? true
+            };
+        }
         case 'DRAWERS':
             return {
                 ...metadata, boxType: id, type: 'blok_drawers',
@@ -273,6 +305,28 @@ export interface BlokiModalParams {
     depth_mm?: number;
     height_mm?: number;
     disabledReferences?: Partial<Record<BlokiReferenceSide, boolean>>;
+    // ─── Drzwi przesuwne (SLIDING_DOORS) ───────────────────────────────────
+    liczba_skrzydel?: number;
+    zaklad?: number;
+    zakladka_mm?: number;
+    typ_rolki?: 'TOP' | 'BOTTOM' | 'BOTH';
+    producent_rolek?: string;
+    roller_id?: string;
+    handle_id?: string;
+    tor_gorny_wysokosc_mm?: number;
+    tor_gorny_glebokosc_mm?: number;
+    tor_gorny_cofniecie_mm?: number;
+    tor_dolny_wysokosc_mm?: number;
+    tor_dolny_glebokosc_mm?: number;
+    tor_dolny_cofniecie_mm?: number;
+    rozstaw_torow_mm?: number;
+    szerokosc_raczki_mm?: number;
+    grubosc_raczki_mm?: number;
+    prowadnica_dolna_wysokosc_mm?: number;
+    prowadnica_dolna_glebokosc_mm?: number;
+    prowadnica_dolna_cofniecie_mm?: number;
+    pokaz_rolki?: boolean;
+    pokaz_raczki?: boolean;
     // aliasy — tylko granica createBlokInDetectedBay
     shelfCount?: number;
     shelfOffsetFrontMm?: number;
@@ -321,7 +375,8 @@ export const BLOKI_CATEGORY_NAMES: Record<string, string> = {
     'LED_INTERNAL': 'blok_led_szafowy',
     'LED_EXTERNAL': 'blok_led_podszafkowy',
     'HANDLES': 'blok_uchwyty',
-    'HANGERS': 'blok_zawieszki'
+    'HANGERS': 'blok_zawieszki',
+    'SLIDING_DOORS': 'blok_drzwi_przesuwne'
 };
 
 import { Command } from '../A1_core/commands/command.js';
@@ -331,6 +386,7 @@ import { SyncDrawerDrillingsCommand } from './commands/sync-drawer-drillings-com
 import { SyncFlapsDrillingsCommand } from './commands/sync-flaps-drillings-command.js';
 import { SyncTubesDrillingsCommand } from './commands/sync-tubes-drillings-command.js';
 import { ClearBlokiDrillingsCommand } from './commands/clear-blok-drillings-command.js';
+import { withBlokiTransaction } from './bloki-transaction.js';
 
 export class InsertBlokiCommand implements Command {
     readonly id: string;
@@ -342,6 +398,7 @@ export class InsertBlokiCommand implements Command {
     private _targetParentId: string;
     private _sbNode: CADNode;
     private _sbContainer: ContainerModel;
+    private _isApplied = false;
 
     constructor(targetParentId: string, sbNode: CADNode, label: string) {
         this.id = `cmd_insert_bloki_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -355,23 +412,36 @@ export class InsertBlokiCommand implements Command {
     }
 
     execute(document: ProjectDocument): void {
-        this._addCmd.execute(document);
-        update_bloki_core(this._sbContainer, document);
+        if (this._isApplied) return;
+        this.runAtomically(document, () => {
+            this._addCmd.execute(document);
+            update_bloki_core(this._sbContainer, document);
+        }, false);
+        this._isApplied = true;
     }
 
     undo(document: ProjectDocument): void {
-        new ClearBlokiDrillingsCommand(this._sbNode.id).execute(document);
-        this._addCmd.undo(document);
-        new SyncShelfDrillingsCommand(this._targetParentId).execute(document);
-        new SyncDoorDrillingsCommand(this._targetParentId).execute(document);
-        new SyncDrawerDrillingsCommand(this._targetParentId).execute(document);
-        new SyncFlapsDrillingsCommand(this._targetParentId).execute(document);
-        new SyncTubesDrillingsCommand(this._targetParentId).execute(document);
+        if (!this._isApplied) return;
+        this.runAtomically(document, () => {
+            new ClearBlokiDrillingsCommand(this._sbNode.id).execute(document);
+            this._addCmd.undo(document);
+            new SyncShelfDrillingsCommand(this._targetParentId).execute(document);
+            new SyncDoorDrillingsCommand(this._targetParentId).execute(document);
+            new SyncDrawerDrillingsCommand(this._targetParentId).execute(document);
+            new SyncFlapsDrillingsCommand(this._targetParentId).execute(document);
+            new SyncTubesDrillingsCommand(this._targetParentId).execute(document);
+        }, true);
+        this._isApplied = false;
     }
 
     redo(document: ProjectDocument): void {
-        this._addCmd.execute(document);
-        update_bloki_core(this._sbContainer, document);
+        this.execute(document);
+    }
+
+    private runAtomically(document: ProjectDocument, operation: () => void, wasApplied: boolean): void {
+        withBlokiTransaction(document, this._sbNode, operation, () => {
+            this._isApplied = wasApplied;
+        });
     }
 }
 

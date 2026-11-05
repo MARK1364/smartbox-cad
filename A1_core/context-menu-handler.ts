@@ -9,11 +9,12 @@
 
 import { ContextManager } from './context-manager.js';
 import { UIController } from './ui-controller.js';
-import { findFacesAlongRay } from './quick-pick/quick-pick-detector.js';
+import { findFacesAlongRay, findHiddenEntityAlongRay } from './quick-pick/quick-pick-detector.js';
 import { openQuickPick } from './quick-pick/quick-pick-events.js';
 import { closeCadFloatingEdit } from '../src/floating-edit/cad-edit-entity.js';
 import { isDimensionToolActive, getDimensionTool } from '../A8_pmi/pmi-tool-activate.js';
 import { isSmartWallContainer, isWallPart } from '../S4_sciany/smartwall-types.js';
+import { isPanelLike } from './panel-like.js';
 import { showCadTreeContextMenu, type TreeContextMenuData } from '../src/module-data/tree-context-menu.js';
 
 export class ContextMenuHandler {
@@ -488,10 +489,14 @@ export class ContextMenuHandler {
                 };
             } else {
                 // Sprawdź formatkę (panel)
-                const panel = pickedMesh?.metadata?.panelModel
+                const panel = effectiveMesh?.metadata?.panelModel
+                    || pickedMesh?.metadata?.panelModel
                     || (inspected?.panelId ? (doc.findNode?.(inspected.panelId)?.domainData || getAllPanels().find((p: any) => p.id === inspected.panelId)) : null)
+                    || (effectiveMesh?.metadata?.panelId ? (doc.findNode?.(effectiveMesh.metadata.panelId)?.domainData || getAllPanels().find((p: any) => p.id === effectiveMesh.metadata.panelId)) : null)
                     || (pickedMesh?.metadata?.panelId ? (doc.findNode?.(pickedMesh.metadata.panelId)?.domainData || getAllPanels().find((p: any) => p.id === pickedMesh.metadata.panelId)) : null)
-                    || (pickedMesh?.metadata?.id ? (doc.findNode?.(pickedMesh.metadata.id)?.domainData || getAllPanels().find((p: any) => p.id === pickedMesh.metadata.id)) : null);
+                    || (effectiveMesh?.metadata?.id ? (doc.findNode?.(effectiveMesh.metadata.id)?.domainData || getAllPanels().find((p: any) => p.id === effectiveMesh.metadata.id)) : null)
+                    || (pickedMesh?.metadata?.id ? (doc.findNode?.(pickedMesh.metadata.id)?.domainData || getAllPanels().find((p: any) => p.id === pickedMesh.metadata.id)) : null)
+                    || (doc.activeEntity && isPanelLike(doc.activeEntity) && !containerTarget ? doc.activeEntity : null);
 
                 if (panel) {
                     doc.setActiveEntity?.(panel);
@@ -501,6 +506,7 @@ export class ContextMenuHandler {
                         id: panel.id,
                         uuid: panel.id,
                         name: panel.name,
+                        visible: panel.visible !== false,
                         isManual: (panel as any).engineManaged === false,
                         frozen: !!(panel as any).frozen,
                         clientX: e.clientX,
@@ -515,18 +521,86 @@ export class ContextMenuHandler {
                         type: containerTarget.isBlok ? 'bloki' : 'container',
                         id: containerTarget.id,
                         name: containerTarget.model?.name,
+                        visible: containerTarget.model?.visible !== false,
                         clientX: e.clientX,
                         clientY: e.clientY,
                         quickPickCandidates: quickPickCandidates.length > 1 ? quickPickCandidates : undefined,
                     };
                 } else {
-                    // Puste miejsce (tło sceny / podłoga)
-                    data = {
-                        type: 'project',
-                        id: 'root',
-                        name: 'Projekt',
-                        clientX: e.clientX,
-                        clientY: e.clientY,
+                    // Sprawdź, czy pod kursorem znajduje się ukryty element (formatka, okucie, korpus)
+                    const hiddenHit = findHiddenEntityAlongRay(
+                        viewport.scene,
+                        viewport.scene.pointerX,
+                        viewport.scene.pointerY,
+                        doc,
+                        ContextManager.instance.panelViews,
+                        ContextManager.instance.hardwareViews
+                    );
+                    if (hiddenHit) {
+                        if (hiddenHit.type === 'part') {
+                            doc.setActiveEntity?.(hiddenHit.entity);
+                            UIController.instance?.emitTree?.('select-part', { id: hiddenHit.id, uuid: hiddenHit.id });
+                            data = {
+                                type: 'part',
+                                id: hiddenHit.id,
+                                uuid: hiddenHit.id,
+                                name: hiddenHit.name,
+                                visible: false,
+                                isManual: (hiddenHit.entity as any).engineManaged === false,
+                                frozen: !!(hiddenHit.entity as any).frozen,
+                                clientX: e.clientX,
+                                clientY: e.clientY,
+                            };
+                        } else if (hiddenHit.type === 'hardware') {
+                            UIController.instance?.emitTree?.('select-hardware', { id: hiddenHit.id });
+                            data = {
+                                type: 'hardware',
+                                id: hiddenHit.id,
+                                name: hiddenHit.name,
+                                visible: false,
+                                clientX: e.clientX,
+                                clientY: e.clientY,
+                            };
+                        } else {
+                            data = {
+                                type: 'container',
+                                id: hiddenHit.id,
+                                name: hiddenHit.name,
+                                visible: false,
+                                clientX: e.clientX,
+                                clientY: e.clientY,
+                            };
+                        }
+                    } else {
+                        // Puste miejsce (tło sceny / podłoga)
+                        data = {
+                            type: 'project',
+                            id: 'root',
+                            name: 'Projekt',
+                            clientX: e.clientX,
+                            clientY: e.clientY,
+                        };
+                    }
+                }
+            }
+
+            // Jeśli kliknięty obiekt jest widoczny, sprawdź czy wzdłuż promienia pod kursorem znajduje się dodatkowo ukryty element
+            if (data && data.visible !== false && data.id !== 'root') {
+                const hiddenHit = findHiddenEntityAlongRay(
+                    viewport.scene,
+                    viewport.scene.pointerX,
+                    viewport.scene.pointerY,
+                    doc,
+                    ContextManager.instance.panelViews,
+                    ContextManager.instance.hardwareViews
+                );
+                if (hiddenHit && hiddenHit.id !== data.id) {
+                    data.hiddenUnderCursor = {
+                        id: hiddenHit.id,
+                        uuid: hiddenHit.uuid || hiddenHit.id,
+                        name: hiddenHit.name,
+                        type: hiddenHit.type,
+                        entity: hiddenHit.entity,
                     };
                 }
             }

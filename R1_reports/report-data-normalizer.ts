@@ -43,6 +43,7 @@ export interface CuttingPanelContract {
     is_x_longer: boolean;
     furniture_name: string;
     qty: number;
+    rotate_grain?: boolean;
 }
 
 export interface ContainerScopeItem {
@@ -137,9 +138,10 @@ export class ReportDataNormalizer {
 
         if (wRaw <= 0 || hRaw <= 0) return null;
 
-        const length_mm = Math.max(wRaw, hRaw);
-        const width_mm = Math.min(wRaw, hRaw);
-        const is_x_longer = wRaw >= hRaw;
+        const isGrainRotated = !!(panel.rotate_grain || panel.grain_direction === 'CROSS' || panel.custom_properties?.rotate_grain);
+        const length_mm = isGrainRotated ? Math.min(wRaw, hRaw) : Math.max(wRaw, hRaw);
+        const width_mm = isGrainRotated ? Math.max(wRaw, hRaw) : Math.min(wRaw, hRaw);
+        const is_x_longer = isGrainRotated ? (wRaw < hRaw) : (wRaw >= hRaw);
 
         const isAluFrame = panel.panelForm === 'ALU_FRAME' || (typeof panel.isAluFrame === 'function' && panel.isAluFrame());
 
@@ -186,7 +188,8 @@ export class ReportDataNormalizer {
             edge_config,
             is_x_longer,
             furniture_name: furnitureName || defaultProjectName(),
-            qty: 1
+            qty: 1,
+            ...(isGrainRotated ? { rotate_grain: true } : {})
         };
     }
 
@@ -291,6 +294,10 @@ export class ReportDataNormalizer {
             let activeContainerId = currentContainerId;
             let activeBlokId = currentBlokId;
             const domain = node.domainData || node;
+
+            if (node.frozen === true || domain?.frozen === true || domain?.params?.frozen === true) {
+                return;
+            }
 
             // Strict: Bloki tylko po flagach strukturalnych, nigdy po nazwie.
             const isBlok = domain?.is_blok ||
@@ -590,5 +597,73 @@ export class ReportDataNormalizer {
         }
 
         return grouped;
+    }
+
+    /**
+     * Agreguje formatki o tych samych gabarytach i okleinowaniu (sumuje qty),
+     * łącząc unikalne role / uwagi w jedno zestawienie (do hurtowni).
+     */
+    static aggregateContractRowsByGeometry(
+        rows: CuttingPanelContract[],
+        getEdgeCodeFn?: (edgeConfig: any, direction: 'length' | 'width', is_x_longer?: boolean) => string
+    ): CuttingPanelContract[] {
+        const defaultGetEdgeCode = (cfg: any, dir: 'length' | 'width', isXLonger = true) => {
+            if (!cfg || typeof cfg !== 'object') return '0';
+            const e1 = dir === 'length' ? (isXLonger ? cfg['+X'] : cfg['+Y']) : (isXLonger ? cfg['+Y'] : cfg['+X']);
+            const e2 = dir === 'length' ? (isXLonger ? cfg['-X'] : cfg['-Y']) : (isXLonger ? cfg['-Y'] : cfg['-X']);
+            return String((e1?.active ? 1 : 0) + (e2?.active ? 1 : 0));
+        };
+        const edgeCodeCalc = getEdgeCodeFn || defaultGetEdgeCode;
+
+        const getDetailedEdgeSig = (cfg: any, isXLonger = true) => {
+            if (!cfg || typeof cfg !== 'object') return '0|0';
+            const getDirTypes = (d: 'length' | 'width') => {
+                const e1 = d === 'length' ? (isXLonger ? cfg['+X'] : cfg['+Y']) : (isXLonger ? cfg['+Y'] : cfg['+X']);
+                const e2 = d === 'length' ? (isXLonger ? cfg['-X'] : cfg['-Y']) : (isXLonger ? cfg['-Y'] : cfg['-X']);
+                const active = [e1, e2].filter((e) => e && e.active === true).map((e) => String(e.type_id || 'std').toLowerCase()).sort();
+                return active.join('+');
+            };
+            return `${getDirTypes('length')}|${getDirTypes('width')}`;
+        };
+
+        const groups = new Map<string, { panel: CuttingPanelContract; roles: string[]; totalQty: number }>();
+
+        for (const row of rows) {
+            const lCode = edgeCodeCalc(row.edge_config, 'length', row.is_x_longer);
+            const wCode = edgeCodeCalc(row.edge_config, 'width', row.is_x_longer);
+            const edgeSig = getDetailedEdgeSig(row.edge_config, row.is_x_longer);
+            const len = Math.round(row.length_mm);
+            const wid = Math.round(row.width_mm);
+            const key = `${row.material}_${row.thickness_mm}_${len}_${lCode}_${wid}_${wCode}_${row.is_x_longer}_${edgeSig}`;
+
+            const existing = groups.get(key);
+            const qty = row.qty || 1;
+            const role = row.role ? row.role.trim() : '';
+
+            if (!existing) {
+                groups.set(key, {
+                    panel: { ...row, length_mm: len, width_mm: wid },
+                    roles: role ? [role] : [],
+                    totalQty: qty,
+                });
+            } else {
+                existing.totalQty += qty;
+                if (role && !existing.roles.includes(role)) {
+                    existing.roles.push(role);
+                }
+            }
+        }
+
+        const result: CuttingPanelContract[] = [];
+        for (const entry of groups.values()) {
+            const merged = { ...entry.panel };
+            merged.qty = entry.totalQty;
+            if (entry.roles.length > 0) {
+                merged.role = entry.roles.join(', ');
+            }
+            result.push(merged);
+        }
+
+        return result.sort((a, b) => (b.length_mm - a.length_mm) || (b.width_mm - a.width_mm) || (a.role || '').localeCompare(b.role || ''));
     }
 }

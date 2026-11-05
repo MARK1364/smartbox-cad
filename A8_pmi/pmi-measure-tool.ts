@@ -21,7 +21,7 @@ import pmiTekst from './pmi_tekst.json';
 import { Vec3, v3Len, v3Sub } from './dimension-solver';
 import { PMIStore, PMIMeasurementInit } from './pmi-data';
 import { PMIRenderer } from './pmi-renderer';
-import { AddMeasurementCommand, executePMICommand, deleteActiveDimension } from './pmi-commands';
+import { deleteActiveDimension } from './pmi-commands';
 import {
     PMIAnchorRef,
     buildAnchorRef,
@@ -345,11 +345,10 @@ export class MeasureTool extends BaseState {
     }
 
     private commitEdge(edge: NonNullable<MeasureElementPick['edge']>): void {
-        PMIStore.instance.clearAllMeasurements();
-        executePMICommand(new AddMeasurementCommand(PMIStore.instance, {
+        PMIStore.instance.replaceWithEphemeralMeasurement({
             anchor1: buildAnchorRef(edge.mesh, edge.p1World, edge.p1Local, edge.index1),
             anchor2: buildAnchorRef(edge.mesh, edge.p2World, edge.p2Local, edge.index2),
-        }));
+        });
         this.renderer.clearMeasurePreview();
     }
 
@@ -371,8 +370,7 @@ export class MeasureTool extends BaseState {
             init.viaAnchor = freeAnchorRef(result.junction);
         }
 
-        PMIStore.instance.clearAllMeasurements();
-        executePMICommand(new AddMeasurementCommand(PMIStore.instance, init));
+        PMIStore.instance.replaceWithEphemeralMeasurement(init);
         this.renderer.clearMeasurePreview();
         this.resetPicks();
         this.setUIStatus(
@@ -392,11 +390,10 @@ export class MeasureTool extends BaseState {
             return;
         }
 
-        PMIStore.instance.clearAllMeasurements();
-        executePMICommand(new AddMeasurementCommand(PMIStore.instance, {
+        PMIStore.instance.replaceWithEphemeralMeasurement({
             anchor1: a.anchor,
             anchor2: b.anchor,
-        }));
+        });
 
         this.renderer.clearMeasurePreview();
         this.resetPicks();

@@ -1571,18 +1571,24 @@ export class GizmoController {
                         delta = Math.round(BABYLON.Vector3.Dot(diffVec, normal));
                     }
 
-                    // Precyzyjnie przypnij pozycję kulki do poruszającej się krawędzi formatki
-                    sphere.position.copyFrom(startPos.add(normal.scale(delta)));
-
                     if (paramName === 'backOffset' || paramName === 'cofniecie_plecow_mm') {
                         const newValue = Math.max(0, originalValue + delta);
+                        const effectiveDelta = newValue - originalValue;
+                        sphere.position.copyFrom(startPos.add(normal.scale(effectiveDelta)));
                         const curVal = c.generatorParams.cofniecie_plecow_mm ?? c.generatorParams.backOffset;
                         if (curVal === newValue) return;
                         this.previewOffsetOnContainer(c, paramName, newValue, role);
                         return;
                     }
 
-                    const newValue = originalValue + delta;
+                    const rawValue = originalValue + delta;
+                    const handler = role ? findOffsetGizmoHandler(role) : null;
+                    const newValue = handler?.clampOffset ? handler.clampOffset(c, paramName, rawValue) : rawValue;
+                    const effectiveDelta = newValue - originalValue;
+
+                    // Precyzyjnie przypnij pozycję kulki do poruszającej się krawędzi formatki (uwzględnia obcięcie min 1mm)
+                    sphere.position.copyFrom(startPos.add(normal.scale(effectiveDelta)));
+
                     if (!c.generatorParams.offsets) {
                         c.generatorParams.offsets = {};
                     }

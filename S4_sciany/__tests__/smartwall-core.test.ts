@@ -1,7 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ProjectDocument } from '../../A1_core/project-document.js';
+import { CommandHistory } from '../../A1_core/commands/command-history.js';
+import { MacroCommand } from '../../A1_core/commands/macro-command.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { CreateSmartWallCommand } from '../commands/create-smartwall-command.js';
+import * as smartWallCore from '../smartwall-core.js';
 import { rebuildSmartWall } from '../smartwall-core.js';
 import { isExcludedFromProduction, isSmartWallContainer } from '../smartwall-types.js';
 
@@ -31,6 +34,73 @@ describe('S4 SmartWall commands / core', () => {
 
         cmd.undo(doc);
         expect(doc.getContainers()).toHaveLength(0);
+    });
+
+    it('rollbackuje tworzenie SmartWall po błędzie przebudowy bez wpisu Undo', () => {
+        const doc = new ProjectDocument();
+        new CreateSmartWallCommand({ preset: 'rect', name: 'Istniejąca ściana' }).execute(doc);
+        const previousActiveEntity = doc.activeEntity;
+        const initialContainerCount = doc.getContainers().length;
+        const history = new CommandHistory(doc);
+        const command = new CreateSmartWallCommand({ preset: 'rect', name: 'Nowa ściana' });
+        const rebuild = vi.spyOn(smartWallCore, 'rebuildSmartWall').mockImplementation((model, targetDoc) => {
+            rebuild.mockRestore();
+            smartWallCore.rebuildSmartWall(model, targetDoc);
+            throw new Error('test SmartWall rebuild failure');
+        });
+
+        expect(() => history.execute(command)).toThrow('test SmartWall rebuild failure');
+
+        expect(history.canUndo).toBe(false);
+        expect(doc.getContainers()).toHaveLength(initialContainerCount);
+        expect(doc.activeEntity).toBe(previousActiveEntity);
+        expect(doc.rootNode.children.map((child) => child.name)).not.toContain('Nowa ściana');
+    });
+
+    it('Undo/Redo przywraca te same ID kontenera i formatek SmartWall', () => {
+        const doc = new ProjectDocument();
+        const history = new CommandHistory(doc);
+        history.execute(new CreateSmartWallCommand({ preset: 'rect', name: 'SmartWall ID' }));
+        const container = doc.getContainers()[0];
+        const containerId = container.id;
+        const childIds = container.children.map((child) => child.id);
+
+        expect(history.undo()).toBe(true);
+        expect(doc.findNode(containerId)).toBeNull();
+        expect(history.redo()).toBe(true);
+
+        const redoneContainer = doc.findNode(containerId);
+        expect(redoneContainer).not.toBeNull();
+        expect(redoneContainer!.children.map((child) => child.id)).toEqual(childIds);
+        expect(doc.activeEntity).toBe(redoneContainer!.domainData);
+    });
+
+    it('nie publikuje zdarzenia SmartWall, gdy późniejszy krok makra powoduje rollback', () => {
+        const dispatchEvent = vi.fn();
+        vi.stubGlobal('window', { document: { dispatchEvent } });
+        vi.stubGlobal('CustomEvent', class {
+            constructor(public type: string) {}
+        });
+
+        try {
+            const doc = new ProjectDocument();
+            const createWall = new CreateSmartWallCommand({ preset: 'rect', name: 'Makro SmartWall' });
+            const failingCommand = {
+                id: 'test_failure',
+                label: 'Fail',
+                timestamp: Date.now(),
+                affectedNodeIds: [],
+                execute: () => { throw new Error('test macro failure'); },
+                undo: () => {},
+            };
+            const macro = new MacroCommand([createWall, failingCommand]);
+
+            expect(() => macro.execute(doc)).toThrow('test macro failure');
+            expect(doc.getContainers()).toHaveLength(0);
+            expect(dispatchEvent).not.toHaveBeenCalled();
+        } finally {
+            vi.unstubAllGlobals();
+        }
     });
 
     it('zamrożona ściana: visible=false, flaga przeżywa rebuild', () => {

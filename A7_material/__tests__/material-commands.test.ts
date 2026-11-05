@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
@@ -6,7 +6,9 @@ import { AssignMaterialCommand, SetEdgeBandingCommand } from '../material-comman
 import { MaterialItem } from '../material-types.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
 import { initializeSmartFrameEngine, rebuildSmartFrameContainer } from '../../A3_smartframe/smartframe-adapter.js';
+import * as smartFrameAdapter from '../../A3_smartframe/smartframe-adapter.js';
 import { update_bloki_core } from '../../A2_bloki/01_bloki-core.js';
+import { CommandHistory } from '../../A1_core/commands/command-history.js';
 
 describe('AssignMaterialCommand & SetEdgeBandingCommand', () => {
     let doc: ProjectDocument;
@@ -96,6 +98,106 @@ describe('AssignMaterialCommand & SetEdgeBandingCommand', () => {
         expect(bottomPanel.width).toBe(mmToNm(964));
     });
 
+    it('rolls back material and thickness if rebuilding a container fails and does not add the command to undo history', () => {
+        const container = doc.createAssembly({ name: 'Szafka' });
+        container.width = mmToNm(1000);
+        container.height = mmToNm(2000);
+        container.depth = mmToNm(600);
+        container.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        rebuildSmartFrameContainer(container);
+
+        const cntNode = doc.findNode(container.id)!;
+        const sideNode = cntNode.children.find((child: any) => child.domainData?.role === 'LEFT_SIDE_PANEL')!;
+        const panel = sideNode.domainData as PanelModel;
+        const previousMaterialId = panel.materialId;
+        const previousThickness = panel.thickness;
+        const history = new CommandHistory(doc);
+        const rebuildSpy = vi.spyOn(smartFrameAdapter, 'rebuildSmartFrameContainer')
+            .mockImplementationOnce(() => {
+                throw new Error('forced rebuild failure');
+            });
+
+        try {
+            const command = new AssignMaterialCommand(sideNode.id, mat28, 'SINGLE');
+            expect(() => history.execute(command)).toThrow('forced rebuild failure');
+            expect(history.canUndo).toBe(false);
+            expect(panel.materialId).toBe(previousMaterialId);
+            expect(panel.thickness).toBe(previousThickness);
+            expect(panel.custom_properties?.thickness_mm).toBe(18);
+            expect(cntNode.children.find((child: any) => child.domainData?.role === 'BOTTOM_PANEL')?.domainData?.width)
+                .toBe(mmToNm(964));
+        } finally {
+            rebuildSpy.mockRestore();
+        }
+    });
+
+    it('restores the applied material and keeps the undo entry when rebuilding fails during undo', () => {
+        const container = doc.createAssembly({ name: 'Szafka' });
+        container.width = mmToNm(1000);
+        container.height = mmToNm(2000);
+        container.depth = mmToNm(600);
+        container.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        rebuildSmartFrameContainer(container);
+
+        const cntNode = doc.findNode(container.id)!;
+        const sideNode = cntNode.children.find((child: any) => child.domainData?.role === 'LEFT_SIDE_PANEL')!;
+        const panel = sideNode.domainData as PanelModel;
+        const bottomNode = cntNode.children.find((child: any) => child.domainData?.role === 'BOTTOM_PANEL')!;
+        const history = new CommandHistory(doc);
+        const command = new AssignMaterialCommand(sideNode.id, mat28, 'SINGLE');
+        history.execute(command);
+
+        const rebuildSpy = vi.spyOn(smartFrameAdapter, 'rebuildSmartFrameContainer')
+            .mockImplementationOnce(() => {
+                throw new Error('forced undo rebuild failure');
+            });
+
+        try {
+            expect(() => history.undo()).toThrow('forced undo rebuild failure');
+            expect(history.canUndo).toBe(true);
+            expect(history.canRedo).toBe(false);
+            expect(panel.materialId).toBe(mat28.id);
+            expect(panel.thickness).toBe(mmToNm(28));
+            expect(panel.custom_properties?.thickness_mm).toBe(28);
+            expect(bottomNode.domainData?.width).toBe(mmToNm(954));
+        } finally {
+            rebuildSpy.mockRestore();
+        }
+
+        expect(history.undo()).toBe(true);
+        expect(panel.materialId).toBe(mat18.id);
+        expect(panel.thickness).toBe(mmToNm(18));
+        expect(bottomNode.domainData?.width).toBe(mmToNm(964));
+        expect(history.canUndo).toBe(false);
+        expect(history.canRedo).toBe(true);
+    });
+
+    it('prefers technical panel roles over names when deciding whether panels are backs', () => {
+        const target = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'PLECY - etykieta użytkownika'
+        }) as PanelModel;
+        const targetNode = doc.findNode(target.id)!;
+        target.role = 'LEFT_SIDE_PANEL';
+
+        const back = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Bok - etykieta użytkownika'
+        }) as PanelModel;
+        const backNode = doc.findNode(back.id)!;
+        back.role = 'BACK_PANEL';
+
+        const command = new AssignMaterialCommand(targetNode.id, mat28, 'PROJECT');
+        command.execute(doc);
+
+        expect(target.materialId).toBe(mat28.id);
+        expect(back.materialId).toBe(mat18.id);
+    });
+
     it('updates grubosc_frontu_mm on doors Bloki so rebuild keeps new thickness', () => {
         const cabinet = doc.createAssembly({ name: 'Korpus' });
         cabinet.width = mmToNm(600);
@@ -153,6 +255,12 @@ describe('AssignMaterialCommand & SetEdgeBandingCommand', () => {
         expect(sb.generatorParams.grubosc_frontu_mm).toBeUndefined();
         const doorUndo = sbNode.children.find((c: any) => c.domainData?.role === 'FRONT')!;
         expect((doorUndo.domainData as PanelModel).thickness).toBe(mmToNm(18));
+
+        const roleMismatchPanel = doorUndo.domainData as PanelModel;
+        roleMismatchPanel.role = 'LEFT_SIDE_PANEL';
+        roleMismatchPanel.name = 'DRZWI - etykieta użytkownika';
+        new AssignMaterialCommand(doorUndo.id, mat28, 'SINGLE').execute(doc);
+        expect(sb.generatorParams.grubosc_frontu_mm).toBeUndefined();
     });
 
     it('applies edge banding and removes it correctly', () => {

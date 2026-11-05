@@ -16,6 +16,7 @@ import { PropertiesManager, PropertiesData, CustomProperty } from '../A1_core/pr
 import { ContextManager } from '../A1_core/context-manager';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput';
 import { isPanelModel } from '../A4_smartpanel/panel-model';
+import { SetGrainDirectionCommand } from '../A1_core/commands/set-grain-direction-command';
 import { updateLibraryOperationParams } from '../o1_operacji';
 import { AssociativeDimInputs } from '../A4_smartpanel/associative-dim-ui';
 import { tx } from '../T1_tlumaczenia/core.js';
@@ -65,6 +66,7 @@ export const PropertiesPanel: React.FC = () => {
     const [visible, setVisible] = useState(false);
     const [data, setData] = useState<PropertiesData | null>(null);
     const [activeTab, setActiveTab] = useState<TabName>('properties');
+    const [, setUpdateTrigger] = useState(0);
 
     // Custom property editing state
     const [newPropKey, setNewPropKey] = useState('');
@@ -82,6 +84,7 @@ export const PropertiesPanel: React.FC = () => {
         const handleUpdate = (e: any) => {
             if (e.detail) {
                 setData(prev => normalizePropsData(prev ? { ...prev, ...e.detail } : e.detail));
+                setUpdateTrigger(prev => prev + 1);
             }
         };
 
@@ -329,6 +332,39 @@ export const PropertiesPanel: React.FC = () => {
                                 <div className="item-field">
                                     <label>{tx(srcTekst, 'prop.thickness_t', TX_NS)}</label>
                                     <span className="item-highlight">{data.panelProps.thickness} mm</span>
+                                </div>
+                                <div className="item-section-divider">Usłojenie</div>
+                                <div className="item-field" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <label>Kierunek:</label>
+                                    <button
+                                        type="button"
+                                        style={{ padding: '3px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', background: '#27272a', border: '1px solid #3f3f46', borderRadius: '4px', color: '#f59e0b' }}
+                                        onClick={() => {
+                                            const doc = ContextManager.instance.document;
+                                            const panel = data.panelId ? (doc?.findNode(data.panelId)?.domainData as any) : null;
+                                            if (panel) {
+
+
+                                                if (data.panelId) {
+                                                    const cmd = new SetGrainDirectionCommand(data.panelId, !panel.rotate_grain, undefined, [panel]);
+                                                    const cmdHist = ContextManager.instance.commandHistory;
+                                                    if (cmdHist) {
+                                                        cmdHist.execute(cmd);
+                                                    } else if (doc) {
+                                                        cmd.execute(doc);
+                                                    }
+
+
+                                                }
+
+
+                                                setUpdateTrigger(prev => prev + 1);
+                                            }
+                                        }}
+                                        title="Kliknij, aby obrócić usłojenie formatki o 90°"
+                                    >
+                                        🔄 {(data.panelId && (ContextManager.instance.document?.findNode(data.panelId)?.domainData as any)?.rotate_grain) ? 'Poprzeczne (90°)' : 'Wzdłużne'}
+                                    </button>
                                 </div>
                             </>
                         )}

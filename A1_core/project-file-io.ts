@@ -34,6 +34,12 @@ interface NativeFileHandle {
 
 export type ProjectSaveMode = 'native' | 'download';
 
+export interface ProjectOpenResult {
+    data: any;
+    fileName: string;
+    commit: () => void;
+}
+
 export function suggestedProjectFileName(projectName?: string): string {
     const base = (projectName || 'smartpanel').replace(/[<>:"/\\|?*]+/g, '_').trim() || 'smartpanel';
     return base.toLowerCase().endsWith('.spp.json') ? base : `${base}.spp.json`;
@@ -163,7 +169,7 @@ export class ProjectFileIO {
         return this.save(document);
     }
 
-    async open(): Promise<{ data: any; fileName: string } | null> {
+    async open(): Promise<ProjectOpenResult | null> {
         if (hasOpenPicker()) {
             const handles = await (window as any).showOpenFilePicker({
                 types: FILE_PICKER_TYPES,
@@ -173,19 +179,31 @@ export class ProjectFileIO {
             if (!handle) return null;
             const file = await handle.getFile();
             const text = await file.text();
-            this.fileHandle = handle;
-            return { data: JSON.parse(text), fileName: file.name };
+            const data = JSON.parse(text);
+            return {
+                data,
+                fileName: file.name,
+                commit: () => { this.fileHandle = handle; },
+            };
         }
 
         const file = await pickFileWithInput();
         if (!file) return null;
-        this.fileHandle = null;
-        return { data: JSON.parse(await file.text()), fileName: file.name };
+        const data = JSON.parse(await file.text());
+        return {
+            data,
+            fileName: file.name,
+            commit: () => { this.fileHandle = null; },
+        };
     }
 
-    async openFromFile(file: File): Promise<{ data: any; fileName: string }> {
-        this.fileHandle = null;
-        return { data: JSON.parse(await file.text()), fileName: file.name };
+    async openFromFile(file: File): Promise<ProjectOpenResult> {
+        const data = JSON.parse(await file.text());
+        return {
+            data,
+            fileName: file.name,
+            commit: () => { this.fileHandle = null; },
+        };
     }
 
     private _afterWrite(document: ProjectDocument, payload: ProjectDocumentJSON): void {

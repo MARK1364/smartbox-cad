@@ -11,6 +11,8 @@ import { applyPlanToContainer, runEngineAndApply } from '../../A3_smartframe/sma
 import { PanelModel } from '../panel-model.js';
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
+import { Vec3 } from '../../A1_core/cad-math/vec3.js';
+import { Quat } from '../../A1_core/cad-math/quat.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 
 describe('szafa SmartFrame i asocjacyjny panel', () => {
@@ -156,5 +158,83 @@ describe('szafa SmartFrame i asocjacyjny panel', () => {
         );
         // Lewy INNER = FACE_Z_PLUS (+X), prawy INNER = FACE_Z_PLUS (-X)
         expect(d).toBeCloseTo(764, 1);
+    });
+
+    it('obsługuje wymiar asocjacyjny między inną formatką SmartPanel a boczkiem korpusu (różne struktury oraz OUTLINE_SIDE_*)', () => {
+        const doc = new ProjectDocument();
+        ContextManager.instance.document = doc;
+        const cabinet = doc.createAssembly({ name: 'Szafa' }) as any;
+        cabinet.generatorParams = {
+            type: 'korpus3_2',
+            szerokosc_mm: 800,
+            wysokosc_mm: 720,
+            glebokosc_mm: 560,
+            liczba_stref: 1,
+        };
+        const plan = planCabinet(cabinet.generatorParams);
+        applyPlanToContainer(cabinet, plan);
+
+        const leftNode = doc.getPanels().find((p: any) => p.domainData?.role === 'LEFT_SIDE_PANEL')!;
+        expect(leftNode).toBeDefined();
+
+        // Drugi SmartPanel stojący po lewej stronie szafy (x = -1000 mm, szerokość = 200 mm -> prawa krawędź na x = -900 mm)
+        // Boczek lewy szafy (szer. 800 mm) ma zewnętrzną ścianę FACE_Z_MINUS na x = -400 mm
+        const refSmartPanel = new PanelModel({
+            width: mmToNm(200),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Noga_Biurka',
+            role: 'MANUAL_PANEL',
+            engineManaged: false,
+        });
+        const refNode = CADNode.create(NodeType.PART, refSmartPanel.name, refSmartPanel.id);
+        refNode.domainData = refSmartPanel;
+        refNode.setLocalTransform(new Vec3(mmToNm(-1000), 0, mmToNm(360)), Quat.IDENTITY);
+        doc.addNode(doc.rootNode.id, refNode);
+
+        // 1. Wskazanie wąskiej ściany bocznej OUTLINE_SIDE_1 (+X, x = -900 mm) na SmartPanelu oraz zewnętrznej ściany boczka korpusu (x = -400 mm)
+        const distOutlineToCabinet = distanceBetweenPlanesMm(
+            doc,
+            { nodeId: refNode.id, face: 'OUTLINE_SIDE_1' },
+            { nodeId: leftNode.id, face: 'FACE_Z_MINUS' }
+        );
+        expect(distOutlineToCabinet).toBeCloseTo(500, 1);
+
+        // 2. Nawet gdy użytkownik kliknie szeroką ścianę nieobróconego SmartPanela (FACE_Z_PLUS, środek x = -1000 mm) i boczek korpusu (x = -400 mm)
+        const distBroadToCabinet = distanceBetweenPlanesMm(
+            doc,
+            { nodeId: refNode.id, face: 'FACE_Z_PLUS' },
+            { nodeId: leftNode.id, face: 'FACE_Z_MINUS' }
+        );
+        expect(distBroadToCabinet).toBeCloseTo(600, 1);
+
+        // 3. Docelowy SmartPanel, którego szerokość zależy od odległości między Noga_Biurka (OUTLINE_SIDE_1) a Bok_L (FACE_Z_MINUS)
+        const targetSmartPanel = new PanelModel({
+            width: mmToNm(300),
+            height: mmToNm(500),
+            thickness: mmToNm(18),
+            name: 'Blenda_Podbiurkowa',
+            role: 'MANUAL_PANEL',
+            engineManaged: false,
+        });
+        const targetNode = CADNode.create(NodeType.PART, targetSmartPanel.name, targetSmartPanel.id);
+        targetNode.domainData = targetSmartPanel;
+        doc.addNode(doc.rootNode.id, targetNode);
+
+        targetSmartPanel.associativeDims = {
+            width: {
+                planeA: { nodeId: refNode.id, face: 'OUTLINE_SIDE_1' },
+                planeB: { nodeId: leftNode.id, face: 'FACE_Z_MINUS' },
+                offsetMm: 0,
+            },
+        };
+
+        expect(applyAssociativeDim(doc, targetSmartPanel, 'width')).toBe(true);
+        expect(nmToMm(targetSmartPanel.width)).toBeCloseTo(500, 1);
+
+        // Przesunięcie Noga_Biurka o 150 mm w lewo (x = -1150 mm -> prawa krawędź na x = -1050 mm, dystans = 650 mm)
+        refNode.setLocalTransform(new Vec3(mmToNm(-1150), 0, mmToNm(360)), Quat.IDENTITY);
+        expect(applyAllAssociativeDims(doc)).toBe(true);
+        expect(nmToMm(targetSmartPanel.width)).toBeCloseTo(650, 1);
     });
 });

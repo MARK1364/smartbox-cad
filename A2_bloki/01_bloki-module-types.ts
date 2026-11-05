@@ -36,6 +36,71 @@ export interface DoorsPlanParams {
     zawias_6_szablon?: string;
 }
 
+/**
+ * DRZWI PRZESUWNE — skrzydła przesuwające się w torze górnym/dolnym.
+ *
+ * Faza 1: wszystkie elementy (skrzydła, tor, rolki, rączki) są boxami (placeholder).
+ * Faza 2: rolki/rączki → GLB (hardware-loader), tor/profile → parametryczna ekstruzja
+ * przekroju 2D (polygon-extrusion / alu-frame-profile).
+ *
+ * Geometria: front na osi Y (przód = -Y), X = szerokość, Z = wysokość.
+ */
+export type SlidingRollerType = 'TOP' | 'BOTTOM' | 'BOTH';
+
+export interface SlidingDoorsPlanParams {
+    /** Liczba skrzydeł przesuwnych [1..6]. */
+    liczba_skrzydel?: number;
+    /** Grubość skrzydła (frontu) w mm. */
+    grubosc_frontu_mm?: number;
+    /** Szczelina między skrzydłami w mm. */
+    szczelina_mm?: number;
+    /** Zakład skrzydeł — współczynnik (1.0 = stykają się, >1 = nachodzą). */
+    zaklad?: number;
+    /** Zakładka skrzydeł w mm (Sevroll standard: 30 mm). */
+    zakladka_mm?: number;
+    /** Nałożenia skrzydła względem wnęki (jak w module DOORS). */
+    nalozenie_gora_mm?: number;
+    nalozenie_dol_mm?: number;
+    nalozenie_lewe_mm?: number;
+    nalozenie_prawe_mm?: number;
+    /** Umiejscowienie rolek (toru). */
+    typ_rolki?: SlidingRollerType;
+    /** Producent rolek (np. SEVROLL). */
+    producent_rolek?: string;
+    /** ID rolki — klucz do modelu GLB w B1_biblioteka (Faza 2). */
+    roller_id?: string;
+    /** ID rączki — klucz do modelu GLB w B1_biblioteka (Faza 2). */
+    handle_id?: string;
+    /** Wysokość toru górnego w mm (np. Sevroll Gemini/Elegant: 40 mm). */
+    tor_gorny_wysokosc_mm?: number;
+    /** Głębokość toru górnego w mm (np. Sevroll podwójny: 75 mm). */
+    tor_gorny_glebokosc_mm?: number;
+    /** Cofnięcie toru górnego względem lica frontu w mm. */
+    tor_gorny_cofniecie_mm?: number;
+    /** Wysokość toru dolnego w mm (np. Sevroll Elegant: 10 mm). */
+    tor_dolny_wysokosc_mm?: number;
+    /** Głębokość toru dolnego w mm (np. Sevroll Elegant: 60 mm). */
+    tor_dolny_glebokosc_mm?: number;
+    /** Cofnięcie toru dolnego względem lica frontu w mm. */
+    tor_dolny_cofniecie_mm?: number;
+    /** Rozstaw osi torów w Y w mm (Sevroll: 35 mm). */
+    rozstaw_torow_mm?: number;
+    /** Szerokość profilu rączki w X w mm (Sevroll Alfa: 25 mm). */
+    szerokosc_raczki_mm?: number;
+    /** Grubość profilu rączki w Y w mm (Sevroll: 28 mm). */
+    grubosc_raczki_mm?: number;
+    /** Wysokość prowadnicy dolnej w mm (legacy alias). */
+    prowadnica_dolna_wysokosc_mm?: number;
+    /** Głębokość prowadnicy dolnej w mm (legacy alias). */
+    prowadnica_dolna_glebokosc_mm?: number;
+    /** Cofnięcie prowadnicy dolnej względem lica frontu w mm (legacy alias). */
+    prowadnica_dolna_cofniecie_mm?: number;
+    /** Pokaż rolki w podglądzie. */
+    pokaz_rolki?: boolean;
+    /** Pokaż rączki w podglądzie. */
+    pokaz_raczki?: boolean;
+}
+
 export type SkosneDoorType = 'LEFT' | 'RIGHT' | 'DOUBLE';
 
 /**
@@ -337,7 +402,8 @@ export type BlokiModuleId =
     | 'LED_EXTERNAL'
     | 'HANDLES'
     | 'HANGERS'
-    | 'SINKS';
+    | 'SINKS'
+    | 'SLIDING_DOORS';
 
 export interface BlokiModuleTypeById {
     SHELVES: 'blok_shelves';
@@ -356,6 +422,7 @@ export interface BlokiModuleTypeById {
     HANDLES: 'blok_handle';
     HANGERS: 'smartpart_hangers';
     SINKS: 'blok_sink';
+    SLIDING_DOORS: 'blok_sliding_doors';
 }
 
 export interface BlokiPanelReference {
@@ -404,6 +471,7 @@ export interface BlokiModuleParamsById {
     HANDLES: HandlePlanParams;
     HANGERS: Record<string, unknown>;
     SINKS: Record<string, unknown>;
+    SLIDING_DOORS: SlidingDoorsPlanParams;
 }
 
 export type BlokiGeneratorParams = BlokiGeneratorMetadata &
@@ -441,7 +509,8 @@ const BLOKI_TYPE_BY_ID: BlokiModuleTypeById = {
     LED_EXTERNAL: 'blok_led_external',
     HANDLES: 'blok_handle',
     HANGERS: 'smartpart_hangers',
-    SINKS: 'blok_sink'
+    SINKS: 'blok_sink',
+    SLIDING_DOORS: 'blok_sliding_doors'
 };
 
 export function isBlokiGeneratorParams(raw: unknown): raw is BlokiGeneratorParams {

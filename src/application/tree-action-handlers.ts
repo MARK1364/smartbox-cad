@@ -139,6 +139,42 @@ export function registerTreeActionHandlers(
         rebuildGeometry();
         ctx.document.emitChange('all');
       }
+    } else if (action === 'hide-part' || action === 'hide-container' || action === 'hide-element') {
+      const entity =
+        data.panelRef ||
+        getAllPanels(ctx.document).find((p: any) => p.id === data.id || p.smartId?.uid === data.uuid) ||
+        getAllContainers(ctx.document).find((c: any) => c.id === data.id) ||
+        (ctx.document.getNodesByType ? ctx.document.getNodesByType(NodeType.HARDWARE).find((h: any) => h.id === data.id)?.domainData : null);
+      if (entity) {
+        entity.visible = false;
+        rebuildGeometry();
+        ctx.document.emitChange('all');
+        ctx.ui.setStatus?.(`Ukryto: ${entity.name || 'element'} (Shift+Tab aby przywrócić)`, true);
+      }
+    } else if (action === 'show-part' || action === 'show-container' || action === 'show-element') {
+      const entity =
+        data.panelRef ||
+        getAllPanels(ctx.document).find((p: any) => p.id === data.id || p.smartId?.uid === data.uuid) ||
+        getAllContainers(ctx.document).find((c: any) => c.id === data.id) ||
+        (ctx.document.getNodesByType ? ctx.document.getNodesByType(NodeType.HARDWARE).find((h: any) => h.id === data.id)?.domainData : null);
+      if (entity) {
+        if (entity.frozen || entity.params?.frozen) {
+          ctx.ui.setStatus?.(tx(srcTekst, 'tree.unfreeze_op', TX_NS) || 'Element jest zamrozony. Odmroz go, aby pokazac.', true);
+          return;
+        }
+        entity.visible = true;
+        const node = ctx.document.findNode(entity.id || data.id);
+        let curr = node?.parent;
+        while (curr && curr !== ctx.document.rootNode) {
+          if (curr.domainData && (curr.domainData as any).visible === false) {
+            (curr.domainData as any).visible = true;
+          }
+          curr = curr.parent;
+        }
+        rebuildGeometry();
+        ctx.document.emitChange('all');
+        ctx.ui.setStatus?.(`Pokazano: ${entity.name || 'element'}`, true);
+      }
     } else if (action === 'show-only') {
       const doc = ctx.document;
       const targetId = String(data.id || data.uuid || '');
@@ -240,6 +276,25 @@ export function registerTreeActionHandlers(
       doc.emitChange('all');
       (ContextManager.instance as any).notifyIsolationUpdate?.();
       ctx.ui.setStatus?.('Pokazano cały projekt', true);
+    } else if (action === 'hide-feature' || action === 'show-feature') {
+      const panels = getAllPanels(ctx.document);
+      const nextVis = action === 'show-feature';
+      for (const panel of panels) {
+        if (panel.features) {
+          const feature = panel.features.find((f: any) => f.id === data.id);
+          if (feature) {
+            feature.visible = nextVis;
+            if (typeof panel.setFeatures === 'function') {
+              panel.setFeatures(panel.features);
+            } else if (typeof panel._emit === 'function') {
+              panel._emit('features', { features: panel.features });
+            }
+            rebuildGeometry();
+            ctx.document.emitChange('all');
+            break;
+          }
+        }
+      }
     } else if (action === 'toggle-visibility') {
       const panels = getAllPanels(ctx.document);
       for (const panel of panels) {
@@ -282,6 +337,41 @@ export function registerTreeActionHandlers(
             break;
           }
         }
+      }
+    } else if (action === 'hide-hardware' || action === 'show-hardware') {
+      const doc = ctx.document;
+      const hwNode =
+        doc.findNode(data.id) ||
+        (doc.getNodesByType
+          ? doc.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === data.id)
+          : null);
+      if (hwNode) {
+        if (!hwNode.domainData) {
+          hwNode.domainData = new HardwareModel({ id: hwNode.id, name: hwNode.name });
+        } else if (typeof (hwNode.domainData as any).toJSON !== 'function') {
+          hwNode.domainData = HardwareModel.fromJSON(hwNode.domainData);
+        }
+        const isFrozen = Boolean(hwNode.frozen || (hwNode.domainData as any).frozen);
+        if (isFrozen && action === 'show-hardware') {
+          ctx.ui.setStatus?.('Okucie jest zamrozone. Odmroz je, aby pokazac.', true);
+          return;
+        }
+        const nextVis = action === 'show-hardware';
+        (hwNode.domainData as any).visible = nextVis;
+
+        const panels = getAllPanels(doc);
+        for (const panel of panels) {
+          if (panel.features) {
+            for (const feat of panel.features) {
+              if (matchesHardware(feat, data.id, hwNode.domainData)) {
+                feat.visible = nextVis;
+                if (feat.params) feat.params.visible = nextVis;
+              }
+            }
+          }
+        }
+        rebuildGeometry(nextVis ? 'Pokazano okucie' : 'Ukryto okucie');
+        ctx.document.emitChange('all');
       }
     } else if (action === 'toggle-hardware-visibility') {
       const doc = ctx.document;
@@ -365,6 +455,10 @@ export function registerTreeActionHandlers(
         const newFrozen = !panel.frozen;
         panel.frozen = newFrozen;
         panel.visible = !newFrozen;
+        const panelNode = doc.findNode(panel.id);
+        if (panelNode) {
+          panelNode.frozen = newFrozen;
+        }
         rebuildGeometry(
           newFrozen
             ? tx(srcTekst, 'cadapp.freeze_panel', TX_NS)
@@ -416,6 +510,9 @@ export function registerTreeActionHandlers(
           const newFrozen = !panel.frozen;
           panel.frozen = newFrozen;
           panel.visible = !newFrozen;
+          if (panelNode) {
+            panelNode.frozen = newFrozen;
+          }
           rebuildGeometry(
             newFrozen
               ? tx(srcTekst, 'cadapp.freeze_panel', TX_NS)

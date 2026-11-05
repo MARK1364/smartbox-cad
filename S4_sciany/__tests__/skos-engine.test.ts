@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ProjectDocument } from '../../A1_core/project-document.js';
+import { CommandHistory } from '../../A1_core/commands/command-history.js';
 import { CreateSmartWallCommand } from '../commands/create-smartwall-command.js';
 import { SetSmartWallParamsCommand } from '../commands/set-smartwall-params-command.js';
 import { planSkos, skosOutline2dMm } from '../skos-engine.js';
+import * as smartWallCore from '../smartwall-core.js';
 import { rebuildSmartWall } from '../smartwall-core.js';
 import { isExcludedFromProduction } from '../smartwall-types.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
@@ -80,6 +82,45 @@ describe('S4 Skos (klin pod schody)', () => {
         cmd.undo(doc);
         const part2 = doc.getContainers()[0].children[0].domainData as any;
         expect(part2.custom_properties?.outline2d).toEqual([[0, 0], [2000, 900], [2000, 1800], [0, 1800]]);
+    });
+
+    it('cofa parametry i częściowo przebudowane dzieci po błędzie, bez wpisu Undo', () => {
+        const doc = new ProjectDocument();
+        new CreateSmartWallCommand({ preset: 'rect' }).execute(doc);
+        const node = doc.getContainers()[0];
+        const container = node.domainData as any;
+        const before = SetSmartWallParamsCommand.snapshotFrom(container);
+        const originalChildren = [...node.children];
+        const originalChildState = originalChildren.map((child) => ({
+            id: child.id,
+            name: child.name,
+            width: (child.domainData as any).width,
+            transform: Array.from(child.localMatrix.data),
+        }));
+        const history = new CommandHistory(doc);
+        const command = new SetSmartWallParamsCommand(
+            container.id,
+            before,
+            { ...before, preset: 'single', singleLength: 3000 },
+        );
+        const rebuild = vi.spyOn(smartWallCore, 'rebuildSmartWall').mockImplementation((target, targetDoc) => {
+            rebuild.mockRestore();
+            smartWallCore.rebuildSmartWall(target, targetDoc);
+            throw new Error('test rebuild failure');
+        });
+
+        expect(() => history.execute(command)).toThrow('test rebuild failure');
+
+        expect(history.canUndo).toBe(false);
+        expect(SetSmartWallParamsCommand.snapshotFrom(container)).toEqual(before);
+        expect(node.children).toHaveLength(originalChildren.length);
+        expect(node.children).toEqual(originalChildren);
+        expect(node.children.map((child) => ({
+            id: child.id,
+            name: child.name,
+            width: (child.domainData as any).width,
+            transform: Array.from(child.localMatrix.data),
+        }))).toEqual(originalChildState);
     });
 
     it('przełącznik ukosu góra/dół podmienia obrys', () => {

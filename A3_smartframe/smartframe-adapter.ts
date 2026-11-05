@@ -12,6 +12,7 @@ import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { CADNode } from '../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../A1_core/cad-node/node-type.js';
+import { IDManager } from '../A1_core/id-manager.js';
 import korpusRulesData from './korpus3_3_rules.json';
 import korpusRogowy90RulesData from './korpus_rogowy90_rules.json';
 import korpusRogowy1RulesData from './korpus_rogowy1_rules.json';
@@ -166,6 +167,14 @@ function rebuildPanelView(panel: any) {
     if (!views || !panel) return;
     const view = views.get(panel) || (panel.id ? views.get(panel.id) : null);
     if (!view) return;
+    if (panel.frozen || panel.params?.frozen) {
+        if (typeof (view as any).setPanelVisible === 'function') {
+            (view as any).setPanelVisible(false);
+        } else if (view.root) {
+            view.root.setEnabled(false);
+        }
+        return;
+    }
     const fp = computePanelFeaturesFingerprint(panel);
     const isDimsDirty =
         view.lastWidth !== panel.width ||
@@ -291,7 +300,200 @@ function findLcsInModelTree(modelTree: any, role?: string, partKey?: string): an
 }
 
 /** Kopiuje strukturę operacji z silnika do kontenera w projekcie */
-export function applyPlanToContainer(container: any, operationPlan: any) {
+interface ContainerNodeSnapshot {
+    node: any;
+    name: string;
+    localMatrix: any;
+    domainData: any;
+    domainDataState: any;
+    featureState: any;
+    suppressViewEvents: unknown;
+    children: ContainerNodeSnapshot[];
+}
+
+interface SolverRuntimeSnapshot {
+    controller: any;
+    store: any;
+    constraints: Array<{ node: any; state: any }>;
+    issuesById?: Map<any, any>;
+    history?: any;
+    undoStack?: any[];
+    redoStack?: any[];
+    hadPendingSolve: boolean;
+}
+
+function cloneSnapshotValue(value: any): any {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function snapshotDocumentNode(node: any, containerNode: any, insideContainer = false): ContainerNodeSnapshot {
+    const isInsideContainer = insideContainer || node === containerNode;
+    const domainData = node.domainData;
+    const preserveDomainData = isInsideContainer || (
+        domainData &&
+        typeof domainData.toJSON === 'function' &&
+        (
+            domainData instanceof ContainerModel ||
+            domainData.type === 'container' ||
+            typeof domainData.setDimensions === 'function'
+        )
+    );
+    const serialized = preserveDomainData
+        ? (typeof domainData?.toJSON === 'function' ? domainData.toJSON() : domainData)
+        : undefined;
+
+    return {
+        node,
+        name: node.name,
+        localMatrix: node.localMatrix.clone(),
+        domainData,
+        domainDataState: cloneSnapshotValue(serialized),
+        featureState: preserveDomainData && Array.isArray(domainData?.features)
+            ? cloneSnapshotValue(domainData.features)
+            : undefined,
+        suppressViewEvents: domainData?._suppressViewEvents,
+        children: node.children.map((child: any) =>
+            snapshotDocumentNode(child, containerNode, isInsideContainer)
+        ),
+    };
+}
+
+function snapshotSolverRuntime(): SolverRuntimeSnapshot | null {
+    const controller = (ContextManager.instance as any).solverController;
+    const store = controller?._store;
+    if (!controller || !store) return null;
+
+    const history = controller._history;
+    return {
+        controller,
+        store,
+        constraints: (store.constraints || []).map((node: any) => ({
+            node,
+            state: cloneSnapshotValue(node),
+        })),
+        issuesById: store._issuesById instanceof Map
+            ? new Map([...store._issuesById].map(([id, issues]: [any, any]) => [id, cloneSnapshotValue(issues)]))
+            : undefined,
+        history,
+        undoStack: history?._undoStack ? [...history._undoStack] : undefined,
+        redoStack: history?._redoStack ? [...history._redoStack] : undefined,
+        hadPendingSolve: controller._debounceTimer !== null && controller._debounceTimer !== undefined,
+    };
+}
+
+function restoreSolverRuntime(snapshot: SolverRuntimeSnapshot | null): void {
+    if (!snapshot) return;
+    const { controller, store, constraints, issuesById, history, undoStack, redoStack } = snapshot;
+
+    if (controller._debounceTimer !== null && controller._debounceTimer !== undefined) {
+        clearTimeout(controller._debounceTimer);
+        controller._debounceTimer = null;
+    }
+
+    for (const { node, state } of constraints) {
+        for (const key of Object.keys(node)) {
+            if (!(key in state)) delete node[key];
+        }
+        Object.assign(node, cloneSnapshotValue(state));
+    }
+    store.constraints = constraints.map(({ node }) => node);
+    if (issuesById) {
+        store._issuesById = new Map(
+            [...issuesById].map(([id, issues]) => [id, cloneSnapshotValue(issues)])
+        );
+    }
+    if (history && undoStack && redoStack) {
+        history._undoStack = [...undoStack];
+        history._redoStack = [...redoStack];
+    }
+    if (snapshot.hadPendingSolve && typeof controller.requestSolve === 'function') {
+        controller.requestSolve();
+    }
+}
+
+function findNodeSnapshot(snapshot: ContainerNodeSnapshot, node: any): ContainerNodeSnapshot | null {
+    if (snapshot.node === node) return snapshot;
+    for (const child of snapshot.children) {
+        const found = findNodeSnapshot(child, node);
+        if (found) return found;
+    }
+    return null;
+}
+
+function restoreContainerNode(snapshot: ContainerNodeSnapshot): void {
+    const { node, domainData, domainDataState } = snapshot;
+    node.name = snapshot.name;
+    node.setLocalMatrix(snapshot.localMatrix.clone());
+    if (domainData) {
+        node.domainData = domainData;
+        if (domainDataState && typeof domainData.loadFromJSON === 'function') {
+            domainData.loadFromJSON(domainDataState);
+        } else if (domainDataState && typeof domainData.fromJSON === 'function') {
+            domainData.fromJSON(domainDataState);
+        } else if (domainDataState && typeof domainData === 'object') {
+            for (const key of Object.keys(domainData)) {
+                if (!(key in domainDataState)) delete domainData[key];
+            }
+            Object.assign(domainData, domainDataState);
+        }
+        if (snapshot.featureState && Array.isArray(domainData.features)) {
+            const originalSmartIds = new Set(
+                snapshot.featureState.map((feature: any) => feature?.smartId).filter(Boolean)
+            );
+            for (const feature of domainData.features) {
+                if (feature?.smartId && !originalSmartIds.has(feature.smartId)) {
+                    IDManager.getInstance().unregister(feature.smartId);
+                }
+            }
+            domainData.features = snapshot.featureState;
+        }
+        if (snapshot.suppressViewEvents !== undefined) {
+            domainData._suppressViewEvents = snapshot.suppressViewEvents;
+        } else {
+            delete domainData._suppressViewEvents;
+        }
+    } else {
+        node.domainData = domainData;
+    }
+
+    for (const childSnapshot of snapshot.children) {
+        restoreContainerNode(childSnapshot);
+    }
+}
+
+function withContainerTransaction<T>(container: any, operation: () => T): T {
+    const doc = ContextManager.instance.document;
+    const containerNode = doc && container?.id ? doc.findNode(container.id) : null;
+    if (!doc || !containerNode) return operation();
+
+    const documentSnapshot = snapshotDocumentNode(doc.rootNode, containerNode);
+    const containerSnapshot = findNodeSnapshot(documentSnapshot, containerNode);
+    if (!containerSnapshot) throw new Error('SmartFrame transaction: container is not part of the document tree.');
+    const activeEntity = doc.activeEntity;
+    const solverSnapshot = snapshotSolverRuntime();
+    return doc.transaction(
+        operation,
+        () => {
+            for (const child of [...containerNode.children]) {
+                doc.removeNode(child.id);
+            }
+            restoreContainerNode(documentSnapshot);
+            for (let index = 0; index < containerSnapshot.children.length; index++) {
+                const childSnapshot = containerSnapshot.children[index];
+                doc.addNode(containerNode.id, childSnapshot.node, index);
+            }
+            restoreSolverRuntime(solverSnapshot);
+            doc.setActiveEntity(activeEntity);
+            syncContainerPanelViews(container);
+        }
+    );
+}
+
+export function withSmartFrameContainerTransaction<T>(container: any, operation: () => T): T {
+    return withContainerTransaction(container, operation);
+}
+
+function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
     const activePanelIds = new Set<string>();
     const W = container.width;
     const D = container.depth;
@@ -306,6 +508,7 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
                 cleanBlokiChildHoleFeatures(child);
                 continue;
             }
+
             const panelData = child.domainData;
             if (isManualPanel(panelData)) continue;
             if (!panelData?.features?.length) continue;
@@ -636,6 +839,10 @@ export function applyPlanToContainer(container: any, operationPlan: any) {
     }
 }
 
+export function applyPlanToContainer(container: any, operationPlan: any) {
+    return withContainerTransaction(container, () => applyPlanToContainerUnsafe(container, operationPlan));
+}
+
 /**
  * Uruchamia silnik i aplikuje wygenerowane części do kontenera.
  * WSZYSTKIE wymiary na wejściu w [mm] — brak zgadywania jednoski po wartości.
@@ -644,8 +851,8 @@ export function runEngineAndApply(
     container: any,
     w_mm: number, wysokosc_mm: number, glebokosc_mm: number,
     zCount: 1 | 2 | 3 = 1,
-    wysokosc_strefy_dolnej_mm = 0,
-    wysokosc_strefy_srodkowej_mm = 0,
+    wysokosc_strefy_dolnej_mm?: number,
+    wysokosc_strefy_srodkowej_mm?: number,
     cofniecie_plecow_mm?: number,
     offsets?: Record<string, number>
 ) {
@@ -667,20 +874,6 @@ export function runEngineAndApply(
     }
     const effectiveZoneCount = (isCorner || isSkosny) ? 1 : zCount;
 
-    if (container) {
-        container.width = mmToNm(w_mm);
-        container.height = mmToNm(h_mm);
-        container.depth = mmToNm(glebokosc_mm);
-        if (!container.generatorParams) container.generatorParams = {};
-        container.generatorParams.szerokosc_mm = w_mm;
-        container.generatorParams.wysokosc_mm = h_mm;
-        container.generatorParams.glebokosc_mm = glebokosc_mm;
-        container.generatorParams.liczba_stref = effectiveZoneCount as 1 | 2 | 3;
-        container.generatorParams.wysokosc_strefy_dolnej_mm = wysokosc_strefy_dolnej_mm;
-        container.generatorParams.wysokosc_strefy_srodkowej_mm = wysokosc_strefy_srodkowej_mm;
-        container.generatorParams.cofniecie_plecow_mm = bOffset;
-    }
-
     const doc = ContextManager.instance.document;
     const cntNode = (doc && container?.id) ? doc.findNode(container.id) : null;
 
@@ -689,8 +882,8 @@ export function runEngineAndApply(
         wysokosc_mm: h_mm,
         glebokosc_mm: glebokosc_mm,
         liczba_stref: effectiveZoneCount as 1 | 2 | 3,
-        wysokosc_strefy_dolnej_mm: effectiveZoneCount > 1 && wysokosc_strefy_dolnej_mm > 0 ? wysokosc_strefy_dolnej_mm : undefined,
-        wysokosc_strefy_srodkowej_mm: effectiveZoneCount === 3 && wysokosc_strefy_srodkowej_mm > 0 ? wysokosc_strefy_srodkowej_mm : undefined,
+        wysokosc_strefy_dolnej_mm: effectiveZoneCount > 1 ? wysokosc_strefy_dolnej_mm : undefined,
+        wysokosc_strefy_srodkowej_mm: effectiveZoneCount === 3 ? wysokosc_strefy_srodkowej_mm : undefined,
         cofniecie_plecow_mm: bOffset,
         offsets: offsets ?? gp.offsets,
         container: cntNode || container,
@@ -708,21 +901,38 @@ export function runEngineAndApply(
         wysokosc_lewy_mm: gp.wysokosc_lewy_mm,
         wysokosc_prawy_mm: gp.wysokosc_prawy_mm
     });
-    if (container) (container as any)._deferViewSync = true;
-    setContainerPanelsSuppressEvents(container, true);
-    try {
-        applyPlanToContainer(container, plan);
 
-        // Po zastosowaniu planu węzły istnieją w dokumencie. Wyliczamy rowki matematycznie na podstawie macierzy:
-        if (doc) {
-            new SyncBackGroovesCommand(container.id).execute(doc);
-            notifyKorpusRebuilt(doc, container.id);
+    withContainerTransaction(container, () => {
+        if (container) {
+            container.width = mmToNm(w_mm);
+            container.height = mmToNm(h_mm);
+            container.depth = mmToNm(glebokosc_mm);
+            if (!container.generatorParams) container.generatorParams = {};
+            container.generatorParams.szerokosc_mm = w_mm;
+            container.generatorParams.wysokosc_mm = h_mm;
+            container.generatorParams.glebokosc_mm = glebokosc_mm;
+            container.generatorParams.liczba_stref = effectiveZoneCount as 1 | 2 | 3;
+            container.generatorParams.wysokosc_strefy_dolnej_mm = wysokosc_strefy_dolnej_mm;
+            container.generatorParams.wysokosc_strefy_srodkowej_mm = wysokosc_strefy_srodkowej_mm;
+            container.generatorParams.cofniecie_plecow_mm = bOffset;
         }
-    } finally {
-        if (container) (container as any)._deferViewSync = false;
-        setContainerPanelsSuppressEvents(container, false);
-        syncContainerPanelViews(container);
-    }
+
+        const previousDeferViewSync = (container as any)?._deferViewSync;
+        if (container) (container as any)._deferViewSync = true;
+        setContainerPanelsSuppressEvents(container, true);
+        try {
+            applyPlanToContainerUnsafe(container, plan);
+            if (doc) new SyncBackGroovesCommand(container.id).execute(doc);
+        } finally {
+            if (container) (container as any)._deferViewSync = previousDeferViewSync;
+            setContainerPanelsSuppressEvents(container, false);
+            syncContainerPanelViews(container);
+        }
+
+        if (doc) {
+            doc.beforeCommit(() => notifyKorpusRebuilt(doc, container.id));
+        }
+    });
 }
 
 /** Bootstrap — reguły są importowane statycznie; zostawione dla kompatybilności init. */
@@ -730,6 +940,51 @@ export async function initializeSmartFrameEngine(): Promise<void> {
     if (typeof window !== 'undefined') {
         (window as any).korpusRules = korpusRulesData;
     }
+}
+
+/**
+ * Czysty plan formatek korpusu dla PODANYCH offsetów (bez zapisu do dokumentu).
+ * Używane do sprawdzania wymiarów przed zapisem offsetu z gizma.
+ */
+export function planKorpusPartsForOffsets(container: any, offsets: Record<string, number>): any[] {
+    const gp = container?.generatorParams || {};
+    const cabinetType = resolveCabinetType(gp.typ_korpusu || gp.type);
+    const isCorner = cabinetType === 'korpus_rogowy1' || cabinetType === 'korpus_rogowy90';
+    const isSkosny = cabinetType === 'korpus_skosny' || cabinetType === 'korpus_skosny_dach' || cabinetType === 'korpus_skosny_lr' || cabinetType === 'korpus_skosny_lr_uc';
+    const w_mm = Number.isFinite(container.width) ? nmToMm(container.width) : (gp.szerokosc_mm ?? 600);
+    let h_mm = Number.isFinite(container.height) ? nmToMm(container.height) : (gp.wysokosc_mm ?? 720);
+    const d_mm = Number.isFinite(container.depth) ? nmToMm(container.depth) : (gp.glebokosc_mm ?? 560);
+    if (isSkosny) {
+        h_mm = Math.max(h_mm, gp.wysokosc_przod_mm ?? h_mm, gp.wysokosc_tyl_mm ?? 1000);
+    }
+    const zoneCount = ((isCorner || isSkosny) ? 1 : (gp.liczba_stref ?? 1)) as 1 | 2 | 3;
+    const doc = ContextManager.instance.document;
+    const cntNode = (doc && container?.id) ? doc.findNode(container.id) : null;
+    const plan = planCabinet({
+        szerokosc_mm: w_mm,
+        wysokosc_mm: h_mm,
+        glebokosc_mm: d_mm,
+        liczba_stref: zoneCount,
+        wysokosc_strefy_dolnej_mm: zoneCount > 1 ? gp.wysokosc_strefy_dolnej_mm : undefined,
+        wysokosc_strefy_srodkowej_mm: zoneCount === 3 ? gp.wysokosc_strefy_srodkowej_mm : undefined,
+        cofniecie_plecow_mm: gp.cofniecie_plecow_mm ?? gp.backOffset ?? 3,
+        offsets,
+        container: cntNode || container,
+        tryb_wienca_gornego: (gp.topPanelMode || 'FULL') as 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V',
+        szerokosc_trawersu_mm: gp.traverseWidth || 80,
+        typ_korpusu: cabinetType,
+        szerokosc_blendy_mm: gp.szerokosc_blendy_mm,
+        strona_blendy: gp.strona_blendy,
+        glebokosc_boku_lewego_mm: gp.glebokosc_boku_lewego_mm,
+        glebokosc_boku_prawego_mm: gp.glebokosc_boku_prawego_mm,
+        szerokosc_listwy_naroznej_mm: gp.szerokosc_listwy_naroznej_mm,
+        typ_listwy_naroznej: gp.typ_listwy_naroznej,
+        wysokosc_przod_mm: gp.wysokosc_przod_mm,
+        wysokosc_tyl_mm: gp.wysokosc_tyl_mm,
+        wysokosc_lewy_mm: gp.wysokosc_lewy_mm,
+        wysokosc_prawy_mm: gp.wysokosc_prawy_mm
+    });
+    return plan.parts as any[];
 }
 
 export function rebuildSmartFrameContainer(container: any): boolean {
@@ -755,16 +1010,19 @@ export function rebuildSmartFrameContainer(container: any): boolean {
         offs
     );
 
-    const rebuild = (typeof window !== 'undefined') ? (window as any).__rebuildGeometry : null;
-    if (typeof rebuild === 'function') {
-        try { rebuild(); } catch { }
-    }
-
-    if (typeof window !== 'undefined' && window.document) {
-        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-    }
-
     const doc = ContextManager.instance.document;
+    const publishViewUpdate = () => {
+        const rebuild = (typeof window !== 'undefined') ? (window as any).__rebuildGeometry : null;
+        if (typeof rebuild === 'function') {
+            try { rebuild(); } catch { }
+        }
+        if (typeof window !== 'undefined' && window.document) {
+            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+        }
+    };
+    if (doc) doc.afterCommit(publishViewUpdate);
+    else publishViewUpdate();
+
     if (doc) {
         if (!(typeof window !== 'undefined' && (window as any).__glcGizmoActive)) doc.notifyDocumentChanged();
     }
@@ -910,8 +1168,8 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
     const skos_hL_mm = params.wysokosc_lewy_mm ?? gp.wysokosc_lewy_mm ?? 1000;
     const skos_hR_mm = params.wysokosc_prawy_mm ?? gp.wysokosc_prawy_mm ?? h_mm;
     const skos_h_mm = isSkosnyLr ? Math.max(skos_hL_mm, skos_hR_mm) : Math.max(skos_hF_mm, skos_hB_mm);
-    const bottomHeight = params.wysokosc_strefy_dolnej_mm ?? gp.wysokosc_strefy_dolnej_mm ?? (isSkosny ? skos_h_mm : h_mm);
-    const middleHeight = params.wysokosc_strefy_srodkowej_mm ?? gp.wysokosc_strefy_srodkowej_mm ?? 0;
+    const bottomHeightMm = params.wysokosc_strefy_dolnej_mm ?? gp.wysokosc_strefy_dolnej_mm ?? (isSkosny ? skos_h_mm : h_mm);
+    const middleHeightMm = params.wysokosc_strefy_srodkowej_mm ?? gp.wysokosc_strefy_srodkowej_mm ?? 0;
     const blindWidth = params.szerokosc_blendy_mm ?? gp.szerokosc_blendy_mm ?? 400;
     const blindSide = params.strona_blendy ?? gp.strona_blendy ?? 'LEFT';
     const bokLewy = params.glebokosc_boku_lewego_mm ?? gp.glebokosc_boku_lewego_mm ?? 600;
@@ -924,6 +1182,29 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
         ? { ...(gp.offsets || {}), ...(params.offsets || {}) }
         : { ...(gp.offsets || {}) };
 
+    planCabinet({
+        szerokosc_mm: w_mm,
+        wysokosc_mm: isSkosny ? skos_h_mm : h_mm,
+        glebokosc_mm: d_mm,
+        liczba_stref: zoneCount,
+        wysokosc_strefy_dolnej_mm: zoneCount > 1 ? bottomHeightMm : undefined,
+        wysokosc_strefy_srodkowej_mm: zoneCount === 3 ? middleHeightMm : undefined,
+        cofniecie_plecow_mm: bOffset,
+        offsets: effectiveOffsets,
+        tryb_wienca_gornego: (gp.topPanelMode || 'FULL') as 'FULL' | 'TRAVERSE_H' | 'TRAVERSE_V',
+        szerokosc_trawersu_mm: gp.traverseWidth || 80,
+        typ_korpusu: cabinetType,
+        ...(isRogowy1 ? { szerokosc_blendy_mm: blindWidth, strona_blendy: blindSide } : {}),
+        ...(isRogowy90 ? {
+            glebokosc_boku_lewego_mm: bokLewy,
+            glebokosc_boku_prawego_mm: bokPrawy,
+            szerokosc_listwy_naroznej_mm: szerokoscListwy,
+            ...(typListwy ? { typ_listwy_naroznej: typListwy } : {})
+        } : {}),
+        ...(isSkosny && !isSkosnyLr ? { wysokosc_przod_mm: skos_hF_mm, wysokosc_tyl_mm: skos_hB_mm } : {}),
+        ...(isSkosnyLr ? { wysokosc_lewy_mm: skos_hL_mm, wysokosc_prawy_mm: skos_hR_mm } : {}),
+    });
+
     container.width = mmToNm(w_mm);
     container.height = mmToNm(isSkosny ? skos_h_mm : h_mm);
     container.depth = mmToNm(d_mm);
@@ -935,8 +1216,8 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
         wysokosc_mm: isSkosny ? skos_h_mm : h_mm,
         glebokosc_mm: d_mm,
         liczba_stref: zoneCount,
-        wysokosc_strefy_dolnej_mm: (isCorner || isSkosny || zoneCount === 1) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeight,
-        wysokosc_strefy_srodkowej_mm: (isCorner || isSkosny || zoneCount === 1) ? 0 : middleHeight,
+        wysokosc_strefy_dolnej_mm: (isCorner || isSkosny || zoneCount === 1) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeightMm,
+        wysokosc_strefy_srodkowej_mm: (isCorner || isSkosny || zoneCount === 1) ? 0 : middleHeightMm,
         cofniecie_plecow_mm: bOffset,
         offsets: effectiveOffsets,
         ...(isSkosny && !isSkosnyLr ? { wysokosc_przod_mm: skos_hF_mm, wysokosc_tyl_mm: skos_hB_mm } : {}),
@@ -953,8 +1234,8 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
         container,
         w_mm, isSkosny ? skos_h_mm : h_mm, d_mm,
         zoneCount,
-        (isCorner || isSkosny || zoneCount === 1) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeight,
-        (isCorner || isSkosny || zoneCount === 1) ? 0 : middleHeight,
+        (isCorner || isSkosny || zoneCount === 1) ? (isSkosny ? skos_h_mm : h_mm) : bottomHeightMm,
+        (isCorner || isSkosny || zoneCount === 1) ? 0 : middleHeightMm,
         bOffset, effectiveOffsets
     );
     const rebuild = (typeof window !== 'undefined') ? (window as any).__rebuildGeometry : null;

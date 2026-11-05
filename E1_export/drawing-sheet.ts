@@ -249,7 +249,7 @@ export class DrawingSheet {
         lines.push(svgText(tbX + 2, curY + 3, 'Nazwa projektu / mebla', 1.5, 'start', 'normal', undefined, '#666666'));
         lines.push(svgText(tbX + colSplit + 2, curY + 3, 'Nr rysunku', 1.5, 'start', 'normal', undefined, '#666666'));
 
-        const displayName = this.titleBlock.furnitureName || this.titleBlock.projectName || 'Mebel CAD';
+        const displayName = this.titleBlock.projectName || this.titleBlock.furnitureName || 'Nowy projekt';
         lines.push(svgText(tbX + 2, curY + 8, displayName, 3.5, 'start', 'bold'));
         lines.push(svgText(tbX + colSplit + 2, curY + 8, this.titleBlock.drawingNumber || 'SB-001', 3.2, 'start', 'bold'));
 

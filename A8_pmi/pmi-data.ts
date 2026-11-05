@@ -451,6 +451,25 @@ export class PMIStore {
         return item;
     }
 
+    /** Zastępuje lekką miarkę narzędzia pomiarowego bez tworzenia wpisu w historii Undo/Redo. */
+    public replaceWithEphemeralMeasurement(data: PMIMeasurementInit): PMIMeasurement {
+        const item: PMIMeasurement = {
+            distanceMM: 0,
+            text: '',
+            visible: true,
+            selected: true,
+            ...data,
+            id: data.id ?? this._generateMeasureId(),
+        };
+        for (const annotation of this.annotations) annotation.selected = false;
+        this.measurements = [item];
+        this.activeIndex = -1;
+        this.activeMeasurementIndex = 0;
+        this._syncMeasureIdWith(item.id);
+        this._notify();
+        return item;
+    }
+
     public insertMeasurement(item: PMIMeasurement, index: number): void {
         const at = Math.max(0, Math.min(index, this.measurements.length));
         this.measurements.splice(at, 0, item);
@@ -786,5 +805,3 @@ function normalizeAnnotation(raw: any): PMIAnnotation {
         textShiftMM: typeof raw?.textShiftMM === 'number' ? nmToMm(raw.textShiftMM) : 0,
     };
 }
-
-

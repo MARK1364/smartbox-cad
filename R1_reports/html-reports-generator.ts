@@ -51,8 +51,103 @@ export class HtmlReportsGeneratorWeb {
     /**
      * Generuje wewnętrzny kod zakładek materiałowych dla listy cięcia (format A4, 30 wierszy per arkusz)
      */
-    public generateMaterialCuttingTabsHtml(panels: CuttingPanelContract[], prefix = 'repMatTab'): { buttonsHtml: string; contentHtml: string } {
+    /**
+     * Renderuje zestaw arkuszy formatki A4 (30 wierszy/arkusz) dla danego trybu (scalone vs rozpisane)
+     */
+    private renderCutSheetsHtml(
+        tabId: string,
+        mode: 'merged' | 'detailed',
+        panels: CuttingPanelContract[],
+        matName: string,
+        thickLabel: string,
+        today_str: string
+    ): string {
         const rows_per_sheet = 30;
+        const totalPages = Math.max(1, Math.ceil(panels.length / rows_per_sheet));
+        const modeClass = mode === 'merged' ? 'sheets-merged' : 'sheets-detailed';
+        const displayStyle = mode === 'merged' ? '' : ' style="display:none;"';
+
+        let html = `<div class="sheets-group ${modeClass}"${displayStyle}>`;
+
+        for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+            const startRow = pageIdx * rows_per_sheet;
+            const pagePanels = panels.slice(startRow, startRow + rows_per_sheet);
+
+            html += `
+            <div class="cut-sheet">
+                <div class="print-button-container no-print">
+                    <button onclick="printCurrentTab('${tabId}')" class="print-btn-tab">🖨 Drukuj Formatkę A4</button>
+                </div>
+
+                <table class="cut-header-table">
+                    <tbody>
+                        <tr><th>Zleceniodawca</th><td contenteditable="true"></td><th>Zleceniobiorca</th><td contenteditable="true"></td></tr>
+                        <tr><th>Materiał</th><td>${matName}</td><th>Grubość</th><td>${thickLabel}</td></tr>
+                        <tr><th>Data</th><td>${today_str}</td><th>Strona</th><td>${pageIdx + 1}/${totalPages}</td></tr>
+                    </tbody>
+                </table>
+
+                <table class="cutting-table-a4">
+                    <thead>
+                        <tr>
+                            <th class="cut-col-lp">LP</th>
+                            <th class="cut-col-len">Długość</th>
+                            <th class="cut-col-lenedge">Oklein. Długości</th>
+                            <th class="cut-col-wid">Szerokość</th>
+                            <th class="cut-col-widedge">Oklein. Szerokości</th>
+                            <th class="cut-col-qty">Szt.</th>
+                            <th class="cut-col-role">Uwagi</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+            for (let r = 0; r < rows_per_sheet; r++) {
+                if (r < pagePanels.length) {
+                    const p = pagePanels[r];
+                    const lp = startRow + r + 1;
+                    const lCode = this.getEdgeCode(p.edge_config, 'length', p.is_x_longer);
+                    const wCode = this.getEdgeCode(p.edge_config, 'width', p.is_x_longer);
+
+                    html += `
+                        <tr>
+                            <td>${lp}</td>
+                            <td contenteditable="true">${p.length_mm} mm</td>
+                            <td contenteditable="true">${lCode}</td>
+                            <td contenteditable="true">${p.width_mm} mm</td>
+                            <td contenteditable="true">${wCode}</td>
+                            <td contenteditable="true" style="font-weight:bold;">${p.qty || 1}</td>
+                            <td class="col-role" contenteditable="true">${p.role || ''}</td>
+                        </tr>`;
+                } else {
+                    html += `
+                        <tr>
+                            <td>${startRow + r + 1}</td>
+                            <td contenteditable="true"></td>
+                            <td contenteditable="true"></td>
+                            <td contenteditable="true"></td>
+                            <td contenteditable="true"></td>
+                            <td contenteditable="true"></td>
+                            <td class="col-role" contenteditable="true"></td>
+                        </tr>`;
+                }
+            }
+
+            html += `
+                    </tbody>
+                </table>
+            </div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    }
+
+    /**
+     * Generuje wewnętrzny kod zakładek materiałowych dla listy cięcia (format A4, 30 wierszy per arkusz)
+     * Zawiera zarówno zestaw arkuszy scalonych (sumowane ilości), jak i rozpisanych (każda pozycja osobno),
+     * z możliwością natychmiastowego przełączania w UI.
+     */
+    public generateMaterialCuttingTabsHtml(panels: CuttingPanelContract[], prefix = 'repMatTab'): { buttonsHtml: string; contentHtml: string } {
         const today_str = new Date().toISOString().slice(0, 10);
 
         // Grupowanie formatek po unikalnym materiale i grubości
@@ -96,86 +191,23 @@ export class HtmlReportsGeneratorWeb {
 
             buttonsHtml += `<button class="material-tablinks${activeCls}" onclick="openMaterialCutTab(event, '${tabId}')">${tabTitle}</button>`;
 
-            // Sortowanie formatek
+            // Sortowanie formatek: gabaryty malejąco
             const sortedPanels = [...group.panels].sort((a, b) => {
-                return (a.role || '').localeCompare(b.role || '') || (b.length_mm - a.length_mm) || (b.width_mm - a.width_mm);
+                return (b.length_mm - a.length_mm) || (b.width_mm - a.width_mm) || (a.role || '').localeCompare(b.role || '');
             });
 
-            // Agregacja identycznych formatek
-            const aggPanels = Object.values(ReportDataNormalizer.aggregateContractRows(sortedPanels));
-            const totalPages = Math.max(1, Math.ceil(aggPanels.length / rows_per_sheet));
+            // 1. Scalone: sumowanie identycznych gabarytów i okleinowania
+            const mergedPanels = ReportDataNormalizer.aggregateContractRowsByGeometry(
+                sortedPanels,
+                (cfg, dir, isX) => this.getEdgeCode(cfg, dir, isX)
+            );
+
+            // 2. Rozpisane: każda pozycja osobno
+            const detailedPanels = sortedPanels;
 
             contentHtml += `<div id="${tabId}" class="material-tabcontent${activeCls}">`;
-
-            for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
-                const startRow = pageIdx * rows_per_sheet;
-                const pagePanels = aggPanels.slice(startRow, startRow + rows_per_sheet);
-
-                contentHtml += `
-                <div class="cut-sheet">
-                    <div class="print-button-container no-print">
-                        <button onclick="printCurrentTab('${tabId}')" class="print-btn-tab">🖨 Drukuj Formatkę A4</button>
-                    </div>
-
-                    <table class="cut-header-table">
-                        <tbody>
-                            <tr><th>Zleceniodawca</th><td contenteditable="true"></td><th>Zleceniobiorca</th><td contenteditable="true"></td></tr>
-                            <tr><th>Materiał</th><td>${matName}</td><th>Grubość</th><td>${thickLabel}</td></tr>
-                            <tr><th>Data</th><td>${today_str}</td><th>Strona</th><td>${pageIdx + 1}/${totalPages}</td></tr>
-                        </tbody>
-                    </table>
-
-                    <table class="cutting-table-a4">
-                        <thead>
-                            <tr>
-                                <th class="cut-col-lp">LP</th>
-                                <th class="cut-col-len">Długość</th>
-                                <th class="cut-col-lenedge">Oklein. Długości</th>
-                                <th class="cut-col-wid">Szerokość</th>
-                                <th class="cut-col-widedge">Oklein. Szerokości</th>
-                                <th class="cut-col-qty">Szt.</th>
-                                <th class="cut-col-role">Uwagi</th>
-                            </tr>
-                        </thead>
-                        <tbody>`;
-
-                for (let r = 0; r < rows_per_sheet; r++) {
-                    if (r < pagePanels.length) {
-                        const p = pagePanels[r];
-                        const lp = r + 1;
-                        const lCode = this.getEdgeCode(p.edge_config, 'length', p.is_x_longer);
-                        const wCode = this.getEdgeCode(p.edge_config, 'width', p.is_x_longer);
-
-                        contentHtml += `
-                            <tr>
-                                <td>${lp}</td>
-                                <td contenteditable="true">${p.length_mm} mm</td>
-                                <td contenteditable="true">${lCode}</td>
-                                <td contenteditable="true">${p.width_mm} mm</td>
-                                <td contenteditable="true">${wCode}</td>
-                                <td contenteditable="true" style="font-weight:bold;">${p.qty}</td>
-                                <td class="col-role" contenteditable="true">${p.role}</td>
-                            </tr>`;
-                    } else {
-                        contentHtml += `
-                            <tr>
-                                <td>${r + 1}</td>
-                                <td contenteditable="true"></td>
-                                <td contenteditable="true"></td>
-                                <td contenteditable="true"></td>
-                                <td contenteditable="true"></td>
-                                <td contenteditable="true"></td>
-                                <td class="col-role" contenteditable="true"></td>
-                            </tr>`;
-                    }
-                }
-
-                contentHtml += `
-                        </tbody>
-                    </table>
-                </div>`;
-            }
-
+            contentHtml += this.renderCutSheetsHtml(tabId, 'merged', mergedPanels, matName, thickLabel, today_str);
+            contentHtml += this.renderCutSheetsHtml(tabId, 'detailed', detailedPanels, matName, thickLabel, today_str);
             contentHtml += `</div>`;
         });
 
@@ -290,7 +322,83 @@ export class HtmlReportsGeneratorWeb {
         .material-tabcontent { display: none; }
         .material-tabcontent.active { display: block; }
 
+        
+        /* Przełącznik trybu listy cięć (Scalenie vs Rozpisane) */
+        .cutting-mode-bar {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 4px 10px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .cutting-mode-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .cutting-mode-radios {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .cutting-mode-radios label {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cutting-mode-radios input[type="radio"] {
+            margin: 0;
+            cursor: pointer;
+            accent-color: #007bff;
+        }
+
         /* Formatka A4 */
+        
+        /* Przełącznik trybu listy cięć (Scalenie vs Rozpisane) */
+        .cutting-mode-bar {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 4px 10px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .cutting-mode-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .cutting-mode-radios {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .cutting-mode-radios label {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cutting-mode-radios input[type="radio"] {
+            margin: 0;
+            cursor: pointer;
+            accent-color: #007bff;
+        }
+
         .cut-sheet {
             width: 210mm;
             min-height: 297mm;
@@ -447,11 +555,26 @@ export class HtmlReportsGeneratorWeb {
 
         <!-- 2. Lista Cięć - Formularze A4 per materiał -->
         <div id="CuttingListTab" class="tabcontent">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:8px;">
                 <h3 style="color:#1976d2; margin:0;">Listy Cięć dla Hurtowni (Formatka A4 - 30 wierszy/strona)</h3>
-                <button class="tool-btn tool-btn-green no-print" onclick="exportCuttingToCSV()">📊 Eksportuj do CSV</button>
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <div class="cutting-mode-bar no-print">
+                        <span class="cutting-mode-label">Widok formatek:</span>
+                        <div class="cutting-mode-radios">
+                            <label>
+                                <input type="radio" name="project-cutting-mode" value="merged" checked onchange="switchCuttingMode('merged')">
+                                Scalenie
+                            </label>
+                            <label>
+                                <input type="radio" name="project-cutting-mode" value="detailed" onchange="switchCuttingMode('detailed')">
+                                Rozpisane
+                            </label>
+                        </div>
+                    </div>
+                    <button class="tool-btn tool-btn-green no-print" onclick="exportCuttingToCSV()">📊 Eksportuj do CSV</button>
+                </div>
             </div>
-            <p class="no-print" style="color:#666; font-size:12px; margin:4px 0 10px 0;">Wybierz zakładkę materiału, aby wyświetlić gotowe arkusze do druku lub edycji.</p>
+            <p class="no-print" style="color:#666; font-size:12px; margin:0 0 10px 0;">Wybierz zakładkę materiału, aby wyświetlić gotowe arkusze do druku lub edycji. Możesz przełączać między formatkami scalonymi (sumowane ilości) a rozpisanymi (każda pozycja osobno).</p>
             
             <div class="material-tabs no-print">
                 ${materialTabsBtns}
@@ -587,18 +710,32 @@ export class HtmlReportsGeneratorWeb {
             printWindow.document.close();
         }
 
+        
+        function switchCuttingMode(mode) {
+            const isMerged = mode === 'merged';
+            const mergedGroups = document.querySelectorAll('.sheets-merged');
+            const detailedGroups = document.querySelectorAll('.sheets-detailed');
+
+            mergedGroups.forEach(function(el) { el.style.display = isMerged ? 'block' : 'none'; });
+            detailedGroups.forEach(function(el) { el.style.display = isMerged ? 'none' : 'block'; });
+
+            const radiosMerged = document.querySelectorAll('input[type="radio"][value="merged"]');
+            const radiosDetailed = document.querySelectorAll('input[type="radio"][value="detailed"]');
+            radiosMerged.forEach(function(r) { r.checked = isMerged; });
+            radiosDetailed.forEach(function(r) { r.checked = !isMerged; });
+        }
+
         function exportCuttingToCSV() {
             let csv = ["\\uFEFFLP;Dlugosc;Okleinowanie_Dlugosci;Szerokosc;Okleinowanie_Szerokosci;Szt;Rola;Material;Grubosc"];
-            const tables = document.querySelectorAll('.cutting-table-a4');
+            const sheets = document.querySelectorAll('.sheets-group:not([style*="display: none"]):not([style*="display:none"]) .cut-sheet');
             let globalLp = 1;
-            tables.forEach(table => {
-                const sheet = table.closest('.cut-sheet');
-                const headerCells = sheet ? sheet.querySelectorAll('.cut-header-table td') : [];
+            sheets.forEach(function(sheet) {
+                const headerCells = sheet.querySelectorAll('.cut-header-table td');
                 const matName = headerCells[1]?.textContent?.trim() || '';
                 const thick = headerCells[2]?.textContent?.trim() || '';
 
-                const rows = table.querySelectorAll('tbody tr');
-                rows.forEach(row => {
+                const rows = sheet.querySelectorAll('.cutting-table-a4 tbody tr');
+                rows.forEach(function(row) {
                     const cells = row.querySelectorAll('td');
                     const len = cells[1]?.textContent?.trim()?.replace(' mm', '') || '';
                     if (!len) return; // pomiń puste wiersze
@@ -608,7 +745,7 @@ export class HtmlReportsGeneratorWeb {
                     const qty = cells[5]?.textContent?.trim() || '1';
                     const role = cells[6]?.textContent?.trim() || '';
 
-                    csv.push([globalLp++, len, lCode, wid, wCode, qty, '"' + role + '"', '"' + matName + '"', thick].join(';'));
+                    csv.push([globalLp++, len, lCode, wid, wCode, qty, '"' + role.replace(/"/g, '""') + '"', '"' + matName.replace(/"/g, '""') + '"', thick].join(';'));
                 });
             });
 
@@ -716,6 +853,19 @@ export class HtmlReportsGeneratorWeb {
     <div class="no-print-top">
         <button class="print-btn" onclick="printCurrentTab()">🖨 DRUKUJ ZAMÓWIENIE (A4)</button>
         <button class="download-btn" onclick="downloadOrderHtml()">💾 POBIERZ PLIK HTML</button>
+        <div class="cutting-mode-bar no-print" style="margin: 0 4px;">
+            <span class="cutting-mode-label">Widok formatek:</span>
+            <div class="cutting-mode-radios">
+                <label>
+                    <input type="radio" name="order-cutting-mode" value="merged" checked onchange="switchCuttingMode('merged')">
+                    Scalenie
+                </label>
+                <label>
+                    <input type="radio" name="order-cutting-mode" value="detailed" onchange="switchCuttingMode('detailed')">
+                    Rozpisane
+                </label>
+            </div>
+        </div>
         <p style="font-size: 12px; color: #666; width: 100%; margin: 5px 0 0 0;">Możesz edytować dowolne komórki przed wydrukiem. W oknie drukowania wybierz format A4 oraz marginesy "Brak".</p>
     </div>
 
@@ -739,6 +889,21 @@ export class HtmlReportsGeneratorWeb {
             var target = document.getElementById(tabName);
             if (target) target.className += " active";
             if (evt && evt.currentTarget) evt.currentTarget.className += " active";
+        }
+
+        
+        function switchCuttingMode(mode) {
+            const isMerged = mode === 'merged';
+            const mergedGroups = document.querySelectorAll('.sheets-merged');
+            const detailedGroups = document.querySelectorAll('.sheets-detailed');
+
+            mergedGroups.forEach(function(el) { el.style.display = isMerged ? 'block' : 'none'; });
+            detailedGroups.forEach(function(el) { el.style.display = isMerged ? 'none' : 'block'; });
+
+            const radiosMerged = document.querySelectorAll('input[type="radio"][value="merged"]');
+            const radiosDetailed = document.querySelectorAll('input[type="radio"][value="detailed"]');
+            radiosMerged.forEach(function(r) { r.checked = isMerged; });
+            radiosDetailed.forEach(function(r) { r.checked = !isMerged; });
         }
 
         function downloadOrderHtml() {
@@ -798,15 +963,17 @@ export class HtmlReportsGeneratorWeb {
     /**
      * Eksportuje listę cięcia do pliku CSV z kodowaniem UTF-8 z BOM
      */
-    public generateCsv(panels: CuttingPanelContract[]): string {
-        const grouped = ReportDataNormalizer.aggregateContractRows(panels);
+    public generateCsv(panels: CuttingPanelContract[], mode: 'merged' | 'detailed' = 'merged'): string {
+        const rows = mode === 'detailed'
+            ? [...panels].sort((a, b) => (b.length_mm - a.length_mm) || (b.width_mm - a.width_mm))
+            : ReportDataNormalizer.aggregateContractRowsByGeometry(panels, (cfg, dir, isX) => this.getEdgeCode(cfg, dir, isX));
         const lines: string[] = [];
 
         // UTF-8 BOM
         lines.push('\uFEFFLP;Dlugosc;Okleinowanie_Dlugosci;Szerokosc;Okleinowanie_Szerokosci;Szt;Rola;Material;Grubosc');
 
         let lp = 1;
-        for (const p of Object.values(grouped)) {
+        for (const p of rows) {
             const lCode = this.getEdgeCode(p.edge_config, 'length', p.is_x_longer);
             const wCode = this.getEdgeCode(p.edge_config, 'width', p.is_x_longer);
             const matName = this.engine.resolveMaterialName(p.material);

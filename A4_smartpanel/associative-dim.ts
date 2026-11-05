@@ -41,10 +41,10 @@ export function isAssocComplete(dim?: AssociativeDim | null): boolean {
 
 export function faceShortLabel(face: string): string {
     const key = String(face || '').toUpperCase();
-    if (key.includes('X_MINUS') || key === 'LEFT' || key === '-X') return 'Lewa';
-    if (key.includes('X_PLUS') || key === 'RIGHT' || key === '+X') return 'Prawa';
-    if (key.includes('Y_PLUS') || key === 'TOP' || key === '+Y') return 'Góra';
-    if (key.includes('Y_MINUS') || key === 'BOTTOM' || key === '-Y') return 'Dół';
+    if (key.includes('X_MINUS') || key === 'LEFT' || key === '-X' || key === 'OUTLINE_SIDE_3') return 'Lewa';
+    if (key.includes('X_PLUS') || key === 'RIGHT' || key === '+X' || key === 'OUTLINE_SIDE_1') return 'Prawa';
+    if (key.includes('Y_PLUS') || key === 'TOP' || key === '+Y' || key === 'OUTLINE_SIDE_2') return 'Góra';
+    if (key.includes('Y_MINUS') || key === 'BOTTOM' || key === '-Y' || key === 'OUTLINE_SIDE_0') return 'Dół';
     if (key.includes('Z_PLUS') || key === 'FRONT' || key === '+Z') return 'Przód';
     if (key.includes('Z_MINUS') || key === 'BACK' || key === '-Z') return 'Tył';
     return face || 'ściana';
@@ -56,11 +56,23 @@ export function planeRefLabel(ref: AssocPlaneRef | null): string {
     return `${name} · ${faceShortLabel(ref.face)}`;
 }
 
-function resolvePlaneFaceName(node: any, rawFace: string): string {
+export function resolvePlaneFaceName(node: any, rawFace: string, outlineEdgeKey?: string | null): string {
     const raw = String(rawFace || '').trim();
+    const edgeKey = String(outlineEdgeKey || '').trim().toUpperCase();
+    if (edgeKey === '-X') return 'FACE_X_MINUS';
+    if (edgeKey === '+X') return 'FACE_X_PLUS';
+    if (edgeKey === '-Y') return 'FACE_Y_MINUS';
+    if (edgeKey === '+Y') return 'FACE_Y_PLUS';
+
+    const upper = raw.toUpperCase();
+    if (upper === '-X' || upper === 'OUTLINE_SIDE_3') return 'FACE_X_MINUS';
+    if (upper === '+X' || upper === 'OUTLINE_SIDE_1') return 'FACE_X_PLUS';
+    if (upper === '-Y' || upper === 'OUTLINE_SIDE_0') return 'FACE_Y_MINUS';
+    if (upper === '+Y' || upper === 'OUTLINE_SIDE_2') return 'FACE_Y_PLUS';
+
     const lcsFaces = node?.domainData?.lcs?.faces;
     if (lcsFaces && typeof lcsFaces === 'object') {
-        const mapped = lcsFaces[raw] || lcsFaces[raw.toUpperCase()];
+        const mapped = lcsFaces[raw] || lcsFaces[upper];
         if (mapped) return mapped;
     }
     return raw;
@@ -84,14 +96,23 @@ function resolvePlaneWorld(doc: any, ref: AssocPlaneRef | null): { point: Vec3; 
     return { point, normal };
 }
 
-/** Odległość między dwiema płaszczyznami [mm] (rzut na normalną A). */
+/** Odległość między dwiema płaszczyznami [mm] (rzut na normalną płaszczyzny referencyjnej). */
 export function distanceBetweenPlanesMm(doc: any, a: AssocPlaneRef | null, b: AssocPlaneRef | null): number | null {
     const planeA = resolvePlaneWorld(doc, a);
     const planeB = resolvePlaneWorld(doc, b);
     if (!planeA || !planeB) return null;
-    if (a && b && a.nodeId === b.nodeId && a.face === b.face) return null;
+    if (a && b && a.nodeId === b.nodeId && resolvePlaneFaceName(doc.findNode(a.nodeId), a.face) === resolvePlaneFaceName(doc.findNode(b.nodeId), b.face)) {
+        return null;
+    }
     const delta = planeB.point.sub(planeA.point);
-    const dist = Math.abs(delta.x * planeA.normal.x + delta.y * planeA.normal.y + delta.z * planeA.normal.z);
+    const distA = Math.abs(delta.x * planeA.normal.x + delta.y * planeA.normal.y + delta.z * planeA.normal.z);
+    const distB = Math.abs(delta.x * planeB.normal.x + delta.y * planeB.normal.y + delta.z * planeB.normal.z);
+    const parallelDot = Math.abs(
+        planeA.normal.x * planeB.normal.x +
+        planeA.normal.y * planeB.normal.y +
+        planeA.normal.z * planeB.normal.z
+    );
+    const dist = parallelDot >= 0.5 ? distA : Math.max(distA, distB);
     if (!Number.isFinite(dist)) return null;
     return dist;
 }
@@ -134,12 +155,32 @@ export function applyAllAssociativeDims(doc: any): boolean {
         }
         if (changed) {
             doc.emitChange?.('dimensions');
-            if (typeof window !== 'undefined') {
-                window.document.dispatchEvent(new CustomEvent('bloki-panel-changed'));
-                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-                (window as any).__rebuildGeometry?.();
+            const rebuildGeometry = () => {
+                if (typeof window !== 'undefined') {
+                    (window as any).__rebuildGeometry?.();
+                }
+            };
+            const dispatchPanelChanged = () => {
+                if (typeof window !== 'undefined') {
+                    window.document.dispatchEvent(new CustomEvent('bloki-panel-changed'));
+                }
+            };
+            const dispatchProjectChanged = () => {
+                if (typeof window !== 'undefined') {
+                    window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                }
+            };
+            if (typeof doc.beforeCommit === 'function') {
+                doc.beforeCommit(resyncSolver);
+                doc.afterCommit(rebuildGeometry);
+                doc.afterCommit(dispatchPanelChanged);
+                doc.afterCommit(dispatchProjectChanged);
+            } else {
+                resyncSolver();
+                rebuildGeometry();
+                dispatchPanelChanged();
+                dispatchProjectChanged();
             }
-            resyncSolver();
         }
         return changed;
     } finally {

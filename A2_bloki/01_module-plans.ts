@@ -18,6 +18,7 @@ import type {
     ShelfPlanParams,
     ShelvesPlanParams,
     SkosneDoorsPlanParams,
+    SlidingDoorsPlanParams,
     TubesPlanParams
 } from './01_bloki-module-types.js';
 
@@ -28,6 +29,7 @@ import {
     calculateSkosneDoorsPlan,
     normalizeSkosneDoorsParams
 } from './06_skosne-doors-engine.js';
+import { calculateSlidingDoorsPlan, normalizeSlidingDoorsParams } from './19_sliding-doors-engine.js';
 import { calculateCornerDoorsPlan, normalizeCornerDoorsParams } from './07_corner-doors-engine.js';
 import { calculateCornerShelvesPlan, normalizeCornerShelvesParams } from './18_corner-shelves-engine.js';
 import { calculateTubesPlan, normalizeTubesParams } from './08_tubes-engine.js';
@@ -68,6 +70,12 @@ export function buildSkosneDoorsPlan(params: SkosneDoorsPlanParams, dims: Module
     const normalized = normalizeSkosneDoorsParams(params, dims_mm);
     if (!normalized) return { parts: [], hardware: [] };
     return calculateSkosneDoorsPlan(dims_mm, normalized);
+}
+
+export function buildSlidingDoorsPlan(params: SlidingDoorsPlanParams, dims: ModuleDims): BlokiPlanResult {
+    const dims_mm = toDimensionsMm(dims);
+    const normalized = normalizeSlidingDoorsParams(params, dims_mm);
+    return calculateSlidingDoorsPlan(dims_mm, normalized);
 }
 
 export function buildCornerDoorsPlan(params: CornerDoorsPlanParams, dims: ModuleDims): BlokiPlanResult {

@@ -2,7 +2,7 @@
  * Szerokości Drzewa obiektów i Panelu edycji + resize / collapse (localStorage).
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const TREE_DEFAULT = 280;
 const EDIT_DEFAULT = 340;
@@ -243,6 +243,12 @@ export function usePanelWidths() {
       return prev;
     });
   }, []);
+
+    useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('cad-panel-resized'));
+    }
+  }, [treeWidth, editPanelWidth]);
 
   return {
     treeWidth,
