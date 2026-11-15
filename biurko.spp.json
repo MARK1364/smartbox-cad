@@ -957,6 +957,7 @@
               1,
               1
             ],
+            "frozen": true,
             "children": [],
             "domainData": {
               "projectName": "Projekt",
@@ -1022,7 +1023,7 @@
               "zonePrefix": "B_",
               "engineManaged": true,
               "visible": false,
-              "frozen": false,
+              "frozen": true,
               "associativeDims": null,
               "panelForm": "SOLID",
               "features": []

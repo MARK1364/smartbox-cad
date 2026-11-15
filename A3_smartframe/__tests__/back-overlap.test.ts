@@ -5,7 +5,8 @@ import {
     readOffsetMm,
     isBackPanelEdgeParam
 } from '../back-overlap';
-import korpusRules from '../korpus3_3_rules.json';
+import { getModuleRules } from '../../A1_core/rules-vault';
+const korpusRules = getModuleRules('korpus3');
 import { rulesMToMm } from '../../A1_core/cad-math/units';
 
 describe('back edge offset defaults', () => {

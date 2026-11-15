@@ -265,4 +265,36 @@ describe('Bloki LED Internal Module (buildLedInternalPlan)', () => {
         expect(feat.params.length).toBe(1964 - 20 - 20); // 1924 mm
         expect(feat.params.u).toBe(550 - 50 - 14); // 486 mm
     });
+
+    it('buildBlokiLedInternalGroovePlan respects customReferences target face (e.g. FACE_Z_MINUS)', () => {
+        const partitionPanel = new PanelModel({ width: 500_000_000, height: 2000_000_000, thickness: 18_000_000 });
+        const partitionNode = CADNode.create(NodeType.PART, 'Przegroda', 'p_div');
+        partitionNode.domainData = partitionPanel;
+
+        const docMock: any = {
+            findNode: (id: string) => (id === 'p_div' ? partitionNode : null)
+        };
+        const sbNode: any = {
+            domainData: {
+                id: 'sb_test_face',
+                height: 2000_000_000,
+                depth: 500_000_000,
+                generatorParams: {
+                    boxType: 'LED_INTERNAL',
+                    wariant_led: 'VERTICAL_LEFT_SIDE',
+                    odsuniecie_od_przodu_lewe_mm: 50,
+                    szerokosc_wpustu_mm: 14,
+                    glebokosc_wpustu_mm: 9,
+                    customReferences: { xMin: { panelId: 'p_div', face: 'FACE_Z_MINUS' } }
+                }
+            }
+        };
+
+        syncBlokiLedInternalGrooves(sbNode, docMock);
+
+        expect(partitionPanel.features.length).toBe(1);
+        const f = partitionPanel.features[0];
+        expect(f.face).toBe('FACE_Z_MINUS');
+        expect(f.params.isLedGroove).toBe(true);
+    });
 });

@@ -35,6 +35,7 @@ function readInitial(): NestingModulePayload | null {
             containers: data.containers || [],
             config: data.config,
             selectedMaterial: data.selectedMaterial || 'ALL',
+            issues: data.issues || [],
         };
     } catch {
         return null;
@@ -44,6 +45,7 @@ function readInitial(): NestingModulePayload | null {
 function NestingStandaloneApp() {
     const [payload, setPayload] = useState<NestingModulePayload | null>(readInitial);
     const [reloadKey, setReloadKey] = useState(0);
+    const demoMode = new URLSearchParams(window.location.search).get('demo') === '1';
 
     const applyPayload = (next: NestingModulePayload) => {
         setPayload(next);
@@ -90,6 +92,7 @@ function NestingStandaloneApp() {
             parts,
             containers: [],
             selectedMaterial: 'ALL',
+            issues: [],
         });
     };
 
@@ -108,7 +111,9 @@ function NestingStandaloneApp() {
                     initialParts={payload?.parts}
                     initialSelectedMaterial={payload?.selectedMaterial || 'ALL'}
                     scopeLabel={payload?.scope?.name || payload?.meta?.originLabel}
+                    initialIssues={payload?.issues}
                     isStandaloneWindow
+                    demoMode={demoMode && !payload}
                 />
             </div>
         </div>

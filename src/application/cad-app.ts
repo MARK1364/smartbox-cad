@@ -6,6 +6,7 @@
  */
 
 import { ContextManager } from '../../A1_core/context-manager.js';
+import { UIController } from '../../A1_core/ui-controller.js';
 import { bootstrapScene, BootstrapContext } from './scene-bootstrap.js';
 import { AppCommands } from './cad-app-commands.js';
 import { GizmoController } from '../../A1_core/gizmo-controller.js';
@@ -20,6 +21,7 @@ import { syncSelectionHighlights } from '../../A1_core/selection-highlight.js';
 import { handleConstraintPickEvent } from '../../S2_solver/constraint-picker.js';
 import { isConnectorPickActive } from '../../C2_connectors/connector-picker.js';
 import { shouldPromoteSubgeometryToEntity } from '../../A1_core/selection-mode.js';
+import { findOwningContainer } from '../../A1_core/panel-like.js';
 import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
 import { openCncFromCad, openReportFromCad, openNestingFromCad, openSmartPartsStudioFromCad } from '../module-data/open-modules.js';
 import { registerModuleOpenHandler } from '../../A1_core/module-open-port.js';
@@ -163,8 +165,22 @@ async function main() {
             }
             ctx.ui.showSelectedFace(data.face, data.faceData, data.smartId, 'face');
             if (data.panelModel && shouldPromoteSubgeometryToEntity(ContextManager.instance.activeTab)) {
-                ctx.document.setActiveEntity(data.panelModel);
-                ctx.propertiesManager.inspectPanel(data.panelModel, ctx.panelViews, true);
+                const container = findOwningContainer(ctx.document, data.panelModel);
+
+                if (data.isDoubleClick || !container) {
+                    ctx.document.setActiveEntity(data.panelModel);
+                    ctx.facePicker.clearSelection();
+                    ctx.propertiesManager.inspectPanel(data.panelModel, ctx.panelViews, true);
+                    UIController.instance?.emitTree?.('select-part', { id: data.panelModel.id, uuid: data.panelModel.id });
+                    syncSelectionHighlights(ctx);
+                    if (gizmoCtrl) gizmoCtrl.updateFaceGizmo();
+                } else {
+                    if (container) {
+                        ctx.document.setActiveEntity(container);
+                        ctx.propertiesManager.inspectContainer(container, true);
+                        syncSelectionHighlights(ctx);
+                    }
+                }
             }
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('cad-close-floating-operation'));
@@ -343,6 +359,24 @@ async function main() {
                         ctx.ui?.setStatus?.('Element jest zamrożony. Odmroź go, aby pokazać.', true);
                         return;
                     }
+
+                    if ((hiddenHit as any).subType) {
+                        const subType = (hiddenHit as any).subType;
+                        const hw = hiddenHit.entity;
+                        if (hw) {
+                            if (Array.isArray(hw.hiddenSubparts)) {
+                                hw.hiddenSubparts = hw.hiddenSubparts.filter((s: string) => s !== subType);
+                            }
+                            if (hw.params && Array.isArray(hw.params.hiddenSubparts)) {
+                                hw.params.hiddenSubparts = hw.params.hiddenSubparts.filter((s: string) => s !== subType);
+                            }
+                        }
+                        rebuildGeometry(`Pokazano ${hiddenHit.name || subType}`);
+                        ctx.document.emitChange('all');
+                        ctx.ui?.setStatus?.(`Pokazano: ${hiddenHit.name} (Shift+Tab)`, true);
+                        return;
+                    }
+
                     hiddenHit.entity.visible = true;
                     const node = ctx.document.findNode(hiddenHit.id);
                     let curr = node?.parent;
@@ -375,6 +409,21 @@ async function main() {
                         rebuildGeometry('Ukryto formatkę');
                         ctx.document.emitChange('all');
                         ctx.ui?.setStatus?.(`Ukryto: ${panel.name || 'formatka'} (Shift+Tab aby przywrócić)`, true);
+                    } else if (meta?.subType) {
+                        const hwId = meta.parentId || meta.hardwareId || meta.id;
+                        const hwNode = ctx.document.findNode?.(hwId);
+                        const hw = (hwNode?.domainData || hwNode) as any;
+                        if (hw) {
+                            if (!Array.isArray(hw.hiddenSubparts)) hw.hiddenSubparts = [];
+                            if (!hw.hiddenSubparts.includes(meta.subType)) hw.hiddenSubparts.push(meta.subType);
+                            if (hw.params) {
+                                if (!Array.isArray(hw.params.hiddenSubparts)) hw.params.hiddenSubparts = [];
+                                if (!hw.params.hiddenSubparts.includes(meta.subType)) hw.params.hiddenSubparts.push(meta.subType);
+                            }
+                            rebuildGeometry(`Ukryto: ${meta.subName || meta.subType}`);
+                            ctx.document.emitChange('all');
+                            ctx.ui?.setStatus?.(`Ukryto: ${meta.subName || meta.subType} (Shift+Tab aby przywrócić)`, true);
+                        }
                     } else if (meta?.type === 'hardware' || meta?.hardwareId) {
                         const hwId = meta.id || meta.hardwareId;
                         const hwNode = ctx.document.findNode?.(hwId);

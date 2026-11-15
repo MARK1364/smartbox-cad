@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { GlobalReportsEngineWeb, GlobalProjectSummary, PanelPricingResult, AccessoryPricingResult } from './global-reports-engine';
-import { ReportDataNormalizer } from './report-data-normalizer';
+import { ReportDataNormalizer, ReportDataIssue } from './report-data-normalizer';
 import { HtmlReportsGeneratorWeb } from './html-reports-generator';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { UIController } from '../A1_core/ui-controller.js';
@@ -15,6 +15,7 @@ interface ReportsUIProps {
         accessories?: any[];
         furnitures?: string[];
         containers?: any[];
+        issues?: ReportDataIssue[];
     };
     isStandalone?: boolean;
 }
@@ -162,11 +163,13 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
     // Surowe dane: payload podstrony albo skan żywego dokumentu CAD
     const projectRawData = useMemo(() => {
         if (initialPayload?.panels) {
+            const normalized = ReportDataNormalizer.validateCuttingPanelContracts(initialPayload.panels);
             return {
-                panels: initialPayload.panels,
+                panels: normalized.panels,
                 accessories: initialPayload.accessories || [],
                 furnitures: initialPayload.furnitures || [],
                 containers: initialPayload.containers || [],
+                issues: [...(initialPayload.issues || []), ...normalized.issues],
             };
         }
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -238,7 +241,8 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
             reportTitle,
             projectData.summary,
             projectData.pricedPanels,
-            projectData.pricedAccessories
+            projectData.pricedAccessories,
+            projectRawData.issues
         );
         generator.openHtmlInNewTab(html);
     };
@@ -316,6 +320,18 @@ export const ReportsUI: React.FC<ReportsUIProps> = ({ document: propDoc, initial
                     </button>
                 </div>
             </div>
+            {projectRawData.issues.length > 0 && (
+                <section role="alert" style={{ border: '1px solid #f59e0b', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '6px', padding: '8px 10px', color: '#fef3c7' }}>
+                    <strong>Pominięto {projectRawData.issues.length} {projectRawData.issues.length === 1 ? 'formatkę' : 'formatek'} z niekompletnymi danymi produkcyjnymi:</strong>
+                    <ul style={{ margin: '6px 0 0', paddingLeft: '20px' }}>
+                        {projectRawData.issues.map((issue, index) => (
+                            <li key={`${issue.node_id}-${index}`}>
+                                {issue.panel_name} ({issue.node_id}): {issue.reason}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
 
             {/* Dedykowana Sekcja Drag & Drop / Zakres Wyceny */}
             <div 

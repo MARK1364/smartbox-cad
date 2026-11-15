@@ -24,6 +24,11 @@
     "en": "Manufacturer:",
     "de": "Hersteller:"
   },
+  "hinge_plate.label": {
+    "pl": "Prowadnik:",
+    "en": "Mounting plate:",
+    "de": "Montageplatte:"
+  },
   "ov_top.label": {
     "pl": "Nałożenie góra",
     "en": "Overlap top",

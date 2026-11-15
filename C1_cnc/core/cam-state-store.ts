@@ -90,11 +90,29 @@ export class CAMStateStore {
 
     private notify(): void {
         const stateCopy = this.getState();
-        this.listeners.forEach(l => l(stateCopy));
+        this.listeners.forEach(listener => {
+            // Izolujemy błędy per listener — jeden rzucający subskrybent nie może
+            // zatrzymać powiadamiania pozostałych.
+            try {
+                listener(stateCopy);
+            } catch (error) {
+                console.error('CAMStateStore listener error:', error);
+            }
+        });
     }
 
     public setPrograms(programs: CNCProgramState[]): void {
         this.state.programs = [...programs];
+        this.notify();
+    }
+
+    /**
+     * Atomowo ustawia listę programów i aktywne ID, wysyłając jedno powiadomienie.
+     * Dzięki temu subskrybenci nie widzą stanu pośredniego (nowa lista + stare ID).
+     */
+    public setProgramsAndActiveProgram(programs: CNCProgramState[], activeProgramId: string | null): void {
+        this.state.programs = [...programs];
+        this.state.activeProgramId = activeProgramId;
         this.notify();
     }
 

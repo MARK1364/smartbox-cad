@@ -13,10 +13,11 @@ import { nmToMm, mmToNm } from '../A1_core/cad-math/units.js';
 import { CADNode } from '../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../A1_core/cad-node/node-type.js';
 import { IDManager } from '../A1_core/id-manager.js';
-import korpusRulesData from './korpus3_3_rules.json';
-import korpusRogowy90RulesData from './korpus_rogowy90_rules.json';
-import korpusRogowy1RulesData from './korpus_rogowy1_rules.json';
-import korpusSkosnyRulesData from './korpus_skosny_rules.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const korpusRulesData = getModuleRules('korpus3');
+const korpusRogowy90RulesData = getModuleRules('korpus_rogowy90');
+const korpusRogowy1RulesData = getModuleRules('korpus_rogowy1');
+const korpusSkosnyRulesData = getModuleRules('korpus_skosny');
 
 function resolveCabinetRulesForType(type?: string): any {
     const t = String(type || '').toLowerCase();
@@ -554,6 +555,72 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
         }
     }
 
+    // ─── Tworzenie i synchronizacja pustych grup złożenia (np. Szuflada 1, Szuflada 2) ───
+    const groupNodeMap = new Map<string, any>();
+    const activeGroupIds = new Set<string>();
+    if (Array.isArray(operationPlan.groups)) {
+        for (const g of operationPlan.groups) {
+            if (!g?.key) continue;
+            const groupFullId = `${container.id}_${g.key}`;
+            let groupNode = cntNode.children.find((c: any) => c.nodeType === NodeType.ASSEMBLY && c.id === groupFullId)
+                || (doc ? doc.findNode(groupFullId) : null);
+
+            if (!groupNode) {
+                groupNode = CADNode.create(NodeType.ASSEMBLY, g.name || g.key, groupFullId);
+                const groupModel = ContainerModel.fromJSON({
+                    id: groupFullId,
+                    type: 'container',
+                    name: g.name || g.key,
+                    role: g.role || 'DRAWER_GROUP',
+                    width: 0,
+                    height: 0,
+                    depth: 0,
+                    visible: true,
+                    generatorParams: { isEmptyGroup: true, groupKey: g.key },
+                });
+                groupModel.id = groupFullId;
+                (groupModel as any).role = g.role || 'DRAWER_GROUP';
+                groupNode.domainData = groupModel;
+                if (doc) doc.addNode(container.id, groupNode);
+                else cntNode.addChild(groupNode);
+            } else {
+                groupNode.name = g.name || g.key;
+                if (groupNode.domainData) {
+                    (groupNode.domainData as any).id = groupNode.id;
+                    (groupNode.domainData as any).name = g.name || g.key;
+                    (groupNode.domainData as any).role = g.role || 'DRAWER_GROUP';
+                    (groupNode.domainData as any).generatorParams = {
+                        ...((groupNode.domainData as any).generatorParams || {}),
+                        isEmptyGroup: true,
+                        groupKey: g.key,
+                    };
+                }
+            }
+            groupNode.setLocalTransform(
+                new Vec3(mmToNm(g.loc?.x ?? 0), mmToNm(g.loc?.y ?? 0), mmToNm(g.loc?.z ?? 0)),
+                Quat.IDENTITY
+            );
+            groupNodeMap.set(g.key, groupNode);
+            activeGroupIds.add(groupFullId);
+        }
+    }
+
+    const collectDirectAndGroupedPanels = () => {
+        const list: any[] = [];
+        for (const c of cntNode.children) {
+            if (c.nodeType === NodeType.PART && c.domainData) {
+                list.push(c.domainData);
+            } else if (c.nodeType === NodeType.ASSEMBLY && (c.domainData as any)?.role === 'DRAWER_GROUP') {
+                for (const gc of c.children) {
+                    if (gc.nodeType === NodeType.PART && gc.domainData) {
+                        list.push(gc.domainData);
+                    }
+                }
+            }
+        }
+        return list;
+    };
+
     for (const part of operationPlan.parts) {
 
         let localCenterX = part.loc.x;   // CAD X = szerokość
@@ -599,7 +666,10 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
         const cornerY = part.loc.y;
         const cornerZ = part.loc.z;
 
-        let panel = cntNode.children.map((c: any) => c.domainData).find((p: any) => {
+        const targetParentNode = (part.groupKey && groupNodeMap.get(part.groupKey)) || cntNode;
+        const candidateExistingPanels = collectDirectAndGroupedPanels();
+
+        let panel = candidateExistingPanels.find((p: any) => {
             if (!p || isManualPanel(p)) return false;
             const panelId = p.smartId?.fullPath || p.id;
             if (activePanelIds.has(panelId)) return false;
@@ -609,8 +679,7 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
             const sameZone = !part.zonePrefix || p.zonePrefix === part.zonePrefix;
             if (p.role && p.role === part.role && sameZone) {
                 const candidateParts = operationPlan.parts.filter((pt: any) => pt.role === part.role && (!part.zonePrefix || pt.zonePrefix === part.zonePrefix));
-                const existingWithRole = cntNode.children
-                    .map((c: any) => c.domainData)
+                const existingWithRole = candidateExistingPanels
                     .filter((ep: any) => ep && !isManualPanel(ep) && ep.role === part.role && (!part.zonePrefix || ep.zonePrefix === part.zonePrefix));
                 if (candidateParts.length === 1 && existingWithRole.length === 1) return true;
             }
@@ -629,6 +698,14 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
         }
 
         if (panel && panelNode) {
+            if (panelNode.parent?.id !== targetParentNode.id) {
+                if (doc) {
+                    doc.reparentNode(panelNode.id, targetParentNode.id, { mode: 'keepLocal' });
+                } else {
+                    panelNode.parent?.removeChild(panelNode);
+                    targetParentNode.addChild(panelNode);
+                }
+            }
             if (!panel.nameUserDefined) {
                 const baseName = part.name ?? part.key ?? part.role ?? 'Part';
                 const currentName = panelNode.name;
@@ -658,7 +735,8 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
                 part.role === 'RIGHT_SIDE_PANEL' ||
                 part.role === 'FRONT_PANEL' ||
                 part.role === 'BOTTOM_PANEL' ||
-                part.role === 'TOP_PANEL';
+                part.role === 'TOP_PANEL' ||
+                part.role === 'DIVIDER_PLATE';
             // Obrzeże nadane ręcznie przez użytkownika ma pierwszeństwo przed regułami —
             // regeneracja korpusu (zmiana wymiaru, gizmo) dopisuje tylko brakujące krawędzie.
             const isUserEdgeBanding = (panel as any).edgeBandingUserDefined === true;
@@ -751,8 +829,8 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
                 rotQuat
             );
 
-            if (doc) doc.addNode(container.id, panelNode);
-            else cntNode.addChild(panelNode);
+            if (doc) doc.addNode(targetParentNode.id, panelNode);
+            else targetParentNode.addChild(panelNode);
         }
         if (panel) {
             const panelId = panel.smartId?.fullPath || panel.id;
@@ -765,7 +843,47 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
     if (Array.isArray((operationPlan as any).hardware)) {
         for (const hw of (operationPlan as any).hardware) {
             const hwFullId = `${container.id}_${hw.id}`;
-            let hwNode = cntNode.children.find((c: any) => c.nodeType === NodeType.HARDWARE && (c.id === hwFullId || c.id === hw.id));
+
+            // Określenie właściwego rodzica okucia (np. grupa szuflady lub półka dla podpórek)
+            let targetParentNode = (hw.groupKey && groupNodeMap.get(hw.groupKey)) || cntNode;
+            if (hw.hardwareType === 'SHELF_PIN' || hw.params?.shelfKey || hw.params?.shelfIndex !== undefined) {
+                const sIdx = hw.params?.shelfIndex ?? (
+                    typeof hw.id === 'string'
+                        ? parseInt(hw.id.match(/(?:shelf|polk[ai]|polka)_?(\d+)/i)?.[1] || '0', 10)
+                        : 0
+                );
+                const targetKey = hw.params?.shelfKey || (sIdx > 0 ? `shelf_${sIdx}` : undefined);
+                const targetKeyLower = targetKey ? String(targetKey).toLowerCase() : undefined;
+
+                const shelfPanels = cntNode.children.filter((c: any) =>
+                    c.nodeType === NodeType.PART &&
+                    (c.domainData?.role === 'SHELF_PANEL' || c.domainData?.role === 'SHELF')
+                );
+
+                const foundShelf = shelfPanels.find((c: any) => {
+                    const cKey = String((c.domainData as any)?.key || '').toLowerCase();
+                    if (targetKeyLower && cKey) {
+                        if (cKey === targetKeyLower) return true;
+                        if (cKey === `corner_${targetKeyLower}`) return true;
+                        if (cKey.replace(/^corner_/, '') === targetKeyLower.replace(/^corner_/, '')) return true;
+                    }
+                    if (sIdx > 0) {
+                        if ((c.domainData as any)?.shelfIndex === sIdx || (c.domainData as any)?.params?.shelfIndex === sIdx) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }) || (sIdx > 0 && shelfPanels.length >= sIdx ? shelfPanels[sIdx - 1] : undefined);
+
+                if (foundShelf) {
+                    targetParentNode = foundShelf;
+                }
+            }
+
+            let hwNode = targetParentNode.children.find((c: any) => c.nodeType === NodeType.HARDWARE && (c.id === hwFullId || c.id === hw.id))
+                || cntNode.children.find((c: any) => c.nodeType === NodeType.HARDWARE && (c.id === hwFullId || c.id === hw.id))
+                || (doc ? doc.findNode(hwFullId) || doc.findNode(hw.id) : null);
+
             if (!hwNode) {
                 hwNode = CADNode.create(NodeType.HARDWARE, hw.name, hwFullId);
                 hwNode.domainData = HardwareModel.fromJSON({
@@ -782,9 +900,17 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
                     custom_properties: hw.customProperties || hw.custom_properties,
                     visible: true
                 });
-                if (doc) doc.addNode(container.id, hwNode);
-                else cntNode.addChild(hwNode);
+                if (doc) doc.addNode(targetParentNode.id, hwNode);
+                else targetParentNode.addChild(hwNode);
             } else {
+                if (hwNode.parent?.id !== targetParentNode.id) {
+                    if (doc) {
+                        doc.reparentNode(hwNode.id, targetParentNode.id, { mode: 'keepLocal' });
+                    } else {
+                        hwNode.parent?.removeChild(hwNode);
+                        targetParentNode.addChild(hwNode);
+                    }
+                }
                 hwNode.name = hw.name;
                 if (hwNode.domainData) {
                     if (typeof (hwNode.domainData as any).toJSON !== 'function') {
@@ -810,31 +936,47 @@ function applyPlanToContainerUnsafe(container: any, operationPlan: any) {
     }
 
     if (doc) {
-        const currentChildren = [...cntNode.children];
-        for (const childNode of currentChildren) {
-            if (childNode.nodeType === NodeType.HARDWARE) {
-                if (!activeHardwareIds.has(childNode.id)) {
-                    doc.removeNode(childNode.id);
-                }
-                continue;
-            }
-            const p = childNode.domainData as any;
-            const isBlokiNode = childNode.nodeType === NodeType.ASSEMBLY
-                || p?.is_blok
-                || p.generatorParams?.is_blok
-                || Boolean(p.generatorParams?.boxType)
-                || p.type === 'container'
-                || p.type === 'assembly'
-                || p.type === 'bloki'
-                || p.type === 'bloki_container';
-            if (!p || isBlokiNode || isManualPanel(p)) {
-                continue;
-            }
-            const panelId = p.smartId?.fullPath || p.id;
-            if (!activePanelIds.has(panelId)) {
-                doc.removeNode(childNode.id);
+        // Czyść nieaktywne okucia w całym poddrzewie kontenera (zarówno bezpośrednie, jak i przypisane do półek)
+        const allExistingHw = cntNode.findByType(NodeType.HARDWARE);
+        for (const h of allExistingHw) {
+            if (!activeHardwareIds.has(h.id)) {
+                doc.removeNode(h.id);
             }
         }
+
+        const cleanupStaleChildren = (parentNode: any) => {
+            const currentChildren = [...parentNode.children];
+            for (const childNode of currentChildren) {
+                if (childNode.nodeType === NodeType.HARDWARE) {
+                    continue;
+                }
+                const p = childNode.domainData as any;
+                if (childNode.nodeType === NodeType.ASSEMBLY && p?.role === 'DRAWER_GROUP') {
+                    if (activeGroupIds.has(childNode.id)) {
+                        cleanupStaleChildren(childNode);
+                    } else {
+                        doc.removeNode(childNode.id);
+                    }
+                    continue;
+                }
+                const isBlokiNode = childNode.nodeType === NodeType.ASSEMBLY
+                    || p?.is_blok
+                    || p.generatorParams?.is_blok
+                    || Boolean(p.generatorParams?.boxType)
+                    || p.type === 'container'
+                    || p.type === 'assembly'
+                    || p.type === 'bloki'
+                    || p.type === 'bloki_container';
+                if (!p || isBlokiNode || isManualPanel(p)) {
+                    continue;
+                }
+                const panelId = p.smartId?.fullPath || p.id;
+                if (!activePanelIds.has(panelId)) {
+                    doc.removeNode(childNode.id);
+                }
+            }
+        };
+        cleanupStaleChildren(cntNode);
         applyAllAssociativeDims(doc);
     }
 }
@@ -885,6 +1027,7 @@ export function runEngineAndApply(
         wysokosc_strefy_dolnej_mm: effectiveZoneCount > 1 ? wysokosc_strefy_dolnej_mm : undefined,
         wysokosc_strefy_srodkowej_mm: effectiveZoneCount === 3 ? wysokosc_strefy_srodkowej_mm : undefined,
         cofniecie_plecow_mm: bOffset,
+        grubosc_plecow_mm: gp.grubosc_plecow_mm,
         offsets: offsets ?? gp.offsets,
         container: cntNode || container,
         tryb_wienca_gornego,
@@ -1016,7 +1159,8 @@ export function rebuildSmartFrameContainer(container: any): boolean {
         if (typeof rebuild === 'function') {
             try { rebuild(); } catch { }
         }
-        if (typeof window !== 'undefined' && window.document) {
+        const isGizmoActive = typeof window !== 'undefined' && Boolean((window as any).__glcGizmoActive);
+        if (!isGizmoActive && typeof window !== 'undefined' && window.document) {
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
         }
     };
@@ -1242,13 +1386,14 @@ export function applyRealtimeUpdate(docTarget: any, params: KorpusParams, target
     if (typeof rebuild === 'function') {
         try { rebuild('SmartFrame realtime update'); } catch { }
     }
-    if (typeof window !== 'undefined') {
+    const isGizmoActive = typeof window !== 'undefined' && Boolean((window as any).__glcGizmoActive);
+    if (!isGizmoActive && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('bloki-project-changed', { detail: { containerId: container.id } }));
         if (window.document) {
             window.document.dispatchEvent(new CustomEvent('bloki-project-changed', { detail: { containerId: container.id } }));
         }
     }
-    if (doc) {
+    if (doc && !isGizmoActive) {
         doc.notifyDocumentChanged();
     }
 }

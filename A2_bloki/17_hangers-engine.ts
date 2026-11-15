@@ -11,6 +11,7 @@ import type { BlokiDimensions_mm, BlokiHardware, BlokiPlanResult } from './01_bl
 import type { HangersPlanParams, HangerSetDefinition } from './17_hangers-types.js';
 import { resolveActiveHangerSet } from './17_hangers-types.js';
 import { getHardware } from '../B1_biblioteka/index.js';
+import { callHangersPlanWasm } from './hangers-wasm-bridge.js';
 
 export function normalizeHangersParams(
     raw: Partial<HangersPlanParams> | undefined,
@@ -86,6 +87,11 @@ export function calculateHangersPlan(
 
     if (!setDef || !Array.isArray(setDef.parts) || setDef.parts.length === 0) {
         return { parts: [], hardware: [] };
+    }
+
+    const wasmResult = callHangersPlanWasm(dims_mm, norm, setDef);
+    if (wasmResult) {
+        return wasmResult;
     }
 
     const hardware: BlokiHardware[] = [];

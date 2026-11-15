@@ -80,4 +80,50 @@ describe('Drawers Drilling Association', () => {
             }
         }
     });
+
+    it('fallback geometryczny: generuje otwory korpusu gdy brak boundary i customReferences', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2' };
+        const cabinetNode = doc.findNode(cabinet.id)!;
+
+        const addSide = (name: string, role: string, xNm: number) => {
+            const panel = new PanelModel({
+                name,
+                role,
+                width: mmToNm(500),
+                height: mmToNm(720),
+                thickness: mmToNm(18),
+            });
+            const node = CADNode.create(NodeType.PART, panel.name, panel.id);
+            node.domainData = panel;
+            node.setLocalTransform(new Vec3(xNm, 0, 0), Quat.IDENTITY);
+            doc.addNode(cabinet.id, node);
+            return node;
+        };
+
+        const leftNode = addSide('Bok Lewy', 'LEFT_SIDE_PANEL', mmToNm(-291));
+        const rightNode = addSide('Bok Prawy', 'RIGHT_SIDE_PANEL', mmToNm(291));
+
+        const sbContainer = doc.createAssembly({
+            name: 'Szuflady',
+            width: mmToNm(564),
+            height: mmToNm(720),
+            depth: mmToNm(500),
+        }, cabinetNode.id) as ContainerModel;
+        const sbNode = doc.findNode(sbContainer.id)!;
+        sbContainer.generatorParams = {
+            type: 'blok_drawers',
+            boxType: 'DRAWERS',
+            liczba_szuflad: 2,
+            // Brak boundary i brak customReferences
+        };
+
+        const intents = buildDrawersDrillings(doc, cabinetNode.id);
+        expect(intents.length).toBeGreaterThan(0);
+
+        const leftIntents = intents.filter(i => i.targetNodeId === leftNode.id);
+        const rightIntents = intents.filter(i => i.targetNodeId === rightNode.id);
+        expect(leftIntents.length).toBe(8); // 2 szuflady * 4 otwory
+        expect(rightIntents.length).toBe(8);
+    });
 });

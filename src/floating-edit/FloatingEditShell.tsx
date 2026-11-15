@@ -5,6 +5,13 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { computeFloatBesideEditPanel } from './float-position.js';
+import { tx } from '../../T1_tlumaczenia/core.js';
+import { useLocale } from '../../T1_tlumaczenia/react.js';
+import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
+import srcTekstRaw from '../src_tekst.json';
+
+const srcTekst = srcTekstRaw as unknown as ModuleTexts;
+const TX_NS = 'src';
 
 export interface FloatingEditShellProps {
     title: string;
@@ -23,6 +30,7 @@ export function FloatingEditShell({
     onClose,
     children,
 }: FloatingEditShellProps): React.JSX.Element {
+    useLocale();
     const rootRef = useRef<HTMLDivElement | null>(null);
     const [pos, setPos] = useState<{ x: number; y: number }>(() =>
         computeFloatBesideEditPanel(width, 320),
@@ -43,7 +51,14 @@ export function FloatingEditShell({
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') {
+                onClose();
+            } else if (e.key === 'Enter') {
+                const tag = (e.target as HTMLElement)?.tagName;
+                if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+                    onClose();
+                }
+            }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
@@ -131,7 +146,7 @@ export function FloatingEditShell({
                         padding: '0 4px',
                         flexShrink: 0,
                     }}
-                    title="Zamknij"
+                    title={tx(srcTekst, 'float.close', TX_NS)}
                 >
                     ✕
                 </button>
@@ -152,6 +167,47 @@ export function FloatingEditShell({
             ) : null}
             <div style={{ padding: '8px 10px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
                 {children}
+            </div>
+            {/* Dolna belka akcji (Wersja 2 - Inspektor Live Edit z wyraźnym zakończeniem) */}
+            <div
+                style={{
+                    padding: '8px 10px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                }}
+            >
+                <button
+                    type="button"
+                    onClick={onClose}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        width: '100%',
+                        padding: '6px 12px',
+                        backgroundColor: '#10b981',
+                        border: '1px solid #059669',
+                        borderRadius: '5px',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#059669')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#10b981')}
+                    title={tx(srcTekst, 'float.done_title', TX_NS)}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>{tx(srcTekst, 'float.done', TX_NS)}</span>
+                </button>
             </div>
         </div>
     );

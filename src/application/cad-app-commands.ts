@@ -262,8 +262,7 @@ export class AppCommands {
             
             try {
                 const camStore = CAMStateStore.getInstance();
-                camStore.setPrograms([]);
-                camStore.setActiveProgramId(null);
+                camStore.setProgramsAndActiveProgram([], null);
             } catch {}
 
             rebuildGeometry('Utworzono nowy projekt');
@@ -395,6 +394,10 @@ export class AppCommands {
             rebuildGeometry();
         };
 
+        const setEdgeBandingVisible = (visible: boolean) => {
+            ContextManager.instance.setEdgeBandingVisible(visible);
+        };
+
         const setPmiVisible = (visible: boolean) => {
             ContextManager.instance.setPmiVisible(visible);
             viewport.requestRender?.(4);
@@ -417,6 +420,7 @@ export class AppCommands {
             setView: handleViewCubeClick,
             setLcsVisible,
             setPmiVisible,
+            setEdgeBandingVisible,
             undo: () => {
                 const cmdHist = ContextManager.instance.commandHistory;
                 if (!cmdHist?.canUndo) return;

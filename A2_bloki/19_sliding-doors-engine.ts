@@ -30,6 +30,7 @@ import type { SlidingDoorsPlanParams, SlidingRollerType } from './01_bloki-modul
 import {
     assertCanonicalSlidingDoorsParams
 } from './01_bloki-module-param-guards.js';
+import { callSlidingDoorsPlanWasm } from './sliding-doors-wasm-bridge.js';
 
 export { assertCanonicalSlidingDoorsParams, LEGACY_SLIDING_DOORS_PARAM_ALIASES }
     from './01_bloki-module-param-guards.js';
@@ -192,6 +193,12 @@ export function calculateSlidingDoorsPlan(
     dims: BlokiDimensions_mm,
     params: NormalizedSlidingDoorsParams
 ): BlokiPlanResult {
+    // ─── WYWOŁANIE BINARNEGO SILNIKA WASM (RUST) ──────────────────────────────
+    const wasmResult = callSlidingDoorsPlanWasm(dims, params);
+    if (wasmResult) {
+        return wasmResult;
+    }
+
     const parts: BlokiPart[] = [];
 
     const {

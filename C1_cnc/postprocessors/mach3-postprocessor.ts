@@ -19,6 +19,7 @@ export class Mach3Postprocessor extends Postprocessor {
     }
 
     public generateNcCode(program: CLDataProgram): string {
+        this.validateCLDataProgram(program, 'Mach3Postprocessor');
         this.currentLineNumber = 10;
 
         const wcs = program.wcsName || 'G55';
@@ -47,10 +48,10 @@ export class Mach3Postprocessor extends Postprocessor {
                     break;
                 }
                 case 'SPINDL':
-                    lines.push(`${this.getN()} M3 S${cmd.spindleRpm || 3000}`);
+                    lines.push(`${this.getN()} M3 S${cmd.spindleRpm!}`);
                     break;
                 case 'FEDRAT':
-                    lines.push(`${this.getN()} F${cmd.feedRate || 1000}`);
+                    lines.push(`${this.getN()} F${cmd.feedRate!}`);
                     break;
                 case 'COMPENSATION':
                     cancelDrill();
@@ -62,7 +63,8 @@ export class Mach3Postprocessor extends Postprocessor {
                     cancelDrill();
                     if (cmd.point) {
                         const pt = cmd.point;
-                        lines.push(`${this.getN()} G1 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)}`);
+                        const g = (cmd.isRapid || cmd.motion === 'RAPID') ? 'G0' : 'G1';
+                        lines.push(`${this.getN()} ${g} X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)}`);
                     }
                     break;
                 case 'ARC':
@@ -81,10 +83,21 @@ export class Mach3Postprocessor extends Postprocessor {
                     if (cmd.point && cmd.drillParams) {
                         const pt = cmd.point;
                         const p = cmd.drillParams;
+                        const isHorizontal = Boolean(
+                            (p.axis && (Math.abs(p.axis.x) > 0.5 || Math.abs(p.axis.y) > 0.5)) ||
+                            (p.face && (p.face.startsWith('FACE_X') || p.face.startsWith('FACE_Y')))
+                        );
+                        if (isHorizontal) {
+                            throw new Error(`[Mach3Postprocessor] Wiercenie poziome ("${p.face || 'axis X/Y'}") nie jest bezpośrednio obsługiwane przez 3-osiowy postprocesor Mach3 (wymaga agregatu kątowego).`);
+                        }
                         const isPeck = p.type === 'PECK' && !!p.peckStep;
+                        const dirZ = (p.axis && p.axis.z > 0.5) ? 1 : -1;
+                        const targetZ = pt.z + dirZ * Math.abs(p.depth);
+                        const retractZ = pt.z - dirZ * Math.abs(p.retractR);
+
                         const drillKey = isPeck
-                            ? `G83|${p.retractR}|${p.peckStep}|${pt.z.toFixed(3)}`
-                            : `G81|${p.retractR}|${pt.z.toFixed(3)}`;
+                            ? `G83|${retractZ.toFixed(3)}|${p.peckStep}|${targetZ.toFixed(3)}`
+                            : `G81|${retractZ.toFixed(3)}|${targetZ.toFixed(3)}`;
 
                         if (drillCycleActive && activeDrillKey === drillKey) {
                             // Modalny cykl: kolejne otwory = same XY
@@ -92,11 +105,11 @@ export class Mach3Postprocessor extends Postprocessor {
                         } else {
                             if (isPeck) {
                                 lines.push(
-                                    `${this.getN()} G83 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)} R${p.retractR} Q${p.peckStep}`
+                                    `${this.getN()} G83 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${targetZ.toFixed(3)} R${retractZ.toFixed(3)} Q${p.peckStep}`
                                 );
                             } else {
                                 lines.push(
-                                    `${this.getN()} G81 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${pt.z.toFixed(3)} R${p.retractR}`
+                                    `${this.getN()} G81 X${pt.x.toFixed(3)} Y${pt.y.toFixed(3)} Z${targetZ.toFixed(3)} R${retractZ.toFixed(3)}`
                                 );
                             }
                             drillCycleActive = true;

@@ -32,12 +32,7 @@ import { DrawingSheet } from './drawing-sheet';
 import { ContextManager } from '../A1_core/context-manager';
 import { TOP_BETA, BOTTOM_BETA } from '../S3_scena/named-camera-view.js';
 import { clearLegacyExportStorage } from '../A1_core/export-session-storage.js';
-import { tx } from '../T1_tlumaczenia/core.js';
-import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
-import exportTekstRaw from './export_tekst.json';
-
-const exportTekst = exportTekstRaw as unknown as ModuleTexts;
-const TX_NS = 'export';
+import { ReportDataNormalizer } from '../R1_reports/report-data-normalizer.js';
 
 declare const BABYLON: any;
 
@@ -710,35 +705,23 @@ export class ExportEngine {
         const doc = ContextManager.instance?.document;
         if (!doc) return [];
 
-        const rows: BOMRow[] = [];
-        const traverse = (node: any) => {
-            if (!node) return;
-            const isFrozen = Boolean(node.frozen || node.domainData?.frozen || node.parameters?.frozen || node.params?.frozen);
-            if (isFrozen) return;
-
-            // Strict: formatka po typie systemu (type/nodeType), nigdy po display name.
-            if (node.type === 'PANEL' || node.nodeType === 'PART') {
-                const params = node.parameters || node.params || {};
-                rows.push({
-                    name: node.name || tx(exportTekst, 'default_panel_name', TX_NS),
-                    material: node.materialName || params.material || 'Laminat 18mm',
-                    length: params.height || params.length || 720,
-                    width: params.width || 560,
-                    thickness: params.thickness || 18,
-                    qty: 1,
-                    edge_config: node.edge_config || params.edge_config,
-                });
-            }
-            if (node.children && Array.isArray(node.children)) {
-                node.children.forEach(traverse);
-            }
-        };
-
-        if (doc.rootNode) {
-            traverse(doc.rootNode);
+        const normalized = ReportDataNormalizer.extractProjectData(doc);
+        if (normalized.issues.length > 0) {
+            const details = normalized.issues
+                .map((issue) => `${issue.panel_name} (${issue.node_id}): ${issue.reason}`)
+                .join('; ');
+            throw new Error(`Nie można wygenerować BOM — niekompletne dane PanelModel: ${details}`);
         }
 
-        return rows;
+        return normalized.panels.map((panel) => ({
+            name: panel.panel_name || panel.role,
+            material: panel.material,
+            length: panel.length_mm,
+            width: panel.width_mm,
+            thickness: panel.thickness_mm,
+            qty: panel.qty,
+            edge_config: panel.edge_config,
+        }));
     }
 
     // ─── Generowanie Gotowego Arkusza z Przyciętym Kadrem ───
@@ -1056,4 +1039,3 @@ export class ExportEngine {
         clearLegacyExportStorage();
     }
 }
-

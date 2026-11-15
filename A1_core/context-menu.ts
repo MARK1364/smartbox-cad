@@ -18,6 +18,8 @@ export type CtxMenuItem = {
     section?: string;
     /** Zwarty pasek ikon obok siebie. */
     toolbar?: CtxMenuItem[];
+    /** Wariant wizualny przycisku narzędziowego. */
+    variant?: 'accent';
 };
 
 function shortCaption(item: CtxMenuItem): string {
@@ -95,7 +97,7 @@ export class ContextMenu {
 
                     const vLabel = document.createElement('div');
                     vLabel.className = 'ctx-menu-vlabel';
-                    vLabel.textContent = item.section;
+                    vLabel.textContent = item.section.trim().replace(/\s+/g, '\n');
                     group.appendChild(vLabel);
 
                     group.appendChild(this._buildToolbar(item.toolbar));
@@ -165,6 +167,9 @@ export class ContextMenu {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'ctx-menu-tool';
+            if (tool.variant === 'accent') {
+                btn.classList.add('ctx-menu-tool--accent');
+            }
             if (tool.disabled) {
                 btn.classList.add('disabled');
                 btn.disabled = true;

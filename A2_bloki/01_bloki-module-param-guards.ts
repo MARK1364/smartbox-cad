@@ -167,6 +167,11 @@ export const LEGACY_SHELVES_PARAM_ALIASES: Readonly<Record<string, string>> = {
     system_32_start_offset: 'start_system32_z_mm',
     system32HoleCount: 'liczba_otworow_system32',
     system_32_hole_count: 'liczba_otworow_system32',
+    pinDiameter: 'srednica_podporki_mm',
+    pin_diameter: 'srednica_podporki_mm',
+    pin_dia: 'srednica_podporki_mm',
+    shelfPositions: 'pozycje_polek_z_mm',
+    shelf_positions_z: 'pozycje_polek_z_mm',
 };
 
 export const LEGACY_CORNER_SHELVES_PARAM_ALIASES: Readonly<Record<string, string>> = {

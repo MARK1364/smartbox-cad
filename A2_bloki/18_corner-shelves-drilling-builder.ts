@@ -82,7 +82,7 @@ export function buildCornerShelvesDrillings(
     // 2. Znajdź aktywne kontenery z półkami narożnymi
     const cornerContainers = containers.filter((c: any) => {
         const p = c.domainData?.generatorParams;
-        if (!p || c.domainData?.visible === false) return false;
+        if (!p || c.frozen || c.domainData?.frozen === true) return false;
         const isCorner = p.type === 'blok_corner_shelves' || p.boxType === 'CORNER_SHELVES' || p.type === 'CORNER_SHELVES';
         if (!isCorner) return false;
         if (cabinetContainerId) {

@@ -401,6 +401,17 @@ export function resolveSkosnyLrGeometry(
 
     const beta_rad = Math.atan2(h_prawy_mm - h_lewy_mm, szerokosc_wewnetrzna_mm);
     const beta_deg = beta_rad * 180 / Math.PI;
+    const abs_cut_angle_deg = Math.abs(beta_deg) < 0.05 ? 0 : Math.abs(beta_deg);
+    const sideTopBevelLeft = {
+        active: true,
+        type_id: '0.008x0.022',
+        ...(abs_cut_angle_deg ? { cutAngle: abs_cut_angle_deg, cutAnchor: (beta_deg >= 0 ? 'Z_PLUS' : 'Z_MINUS') as 'Z_PLUS' | 'Z_MINUS' } : {})
+    };
+    const sideTopBevelRight = {
+        active: true,
+        type_id: '0.008x0.022',
+        ...(abs_cut_angle_deg ? { cutAngle: abs_cut_angle_deg, cutAnchor: (beta_deg >= 0 ? 'Z_MINUS' : 'Z_PLUS') as 'Z_PLUS' | 'Z_MINUS' } : {})
+    };
 
     const backShiftY = o.backShiftY ?? 0;
     const shortenedD = D_mm - odsuniecie_plecow_mm + backShiftY;
@@ -424,7 +435,13 @@ export function resolveSkosnyLrGeometry(
             dim: { x: h_lewy_mm + pY, y: targetD + pX, z: grubosc_lewy_mm },
             loc: { x: -W_mm / 2 + grubosc_lewy_mm / 2 + przesuniecie_x_mm,
                    y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + targetLocY + przesuniecie_y_mm,
-                   z: h_lewy_mm / 2 + (margines_gorny_mm - margines_dolny_mm) / 2 + przesuniecie_z_mm }
+                   z: h_lewy_mm / 2 + (margines_gorny_mm - margines_dolny_mm) / 2 + przesuniecie_z_mm },
+            edge_banding: {
+                '+X': { active: true, type_id: '0.008x0.022' },
+                '-X': { active: false, type_id: 'none' },
+                '+Y': sideTopBevelLeft,
+                '-Y': { active: true, type_id: '0.008x0.022' }
+            }
         };
     }
     if (matchedKey === 'BOK_P' || matchedKey === 'SIDE_RIGHT' || role === 'RIGHT_SIDE_PANEL') {
@@ -438,7 +455,13 @@ export function resolveSkosnyLrGeometry(
             dim: { x: h_prawy_mm + pY, y: targetD + pX, z: grubosc_prawy_mm },
             loc: { x: W_mm / 2 - grubosc_prawy_mm / 2 + przesuniecie_x_mm,
                    y: (wpuszczenie_prawe_mm - wpuszczenie_lewe_mm) / 2 + targetLocY + przesuniecie_y_mm,
-                   z: h_prawy_mm / 2 + (margines_gorny_mm - margines_dolny_mm) / 2 + przesuniecie_z_mm }
+                   z: h_prawy_mm / 2 + (margines_gorny_mm - margines_dolny_mm) / 2 + przesuniecie_z_mm },
+            edge_banding: {
+                '+X': { active: false, type_id: 'none' },
+                '-X': { active: true, type_id: '0.008x0.022' },
+                '+Y': sideTopBevelRight,
+                '-Y': { active: true, type_id: '0.008x0.022' }
+            }
         };
     }
 
@@ -460,12 +483,13 @@ export function resolveSkosnyLrGeometry(
     }
 
     // ── WIENIEC GÓRNY (skośny) ───────────────────────────────────────────────
-    // wyjątek: geometria pochylona (lcs rotation) — reszta identyczna z korpus3
+    // wyjątek: geometria pochylona (lcs rotation) oraz końce docięte pionowo między bokami
     if (matchedKey === 'WIENIEC_G' || matchedKey === 'TOP' || role === 'TOP_PANEL') {
         const isShortened = overlapTop >= grubosc_gorny_mm - BACK_OVERLAP_EPS_MM && shortenedD > 0;
         const targetD = isShortened ? shortenedD : D_mm;
         const targetLocY = isShortened ? shortenedLocY : 0;
         const slopeLen_mm = Math.hypot(szerokosc_wewnetrzna_mm, h_prawy_mm - h_lewy_mm);
+        const topEndCut = Math.abs(beta_deg) < 0.05 ? 0 : beta_deg;
         return {
             thickness: grubosc_mm,
             dim: { x: slopeLen_mm, y: targetD, z: grubosc_mm },
@@ -476,7 +500,22 @@ export function resolveSkosnyLrGeometry(
             },
             lcs: {
                 mapping: { X: 'x', Y: 'y', Z: 'z' },
-                rotation: [-90, 0, -beta_deg]
+                rotation: [-90, 0, -beta_deg],
+                faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
+            },
+            edge_banding: {
+                '+X': {
+                    active: false,
+                    type_id: 'none',
+                    ...(topEndCut !== 0 ? { cutAngle: topEndCut, cutAnchor: 'Z_MINUS' as const } : {})
+                },
+                '-X': {
+                    active: false,
+                    type_id: 'none',
+                    ...(topEndCut !== 0 ? { cutAngle: -topEndCut, cutAnchor: 'Z_MINUS' as const } : {})
+                },
+                '+Y': { active: false, type_id: 'none' },
+                '-Y': { active: true, type_id: '0.008x0.022' }
             }
         };
     }
@@ -587,14 +626,14 @@ export function resolveSkosnyLrUcGeometry(
     const tan_beta     = W_mm !== 0 ? (h_prawy_mm - h_lewy_mm) / W_mm : 0;
     const kat_skosu_rad = Math.atan(tan_beta);
     const kat_skosu_deg = kat_skosu_rad * 180 / Math.PI;
-    const cut_angle_deg = Math.abs(kat_skosu_deg) < 0.05 ? 0 : kat_skosu_deg;
+    const abs_cut_angle_deg = Math.abs(kat_skosu_deg) < 0.05 ? 0 : Math.abs(kat_skosu_deg);
 
     // Pionowy uskok na grubości boku o kąt β: t · tanβ
     const uskok_lewy_mm  = grubosc_lewy_mm  * tan_beta;
     const uskok_prawy_mm = grubosc_prawy_mm * tan_beta;
 
-    const wysokosc_formatki_lewej_mm  = h_lewy_mm  + uskok_lewy_mm;
-    const wysokosc_formatki_prawej_mm = h_prawy_mm;
+    const wysokosc_formatki_lewej_mm  = h_lewy_mm  + Math.max(0, uskok_lewy_mm);
+    const wysokosc_formatki_prawej_mm = h_prawy_mm + Math.max(0, -uskok_prawy_mm);
 
     const z_top_center_mm = (h_lewy_mm + h_prawy_mm) / 2 + przesuniecie_srodka_mm * tan_beta;
     const dlugosc_skosu_mm = Math.hypot(szerokosc_wewnetrzna_mm, szerokosc_wewnetrzna_mm * tan_beta);
@@ -610,12 +649,12 @@ export function resolveSkosnyLrUcGeometry(
     const sideTopBevelLeft = {
         active: true,
         type_id: '0.008x0.022',
-        ...(cut_angle_deg ? { cutAngle: cut_angle_deg,  cutAnchor: 'Z_PLUS'  as const } : {})
+        ...(abs_cut_angle_deg ? { cutAngle: abs_cut_angle_deg, cutAnchor: (tan_beta >= 0 ? 'Z_PLUS' : 'Z_MINUS') as 'Z_PLUS' | 'Z_MINUS' } : {})
     };
     const sideTopBevelRight = {
         active: true,
         type_id: '0.008x0.022',
-        ...(cut_angle_deg ? { cutAngle: cut_angle_deg,  cutAnchor: 'Z_MINUS' as const } : {})
+        ...(abs_cut_angle_deg ? { cutAngle: abs_cut_angle_deg, cutAnchor: (tan_beta >= 0 ? 'Z_MINUS' : 'Z_PLUS') as 'Z_PLUS' | 'Z_MINUS' } : {})
     };
 
     const backShiftY = o.backShiftY ?? 0;

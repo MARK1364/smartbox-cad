@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     hingeAlignHandedness,
     hingeArmDir,
+    hingeCupDir,
     resolveHingeAlignAxes
 } from '../hinge-align.js';
 
@@ -15,6 +16,15 @@ describe('resolveHingeAlignAxes', () => {
         for (const ori of ['left', 'right', 'top', 'bottom'] as const) {
             const axes = resolveHingeAlignAxes(U, V, N, ori);
             expect(hingeAlignHandedness(axes)).toBeCloseTo(1, 6);
+        }
+    });
+
+    it('points cup axis (+zDir) into the door plate (-N) for all orientations', () => {
+        for (const ori of ['left', 'right', 'top', 'bottom'] as const) {
+            const cup = hingeCupDir(resolveHingeAlignAxes(U, V, N, ori));
+            expect(cup[0]).toBeCloseTo(0);
+            expect(cup[1]).toBeCloseTo(0);
+            expect(cup[2]).toBeCloseTo(-1);
         }
     });
 

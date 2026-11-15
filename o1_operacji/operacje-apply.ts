@@ -407,7 +407,7 @@ export function bindOperationEdge(
     ));
     if (!existing || existing.params.placement !== 'edge_dims') return null;
 
-    const fromKey = edgeKeyToPanelFace(pickedFaceOrKey, slot || 'auto');
+    const fromKey = edgeKeyToPanelFace(pickedFaceOrKey, slot || 'auto', panel.role);
     const asFaceName = tryNormalizeFace(pickedFaceOrKey);
     const asFace = (isUEdge(asFaceName) || isVEdge(asFaceName)) ? asFaceName : fromKey;
     if (!asFace) return null;

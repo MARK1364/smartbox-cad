@@ -20,6 +20,7 @@ export interface KorpusCreateParams {
     wysokosc_strefy_dolnej_mm?: number;
     wysokosc_strefy_srodkowej_mm?: number;
     cofniecie_plecow_mm?: number;
+    grubosc_plecow_mm?: number;
     szerokosc_blendy_mm?: number;
     strona_blendy?: 'LEFT' | 'RIGHT';
     glebokosc_boku_lewego_mm?: number;

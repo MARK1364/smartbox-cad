@@ -8,7 +8,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
-import { calculateDrawersPlan, normalizeDrawersParams, listRailBrands, listRailLengthsForBrand, listRailSystemsForBrand, resolveDrawerLayout } from './09_drawers-engine.js';
+import { calculateDrawersPlan, normalizeDrawersParams, listRailBrands, listRailLengthsForBrand, listRailLengthsForSystem, listRailSystemsForBrand, resolveDrawerLayout } from './09_drawers-engine.js';
 import type { ModuleDims } from './01_base-engine.js';
 import type { BlokiPlanResult } from './01_bloki-types.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
@@ -18,7 +18,8 @@ import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import drawersTekstRaw from './09_drawers_tekst.json';
 
-import drawersRules from './09_drawers_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const drawersRules = getModuleRules('09_drawers');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import type { DrawersPlanParams } from './01_bloki-module-types.js';
 
@@ -95,16 +96,17 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
     const [spacerL, setSpacerL] = useState<boolean>((p.dystans_lewy_mm ?? 0) > 0);
     const [spacerR, setSpacerR] = useState<boolean>((p.dystans_prawy_mm ?? 0) > 0);
     const [manufacturer, setManufacturer] = useState<string>(p.producent_prowadnic || brands[0] || 'Blum');
-    const [railConfigs, setRailConfigs] = useState<Record<number, { length: string; system: string }>>(() => {
+    const [railConfigs, setRailConfigs] = useState<Record<number, { length: string; system: string; internal?: boolean }>>(() => {
         const src = p.konfiguracje_prowadnic || {};
-        const next: Record<number, { length: string; system: string }> = {};
+        const next: Record<number, { length: string; system: string; internal?: boolean }> = {};
         const systems = listRailSystemsForBrand(p.producent_prowadnic || brands[0] || 'Blum');
         const lengths = listRailLengthsForBrand(p.producent_prowadnic || brands[0] || 'Blum');
         for (let i = 1; i <= MAX_DRAWERS; i++) {
             const cfg = src[i] || src[String(i)] || {};
             next[i] = {
                 length: String(cfg.length || lengths[0] || '500'),
-                system: cfg.system || fallbackRailSystem(systems)
+                system: cfg.system || fallbackRailSystem(systems),
+                internal: Boolean(cfg.internal),
             };
         }
         return next;
@@ -128,12 +130,13 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
         const src = gp.konfiguracje_prowadnic || {};
         const sys = listRailSystemsForBrand(brand);
         const len = listRailLengthsForBrand(brand);
-        const next: Record<number, { length: string; system: string }> = {};
+        const next: Record<number, { length: string; system: string; internal?: boolean }> = {};
         for (let i = 1; i <= MAX_DRAWERS; i++) {
             const cfg = src[i] || src[String(i)] || {};
             next[i] = {
                 length: String(cfg.length || len[0] || '500'),
-                system: cfg.system || fallbackRailSystem(sys)
+                system: cfg.system || fallbackRailSystem(sys),
+                internal: Boolean(cfg.internal),
             };
         }
         setRailConfigs(next);
@@ -180,8 +183,23 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
         depth_mm: dimToMm(container?.depth) || 500
     });
 
-    const setRail = (index: number, patch: Partial<{ length: string; system: string }>) => {
-        const next = { ...railConfigs, [index]: { ...railConfigs[index], ...patch } };
+    const setRail = (index: number, patch: Partial<{ length: string; system: string; internal?: boolean }>) => {
+        const cur = railConfigs[index] || { length: lengths[0] || '500', system: fallbackRailSystem(systems) };
+        const merged = { ...cur, ...patch };
+        if (patch.system && !patch.length) {
+            const sysLens = listRailLengthsForSystem(patch.system);
+            if (sysLens.length > 0 && !sysLens.includes(String(merged.length))) {
+                const curNum = Number(merged.length) || 500;
+                let closest = sysLens[0];
+                let minDiff = Infinity;
+                for (const l of sysLens) {
+                    const diff = Math.abs(Number(l) - curNum);
+                    if (diff < minDiff) { minDiff = diff; closest = l; }
+                }
+                merged.length = closest;
+            }
+        }
+        const next = { ...railConfigs, [index]: merged };
         setRailConfigs(next);
         pushUpdate({ konfiguracje_prowadnic: next });
     };
@@ -247,7 +265,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                     <span style={labelStyle}>{tx(drawersTekst, 'common_gap.label', TX_NS)}</span>
                     <SmartNumericInput
                         value={commonGap}
-                        min={0} step={0.01} decimals={2} unit="mm"
+                        min={0} step={1} decimals={2} unit="mm"
                         style={inputStyle}
                         onChange={(val) => {
                             setCommonGap(val);
@@ -266,7 +284,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                                 <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(drawersTekst, 'front_height.label_template', TX_NS, { n: i + 1 })}</span>
                                 <SmartNumericInput
                                     value={frontHeights[i] ?? 150}
-                                    min={10} step={0.01} decimals={2} unit="mm"
+                                    min={10} step={1} decimals={2} unit="mm"
                                     style={{ ...inputStyle, width: '80px', fontSize: '11px' }}
                                     onChange={(val) => {
                                         const next = [...frontHeights];
@@ -281,7 +299,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                                     <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(drawersTekst, 'gap.label_template', TX_NS, { n: i + 1 })}</span>
                                     <SmartNumericInput
                                         value={individualGaps[i] ?? 3}
-                                        min={0} step={0.01} decimals={2} unit="mm"
+                                        min={0} step={1} decimals={2} unit="mm"
                                         style={{ ...inputStyle, width: '80px', fontSize: '11px' }}
                                         onChange={(val) => {
                                             const next = [...individualGaps];
@@ -294,6 +312,36 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                             )}
                         </React.Fragment>
                     ))}
+                    {(() => {
+                        const sumFronts = Array.from({ length: count }).reduce<number>((s, _, idx) => s + toNum(frontHeights[idx], 150), 0);
+                        const sumGaps = Array.from({ length: Math.max(0, count - 1) }).reduce<number>((s, _, idx) => s + toNum(individualGaps[idx], 3), 0);
+                        const usedH = Math.round((sumFronts + sumGaps) * 100) / 100;
+                        const bayH = dimToMm(container?.height) || 720;
+                        const targetH = Math.round((bayH + toNum(ovBottom, 0) + toNum(ovTop, 0)) * 100) / 100;
+                        const mismatch = Math.round((usedH - targetH) * 100) / 100;
+                        const isMismatch = Math.abs(mismatch) > 0.5;
+                        const diffStr = mismatch > 0 ? `+${mismatch}` : `${mismatch}`;
+                        return (
+                            <div
+                                style={isMismatch ? {
+                                    marginTop: '4px',
+                                    padding: '4px 6px',
+                                    borderRadius: '3px',
+                                    fontSize: '11px',
+                                    fontWeight: 'bold',
+                                    background: '#451a03',
+                                    border: '1px solid #d97706',
+                                    color: '#fbbf24'
+                                } : {
+                                    marginTop: '2px',
+                                    fontSize: '11px',
+                                    color: '#a1a1aa'
+                                }}
+                            >
+                                {tx(drawersTekst, 'front_heights.mismatch_template', TX_NS, { diff: diffStr, used: usedH, target: targetH })}
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 
@@ -310,7 +358,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                             <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(drawersTekst, `${labelKey}.label`, TX_NS)}:</span>
                             <SmartNumericInput
                                 value={val}
-                                step={0.01}
+                                step={1}
                                 decimals={2}
                                 unit="mm"
                                 style={{ width: '50px', padding: '2px 4px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right', fontSize: '11px' }}
@@ -321,17 +369,6 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                             />
                         </div>
                     ))}
-                </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <input type="checkbox" id="chkSpacerL" checked={spacerL} onChange={(e) => { setSpacerL(e.target.checked); pushUpdate({ dystans_lewy_mm: e.target.checked ? SPACER_THICK_MM : 0 }); }} />
-                    <label htmlFor="chkSpacerL" style={{ color: '#e4e4e7', fontSize: '12px', cursor: 'pointer' }}>{tx(drawersTekst, 'spacer_left.label', TX_NS)}</label>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <input type="checkbox" id="chkSpacerR" checked={spacerR} onChange={(e) => { setSpacerR(e.target.checked); pushUpdate({ dystans_prawy_mm: e.target.checked ? SPACER_THICK_MM : 0 }); }} />
-                    <label htmlFor="chkSpacerR" style={{ color: '#e4e4e7', fontSize: '12px', cursor: 'pointer' }}>{tx(drawersTekst, 'spacer_right.label', TX_NS)}</label>
                 </div>
             </div>
 
@@ -357,19 +394,36 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                                 border: warn ? '1px solid #7f1d1d' : '1px solid #27272a'
                             }}
                         >
-                            <div style={{ color: warn ? '#f87171' : '#e4e4e7', fontSize: '11px', fontWeight: warn ? 'bold' : 'normal' }}>
-                                {tx(drawersTekst, 'drawer.slot_label', TX_NS, { n: slot.index })}
-                                <span style={{ opacity: 0.7, marginLeft: '6px' }}>{Math.round(slot.frontH * 100) / 100} mm</span>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: warn ? '#f87171' : '#e4e4e7', fontSize: '11px', fontWeight: warn ? 'bold' : 'normal' }}>
+                                <div>
+                                    {tx(drawersTekst, 'drawer.slot_label', TX_NS, { n: slot.index })}
+                                    <span style={{ opacity: 0.7, marginLeft: '6px' }}>{Math.round(slot.frontH * 100) / 100} mm</span>
+                                </div>
+                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '11px', color: '#cbd5e1', fontWeight: 'normal' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(cfg.internal)}
+                                        onChange={(e) => setRail(slot.index, { internal: e.target.checked })}
+                                    />
+                                    {tx(drawersTekst, 'drawer.internal_label', TX_NS)}
+                                </label>
                             </div>
                             <div style={rowStyle}>
                                 <span style={{ ...labelStyle, fontSize: '11px' }}>Długość:</span>
-                                <select
-                                    value={cfg.length}
-                                    style={{ ...selectStyle, width: '110px', fontSize: '11px' }}
-                                    onChange={(e) => setRail(slot.index, { length: e.target.value })}
-                                >
-                                    {lengths.map((l) => <option key={l} value={l}>{l} mm</option>)}
-                                </select>
+                                {(() => {
+                                    const sysLens = listRailLengthsForSystem(cfg.system);
+                                    const availLengths = sysLens.length > 0 ? sysLens : lengths;
+                                    const selectVal = availLengths.includes(String(cfg.length)) ? cfg.length : (availLengths[0] || cfg.length);
+                                    return (
+                                        <select
+                                            value={selectVal}
+                                            style={{ ...selectStyle, width: '110px', fontSize: '11px' }}
+                                            onChange={(e) => setRail(slot.index, { length: e.target.value })}
+                                        >
+                                            {availLengths.map((l) => <option key={l} value={l}>{l} mm</option>)}
+                                        </select>
+                                    );
+                                })()}
                             </div>
                             <div style={rowStyle}>
                                 <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(drawersTekst, 'rail_system.label', TX_NS)}</span>
@@ -388,7 +442,7 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                                         return Array.from(seriesMap.entries()).map(([ser, sysList]) => (
                                             <optgroup key={ser} label={ser}>
                                                 {sysList.map((s) => (
-                                                    <option key={s.id} value={s.id}>{s.name} ({s.corpusHeightMm}mm)</option>
+                                                    <option key={s.id} value={s.id}>{s.name}</option>
                                                 ))}
                                             </optgroup>
                                         ));
@@ -398,6 +452,17 @@ export function DrawersSubModule({ container, triggerUpdate }: { container: Cont
                         </div>
                     );
                 })}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input type="checkbox" id="chkSpacerL" checked={spacerL} onChange={(e) => { setSpacerL(e.target.checked); pushUpdate({ dystans_lewy_mm: e.target.checked ? SPACER_THICK_MM : 0 }); }} />
+                    <label htmlFor="chkSpacerL" style={{ color: '#e4e4e7', fontSize: '12px', cursor: 'pointer' }}>{tx(drawersTekst, 'spacer_left.label', TX_NS)}</label>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input type="checkbox" id="chkSpacerR" checked={spacerR} onChange={(e) => { setSpacerR(e.target.checked); pushUpdate({ dystans_prawy_mm: e.target.checked ? SPACER_THICK_MM : 0 }); }} />
+                    <label htmlFor="chkSpacerR" style={{ color: '#e4e4e7', fontSize: '12px', cursor: 'pointer' }}>{tx(drawersTekst, 'spacer_right.label', TX_NS)}</label>
+                </div>
             </div>
         </div>
     );

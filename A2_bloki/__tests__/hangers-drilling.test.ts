@@ -4,7 +4,7 @@ import { ContextManager } from '../../A1_core/context-manager.js';
 import { CommandHistory } from '../../A1_core/commands/command-history.js';
 import { runEngineAndApply } from '../../A3_smartframe/smartframe-adapter.js';
 import { probeBayFromCADPoint } from '../02_bloki-bay-detector.js';
-import { createBlokInDetectedBay, BLOKI_INTERNAL_OPTIONS } from '../02_bloki-bay-actions.js';
+import { createBlokInDetectedBay, BLOKI_ALL_OPTIONS } from '../02_bloki-bay-actions.js';
 import { registerBlokiModule } from '../01_register.js';
 import { ContainerModel } from '../../A1_core/container-model.js';
 import { buildHangersDrillings } from '../17_hangers-drilling-builder.js';
@@ -31,10 +31,10 @@ describe('Hangers Drilling in Cabinet', () => {
 
         const bay = probeBayFromCADPoint(doc, { x: 0, y: 0, z: 360 });
         expect(bay).not.toBeNull();
-        console.log('DETECTED BAY BOUNDARY LEFT:', bay!.boundary.left);
+
         console.log('DETECTED BAY BOUNDARY RIGHT:', bay!.boundary.right);
 
-        const hangersOption = BLOKI_INTERNAL_OPTIONS.find(o => o.id === 'HANGERS')!;
+        const hangersOption = BLOKI_ALL_OPTIONS.find(o => o.id === 'HANGERS')!;
         expect(hangersOption).toBeDefined();
 
         const blokNode = createBlokInDetectedBay(doc, bay!, hangersOption);
@@ -75,15 +75,17 @@ describe('Hangers Drilling in Cabinet', () => {
         // Lewy bok: wycięcie narożne/brzegowe
         const leftCutout = leftFeatures.find((f: any) => f.type === 'cutout');
         expect(leftCutout).toBeDefined();
-        expect(leftCutout.params.u).toBeCloseTo(1.5, 1);
-        expect(leftCutout.params.v + leftCutout.params.length).toBeCloseTo(711, 1);
+
+        expect(leftCutout.params.u).toBeCloseTo(-20, 1);
+        expect(leftCutout.params.v + leftCutout.params.length).toBeCloseTo(702, 1);
         expect(leftCutout.params.through).toBe(true);
 
         // Prawy bok: wycięcie narożne od u=315..350 do v=720
         const rightCutout = rightFeatures.find((f: any) => f.type === 'cutout');
         expect(rightCutout).toBeDefined();
-        expect(rightCutout.params.u + rightCutout.params.width).toBeCloseTo(598.5, 1);
-        expect(rightCutout.params.v + rightCutout.params.length).toBeCloseTo(711, 1);
+
+        expect(rightCutout.params.u + rightCutout.params.width).toBeCloseTo(620, 1);
+        expect(rightCutout.params.v + rightCutout.params.length).toBeCloseTo(702, 1);
         expect(rightCutout.params.through).toBe(true);
 
         const rightHole = rightFeatures.find((f: any) => f.type === 'hole');

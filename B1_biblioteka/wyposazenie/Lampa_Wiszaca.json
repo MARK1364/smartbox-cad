@@ -1,0 +1,53 @@
+{
+  "id": "sp:lampa_wiszaca",
+  "name": "Lampa wisząca sufitowa",
+  "category": "LIGHTING",
+  "units": "mm",
+  "version": "1.0",
+  "type": "SCENE_PROP",
+  "mainContainer": {
+    "widthMm": 380,
+    "heightMm": 900,
+    "depthMm": 380
+  },
+  "visual": {
+    "model": "models/Lampa_Wiszaca.glb",
+    "units": "mm"
+  },
+  "parts": [
+    {
+      "id": "podsufitka",
+      "name": "Rozeta sufitowa",
+      "widthMm": 120,
+      "heightMm": 35,
+      "depthMm": 120,
+      "xMm": 0,
+      "yMm": 0,
+      "zMm": 882.5,
+      "colorHex": "#27272a"
+    },
+    {
+      "id": "przewod",
+      "name": "Przewód zawieszenia",
+      "widthMm": 14,
+      "heightMm": 645,
+      "depthMm": 14,
+      "xMm": 0,
+      "yMm": 0,
+      "zMm": 542.5,
+      "colorHex": "#3f3f46"
+    },
+    {
+      "id": "klosz",
+      "name": "Klosz lampy",
+      "widthMm": 380,
+      "heightMm": 220,
+      "depthMm": 380,
+      "xMm": 0,
+      "yMm": 0,
+      "zMm": 110,
+      "colorHex": "#fef08a"
+    }
+  ]
+}
+

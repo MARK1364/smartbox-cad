@@ -109,6 +109,11 @@
     "en": "Select exactly one panel in the CAD project tree!",
     "de": "Genau eine Platte im CAD-Projektbaum wählen!"
   },
+  "warnings.history_unavailable": {
+    "pl": "Nie można zmienić programu CNC: historia komend jest niedostępna. Operacja nie została wykonana.",
+    "en": "Cannot modify the CNC program: command history is unavailable. The operation was not performed.",
+    "de": "Das CNC-Programm kann nicht geändert werden: Die Befehlshistorie ist nicht verfügbar. Der Vorgang wurde nicht ausgeführt."
+  },
   "warnings.panel_frozen_code": {
     "pl": "Formatka jest zamrożona (obiekt wykluczony z obróbki CNC). Odmroź formatkę w drzewie obiektów, aby wygenerować kod.",
     "en": "Panel is frozen (excluded from CNC machining). Unfreeze the panel in the object tree to generate code.",
@@ -658,6 +663,11 @@
     "pl": "Zmieniono głębokość: CAD={cad}mm vs CAM={cam}mm",
     "en": "Depth changed: CAD={cad}mm vs CAM={cam}mm",
     "de": "Tiefe geändert: CAD={cad}mm vs CAM={cam}mm"
+  },
+  "sync.modified_geometry": {
+    "pl": "Geometria obróbki różni się między CAD i CAM",
+    "en": "Machining geometry differs between CAD and CAM",
+    "de": "Die Bearbeitungsgeometrie unterscheidet sich zwischen CAD und CAM"
   },
   "sync.orphaned": {
     "pl": "Usunięta cecha CAD (osierocona operacja CNC): {name}",

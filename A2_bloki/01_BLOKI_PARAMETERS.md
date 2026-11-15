@@ -158,6 +158,8 @@ Pliki: [shelves-engine.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Founda
 | `rozstaw_system32_mm` | `system32Spacing`, `system_32_spacing` | `number` | `32` | `mm` | Skok siatki System 32 w pionie |
 | `start_system32_z_mm` | `system32StartOffset`, `system_32_start_offset` | `number` | `150` | `mm` | Wysokość startowa pierwszego otworu System 32 |
 | `liczba_otworow_system32` | `system32HoleCount`, `system_32_hole_count` | `number` | `10` | szt. | Liczba otworów w rzędzie System 32 |
+| `srednica_podporki_mm` | `pinDiameter`, `pin_diameter`, `pin_dia` | `number` | `5` | `mm` | Średnica podpórki półki |
+| `pozycje_polek_z_mm` | `shelfPositions`, `shelf_positions_z` | `number[]` | `undefined` | `mm[]` | Indywidualne wysokości spodu półek od dołu (gdy brak: równy podział) |
 
 ---
 
@@ -209,6 +211,8 @@ Pliki: [dividers-engine.ts](file:///c:/Users/ADM/AppData/Roaming/Blender%20Found
 | `grubosc_przegrody_mm` | `thickness` | `number` | `18` | `mm` | Grubość pojedynczej płyty przegrody |
 | `tryb_rozstawu` | `spacingMode`, `spacing_mode` | `'EQUAL' \| 'CUSTOM'` | `'EQUAL'` | enum | Tryb rozmieszczenia: równe światła wnęk (`EQUAL`) lub własne szerokości (`CUSTOM`) |
 | `szerokosci_wnek_mm` | `sectionWidths`, `section_widths`, `section_{i}_width` | `number[]` | `[200, 200, 200, 200, 200]` | lista `mm` | Szerokości kolejnych wnęk od lewej strony (w trybie `CUSTOM`) |
+| `dach_kat_deg` | — | `number` | `0` | `°` | Kąt nachylenia skośnego wieńca górnego (lewy-prawy, automatycznie z `TOP_PANEL`) |
+| `przesuniecie_strefy_x_mm` | — | `number` | `0` | `mm` | Przesunięcie środka strefy Bloku w osi X względem środka dachu korpusu |
 
 ---
 

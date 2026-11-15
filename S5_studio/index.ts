@@ -8,6 +8,7 @@ export * from './smartpart-studio-types.js';
 export * from './smartpart-custom-store.js';
 export * from './smartpart-studio-scene.js';
 export * from './custom-smartpart-apply.js';
+export { UpdateCustomSmartPartParamsCommand } from './update-custom-smartpart-params-command.js';
 export * from './smartpart-params.js';
 export * from './smartpart-driver-clipboard.js';
 export * from './smartpart-object-link-clipboard.js';

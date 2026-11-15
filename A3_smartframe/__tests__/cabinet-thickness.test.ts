@@ -4,8 +4,9 @@ import {
     requireCabinetPartThickness,
     resolveCarcassBoardThicknessFromRules
 } from '../geometry/cabinet-thickness.js';
-import korpus3Rules from '../korpus3_3_rules.json';
-import korpusSkosnyRules from '../korpus_skosny_rules.json';
+import { getModuleRules } from '../../A1_core/rules-vault.js';
+const korpus3Rules = getModuleRules('korpus3');
+const korpusSkosnyRules = getModuleRules('korpus_skosny');
 
 describe('cabinet-thickness (SSOT & Fail-Fast)', () => {
     it('poprawnie pobiera grubość z reguł dla standardowego korpusu (boki 18 mm, plecy 3 mm)', () => {

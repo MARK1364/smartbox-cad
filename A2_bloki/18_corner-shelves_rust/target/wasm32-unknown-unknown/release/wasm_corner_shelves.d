@@ -1,0 +1,1 @@
+C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A2_bloki\18_corner-shelves_rust\target\wasm32-unknown-unknown\release\wasm_corner_shelves.wasm: C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A2_bloki\18_corner-shelves_rust\src\lib.rs

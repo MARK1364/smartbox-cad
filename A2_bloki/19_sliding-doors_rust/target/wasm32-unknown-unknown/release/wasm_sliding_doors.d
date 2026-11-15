@@ -1,0 +1,1 @@
+C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A2_bloki\19_sliding-doors_rust\target\wasm32-unknown-unknown\release\wasm_sliding_doors.wasm: C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A2_bloki\19_sliding-doors_rust\src\lib.rs

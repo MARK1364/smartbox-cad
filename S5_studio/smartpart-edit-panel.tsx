@@ -15,8 +15,8 @@ import {
     type SmartPartPackageDefinition,
     isCustomSmartPartModel,
     isHangerSmartPartGroup,
-    updateCustomSmartPartParams,
 } from './index.js';
+import { UpdateCustomSmartPartParamsCommand } from './update-custom-smartpart-params-command.js';
 import { updateHangerSmartPartParams } from '../A2_bloki/hangers/hanger-apply.js';
 import '../A2_bloki/01_smartparts-ui.css';
 
@@ -76,15 +76,20 @@ export function SmartPartEditPanel({ container }: { container: any }): React.JSX
         if (!document || !editTarget) return;
         if (isHangerSmartPartGroup(editTarget)) {
             updateHangerSmartPartParams(document, editTarget, next);
-        } else {
-            updateCustomSmartPartParams(document, editTarget, next);
-            if (typeof window !== 'undefined' && typeof (window as any).__rebuildGeometry === 'function') {
-                (window as any).__rebuildGeometry('SmartPart param');
+            if (typeof window !== 'undefined') {
+                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
             }
-        }
-        if (typeof window !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-            window.document.dispatchEvent(new CustomEvent('bloki-properties-update'));
+        } else {
+            const before = { ...values };
+            const rebuildGeometry = typeof window !== 'undefined'
+                && typeof (window as any).__rebuildGeometry === 'function'
+                ? () => (window as any).__rebuildGeometry('SmartPart param', true)
+                : undefined;
+            const command = new UpdateCustomSmartPartParamsCommand(editTarget, before, next, rebuildGeometry);
+            const history = ContextManager.instance.commandHistory;
+            if (history) history.execute(command);
+            else command.execute(document);
         }
         ContextManager.instance.viewport?.requestRender?.(2);
     };

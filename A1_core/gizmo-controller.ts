@@ -60,6 +60,11 @@ export class GizmoController {
     private _isClosingFloatingInput = false;
     private _hookedInputEl: HTMLInputElement | null = null;
     private _ignoreBlurUntil = 0;
+    private _rafPreviewOffsetId: any = null;
+    private _pendingPreviewOffset: { container: any; paramName: string; value: number; role?: string } | null = null;
+    private _rafTranslateDragId: any = null;
+    private _rafCornerDragId: any = null;
+    private _pendingCornerUpdate: { doc: any; params: any; container: any } | null = null;
 
     /**
      * Ściana panelu (klucz = kanoniczny FaceName) → sufiks parametra korpusu.
@@ -392,6 +397,16 @@ export class GizmoController {
                 cursor: text;
             `;
 
+            const grabIcon = document.createElement('span');
+            grabIcon.id = 'gizmo-grab-icon';
+            grabIcon.style.cssText = `
+                display: none;
+                margin-right: 4px;
+                font-size: 13px;
+                line-height: 1;
+                user-select: none;
+            `;
+
             const unit = document.createElement('span');
             unit.innerText = 'mm';
             unit.style.cssText = `
@@ -401,6 +416,7 @@ export class GizmoController {
                 user-select: none;
             `;
 
+            badge.appendChild(grabIcon);
             badge.appendChild(input);
             badge.appendChild(unit);
             document.body.appendChild(badge);
@@ -510,6 +526,8 @@ export class GizmoController {
 
         const badge = document.getElementById('gizmo-floating-input');
         const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
+        const grabIcon = document.getElementById('gizmo-grab-icon');
+        if (grabIcon) grabIcon.style.display = 'none';
         if (badge && input) {
             badge.style.display = 'flex';
             badge.style.border = `1.5px solid ${borderHex}`;
@@ -566,6 +584,8 @@ export class GizmoController {
 
         const badge = document.getElementById('gizmo-floating-input');
         const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
+        const grabIcon = document.getElementById('gizmo-grab-icon');
+        if (grabIcon) grabIcon.style.display = 'none';
         if (badge && input) {
             badge.style.display = 'flex';
             badge.style.border = `1.5px solid ${colorHex}`;
@@ -595,8 +615,42 @@ export class GizmoController {
     /**
      * Podgląd offsetu na WSKAZANYM korpusie — bez applyRealtimeUpdate/getActiveContainer
      * (te brały gabaryt z getContainers()[0] i nadpisywały aktywny korpus).
+     * W trakcie aktywnego przeciągania kulek stosuje throttling rAF (max 1 rebuild na klatkę renderu).
      */
     private previewOffsetOnContainer(container: any, paramName: string, value: number, role?: string): void {
+        if (!this.isDraggingFaceGizmo) {
+            this._executePreviewOffset(container, paramName, value, role);
+            return;
+        }
+
+        this._pendingPreviewOffset = { container, paramName, value, role };
+        if (this._rafPreviewOffsetId === null) {
+            const raf = typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : (cb: () => void) => setTimeout(cb, 16);
+            this._rafPreviewOffsetId = raf(() => {
+                this._rafPreviewOffsetId = null;
+                if (this._pendingPreviewOffset) {
+                    const { container: c, paramName: p, value: v, role: r } = this._pendingPreviewOffset;
+                    this._pendingPreviewOffset = null;
+                    this._executePreviewOffset(c, p, v, r);
+                }
+            });
+        }
+    }
+
+    private _flushPendingPreviewOffset(): void {
+        if (this._rafPreviewOffsetId !== null) {
+            const caf = typeof cancelAnimationFrame !== 'undefined' ? cancelAnimationFrame : clearTimeout;
+            caf(this._rafPreviewOffsetId);
+            this._rafPreviewOffsetId = null;
+        }
+        if (this._pendingPreviewOffset) {
+            const { container, paramName, value, role } = this._pendingPreviewOffset;
+            this._pendingPreviewOffset = null;
+            this._executePreviewOffset(container, paramName, value, role);
+        }
+    }
+
+    private _executePreviewOffset(container: any, paramName: string, value: number, role?: string): void {
         if (!container) return;
         if (!container.generatorParams) container.generatorParams = {};
 
@@ -1052,6 +1106,8 @@ export class GizmoController {
     }
 
     public clearFaceGizmos(): void {
+        this._flushPendingPreviewOffset();
+        this._flushCornerRealtimeUpdate();
         if (this._blurTimeoutId) {
             clearTimeout(this._blurTimeoutId);
             this._blurTimeoutId = null;
@@ -1530,6 +1586,9 @@ export class GizmoController {
 
                 dragBehavior.onDragStartObservable.add(() => {
                     hasDragged = false;
+                    if (typeof window !== 'undefined') {
+                        (window as any).__glcGizmoActive = true;
+                    }
                     if (this._blurTimeoutId) {
                         clearTimeout(this._blurTimeoutId);
                         this._blurTimeoutId = null;
@@ -1601,6 +1660,13 @@ export class GizmoController {
                 });
 
                 dragBehavior.onDragEndObservable.add(() => {
+                    this._flushPendingPreviewOffset();
+                    if (typeof window !== 'undefined') {
+                        (window as any).__glcGizmoActive = false;
+                        if (window.document) {
+                            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                        }
+                    }
                     this._disposeDragGuideLine();
                     this.isDraggingFaceGizmo = false;
                     viewport.camera.attachControl(viewport.canvas, true);
@@ -1725,6 +1791,9 @@ export class GizmoController {
                     
                     centerDrag.onDragStartObservable.add(() => {
                         hasCenterDragged = false;
+                        if (typeof window !== 'undefined') {
+                            (window as any).__glcGizmoActive = true;
+                        }
                         if (this._blurTimeoutId) {
                             clearTimeout(this._blurTimeoutId);
                             this._blurTimeoutId = null;
@@ -1777,6 +1846,13 @@ export class GizmoController {
                     });
 
                     centerDrag.onDragEndObservable.add(() => {
+                        this._flushPendingPreviewOffset();
+                        if (typeof window !== 'undefined') {
+                            (window as any).__glcGizmoActive = false;
+                            if (window.document) {
+                                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                            }
+                        }
                         this._disposeDragGuideLine();
                         this.isDraggingFaceGizmo = false;
                         viewport.camera.attachControl(viewport.canvas, true);
@@ -1830,11 +1906,19 @@ export class GizmoController {
                             viewport.scene
                         );
                         topCube.metadata = { isTopConfigCube: true };
-                        topCube.setParent(view.root);
-                        if (topCube.computeWorldMatrix) {
-                            topCube.computeWorldMatrix(true);
-                        }
+                        // Bez setParent (kompensacja skali/rotacji względem starej macierzy świata dawała gigantyczną kostkę):
+                        // parent bezpośrednio + jawna skala odwrotna do skali świata rodzica => rozmiar w świecie = cubeSize.
+                        view.root.computeWorldMatrix(true);
+                        const rootScale = new BABYLON.Vector3(1, 1, 1);
+                        view.root.getWorldMatrix().decompose(rootScale);
+                        topCube.parent = view.root;
                         topCube.position.set(0, 0, 0);
+                        topCube.rotationQuaternion = BABYLON.Quaternion.Identity();
+                        topCube.scaling.set(
+                            1 / (Math.abs(rootScale.x) || 1),
+                            1 / (Math.abs(rootScale.y) || 1),
+                            1 / (Math.abs(rootScale.z) || 1),
+                        );
 
                         // Niebieska kula move obok — nie zasłania pomarańczowej kostki w środku
                         centerSphere.position = new BABYLON.Vector3(thicknessMm * 2, 0, 0);
@@ -1860,6 +1944,36 @@ export class GizmoController {
 
         if (container) {
             this.createCornerGizmosForContainer(container);
+        }
+    }
+
+    private _scheduleCornerRealtimeUpdate(doc: any, params: any, container: any): void {
+        this._pendingCornerUpdate = { doc, params, container };
+        if (this._rafCornerDragId === null) {
+            const raf = typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : (cb: () => void) => setTimeout(cb, 16);
+            this._rafCornerDragId = raf(() => {
+                this._rafCornerDragId = null;
+                if (this._pendingCornerUpdate) {
+                    const { doc: d, params: p, container: c } = this._pendingCornerUpdate;
+                    this._pendingCornerUpdate = null;
+                    const cabMod = getCabinetModule();
+                    cabMod?.applyRealtimeUpdate?.(d, p, c);
+                }
+            });
+        }
+    }
+
+    private _flushCornerRealtimeUpdate(): void {
+        if (this._rafCornerDragId !== null) {
+            const caf = typeof cancelAnimationFrame !== 'undefined' ? cancelAnimationFrame : clearTimeout;
+            caf(this._rafCornerDragId);
+            this._rafCornerDragId = null;
+        }
+        if (this._pendingCornerUpdate) {
+            const { doc, params, container } = this._pendingCornerUpdate;
+            this._pendingCornerUpdate = null;
+            const cabMod = getCabinetModule();
+            cabMod?.applyRealtimeUpdate?.(doc, params, container);
         }
     }
 
@@ -1966,10 +2080,14 @@ export class GizmoController {
             sphere.material = mat;
 
             sphere.actionManager = new BABYLON.ActionManager(viewport.scene);
+            sphere.actionManager.hoverCursor = 'grab';
             sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
                 BABYLON.ActionManager.OnPointerOverTrigger,
                 () => {
                     sphere.scaling.setAll(1.3);
+                    if (!this.isDraggingCornerGizmo) {
+                        if (viewport.canvas) viewport.canvas.style.cursor = 'grab';
+                    }
                     if (!this.isDraggingCornerGizmo && !this.isEditingFaceGizmo && !this._isGlcGizmoActive()) {
                         const curVal = c.sy === 1 ? c.local.y : width;
                         this._updateCornerDragBadge(curVal, sphere, '#38bdf8');
@@ -1980,6 +2098,9 @@ export class GizmoController {
                 BABYLON.ActionManager.OnPointerOutTrigger,
                 () => {
                     sphere.scaling.setAll(1.0);
+                    if (!this.isDraggingCornerGizmo) {
+                        if (viewport.canvas) viewport.canvas.style.cursor = '';
+                    }
                     if (!this.isDraggingCornerGizmo && !this.isEditingFaceGizmo && !this._isGlcGizmoActive()) {
                         const badge = document.getElementById('gizmo-floating-input');
                         if (badge) badge.style.display = 'none';
@@ -2063,6 +2184,7 @@ export class GizmoController {
                     isZoneGizmo: true,
                     dividerType: div.dividerType,
                     cornerId: dc.id,
+                    cornerIdx: div.dividerType === 'BOTTOM' ? 8 : 16,
                     sx: dc.sx,
                     sy: 0,
                     sz: dc.sz,
@@ -2080,10 +2202,14 @@ export class GizmoController {
                 sphere.material = mat;
 
                 sphere.actionManager = new BABYLON.ActionManager(viewport.scene);
+                sphere.actionManager.hoverCursor = 'grab';
                 sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
                     BABYLON.ActionManager.OnPointerOverTrigger,
                     () => {
                         sphere.scaling.setAll(1.35);
+                        if (!this.isDraggingCornerGizmo) {
+                            if (viewport.canvas) viewport.canvas.style.cursor = 'grab';
+                        }
                         if (!this.isDraggingCornerGizmo && !this._isGlcGizmoActive()) {
                             this._updateCornerDragBadge(div.zMm, sphere, '#fb923c');
                         }
@@ -2093,6 +2219,9 @@ export class GizmoController {
                     BABYLON.ActionManager.OnPointerOutTrigger,
                     () => {
                         sphere.scaling.setAll(1.0);
+                        if (!this.isDraggingCornerGizmo) {
+                            if (viewport.canvas) viewport.canvas.style.cursor = '';
+                        }
                         if (!this.isDraggingCornerGizmo && !this.isEditingFaceGizmo && !this._isGlcGizmoActive()) {
                             const badge = document.getElementById('gizmo-floating-input');
                             if (badge) badge.style.display = 'none';
@@ -2216,6 +2345,15 @@ export class GizmoController {
                 }
                 this.isDraggingFaceGizmo = true;
                 this.isDraggingCornerGizmo = true;
+                if (typeof window !== 'undefined') {
+                    (window as any).__glcGizmoActive = true;
+                }
+                if (mesh.actionManager) mesh.actionManager.hoverCursor = 'grabbing';
+                if (viewport.scene) viewport.scene.defaultCursor = 'grabbing';
+                if (viewport.canvas) viewport.canvas.style.cursor = 'grabbing';
+                if (typeof document !== 'undefined' && document.body) {
+                    document.body.style.cursor = 'grabbing';
+                }
 
                 // Zawsze otwieraj okno edycji korpusu przy interakcji z gizmami gabarytu
                 if (typeof window !== 'undefined') {
@@ -2294,6 +2432,11 @@ export class GizmoController {
                     hasDragged: false,
                     snappedLevelNode: null,
                 };
+                this._updateCornerDragBadge(
+                    isZoneGizmo ? startZoneZ : ((mesh.metadata.sy ?? 1) === 1 ? curH : curW),
+                    mesh,
+                    isZoneGizmo ? '#fb923c' : '#38bdf8'
+                );
             } else if (type === BABYLON.PointerEventTypes.POINTERMOVE) {
                 if (!dragSession) return;
 
@@ -2568,8 +2711,7 @@ export class GizmoController {
                     ContextManager.instance.sceneSyncAdapter?.syncNodeToMesh?.(container.id);
                 }
 
-                const cabMod = getCabinetModule();
-                cabMod?.applyRealtimeUpdate?.(doc, {
+                this._scheduleCornerRealtimeUpdate(doc, {
                     szerokosc_mm: newWidth,
                     wysokosc_mm: newHeight,
                     glebokosc_mm: newDepth,
@@ -2608,8 +2750,18 @@ export class GizmoController {
                 if (!dragSession) return;
                 const session = dragSession;
                 dragSession = null;
+                this._flushCornerRealtimeUpdate();
                 this.isDraggingFaceGizmo = false;
                 this.isDraggingCornerGizmo = false;
+                if (typeof window !== 'undefined') {
+                    (window as any).__glcGizmoActive = false;
+                }
+                if (session.sphere?.actionManager) session.sphere.actionManager.hoverCursor = 'grab';
+                if (viewport.scene) viewport.scene.defaultCursor = '';
+                if (viewport.canvas) viewport.canvas.style.cursor = '';
+                if (typeof document !== 'undefined' && document.body) {
+                    document.body.style.cursor = '';
+                }
                 this._disposeDragGuideLine();
                 if (typeof window !== 'undefined') {
                     (window as any).__glcAxis?.highlightLevelPlane?.(null);
@@ -2798,6 +2950,13 @@ export class GizmoController {
         const input = document.getElementById('gizmo-input-field') as HTMLInputElement;
         if (!badge || !input) return;
 
+        const grabIcon = document.getElementById('gizmo-grab-icon');
+        if (grabIcon) {
+            grabIcon.style.display = 'inline-flex';
+            grabIcon.innerText = this.isDraggingCornerGizmo ? '✊' : '✋';
+            grabIcon.title = this.isDraggingCornerGizmo ? 'Rozciąganie naroża' : 'Chwyć i przeciągnij naroże';
+        }
+
         badge.style.display = 'flex';
         badge.style.border = `1.5px solid ${colorHex}`;
         if (document.activeElement !== input) {
@@ -2896,6 +3055,24 @@ export class GizmoController {
     }
 
     private _onTranslateDrag(): void {
+        if (this._rafTranslateDragId !== null) return;
+        const raf = typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : (cb: () => void) => setTimeout(cb, 16);
+        this._rafTranslateDragId = raf(() => {
+            this._rafTranslateDragId = null;
+            this._executeTranslateDrag();
+        });
+    }
+
+    private _flushTranslateDrag(): void {
+        if (this._rafTranslateDragId !== null) {
+            const caf = typeof cancelAnimationFrame !== 'undefined' ? cancelAnimationFrame : clearTimeout;
+            caf(this._rafTranslateDragId);
+            this._rafTranslateDragId = null;
+        }
+        this._executeTranslateDrag();
+    }
+
+    private _executeTranslateDrag(): void {
         const ctx = this._resolveTransformTarget();
         if (!ctx) {
             return;
@@ -2921,6 +3098,14 @@ export class GizmoController {
     }
 
     private _onTranslateDragEnd(): void {
+        this._flushTranslateDrag();
+        if (typeof window !== 'undefined') {
+            (window as any).__glcGizmoActive = false;
+            if (window.document) {
+                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+            }
+        }
+
         const viewport = ContextManager.instance.viewport;
         if (viewport?.camera) {
             viewport.camera.attachControl(viewport.canvas, true);
@@ -2957,6 +3142,9 @@ export class GizmoController {
     }
 
     private _beginConstraintDrag(): void {
+        if (typeof window !== 'undefined') {
+            (window as any).__glcGizmoActive = true;
+        }
         const ctx = this._resolveTransformTarget();
         if (!ctx) {
             return;

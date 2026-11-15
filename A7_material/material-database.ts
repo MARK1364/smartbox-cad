@@ -1,5 +1,6 @@
 import { MaterialItem, EdgeBandingType, MaterialFilters, MaterialInfo } from './material-types.js';
-import smartPanelData from '../A4_smartpanel/smart_panel_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const smartPanelData = getModuleRules('smart_panel_V1');
 
 // Domyślna paleta kolorów i właściwości dla znanych dekorów Egger oraz materiałów
 const MATERIAL_VISUAL_PROPERTIES: Record<string, { color: { r: number; g: number; b: number }; hex: string; roughness: number; isTransparent?: boolean; opacity?: number }> = {

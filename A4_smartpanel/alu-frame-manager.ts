@@ -9,7 +9,8 @@
  * - Przeliczniki z/do nanometrów realizowane przez units.ts.
  */
 
-import templatesJson from './ramka_alu_templates.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const templatesJson = getModuleRules('ramka_alu_templates');
 import { nmToMm } from '../A1_core/cad-math/units.js';
 
 export interface AluProfileConfig {

@@ -11,7 +11,8 @@
 import { tx } from '../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import instrukcjaTekstRaw from './instrukcja_tekst.json';
-import connectorsRulesRaw from '../C2_connectors/connectors_3_rules.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const connectorsRulesRaw = getModuleRules('connectors_3_rules');
 import type { AssemblyPlan, AssemblyStep } from './assembly-sequence-engine.js';
 
 const assemblyTekst = instrukcjaTekstRaw as unknown as ModuleTexts;

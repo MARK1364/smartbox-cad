@@ -4,6 +4,7 @@ import { CommandHistory } from '../../A1_core/commands/command-history.js';
 import { MacroCommand } from '../../A1_core/commands/macro-command.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { CreateSmartWallCommand } from '../commands/create-smartwall-command.js';
+import { SetSmartWallParamsCommand } from '../commands/set-smartwall-params-command.js';
 import * as smartWallCore from '../smartwall-core.js';
 import { rebuildSmartWall } from '../smartwall-core.js';
 import { isExcludedFromProduction, isSmartWallContainer } from '../smartwall-types.js';
@@ -97,6 +98,41 @@ describe('S4 SmartWall commands / core', () => {
 
             expect(() => macro.execute(doc)).toThrow('test macro failure');
             expect(doc.getContainers()).toHaveLength(0);
+            expect(dispatchEvent).not.toHaveBeenCalled();
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('nie publikuje zdarzenia parametrów SmartWall przed zatwierdzeniem makra', () => {
+        const dispatchEvent = vi.fn();
+        vi.stubGlobal('window', { document: { dispatchEvent } });
+        vi.stubGlobal('CustomEvent', class {
+            constructor(public type: string) {}
+        });
+
+        try {
+            const doc = new ProjectDocument();
+            new CreateSmartWallCommand({ preset: 'rect', name: 'SmartWall transakcyjny' }).execute(doc);
+            const container = doc.getContainers()[0].domainData as any;
+            const before = SetSmartWallParamsCommand.snapshotFrom(container);
+            const updateParams = new SetSmartWallParamsCommand(container.id, before, {
+                ...before,
+                roomWidth: before.roomWidth + 500,
+            });
+            const failingCommand = {
+                id: 'test_params_failure',
+                label: 'Fail',
+                timestamp: Date.now(),
+                affectedNodeIds: [],
+                execute: () => { throw new Error('test macro params failure'); },
+                undo: () => {},
+            };
+            const macro = new MacroCommand([updateParams, failingCommand]);
+            dispatchEvent.mockClear();
+
+            expect(() => macro.execute(doc)).toThrow('test macro params failure');
+            expect(SetSmartWallParamsCommand.snapshotFrom(container)).toEqual(before);
             expect(dispatchEvent).not.toHaveBeenCalled();
         } finally {
             vi.unstubAllGlobals();

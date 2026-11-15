@@ -117,9 +117,18 @@ export function applyPanelViewSolverVisibility(
     }
     if (view._edgeMeshes && Array.isArray(view._edgeMeshes)) {
         for (const mesh of view._edgeMeshes) {
-            const edgeState = { ...state, isVisible: state.enabled, isPickable: state.enabled };
+            const pickOnly = Boolean(mesh?.metadata?.pickOnly);
+            const edgeState = {
+                ...state,
+                visibility: pickOnly ? 0 : state.visibility,
+                isVisible: state.enabled,
+                isPickable: state.enabled,
+            };
             applyMeshSolverVisibility(mesh, edgeState);
         }
+    }
+    if (view._edgeBatchMesh) {
+        applyMeshSolverVisibility(view._edgeBatchMesh, { ...state, isPickable: false });
     }
     if (view._vertexSpheres && Array.isArray(view._vertexSpheres)) {
         for (const mesh of view._vertexSpheres) {

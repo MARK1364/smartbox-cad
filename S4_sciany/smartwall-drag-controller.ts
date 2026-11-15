@@ -212,8 +212,7 @@ export class SmartWallDragController {
             };
             runCmd(new CreateSmartWallCommand(params));
         }
-        if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+        if (typeof window !== 'undefined') {
             (window as any).__rebuildGeometry?.('Utworzono SmartWall');
         }
         this.endDrag();

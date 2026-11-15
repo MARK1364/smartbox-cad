@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { CNCProgramState } from '../../core/cam-state-store.js';
+import { CAMStateStore, CNCProgramState } from '../../core/cam-state-store.js';
 import { CNCEngine } from '../../core/cnc-engine.js';
+import { CAMSyncService } from '../../core/cam-sync-service.js';
 import { Mach3Postprocessor } from '../../postprocessors/mach3-postprocessor.js';
 import { FanucPostprocessor } from '../../postprocessors/fanuc-postprocessor.js';
 import { BiessePostprocessor } from '../../postprocessors/biesse-postprocessor.js';
 import { WoodWOPPostprocessor } from '../../postprocessors/woodwop-postprocessor.js';
 import { SCMPostprocessor } from '../../postprocessors/scm-postprocessor.js';
 
-import { MachiningRuleEngine } from '../../rules/machining-rule-engine.js';
 import { checkExportGate, consumeTrialExport } from '../../../src/saas/saas-gate.js';
 import { watermarkGCode } from '../../../src/saas/watermark.js';
 import { SaaSUpgradeBus } from '../../../src/saas/saas-upgrade-bus.js';
@@ -18,6 +18,28 @@ import cncTekstRaw from '../../cnc_tekst.json';
 
 const cncTekst = cncTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'cnc';
+
+export const SUPPORTED_POSTPROCESSORS = ['Mach3', 'Fanuc', 'WoodWOP', 'Biesse', 'SCM'] as const;
+
+export function resolvePostprocessor(postprocessorName?: string | null) {
+    const raw = (postprocessorName === undefined || postprocessorName === null || String(postprocessorName).trim() === '')
+        ? 'Mach3'
+        : String(postprocessorName).trim();
+    if (raw === 'WoodWOP') return new WoodWOPPostprocessor();
+    if (raw === 'SCM') return new SCMPostprocessor();
+    if (raw === 'Biesse') return new BiessePostprocessor();
+    if (raw === 'Fanuc') return new FanucPostprocessor();
+    if (raw === 'Mach3') return new Mach3Postprocessor();
+    throw new Error(`[C1_cnc/GCodeTab] Nieobsługiwany postprocesor "${postprocessorName}". Dostępne: ${SUPPORTED_POSTPROCESSORS.join(', ')}.`);
+}
+
+export function sanitizeFileName(name: string): string {
+    const cleaned = (name || '')
+        .replace(/[/\\?%*:|"<>]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return cleaned || 'program';
+}
 
 interface GCodeTabProps {
     program: CNCProgramState;
@@ -39,12 +61,13 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
 
     const getFilename = () => {
         const ext = getExtension();
-        const base = program.targetPanelLabel || program.id || 'program';
+        const base = sanitizeFileName(program.targetPanelLabel || program.id || 'program');
         return `${base}_${program.postprocessor || 'Mach3'}${ext}`;
     };
 
     const generateCode = (): string => {
         const engine = CNCEngine.getInstance();
+        const store = CAMStateStore.getInstance();
         const features = program.features || [];
 
         if (features.length === 0) {
@@ -53,24 +76,33 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
             return '';
         }
 
-        // Automatyczne dopasowanie narzędzia za pomocą inteligentnych reguł technologicznych AFR
-        const ruleEngine = MachiningRuleEngine.getInstance();
         const preparedFeatures = features.map(f => {
-            if (!f.toolId) {
-                const resolution = ruleEngine.resolveFeatureMachining(f, engine.toolLibrary);
-                const assignedId = resolution.tool?.id || engine.toolLibrary.getAllTools()[0]?.id || 'tool_1';
-                return { ...f, toolId: assignedId };
-            }
-            return f;
+            const assignedId = f.toolId || program.toolAssignments?.[f.featureId] || null;
+            return assignedId && f.toolId !== assignedId ? { ...f, toolId: assignedId } : f;
         });
 
+        // Sprawdź czy są operacje bez przypisanego narzędzia (spójnie z symulacją — bez cichego przypisywania pierwszego frezu)
+        const missingToolFeats = preparedFeatures.filter(
+            f => !f.toolId || !engine.toolLibrary.getTool(f.toolId)
+        );
+        if (missingToolFeats.length > 0) {
+            const msg = tx(cncTekst, 'warnings.no_tool_code', TX_NS, { n: missingToolFeats.length });
+            setGcodeText('');
+            setStatusMsg(msg);
+            store.setWarningMessage(msg);
+            return '';
+        }
+
+        store.setWarningMessage(null);
+
         const dims = engine.getDimensionsMM(program.targetPanel);
-        engine.wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
+        const wcs = CAMSyncService.getInstance().createWcsForPanelAndProgram(program.targetPanel, program);
+        engine.wcsManager.copyFrom(wcs);
 
         const clProgram = engine.camProcessor.buildCLProgram({
             projectName: program.name || tx(cncTekst, 'gcode.default_project_name', TX_NS),
-            wcsOrigin: engine.wcsManager.getOrigin(),
-            wcsName: program.wcsName || 'G55',
+            wcsOrigin: wcs.getOrigin(),
+            wcsName: wcs.getWcsName(),
             features: preparedFeatures,
             toolAssignments: program.toolAssignments || {},
             postprocessor: program.postprocessor || 'Mach3',
@@ -79,23 +111,35 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
             workpieceDimensions: dims
         });
 
-        let post: any;
-        const postName = program.postprocessor || 'Mach3';
-        if (postName === 'WoodWOP') post = new WoodWOPPostprocessor();
-        else if (postName === 'SCM') post = new SCMPostprocessor();
-        else if (postName === 'Biesse') post = new BiessePostprocessor();
-        else if (postName === 'Fanuc') post = new FanucPostprocessor();
-        else post = new Mach3Postprocessor();
+        const post = resolvePostprocessor(program.postprocessor);
 
         const nc = post.generateNcCode(clProgram);
         setGcodeText(nc);
         return nc;
     };
 
-    // Automatyczne generowanie kodu przy wejściu lub zmianie parametrów
+    // Automatyczne generowanie kodu przy wejściu lub zmianie parametrów programu, strategii, narzędzi lub WCS
     useEffect(() => {
         generateCode();
-    }, [program.postprocessor, program.features, program.wcsName, program.targetPanel]);
+    }, [
+        program.id,
+        program.name,
+        program.projectName,
+        program.postprocessor,
+        program.features,
+        program.toolAssignments,
+        program.strategyId,
+        program.strategyParams,
+        program.wcsName,
+        program.cornerIndex,
+        program.wcsOffsetX,
+        program.wcsOffsetY,
+        program.wcsOffsetZ,
+        program.wcsRotX,
+        program.wcsRotY,
+        program.wcsRotZ,
+        program.targetPanel
+    ]);
 
     const handlePickDirectory = async () => {
         try {
@@ -132,7 +176,7 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
             return;
         }
 
-        let content = gcodeText || generateCode();
+        let content = generateCode();
         if (!content) return;
         if (gate.watermark) {
             content = watermarkGCode(content, program.postprocessor || 'Mach3', gate.watermarkText);
@@ -175,15 +219,16 @@ export const GCodeTab: React.FC<GCodeTabProps> = ({ program, onUpdateProgram }) 
 
     const handleCopyCode = async () => {
         // Strict: jak wyżej — decyzja po danych, nie po tekście.
-        if ((program.features || []).length === 0 || !gcodeText) return;
+        if ((program.features || []).length === 0) return;
+
+        let content = generateCode();
+        if (!content) return;
 
         const gate = checkExportGate();
         if (!gate.allowed) {
             SaaSUpgradeBus.requestUpgrade(tx(cncTekst, 'gcode.title', TX_NS));
             return;
         }
-
-        let content = gcodeText;
         if (gate.watermark) {
             content = watermarkGCode(content, program.postprocessor || 'Mach3', gate.watermarkText);
         }

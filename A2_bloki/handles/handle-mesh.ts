@@ -5,11 +5,13 @@
 
 import type { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
+import { nmToMm } from '../../A1_core/cad-math/units.js';
 import { HardwareLoader } from '../../B1_biblioteka/hardware-loader.js';
 import { handleGlbTemplateId } from '../../B1_biblioteka/uchwyty/handles-from-catalog.js';
 import type { HandleParamsMm } from './handle-types.js';
-import { resolveHandleGlbFile } from './handle-types.js';
+import { DEFAULT_HANDLE_PARAMS, resolveHandleGlbFile } from './handle-types.js';
 import type { HandleComputedLayoutMm } from './handle-layout.js';
+import { computeHandleLayout } from './handle-layout.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -112,8 +114,22 @@ export function findPanelRootMesh(scene: any, panelId: string): any | null {
     const panelViews = (ContextManager.instance as any)?.panelViews;
     if (panelViews) {
         for (const [pModel, pView] of panelViews.entries()) {
-            if (pModel?.id === panelId && pView?.root) {
+            if ((pModel?.id === panelId || pModel?.smartId?.fullPath === panelId) && pView?.root) {
                 return pView.root;
+            }
+        }
+    }
+
+    const doc = (ContextManager.instance as any)?.document;
+    if (doc) {
+        const node = doc.findNode(panelId);
+        if (node && node.domainData && panelViews) {
+            const v = panelViews.get(node.domainData);
+            if (v?.root) return v.root;
+            for (const [pModel, pView] of panelViews.entries()) {
+                if ((pModel?.id === node.id || pModel?.id === node.domainData?.id) && pView?.root) {
+                    return pView.root;
+                }
             }
         }
     }
@@ -157,22 +173,27 @@ function resolveGlbId(params: HandleParamsMm): string | null {
 }
 
 function applyHandleColorToTree(root: any, params: HandleParamsMm, B: any): void {
-    if (!root || !params?.color || !B) return;
-    const { r, g, b } = params.color;
+    if (!root || !B) return;
     const nodes = [root, ...(typeof root.getDescendants === 'function' ? root.getDescendants(false) : [])];
     for (const node of nodes) {
+        node.setEnabled?.(true);
+        if ('isVisible' in node) node.isVisible = true;
         const mat = (node as any).material;
         if (!mat) continue;
-        if (!(node as any).metadata) (node as any).metadata = {};
-        if (!(node as any).metadata.handleColorCloned && typeof mat.clone === 'function') {
-            (node as any).material = mat.clone(`${mat.name || 'handle'}_tint`);
-            (node as any).metadata.handleColorCloned = true;
+        mat.backFaceCulling = false;
+        if (params?.color) {
+            const { r, g, b } = params.color;
+            if (!(node as any).metadata) (node as any).metadata = {};
+            if (!(node as any).metadata.handleColorCloned && typeof mat.clone === 'function') {
+                (node as any).material = mat.clone(`${mat.name || 'handle'}_tint`);
+                (node as any).metadata.handleColorCloned = true;
+            }
+            const m = (node as any).material;
+            if (m.diffuseColor) m.diffuseColor = new B.Color3(r, g, b);
+            if (m.albedoColor) m.albedoColor = new B.Color3(r, g, b);
+            if (m.emissiveColor) m.emissiveColor = new B.Color3(r * 0.15, g * 0.15, b * 0.15);
+            if (m.specularColor) m.specularColor = new B.Color3(0.35, 0.35, 0.38);
         }
-        const m = (node as any).material;
-        if (m.diffuseColor) m.diffuseColor = new B.Color3(r, g, b);
-        if (m.albedoColor) m.albedoColor = new B.Color3(r, g, b);
-        if (m.emissiveColor) m.emissiveColor = new B.Color3(r * 0.15, g * 0.15, b * 0.15);
-        if (m.specularColor) m.specularColor = new B.Color3(0.35, 0.35, 0.38);
     }
 }
 
@@ -196,7 +217,7 @@ function placeHandleRoot(
         normalZ,
     };
 
-    const parentPanelId = genParams.targetPanelId;
+    const parentPanelId = genParams.targetPanelId || cntNode.parent?.id;
     const scene = root.getScene?.() || ContextManager.instance?.viewport?.scene;
     const panelRoot = findPanelRootMesh(scene, parentPanelId);
     const babylon = B || (typeof window !== 'undefined' ? (window as any).BABYLON : null);
@@ -207,12 +228,18 @@ function placeHandleRoot(
         root.position.set(layout.center.x, layout.center.y, faceZ);
         // Kwaternion: baza → na zewnątrz → twist w płaszczyźnie ramki (poziom/pion)
         root.rotationQuaternion = buildHandleGlbQuaternion(babylon, layout.orientation, normalZ);
-        root.rotation.set(0, 0, 0); // Euler wyłączony — steruje tylko quaternion
     } else if (panelRoot) {
         root.parent = panelRoot;
         root.position.set(layout.center.x, layout.center.y, faceZ);
         const rot = resolveHandleGlbRotationRad(layout.orientation, normalZ);
         root.rotation.set(rot.x, rot.y, rot.z);
+    } else {
+        root.position.set(layout.center.x, layout.center.y, faceZ);
+    }
+
+    root.setEnabled?.(true);
+    if (typeof root.computeWorldMatrix === 'function') {
+        root.computeWorldMatrix(true);
     }
 
     applyHandleColorToTree(root, params, babylon);
@@ -247,7 +274,8 @@ export function buildHandleParametricMesh(
         const loader = HardwareLoader.instance;
         if (loader.hasTemplate(glbId)) {
             const instance = loader.createHandleInstance(glbId, scene);
-            if (instance) {
+            const hasMeshes = !instance?.getChildMeshes || instance.getChildMeshes(false).length > 0;
+            if (instance && hasMeshes) {
                 placeHandleRoot(instance, cntNode, params, layout, faceZ, normalZ, genParams, B);
                 return;
             }
@@ -261,9 +289,10 @@ export function buildHandleParametricMesh(
                 || (cntNode.domainData as any)?.generatorParams?.partType === 'HANDLE';
             if (!still && !(cntNode.domainData as any)?.generatorParams) return;
 
-            disposeHandleVisual(scene, cntNode.id);
             const instance = loader.createHandleInstance(glbId, scene);
-            if (instance) {
+            const hasMeshes = !instance?.getChildMeshes || instance.getChildMeshes(false).length > 0;
+            if (instance && hasMeshes) {
+                disposeHandleVisual(scene, cntNode.id);
                 placeHandleRoot(instance, cntNode, params, layout, faceZ, normalZ, genParams, B);
                 ContextManager.instance?.viewport?.requestRender?.(4);
             }
@@ -356,11 +385,93 @@ function buildProceduralHandleMesh(
         layout,
     };
 
-    const parentPanelId = genParams.targetPanelId;
+    const parentPanelId = genParams.targetPanelId || cntNode.parent?.id;
     const panelRoot = findPanelRootMesh(scene, parentPanelId);
     if (panelRoot) {
         merged.parent = panelRoot;
         merged.position.set(layout.center.x, layout.center.y, faceZ);
         merged.rotation.set(0, 0, 0);
+    } else {
+        merged.position.set(layout.center.x, layout.center.y, faceZ);
+    }
+}
+
+/**
+ * Po rebuildzie geometrii odtwarza meshe uchwytów SmartPart (GLB lub parametryczne).
+ * Bez tego przy każdym przebudowaniu panelViews meshe uchwytów są usuwane razem ze starym panelem.
+ */
+export function syncHandleMeshesFromDocument(document: any): void {
+    if (!document?.rootNode) return;
+    const win = typeof window !== 'undefined' ? (window as any) : null;
+    const scene = ContextManager.instance?.viewport?.scene || win?.__cad_scene;
+    if (!scene) return;
+
+    const liveHandleIds = new Set<string>();
+    const stack: any[] = [document.rootNode];
+
+    while (stack.length > 0) {
+        const node = stack.pop();
+        if (!node) continue;
+        if (Array.isArray(node.children)) {
+            for (const ch of node.children) stack.push(ch);
+        }
+
+        const domainData = node.domainData;
+        const gp = domainData?.generatorParams || domainData?.params;
+        const isHandle =
+            domainData?.role === 'SMARTPART_HANDLE'
+            || gp?.type === 'smartpart_handle'
+            || gp?.partType === 'HANDLE';
+
+        if (!isHandle || !gp) continue;
+        liveHandleIds.add(node.id);
+
+        try {
+            const targetPanelId = gp.targetPanelId || node.parent?.id;
+            const targetPanelNode = targetPanelId ? document.findNode(targetPanelId) : null;
+            const panelModel = targetPanelNode?.domainData;
+            const panelWMm = gp.panelWidthMm ?? (panelModel ? nmToMm(panelModel.width) : 0);
+            const panelHMm = gp.panelHeightMm ?? (panelModel ? nmToMm(panelModel.height) : 0);
+            const panelTMm = gp.panelThicknessMm ?? (panelModel ? nmToMm(panelModel.thickness) : 18);
+            const faceZ = gp.faceZ ?? -panelTMm / 2;
+            const normalZ = gp.normalZ ?? -1;
+
+            const handleParams: HandleParamsMm = {
+                ...DEFAULT_HANDLE_PARAMS,
+                ...gp,
+            };
+
+            const layout = computeHandleLayout(handleParams, panelWMm, panelHMm);
+            buildHandleParametricMesh(node, handleParams, layout, faceZ, normalZ);
+        } catch (err) {
+            console.warn('[HandleMesh] sync:', err);
+        }
+    }
+
+    purgeOrphanHandleMeshes(document, liveHandleIds);
+}
+
+/** Usuwa meshe uchwytów bez odpowiadającego CADNode w dokumencie (po skasowaniu). */
+export function purgeOrphanHandleMeshes(document: any, liveHandleIds?: Set<string>): void {
+    const win = typeof window !== 'undefined' ? (window as any) : null;
+    const scene = ContextManager.instance?.viewport?.scene || win?.__cad_scene;
+    if (!scene || !document) return;
+    const live = liveHandleIds || new Set<string>();
+
+    for (const mesh of [...(scene.meshes || [])]) {
+        if (mesh?.metadata?.type === 'smartpart_handle') {
+            const nId = mesh.metadata.nodeId;
+            if (nId && !live.has(nId)) {
+                try { mesh.dispose(); } catch { /* ignore */ }
+            }
+        }
+    }
+    for (const tn of [...(scene.transformNodes || [])]) {
+        if (tn?.metadata?.type === 'smartpart_handle') {
+            const nId = tn.metadata.nodeId;
+            if (nId && !live.has(nId)) {
+                try { tn.dispose(); } catch { /* ignore */ }
+            }
+        }
     }
 }

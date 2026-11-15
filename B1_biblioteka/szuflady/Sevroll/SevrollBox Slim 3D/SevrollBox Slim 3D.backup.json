@@ -1,0 +1,213 @@
+{
+  "id": "sevrollbox_slim_3d",
+  "brand": "Sevroll",
+  "series": "SevrollBox Slim 3D",
+  "units": "mm",
+  "construction": "SYSTEM",
+  "panels": {
+    "bottom": {
+      "role": "DRAWER_BOTTOM",
+      "name": "Dno szuflady",
+      "thickness": 16.0,
+      "width_offset": -21.0,
+      "length_offset": -20.0
+    },
+    "back": {
+      "role": "DRAWER_BACK",
+      "name": "Plecy szuflady",
+      "thickness": 16.0,
+      "width_offset": -42.0
+    }
+  },
+  "profile": {
+    "b_x": 7.0,
+    "b_tw": 12.0,
+    "kompensacja_plecow": 21.0,
+    "b_bw": 3.5,
+    "wciecie_dna": 1.0,
+    "p_th": 16.0,
+    "m_w": 45.0,
+    "m_h": 60.0,
+    "m_wall": 2.0,
+    "m_nrx": 20.0,
+    "m_nh": 19.0,
+    "m_x": 0.0,
+    "m_y": 0.0,
+    "r_h": 23.0,
+    "r_lw": 10.0,
+    "r_rw": 10.0,
+    "r_ad": 20.0,
+    "r_w": 42.0,
+    "r_x": 14.0
+  },
+  "variants": [
+    {
+      "id": "SEVROLLBOX_SLIM_3D_90",
+      "legacy_id": "S90",
+      "name": "Slim 3D H-90",
+      "corpus_height": 90.0,
+      "back_height": 60.0,
+      "total_height": 106.0,
+      "min_space": 101.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "profile": {
+        "b_h": 90.0,
+        "b_ph": 60.0,
+        "b_y": 106.0,
+        "kompensacja_plecow": 21.0
+      },
+      "machining": {
+        "front_holes_formula": "nał+55+32",
+        "front_edge_formula": "nał+14",
+        "front_edge_offset_base": 14.0,
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 87.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 35.5, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "270": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_90_270", "boczek_len": 270, "mocowanie_len": 260, "prowadnica_len": 278 },
+        "300": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_90_300", "boczek_len": 300, "mocowanie_len": 260, "prowadnica_len": 308 },
+        "350": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_90_350", "boczek_len": 350, "mocowanie_len": 260, "prowadnica_len": 358 },
+        "400": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_90_400", "boczek_len": 400, "mocowanie_len": 290, "prowadnica_len": 408 },
+        "450": { "z_offset": 35.5, "x_positions": [37, 69, 229, 261], "price_id": "SEVROLLBOX_SLIM_3D_90_450", "boczek_len": 450, "mocowanie_len": 290, "prowadnica_len": 458 },
+        "500": { "z_offset": 35.5, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_90_500", "boczek_len": 500, "mocowanie_len": 320, "prowadnica_len": 508 },
+        "550": { "z_offset": 35.5, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_90_550", "boczek_len": 550, "mocowanie_len": 320, "prowadnica_len": 558 }
+      }
+    },
+    {
+      "id": "SEVROLLBOX_SLIM_3D_131",
+      "legacy_id": "S131",
+      "name": "Slim 3D H-131",
+      "corpus_height": 131.0,
+      "back_height": 101.0,
+      "total_height": 147.0,
+      "min_space": 151.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "profile": {
+        "b_h": 131.0,
+        "b_ph": 101.0,
+        "b_y": 147.0,
+        "kompensacja_plecow": 21.0
+      },
+      "machining": {
+        "front_holes_formula": "nał+87+32",
+        "front_edge_formula": "nał+14",
+        "front_edge_offset_base": 14.0,
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 87.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 119.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 35.5, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "270": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_131_270", "boczek_len": 270, "mocowanie_len": 260, "prowadnica_len": 278 },
+        "300": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_131_300", "boczek_len": 300, "mocowanie_len": 260, "prowadnica_len": 308 },
+        "350": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_131_350", "boczek_len": 350, "mocowanie_len": 260, "prowadnica_len": 358 },
+        "400": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_131_400", "boczek_len": 400, "mocowanie_len": 290, "prowadnica_len": 408 },
+        "450": { "z_offset": 35.5, "x_positions": [37, 69, 229, 261], "price_id": "SEVROLLBOX_SLIM_3D_131_450", "boczek_len": 450, "mocowanie_len": 290, "prowadnica_len": 458 },
+        "500": { "z_offset": 35.5, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_131_500", "boczek_len": 500, "mocowanie_len": 320, "prowadnica_len": 508 },
+        "550": { "z_offset": 35.5, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_131_550", "boczek_len": 550, "mocowanie_len": 320, "prowadnica_len": 558 }
+      }
+    },
+    {
+      "id": "SEVROLLBOX_SLIM_3D_178",
+      "legacy_id": "S178",
+      "name": "Slim 3D H-178",
+      "corpus_height": 178.0,
+      "back_height": 148.0,
+      "total_height": 194.0,
+      "min_space": 198.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "profile": {
+        "b_h": 178.0,
+        "b_ph": 148.0,
+        "b_y": 194.0,
+        "kompensacja_plecow": 21.0
+      },
+      "machining": {
+        "front_holes_formula": "(nał+55)+32+64+32",
+        "front_edge_formula": "nał+14",
+        "front_edge_offset_base": 14.0,
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 87.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_3", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 151.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_4", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 183.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 35.5, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "270": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_178_270", "boczek_len": 270, "mocowanie_len": 260, "prowadnica_len": 278 },
+        "300": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_178_300", "boczek_len": 300, "mocowanie_len": 260, "prowadnica_len": 308 },
+        "350": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_178_350", "boczek_len": 350, "mocowanie_len": 260, "prowadnica_len": 358 },
+        "400": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_178_400", "boczek_len": 400, "mocowanie_len": 290, "prowadnica_len": 408 },
+        "450": { "z_offset": 35.5, "x_positions": [37, 69, 229, 261], "price_id": "SEVROLLBOX_SLIM_3D_178_450", "boczek_len": 450, "mocowanie_len": 290, "prowadnica_len": 458 },
+        "500": { "z_offset": 35.5, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_178_500", "boczek_len": 500, "mocowanie_len": 320, "prowadnica_len": 508 },
+        "550": { "z_offset": 35.5, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_178_550", "boczek_len": 550, "mocowanie_len": 320, "prowadnica_len": 558 }
+      }
+    },
+    {
+      "id": "SEVROLLBOX_SLIM_3D_214",
+      "legacy_id": "S214",
+      "name": "Slim 3D H-214",
+      "corpus_height": 214.0,
+      "back_height": 183.0,
+      "total_height": 229.0,
+      "min_space": 223.0,
+      "rail_height": 35.0,
+      "width": 27.0,
+      "profile": {
+        "b_h": 214.0,
+        "b_ph": 183.0,
+        "b_y": 229.0,
+        "kompensacja_plecow": 21.0
+      },
+      "machining": {
+        "front_holes_formula": "(nał+55)+32+64+32",
+        "front_edge_formula": "nał+14",
+        "front_edge_offset_base": 14.0,
+        "front_holes": [
+          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 55.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 87.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_3", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 151.0, "object": "Cylinder" },
+          { "name": "Mocowanie_frontu_4", "dia": 3.0, "depth": 10.0, "edge_dist": 29.0, "z_from_bottom": 183.0, "object": "Cylinder" }
+        ],
+        "corpus_holes": [
+          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 69.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 35.5, "object": "Cylinder" },
+          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 293.0, "z_from_bottom": 35.5, "object": "Cylinder" }
+        ]
+      },
+      "lengths": {
+        "270": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_214_270", "boczek_len": 270, "mocowanie_len": 260, "prowadnica_len": 278 },
+        "300": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_214_300", "boczek_len": 300, "mocowanie_len": 260, "prowadnica_len": 308 },
+        "350": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_214_350", "boczek_len": 350, "mocowanie_len": 260, "prowadnica_len": 358 },
+        "400": { "z_offset": 35.5, "x_positions": [37, 69, 165, 197], "price_id": "SEVROLLBOX_SLIM_3D_214_400", "boczek_len": 400, "mocowanie_len": 290, "prowadnica_len": 408 },
+        "450": { "z_offset": 35.5, "x_positions": [37, 69, 229, 261], "price_id": "SEVROLLBOX_SLIM_3D_214_450", "boczek_len": 450, "mocowanie_len": 290, "prowadnica_len": 458 },
+        "500": { "z_offset": 35.5, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_214_500", "boczek_len": 500, "mocowanie_len": 320, "prowadnica_len": 508 },
+        "550": { "z_offset": 35.5, "x_positions": [37, 69, 261, 293], "price_id": "SEVROLLBOX_SLIM_3D_214_550", "boczek_len": 550, "mocowanie_len": 320, "prowadnica_len": 558 }
+      }
+    }
+  ]
+}

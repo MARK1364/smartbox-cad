@@ -24,6 +24,7 @@ import {
 import { buildHoleMachiningIntent } from './01_machining-intent.js';
 import { equalShelfCenterZ, equalShelfBay } from './04_shelves-engine.js';
 import { UIController } from '../A1_core/ui-controller.js';
+import { callCornerShelvesPlanWasm } from './corner-shelves-wasm-bridge.js';
 
 export { assertCanonicalCornerShelvesParams, LEGACY_CORNER_SHELVES_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -119,6 +120,12 @@ export function calculateCornerShelvesPlan(
     dims: BlokiDimensions_mm,
     params: NormalizedCornerShelvesParams
 ): BlokiPlanResult {
+    // ─── WYWOŁANIE BINARNEGO SILNIKA WASM (RUST) ──────────────────────────────
+    const wasmResult = callCornerShelvesPlanWasm(dims, params);
+    if (wasmResult) {
+        return wasmResult;
+    }
+
     const parts: BlokiPart[] = [];
     const hardware: BlokiHardware[] = [];
 
@@ -330,7 +337,7 @@ export function calculateCornerShelvesPlan(
                     side: 'left',
                     loc: { x: xFrontHole, y: y0 + bokLTh, z: pinCenterZ },
                     rotation: { x: -Math.PI / 2, y: 0, z: 0 },
-                    params: { shelfIndex: i, position: 'LF', side: 'left' }
+                    params: { shelfIndex: i, shelfKey: `corner_shelf_${i}`, position: 'LF', side: 'left' }
                 },
                 {
                     id: `corner_shelf_${i}_pin_LB`,
@@ -340,7 +347,7 @@ export function calculateCornerShelvesPlan(
                     side: 'left',
                     loc: { x: xBackHole, y: y0 + bokLTh, z: pinCenterZ },
                     rotation: { x: -Math.PI / 2, y: 0, z: 0 },
-                    params: { shelfIndex: i, position: 'LB', side: 'left' }
+                    params: { shelfIndex: i, shelfKey: `corner_shelf_${i}`, position: 'LB', side: 'left' }
                 },
                 {
                     id: `corner_shelf_${i}_pin_RF`,
@@ -350,7 +357,7 @@ export function calculateCornerShelvesPlan(
                     side: 'right',
                     loc: { x: x1 - bokPTh, y: yFrontHole, z: pinCenterZ },
                     rotation: { x: 0, y: 0, z: Math.PI / 2 },
-                    params: { shelfIndex: i, position: 'RF', side: 'right' }
+                    params: { shelfIndex: i, shelfKey: `corner_shelf_${i}`, position: 'RF', side: 'right' }
                 },
                 {
                     id: `corner_shelf_${i}_pin_RB`,
@@ -360,13 +367,14 @@ export function calculateCornerShelvesPlan(
                     side: 'right',
                     loc: { x: x1 - bokPTh, y: yBackHole, z: pinCenterZ },
                     rotation: { x: 0, y: 0, z: Math.PI / 2 },
-                    params: { shelfIndex: i, position: 'RB', side: 'right' }
+                    params: { shelfIndex: i, shelfKey: `corner_shelf_${i}`, position: 'RB', side: 'right' }
                 }
             );
         }
 
         parts.push({
             name: `Polka_${i}`,
+            key: `corner_shelf_${i}`,
             role: 'SHELF',
             report_type: 'SHELF',
             nodeType: 'PART',

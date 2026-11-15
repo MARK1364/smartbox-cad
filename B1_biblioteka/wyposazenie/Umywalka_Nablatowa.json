@@ -1,0 +1,42 @@
+{
+  "id": "sp:umywalka_nablatowa",
+  "name": "Umywalka nablatowa 60x40",
+  "category": "BATHROOM",
+  "units": "mm",
+  "version": "1.0",
+  "type": "SCENE_PROP",
+  "mainContainer": {
+    "widthMm": 600,
+    "heightMm": 140,
+    "depthMm": 400
+  },
+  "visual": {
+    "model": "models/Umywalka_Nablatowa.glb",
+    "units": "mm"
+  },
+  "parts": [
+    {
+      "id": "misa_umywalki",
+      "name": "Misa ceramiczna",
+      "widthMm": 600,
+      "heightMm": 140,
+      "depthMm": 400,
+      "xMm": 0,
+      "yMm": 0,
+      "zMm": 70,
+      "colorHex": "#f8fafc"
+    },
+    {
+      "id": "bateria_umywalkowa",
+      "name": "Bateria stojąca",
+      "widthMm": 50,
+      "heightMm": 180,
+      "depthMm": 160,
+      "xMm": 0,
+      "yMm": 120,
+      "zMm": 160,
+      "colorHex": "#94a3b8"
+    }
+  ]
+}
+

@@ -190,12 +190,24 @@ body, html {
     padding: 6px 8px;
 }
 
+input:disabled,
+select:disabled,
+textarea:disabled,
 .input-row input:disabled,
+.input-row select:disabled,
 .input-row input[readonly] {
-    background: rgba(0, 0, 0, 0.25);
-    color: #94a3b8;
-    border-color: rgba(255, 255, 255, 0.08);
-    cursor: not-allowed;
+    background: rgba(15, 23, 42, 0.75) !important;
+    color: #64748b !important;
+    border: 1px dashed rgba(148, 163, 184, 0.25) !important;
+    cursor: not-allowed !important;
+    opacity: 0.55;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6) !important;
+}
+
+.input-row input:not(:disabled):focus,
+.input-row select:not(:disabled):focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
 }
 
 .input-row .unit {
@@ -669,6 +681,51 @@ body, html {
     flex-shrink: 0;
 }
 
+/* --- Grupy zakładek na belce (Opcja 1 - do testów, łatwe do cofnięcia) --- */
+.topbar-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 4px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom-width: 2px;
+}
+
+.topbar-group--scene {
+    border-bottom-color: rgba(56, 189, 248, 0.45);
+}
+
+.topbar-group--construction {
+    border-bottom-color: rgba(59, 130, 246, 0.55);
+}
+
+.topbar-group--tech {
+    border-bottom-color: rgba(16, 185, 129, 0.45);
+}
+
+.topbar-group--docs {
+    border-bottom-color: rgba(168, 85, 247, 0.45);
+}
+
+.topbar-group-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(203, 213, 225, 0.55);
+    padding: 0 4px 0 2px;
+    white-space: nowrap;
+    user-select: none;
+}
+
+@media (max-width: 1520px) {
+    .topbar-group-label {
+        display: none;
+    }
+}
+
 /* --- Narzędzia transformacji 3D (G i R) z brązowym tłem --- */
 .topbar-transform-group {
     display: flex;
@@ -1000,10 +1057,22 @@ body, html {
 }
 
 .tree-node.selected,
-.tree-node.selected {
-    background: rgba(59, 130, 246, 0.25);
-    color: #60a5fa;
-    font-weight: 500;
+.tree-node.is-selected {
+    background: rgba(56, 189, 248, 0.22) !important;
+    border-left: 3px solid #38bdf8 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+.tree-node.selected .node-name-text,
+.tree-node.is-selected .node-name-text {
+    color: #38bdf8 !important;
+    font-weight: 600 !important;
+}
+
+.tree-node.has-selected-child {
+    background: rgba(56, 189, 248, 0.08) !important;
+    border-left: 3px solid rgba(56, 189, 248, 0.5) !important;
 }
 
 .tree-node-content,
@@ -1024,8 +1093,13 @@ body, html {
 
 .tree-node-actions,
 .tree-node-actions {
-    display: flex;
-    gap: 2px;
+    display: flex !important;
+    align-items: center;
+    gap: 3px;
+    opacity: 1 !important;
+    visibility: visible !important;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .tree-action-btn,
@@ -1033,17 +1107,47 @@ body, html {
     background: transparent;
     border: none;
     font-size: 0.85rem;
-    padding: 1px 3px;
+    padding: 2px 3px;
     cursor: pointer;
-    border-radius: 2px;
-    opacity: 0.5;
-    transition: opacity 0.1s, background 0.1s;
+    border-radius: 3px;
+    opacity: 0.7;
+    color: var(--text-muted, #94a3b8);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
 
 .tree-action-btn:hover,
 .tree-action-btn:hover {
     opacity: 1;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.tree-action-btn.btn-delete:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.tree-action-btn.btn-edit-node:hover {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.2);
+    opacity: 1;
+}
+
+.tree-action-btn.is-frozen,
+.tree-action-btn.btn-freeze:hover,
+.tree-action-btn.btn-freeze-part:hover,
+.tree-action-btn.btn-freeze-hw:hover {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.15);
+    opacity: 1;
+}
+
+.tree-action-btn.is-hidden {
+    color: #ef4444;
+    opacity: 0.9;
 }
 
 .tree-children,
@@ -1752,15 +1856,16 @@ body, html {
     text-align: center;
     font-size: 8px;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
+    line-height: 1.15;
     text-transform: uppercase;
     color: #94a3b8;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 4px;
-    padding: 4px 1px;
-    width: 17px;
+    padding: 4px 2px;
     min-width: 17px;
+    white-space: pre-line;
     flex-shrink: 0;
     user-select: none;
     display: flex;
@@ -1771,13 +1876,15 @@ body, html {
 .ctx-menu-group .ctx-menu-toolbar {
     flex: 1;
     padding: 0;
+    align-self: center;
 }
 
 /* Zwarty pasek ikon z podpisami — jak toolbar formularza HTML */
 .ctx-menu-toolbar {
     display: flex;
     flex-wrap: wrap;
-    align-items: stretch;
+    align-items: flex-start;
+    align-content: flex-start;
     gap: 4px;
     padding: 4px 8px 6px;
 }
@@ -1786,11 +1893,12 @@ body, html {
     display: inline-flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 3px;
     min-width: 52px;
     max-width: 95px;
-    flex: 1 1 0px;
+    height: auto;
+    flex: 0 0 auto;
     padding: 5px 6px 4px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 5px;
@@ -1798,6 +1906,22 @@ body, html {
     color: #cbd5e1;
     cursor: pointer;
     transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.ctx-menu-tool--accent {
+    border-color: rgba(56, 189, 248, 0.45);
+    background: rgba(14, 116, 144, 0.22);
+    color: #e0f2fe;
+}
+
+.ctx-menu-tool--accent:hover {
+    background: rgba(56, 189, 248, 0.35);
+    border-color: rgba(56, 189, 248, 0.8);
+    color: #ffffff;
+}
+
+.ctx-menu-tool--accent .ctx-menu-tool-caption {
+    color: #bae6fd;
 }
 
 .ctx-menu-tool:hover {

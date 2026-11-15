@@ -9,12 +9,13 @@
 
 import { ContextManager } from './context-manager.js';
 import { UIController } from './ui-controller.js';
-import { findFacesAlongRay, findHiddenEntityAlongRay } from './quick-pick/quick-pick-detector.js';
+import { findFacesAlongRay } from './quick-pick/quick-pick-detector.js';
 import { openQuickPick } from './quick-pick/quick-pick-events.js';
 import { closeCadFloatingEdit } from '../src/floating-edit/cad-edit-entity.js';
 import { isDimensionToolActive, getDimensionTool } from '../A8_pmi/pmi-tool-activate.js';
 import { isSmartWallContainer, isWallPart } from '../S4_sciany/smartwall-types.js';
 import { isPanelLike } from './panel-like.js';
+import { syncSelectionHighlights } from './selection-highlight.js';
 import { showCadTreeContextMenu, type TreeContextMenuData } from '../src/module-data/tree-context-menu.js';
 
 export class ContextMenuHandler {
@@ -95,6 +96,10 @@ export class ContextMenuHandler {
         const meta = mesh?.metadata;
         if (meta?.containerId) {
             const c = tryNode(meta.containerId);
+            if (c) return c;
+        }
+        if (meta?.panelModel?.id) {
+            const c = tryNode(meta.panelModel.id);
             if (c) return c;
         }
         if (meta?.panelId || meta?.nodeId || meta?.modelId || meta?.id) {
@@ -284,6 +289,36 @@ export class ContextMenuHandler {
                 }
             }
 
+            // To co ukryte nie istnieje dla wyboru: filtrujemy siatki wyłączone lub należące do ukrytych elementów
+            const isMeshVisibleForPick = (mesh: any): boolean => {
+                if (!mesh) return false;
+                if (typeof mesh.isEnabled === 'function' && !mesh.isEnabled()) return false;
+                if (mesh.isVisible === false) return false;
+                const meta = mesh.metadata;
+                if (meta) {
+                    if (meta.visible === false) return false;
+                    const pm = meta.panelModel || meta.model;
+                    if (pm && pm.visible === false) return false;
+                }
+                return true;
+            };
+
+            const generalPick = viewport.scene.pick(
+                viewport.scene.pointerX,
+                viewport.scene.pointerY,
+                (mesh: any) => isMeshVisibleForPick(mesh)
+            );
+            const pickedMesh = (generalPick && generalPick.hit) ? generalPick.pickedMesh : null;
+
+            const pickResult = viewport.scene.pick(
+                viewport.scene.pointerX,
+                viewport.scene.pointerY,
+                (mesh: any) => isMeshVisibleForPick(mesh) && Boolean(mesh.metadata && mesh.metadata.faceName)
+            );
+
+            const clickedFaceMesh = (pickResult && pickResult.hit) ? pickResult.pickedMesh : null;
+            const clickedFaceName = clickedFaceMesh ? clickedFaceMesh.metadata.faceName : null;
+
             const glcOrDatumPick = viewport.scene.pick(
                 viewport.scene.pointerX,
                 viewport.scene.pointerY,
@@ -295,7 +330,22 @@ export class ContextMenuHandler {
                     )
                 )
             );
-            if (glcOrDatumPick && glcOrDatumPick.hit && glcOrDatumPick.pickedMesh) {
+
+            // Oś GLC lub poziom Z może być kliknięty przez PPM tylko wtedy, gdy NIE jest zasłonięty
+            // przez bryłę modelu (np. front szuflady, korpus, formatkę czy okucie).
+            const isGlcOccluded = Boolean(
+                glcOrDatumPick?.hit && (
+                    (generalPick?.hit &&
+                     generalPick.pickedMesh &&
+                     generalPick.pickedMesh.metadata?.type !== 'datum_level' &&
+                     generalPick.pickedMesh.metadata?.type !== 'glc_axis' &&
+                     generalPick.pickedMesh.metadata?.type !== 'glc_axis_tip' &&
+                     generalPick.distance < glcOrDatumPick.distance - 0.5) ||
+                    (clickedFaceMesh && pickResult && pickResult.distance < glcOrDatumPick.distance - 0.5)
+                )
+            );
+
+            if (glcOrDatumPick && glcOrDatumPick.hit && glcOrDatumPick.pickedMesh && !isGlcOccluded) {
                 const m = glcOrDatumPick.pickedMesh;
                 if (m.metadata?.type === 'datum_level') {
                     showCadTreeContextMenu({
@@ -312,7 +362,7 @@ export class ContextMenuHandler {
                     showCadTreeContextMenu({
                         type: 'glc',
                         id: 'glc_origin',
-                        name: 'Układ globalny (GLC)',
+                        name: 'Podłoga bazowa',
                         pickedZ_mm,
                         clientX: e.clientX,
                         clientY: e.clientY,
@@ -320,21 +370,6 @@ export class ContextMenuHandler {
                     return;
                 }
             }
-
-            const generalPick = viewport.scene.pick(
-                viewport.scene.pointerX,
-                viewport.scene.pointerY
-            );
-            const pickedMesh = (generalPick && generalPick.hit) ? generalPick.pickedMesh : null;
-
-            const pickResult = viewport.scene.pick(
-                viewport.scene.pointerX,
-                viewport.scene.pointerY,
-                (mesh: any) => mesh.metadata && mesh.metadata.faceName
-            );
-
-            const clickedFaceMesh = (pickResult && pickResult.hit) ? pickResult.pickedMesh : null;
-            const clickedFaceName = clickedFaceMesh ? clickedFaceMesh.metadata.faceName : null;
 
             if (clickedFaceMesh && clickedFaceName) {
                 facePicker.selectedFace = clickedFaceMesh;
@@ -368,7 +403,15 @@ export class ContextMenuHandler {
 
             const applianceTarget = this.resolveApplianceTarget(effectiveMesh, doc, inspected);
             const wallTarget = this.resolveWallTarget(effectiveMesh, doc, inspected);
-            const containerTarget = this.resolveContainerTarget(effectiveMesh, doc, inspected);
+            let containerTarget = this.resolveContainerTarget(effectiveMesh, doc, inspected);
+
+            const activeEntity = doc.activeEntity;
+            const isActivePanel = Boolean(activeEntity && isPanelLike(activeEntity) && (activeEntity as any).visible !== false);
+
+            // Gdy aktywna jest formatka — kontener smartframe jest pomijany w wyborze, a PPM tyczy się aktywnej formatki
+            if (isActivePanel) {
+                containerTarget = null;
+            }
 
             let data: TreeContextMenuData;
 
@@ -455,13 +498,43 @@ export class ContextMenuHandler {
                         quickPickCandidates: quickPickCandidates.length > 1 ? quickPickCandidates : undefined,
                     };
                 }
-            } else if (effectiveMesh?.metadata?.type === 'hardware' || inspected?.hardwareId) {
-                const hwId = pickedMesh?.metadata?.id || inspected?.id || inspected?.hardwareId;
-                UIController.instance?.emitTree?.('select-hardware', { id: hwId });
+            } else if (effectiveMesh?.metadata?.type === 'hardware' || effectiveMesh?.metadata?.parentHardwareMesh || inspected?.hardwareId) {
+                const hwNode = effectiveMesh?.metadata?.cadNode || effectiveMesh?.metadata?.parentHardwareMesh?.metadata?.cadNode;
+                const hwModel = hwNode?.domainData ?? hwNode;
+                const subType = effectiveMesh?.metadata?.subType || pickedMesh?.metadata?.subType;
+                const subName = effectiveMesh?.metadata?.subName || pickedMesh?.metadata?.subName;
+                const subId = effectiveMesh?.metadata?.id || pickedMesh?.metadata?.id;
+                const hwId = subType ? (subId || `${hwNode?.id}_${subType}`) : (hwNode?.id || hwModel?.id || pickedMesh?.metadata?.id || inspected?.id || inspected?.hardwareId);
+
+                const activeEntity = subType ? {
+                    id: hwId,
+                    name: subName || `${hwNode?.name || 'Okucie'} - ${subType}`,
+                    subType,
+                    lengthMm: effectiveMesh?.metadata?.lengthMm || pickedMesh?.metadata?.lengthMm,
+                    parentId: hwNode?.id,
+                    cadNode: hwNode,
+                    domainData: hwModel,
+                    mesh: effectiveMesh || pickedMesh,
+                    type: 'hardware_subpart',
+                } : (hwModel ?? hwNode);
+
+                if (activeEntity) {
+                    doc.setActiveEntity?.(activeEntity);
+                }
+                UIController.instance?.emitTree?.('select-hardware', {
+                    id: hwId,
+                    parentId: hwNode?.id,
+                    subType,
+                    name: subName || hwNode?.name,
+                });
+                const cm = ContextManager.instance;
+                syncSelectionHighlights({ document: doc, panelViews: cm.panelViews, containerViews: cm.containerViews } as any);
                 data = {
                     type: 'hardware',
                     id: hwId,
-                    name: pickedMesh?.metadata?.name || inspected?.name,
+                    parentId: hwNode?.id,
+                    subType,
+                    name: subName || pickedMesh?.metadata?.name || inspected?.name,
                     clientX: e.clientX,
                     clientY: e.clientY,
                     quickPickCandidates: quickPickCandidates.length > 1 ? quickPickCandidates : undefined,
@@ -489,16 +562,22 @@ export class ContextMenuHandler {
                 };
             } else {
                 // Sprawdź formatkę (panel)
-                const panel = effectiveMesh?.metadata?.panelModel
+                const pickedPanel = effectiveMesh?.metadata?.panelModel
                     || pickedMesh?.metadata?.panelModel
                     || (inspected?.panelId ? (doc.findNode?.(inspected.panelId)?.domainData || getAllPanels().find((p: any) => p.id === inspected.panelId)) : null)
                     || (effectiveMesh?.metadata?.panelId ? (doc.findNode?.(effectiveMesh.metadata.panelId)?.domainData || getAllPanels().find((p: any) => p.id === effectiveMesh.metadata.panelId)) : null)
                     || (pickedMesh?.metadata?.panelId ? (doc.findNode?.(pickedMesh.metadata.panelId)?.domainData || getAllPanels().find((p: any) => p.id === pickedMesh.metadata.panelId)) : null)
                     || (effectiveMesh?.metadata?.id ? (doc.findNode?.(effectiveMesh.metadata.id)?.domainData || getAllPanels().find((p: any) => p.id === effectiveMesh.metadata.id)) : null)
-                    || (pickedMesh?.metadata?.id ? (doc.findNode?.(pickedMesh.metadata.id)?.domainData || getAllPanels().find((p: any) => p.id === pickedMesh.metadata.id)) : null)
-                    || (doc.activeEntity && isPanelLike(doc.activeEntity) && !containerTarget ? doc.activeEntity : null);
+                    || (pickedMesh?.metadata?.id ? (doc.findNode?.(pickedMesh.metadata.id)?.domainData || getAllPanels().find((p: any) => p.id === pickedMesh.metadata.id)) : null);
 
-                if (panel) {
+                // Jeśli kliknięto w inną widoczną formatkę — wybierz ją.
+                // Jeśli nie trafiono bezpośrednio w formatkę, ale formatka jest aktywna — PPM tyczy się aktywnej formatki.
+                const panel = (pickedPanel && (pickedPanel as any).visible !== false)
+                    ? pickedPanel
+                    : (isActivePanel ? activeEntity : null);
+                const shouldTargetPanel = Boolean(panel && (panel as any).visible !== false);
+
+                if (shouldTargetPanel) {
                     doc.setActiveEntity?.(panel);
                     UIController.instance?.emitTree?.('select-part', { id: panel.id, uuid: panel.id });
                     data = {
@@ -506,7 +585,7 @@ export class ContextMenuHandler {
                         id: panel.id,
                         uuid: panel.id,
                         name: panel.name,
-                        visible: panel.visible !== false,
+                        visible: true,
                         isManual: (panel as any).engineManaged === false,
                         frozen: !!(panel as any).frozen,
                         clientX: e.clientX,
@@ -527,80 +606,13 @@ export class ContextMenuHandler {
                         quickPickCandidates: quickPickCandidates.length > 1 ? quickPickCandidates : undefined,
                     };
                 } else {
-                    // Sprawdź, czy pod kursorem znajduje się ukryty element (formatka, okucie, korpus)
-                    const hiddenHit = findHiddenEntityAlongRay(
-                        viewport.scene,
-                        viewport.scene.pointerX,
-                        viewport.scene.pointerY,
-                        doc,
-                        ContextManager.instance.panelViews,
-                        ContextManager.instance.hardwareViews
-                    );
-                    if (hiddenHit) {
-                        if (hiddenHit.type === 'part') {
-                            doc.setActiveEntity?.(hiddenHit.entity);
-                            UIController.instance?.emitTree?.('select-part', { id: hiddenHit.id, uuid: hiddenHit.id });
-                            data = {
-                                type: 'part',
-                                id: hiddenHit.id,
-                                uuid: hiddenHit.id,
-                                name: hiddenHit.name,
-                                visible: false,
-                                isManual: (hiddenHit.entity as any).engineManaged === false,
-                                frozen: !!(hiddenHit.entity as any).frozen,
-                                clientX: e.clientX,
-                                clientY: e.clientY,
-                            };
-                        } else if (hiddenHit.type === 'hardware') {
-                            UIController.instance?.emitTree?.('select-hardware', { id: hiddenHit.id });
-                            data = {
-                                type: 'hardware',
-                                id: hiddenHit.id,
-                                name: hiddenHit.name,
-                                visible: false,
-                                clientX: e.clientX,
-                                clientY: e.clientY,
-                            };
-                        } else {
-                            data = {
-                                type: 'container',
-                                id: hiddenHit.id,
-                                name: hiddenHit.name,
-                                visible: false,
-                                clientX: e.clientX,
-                                clientY: e.clientY,
-                            };
-                        }
-                    } else {
-                        // Puste miejsce (tło sceny / podłoga)
-                        data = {
-                            type: 'project',
-                            id: 'root',
-                            name: 'Projekt',
-                            clientX: e.clientX,
-                            clientY: e.clientY,
-                        };
-                    }
-                }
-            }
-
-            // Jeśli kliknięty obiekt jest widoczny, sprawdź czy wzdłuż promienia pod kursorem znajduje się dodatkowo ukryty element
-            if (data && data.visible !== false && data.id !== 'root') {
-                const hiddenHit = findHiddenEntityAlongRay(
-                    viewport.scene,
-                    viewport.scene.pointerX,
-                    viewport.scene.pointerY,
-                    doc,
-                    ContextManager.instance.panelViews,
-                    ContextManager.instance.hardwareViews
-                );
-                if (hiddenHit && hiddenHit.id !== data.id) {
-                    data.hiddenUnderCursor = {
-                        id: hiddenHit.id,
-                        uuid: hiddenHit.uuid || hiddenHit.id,
-                        name: hiddenHit.name,
-                        type: hiddenHit.type,
-                        entity: hiddenHit.entity,
+                    // Puste miejsce (tło sceny / podłoga) — to co ukryte nie istnieje dla wyboru
+                    data = {
+                        type: 'project',
+                        id: 'root',
+                        name: 'Projekt',
+                        clientX: e.clientX,
+                        clientY: e.clientY,
                     };
                 }
             }

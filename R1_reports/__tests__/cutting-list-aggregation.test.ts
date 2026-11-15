@@ -152,6 +152,8 @@ describe('R1_reports — Lista formatek do hurtowni (Scalone vs Rozpisane)', () 
         expect(fullHtml).toContain('Scalenie');
         expect(fullHtml).toContain('Rozpisane');
         expect(fullHtml).toContain('switchCuttingMode');
+        expect(fullHtml).toContain('const matName = headerCells[0]?.textContent?.trim() ||');
+        expect(fullHtml).toContain('const thick = headerCells[1]?.textContent?.trim() ||');
     });
 
     it('generateCsv generuje plik w trybie scalonym (domyślnym) lub rozpisanym', () => {
@@ -177,4 +179,3 @@ describe('R1_reports — Lista formatek do hurtowni (Scalone vs Rozpisane)', () 
         expect(detailedLines[2]).toContain(';1;');
     });
 });
-

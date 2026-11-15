@@ -312,7 +312,7 @@ describe('buildBackGrooves overlap depth', () => {
         };
 
         // Przesuwamy wieniec dolny o 150 mm w górę (shiftZ = -150)
-        korpusOffsetGizmoHandler.previewOffset(container, 'Wieniec_D_shiftZ', -150);
+        korpusOffsetGizmoHandler.commitOffset(container, 'Wieniec_D_shiftZ', 0, -150);
 
         // Margines dolny pleców przeliczył się z 11 mm na 11 + 150 = 161 mm:
         expect(container.generatorParams.offsets['Plecy_-Y']).toBe(161);
@@ -345,7 +345,7 @@ describe('buildBackGrooves overlap depth', () => {
         expect(botGroove).toBeUndefined();
 
         // 4. Gdy użytkownik następnie wpisze na zielonym gizmie pleców Plecy_-Y = 18 (na równo ze spodem podniesionego wieńca):
-        korpusOffsetGizmoHandler.previewOffset(container, 'Plecy_-Y', 18);
+        korpusOffsetGizmoHandler.commitOffset(container, 'Plecy_-Y', 161, 18);
         const planFlush = planCabinet({
             szerokosc_mm: 1000,
             wysokosc_mm: 750,
@@ -379,7 +379,7 @@ describe('buildBackGrooves overlap depth', () => {
         };
 
         // Przesuwamy lewy bok o 50 mm do środka (+X w CAD -> przy sign = -1 wartość shiftX = -50)
-        korpusOffsetGizmoHandler.previewOffset(container, 'Bok_L_shiftX', -50);
+        korpusOffsetGizmoHandler.commitOffset(container, 'Bok_L_shiftX', 0, -50);
 
         // Margines lewy pleców przeliczył się z 11 mm na 11 + 50 = 61 mm:
         expect(container.generatorParams.offsets['Plecy_-X']).toBe(61);

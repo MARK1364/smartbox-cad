@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import korpus3Rules from '../korpus3_3_rules.json';
-import rogowy90Rules from '../korpus_rogowy90_rules.json';
-import rogowy1Rules from '../korpus_rogowy1_rules.json';
-import skosnyRules from '../korpus_skosny_rules.json';
+import { getModuleRules } from '../../A1_core/rules-vault.js';
+const korpus3Rules = getModuleRules('korpus3');
+const rogowy90Rules = getModuleRules('korpus_rogowy90');
+const rogowy1Rules = getModuleRules('korpus_rogowy1');
+const skosnyRules = getModuleRules('korpus_skosny');
 
 const ABS = { active: true, type_id: '0.008x0.022' };
 const NONE = { active: false, type_id: 'none' };

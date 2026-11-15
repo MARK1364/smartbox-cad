@@ -4,7 +4,7 @@
  * Zakładka drzewa operacji technologicznych, selekcji konturu z 3D oraz modala edycji cech.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CNCProgramState } from '../../core/cam-state-store.js';
 import { ToolLibrary } from '../../processor/tool-library.js';
 import { DrillingStrategy } from '../../strategies/drilling-strategy.js';
@@ -41,14 +41,49 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
     onGenerateCLData
 }) => {
     const [selectedStrategyId, setSelectedStrategyId] = useState<string>('profiling_25d');
-    const [editingFeatureIndex, setEditingFeatureIndex] = useState<number | null>(null);
+    const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
     const [tempFeatureEdit, setTempFeatureEdit] = useState<any>(null);
     const [hoveredFeatureIdx, setHoveredFeatureIdx] = useState<number | null>(null);
-    const [pinnedPreviewIdx, setPinnedPreviewIdx] = useState<number | null>(null);
+    const [pinnedPreviewFeatureId, setPinnedPreviewFeatureId] = useState<string | null>(null);
+    const lastHighlightedViewRef = useRef<any>(null);
     useLocale();
 
     const tools = toolLibrary.getAllTools();
     const strategies = [new DrillingStrategy(), new ProfilingStrategy(), new PocketingStrategy()];
+
+    // Indeks edytowanej operacji wyliczamy z aktualnej listy — identyfikatorem
+    // pozostaje featureId, więc przesunięcie pozycji nie zmienia edytowanej cechy.
+    const editingFeatureIndex = editingFeatureId === null
+        ? -1
+        : program.features.findIndex(f => f.featureId === editingFeatureId);
+
+    useEffect(() => {
+        if (editingFeatureId !== null && editingFeatureIndex < 0) {
+            setEditingFeatureId(null);
+            setTempFeatureEdit(null);
+        }
+    }, [editingFeatureId, editingFeatureIndex]);
+
+    // Indeks przypiętej operacji wyliczamy z aktualnej listy, żeby usunięcie
+    // wcześniejszej pozycji nie przesunęło podglądu na inną operację.
+    const pinnedPreviewIdx = pinnedPreviewFeatureId === null
+        ? -1
+        : program.features.findIndex(f => f.featureId === pinnedPreviewFeatureId);
+    const pinnedPreviewFeature = pinnedPreviewIdx >= 0 ? program.features[pinnedPreviewIdx] : null;
+
+    const clearLastHighlightedView = () => {
+        const previous = lastHighlightedViewRef.current;
+        if (previous && typeof previous.clearFeatureHighlights === 'function') {
+            previous.clearFeatureHighlights();
+        }
+        lastHighlightedViewRef.current = null;
+    };
+
+    const trackHighlightedView = (view: any) => {
+        if (lastHighlightedViewRef.current === view) return;
+        clearLastHighlightedView();
+        lastHighlightedViewRef.current = view;
+    };
 
     const handleToolAssign = (featureId: string, toolId: string) => {
         onUpdateProgram(p => ({
@@ -60,34 +95,55 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
 
     const handleOpenEditModal = (idx: number) => {
         const feat = program.features[idx];
-        setEditingFeatureIndex(idx);
+        if (!feat) return;
+        setEditingFeatureId(feat.featureId);
         setTempFeatureEdit(JSON.parse(JSON.stringify(feat)));
     };
 
     const handleSaveEditModal = () => {
-        if (editingFeatureIndex === null || !tempFeatureEdit) return;
+        if (editingFeatureId === null || !tempFeatureEdit) return;
         onUpdateProgram(p => {
+            const targetIndex = p.features.findIndex(f => f.featureId === editingFeatureId);
+            if (targetIndex < 0) return p;
             const updated = [...p.features];
-            updated[editingFeatureIndex] = tempFeatureEdit;
-            return { ...p, features: updated };
+            updated[targetIndex] = tempFeatureEdit;
+            const nextAssignments = { ...(p.toolAssignments || {}) };
+            if (tempFeatureEdit.toolId) {
+                nextAssignments[tempFeatureEdit.featureId] = tempFeatureEdit.toolId;
+            } else {
+                delete nextAssignments[tempFeatureEdit.featureId];
+            }
+            if (tempFeatureEdit.featureId !== editingFeatureId) {
+                delete nextAssignments[editingFeatureId];
+            }
+            return { ...p, features: updated, toolAssignments: nextAssignments };
         });
-        setEditingFeatureIndex(null);
+        setEditingFeatureId(null);
         setTempFeatureEdit(null);
     };
 
     const handleDeleteFeature = (idx: number) => {
-        onUpdateProgram(p => ({
-            ...p,
-            features: p.features.filter((_, i) => i !== idx)
-        }));
-        if (pinnedPreviewIdx === idx) {
-            setPinnedPreviewIdx(null);
+        const deletedFeatureId = program.features[idx]?.featureId;
+        onUpdateProgram(p => {
+            const nextAssignments = { ...(p.toolAssignments || {}) };
+            if (deletedFeatureId) {
+                delete nextAssignments[deletedFeatureId];
+            }
+            return {
+                ...p,
+                features: p.features.filter((_, i) => i !== idx),
+                toolAssignments: nextAssignments
+            };
+        });
+        if (deletedFeatureId !== undefined && pinnedPreviewFeatureId === deletedFeatureId) {
+            setPinnedPreviewFeatureId(null);
             const pvs = ContextManager.instance.panelViews as Map<any, any> | undefined;
             const targetPanel = program.targetPanel;
             const view = pvs && targetPanel ? pvs.get(targetPanel) : null;
             if (view && typeof view.clearFeatureHighlights === 'function') {
                 view.clearFeatureHighlights();
             }
+            clearLastHighlightedView();
             CNCEngine.getInstance().visualizer?.clearHighlight();
         }
     };
@@ -96,14 +152,19 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
         const pvs = ContextManager.instance.panelViews as Map<any, any> | undefined;
         if (!pvs || pvs.size === 0) return null;
         const targetPanel = program.targetPanel;
-        if (targetPanel && pvs.has(targetPanel)) return pvs.get(targetPanel);
+
+        // Program ma konkretny cel: bez widoku tego panelu nie wolno podstawiać innej formatki.
         if (targetPanel) {
+            if (pvs.has(targetPanel)) return pvs.get(targetPanel);
             for (const [p, v] of pvs.entries()) {
                 if (p === targetPanel || (p?.id && targetPanel?.id && p.id === targetPanel.id)) {
                     return v;
                 }
             }
+            return null;
         }
+
+        // Tylko program bez targetPanel może korzystać z aktywnej/zaznaczonej formatki.
         const act = ContextManager.instance.activePanel || ContextManager.instance.selectedPanel;
         if (act && pvs.has(act)) return pvs.get(act);
         if (act) {
@@ -113,19 +174,25 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
                 }
             }
         }
-        return pvs.values().next().value || null;
+        return null;
     };
 
     const handleFeatureHover = (feat: any, idx: number) => {
         setHoveredFeatureIdx(idx);
         const engine = CNCEngine.getInstance();
         const view = resolveCurrentPanelView();
+        if (!view) {
+            clearLastHighlightedView();
+            engine.visualizer?.clearHighlight();
+            return;
+        }
+        trackHighlightedView(view);
         let handled = false;
-        if (view && typeof view.highlightFeature === 'function') {
+        if (typeof view.highlightFeature === 'function') {
             handled = Boolean(view.highlightFeature(feat, true));
         }
         if (!handled) {
-            engine.visualizer?.highlightFeature(feat, view?.root || null);
+            engine.visualizer?.highlightFeature(feat, view.root || null);
         } else {
             engine.visualizer?.clearHighlight();
         }
@@ -135,51 +202,65 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
         setHoveredFeatureIdx(null);
         const engine = CNCEngine.getInstance();
         const view = resolveCurrentPanelView();
-        if (view && typeof view.clearFeatureHighlights === 'function') {
+        if (!view) {
+            clearLastHighlightedView();
+            engine.visualizer?.clearHighlight();
+            return;
+        }
+        trackHighlightedView(view);
+        if (typeof view.clearFeatureHighlights === 'function') {
             view.clearFeatureHighlights();
         }
-        if (pinnedPreviewIdx !== null) {
-            const pinnedFeat = program.features[pinnedPreviewIdx];
-            if (pinnedFeat) {
-                let handled = false;
-                if (view && typeof view.highlightFeature === 'function') {
-                    handled = Boolean(view.highlightFeature(pinnedFeat, true));
-                }
-                if (!handled) {
-                    engine.visualizer?.highlightFeature(pinnedFeat, view?.root || null);
-                } else {
-                    engine.visualizer?.clearHighlight();
-                }
-                return;
+        if (pinnedPreviewFeature) {
+            let handled = false;
+            if (typeof view.highlightFeature === 'function') {
+                handled = Boolean(view.highlightFeature(pinnedPreviewFeature, true));
             }
+            if (!handled) {
+                engine.visualizer?.highlightFeature(pinnedPreviewFeature, view.root || null);
+            } else {
+                engine.visualizer?.clearHighlight();
+            }
+            return;
         }
         engine.visualizer?.clearHighlight();
     };
 
-    const handleTogglePinFeature = (feat: any, idx: number) => {
+    const handleTogglePinFeature = (feat: any, _idx: number) => {
         const engine = CNCEngine.getInstance();
         const view = resolveCurrentPanelView();
 
-        if (pinnedPreviewIdx === idx) {
-            setPinnedPreviewIdx(null);
-            if (view && typeof view.clearFeatureHighlights === 'function') {
+        if (pinnedPreviewFeatureId === feat.featureId) {
+            setPinnedPreviewFeatureId(null);
+            // Zawsze czyścimy zapamiętany widok, nawet gdy bieżący nie da się rozwiązać.
+            const remembered = lastHighlightedViewRef.current;
+            clearLastHighlightedView();
+            if (view && view !== remembered && typeof view.clearFeatureHighlights === 'function') {
                 view.clearFeatureHighlights();
             }
             engine.visualizer?.clearHighlight();
+            return;
+        }
+
+        if (!view) {
+            clearLastHighlightedView();
+            engine.visualizer?.clearHighlight();
+            return;
+        }
+
+        setPinnedPreviewFeatureId(feat.featureId);
+        trackHighlightedView(view);
+        if (typeof view.clearFeatureHighlights === 'function') {
+            view.clearFeatureHighlights();
+        }
+        let handled = false;
+        if (typeof view.highlightFeature === 'function') {
+            handled = Boolean(view.highlightFeature(feat, true));
+        }
+        if (!handled) {
+            engine.visualizer?.highlightFeature(feat, view.root || null);
         } else {
-            setPinnedPreviewIdx(idx);
-            if (view && typeof view.clearFeatureHighlights === 'function') {
-                view.clearFeatureHighlights();
-            }
-            let handled = false;
-            if (view && typeof view.highlightFeature === 'function') {
-                handled = Boolean(view.highlightFeature(feat, true));
-            }
-            if (!handled) {
-                engine.visualizer?.highlightFeature(feat, view?.root || null);
-            } else {
-                engine.visualizer?.clearHighlight();
-            }
+            engine.visualizer?.clearHighlight();
         }
     };
 
@@ -222,7 +303,7 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
                             const assignedToolId = feat.toolId || program.toolAssignments[feat.featureId] || '';
 
                             const isHovered = hoveredFeatureIdx === idx;
-                            const isPinned = pinnedPreviewIdx === idx;
+                            const isPinned = pinnedPreviewFeatureId !== null && feat.featureId === pinnedPreviewFeatureId;
                             const isActiveHighlight = isHovered || isPinned;
 
                             return (
@@ -400,7 +481,7 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
             </div>
 
             {/* Modal edycji właściwości operacji */}
-            {editingFeatureIndex !== null && tempFeatureEdit && (
+            {editingFeatureIndex >= 0 && tempFeatureEdit && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
                     <div className="bg-gray-900 border border-gray-700 text-white p-4 rounded-lg w-96 space-y-3 shadow-2xl">
                         <h4 className="font-bold text-sm text-blue-400 border-b border-gray-800 pb-2">
@@ -500,7 +581,7 @@ export const OperationsTab: React.FC<OperationsTabProps> = ({
                                 {tx(cncTekst, 'operations.save', TX_NS)}
                             </button>
                             <button
-                                onClick={() => { setEditingFeatureIndex(null); setTempFeatureEdit(null); }}
+                                onClick={() => { setEditingFeatureId(null); setTempFeatureEdit(null); }}
                                 className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 py-1.5 px-3 rounded text-xs"
                             >
                                 {tx(cncTekst, 'operations.cancel', TX_NS)}

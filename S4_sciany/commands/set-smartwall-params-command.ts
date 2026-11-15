@@ -198,9 +198,11 @@ export class SetSmartWallParamsCommand implements Command {
         document.transaction(() => {
             writeSnapshotNm(container, snap);
             rebuildSmartWall(container, document);
-            if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-                window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-            }
+            document.afterCommit(() => {
+                if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
+                    window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+                }
+            });
         }, () => restoreSmartWallState(document, container, node, snapshot));
     }
 

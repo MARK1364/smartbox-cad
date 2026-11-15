@@ -16,8 +16,9 @@ import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import type { DetectedBay } from './02_bloki-bay-detector.js';
 import { update_bloki_core } from './01_bloki-core.js';
 import { applyCornerDoorsDefaultRefs } from './07_corner-doors-refs.js';
-import doorsRules from './05_doors_3_rules_V1.json';
-import skosneDoorsRules from './06_skosne-doors_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const doorsRules = getModuleRules('05_doors');
+const skosneDoorsRules = getModuleRules('06_skosne-doors');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { calculateDefaultSlidingDoorsCount } from './19_sliding-doors-engine.js';
 import type {
@@ -385,6 +386,7 @@ import { SyncDoorDrillingsCommand } from './commands/sync-door-drillings-command
 import { SyncDrawerDrillingsCommand } from './commands/sync-drawer-drillings-command.js';
 import { SyncFlapsDrillingsCommand } from './commands/sync-flaps-drillings-command.js';
 import { SyncTubesDrillingsCommand } from './commands/sync-tubes-drillings-command.js';
+import { SyncLedMachiningCommand } from './commands/sync-led-machining-command.js';
 import { ClearBlokiDrillingsCommand } from './commands/clear-blok-drillings-command.js';
 import { withBlokiTransaction } from './bloki-transaction.js';
 
@@ -430,6 +432,7 @@ export class InsertBlokiCommand implements Command {
             new SyncDrawerDrillingsCommand(this._targetParentId).execute(document);
             new SyncFlapsDrillingsCommand(this._targetParentId).execute(document);
             new SyncTubesDrillingsCommand(this._targetParentId).execute(document);
+            new SyncLedMachiningCommand(this._targetParentId).execute(document);
         }, true);
         this._isApplied = false;
     }
@@ -487,7 +490,7 @@ export function createBlokInDetectedBay(
         xMin: { partKey: leftRef.nodeName || 'Bok Lewy', face: leftRef.face || leftRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: leftRef.nodeId },
         xMax: { partKey: rightRef.nodeName || 'Bok Prawy', face: rightRef.face || rightRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: rightRef.nodeId },
         zMin: { partKey: bottomRef.nodeName || 'Dół', face: bottomRef.face || bottomRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: bottomRef.nodeId },
-        zMax: { partKey: topRef.nodeName || 'Góra', face: topRef.face || topRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_MINUS'), panelId: topRef.nodeId },
+        zMax: { partKey: topRef.nodeName || 'Góra', face: topRef.face || topRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: topRef.nodeId },
         yMin: { partKey: frontRef.nodeName || 'Przód', face: frontRef.face || frontRef.faceName || 'FACE_X_PLUS', panelId: frontRef.nodeId },
         yMax: { partKey: backRef.nodeName || 'Tył', face: backRef.face || backRef.faceName || (isExternal ? 'FACE_Z_MINUS' : 'FACE_Z_PLUS'), panelId: backRef.nodeId }
     };

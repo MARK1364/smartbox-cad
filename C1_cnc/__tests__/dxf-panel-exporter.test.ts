@@ -86,9 +86,58 @@ describe('DXF Panel Exporter (Uniwersalny Standard Stolarski)', () => {
             expect(dims.thickness).toBe(18);
         });
 
-        it('rzuca błąd przy braku formatki lub nieprawidłowych wymiarach', () => {
+        it('rzuca błąd przy braku formatki lub nieprawidłowych wymiarach (w tym NaN / Infinity)', () => {
             expect(() => getPanelDimensionsMm(null)).toThrow(/Brak referencji do formatki/);
             expect(() => getPanelDimensionsMm({ width: -10, height: 100, thickness: 18 })).toThrow(/nie posiada poprawnych wymiarów/);
+            expect(() => getPanelDimensionsMm({ width: NaN, height: 100, thickness: 18 })).toThrow(/nie posiada poprawnych wymiarów/);
+            expect(() => getPanelDimensionsMm({ width: Infinity, height: 100, thickness: 18 })).toThrow(/nie posiada poprawnych wymiarów/);
+            expect(() => getPanelDimensionsMm(testPanel, { dimensionsMm: { width: NaN, height: 100, thickness: 18 } })).toThrow(/niepoprawne wymiary/);
+        });
+
+        it('FAIL-FAST: ścieżka lokalna (bez WCS) odrzuca nieznaną ścianę oraz jawne zera w parametrach otworu/wpustu/kieszeni', () => {
+            const makeLocalPanel = (feat: any) => ({
+                id: 'panel_local_no_wcs',
+                name: 'Formatka bez WCS',
+                width: mmToNm(600),
+                height: mmToNm(800),
+                thickness: mmToNm(18),
+                features: [feat]
+            });
+
+            expect(() => generatePanelDxf(makeLocalPanel({
+                id: 'h_bad_face',
+                type: 'hole',
+                face: 'UNKNOWN_FACE',
+                params: { u: 50, v: 50, diameter: 8, depth: 12 }
+            }))).toThrow(/Niekanoniczna nazwa ściany/);
+
+            expect(() => generatePanelDxf(makeLocalPanel({
+                id: 'h_zero_dia',
+                type: 'hole',
+                face: 'FACE_Z_PLUS',
+                params: { u: 50, v: 50, diameter: 0, depth: 12 }
+            }))).toThrow(/Średnica otworu musi być skończoną liczbą dodatnią/);
+
+            expect(() => generatePanelDxf(makeLocalPanel({
+                id: 'h_zero_depth',
+                type: 'hole',
+                face: 'FACE_Z_PLUS',
+                params: { u: 50, v: 50, diameter: 8, depth: 0 }
+            }))).toThrow(/Głębokość wiercenia musi być niezerową skończoną liczbą/);
+
+            expect(() => generatePanelDxf(makeLocalPanel({
+                id: 'g_zero_width',
+                type: 'groove',
+                face: 'FACE_Z_PLUS',
+                params: { u: 20, v: 0, width: 0, length: 500, depth: 8 }
+            }))).toThrow(/Szerokość wpustu musi być dodatnią liczbą skończoną/);
+
+            expect(() => generatePanelDxf(makeLocalPanel({
+                id: 'p_zero_depth',
+                type: 'pocket',
+                face: 'FACE_Z_PLUS',
+                params: { u: 20, v: 20, width: 50, length: 50, depth: 0 }
+            }))).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
         });
 
         it('resolvePanelOutline2D generuje prostokątny obrys dla standardowej płyty', () => {
@@ -331,6 +380,47 @@ describe('DXF Panel Exporter (Uniwersalny Standard Stolarski)', () => {
             expect(payload.workpiece.features.length).toBeGreaterThan(0);
         });
 
+        it('eksportuje otwarty kontur z flagą 70 równą 0 (nie zamyka sztucznie)', () => {
+            const panelWithOpenContour = {
+                ...testPanel,
+                features: [
+                    {
+                        id: 'open_profile_1',
+                        type: 'contour',
+                        face: 'FACE_Z_PLUS',
+                        params: {
+                            depth: 6,
+                            points: [
+                                { x: 50, y: 50, z: 0 },
+                                { x: 200, y: 50, z: 0 },
+                                { x: 200, y: 300, z: 0 }
+                            ],
+                            closed: false
+                        }
+                    }
+                ]
+            };
+            const dxf = generatePanelDxf(panelWithOpenContour);
+            const parsed = parseDxfAscii(dxf);
+            const contourPoly = parsed.entities.find(e => e.type === 'LWPOLYLINE' && e.layer === 'CONTOUR_Z6') as any;
+            expect(contourPoly).toBeDefined();
+            expect(contourPoly.closed).toBe(false);
+        });
+
+        it('eksportuje wiercenie krawędziowe w trybie WCS wraz z linią kierunkową w głąb materiału', async () => {
+            const { WcsManager } = await import('../wcs/wcs-manager.js');
+            const { GeometryDataExtractor } = await import('../geometry/geometry-extractor.js');
+            const wcs = new WcsManager('G55');
+            wcs.updateForPanelDimensions(600, 800, 18);
+            const extractor = new GeometryDataExtractor();
+            const extracted = extractor.extractPanelFeatures(testPanel, wcs);
+
+            const dxf = generatePanelDxf(testPanel, { features: extracted.features as any });
+            const parsed = parseDxfAscii(dxf);
+            const edgeLines = parsed.entities.filter(e => e.type === 'LINE' && e.layer.startsWith('DRILL_EDGE'));
+            expect(edgeLines.length).toBeGreaterThan(0);
+        });
+
         it('eksport szafy z półkami (Bok_P) i import z powrotem do CNC z zachowaniem WCS i nieprzelotowych otworów', async () => {
             const doc = new ProjectDocument();
             ContextManager.instance.document = doc;
@@ -391,14 +481,14 @@ describe('DXF Panel Exporter (Uniwersalny Standard Stolarski)', () => {
             expect(g.params.length).toBe(3);               // szerokość frezu wzdłuż V
             expect(g.params.depth).toBe(11);
             expect(g.params.u).toBeCloseTo(7, 1);
-            expect(g.params.v).toBeCloseTo(0, 1);
+            expect(g.params.v).toBeCloseTo(557, 1); // 0 = przód (WCS origin), plecy = 557..560 mm od przodu
 
             // Brak fałszywych profili konturowych powstałych ze zdublowanego obrysu wpustu
             const contours = imported.workpiece.features.filter(f => f.type === 'contour');
             expect(contours.length).toBe(0);
 
             // ─── INWARIANT GEOMETRYCZNY: cecha CAD (WCS) == cecha po imporcie DXF ───
-            // Porównujemy PROSTOKĄTY OBRÓBKI we wspólnym układzie (WCS, róg formatki = 0,0),
+            // Porównujemy PROSTOKĄTY OBRÓBKI we wspólnym układzie (WCS, baza 0,0 = dół-przód),
             // a nie same parametry — dzięki temu zamiana width/length lub lustro osi wyłapie test.
             const { GeometryDataExtractor } = await import('../geometry/geometry-extractor.js');
             const { WcsManager } = await import('../wcs/wcs-manager.js');
@@ -410,7 +500,13 @@ describe('DXF Panel Exporter (Uniwersalny Standard Stolarski)', () => {
             const cornersWcs = [-1, 1].flatMap(sx => [-1, 1].map(sy =>
                 wcs.toWcsCoordinates({ x: sx * pW / 2, y: sy * pH / 2, z: pT / 2 })));
             const minX = Math.min(...cornersWcs.map(c => c.x));
+            const maxX = Math.max(...cornersWcs.map(c => c.x));
             const minY = Math.min(...cornersWcs.map(c => c.y));
+            const maxY = Math.max(...cornersWcs.map(c => c.y));
+            const flipX = minX < -1e-4 && Math.abs(maxX) < 1e-3;
+            const flipY = minY < -1e-4 && Math.abs(maxY) < 1e-3;
+            const toDxfX = (vx: number) => flipX ? -vx : (minX < -1e-4 ? vx - minX : vx);
+            const toDxfY = (vy: number) => flipY ? -vy : (minY < -1e-4 ? vy - minY : vy);
 
             type Rect = [number, number, number, number];
             const norm = (r: Rect): Rect => r.map(v => Math.round(v * 10) / 10) as Rect;
@@ -418,8 +514,8 @@ describe('DXF Panel Exporter (Uniwersalny Standard Stolarski)', () => {
 
             // Wpust: prostokąt CAD z osi + szerokości frezu
             const cadGroove = cadFeatures.find(f => 'startPoint' in f)!;
-            const gx1 = cadGroove.startPoint.x - minX, gy1 = cadGroove.startPoint.y - minY;
-            const gx2 = cadGroove.endPoint.x - minX, gy2 = cadGroove.endPoint.y - minY;
+            const gx1 = toDxfX(cadGroove.startPoint.x), gy1 = toDxfY(cadGroove.startPoint.y);
+            const gx2 = toDxfX(cadGroove.endPoint.x), gy2 = toDxfY(cadGroove.endPoint.y);
             const hw = cadGroove.width / 2;
             const cadRect = norm([
                 Math.min(gx1, gx2) - (Math.abs(gx2 - gx1) < Math.abs(gy2 - gy1) ? hw : 0),
@@ -434,7 +530,7 @@ describe('DXF Panel Exporter (Uniwersalny Standard Stolarski)', () => {
             // Otwory: zbiór środków musi być identyczny
             const key = (x: number, y: number) => `${Math.round(x * 10) / 10}|${Math.round(y * 10) / 10}`;
             const cadHoles = cadFeatures.filter(f => 'diameter' in f)
-                .flatMap((f: any) => (f.positions ?? [f.position]).map((p: any) => key(p.x - minX, p.y - minY))).sort();
+                .flatMap((f: any) => (f.positions ?? [f.position]).map((p: any) => key(toDxfX(p.x), toDxfY(p.y)))).sort();
             const impHoles = holes.map(h => key(h.params.u, h.params.v)).sort();
             expect(impHoles).toEqual(cadHoles);
         });
@@ -587,6 +683,23 @@ describe('DXF Panel Exporter (Uniwersalny Standard Stolarski)', () => {
             const prog = buildDefaultCncProgramForPanel(cncPanel)!;
             expect(prog).not.toBeNull();
             expectSameGaps(await layoutFromWcs(cncPanel, prog.features as any[]), lcsCad);
+        });
+
+        it('respektuje przekazane options.features dla formatki posiadającej rolę WCS', async () => {
+            const cadPanel = buildCabinetPanel('RIGHT_SIDE_PANEL');
+            const customHole = {
+                featureId: 'custom_wcs_hole_1',
+                name: 'Otwór niestandardowy CAM',
+                diameter: 15,
+                depth: 10,
+                face: 'FACE_Z_PLUS',
+                position: { x: 100, y: 150, z: 0 }
+            };
+
+            const dxf = generatePanelDxf(cadPanel, { features: [customHole as any] });
+            const parsed = parseDxfAscii(dxf);
+            const holeCircle = parsed.entities.find(e => e.type === 'CIRCLE' && e.layer === 'DRILL_D15_Z10');
+            expect(holeCircle).toBeDefined();
         });
     });
 });

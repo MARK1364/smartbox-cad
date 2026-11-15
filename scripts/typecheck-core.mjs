@@ -31,7 +31,8 @@ const gateErrors = text
             /C2_connectors[/\\]/.test(line) ||
             /A6_agd[/\\]/.test(line) ||
             /o1_operacji[/\\]/.test(line) ||
-            /S5_studio[/\\]/.test(line))
+            /S5_studio[/\\]/.test(line) ||
+            /P1_platforma[/\\]/.test(line))
     );
 
 if (gateErrors.length > 0) {

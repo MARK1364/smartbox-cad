@@ -187,6 +187,7 @@ export interface CAMStrategyParams {
     compensation?: 'OFF' | 'LEFT' | 'RIGHT';
     peckStepMm?: number;
     reverseDirection?: boolean;
+    workpieceDimensions?: { width: number; height: number; thickness: number };
 }
 
 export interface ToolParameters {

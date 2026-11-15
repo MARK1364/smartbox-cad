@@ -505,6 +505,63 @@ export class PropertiesManager {
         return data;
     }
 
+    // ─── Inspekcja okucia (Hardware / boczki / prowadnice) ─────────
+
+    /**
+     * Inspekcja okucia w scenie (boczki szuflad, prowadnice, zawiasy).
+     */
+    inspectHardware(hw: any, emitEvent: boolean = true): PropertiesData | null {
+        if (!hw) return null;
+
+        const doc = ContextManager.instance.document;
+        const hwId = hw.id || (hw as any).nodeId;
+        const cadNode = hwId && doc?.findNode ? doc.findNode(hwId) : null;
+        
+        let loc = { x: 0, y: 0, z: 0 };
+        let worldLoc = { x: 0, y: 0, z: 0 };
+        if (cadNode) {
+            const decomposed = cadNode.localMatrix.decompose();
+            loc = { 
+                x: nmToMm(decomposed.translation.x), 
+                y: nmToMm(decomposed.translation.y), 
+                z: nmToMm(decomposed.translation.z) 
+            };
+            const worldDecomposed = cadNode.getWorldMatrix().decompose();
+            worldLoc = {
+                x: nmToMm(worldDecomposed.translation.x), 
+                y: nmToMm(worldDecomposed.translation.y), 
+                z: nmToMm(worldDecomposed.translation.z)
+            };
+        }
+
+        const data: PropertiesData = {
+            name: hw.name || cadNode?.name || 'Okucie',
+            objectType: 'Okucie (Hardware)',
+            kind: 'unknown',
+            panelId: hwId,
+            transform: {
+                loc: {
+                    x: Math.round(loc.x),
+                    y: Math.round(loc.y),
+                    z: Math.round(loc.z)
+                },
+                worldLoc: {
+                    x: Math.round(worldLoc.x),
+                    y: Math.round(worldLoc.y),
+                    z: Math.round(worldLoc.z)
+                }
+            },
+            customProperties: this._getCustomProps(hwId || hw.name)
+        };
+
+        if (emitEvent) {
+            this._setCurrent(data);
+        } else {
+            this._current = data;
+        }
+        return data;
+    }
+
     // ─── Generowanie wpisów menu kontekstowego ─────────────────────
 
     /**

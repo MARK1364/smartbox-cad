@@ -1,0 +1,1 @@
+C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A2_bloki\06_skosne-doors_rust\target\wasm32-unknown-unknown\release\libwasm_skosne_doors.rlib: C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A2_bloki\06_skosne-doors_rust\src\lib.rs

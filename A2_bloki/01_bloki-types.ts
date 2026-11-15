@@ -65,7 +65,15 @@ export interface BlokiPart {
     meta?: Record<string, any>;
     report_type?: string;
     library_id?: string;
+    groupKey?: string;
     customProperties?: Record<string, any>;
+}
+
+export interface BlokiGroup {
+    key: string;
+    name: string;
+    role?: string;
+    loc?: { x: number; y: number; z: number };
 }
 
 export interface BlokiHardware {
@@ -78,11 +86,13 @@ export interface BlokiHardware {
     loc: { x: number; y: number; z: number }; // pozycja lokalna w mm
     rotation?: { x: number; y: number; z: number };
     dim?: { x: number; y: number; z: number };
+    groupKey?: string;
     params?: Record<string, any>;
     customProperties?: Record<string, any>;
 }
 
 export interface BlokiPlanResult {
+    groups?: BlokiGroup[];
     parts: BlokiPart[];
     hardware?: BlokiHardware[];
 }

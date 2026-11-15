@@ -204,6 +204,12 @@ export class CAMVisualizer {
             if ('position' in feature) {
                 // Otwór / Grupa otworów
                 const hole = feature as HoleFeature;
+                const holeDia = Number(hole.diameter);
+                const rawHoleDepth = Number(hole.depth);
+                if (!Number.isFinite(holeDia) || holeDia <= 0 || !Number.isFinite(rawHoleDepth) || Math.abs(rawHoleDepth) < 1e-4) {
+                    continue;
+                }
+                const depth = Math.abs(rawHoleDepth);
                 const positions = (useLocalPanel && hole.panelPositions && hole.panelPositions.length > 0)
                     ? hole.panelPositions
                     : ((useLocalPanel && hole.panelPosition)
@@ -212,15 +218,23 @@ export class CAMVisualizer {
                 
                 for (let pIdx = 0; pIdx < positions.length; pIdx++) {
                     const pt = positions[pIdx];
+                    if (!pt || !Number.isFinite(pt.x) || !Number.isFinite(pt.y) || !Number.isFinite(pt.z)) {
+                        continue;
+                    }
                     const rawAxis = (useLocalPanel && hole.panelAxis) ? hole.panelAxis : (hole.axis || { x: 0, y: 0, z: -1 });
-                    const axisLen = Math.hypot(rawAxis.x, rawAxis.y, rawAxis.z) || 1.0;
+                    if (!rawAxis || !Number.isFinite(rawAxis.x) || !Number.isFinite(rawAxis.y) || !Number.isFinite(rawAxis.z)) {
+                        continue;
+                    }
+                    const axisLen = Math.hypot(rawAxis.x, rawAxis.y, rawAxis.z);
+                    if (!Number.isFinite(axisLen) || axisLen < 1e-6) {
+                        continue;
+                    }
                     const dirX = rawAxis.x / axisLen;
                     const dirY = rawAxis.y / axisLen;
                     const dirZ = rawAxis.z / axisLen;
-                    const depth = Math.abs(hole.depth || 10);
 
                     const cyl = BABYLON.MeshBuilder.CreateCylinder(`Hole_${hole.featureId}_${pIdx}`, {
-                        diameter: hole.diameter,
+                        diameter: holeDia,
                         height: depth,
                         tessellation: 24
                     }, this.scene);
@@ -293,29 +307,46 @@ export class CAMVisualizer {
                     e.z += nz * leadOut;
                 }
 
+                const grooveWidth = Number(groove.width);
+                const rawGrooveDepth = Number(groove.depth);
+                if (!Number.isFinite(grooveWidth) || grooveWidth <= 0 || !Number.isFinite(rawGrooveDepth) || Math.abs(rawGrooveDepth) < 1e-4) {
+                    continue;
+                }
+                if (!s || !e || !Number.isFinite(s.x) || !Number.isFinite(s.y) || !Number.isFinite(s.z) ||
+                    !Number.isFinite(e.x) || !Number.isFinite(e.y) || !Number.isFinite(e.z)) {
+                    continue;
+                }
+                const grooveDepth = Math.abs(rawGrooveDepth);
                 const p1 = new BABYLON.Vector3(s.x, s.y, s.z);
                 const p2 = new BABYLON.Vector3(e.x, e.y, e.z);
                 const drawnLen = BABYLON.Vector3.Distance(p1, p2);
+                if (!Number.isFinite(drawnLen) || drawnLen < 1e-4) {
+                    continue;
+                }
 
-                const box = BABYLON.MeshBuilder.CreateBox(`Groove_${groove.featureId}`, {
-                    width: drawnLen || 10,
-                    height: groove.width || 4,
-                    depth: groove.depth || 8
-                }, this.scene);
-                box.material = grooveMat;
-                
                 const rawNorm = (useLocalPanel && groove.panelNormal) ? groove.panelNormal : (groove.normal || { x: 0, y: 0, z: 1 });
-                const normLen = Math.hypot(rawNorm.x, rawNorm.y, rawNorm.z) || 1.0;
+                if (!rawNorm || !Number.isFinite(rawNorm.x) || !Number.isFinite(rawNorm.y) || !Number.isFinite(rawNorm.z)) {
+                    continue;
+                }
+                const normLen = Math.hypot(rawNorm.x, rawNorm.y, rawNorm.z);
+                if (!Number.isFinite(normLen) || normLen < 1e-6) {
+                    continue;
+                }
                 const normX = rawNorm.x / normLen;
                 const normY = rawNorm.y / normLen;
                 const normZ = rawNorm.z / normLen;
+
+                const box = BABYLON.MeshBuilder.CreateBox(`Groove_${groove.featureId}`, {
+                    width: drawnLen,
+                    height: grooveWidth,
+                    depth: grooveDepth
+                }, this.scene);
+                box.material = grooveMat;
 
                 const depthSign = groove.flipDepthDirection ? 1 : -1;
                 const cutDirX = normX * depthSign;
                 const cutDirY = normY * depthSign;
                 const cutDirZ = normZ * depthSign;
-
-                const grooveDepth = Math.abs(groove.depth || 8);
                 const center = BABYLON.Vector3.Center(p1, p2);
                 box.position = new BABYLON.Vector3(
                     center.x + cutDirX * (grooveDepth / 2),
@@ -473,18 +504,33 @@ export class CAMVisualizer {
             highlightMesh.parent = this.highlightRootNode;
         } else if ('position' in feature || feature.type === 'hole') {
             // Otwór / Grupa otworów -> Świecący pierścień i walec dla każdego punktu
-            const diam = feature.diameter || feature.params?.diameter || 5;
-            const depth = feature.depth || feature.params?.depth || 12;
+            const rawDiam = feature.diameter ?? feature.params?.diameter ?? feature.params?.dia;
+            const rawDepth = feature.depth ?? feature.params?.depth;
+            const diam = Number(rawDiam);
+            const rawDepthNum = Number(rawDepth);
+            if (!Number.isFinite(diam) || diam <= 0 || !Number.isFinite(rawDepthNum) || Math.abs(rawDepthNum) < 1e-4) {
+                return;
+            }
+            const depth = Math.abs(rawDepthNum);
+            const fallbackPos = feature.position || (
+                (feature.params?.u !== undefined || feature.params?.x !== undefined) &&
+                (feature.params?.v !== undefined || feature.params?.y !== undefined)
+                    ? { x: Number(feature.params?.u ?? feature.params?.x), y: Number(feature.params?.v ?? feature.params?.y), z: 0 }
+                    : null
+            );
             const positions = (feature.panelPositions && feature.panelPositions.length > 0)
                 ? feature.panelPositions
                 : (feature.panelPosition
                     ? [feature.panelPosition]
                     : ((feature.positions && feature.positions.length > 0)
                         ? feature.positions
-                        : [feature.position || { x: feature.params?.u ?? feature.params?.x ?? 0, y: feature.params?.v ?? feature.params?.y ?? 0, z: 0 }]));
+                        : (fallbackPos ? [fallbackPos] : [])));
 
             for (let idx = 0; idx < positions.length; idx++) {
                 const pos = positions[idx];
+                if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) {
+                    continue;
+                }
                 const cyl = BABYLON.MeshBuilder.CreateCylinder(`Highlight_Hole_${idx}`, {
                     diameter: diam + 2.5,
                     height: Math.max(1, depth + 1.5),
@@ -507,9 +553,15 @@ export class CAMVisualizer {
             }
         } else if ('startPoint' in feature || feature.type === 'groove') {
             // Wpust
-            const p1 = feature.panelStartPoint || feature.startPoint || { x: 0, y: 0, z: 0 };
-            const p2 = feature.panelEndPoint || feature.endPoint || { x: 100, y: 0, z: 0 };
-            const grooveWidth = feature.width || feature.params?.width || 4;
+            const p1 = feature.panelStartPoint || feature.startPoint;
+            const p2 = feature.panelEndPoint || feature.endPoint;
+            const grooveWidth = Number(feature.width ?? feature.params?.width);
+            if (!p1 || !p2 ||
+                !Number.isFinite(p1.x) || !Number.isFinite(p1.y) || !Number.isFinite(p1.z) ||
+                !Number.isFinite(p2.x) || !Number.isFinite(p2.y) || !Number.isFinite(p2.z) ||
+                !Number.isFinite(grooveWidth) || grooveWidth <= 0) {
+                return;
+            }
             const line = BABYLON.MeshBuilder.CreateTube("Highlight_Groove", {
                 path: [new BABYLON.Vector3(p1.x, p1.y, p1.z), new BABYLON.Vector3(p2.x, p2.y, p2.z)],
                 radius: Math.max(1.8, grooveWidth / 2 + 0.4),
@@ -649,7 +701,7 @@ export class CAMVisualizer {
                 rapidLines.push([bottomPos, opSafePos]);
 
                 currentCursor = opSafePos;
-            } else if (op.type === 'groove' || op.type === 'contour') {
+            } else if (op.type === 'groove' || op.type === 'contour' || op.type === 'pocket') {
                 const moves = op.parameters?.moves || [];
                 const cutStart = pos;
                 const surfPt = op.parameters?.surfacePoint;

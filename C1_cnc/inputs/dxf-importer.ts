@@ -332,8 +332,8 @@ export function parseDxfAscii(dxfContent: string): DxfParseResult {
             if (radius > 0) {
                 entities.push({ type: 'ARC', layer, x, y, z, radius, startAngle, endAngle });
             }
-        } else if (rec.type === 'SOLID' || rec.type === '3DFACE') {
-            // Zamiana 4 naroży SOLIDA na zamkniętą polilinię
+        } else if (rec.type === 'SOLID') {
+            // W specyfikacji DXF dla SOLID wierzchołki są ułożone po przekątnej (1, 2, 4, 3)
             const x1 = findFloat(10), y1 = findFloat(20);
             const x2 = findFloat(11), y2 = findFloat(21);
             const x3 = findFloat(12), y3 = findFloat(22);
@@ -345,10 +345,124 @@ export function parseDxfAscii(dxfContent: string): DxfParseResult {
                 { x: x3, y: y3 }
             ];
             entities.push({ type: 'LWPOLYLINE', layer, closed: true, vertices });
+        } else if (rec.type === '3DFACE') {
+            // W specyfikacji DXF dla 3DFACE wierzchołki są ułożone sekwencyjnie po obwodzie (1, 2, 3, 4)
+            const x1 = findFloat(10), y1 = findFloat(20);
+            const x2 = findFloat(11), y2 = findFloat(21);
+            const x3 = findFloat(12), y3 = findFloat(22);
+            const x4 = findFloat(13), y4 = findFloat(23);
+            const isTriangular = (Math.hypot(x3 - x4, y3 - y4) <= 1e-4);
+            const vertices: DxfVertex[] = isTriangular
+                ? [{ x: x1, y: y1 }, { x: x2, y: y2 }, { x: x3, y: y3 }]
+                : [{ x: x1, y: y1 }, { x: x2, y: y2 }, { x: x3, y: y3 }, { x: x4, y: y4 }];
+            entities.push({ type: 'LWPOLYLINE', layer, closed: true, vertices });
         }
     }
 
     return { entities, layers, headerExtMin, headerExtMax };
+}
+
+/**
+ * Przetwarza wierzchołki polilinii DXF, interpolując łuki na segmentach z wartością bulge (wybrzuszenie)
+ */
+function processPolylineVertices(
+    vertices: DxfVertex[],
+    closed: boolean,
+    offsetX: number,
+    offsetY: number
+): { points: { x: number; y: number; z: number }[]; segments: any[] } {
+    const segments: any[] = [];
+    const points: { x: number; y: number; z: number }[] = [];
+
+    if (!vertices || vertices.length === 0) {
+        return { points, segments };
+    }
+
+    const n = vertices.length;
+    const count = closed ? n : n - 1;
+
+    for (let i = 0; i < count; i++) {
+        const vCurr = vertices[i];
+        const vNext = vertices[(i + 1) % n];
+
+        const p0 = {
+            x: Math.round((vCurr.x - offsetX) * 10) / 10,
+            y: Math.round((vCurr.y - offsetY) * 10) / 10,
+            z: 0
+        };
+        const p1 = {
+            x: Math.round((vNext.x - offsetX) * 10) / 10,
+            y: Math.round((vNext.y - offsetY) * 10) / 10,
+            z: 0
+        };
+
+        if (i === 0) {
+            points.push(p0);
+        }
+
+        const bulge = vCurr.bulge || 0;
+        if (Math.abs(bulge) > 1e-4) {
+            const dx = p1.x - p0.x;
+            const dy = p1.y - p0.y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist > 1e-4) {
+                const theta = 4 * Math.atan(bulge);
+                const radius = Math.abs((dist * (1 + bulge * bulge)) / (4 * bulge));
+                const h = (dist * (1 - bulge * bulge)) / (4 * bulge);
+                const midX = (p0.x + p1.x) / 2;
+                const midY = (p0.y + p1.y) / 2;
+                const cx = midX - (dy / dist) * h;
+                const cy = midY + (dx / dist) * h;
+
+                const dir = bulge > 0 ? 'CCW' : 'CW';
+                segments.push({
+                    type: 'ARC',
+                    start: { ...p0 },
+                    end: { ...p1 },
+                    center: {
+                        x: Math.round(cx * 10) / 10,
+                        y: Math.round(cy * 10) / 10,
+                        z: 0
+                    },
+                    radius: Math.round(radius * 10) / 10,
+                    direction: dir,
+                    plane: 'XY'
+                });
+
+                const startAngle = Math.atan2(p0.y - cy, p0.x - cx);
+                const sweepAngle = dir === 'CCW' ? Math.abs(theta) : -Math.abs(theta);
+                const numSteps = Math.max(4, Math.ceil((Math.abs(sweepAngle) * 180 / Math.PI) / 15));
+
+                for (let s = 1; s <= numSteps; s++) {
+                    const angle = startAngle + sweepAngle * (s / numSteps);
+                    points.push({
+                        x: Math.round((cx + radius * Math.cos(angle)) * 10) / 10,
+                        y: Math.round((cy + radius * Math.sin(angle)) * 10) / 10,
+                        z: 0
+                    });
+                }
+                continue;
+            }
+        }
+
+        segments.push({
+            type: 'LINE',
+            start: { ...p0 },
+            end: { ...p1 }
+        });
+        points.push(p1);
+    }
+
+    if (!closed && count === 0 && vertices.length === 1) {
+        points.push({
+            x: Math.round((vertices[0].x - offsetX) * 10) / 10,
+            y: Math.round((vertices[0].y - offsetY) * 10) / 10,
+            z: 0
+        });
+    }
+
+    return { points, segments };
 }
 
 /**
@@ -373,6 +487,15 @@ export function importDxfToWorkpiece(
             '[C1_cnc/dxf-importer] Wymagane defaultThicknessMm (> 0). ' +
             'Zabronione jest ciche domyślne 18 mm — podaj grubość przygotówki z UI lub opcji importu.'
         );
+    }
+    if (options.defaultDrillDepthMm !== undefined && (!Number.isFinite(options.defaultDrillDepthMm) || options.defaultDrillDepthMm <= 0)) {
+        throw new Error(`[C1_cnc/dxf-importer] defaultDrillDepthMm musi być skończoną liczbą dodatnią (${options.defaultDrillDepthMm}).`);
+    }
+    if (options.defaultGrooveWidthMm !== undefined && (!Number.isFinite(options.defaultGrooveWidthMm) || options.defaultGrooveWidthMm <= 0)) {
+        throw new Error(`[C1_cnc/dxf-importer] defaultGrooveWidthMm musi być skończoną liczbą dodatnią (${options.defaultGrooveWidthMm}).`);
+    }
+    if (options.defaultGrooveDepthMm !== undefined && (!Number.isFinite(options.defaultGrooveDepthMm) || options.defaultGrooveDepthMm <= 0)) {
+        throw new Error(`[C1_cnc/dxf-importer] defaultGrooveDepthMm musi być skończoną liczbą dodatnią (${options.defaultGrooveDepthMm}).`);
     }
     const defaultDrillDepth = options.defaultDrillDepthMm ?? 13;
     const defaultGrooveWidth = options.defaultGrooveWidthMm ?? 4;
@@ -573,11 +696,7 @@ export function importDxfToWorkpiece(
             if (/(?:_OUTLINE|_BOUNDARY)$/i.test(ent.layer)) continue;
 
             const depth = lp.depth ?? defaultThickness;
-            const points = ent.vertices.map(v => ({
-                x: Math.round((v.x - offsetX) * 10) / 10,
-                y: Math.round((v.y - offsetY) * 10) / 10,
-                z: 0
-            }));
+            const { points, segments } = processPolylineVertices(ent.vertices, ent.closed, offsetX, offsetY);
 
             features.push({
                 id: `contour_dxf_${featureIndex++}`,
@@ -587,7 +706,59 @@ export function importDxfToWorkpiece(
                 params: {
                     depth,
                     points,
+                    segments: segments.length > 0 ? segments : undefined,
                     closed: ent.closed
+                }
+            });
+        } else if (ent.type === 'ARC') {
+            if (lp.isOutline) continue;
+            if (/(?:_OUTLINE|_BOUNDARY)$/i.test(ent.layer)) continue;
+
+            const depth = lp.depth ?? defaultThickness;
+            const cx = Math.round((ent.x - offsetX) * 10) / 10;
+            const cy = Math.round((ent.y - offsetY) * 10) / 10;
+            const r = Math.round(ent.radius * 10) / 10;
+            const startRad = (ent.startAngle * Math.PI) / 180;
+            const endRad = (ent.endAngle * Math.PI) / 180;
+            const sx = Math.round((cx + r * Math.cos(startRad)) * 10) / 10;
+            const sy = Math.round((cy + r * Math.sin(startRad)) * 10) / 10;
+            const ex = Math.round((cx + r * Math.cos(endRad)) * 10) / 10;
+            const ey = Math.round((cy + r * Math.sin(endRad)) * 10) / 10;
+
+            let sweepDeg = ent.endAngle - ent.startAngle;
+            while (sweepDeg <= 0) sweepDeg += 360;
+            const sweepRad = (sweepDeg * Math.PI) / 180;
+            const numSteps = Math.max(8, Math.ceil(sweepDeg / 15));
+            const arcPoints: { x: number; y: number; z: number }[] = [];
+            for (let s = 0; s <= numSteps; s++) {
+                const a = startRad + sweepRad * (s / numSteps);
+                arcPoints.push({
+                    x: Math.round((cx + r * Math.cos(a)) * 10) / 10,
+                    y: Math.round((cy + r * Math.sin(a)) * 10) / 10,
+                    z: 0
+                });
+            }
+
+            const arcSegment = {
+                type: 'ARC' as const,
+                start: { x: sx, y: sy, z: 0 },
+                end: { x: ex, y: ey, z: 0 },
+                center: { x: cx, y: cy, z: 0 },
+                radius: r,
+                direction: 'CCW' as const,
+                plane: 'XY' as const
+            };
+
+            features.push({
+                id: `contour_dxf_${featureIndex++}`,
+                type: 'contour',
+                face: 'FACE_Z_PLUS',
+                name: `Luk_${featureIndex - 1}`,
+                params: {
+                    depth,
+                    points: arcPoints,
+                    segments: [arcSegment],
+                    closed: false
                 }
             });
         }
@@ -772,6 +943,8 @@ export function inspectDxf(dxfContent: string): DxfMetadataSummary {
                 groovesCount++;
             }
         } else if (ent.type === 'LWPOLYLINE' || ent.type === 'POLYLINE') {
+            if (!lp.isOutline) contoursCount++;
+        } else if (ent.type === 'ARC') {
             if (!lp.isOutline) contoursCount++;
         }
     }

@@ -10,7 +10,8 @@
  *  - SSOT parametrów: A2_bloki/01_BLOKI_PARAMETERS.md oraz B1_biblioteka/drazki/
  */
 
-import tubesRules from './08_tubes_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const tubesRules = getModuleRules('08_tubes');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { type ModuleDims } from './01_base-engine.js';
 import { CYLINDER_SHAPE } from '../A1_core/cad-node/part-shape.js';
@@ -26,6 +27,7 @@ import {
     assertCanonicalTubesParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callTubesPlanWasm } from './tubes-wasm-bridge.js';
 
 export { assertCanonicalTubesParams, LEGACY_TUBES_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -99,6 +101,24 @@ export function calculateTubesPlan(
     const tree = (tubesRules as any).model_tree?.root_assembly?.subcomponents || {};
     const shelfRule = tree.SHELF || {};
     const shelfOverride = (tubesRules as any).parameters?.smart_panel_integration?.role_overrides?.TOP_SHELF;
+
+    const wasmResult = callTubesPlanWasm(dims, params, {
+        shelfRole: shelfRule.role || 'SHELF_PANEL',
+        shelfLcs: shelfRule.lcs || {
+            mapping: { X: 'x', Y: 'y', Z: 'z' },
+            rotation: [90, 0, 0],
+            faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
+        },
+        edgeBanding: shelfOverride?.edge_banding || {
+            "-Y": { active: true, type_id: "0.008x0.022" },
+            "+Y": { active: false, type_id: "none" },
+            "+X": { active: false, type_id: "none" },
+            "-X": { active: false, type_id: "none" }
+        }
+    });
+    if (wasmResult) {
+        return wasmResult;
+    }
 
     let srodek_drazka_z_mm: number;
 

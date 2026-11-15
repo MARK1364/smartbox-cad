@@ -51,6 +51,9 @@ export function findFacesAlongRay(scene: any, pointerX: number, pointerY: number
         if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata || !mesh.metadata.faceName) {
             return false;
         }
+        if (typeof mesh.isEnabled === 'function' && !mesh.isEnabled()) return false;
+        if (mesh.isVisible === false) return false;
+        if (mesh.metadata.visible === false) return false;
         const pVis = mesh.metadata.panelModel ? mesh.metadata.panelModel.visible !== false : true;
         const mVis = mesh.metadata.model ? mesh.metadata.model.visible !== false : true;
         return pVis && mVis;
@@ -133,12 +136,14 @@ export function findFacesAlongRay(scene: any, pointerX: number, pointerY: number
 }
 
 export interface HiddenEntityHit {
-    type: 'part' | 'container' | 'hardware';
+    type: 'part' | 'container' | 'hardware' | 'hardware_subpart';
     id: string;
     uuid?: string;
     name: string;
     distance: number;
     entity: any;
+    subType?: string;
+    hwNode?: any;
     parentContainerId?: string;
 }
 
@@ -207,39 +212,59 @@ export function findHiddenEntityAlongRay(
         }
     }
 
-    // 2. Sprawdź ukryte okucia (hardware)
+    // 2. Sprawdź ukryte okucia (hardware) oraz ich pod-elementy (boczek, mocowanie, prowadnica)
     if (hardwareViews && hardwareViews.size > 0 && doc?.getNodesByType) {
         const hwNodes = doc.getNodesByType('HARDWARE') || [];
         for (const hwNode of hwNodes) {
             const hw = hwNode.domainData;
-            if (!hw || seenIds.has(hwNode.id)) continue;
+            if (!hw) continue;
             const isParentHidden = hwNode.parent?.domainData && hwNode.parent.domainData.visible === false;
             const isHwHidden = hw.visible === false || hwNode.visible === false || isParentHidden;
-            if (!isHwHidden) continue;
+
+            const hiddenSubparts: string[] = [
+                ...(Array.isArray(hw.hiddenSubparts) ? hw.hiddenSubparts : []),
+                ...(Array.isArray(hw.params?.hiddenSubparts) ? hw.params.hiddenSubparts : []),
+            ];
+            const hasHiddenSubparts = hiddenSubparts.length > 0;
+
+            if (!isHwHidden && !hasHiddenSubparts) continue;
 
             const hwView = hardwareViews.get(hwNode.id);
-            if (!hwView || !hwView.rootNode) continue;
+            if (!hwView) continue;
+            const rootMesh = hwView.rootNode || hwView;
 
-            const meshes = typeof hwView.rootNode.getChildMeshes === 'function'
-                ? hwView.rootNode.getChildMeshes()
-                : [];
+            const meshes = typeof rootMesh.getChildMeshes === 'function'
+                ? rootMesh.getChildMeshes()
+                : (rootMesh.subMeshes ? Object.values(rootMesh.subMeshes) : [rootMesh]);
+
             for (const mesh of meshes) {
                 if (!mesh) continue;
+                const subType = mesh.metadata?.subType;
+                const isSubHidden = isHwHidden || (subType && hiddenSubparts.includes(subType));
+                if (!isSubHidden) continue;
+
+                const targetId = (subType && !isHwHidden) ? (mesh.metadata?.id || `${hwNode.id}_${subType}`) : hwNode.id;
+                if (seenIds.has(targetId)) continue;
+
                 try {
                     mesh.computeWorldMatrix?.(true);
                     const hit = ray.intersectsMesh(mesh, false);
                     if (hit && hit.hit && typeof hit.distance === 'number') {
-                        seenIds.add(hwNode.id);
+                        seenIds.add(targetId);
                         hits.push({
-                            type: 'hardware',
-                            id: hwNode.id,
-                            uuid: hwNode.id,
-                            name: hwNode.name || hw.name || 'Okucie',
+                            type: subType && !isHwHidden ? 'hardware_subpart' : 'hardware',
+                            id: targetId,
+                            uuid: targetId,
+                            name: (subType && !isHwHidden)
+                                ? (mesh.metadata?.subName || `${hwNode.name} - ${subType}`)
+                                : (hwNode.name || hw.name || 'Okucie'),
                             distance: hit.distance,
                             entity: hw,
+                            subType: subType && !isHwHidden ? subType : undefined,
+                            hwNode,
                             parentContainerId: hwNode.parent?.id,
-                        });
-                        break;
+                        } as any);
+                        if (isHwHidden) break;
                     }
                 } catch {
                     // ignoruj

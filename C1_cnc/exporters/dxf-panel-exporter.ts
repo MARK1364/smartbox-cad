@@ -29,6 +29,10 @@ export interface DxfExportOptions {
     includeBackFeatures?: boolean;
     /** Jawne wymiary w mm, jeśli obiekt źródłowy nie posiada pól wymiarów w nm */
     dimensionsMm?: { width: number; height: number; thickness: number };
+    /** Opcjonalna lista wyekstrahowanych cech do wyeksportowania */
+    features?: any[];
+    /** Czy dołączyć wymiary otworów od bazy WCS (0,0) na warstwie WYMIARY_OTWORY */
+    includeDimensions?: boolean;
 }
 
 interface DxfLayerDef {
@@ -42,9 +46,12 @@ interface DxfLayerDef {
 export function getPanelDimensionsMm(panel: any, options?: DxfExportOptions): { width: number; height: number; thickness: number } {
     if (options?.dimensionsMm) {
         const { width, height, thickness } = options.dimensionsMm;
-        if (width > 0 && height > 0 && thickness > 0) {
-            return { width, height, thickness };
+        if (typeof width !== 'number' || !Number.isFinite(width) || width <= 0 ||
+            typeof height !== 'number' || !Number.isFinite(height) || height <= 0 ||
+            typeof thickness !== 'number' || !Number.isFinite(thickness) || thickness <= 0) {
+            throw new Error(`[dxf-panel-exporter] Opcja dimensionsMm zawiera niepoprawne wymiary fizyczne (W=${width}, H=${height}, T=${thickness}).`);
         }
+        return { width, height, thickness };
     }
 
     if (!panel) {
@@ -57,9 +64,9 @@ export function getPanelDimensionsMm(panel: any, options?: DxfExportOptions): { 
     const rawH = p.height ?? p.depth ?? p.dim?.y ?? p.dim_nm?.y;
     const rawT = p.thickness ?? p.dim?.z ?? p.dim_nm?.z;
 
-    if (typeof rawW !== 'number' || rawW <= 0 ||
-        typeof rawH !== 'number' || rawH <= 0 ||
-        typeof rawT !== 'number' || rawT <= 0) {
+    if (typeof rawW !== 'number' || !Number.isFinite(rawW) || rawW <= 0 ||
+        typeof rawH !== 'number' || !Number.isFinite(rawH) || rawH <= 0 ||
+        typeof rawT !== 'number' || !Number.isFinite(rawT) || rawT <= 0) {
         throw new Error(`[dxf-panel-exporter] Formatka "${p.id || panel.id || 'nieznana'}" nie posiada poprawnych wymiarów fizycznych (W=${rawW}, H=${rawH}, T=${rawT}).`);
     }
 
@@ -133,6 +140,7 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
     const { width: W, height: H, thickness: T } = getPanelDimensionsMm(panel, options);
     const includeEdgeDrills = options.includeEdgeDrills !== false;
     const includeBackFeatures = options.includeBackFeatures !== false;
+    const includeDimensions = Boolean(options.includeDimensions);
 
     const p = panel?.domainData || panel;
     const role = p?.role || panel?.role;
@@ -179,6 +187,18 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
         dxfT = Math.round((cMaxZ - cMinZ) * 100) / 100;
     }
 
+    const flipWcsX = wcs ? (minX < -1e-4 && Math.abs(dxfW + minX) < 1e-3) : false;
+    const shiftWcsX = wcs && !flipWcsX && minX < -1e-4;
+    const flipWcsY = wcs ? (minY < -1e-4 && Math.abs(dxfH + minY) < 1e-3) : false;
+    const shiftWcsY = wcs && !flipWcsY && minY < -1e-4;
+
+    const toDxfCoords = (pt: { x: number; y: number }): { x: number; y: number } => {
+        if (!wcs) return { x: pt.x, y: pt.y };
+        const x = flipWcsX ? -pt.x : (shiftWcsX ? pt.x - minX : pt.x);
+        const y = flipWcsY ? -pt.y : (shiftWcsY ? pt.y - minY : pt.y);
+        return { x, y };
+    };
+
     const { outline, consumedFeatures } = resolvePanelOutline2D(panel, W, H, T);
 
     const layersMap = new Map<string, DxfLayerDef>();
@@ -202,7 +222,8 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
     if (wcs) {
         finalOutline = outline.map(([u, v]) => {
             const ptWcs = wcs!.toWcsCoordinates({ x: -W / 2 + u, y: -H / 2 + v, z: T / 2 });
-            return [ptWcs.x - minX, ptWcs.y - minY];
+            const m = toDxfCoords(ptWcs);
+            return [m.x, m.y];
         });
     } else {
         finalOutline = outline;
@@ -222,10 +243,10 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
 
     // ─── 2. CECHY OBRÓBCZE (WIERCENIA, ROWKI, KIESZENIE, WYCIĘCIA) ───
     if (wcs) {
-        // Ścieżka WCS: używamy sprawdzonego GeometryDataExtractor do przeliczenia geometrii na bazę CNC
-        const extractor = new GeometryDataExtractor();
-        const camData = extractor.extractPanelFeatures(panel, wcs);
-        const camFeatures = camData.features || [];
+        // Ścieżka WCS: używamy przekazanych cech CAM lub wyliczamy je za pomocą GeometryDataExtractor
+        const camFeatures = (options.features && Array.isArray(options.features) && options.features.length > 0)
+            ? options.features
+            : (new GeometryDataExtractor().extractPanelFeatures(panel, wcs).features || []);
 
         for (const f of camFeatures) {
             if ('positions' in f || 'diameter' in f) {
@@ -255,8 +276,7 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                     : [hf.position];
 
                 for (const pos of positions) {
-                    const x = pos.x - minX;
-                    const y = pos.y - minY;
+                    const { x, y } = toDxfCoords(pos);
                     entities.push([
                         '0', 'CIRCLE',
                         '5', nextHandle(),
@@ -268,6 +288,77 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                         '30', '0.0',
                         '40', radius.toFixed(3)
                     ].join('\n'));
+
+                    if (includeDimensions && !isEdge) {
+                        registerLayer('WYMIARY_OTWORY', 4);
+                        const txtX = x + radius + 1.2;
+                        const txtY = y + radius + 1.2;
+                        const diaLabel = `%%C${diameter}x${depth}`;
+                        const labelText = `X=${x.toFixed(1)} Y=${y.toFixed(1)} (${diaLabel})`;
+                        entities.push([
+                            '0', 'TEXT',
+                            '5', nextHandle(),
+                            '100', 'AcDbEntity',
+                            '8', 'WYMIARY_OTWORY',
+                            '100', 'AcDbText',
+                            '10', txtX.toFixed(3),
+                            '20', txtY.toFixed(3),
+                            '30', '0.0',
+                            '40', '3.5',
+                            '1', labelText
+                        ].join('\n'));
+
+                        const crossArm = Math.max(radius + 1.5, 3.5);
+                        entities.push([
+                            '0', 'LINE',
+                            '5', nextHandle(),
+                            '100', 'AcDbEntity',
+                            '8', 'WYMIARY_OTWORY',
+                            '100', 'AcDbLine',
+                            '10', (x - crossArm).toFixed(3),
+                            '20', y.toFixed(3),
+                            '30', '0.0',
+                            '11', (x + crossArm).toFixed(3),
+                            '21', y.toFixed(3),
+                            '31', '0.0'
+                        ].join('\n'));
+                        entities.push([
+                            '0', 'LINE',
+                            '5', nextHandle(),
+                            '100', 'AcDbEntity',
+                            '8', 'WYMIARY_OTWORY',
+                            '100', 'AcDbLine',
+                            '10', x.toFixed(3),
+                            '20', (y - crossArm).toFixed(3),
+                            '30', '0.0',
+                            '11', x.toFixed(3),
+                            '21', (y + crossArm).toFixed(3),
+                            '31', '0.0'
+                        ].join('\n'));
+                    }
+
+                    if (isEdge) {
+                        const dirX = hf.axis?.x ?? (hf.face === 'FACE_X_MINUS' ? 1 : hf.face === 'FACE_X_PLUS' ? -1 : 0);
+                        const dirY = hf.axis?.y ?? (hf.face === 'FACE_Y_MINUS' ? 1 : hf.face === 'FACE_Y_PLUS' ? -1 : 0);
+                        const norm = Math.hypot(dirX, dirY);
+                        if (norm > 1e-4) {
+                            const nx = dirX / norm;
+                            const ny = dirY / norm;
+                            entities.push([
+                                '0', 'LINE',
+                                '5', nextHandle(),
+                                '100', 'AcDbEntity',
+                                '8', layerName,
+                                '100', 'AcDbLine',
+                                '10', x.toFixed(3),
+                                '20', y.toFixed(3),
+                                '30', '0.0',
+                                '11', (x + nx * depth).toFixed(3),
+                                '21', (y + ny * depth).toFixed(3),
+                                '31', '0.0'
+                            ].join('\n'));
+                        }
+                    }
                 }
             } else if ('startPoint' in f && 'endPoint' in f) {
                 // GrooveFeature
@@ -280,10 +371,8 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                 const layerName = isBack ? `GROOVE_BACK_W${width}_Z${depth}` : `GROOVE_W${width}_Z${depth}`;
                 registerLayer(layerName, isBack ? 30 : 3);
 
-                const x1 = gf.startPoint.x - minX;
-                const y1 = gf.startPoint.y - minY;
-                const x2 = gf.endPoint.x - minX;
-                const y2 = gf.endPoint.y - minY;
+                const { x: x1, y: y1 } = toDxfCoords(gf.startPoint);
+                const { x: x2, y: y2 } = toDxfCoords(gf.endPoint);
 
                 // Centerline
                 entities.push([
@@ -332,7 +421,10 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                 const depth = Number(pf.depth || 3);
                 const layerName = `POCKET_Z${depth}`;
                 registerLayer(layerName, 5);
-                const pts = pf.boundaryPoints.map((pt: any) => [pt.x - minX, pt.y - minY]);
+                const pts = pf.boundaryPoints.map((pt: any) => {
+                    const m = toDxfCoords(pt);
+                    return [m.x, m.y];
+                });
                 const ptsStr = pts.map(([px, py]: [number, number]) => `10\n${px.toFixed(3)}\n20\n${py.toFixed(3)}`).join('\n');
                 entities.push([
                     '0', 'LWPOLYLINE',
@@ -351,8 +443,17 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                 const isCutout = cf.isInnerContour || (depth >= dxfT - 0.51);
                 const layerName = isCutout ? 'CUTOUT' : `CONTOUR_Z${depth}`;
                 registerLayer(layerName, isCutout ? 1 : 5);
-                const pts = cf.points.map((pt: any) => [pt.x - minX, pt.y - minY]);
+                const pts = cf.points.map((pt: any) => {
+                    const m = toDxfCoords(pt);
+                    return [m.x, m.y];
+                });
                 const ptsStr = pts.map(([px, py]: [number, number]) => `10\n${px.toFixed(3)}\n20\n${py.toFixed(3)}`).join('\n');
+                const dStartEnd = pts.length >= 2
+                    ? Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1])
+                    : 0;
+                const isClosed = cf.closed !== undefined
+                    ? Boolean(cf.closed)
+                    : (isCutout || (pts.length >= 3 && dStartEnd < 0.01));
                 entities.push([
                     '0', 'LWPOLYLINE',
                     '5', nextHandle(),
@@ -360,7 +461,7 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                     '8', layerName,
                     '100', 'AcDbPolyline',
                     '90', String(pts.length),
-                    '70', '1',
+                    '70', isClosed ? '1' : '0',
                     ptsStr
                 ].join('\n'));
             }
@@ -379,22 +480,28 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
 
             const featType = (feat.type || '').toLowerCase();
             const rawFace = feat.face || 'FACE_Z_PLUS';
-            let faceName: string;
-            try {
-                faceName = normalizeFaceName(rawFace);
-            } catch {
-                faceName = 'FACE_Z_PLUS';
-            }
+            const faceName = normalizeFaceName(rawFace);
 
             const params = feat.params || {};
 
             if (featType === 'hole' || featType === 'drill') {
-                const diameter = Number(params.diameter || params.dia || 8);
-                const depth = Number(params.depth || 12);
+                const rawDia = params.diameter ?? params.dia ?? 8;
+                const diameter = Number(rawDia);
+                if (!Number.isFinite(diameter) || diameter <= 0) {
+                    throw new Error(`[dxf-panel-exporter] Średnica otworu musi być skończoną liczbą dodatnią dla cechy "${feat.id || 'hole'}" (diameter=${rawDia}).`);
+                }
+                const rawDepth = params.depth ?? 12;
+                const depth = Number(rawDepth);
+                if (!Number.isFinite(depth) || Math.abs(depth) < 1e-4) {
+                    throw new Error(`[dxf-panel-exporter] Głębokość wiercenia musi być niezerową skończoną liczbą dla cechy "${feat.id || 'hole'}" (depth=${rawDepth}).`);
+                }
                 const radius = diameter / 2;
 
-                const baseU = Number(params.u !== undefined ? params.u : (params.u_nm !== undefined ? nmToMm(params.u_nm) : (params.x || 0)));
-                const baseV = Number(params.v !== undefined ? params.v : (params.v_nm !== undefined ? nmToMm(params.v_nm) : (params.y || 0)));
+                const baseU = Number(params.u !== undefined ? params.u : (params.u_nm !== undefined ? nmToMm(params.u_nm) : (params.x ?? 0)));
+                const baseV = Number(params.v !== undefined ? params.v : (params.v_nm !== undefined ? nmToMm(params.v_nm) : (params.y ?? 0)));
+                if (!Number.isFinite(baseU) || !Number.isFinite(baseV)) {
+                    throw new Error(`[dxf-panel-exporter] Współrzędne otworu (u, v) muszą być liczbami skończonymi dla cechy "${feat.id || 'hole'}" (u=${baseU}, v=${baseV}).`);
+                }
 
                 const isThrough = params.through === true || depth >= T - 0.51;
 
@@ -415,6 +522,54 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                             '30', '0.0',
                             '40', radius.toFixed(3)
                         ].join('\n'));
+
+                        if (includeDimensions) {
+                            registerLayer('WYMIARY_OTWORY', 4);
+                            const txtX = u + radius + 1.2;
+                            const txtY = v + radius + 1.2;
+                            const diaLabel = `%%C${diameter}x${depth}`;
+                            const labelText = `X=${u.toFixed(1)} Y=${v.toFixed(1)} (${diaLabel})`;
+                            entities.push([
+                                '0', 'TEXT',
+                                '5', nextHandle(),
+                                '100', 'AcDbEntity',
+                                '8', 'WYMIARY_OTWORY',
+                                '100', 'AcDbText',
+                                '10', txtX.toFixed(3),
+                                '20', txtY.toFixed(3),
+                                '30', '0.0',
+                                '40', '3.5',
+                                '1', labelText
+                            ].join('\n'));
+
+                            const crossArm = Math.max(radius + 1.5, 3.5);
+                            entities.push([
+                                '0', 'LINE',
+                                '5', nextHandle(),
+                                '100', 'AcDbEntity',
+                                '8', 'WYMIARY_OTWORY',
+                                '100', 'AcDbLine',
+                                '10', (u - crossArm).toFixed(3),
+                                '20', v.toFixed(3),
+                                '30', '0.0',
+                                '11', (u + crossArm).toFixed(3),
+                                '21', v.toFixed(3),
+                                '31', '0.0'
+                            ].join('\n'));
+                            entities.push([
+                                '0', 'LINE',
+                                '5', nextHandle(),
+                                '100', 'AcDbEntity',
+                                '8', 'WYMIARY_OTWORY',
+                                '100', 'AcDbLine',
+                                '10', u.toFixed(3),
+                                '20', (v - crossArm).toFixed(3),
+                                '30', '0.0',
+                                '11', u.toFixed(3),
+                                '21', (v + crossArm).toFixed(3),
+                                '31', '0.0'
+                            ].join('\n'));
+                        }
 
                     } else if (faceName === 'FACE_Z_MINUS') {
                         if (!includeBackFeatures) continue;
@@ -560,9 +715,25 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
 
             } else if (featType === 'groove' || featType === 'nut') {
                 const gp = getGrooveParamsMm(params);
-                const width = gp.width || 4;
-                const length = gp.length || (width > 0 ? W : H);
-                const depth = Math.abs(gp.depth || 8);
+                const hasExplicitWidth = params.width !== undefined || params.width_nm !== undefined;
+                const hasExplicitDepth = params.depth !== undefined || params.depth_nm !== undefined;
+                const hasExplicitLength = params.length !== undefined || params.length_nm !== undefined;
+                const width = hasExplicitWidth ? Number(gp.width) : 4;
+                if (!Number.isFinite(width) || width <= 0) {
+                    throw new Error(`[dxf-panel-exporter] Szerokość wpustu musi być dodatnią liczbą skończoną dla cechy "${feat.id || 'groove'}" (width=${width}).`);
+                }
+                const rawDepth = hasExplicitDepth ? Number(gp.depth) : 8;
+                if (!Number.isFinite(rawDepth) || Math.abs(rawDepth) < 1e-4) {
+                    throw new Error(`[dxf-panel-exporter] Głębokość wpustu nie może być zerowa ani nieskończona dla cechy "${feat.id || 'groove'}" (depth=${rawDepth}).`);
+                }
+                const depth = Math.abs(rawDepth);
+                const length = hasExplicitLength ? Number(gp.length) : (width > 0 ? W : H);
+                if (!Number.isFinite(length) || length <= 0) {
+                    throw new Error(`[dxf-panel-exporter] Długość wpustu musi być dodatnią liczbą skończoną dla cechy "${feat.id || 'groove'}" (length=${length}).`);
+                }
+                if (!Number.isFinite(gp.u) || !Number.isFinite(gp.v)) {
+                    throw new Error(`[dxf-panel-exporter] Współrzędne wpustu (u, v) muszą być liczbami skończonymi dla cechy "${feat.id || 'groove'}" (u=${gp.u}, v=${gp.v}).`);
+                }
 
                 const isBack = faceName === 'FACE_Z_MINUS';
                 if (isBack && !includeBackFeatures) continue;
@@ -636,11 +807,24 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                 ].join('\n'));
 
             } else if (featType === 'pocket') {
-                const depth = Number(params.depth || 3);
-                const u = Number(params.u !== undefined ? params.u : (params.x || 0));
-                const v = Number(params.v !== undefined ? params.v : (params.y || 0));
-                const width = Number(params.width || 50);
-                const length = Number(params.length || params.height || 50);
+                const gp = getGrooveParamsMm(params);
+                const hasExplicitDepth = params.depth !== undefined || params.depth_nm !== undefined;
+                const rawDepth = hasExplicitDepth ? Number(gp.depth) : 3;
+                if (!Number.isFinite(rawDepth) || Math.abs(rawDepth) < 1e-4) {
+                    throw new Error(`[dxf-panel-exporter] Głębokość kieszeni musi być niezerową skończoną liczbą dla cechy "${feat.id || 'pocket'}" (depth=${rawDepth}).`);
+                }
+                const depth = rawDepth;
+                const u = Number(params.u !== undefined ? params.u : (params.u_nm !== undefined ? nmToMm(params.u_nm) : (params.x ?? 0)));
+                const v = Number(params.v !== undefined ? params.v : (params.v_nm !== undefined ? nmToMm(params.v_nm) : (params.y ?? 0)));
+                const hasExplicitWidth = params.width !== undefined || params.width_nm !== undefined;
+                const width = hasExplicitWidth ? Number(gp.width) : 0;
+                const length = (params.length !== undefined || params.length_nm !== undefined) ? Number(gp.length) : Number(params.height ?? 0);
+                if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(length) || length <= 0) {
+                    throw new Error(`[dxf-panel-exporter] Wymiary kieszeni (width, length) muszą być skończonymi liczbami dodatnimi dla cechy "${feat.id || 'pocket'}" (width=${width}, length=${length}).`);
+                }
+                if (!Number.isFinite(u) || !Number.isFinite(v)) {
+                    throw new Error(`[dxf-panel-exporter] Współrzędne kieszeni (u, v) muszą być liczbami skończonymi dla cechy "${feat.id || 'pocket'}" (u=${u}, v=${v}).`);
+                }
 
                 const layerName = `POCKET_Z${depth}`;
                 registerLayer(layerName, 5);
@@ -664,10 +848,18 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                 ].join('\n'));
 
             } else if (featType === 'cutout') {
-                const u = Number(params.u !== undefined ? params.u : (params.x || 0));
-                const v = Number(params.v !== undefined ? params.v : (params.y || 0));
-                const width = Number(params.width || 50);
-                const length = Number(params.length || params.height || 50);
+                const gp = getGrooveParamsMm(params);
+                const u = Number(params.u !== undefined ? params.u : (params.u_nm !== undefined ? nmToMm(params.u_nm) : (params.x ?? 0)));
+                const v = Number(params.v !== undefined ? params.v : (params.v_nm !== undefined ? nmToMm(params.v_nm) : (params.y ?? 0)));
+                const hasExplicitWidth = params.width !== undefined || params.width_nm !== undefined;
+                const width = hasExplicitWidth ? Number(gp.width) : 0;
+                const length = (params.length !== undefined || params.length_nm !== undefined) ? Number(gp.length) : Number(params.height ?? 0);
+                if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(length) || length <= 0) {
+                    throw new Error(`[dxf-panel-exporter] Wymiary wycięcia (width, length) muszą być skończonymi liczbami dodatnimi dla cechy "${feat.id || 'cutout'}" (width=${width}, length=${length}).`);
+                }
+                if (!Number.isFinite(u) || !Number.isFinite(v)) {
+                    throw new Error(`[dxf-panel-exporter] Współrzędne wycięcia (u, v) muszą być liczbami skończonymi dla cechy "${feat.id || 'cutout'}" (u=${u}, v=${v}).`);
+                }
 
                 const layerName = 'CUTOUT';
                 registerLayer(layerName, 1);
@@ -689,6 +881,29 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
                     '70', '1',
                     polyVertices
                 ].join('\n'));
+            } else if (featType === 'contour' || featType === 'profile') {
+                const depth = Number(params.depth !== undefined ? params.depth : (params.depth_nm !== undefined ? nmToMm(params.depth_nm) : T));
+                const isInner = Boolean(params.isInnerContour);
+                const isCutout = isInner || (depth >= T - 0.51);
+                const layerName = isCutout ? 'CUTOUT' : `CONTOUR_Z${depth}`;
+                registerLayer(layerName, isCutout ? 1 : 5);
+                const rawPoints: any[] = Array.isArray(params.points) ? params.points : [];
+                if (rawPoints.length >= 2) {
+                    const pts = rawPoints.map(pt => [Number(pt.x ?? 0), Number(pt.y ?? 0)]);
+                    const dStartEnd = Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]);
+                    const isClosed = params.closed !== undefined ? Boolean(params.closed) : (isCutout || dStartEnd < 0.01);
+                    const ptsStr = pts.map(([px, py]) => `10\n${px.toFixed(3)}\n20\n${py.toFixed(3)}`).join('\n');
+                    entities.push([
+                        '0', 'LWPOLYLINE',
+                        '5', nextHandle(),
+                        '100', 'AcDbEntity',
+                        '8', layerName,
+                        '100', 'AcDbPolyline',
+                        '90', String(pts.length),
+                        '70', isClosed ? '1' : '0',
+                        ptsStr
+                    ].join('\n'));
+                }
             }
         }
     }
@@ -777,7 +992,8 @@ export function generatePanelDxf(panel: any, options: DxfExportOptions = {}): st
  * Generuje plik DXF dla formatki i uruchamia bezpośrednie pobieranie w przeglądarce.
  */
 export function downloadPanelDxf(panel: any, options: DxfExportOptions = {}): { filename: string; content: string } {
-    const content = generatePanelDxf(panel, options);
+    const opts: DxfExportOptions = { includeDimensions: true, ...options };
+    const content = generatePanelDxf(panel, opts);
     const p = panel?.domainData || panel;
     const rawName = p?.name ?? panel?.name;
     const fallbackId = p?.id ?? panel?.id ?? 'panel';

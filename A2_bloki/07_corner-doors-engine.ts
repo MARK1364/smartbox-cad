@@ -14,6 +14,7 @@
 import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 import { buildHoleMachiningIntent } from './01_machining-intent.js';
 import type { CornerDoorsPlanParams } from './01_bloki-module-types.js';
+import { callCornerDoorsPlanWasm } from './corner-doors-wasm-bridge.js';
 
 const EDGE_BANDING = {
     '+X': { active: true, type_id: '0.008x0.022' },
@@ -351,6 +352,16 @@ export function calculateCornerDoorsPlan(
         }
         return features;
     };
+
+    const wasmResult = callCornerDoorsPlanWasm(dims_mm, params, {
+        lcsPrawe: LCS_DRZWI_PRAWE,
+        lcsLewe: LCS_DRZWI_LEWE,
+        edgeBanding: EDGE_BANDING,
+        buildHingeFeatures
+    });
+    if (wasmResult) {
+        return wasmResult;
+    }
 
     parts.push({
         name: 'Drzwi_Prawe',

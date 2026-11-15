@@ -3,7 +3,7 @@
  */
 
 import { rulesMToMm } from '../A1_core/cad-math/units.js';
-import catalogJson from './katalog/operacje.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
 import { parseSideToken } from './operacje-placement.js';
 import type {
     OperationFaceHint,
@@ -85,14 +85,26 @@ function parseRecipe(id: string, raw: RawItem): OperationRecipe {
     };
 }
 
-const BY_ID = new Map<string, OperationRecipe>();
-const ITEMS: OperationRecipe[] = [];
+let _byId: Map<string, OperationRecipe> | null = null;
+let _items: OperationRecipe[] | null = null;
 
-const rawItems = (catalogJson as { items?: Record<string, RawItem> }).items || {};
-for (const [id, raw] of Object.entries(rawItems)) {
-    const recipe = parseRecipe(id, raw);
-    ITEMS.push(recipe);
-    BY_ID.set(recipe.id, recipe);
+function ensureOperationsLoaded(): { byId: Map<string, OperationRecipe>; items: OperationRecipe[] } {
+    if (_byId && _items) {
+        return { byId: _byId, items: _items };
+    }
+    const byId = new Map<string, OperationRecipe>();
+    const items: OperationRecipe[] = [];
+
+    const catalogJson = getModuleRules<{ items?: Record<string, RawItem> }>('operacje');
+    const rawItems = catalogJson?.items || {};
+    for (const [id, raw] of Object.entries(rawItems)) {
+        const recipe = parseRecipe(id, raw);
+        items.push(recipe);
+        byId.set(recipe.id, recipe);
+    }
+    _byId = byId;
+    _items = items;
+    return { byId, items };
 }
 
 function cloneRecipe(r: OperationRecipe): OperationRecipe {
@@ -105,12 +117,14 @@ function cloneRecipe(r: OperationRecipe): OperationRecipe {
 }
 
 export function listOperations(): OperationRecipe[] {
-    return ITEMS.map(cloneRecipe);
+    const { items } = ensureOperationsLoaded();
+    return items.map(cloneRecipe);
 }
 
 export function getOperation(id: string | null | undefined): OperationRecipe | null {
     if (!id) return null;
-    const r = BY_ID.get(id);
+    const { byId } = ensureOperationsLoaded();
+    const r = byId.get(id);
     if (!r) return null;
     return cloneRecipe(r);
 }

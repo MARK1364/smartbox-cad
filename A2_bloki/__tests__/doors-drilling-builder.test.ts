@@ -114,12 +114,49 @@ describe('Doors Drilling Builder (buildDoorsDrillings)', () => {
         expect(rightIntents).toHaveLength(0);
     });
 
+    it('falls back to cabinet geometry when the block has no customReferences/boundary', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus bez referencji' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2' } as any;
+        const cabinetNode = doc.findNode(cabinet.id)!;
+
+        const addSide = (name: string, role: string, xNm: number) => {
+            const panel = new PanelModel({
+                name, role,
+                width: mmToNm(500), height: mmToNm(720), thickness: mmToNm(18),
+            });
+            const node = CADNode.create(NodeType.PART, panel.name, panel.id);
+            node.domainData = panel;
+            node.setLocalTransform(new Vec3(xNm, 0, 0), Quat.IDENTITY);
+            doc.addNode(cabinet.id, node);
+            return node;
+        };
+        const leftNode = addSide('Bok Lewy', 'LEFT_SIDE_PANEL', mmToNm(-291));
+        addSide('Bok Prawy', 'RIGHT_SIDE_PANEL', mmToNm(291));
+
+        const sb = doc.createAssembly({ name: 'Drzwi', width: mmToNm(564), height: mmToNm(720), depth: mmToNm(500) }, cabinetNode.id) as ContainerModel;
+        sb.generatorParams = {
+            type: 'blok_doors',
+            boxType: 'DOORS',
+            rodzaj_drzwi: 'LEFT',
+            width_mm: 564, height_mm: 720, depth_mm: 500,
+        } as any;
+
+        const intents = buildDoorsDrillings(doc, cabinetNode.id);
+        expect(intents.length).toBeGreaterThan(0);
+        expect(intents.every(i => i.targetNodeId === leftNode.id)).toBe(true);
+        for (const intent of intents) {
+            expect(intent.feature.face).toBe('FACE_Z_PLUS');
+            expect(intent.feature.params.u).toBeGreaterThan(0);
+            expect(intent.feature.params.v).toBeGreaterThan(0);
+        }
+    });
+
     it('loads parallel hinges in library list and identifies them', async () => {
         const { listByType, isParallelHinge } = await import('../../B1_biblioteka/index.js');
         const hinges = listByType('HINGE');
         const parallel = hinges.find(h => h.id === 'BLUM_79B9550');
         expect(parallel).toBeDefined();
-        expect(parallel?.name).toContain('równoległy');
+        expect(parallel?.name).toContain('rownolegly_nakladany_47561700');
         expect(isParallelHinge('BLUM_79B9550')).toBe(true);
         expect(isParallelHinge('BLUM_79T9550')).toBe(true);
         expect(isParallelHinge('BLUM_71B3550')).toBe(false);

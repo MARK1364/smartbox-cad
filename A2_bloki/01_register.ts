@@ -16,6 +16,7 @@ import { SyncDrawerDrillingsCommand } from './commands/sync-drawer-drillings-com
 import { SyncFlapsDrillingsCommand } from './commands/sync-flaps-drillings-command.js';
 import { SyncTubesDrillingsCommand } from './commands/sync-tubes-drillings-command.js';
 import { SyncHangersDrillingsCommand } from './commands/sync-hangers-drillings-command.js';
+import { SyncLedMachiningCommand } from './commands/sync-led-machining-command.js';
 import { BlokiBayController } from './02_bloki-bay-controller.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { update_bloki_core } from './01_bloki-core.js';
@@ -123,5 +124,6 @@ export function registerBlokiModule(): void {
         new SyncFlapsDrillingsCommand(cabinetId).execute(doc);
         new SyncTubesDrillingsCommand(cabinetId).execute(doc);
         new SyncHangersDrillingsCommand(cabinetId).execute(doc);
+        new SyncLedMachiningCommand(cabinetId).execute(doc);
     });
 }

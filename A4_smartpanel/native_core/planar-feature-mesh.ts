@@ -9,7 +9,8 @@ import { normalizeFaceName } from '../../A1_core/face-name.js';
 import { localTo3D, computeFaceData } from './face-lcs.js';
 import { appendQuad, emptyMesh, type FaceMeshData } from './face-mesh.js';
 import type { CadEdge } from './brep-topology.js';
-import { isAxisAlignedRect, isEdgeOnContour } from './planar-features.js';
+import { ensureCCW2D, isAxisAlignedRect, isEdgeOnContour } from './planar-features.js';
+import { triangulatePolygonsWithHoles } from './cap-triangulation.js';
 
 type FaceData = ReturnType<typeof computeFaceData>;
 
@@ -333,35 +334,35 @@ export interface BossExtrudeResult {
 export function buildBossExtrudeMesh(input: BossExtrudeInput): BossExtrudeResult {
     const { id, face, polygon, height, plateW, plateH, plateT } = input;
     const faceData = computeFaceData(face, plateW, plateH, plateT);
-    
+
     // Aksjomat 1 & 2: h >= 0 (jeśli h < 0, klamrujemy do 0 - materiał stapia się z bazą i nie tworzy pustki)
     const effectiveHeight = Math.max(0, height);
-    
+
     const topMesh = emptyMesh();
     const wallsMesh = emptyMesh();
-    
+
     if (effectiveHeight <= 0.0001 || !polygon || polygon.length < 3) {
         return { topMesh, wallsMesh, effectiveHeight: 0 };
     }
-    
+
     // Aksjomat 2: Wierzchołki wierzchu (cap) powstają przez przesunięcie o +h * normal
     // localTo3D z depthOffset = -effectiveHeight daje: faceData.origin + uAxis*u + vAxis*v + normal*effectiveHeight
     const top3D = polygon.map(([u, v]) => localTo3D(faceData, u, v, -effectiveHeight));
     const base3D = polygon.map(([u, v]) => localTo3D(faceData, u, v, 0));
-    
+
     // Aksjomat 3: Triangulacja wierzchu (top) z orientacją normalnej na zewnątrz (+n)
     const flatCoords = [];
     for (const [u, v] of polygon) {
         flatCoords.push(u, v);
     }
     const triIndices = earcut(flatCoords);
-    
+
     // Wierzchołki top
     for (const pt of top3D) {
         topMesh.positions.push(pt[0], pt[1], pt[2]);
     }
     topMesh.indices.push(...triIndices);
-    
+
     // Ścianki boczne (walls) - z normalnymi skierowanymi na zewnątrz wyciągnięcia
     const n = polygon.length;
     for (let i = 0; i < n; i++) {
@@ -370,12 +371,12 @@ export function buildBossExtrudeMesh(input: BossExtrudeInput): BossExtrudeResult
         const b1 = base3D[next];
         const t1 = top3D[next];
         const t0 = top3D[i];
-        
+
         appendQuad(wallsMesh, b0, b1, t1, t0);
     }
-    
+
     // Aksjomat 3: Ściana styku (dno na z = 0) NIE JEST GENEROWANA (Merge Solids)
-    
+
     return { topMesh, wallsMesh, effectiveHeight };
 }
 
@@ -411,7 +412,7 @@ export function assertBossExtrudeAxioms(
         const distFromOrigin = (pt[0] - faceData.origin[0]) * faceData.normal[0]
             + (pt[1] - faceData.origin[1]) * faceData.normal[1]
             + (pt[2] - faceData.origin[2]) * faceData.normal[2];
-        
+
         if (distFromOrigin < -EPS) {
             throw new Error('[Boss-Extrude Axiom 1/2] Wierzchołek (' + pt.join(', ') + ') wycina pustkę w bazie formatki!');
         }
@@ -452,17 +453,173 @@ export function assertBossExtrudeAxioms(
     }
 }
 
+/** Prostokątna cecha obszarowa na tym samym licu (do przycinania krawędzi i schodkowania ścianek). */
+export interface AreaRect {
+    u0: number; u1: number; v0: number; v1: number;
+    depth: number;
+    through: boolean;
+}
+
+const AREA_RECT_EPS = 0.05;
+
+export function collectAreaRects(feats: any[] | undefined, self: any, normFace: string, t: number): AreaRect[] {
+    const out: AreaRect[] = [];
+    for (const f of feats || []) {
+        if (f === self || isFeatureSkipped(f)) continue;
+        if (f.type !== 'groove' && f.type !== 'pocket' && f.type !== 'cutout') continue;
+        const fFace = normalizeFaceName(f.face || f.side || 'FACE_Z_PLUS');
+        if (fFace !== normFace) continue;
+        const poly = f.params?.polygon;
+        if (Array.isArray(poly) && poly.length >= 3 && !isAxisAlignedRect(poly)) continue;
+        const p = getGrooveParamsMm(f.params);
+        const through = f.type === 'cutout'
+            || f.params?.through === true
+            || f.params?.kind === 'THROUGH'
+            || (normFace.includes('FACE_Z') && (p.depth || 0) >= t - AREA_RECT_EPS);
+        out.push({
+            u0: Math.min(p.u, p.u + p.width),
+            u1: Math.max(p.u, p.u + p.width),
+            v0: Math.min(p.v, p.v + p.length),
+            v1: Math.max(p.v, p.v + p.length),
+            depth: through ? t : Math.abs(p.depth || 0),
+            through
+        });
+    }
+    return out;
+}
+
+/** Czy punkt (u,v) leży ściśle we wnętrzu prostokąta. */
+function rectContainsStrict(r: AreaRect, u: number, v: number): boolean {
+    return u > r.u0 + AREA_RECT_EPS && u < r.u1 - AREA_RECT_EPS
+        && v > r.v0 + AREA_RECT_EPS && v < r.v1 - AREA_RECT_EPS;
+}
+
+/** Głębokość płytszej kieszeni, w której leży punkt (u,v) — poziom, od którego zaczyna się ścianka wycięcia. */
+function shallowFloorDepthAt(rects: AreaRect[], ownDepth: number, u: number, v: number): number {
+    let top = 0;
+    for (const r of rects) {
+        if (r.through || r.depth >= ownDepth - AREA_RECT_EPS) continue;
+        if (rectContainsStrict(r, u, v)) top = Math.max(top, r.depth);
+    }
+    return top;
+}
+
+type WallAxis = 'u' | 'v';
+
+function pointOnAxisLine(axis: WallAxis, fixed: number, s: number): [number, number] {
+    return axis === 'u' ? [s, fixed] : [fixed, s];
+}
+
+/** Dzieli odcinek [a,b] wzdłuż osi na podprzedziały wg granic prostokątów (punkty podziału). */
+function splitIntervalByRects(a: number, b: number, axis: WallAxis, rects: AreaRect[]): number[] {
+    const pts = new Set<number>([a, b]);
+    for (const r of rects) {
+        const lo = axis === 'u' ? r.u0 : r.v0;
+        const hi = axis === 'u' ? r.u1 : r.v1;
+        if (lo > a + AREA_RECT_EPS && lo < b - AREA_RECT_EPS) pts.add(lo);
+        if (hi > a + AREA_RECT_EPS && hi < b - AREA_RECT_EPS) pts.add(hi);
+    }
+    return [...pts].sort((x, y) => x - y);
+}
+
+/**
+ * Ścianka wycięcia schodkowana wg płytszych kieszeni na tym samym licu:
+ * zwraca [a, b, głębokość_góry_mm] — np. rewizja 18 mm w ramce 3 mm ma ściankę 15 mm (3..18) wewnątrz ramki.
+ */
+export function stepWallPieces(
+    a: number, b: number, axis: WallAxis, fixed: number, rects: AreaRect[], ownDepth: number
+): Array<[number, number, number]> {
+    const pts = splitIntervalByRects(a, b, axis, rects.filter(r => !r.through && r.depth < ownDepth - AREA_RECT_EPS));
+    const out: Array<[number, number, number]> = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+        const mid = (pts[i] + pts[i + 1]) / 2;
+        const [mu, mv] = pointOnAxisLine(axis, fixed, mid);
+        const top = shallowFloorDepthAt(rects, ownDepth, mu, mv);
+        const last = out[out.length - 1];
+        if (last && Math.abs(last[2] - top) < 1e-6) last[1] = pts[i + 1];
+        else out.push([pts[i], pts[i + 1], top]);
+    }
+    return out;
+}
+
+/**
+ * Dodaje krawędź osiową przyciętą przez przelotowe wycięcia (`cutRects`) i schodkowaną
+ * wg płytszych kieszeni (`stepRects`). Brak przycięcia → oryginalny klucz.
+ */
+export function pushClippedAxisEdge(
+    out: CadEdge[], key: string, faceData: FaceData,
+    axis: WallAxis, fixed: number, a: number, b: number,
+    baseDepth: number, stepRects: AreaRect[], cutRects: AreaRect[], ownDepth: number
+): void {
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    const pts = splitIntervalByRects(lo, hi, axis, [...cutRects, ...stepRects]);
+    const pieces: Array<[number, number, number]> = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+        const mid = (pts[i] + pts[i + 1]) / 2;
+        const [mu, mv] = pointOnAxisLine(axis, fixed, mid);
+        if (cutRects.some(r => rectContainsStrict(r, mu, mv))) continue;
+        const depth = baseDepth > 0 ? baseDepth : shallowFloorDepthAt(stepRects, ownDepth, mu, mv);
+        pieces.push([pts[i], pts[i + 1], depth]);
+    }
+    const untouched = pieces.length === 1 && Math.abs(pieces[0][0] - lo) < 1e-9 && Math.abs(pieces[0][1] - hi) < 1e-9;
+    pieces.forEach(([pa, pb, d], i) => {
+        const [au, av] = pointOnAxisLine(axis, fixed, pa);
+        const [bu, bv] = pointOnAxisLine(axis, fixed, pb);
+        const pA = localTo3D(faceData, au, av, d);
+        const pB = localTo3D(faceData, bu, bv, d);
+        const reversed = a > b;
+        out.push({ key: untouched ? key : `${key}_seg${i + 1}`, points: reversed ? [pB, pA] : [pA, pB] });
+    });
+}
+
+function collectPiercingHolesForBottom(
+    feats: any[],
+    selfFeat: any,
+    selfDepth: number,
+    faceData: FaceData,
+    holes2D?: number[][][]
+): number[][][] {
+    const piercing: number[][][] = [];
+    for (const f of feats) {
+        if (f === selfFeat || isFeatureSkipped(f)) continue;
+        if (f.type !== 'groove' && f.type !== 'pocket' && f.type !== 'cutout') continue;
+        const p = getGrooveParamsMm(f.params);
+        const isThrough = f.type === 'cutout' || f.params?.through === true || f.params?.kind === 'THROUGH';
+        const fDepth = isThrough ? Infinity : Math.abs(p.depth ?? 0);
+        if (fDepth <= selfDepth + 0.05) continue;
+        if (Array.isArray(f.params?.polygon) && f.params.polygon.length >= 3) {
+            piercing.push(f.params.polygon);
+        } else {
+            const u0 = Math.max(0, p.u);
+            const u1 = Math.min(faceData.width, p.u + p.width);
+            const v0 = Math.max(0, p.v);
+            const v1 = Math.min(faceData.height, p.v + p.length);
+            if (u1 - u0 > 0.05 && v1 - v0 > 0.05) {
+                piercing.push([[u0, v0], [u1, v0], [u1, v1], [u0, v1]]);
+            }
+        }
+    }
+    if (holes2D && holes2D.length > 0) {
+        for (const h of holes2D) {
+            if (h.length >= 3) piercing.push(h);
+        }
+    }
+    return piercing;
+}
+
 /** Siatki B-rep cechy obszarowej: `feature_<id>_bottom` oraz ścianki `_w0.._w3` → `featureMeshes`. */
 export function buildAreaFeatureMeshes(feat: any, ctx: {
     faceData: FaceData;
     outerContour: number[][];
     bottomContour?: number[][];
     feats: any[];
+    holes2D?: number[][][];
     lUnion: LGrooveUnion | null;
     t: number;
     featureMeshes: Record<string, FaceMeshData>;
 }): void {
-    const { faceData, outerContour, bottomContour, feats, lUnion, t, featureMeshes } = ctx;
+    const { faceData, outerContour, bottomContour, feats, holes2D, lUnion, t, featureMeshes } = ctx;
     if (lUnion && (feat === lUnion.gA || feat === lUnion.gB)) {
         if (feat === lUnion.gB) return;
         const fidA = String(lUnion.gA.id || lUnion.gA.type || 'groove_L');
@@ -523,7 +680,7 @@ export function buildAreaFeatureMeshes(feat: any, ctx: {
     }
 
     const customPoly: Array<[number, number]> | undefined = Array.isArray(feat.params?.polygon) && feat.params.polygon.length >= 3
-        ? feat.params.polygon
+        ? ensureCCW2D(feat.params.polygon) as Array<[number, number]>
         : undefined;
 
     if (customPoly) {
@@ -545,13 +702,9 @@ export function buildAreaFeatureMeshes(feat: any, ctx: {
             featureMeshes[`feature_${fid}_w0`] = w0;
         }
         if (!isGrooveThrough) {
-            const flat = customPoly.flat();
-            const triIndices = earcut(flat, [], 2);
             const bottom = emptyMesh();
-            for (const [pu, pv] of customPoly) {
-                bottom.positions.push(...localTo3D(faceData, pu, pv, depth));
-            }
-            bottom.indices.push(...triIndices);
+            const piercingHoles = collectPiercingHolesForBottom(feats, feat, depth, faceData, holes2D);
+            triangulatePolygonsWithHoles([customPoly], piercingHoles, faceData, depth, bottom);
             featureMeshes[`feature_${fid}_bottom`] = bottom;
         }
         for (const k of [`feature_${fid}_bottom`, `feature_${fid}_w0`]) {
@@ -612,11 +765,17 @@ export function buildAreaFeatureMeshes(feat: any, ctx: {
                 }
             }
         }
-        const p00_d_bot = localTo3D(faceData, botU0, botV0, depth);
-        const p10_d_bot = localTo3D(faceData, botU1, botV0, depth);
-        const p11_d_bot = localTo3D(faceData, botU1, botV1, depth);
-        const p01_d_bot = localTo3D(faceData, botU0, botV1, depth);
-        appendQuad(bottom, p00_d_bot, p10_d_bot, p11_d_bot, p01_d_bot);
+        const piercingHoles = collectPiercingHolesForBottom(feats, feat, depth, faceData, holes2D);
+        if (piercingHoles.length > 0) {
+            const botRect = [[botU0, botV0], [botU1, botV0], [botU1, botV1], [botU0, botV1]];
+            triangulatePolygonsWithHoles([botRect], piercingHoles, faceData, depth, bottom);
+        } else {
+            const p00_d_bot = localTo3D(faceData, botU0, botV0, depth);
+            const p10_d_bot = localTo3D(faceData, botU1, botV0, depth);
+            const p11_d_bot = localTo3D(faceData, botU1, botV1, depth);
+            const p01_d_bot = localTo3D(faceData, botU0, botV1, depth);
+            appendQuad(bottom, p00_d_bot, p10_d_bot, p11_d_bot, p01_d_bot);
+        }
         featureMeshes[`feature_${fid}_bottom`] = bottom;
     }
 
@@ -632,16 +791,18 @@ export function buildAreaFeatureMeshes(feat: any, ctx: {
             if (hU1 - hU0 > EDGE_EPS) holesW0.push([hU0, hU1]);
         }
     }
-    const segsW0 = clipIntervals(u0, u1, holesW0);
+    const areaRects = collectAreaRects(feats, feat, normalizeFaceName(feat.face || feat.side || 'FACE_Z_PLUS'), t);
+    const segsW0 = clipIntervals(u0, u1, holesW0)
+        .flatMap(([a, b]) => stepWallPieces(a, b, 'u', v0, areaRects, depth));
     const w0 = emptyMesh();
-    for (const [su0, su1] of segsW0) {
+    for (const [su0, su1, topD] of segsW0) {
         if (!throughV0) {
             const su0_bot = Math.abs(su0 - u0) <= EDGE_EPS ? u0_bot : su0;
             const su1_bot = Math.abs(su1 - u1) <= EDGE_EPS ? u1_bot : su1;
             appendQuad(
                 w0,
-                localTo3D(faceData, su0, v0, 0),
-                localTo3D(faceData, su1, v0, 0),
+                localTo3D(faceData, su0, v0, topD),
+                localTo3D(faceData, su1, v0, topD),
                 localTo3D(faceData, su1_bot, v0_bot, depth),
                 localTo3D(faceData, su0_bot, v0_bot, depth)
             );
@@ -660,16 +821,17 @@ export function buildAreaFeatureMeshes(feat: any, ctx: {
             if (hU1 - hU0 > EDGE_EPS) holesW2.push([hU0, hU1]);
         }
     }
-    const segsW2 = clipIntervals(u0, u1, holesW2);
+    const segsW2 = clipIntervals(u0, u1, holesW2)
+        .flatMap(([a, b]) => stepWallPieces(a, b, 'u', v1, areaRects, depth));
     const w2 = emptyMesh();
-    for (const [su0, su1] of segsW2) {
+    for (const [su0, su1, topD] of segsW2) {
         if (!throughV1) {
             const su0_bot = Math.abs(su0 - u0) <= EDGE_EPS ? u0_bot : su0;
             const su1_bot = Math.abs(su1 - u1) <= EDGE_EPS ? u1_bot : su1;
             appendQuad(
                 w2,
-                localTo3D(faceData, su1, v1, 0),
-                localTo3D(faceData, su0, v1, 0),
+                localTo3D(faceData, su1, v1, topD),
+                localTo3D(faceData, su0, v1, topD),
                 localTo3D(faceData, su0_bot, v1_bot, depth),
                 localTo3D(faceData, su1_bot, v1_bot, depth)
             );
@@ -688,16 +850,17 @@ export function buildAreaFeatureMeshes(feat: any, ctx: {
             if (hV1 - hV0 > EDGE_EPS) holesW3.push([hV0, hV1]);
         }
     }
-    const segsW3 = clipIntervals(v0, v1, holesW3);
+    const segsW3 = clipIntervals(v0, v1, holesW3)
+        .flatMap(([a, b]) => stepWallPieces(a, b, 'v', u0, areaRects, depth));
     const w3 = emptyMesh();
-    for (const [sv0, sv1] of segsW3) {
+    for (const [sv0, sv1, topD] of segsW3) {
         if (!throughU0) {
             const sv0_bot = Math.abs(sv0 - v0) <= EDGE_EPS ? v0_bot : sv0;
             const sv1_bot = Math.abs(sv1 - v1) <= EDGE_EPS ? v1_bot : sv1;
             appendQuad(
                 w3,
-                localTo3D(faceData, u0, sv1, 0),
-                localTo3D(faceData, u0, sv0, 0),
+                localTo3D(faceData, u0, sv1, topD),
+                localTo3D(faceData, u0, sv0, topD),
                 localTo3D(faceData, u0_bot, sv0_bot, depth),
                 localTo3D(faceData, u0_bot, sv1_bot, depth)
             );
@@ -716,16 +879,17 @@ export function buildAreaFeatureMeshes(feat: any, ctx: {
             if (hV1 - hV0 > EDGE_EPS) holesW1.push([hV0, hV1]);
         }
     }
-    const segsW1 = clipIntervals(v0, v1, holesW1);
+    const segsW1 = clipIntervals(v0, v1, holesW1)
+        .flatMap(([a, b]) => stepWallPieces(a, b, 'v', u1, areaRects, depth));
     const w1 = emptyMesh();
-    for (const [sv0, sv1] of segsW1) {
+    for (const [sv0, sv1, topD] of segsW1) {
         if (!throughU1) {
             const sv0_bot = Math.abs(sv0 - v0) <= EDGE_EPS ? v0_bot : sv0;
             const sv1_bot = Math.abs(sv1 - v1) <= EDGE_EPS ? v1_bot : sv1;
             appendQuad(
                 w1,
-                localTo3D(faceData, u1, sv0, 0),
-                localTo3D(faceData, u1, sv1, 0),
+                localTo3D(faceData, u1, sv0, topD),
+                localTo3D(faceData, u1, sv1, topD),
                 localTo3D(faceData, u1_bot, sv1_bot, depth),
                 localTo3D(faceData, u1_bot, sv0_bot, depth)
             );
@@ -742,9 +906,11 @@ export function buildAreaFeatureMeshes(feat: any, ctx: {
         `feature_${fid}_w2`,
         `feature_${fid}_w3`,
     ];
-    for (const k of featureMeshKeys) {
-        if (featureMeshes[k]?.positions) {
-            assertCutFeatureEnvelope(k, featureMeshes[k].positions, faceData.width, faceData.height, t);
+    if (!bottomContour) {
+        for (const k of featureMeshKeys) {
+            if (featureMeshes[k]?.positions) {
+                assertCutFeatureEnvelope(k, featureMeshes[k].positions, faceData.width, faceData.height, t);
+            }
         }
     }
 }
@@ -757,6 +923,7 @@ export function appendAreaFeatureEdges(featureEdges: CadEdge[], feat: any, ctx: 
     lUnion: LGrooveUnion | null;
     normFace: string;
     t: number;
+    feats?: any[];
 }): void {
     const { faceData, faceContour, bottomContour, lUnion, normFace, t } = ctx;
     if (lUnion && (feat === lUnion.gA || feat === lUnion.gB)) {
@@ -868,33 +1035,33 @@ export function appendAreaFeatureEdges(featureEdges: CadEdge[], feat: any, ctx: 
         throughU0, throughU1, throughV0, throughV1
     } = resolveBevelGrooveBounds(u0, v0, gw, gh, faceData, faceContour, bottomContour, depth, t);
 
-    const p00_0 = localTo3D(faceData, u0_top, v0_top, 0);
-    const p10_0 = localTo3D(faceData, u1_top, v0_top, 0);
-    const p11_0 = localTo3D(faceData, u1_top, v1_top, 0);
-    const p01_0 = localTo3D(faceData, u0_top, v1_top, 0);
+    const allRects = collectAreaRects(ctx.feats, feat, normFace, t);
+    // Ramka (płytka) traci krawędzie w świetle przelotowych wycięć; wycięcie schodkuje górę w płytszych kieszeniach.
+    const cutRects = isGrooveThrough ? [] : allRects.filter(r => r.through);
+    const stepRects = allRects.filter(r => !r.through);
+    const edgeKey = (n: string) => `e_groove_${feat.id}_${n}`;
 
-    const p00_d = localTo3D(faceData, u0_bot, v0_bot, depth);
-    const p10_d = localTo3D(faceData, u1_bot, v0_bot, depth);
-    const p11_d = localTo3D(faceData, u1_bot, v1_bot, depth);
-    const p01_d = localTo3D(faceData, u0_bot, v1_bot, depth);
+    if (!throughV0) pushClippedAxisEdge(featureEdges, edgeKey('t1'), faceData, 'u', v0_top, u0_top, u1_top, 0, stepRects, cutRects, depth);
+    if (!throughU1) pushClippedAxisEdge(featureEdges, edgeKey('t2'), faceData, 'v', u1_top, v0_top, v1_top, 0, stepRects, cutRects, depth);
+    if (!throughV1) pushClippedAxisEdge(featureEdges, edgeKey('t3'), faceData, 'u', v1_top, u1_top, u0_top, 0, stepRects, cutRects, depth);
+    if (!throughU0) pushClippedAxisEdge(featureEdges, edgeKey('t4'), faceData, 'v', u0_top, v1_top, v0_top, 0, stepRects, cutRects, depth);
 
-
-
-    if (!throughV0) featureEdges.push({ key: `e_groove_${feat.id}_t1`, points: [p00_0, p10_0] });
-    if (!throughU1) featureEdges.push({ key: `e_groove_${feat.id}_t2`, points: [p10_0, p11_0] });
-    if (!throughV1) featureEdges.push({ key: `e_groove_${feat.id}_t3`, points: [p11_0, p01_0] });
-    if (!throughU0) featureEdges.push({ key: `e_groove_${feat.id}_t4`, points: [p01_0, p00_0] });
-
-    if (!isGrooveThrough || !throughV0) featureEdges.push({ key: `e_groove_${feat.id}_b1`, points: [p00_d, p10_d] });
-    if (!isGrooveThrough || !throughU1) featureEdges.push({ key: `e_groove_${feat.id}_b2`, points: [p10_d, p11_d] });
-    if (!isGrooveThrough || !throughV1) featureEdges.push({ key: `e_groove_${feat.id}_b3`, points: [p11_d, p01_d] });
-    if (!isGrooveThrough || !throughU0) featureEdges.push({ key: `e_groove_${feat.id}_b4`, points: [p01_d, p00_d] });
+    if (!isGrooveThrough || !throughV0) pushClippedAxisEdge(featureEdges, edgeKey('b1'), faceData, 'u', v0_bot, u0_bot, u1_bot, depth, [], cutRects, depth);
+    if (!isGrooveThrough || !throughU1) pushClippedAxisEdge(featureEdges, edgeKey('b2'), faceData, 'v', u1_bot, v0_bot, v1_bot, depth, [], cutRects, depth);
+    if (!isGrooveThrough || !throughV1) pushClippedAxisEdge(featureEdges, edgeKey('b3'), faceData, 'u', v1_bot, u1_bot, u0_bot, depth, [], cutRects, depth);
+    if (!isGrooveThrough || !throughU0) pushClippedAxisEdge(featureEdges, edgeKey('b4'), faceData, 'v', u0_bot, v1_bot, v0_bot, depth, [], cutRects, depth);
 
     // Krawędzie pionowe cechy istnieją wtedy, gdy przynajmniej jedna ścianka dochodzi do tego narożnika.
     // Zlicowane (współpłaszczyznowe) krawędzie są centralnie rozpuszczane przez dissolveCoplanarEdges (brep-topology.ts).
-    if (!(throughU0 && throughV0)) featureEdges.push({ key: `e_groove_${feat.id}_v1`, points: [p00_0, p00_d] });
-    if (!(throughU1 && throughV0)) featureEdges.push({ key: `e_groove_${feat.id}_v2`, points: [p10_0, p10_d] });
-    if (!(throughU1 && throughV1)) featureEdges.push({ key: `e_groove_${feat.id}_v3`, points: [p11_0, p11_d] });
-    if (!(throughU0 && throughV1)) featureEdges.push({ key: `e_groove_${feat.id}_v4`, points: [p01_0, p01_d] });
+    const pushVertical = (n: string, uT: number, vT: number, uB: number, vB: number) => {
+        if (cutRects.some(r => rectContainsStrict(r, uT, vT))) return;
+        const topD = shallowFloorDepthAt(stepRects, depth, uT, vT);
+        if (topD >= depth - AREA_RECT_EPS) return;
+        featureEdges.push({ key: edgeKey(n), points: [localTo3D(faceData, uT, vT, topD), localTo3D(faceData, uB, vB, depth)] });
+    };
+    if (!(throughU0 && throughV0)) pushVertical('v1', u0_top, v0_top, u0_bot, v0_bot);
+    if (!(throughU1 && throughV0)) pushVertical('v2', u1_top, v0_top, u1_bot, v0_bot);
+    if (!(throughU1 && throughV1)) pushVertical('v3', u1_top, v1_top, u1_bot, v1_bot);
+    if (!(throughU0 && throughV1)) pushVertical('v4', u0_top, v1_top, u0_bot, v1_bot);
 }
 

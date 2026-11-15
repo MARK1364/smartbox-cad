@@ -1,5 +1,5 @@
 import { GlobalReportsEngineWeb, PanelPricingResult, AccessoryPricingResult, GlobalProjectSummary } from './global-reports-engine';
-import { CuttingPanelContract, ReportDataNormalizer } from './report-data-normalizer';
+import { CuttingPanelContract, ReportDataNormalizer, ReportDataIssue } from './report-data-normalizer';
 
 export class HtmlReportsGeneratorWeb {
     private engine: GlobalReportsEngineWeb;
@@ -148,6 +148,11 @@ export class HtmlReportsGeneratorWeb {
      * z możliwością natychmiastowego przełączania w UI.
      */
     public generateMaterialCuttingTabsHtml(panels: CuttingPanelContract[], prefix = 'repMatTab'): { buttonsHtml: string; contentHtml: string } {
+        const normalized = ReportDataNormalizer.validateCuttingPanelContracts(panels);
+        if (normalized.issues.length > 0) {
+            throw new Error(`Nieprawidłowe dane formatek: ${normalized.issues.map((issue) => `${issue.panel_name}: ${issue.reason}`).join('; ')}`);
+        }
+        panels = normalized.panels;
         const today_str = new Date().toISOString().slice(0, 10);
 
         // Grupowanie formatek po unikalnym materiale i grubości
@@ -170,14 +175,6 @@ export class HtmlReportsGeneratorWeb {
             const nameB = this.engine.resolveMaterialName(b.material_id).toLowerCase();
             return nameA.localeCompare(nameB) || a.thickness_mm - b.thickness_mm;
         });
-
-        if (sortedGroups.length === 0) {
-            sortedGroups.push({
-                material_id: 'W1100_ST9_18',
-                thickness_mm: 18,
-                panels: []
-            });
-        }
 
         let buttonsHtml = '';
         let contentHtml = '';
@@ -221,11 +218,12 @@ export class HtmlReportsGeneratorWeb {
         projectName: string,
         summary: GlobalProjectSummary,
         panels: PanelPricingResult[],
-        accessories: AccessoryPricingResult[] = []
+        accessories: AccessoryPricingResult[] = [],
+        issues: ReportDataIssue[] = [],
     ): string {
         const dateStr = new Date().toLocaleString('pl-PL');
 
-        const rawContracts: CuttingPanelContract[] = panels.map(p => ({
+        const contractResult = ReportDataNormalizer.validateCuttingPanelContracts(panels.map(p => ({
             part_id: p.part_id,
             role: p.role,
             material: p.material_id,
@@ -236,7 +234,14 @@ export class HtmlReportsGeneratorWeb {
             is_x_longer: p.is_x_longer,
             furniture_name: p.furniture_name,
             qty: p.qty || 1
-        }));
+        })));
+        if (contractResult.issues.length > 0) {
+            throw new Error(`Nieprawidłowe dane formatek: ${contractResult.issues.map((issue) => `${issue.panel_name}: ${issue.reason}`).join('; ')}`);
+        }
+        const rawContracts = contractResult.panels;
+        const issuesHtml = issues.length > 0
+            ? `<section class="data-issues"><h3>Pominięto ${issues.length} ${issues.length === 1 ? 'formatkę' : 'formatek'} z niekompletnymi danymi PanelModel</h3><ul>${issues.map((issue) => `<li><strong>${this.escapeHtml(issue.panel_name)}</strong> (${this.escapeHtml(issue.node_id)}): ${this.escapeHtml(issue.reason)}</li>`).join('')}</ul></section>`
+            : '';
 
         // Generowanie materiałowych list cięcia (A4)
         const { buttonsHtml: materialTabsBtns, contentHtml: materialTabsContent } = this.generateMaterialCuttingTabsHtml(rawContracts, 'repMatTab');
@@ -511,6 +516,7 @@ export class HtmlReportsGeneratorWeb {
                 <div class="value">${summary.Liczba_elementow} / ${summary.Calkowite_liczba_akcesorii_szt} szt.</div>
             </div>
         </div>
+        ${issuesHtml}
 
         <div class="tabs no-print">
             <button class="tablinks active" onclick="openTab(event, 'SummaryTab')">Podsumowanie i Płyty</button>
@@ -731,8 +737,8 @@ export class HtmlReportsGeneratorWeb {
             let globalLp = 1;
             sheets.forEach(function(sheet) {
                 const headerCells = sheet.querySelectorAll('.cut-header-table td');
-                const matName = headerCells[1]?.textContent?.trim() || '';
-                const thick = headerCells[2]?.textContent?.trim() || '';
+                const matName = headerCells[0]?.textContent?.trim() || '';
+                const thick = headerCells[1]?.textContent?.trim() || '';
 
                 const rows = sheet.querySelectorAll('.cutting-table-a4 tbody tr');
                 rows.forEach(function(row) {
@@ -764,6 +770,11 @@ export class HtmlReportsGeneratorWeb {
      * Generuje formularz zlecenia cięcia / okleinowania dla hurtowni (Formatka A4 z 30 wierszami per strona)
      */
     public generateOrderReportHtml(moduleName: string, panels: CuttingPanelContract[]): string {
+        const normalized = ReportDataNormalizer.validateCuttingPanelContracts(panels);
+        if (normalized.issues.length > 0) {
+            throw new Error(`Nieprawidłowe dane formatek: ${normalized.issues.map((issue) => `${issue.panel_name}: ${issue.reason}`).join('; ')}`);
+        }
+        panels = normalized.panels;
         const { buttonsHtml: tabsButtonsHtml, contentHtml: tabsContentHtml } = this.generateMaterialCuttingTabsHtml(panels, 'matTab');
 
         return `<!DOCTYPE html>
@@ -964,6 +975,11 @@ export class HtmlReportsGeneratorWeb {
      * Eksportuje listę cięcia do pliku CSV z kodowaniem UTF-8 z BOM
      */
     public generateCsv(panels: CuttingPanelContract[], mode: 'merged' | 'detailed' = 'merged'): string {
+        const normalized = ReportDataNormalizer.validateCuttingPanelContracts(panels);
+        if (normalized.issues.length > 0) {
+            throw new Error(`Nieprawidłowe dane formatek: ${normalized.issues.map((issue) => `${issue.panel_name}: ${issue.reason}`).join('; ')}`);
+        }
+        panels = normalized.panels;
         const rows = mode === 'detailed'
             ? [...panels].sort((a, b) => (b.length_mm - a.length_mm) || (b.width_mm - a.width_mm))
             : ReportDataNormalizer.aggregateContractRowsByGeometry(panels, (cfg, dir, isX) => this.getEdgeCode(cfg, dir, isX));
@@ -1007,6 +1023,16 @@ export class HtmlReportsGeneratorWeb {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    private escapeHtml(value: string): string {
+        return value.replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+        })[char] || char);
     }
 
     /**

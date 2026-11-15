@@ -136,7 +136,7 @@ export function CornerDoorsSubModule({
                 <span style={{ color: '#d4d4d8', fontSize: '12px' }}>{tx(cornerDoorsTekst, 'szcz_srodkowa.label', TX_NS)}</span>
                 <SmartNumericInput
                     value={szcz_srodkowa}
-                    step={0.01}
+                    step={1}
                     decimals={2}
                     unit="mm"
                     style={{
@@ -180,7 +180,7 @@ export function CornerDoorsSubModule({
                             <span style={{ color: '#d4d4d8', fontSize: '11px' }}>{tx(cornerDoorsTekst, `${labelKey}.label`, TX_NS)}</span>
                             <SmartNumericInput
                                 value={val}
-                                step={0.01}
+                                step={1}
                                 decimals={2}
                                 unit="mm"
                                 onChange={(v) => {

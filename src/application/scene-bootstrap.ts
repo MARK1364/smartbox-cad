@@ -25,6 +25,23 @@ import { PropertiesManager } from '../../A1_core/properties.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { ModalTransformManager } from '../../A1_core/modal-transform.js';
 import type { CadModuleContext } from '../../A1_core/cad-module-context.js';
+import { ensureDoorsWasmInitialized } from '../../A2_bloki/doors-wasm-bridge.js';
+import { ensureDrawersWasmInitialized } from '../../A2_bloki/drawers-wasm-bridge.js';
+import { ensureShelvesWasmInitialized } from '../../A2_bloki/shelves-wasm-bridge.js';
+import { ensureFlapsWasmInitialized } from '../../A2_bloki/flaps-wasm-bridge.js';
+import { ensureDividersWasmInitialized } from '../../A2_bloki/dividers-wasm-bridge.js';
+import { ensureTubesWasmInitialized } from '../../A2_bloki/tubes-wasm-bridge.js';
+import { ensureShelfWasmInitialized } from '../../A2_bloki/shelf-wasm-bridge.js';
+import { ensurePanelsWasmInitialized } from '../../A2_bloki/panels-wasm-bridge.js';
+import { ensureSkosneDoorsWasmInitialized } from '../../A2_bloki/skosne-doors-wasm-bridge.js';
+import { ensureCornerDoorsWasmInitialized } from '../../A2_bloki/corner-doors-wasm-bridge.js';
+import { ensureCornerShelvesWasmInitialized } from '../../A2_bloki/corner-shelves-wasm-bridge.js';
+import { ensureSlidingDoorsWasmInitialized } from '../../A2_bloki/sliding-doors-wasm-bridge.js';
+import { ensureLedWasmInitialized } from '../../A2_bloki/led-wasm-bridge.js';
+import { ensureHangersWasmInitialized } from '../../A2_bloki/hangers-wasm-bridge.js';
+import { ensureHandlesWasmInitialized } from '../../A2_bloki/handles/handles-wasm-bridge.js';
+import { ensureSmartFrameWasmInitialized } from '../../A3_smartframe/smartframe-wasm-bridge.js';
+import { ensurePanelBrepWasmInitialized } from '../../A4_smartpanel/panel-brep-wasm-bridge.js';
 
 /** Konkretna implementacja CadModuleContext z dokładnymi typami Babylona. */
 export interface BootstrapContext extends CadModuleContext {
@@ -35,6 +52,25 @@ export interface BootstrapContext extends CadModuleContext {
 }
 
 export async function bootstrapScene(): Promise<BootstrapContext> {
+    // Inicjalizacja binarnych silników WASM w tle przy starcie sceny
+    void ensureDoorsWasmInitialized();
+    void ensureDrawersWasmInitialized();
+    void ensureShelvesWasmInitialized();
+    void ensureFlapsWasmInitialized();
+    void ensureDividersWasmInitialized();
+    void ensureTubesWasmInitialized();
+    void ensureShelfWasmInitialized();
+    void ensurePanelsWasmInitialized();
+    void ensureSkosneDoorsWasmInitialized();
+    void ensureCornerDoorsWasmInitialized();
+    void ensureCornerShelvesWasmInitialized();
+    void ensureSlidingDoorsWasmInitialized();
+    void ensureLedWasmInitialized();
+    void ensureHangersWasmInitialized();
+    void ensureHandlesWasmInitialized();
+    void ensureSmartFrameWasmInitialized();
+    void ensurePanelBrepWasmInitialized();
+
     let canvas = window.document.getElementById('renderCanvas') as HTMLCanvasElement;
     // Czekaj na zamontowanie canvasu w React.js (przydatne przy HMR)
     while (!canvas) {
@@ -44,7 +80,6 @@ export async function bootstrapScene(): Promise<BootstrapContext> {
 
     const document = new ProjectDocument();
     registerProjectDomain(document);
-    document.ensureGlcNode();
     const propertiesManager = PropertiesManager.instance;
 
     // Bezpieczne zwolnienie poprzedniego silnika w przypadku ponownego uruchomienia (HMR)

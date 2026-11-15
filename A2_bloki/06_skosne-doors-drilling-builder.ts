@@ -55,7 +55,7 @@ export function buildSkosneDoorsDrillings(
 
     const sbContainers = containers.filter((c: any) => {
         const p = c.domainData?.generatorParams;
-        if (!p || !(p.type === 'blok_skosne_drzwi' || p.boxType === 'SKOSNE_DOORS') || c.domainData?.visible === false) return false;
+        if (!p || !(p.type === 'blok_skosne_drzwi' || p.boxType === 'SKOSNE_DOORS') || c.frozen || c.domainData?.frozen === true) return false;
         if (cabinetContainerId) {
             return p.parentContainerId === cabinetNode.id || c.parent?.id === cabinetNode.id || isChildOfCabinet(c);
         }
@@ -167,7 +167,7 @@ export function buildSkosneDoorsDrillings(
                 const hingeId = tplMap[hinge.index]
                     ?? normalized.szablony_zawiasow[hinge.index]
                     ?? normalized.domyslny_zawias_id;
-                const corpusHoles = hingeCorpusHolesMm(hingeId);
+                const corpusHoles = hingeCorpusHolesMm(hingeId, (sbData.generatorParams as any)?.typ_prowadnika);
                 const templateId = hingeTemplateId(hingeId);
                 const isParallel = isParallelHinge(hingeId);
                 const targetFace = findTargetHingeFace(targetNode, isParallel, target.suggestedFace);

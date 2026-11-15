@@ -32,6 +32,59 @@ import {
 /** Typ w generatorParams — odróżnia CUSTOM SmartPart od uchwytu / zawieszki. */
 export const SMARTPART_CUSTOM_TYPE = 'smartpart_custom';
 
+function cloneValue<T>(value: T): T {
+    if (Array.isArray(value)) return value.map(cloneValue) as T;
+    if (!value || typeof value !== 'object') return value;
+    const copy = Object.create(Object.getPrototypeOf(value));
+    for (const key of Reflect.ownKeys(value)) {
+        copy[key] = cloneValue((value as any)[key]);
+    }
+    return copy;
+}
+
+interface CustomSmartPartParamsSnapshot {
+    generatorParams: any;
+    width: number;
+    height: number;
+    depth: number;
+    panelFeatures: any[] | null;
+}
+
+function captureParamsSnapshot(container: any, document: any): CustomSmartPartParamsSnapshot {
+    const targetPanelId = container.generatorParams?.targetPanelId as string | undefined;
+    const panelModel = targetPanelId ? document.findNode(targetPanelId)?.domainData : null;
+    return {
+        generatorParams: cloneValue(container.generatorParams),
+        width: container.width,
+        height: container.height,
+        depth: container.depth,
+        panelFeatures: panelModel
+            ? cloneValue(Array.isArray(panelModel.features) ? panelModel.features : [])
+            : null,
+    };
+}
+
+function restoreParamsSnapshot(
+    container: any,
+    document: any,
+    snapshot: CustomSmartPartParamsSnapshot,
+): void {
+    container.generatorParams = cloneValue(snapshot.generatorParams);
+    container.width = snapshot.width;
+    container.height = snapshot.height;
+    container.depth = snapshot.depth;
+
+    const targetPanelId = snapshot.generatorParams?.targetPanelId as string | undefined;
+    const panelModel = targetPanelId ? document.findNode(targetPanelId)?.domainData : null;
+    if (panelModel && snapshot.panelFeatures) {
+        if (typeof panelModel.setFeatures === 'function') {
+            panelModel.setFeatures(cloneValue(snapshot.panelFeatures));
+        } else {
+            panelModel.features = cloneValue(snapshot.panelFeatures);
+        }
+    }
+}
+
 export interface CustomSmartPartApplyParams {
     definition: SmartPartPackageDefinition;
     targetPanelNode: CADNode;
@@ -273,31 +326,44 @@ export function updateCustomSmartPartParams(
         return false;
     }
 
-    gp.paramValues = { ...nextValues };
-    gp.parts = resolved.parts;
-    gp.partBody = resolved.partBody || resolved.parts?.[0];
-    gp.mainContainer = resolved.mainContainer;
+    const snapshot = captureParamsSnapshot(container, document);
+    const update = () => {
+        gp.paramValues = { ...nextValues };
+        gp.parts = resolved.parts;
+        gp.partBody = resolved.partBody || resolved.parts?.[0];
+        gp.mainContainer = resolved.mainContainer;
 
-    container.width = mmToNm(resolved.mainContainer.widthMm);
-    container.height = mmToNm(resolved.mainContainer.heightMm);
-    container.depth = mmToNm(resolved.mainContainer.depthMm);
+        container.width = mmToNm(resolved.mainContainer.widthMm);
+        container.height = mmToNm(resolved.mainContainer.heightMm);
+        container.depth = mmToNm(resolved.mainContainer.depthMm);
 
-    const targetPanelId = gp.targetPanelId as string | undefined;
-    const targetPanelNode = targetPanelId ? document.findNode(targetPanelId) : null;
-    const panelModel = targetPanelNode?.domainData;
-    if (panelModel) {
-        const features = buildFeaturesFromDefinition(resolved, {
-            containerId: container.id,
-            smartPartId: rawDef.id,
-            baseU: Number(gp.baseU) || 0,
-            baseV: Number(gp.baseV) || 0,
-            faceName: String(gp.face || 'FACE_Z_MINUS'),
-        });
-        replaceSmartPartFeaturesOnPanel(panelModel, container.id, features);
-    }
+        const targetPanelId = gp.targetPanelId as string | undefined;
+        const targetPanelNode = targetPanelId ? document.findNode(targetPanelId) : null;
+        const panelModel = targetPanelNode?.domainData;
+        if (panelModel) {
+            const features = buildFeaturesFromDefinition(resolved, {
+                containerId: container.id,
+                smartPartId: rawDef.id,
+                baseU: Number(gp.baseU) || 0,
+                baseV: Number(gp.baseV) || 0,
+                faceName: String(gp.face || 'FACE_Z_MINUS'),
+            });
+            replaceSmartPartFeaturesOnPanel(panelModel, container.id, features);
+        }
 
-    if (typeof document.notifyDocumentChanged === 'function') {
-        document.notifyDocumentChanged();
+        if (typeof document.notifyDocumentChanged === 'function') {
+            document.notifyDocumentChanged();
+        }
+    };
+    if (typeof document.transaction === 'function') {
+        document.transaction(update, () => restoreParamsSnapshot(container, document, snapshot));
+    } else {
+        try {
+            update();
+        } catch (error) {
+            restoreParamsSnapshot(container, document, snapshot);
+            throw error;
+        }
     }
     return true;
 }

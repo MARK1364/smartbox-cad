@@ -144,7 +144,7 @@ export function PanelsSubModule({ container, triggerUpdate }: { container: Conta
                     <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(panelsTekst, 'side.depth', TX_NS)}</span>
                     <SmartNumericInput
                         value={depth}
-                        min={10} step={0.01} decimals={2} unit="mm"
+                        min={10} step={1} decimals={2} unit="mm"
                         style={inputStyle}
                         onChange={(val) => {
                             setDepth(val);
@@ -208,17 +208,17 @@ export function PanelsSubModule({ container, triggerUpdate }: { container: Conta
                     <>
                         <div style={rowStyle}>
                             <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(panelsTekst, 'plinth.height', TX_NS)}</span>
-                            <SmartNumericInput value={plinthHeight} min={50} step={0.01} decimals={2} unit="mm" style={inputStyle}
+                            <SmartNumericInput value={plinthHeight} min={50} step={1} decimals={2} unit="mm" style={inputStyle}
                                 onChange={(val) => { setPlinthHeight(val); pushUpdate({ wysokosc_cokolu_mm: toNum(val, 97) }); }} />
                         </div>
                         <div style={rowStyle}>
                             <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(panelsTekst, 'plinth.recess', TX_NS)}</span>
-                            <SmartNumericInput value={plinthRecess} min={0} step={0.01} decimals={2} unit="mm" style={inputStyle}
+                            <SmartNumericInput value={plinthRecess} min={0} step={1} decimals={2} unit="mm" style={inputStyle}
                                 onChange={(val) => { setPlinthRecess(val); pushUpdate({ cofniecie_cokolu_mm: toNum(val, 20) }); }} />
                         </div>
                         <div style={rowStyle}>
                             <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(panelsTekst, 'plinth.gap', TX_NS)}</span>
-                            <SmartNumericInput value={plinthGap} min={0} step={0.01} decimals={2} unit="mm" style={inputStyle}
+                            <SmartNumericInput value={plinthGap} min={0} step={1} decimals={2} unit="mm" style={inputStyle}
                                 onChange={(val) => { setPlinthGap(val); pushUpdate({ szczelina_cokolu_mm: toNum(val, 3) }); }} />
                         </div>
                     </>

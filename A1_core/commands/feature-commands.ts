@@ -49,8 +49,8 @@ export class AddFeatureCommand implements Command {
         const panel = node.domainData as PanelLike;
         if (!panel.features) return;
 
-        const idx = this.index ?? panel.features.findIndex((f: any) => f.id === this.featureData.id);
-        if (idx !== -1 && idx < panel.features.length) {
+        const idx = panel.features.findIndex((feature: any) => feature?.id === this.featureData.id);
+        if (idx !== -1) {
             panel.features.splice(idx, 1);
         }
 
@@ -67,6 +67,9 @@ export class RemoveFeatureCommand implements Command {
     readonly panelId: string;
     readonly featureData: any;
     readonly index: number;
+    private readonly _previousFeatureId?: string;
+    private readonly _nextFeatureId?: string;
+    private readonly _remainingFeatureIds: Array<string | undefined>;
 
     constructor(document: ProjectDocument, panelId: string, featureId: string, label: string = 'Usunięcie cechy geometrycznej') {
         this.id = `cmd_rem_feat_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -82,6 +85,11 @@ export class RemoveFeatureCommand implements Command {
         }
         this.index = idx;
         this.featureData = JSON.parse(JSON.stringify(panel.features[idx]));
+        this._previousFeatureId = panel.features[idx - 1]?.id;
+        this._nextFeatureId = panel.features[idx + 1]?.id;
+        this._remainingFeatureIds = panel.features
+            .filter((_: any, featureIndex: number) => featureIndex !== idx)
+            .map((feature: any) => feature?.id);
         this.label = label;
         this.timestamp = Date.now();
         this.affectedNodeIds = [panelId];
@@ -91,9 +99,9 @@ export class RemoveFeatureCommand implements Command {
         const node = document.findNode(this.panelId);
         if (!node || !node.domainData) return;
         const panel = node.domainData as PanelLike;
-        if (panel.features && this.index < panel.features.length) {
-            panel.features.splice(this.index, 1);
-        }
+        if (!panel.features) return;
+        const idx = panel.features.findIndex((feature: any) => feature?.id === this.featureData.id);
+        if (idx !== -1) panel.features.splice(idx, 1);
         document.emitChange('features', [this.panelId]);
     }
 
@@ -102,7 +110,27 @@ export class RemoveFeatureCommand implements Command {
         if (!node || !node.domainData) return;
         const panel = node.domainData as PanelLike;
         if (!panel.features) panel.features = [];
-        panel.features.splice(this.index, 0, JSON.parse(JSON.stringify(this.featureData)));
+        if (panel.features.some((feature: any) => feature?.id === this.featureData.id)) return;
+
+        const previousIndex = this._previousFeatureId === undefined
+            ? -1
+            : panel.features.findIndex((feature: any) => feature?.id === this._previousFeatureId);
+        const nextIndex = this._nextFeatureId === undefined
+            ? -1
+            : panel.features.findIndex((feature: any) => feature?.id === this._nextFeatureId);
+        let insertionIndex: number;
+        if (previousIndex !== -1) {
+            insertionIndex = previousIndex + 1;
+        } else if (nextIndex !== -1) {
+            insertionIndex = nextIndex;
+        } else {
+            const currentFeatureIds = panel.features.map((feature: any) => feature?.id);
+            insertionIndex = currentFeatureIds.length === this._remainingFeatureIds.length
+                && currentFeatureIds.every((id, index) => id === this._remainingFeatureIds[index])
+                ? Math.min(this.index, panel.features.length)
+                : panel.features.length;
+        }
+        panel.features.splice(insertionIndex, 0, JSON.parse(JSON.stringify(this.featureData)));
         document.emitChange('features', [this.panelId]);
     }
 }

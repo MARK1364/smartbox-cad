@@ -14,6 +14,7 @@ import {
     type EdgeV,
     computeHandleOverhang,
 } from './handle-types.js';
+import { callHandleLayoutWasm } from './handles-wasm-bridge.js';
 
 export interface HandleComputedLayoutMm {
     /** Środek uchwytu na formacie (X, Y) [mm] */
@@ -268,6 +269,12 @@ export function computeHandleLayout(
     panelWMm: number,
     panelHMm: number
 ): HandleComputedLayoutMm {
+    // ─── WYWOŁANIE BINARNEGO SILNIKA WASM (RUST) ──────────────────────────────
+    const wasmRes = callHandleLayoutWasm(params, panelWMm, panelHMm);
+    if (wasmRes) {
+        return wasmRes.layout;
+    }
+
     const p = ensureHandleUvMm(params, panelWMm, panelHMm);
     const uEdge = p.uEdge || 'FACE_X_MINUS';
     const vEdge = p.vEdge || 'FACE_Y_PLUS';

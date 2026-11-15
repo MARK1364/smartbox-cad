@@ -66,7 +66,12 @@ export class SolverController {
             document.onDocumentChanged((event) => this._onDocumentChanged(event)),
         );
         this._disposers.push(
-            this._store.onChange(() => this.requestSolve()),
+            this._store.onChange(() => {
+                if (this._history?.currentCommand?.suppressConstraintAutoSolve) {
+                    return;
+                }
+                this.requestSolve();
+            }),
         );
 
         return () => this.detach();

@@ -12,7 +12,7 @@ import type { DoorsDrillingIntent, DoorsDrillingFace } from './05_doors-drilling
 import { buildHoleMachiningIntent } from './01_machining-intent.js';
 import { nmToMm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
-import { DEFAULT_HINGE_ID, hingeCorpusHolesMm, hingeTemplateId, isParallelHinge } from '../B1_biblioteka/index.js';
+import { DEFAULT_HINGE_ID, hingeCorpusHolesMm, hingeTemplateId, isParallelHinge, resolveHingeMounting } from '../B1_biblioteka/index.js';
 import { normalizeDoorsParams } from './05_doors-engine.js';
 import { computeFaceData, calcFaceUFromFront, PANEL_FACE_NAMES } from '../A4_smartpanel/native_core/face-lcs.js';
 import type { FaceName } from '../A4_smartpanel/panel-model.js';
@@ -46,7 +46,7 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
     // 2. Znajdź wszystkie aktywne kontenery Bloki z drzwiami
     const sbContainers = containers.filter((c: any) => {
         const p = c.domainData?.generatorParams;
-        if (!p || (p.type !== 'blok_doors' && p.boxType !== 'DOORS') || c.domainData?.visible === false) return false;
+        if (!p || (p.type !== 'blok_doors' && p.boxType !== 'DOORS') || c.frozen || c.domainData?.frozen === true) return false;
         if (cabinetContainerId) {
             return p.parentContainerId === cabinetNode.id || c.parent?.id === cabinetNode.id || isChildOfCabinet(c);
         }
@@ -54,6 +54,46 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
     });
 
     if (sbContainers.length === 0) return intents;
+
+    // 3. Zbierz wszystkie formatki korpusu (wykluczając sam kontener korpusu) — fallback geometryczny
+    const allCabinetPanels: any[] = [];
+    const collectCabinetPanels = (node: any) => {
+        if (!node) return;
+        const data = node.domainData;
+        const gp = data?.generatorParams;
+        if (gp && (String(gp.type || '').startsWith('bloki') || gp.boxType)) return;
+
+        if (data && (data.type === 'panel' || data.type === 'part' || data.role)) {
+            allCabinetPanels.push(node);
+        }
+        if (node.children) {
+            for (const child of node.children) {
+                collectCabinetPanels(child);
+            }
+        }
+    };
+    collectCabinetPanels(cabinetNode);
+
+    const getNodeCabinetPosMm = (node: any): { x: number; y: number; z: number } => {
+        if (cabinetNode && typeof cabinetNode.getWorldMatrix === 'function' && typeof node?.getWorldMatrix === 'function') {
+            const relPos = cabinetNode.getWorldMatrix().invert().multiply(node.getWorldMatrix()).decompose().translation;
+            return { x: nmToMm(relPos.x), y: nmToMm(relPos.y), z: nmToMm(relPos.z) };
+        }
+        const worldPos = node.getWorldMatrix().decompose().translation;
+        return { x: nmToMm(worldPos.x), y: nmToMm(worldPos.y), z: nmToMm(worldPos.z) };
+    };
+
+    const getPanelCabinetX = (node: any): number => getNodeCabinetPosMm(node).x;
+
+    const isVerticalSidePanel = (pNode: any) => {
+        const role = (pNode.domainData?.role || '').toUpperCase();
+        if (role.includes('SIDE') || role.includes('PARTITION') || role.includes('BOK') || role.includes('PRZEGRODA')) return true;
+        if (pNode.localMatrix) {
+            const dirY = Math.abs(pNode.localMatrix.transformDirection(new Vec3(1, 0, 0)).y);
+            return dirY > 0.5;
+        }
+        return true;
+    };
 
     const getPanelWorldZ = (node: any): number => {
         const worldPos = node.getWorldMatrix().decompose().translation;
@@ -76,7 +116,8 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
      */
     const resolveSidePanel = (
         sbNode: any,
-        side: 'left' | 'right'
+        side: 'left' | 'right',
+        worldZ?: number
     ): { node: any; suggestedFace?: string | null } | null => {
         const p = sbNode.domainData?.generatorParams || {};
         const ref = side === 'left' ? p.customReferences?.xMin : p.customReferences?.xMax;
@@ -84,7 +125,7 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
         // Priorytet 1: customReferences
         if (ref?.panelId) {
             const node = document.findNode(ref.panelId);
-            if (node) {
+            if (node && node.domainData && node.domainData.type !== 'container') {
                 return { node, suggestedFace: ref.face };
             }
         }
@@ -93,8 +134,39 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
         const boundaryRef = side === 'left' ? p.boundary?.left : p.boundary?.right;
         if (boundaryRef?.nodeId) {
             const node = document.findNode(boundaryRef.nodeId);
-            if (node) {
+            if (node && node.domainData && node.domainData.type !== 'container') {
                 return { node, suggestedFace: boundaryRef.face };
+            }
+        }
+
+        // Priorytet 3: fallback geometryczny po panelach korpusu
+        if (allCabinetPanels.length > 0) {
+            const sbWidth = nmToMm(sbNode.domainData?.width || 0);
+            const sbCenterX = getPanelCabinetX(sbNode);
+            const sbLeftX = sbCenterX - sbWidth / 2;
+            const sbRightX = sbCenterX + sbWidth / 2;
+
+            const candidates = allCabinetPanels.filter((pNode) => {
+                if (!isVerticalSidePanel(pNode)) return false;
+                const rawH = pNode.domainData?.height ?? pNode.domainData?.length ?? pNode.domainData?.width ?? 0;
+                const h = nmToMm(rawH);
+                const centerZ = getPanelWorldZ(pNode);
+                const pZMin = centerZ - h / 2;
+                const pZMax = centerZ + h / 2;
+                if (h > 0 && (worldZ !== undefined && (worldZ < pZMin - 10 || worldZ > pZMax + 10))) return false;
+
+                const panelX = getPanelCabinetX(pNode);
+                return side === 'left' ? (panelX <= sbCenterX + 5) : (panelX >= sbCenterX - 5);
+            });
+
+            if (candidates.length > 0) {
+                const targetRefX = side === 'left' ? sbLeftX : sbRightX;
+                candidates.sort((a, b) => {
+                    const distA = Math.abs(getPanelCabinetX(a) - targetRefX);
+                    const distB = Math.abs(getPanelCabinetX(b) - targetRefX);
+                    return distA - distB;
+                });
+                return { node: candidates[0], suggestedFace: 'FACE_Z_PLUS' };
             }
         }
 
@@ -175,14 +247,16 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
         for (const hinge of hinges) {
             const worldCenterZ = sbPosZ + hinge.pozycja_lokalna_z_mm;
             const hingeId = resolveHingeId(hinge.index);
-            const corpusHoles = hingeCorpusHolesMm(hingeId);
+            const corpusHoles = hingeCorpusHolesMm(hingeId, normalized.typ_prowadnika);
             const templateId = hingeTemplateId(hingeId);
 
             // ─── 1. BOK / PRZEGRODA PO LEWEJ STRONIE ──────────────────────────
             if (isLeftActive) {
-                const leftTarget = resolveSidePanel(sbNode, 'left');
+                const leftTarget = resolveSidePanel(sbNode, 'left', worldCenterZ);
                 if (leftTarget?.node) {
                     const leftNode = leftTarget.node;
+                    const leftOverlay = normalized.nalozenie_lewe_mm;
+                    const leftMount = resolveHingeMounting({ hingeId, overlay_mm: leftOverlay });
                     const isParallel = isParallelHinge(hingeId);
                     const targetFace = findTargetHingeFace(leftNode, isParallel, leftTarget.suggestedFace);
 
@@ -220,6 +294,16 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
                                 ownerTag: 'isDoorDrilling',
                                 sourceContainerId: sbNode.id,
                                 sourcePartId: `Hinge_L${hinge.index}`,
+                                extraParams: {
+                                    template_id: templateId,
+                                    hinge_id: hingeId,
+                                    plate_id: normalized.typ_prowadnika,
+                                    plate_height_mm: normalized.typ_prowadnika === '173L6130' ? 3 : (normalized.typ_prowadnika ? 0 : leftMount.plate_height_mm),
+                                    plate_part_name: normalized.typ_prowadnika || leftMount.plate_part_name,
+                                    isCorpusHole: true,
+                                    isHingeDrilling: true,
+                                    isDoorDrilling: true,
+                                },
                             }));
                         }
                     }
@@ -228,9 +312,11 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
 
             // ─── 2. BOK / PRZEGRODA PO PRAWEJ STRONIE ─────────────────────────
             if (isRightActive) {
-                const rightTarget = resolveSidePanel(sbNode, 'right');
+                const rightTarget = resolveSidePanel(sbNode, 'right', worldCenterZ);
                 if (rightTarget?.node) {
                     const rightNode = rightTarget.node;
+                    const rightOverlay = normalized.nalozenie_prawe_mm;
+                    const rightMount = resolveHingeMounting({ hingeId, overlay_mm: rightOverlay });
                     const isParallel = isParallelHinge(hingeId);
                     const targetFace = findTargetHingeFace(rightNode, isParallel, rightTarget.suggestedFace);
 
@@ -268,6 +354,16 @@ export function buildDoorsDrillings(document: ProjectDocument, cabinetContainerI
                                 ownerTag: 'isDoorDrilling',
                                 sourceContainerId: sbNode.id,
                                 sourcePartId: `Hinge_R${hinge.index}`,
+                                extraParams: {
+                                    template_id: templateId,
+                                    hinge_id: hingeId,
+                                    plate_id: normalized.typ_prowadnika,
+                                    plate_height_mm: normalized.typ_prowadnika === '173L6130' ? 3 : (normalized.typ_prowadnika ? 0 : rightMount.plate_height_mm),
+                                    plate_part_name: normalized.typ_prowadnika || rightMount.plate_part_name,
+                                    isCorpusHole: true,
+                                    isHingeDrilling: true,
+                                    isDoorDrilling: true,
+                                },
                             }));
                         }
                     }

@@ -6,10 +6,11 @@
  * Zero aliasów camelCase; klucze JSON (parameters.defaults) pozostają w swoim dialekcie.
  */
 
-import korpus3Rules from './korpus3_3_rules.json';
-import korpusRogowy1Rules from './korpus_rogowy1_rules.json';
-import korpusRogowy90Rules from './korpus_rogowy90_rules.json';
-import korpusSkosnyRules from './korpus_skosny_rules.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const korpus3Rules = getModuleRules('korpus3');
+const korpusRogowy1Rules = getModuleRules('korpus_rogowy1');
+const korpusRogowy90Rules = getModuleRules('korpus_rogowy90');
+const korpusSkosnyRules = getModuleRules('korpus_skosny');
 import { rulesMToMm } from '../A1_core/cad-math/units.js';
 import type { CabinetType } from './smartframe-types.js';
 

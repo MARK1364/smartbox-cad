@@ -7,7 +7,8 @@
  *  - normalizeFlapsParams(raw, dims)
  *  - calculateFlapsPlan(dims, params)
  */
-import flapsRules from './12_flaps_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const flapsRules = getModuleRules('12_flaps');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
 import { buildHoleMachiningIntent } from './01_machining-intent.js';
@@ -22,6 +23,7 @@ import {
     assertCanonicalFlapsParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callFlapsPlanWasm } from './flaps-wasm-bridge.js';
 
 export { assertCanonicalFlapsParams, LEGACY_FLAPS_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -192,6 +194,17 @@ export function calculateFlapsPlan(
         "+Y": { active: true, type_id: "0.008x0.022" },
         "-Y": { active: true, type_id: "0.008x0.022" }
     };
+
+    // ─── WYWOŁANIE BINARNEGO SILNIKA WASM (RUST) ──────────────────────────────
+    const wasmResult = callFlapsPlanWasm(dims_mm, params, {
+        edgeBanding,
+        lcs: flapRule?.lcs || FLAP_FRONT_LCS,
+        role: flapRule?.role || 'FLAP'
+    });
+
+    if (wasmResult) {
+        return wasmResult;
+    }
 
     const parts: BlokiPart[] = [{
         name: 'Klapa',

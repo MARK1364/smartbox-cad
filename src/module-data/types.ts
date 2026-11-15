@@ -5,7 +5,7 @@
  * Dodatkowe źródła (STEP/DXF dla CNC) podpinają się pod ten sam kształt.
  */
 
-import type { CuttingPanelContract, AccessoryItem, ContainerScopeItem } from '../../R1_reports/report-data-normalizer';
+import type { CuttingPanelContract, AccessoryItem, ContainerScopeItem, ReportDataIssue } from '../../R1_reports/report-data-normalizer';
 import type { NestingPart, ContainerScopeInfo, SheetConfig } from '../../n1_nesting/core/nesting-types';
 import type { CAMFeature } from '../../C1_cnc/dto/cam-dto';
 import type { CADTreeNode } from '../../R2_rys/drawing-types';
@@ -36,6 +36,7 @@ export interface ReportModulePayload {
     accessories: AccessoryItem[];
     furnitures: string[];
     containers: ContainerScopeItem[];
+    issues?: ReportDataIssue[];
 }
 
 export interface NestingModulePayload {
@@ -45,6 +46,7 @@ export interface NestingModulePayload {
     containers: ContainerScopeInfo[];
     config?: Partial<SheetConfig>;
     selectedMaterial?: string;
+    issues?: ReportDataIssue[];
 }
 
 /**

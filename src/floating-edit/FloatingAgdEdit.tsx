@@ -107,6 +107,28 @@ export function FloatingAgdEdit({ container }: { container: ContainerModel }): R
     if (!container || !params) return null;
 
     const isFridge = container.generatorParams?.kind === 'FRIDGE';
+    const isSceneProp = container.generatorParams?.kind === 'SCENE_PROP';
+
+    const handleScaleDimensions = (multiplier: number) => {
+        if (!container || !params) return;
+        const nextW = Math.max(10, Math.round(Number(params.width_mm || 600) * multiplier));
+        const nextD = Math.max(10, Math.round(Number(params.depth_mm || 600) * multiplier));
+        const nextH = Math.max(10, Math.round(Number(params.height_mm || 600) * multiplier));
+        const newParams: Record<string, any> = {
+            ...params,
+            width_mm: nextW,
+            depth_mm: nextD,
+            height_mm: nextH,
+        };
+        setParams(newParams);
+        if (!container.generatorParams) container.generatorParams = {};
+        container.generatorParams.width_mm = nextW;
+        container.generatorParams.depth_mm = nextD;
+        container.generatorParams.height_mm = nextH;
+        const doc = ContextManager.instance.document;
+        rebuildSmartAppliance(container, doc);
+        window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+    };
 
     const totalApplianceHeight = isFridge
         ? Number(params.totalHeight || 1850)
@@ -132,29 +154,35 @@ export function FloatingAgdEdit({ container }: { container: ContainerModel }): R
         ? Math.max(50, Math.round(((Number(params.corpusWidth || 900) - 4) / 2) * 10) / 10)
         : 0;
 
-    const fields: Array<[string, string]> = isFridge
-        ? (isTopBottom
-            ? [
-                ['totalHeight', 'Wysokość całkowita'],
-                ['frontBottomHeight', 'Drzwi dolne'],
-                ['corpusWidth', 'Szerokość lodówki'],
-                ['corpusDepth', 'Głębokość lodówki'],
-            ]
+    const fields: Array<[string, string]> = isSceneProp
+        ? [
+            ['width_mm', 'Szerokość (X)'],
+            ['depth_mm', 'Głębokość (Y)'],
+            ['height_mm', 'Wysokość (Z)'],
+        ]
+        : isFridge
+            ? (isTopBottom
+                ? [
+                    ['totalHeight', 'Wysokość całkowita'],
+                    ['frontBottomHeight', 'Drzwi dolne'],
+                    ['corpusWidth', 'Szerokość lodówki'],
+                    ['corpusDepth', 'Głębokość lodówki'],
+                ]
+                : [
+                    ['totalHeight', 'Wysokość całkowita'],
+                    ['corpusWidth', 'Szerokość lodówki'],
+                    ['corpusDepth', 'Głębokość lodówki'],
+                ]
+            )
             : [
-                ['totalHeight', 'Wysokość całkowita'],
-                ['corpusWidth', 'Szerokość lodówki'],
-                ['corpusDepth', 'Głębokość lodówki'],
-            ]
-        )
-        : [
-            ['frontHeight', 'Wysokość frontu'],
-            ['nalGoraMicro', 'Nałożenie górne'],
-            ['nalDolneMicro', 'Nałożenie dolne'],
-            ['frontWidth', 'Szerokość frontu'],
-            ['corpusWidth', 'Szerokość korpusu wnęki'],
-            ['corpusDepth', 'Głębokość korpusu wnęki'],
-            ['frontDepth', 'Grubość frontu'],
-        ];
+                ['frontHeight', 'Wysokość frontu'],
+                ['nalGoraMicro', 'Nałożenie górne'],
+                ['nalDolneMicro', 'Nałożenie dolne'],
+                ['frontWidth', 'Szerokość frontu'],
+                ['corpusWidth', 'Szerokość korpusu wnęki'],
+                ['corpusDepth', 'Głębokość korpusu wnęki'],
+                ['frontDepth', 'Grubość frontu'],
+            ];
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -165,8 +193,39 @@ export function FloatingAgdEdit({ container }: { container: ContainerModel }): R
             />
 
             <div style={{ fontSize: '11px', fontWeight: 700, color: '#e4e4e7' }}>
-                {isFridge ? 'Wymiary & komponenty lodówki' : 'Wymiary & położenie frontu'}
+                {isSceneProp ? 'Wymiary gabarytowe modelu 3D' : isFridge ? 'Wymiary & komponenty lodówki' : 'Wymiary & położenie frontu'}
             </div>
+
+            {isSceneProp && (
+                <div style={fieldRow}>
+                    <span style={{ color: '#cbd5e1', fontSize: '11px' }}>Korekta skali (.obj/.glb)</span>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                        {[
+                            ['×0.1', 0.1],
+                            ['×10', 10],
+                            ['×100', 100],
+                        ].map(([lbl, mult]) => (
+                            <button
+                                key={String(lbl)}
+                                type="button"
+                                onClick={() => handleScaleDimensions(Number(mult))}
+                                style={{
+                                    background: '#27272a',
+                                    color: '#e4e4e7',
+                                    border: '1px solid #3f3f46',
+                                    borderRadius: '4px',
+                                    padding: '2px 6px',
+                                    fontSize: '10px',
+                                    cursor: 'pointer',
+                                }}
+                                title="Przeskaluj wymiary modelu (np. z cm lub m na mm)"
+                            >
+                                {lbl}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {isFridge && (
                 <>
@@ -291,7 +350,7 @@ export function FloatingAgdEdit({ container }: { container: ContainerModel }): R
                 </div>
             ))}
 
-            {!isFridge && (
+            {!isFridge && !isSceneProp && (
                 <div
                     style={{
                         padding: '6px 8px',

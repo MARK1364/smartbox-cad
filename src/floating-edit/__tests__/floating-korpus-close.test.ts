@@ -90,9 +90,9 @@ describe('FloatingEditHost - shouldKeepSessionForTab', () => {
         expect(shouldKeepSessionForTab('smartpart', 'tab-a8-pmi')).toBe(false);
     });
 
-    it('zachowuje sesję korpusu tylko dla zakładki korpusu lub biblioteki', () => {
+    it('zachowuje sesję korpusu tylko dla zakładki korpusu', () => {
         expect(shouldKeepSessionForTab('korpus', 'tab-a3-smartframe')).toBe(true);
-        expect(shouldKeepSessionForTab('korpus', 'tab-b1-biblioteka')).toBe(true);
+        expect(shouldKeepSessionForTab('korpus', 'tab-b1-biblioteka')).toBe(false);
         expect(shouldKeepSessionForTab('korpus', 'tab-a4-smartpanel')).toBe(false);
         expect(shouldKeepSessionForTab('korpus', 'tab-a7-material')).toBe(false);
     });

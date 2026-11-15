@@ -28,6 +28,10 @@ export interface CLPoint extends Vector3D {
 export interface CLCommand {
     type: CLCommandType;
     point?: CLPoint;
+    /** Flaga szybkiego pozycjonowania (G0 Rapid Travel zamiast G1 Feed) */
+    isRapid?: boolean;
+    /** Typ ruchu liniowego: szybki (RAPID / G0) lub roboczy (FEED / G1) */
+    motion?: 'RAPID' | 'FEED';
     feedRate?: number;
     spindleRpm?: number;
     spindleDirection?: 'CW' | 'CCW';

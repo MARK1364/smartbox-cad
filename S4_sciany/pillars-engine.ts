@@ -2,7 +2,8 @@
  * pillars-engine — plan filarów / fills [mm].
  */
 
-import pillarsRules from './pillars_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const pillarsRules = getModuleRules('pillars');
 import { rulesMToMm } from '../A1_core/cad-math/units.js';
 import type { SmartWallFillMm, SmartWallPartPlanMm } from './smartwall-types.js';
 import { WALL_ALONG_X_LCS, WALL_DEFAULT_COLOR, WALL_SURFACE_EDGE_BANDING } from './walls-engine.js';

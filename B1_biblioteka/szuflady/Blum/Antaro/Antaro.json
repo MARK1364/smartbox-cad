@@ -8,131 +8,1232 @@
     "bottom": {
       "role": "DRAWER_BOTTOM",
       "name": "Dno szuflady",
-      "thickness": 16.0,
-      "width_offset": -75.0,
-      "length_offset": -24.0
+      "thickness": 16,
+      "width_offset": -75,
+      "length_offset": -24
     },
     "back": {
       "role": "DRAWER_BACK",
       "name": "Plecy szuflady",
-      "thickness": 16.0,
-      "width_offset": -87.0,
-      "height_offset": -10.0
+      "thickness": 16,
+      "width_offset": -87
     }
   },
   "variants": [
     {
       "id": "BLUM_ANTARO_M",
       "legacy_id": "M94",
-      "name": "Antaro M (wys. 94 mm)",
-      "corpus_height": 94.0,
-      "rail_height": 35.0,
-      "width": 27.0,
+      "name": "Antaro M",
+      "corpus_height": 84,
+      "back_height": 84,
+      "total_height": 95.5,
+      "min_space": 99.5,
+      "rail_height": 35,
+      "width": 27,
+      "profile": {
+        "b_h": 86.4,
+        "b_ph": 86.5,
+        "b_y": 95.5,
+        "b_tw": 12.6,
+        "kompensacja_plecow": 75,
+        "m_h": 60,
+        "m_w": 45,
+        "custom_boczek_points": [
+          [
+            16.05,
+            1.8
+          ],
+          [
+            16.14,
+            1.84
+          ],
+          [
+            16.22,
+            1.88
+          ],
+          [
+            16.29,
+            1.95
+          ],
+          [
+            16.35,
+            2.02
+          ],
+          [
+            16.4,
+            2.1
+          ],
+          [
+            16.44,
+            2.19
+          ],
+          [
+            16.46,
+            2.28
+          ],
+          [
+            24.87,
+            56.61
+          ],
+          [
+            25.28,
+            58.28
+          ],
+          [
+            25.95,
+            59.87
+          ],
+          [
+            26.87,
+            61.32
+          ],
+          [
+            28.01,
+            62.61
+          ],
+          [
+            29.35,
+            63.69
+          ],
+          [
+            36.37,
+            68.45
+          ],
+          [
+            36.41,
+            68.48
+          ],
+          [
+            36.44,
+            68.52
+          ],
+          [
+            36.47,
+            68.56
+          ],
+          [
+            36.49,
+            68.61
+          ],
+          [
+            36.5,
+            68.66
+          ],
+          [
+            36.5,
+            68.7
+          ],
+          [
+            36.5,
+            68.75
+          ],
+          [
+            36.48,
+            68.8
+          ],
+          [
+            36.46,
+            68.85
+          ],
+          [
+            36.43,
+            68.89
+          ],
+          [
+            36.4,
+            68.92
+          ],
+          [
+            36.36,
+            68.95
+          ],
+          [
+            36.32,
+            68.98
+          ],
+          [
+            36.27,
+            68.99
+          ],
+          [
+            36.22,
+            69
+          ],
+          [
+            36.17,
+            69
+          ],
+          [
+            31.85,
+            68.59
+          ],
+          [
+            31.76,
+            68.59
+          ],
+          [
+            31.68,
+            68.61
+          ],
+          [
+            31.6,
+            68.63
+          ],
+          [
+            31.53,
+            68.67
+          ],
+          [
+            31.46,
+            68.72
+          ],
+          [
+            31.41,
+            68.78
+          ],
+          [
+            31.36,
+            68.85
+          ],
+          [
+            31.33,
+            68.93
+          ],
+          [
+            31.31,
+            69.01
+          ],
+          [
+            31.3,
+            69.09
+          ],
+          [
+            31.3,
+            81
+          ],
+          [
+            30.8,
+            81
+          ],
+          [
+            30.8,
+            84.6
+          ],
+          [
+            30.81,
+            84.74
+          ],
+          [
+            30.85,
+            84.87
+          ],
+          [
+            30.91,
+            85
+          ],
+          [
+            30.99,
+            85.11
+          ],
+          [
+            31.09,
+            85.21
+          ],
+          [
+            31.2,
+            85.29
+          ],
+          [
+            31.33,
+            85.35
+          ],
+          [
+            31.46,
+            85.39
+          ],
+          [
+            31.6,
+            85.4
+          ],
+          [
+            43.35,
+            85.4
+          ],
+          [
+            43.35,
+            86.4
+          ],
+          [
+            31.6,
+            86.4
+          ],
+          [
+            31.29,
+            86.37
+          ],
+          [
+            30.98,
+            86.29
+          ],
+          [
+            30.7,
+            86.16
+          ],
+          [
+            30.44,
+            85.98
+          ],
+          [
+            30.22,
+            85.76
+          ],
+          [
+            30.04,
+            85.5
+          ],
+          [
+            29.91,
+            85.22
+          ],
+          [
+            29.83,
+            84.91
+          ],
+          [
+            29.8,
+            84.6
+          ],
+          [
+            29.8,
+            67.6
+          ],
+          [
+            29.79,
+            67.46
+          ],
+          [
+            29.75,
+            67.33
+          ],
+          [
+            29.69,
+            67.2
+          ],
+          [
+            29.61,
+            67.09
+          ],
+          [
+            29.51,
+            66.99
+          ],
+          [
+            29.4,
+            66.91
+          ],
+          [
+            29.27,
+            66.85
+          ],
+          [
+            29.14,
+            66.81
+          ],
+          [
+            29,
+            66.8
+          ],
+          [
+            3.4,
+            66.8
+          ],
+          [
+            3.26,
+            66.81
+          ],
+          [
+            3.13,
+            66.85
+          ],
+          [
+            3,
+            66.91
+          ],
+          [
+            2.89,
+            66.99
+          ],
+          [
+            2.79,
+            67.09
+          ],
+          [
+            2.71,
+            67.2
+          ],
+          [
+            2.65,
+            67.33
+          ],
+          [
+            2.61,
+            67.46
+          ],
+          [
+            2.6,
+            67.6
+          ],
+          [
+            2.6,
+            78.01
+          ],
+          [
+            2.74,
+            78.02
+          ],
+          [
+            2.65,
+            82.81
+          ],
+          [
+            2.63,
+            82.95
+          ],
+          [
+            2.6,
+            83.09
+          ],
+          [
+            2.54,
+            83.21
+          ],
+          [
+            2.45,
+            83.33
+          ],
+          [
+            2.35,
+            83.42
+          ],
+          [
+            2.24,
+            83.5
+          ],
+          [
+            2.11,
+            83.56
+          ],
+          [
+            1.97,
+            83.59
+          ],
+          [
+            1.84,
+            83.6
+          ],
+          [
+            0.79,
+            83.58
+          ],
+          [
+            0.65,
+            83.57
+          ],
+          [
+            0.51,
+            83.53
+          ],
+          [
+            0.39,
+            83.47
+          ],
+          [
+            0.27,
+            83.38
+          ],
+          [
+            0.18,
+            83.28
+          ],
+          [
+            0.1,
+            83.17
+          ],
+          [
+            0.04,
+            83.04
+          ],
+          [
+            0.01,
+            82.91
+          ],
+          [
+            0,
+            82.77
+          ],
+          [
+            1.33,
+            9.95
+          ],
+          [
+            1.44,
+            8.66
+          ],
+          [
+            2.66,
+            0.51
+          ],
+          [
+            2.68,
+            0.41
+          ],
+          [
+            2.72,
+            0.31
+          ],
+          [
+            2.78,
+            0.23
+          ],
+          [
+            2.85,
+            0.15
+          ],
+          [
+            2.94,
+            0.09
+          ],
+          [
+            3.03,
+            0.04
+          ],
+          [
+            3.13,
+            0.01
+          ],
+          [
+            3.23,
+            0
+          ],
+          [
+            3.33,
+            0.01
+          ],
+          [
+            15.95,
+            1.78
+          ]
+        ]
+      },
       "machining": {
+        "front_holes_formula": "(nal+47.5)+32",
+        "front_edge_formula": "nal+15.5",
+        "front_edge_offset_base": 15.5,
         "front_holes": [
-          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
-          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 74.0, "object": "Cylinder" }
+          {
+            "name": "Mocowanie_frontu_L1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 20,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 74,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 20,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 74,
+            "side": "R",
+            "enabled": true
+          }
         ],
         "corpus_holes": [
-          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 133.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 453.0, "z_from_bottom": 33.0, "object": "Cylinder" }
+          {
+            "name": "Prowadnica_otw_1",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 37,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_2",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 133,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_3",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 261,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_4",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 453,
+            "z_from_bottom": 33
+          }
         ]
       },
       "lengths": {
-        "300": { "z_offset": 33.0, "x_positions": [37, 133, 165, 261], "price_id": "BLUM_ANTARO_M_300", "glb": "Antaro M 300.glb" },
-        "350": { "z_offset": 33.0, "x_positions": [37, 133, 261, 325], "price_id": "BLUM_ANTARO_M_350", "glb": "Antaro M 350.glb" },
-        "400": { "z_offset": 33.0, "x_positions": [37, 133, 229, 325], "price_id": "BLUM_ANTARO_M_400", "glb": "Antaro M 400.glb" },
-        "450": { "z_offset": 33.0, "x_positions": [37, 133, 261, 357], "price_id": "BLUM_ANTARO_M_450", "glb": "Antaro M 450.glb" },
-        "500": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_M_500", "glb": "Antaro M 500.glb" },
-        "550": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_M_550", "glb": "Antaro M 550.glb" },
-        "600": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_M_600", "glb": "Antaro M 600.glb" }
+        "270": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            165
+          ],
+          "price_id": "BLUM_ANTARO_M_270",
+          "boczek_len": 270,
+          "mocowanie_len": 260,
+          "prowadnica_len": 278
+        },
+        "300": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            165,
+            261
+          ],
+          "price_id": "BLUM_ANTARO_M_300",
+          "glb": "Antaro M 300.glb",
+          "boczek_len": 300,
+          "mocowanie_len": 260,
+          "prowadnica_len": 308
+        },
+        "350": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            325
+          ],
+          "price_id": "BLUM_ANTARO_M_350",
+          "glb": "Antaro M 350.glb",
+          "boczek_len": 350,
+          "mocowanie_len": 260,
+          "prowadnica_len": 358
+        },
+        "400": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            229,
+            325
+          ],
+          "price_id": "BLUM_ANTARO_M_400",
+          "glb": "Antaro M 400.glb",
+          "boczek_len": 400,
+          "mocowanie_len": 290,
+          "prowadnica_len": 408
+        },
+        "450": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            357
+          ],
+          "price_id": "BLUM_ANTARO_M_450",
+          "glb": "Antaro M 450.glb",
+          "boczek_len": 450,
+          "mocowanie_len": 290,
+          "prowadnica_len": 458
+        },
+        "500": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            453
+          ],
+          "price_id": "BLUM_ANTARO_M_500",
+          "glb": "Antaro M 500.glb",
+          "boczek_len": 500,
+          "mocowanie_len": 320,
+          "prowadnica_len": 508
+        },
+        "550": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            453
+          ],
+          "price_id": "BLUM_ANTARO_M_550",
+          "glb": "Antaro M 550.glb",
+          "boczek_len": 550,
+          "mocowanie_len": 320,
+          "prowadnica_len": 558
+        },
+        "600": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            453
+          ],
+          "price_id": "BLUM_ANTARO_M_600",
+          "glb": "Antaro M 600.glb",
+          "boczek_len": 600,
+          "mocowanie_len": 320,
+          "prowadnica_len": 608
+        }
       }
     },
     {
       "id": "BLUM_ANTARO_D",
       "legacy_id": "D214",
-      "name": "Antaro D (wys. 214 mm)",
-      "corpus_height": 214.0,
-      "rail_height": 35.0,
-      "width": 27.0,
+      "name": "Antaro D",
+      "corpus_height": 199,
+      "back_height": 199,
+      "total_height": 224,
+      "min_space": 224,
+      "rail_height": 35,
+      "width": 27,
+      "profile": {
+        "b_h": 199,
+        "b_ph": 215,
+        "b_y": 224,
+        "b_tw": 12,
+        "kompensacja_plecow": 75,
+        "m_h": 60,
+        "m_w": 45
+      },
       "machining": {
+        "front_holes_formula": "(nal+47.5)+32+(fi10-128)",
+        "front_edge_formula": "nal+15.5",
+        "front_edge_offset_base": 15.5,
         "front_holes": [
-          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
-          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 107.0, "object": "Cylinder" },
-          { "name": "Mocowanie_frontu_3", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 194.0, "object": "Cylinder" }
+          {
+            "name": "Mocowanie_frontu_L1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 20,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 107,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L3",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 194,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 20,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 107,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R3",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 194,
+            "side": "R",
+            "enabled": true
+          }
         ],
         "corpus_holes": [
-          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 133.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 453.0, "z_from_bottom": 33.0, "object": "Cylinder" }
+          {
+            "name": "Prowadnica_otw_1",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 37,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_2",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 133,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_3",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 261,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_4",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 453,
+            "z_from_bottom": 33
+          }
         ]
       },
       "lengths": {
-        "300": { "z_offset": 33.0, "x_positions": [37, 133, 165, 261], "price_id": "BLUM_ANTARO_D_300" },
-        "350": { "z_offset": 33.0, "x_positions": [37, 133, 261, 325], "price_id": "BLUM_ANTARO_D_350" },
-        "400": { "z_offset": 33.0, "x_positions": [37, 133, 229, 325], "price_id": "BLUM_ANTARO_D_400" },
-        "450": { "z_offset": 33.0, "x_positions": [37, 133, 261, 357], "price_id": "BLUM_ANTARO_D_450" },
-        "500": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_D_500" },
-        "550": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_D_550" },
-        "600": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_D_600" }
+        "270": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            165
+          ],
+          "price_id": "BLUM_ANTARO_D_270",
+          "boczek_len": 270,
+          "mocowanie_len": 260,
+          "prowadnica_len": 278
+        },
+        "300": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            165,
+            261
+          ],
+          "price_id": "BLUM_ANTARO_D_300",
+          "boczek_len": 300,
+          "mocowanie_len": 260,
+          "prowadnica_len": 308
+        },
+        "350": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            325
+          ],
+          "price_id": "BLUM_ANTARO_D_350",
+          "boczek_len": 350,
+          "mocowanie_len": 260,
+          "prowadnica_len": 358
+        },
+        "400": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            229,
+            325
+          ],
+          "price_id": "BLUM_ANTARO_D_400",
+          "boczek_len": 400,
+          "mocowanie_len": 290,
+          "prowadnica_len": 408
+        },
+        "450": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            357
+          ],
+          "price_id": "BLUM_ANTARO_D_450",
+          "boczek_len": 450,
+          "mocowanie_len": 290,
+          "prowadnica_len": 458
+        },
+        "500": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            453
+          ],
+          "price_id": "BLUM_ANTARO_D_500",
+          "boczek_len": 500,
+          "mocowanie_len": 320,
+          "prowadnica_len": 508
+        },
+        "550": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            453
+          ],
+          "price_id": "BLUM_ANTARO_D_550",
+          "boczek_len": 550,
+          "mocowanie_len": 320,
+          "prowadnica_len": 558
+        },
+        "600": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            453
+          ],
+          "price_id": "BLUM_ANTARO_D_600",
+          "boczek_len": 600,
+          "mocowanie_len": 320,
+          "prowadnica_len": 608
+        }
       }
     },
     {
       "id": "BLUM_ANTARO_N",
       "legacy_id": "N68",
-      "name": "Antaro N (wys. 68 mm)",
-      "corpus_height": 68.0,
-      "rail_height": 35.0,
-      "width": 27.0,
+      "name": "Antaro N",
+      "corpus_height": 68,
+      "back_height": 58,
+      "total_height": 84,
+      "min_space": 88,
+      "rail_height": 35,
+      "width": 27,
+      "profile": {
+        "b_h": 68,
+        "b_ph": 75,
+        "b_y": 84,
+        "b_tw": 12,
+        "kompensacja_plecow": 75,
+        "m_h": 60,
+        "m_w": 45
+      },
       "machining": {
         "front_holes": [
-          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
-          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 48.0, "object": "Cylinder" }
+          {
+            "name": "Mocowanie_frontu_L1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 20,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 48,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 20,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 48,
+            "side": "R",
+            "enabled": true
+          }
         ],
         "corpus_holes": [
-          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 133.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 33.0, "object": "Cylinder" }
+          {
+            "name": "Prowadnica_otw_1",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 37,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_2",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 133,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_3",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 261,
+            "z_from_bottom": 33
+          }
         ]
       },
       "lengths": {
-        "270": { "z_offset": 33.0, "x_positions": [37, 133, 165], "price_id": "BLUM_ANTARO_N_270", "glb": "Antaro N 270.glb" },
-        "300": { "z_offset": 33.0, "x_positions": [37, 133, 165], "price_id": "BLUM_ANTARO_N_300" },
-        "350": { "z_offset": 33.0, "x_positions": [37, 133, 261], "price_id": "BLUM_ANTARO_N_350" },
-        "400": { "z_offset": 33.0, "x_positions": [37, 133, 229], "price_id": "BLUM_ANTARO_N_400" },
-        "450": { "z_offset": 33.0, "x_positions": [37, 133, 261], "price_id": "BLUM_ANTARO_N_450" },
-        "500": { "z_offset": 33.0, "x_positions": [37, 133, 261], "price_id": "BLUM_ANTARO_N_500" }
+        "400": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            229
+          ],
+          "price_id": "BLUM_ANTARO_N_400",
+          "boczek_len": 400,
+          "mocowanie_len": 290,
+          "prowadnica_len": 408
+        },
+        "450": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261
+          ],
+          "price_id": "BLUM_ANTARO_N_450",
+          "boczek_len": 450,
+          "mocowanie_len": 290,
+          "prowadnica_len": 458
+        },
+        "500": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261
+          ],
+          "price_id": "BLUM_ANTARO_N_500",
+          "boczek_len": 500,
+          "mocowanie_len": 320,
+          "prowadnica_len": 508
+        },
+        "550": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            229,
+            453
+          ],
+          "price_id": "BLUM_ANTARO_N_550",
+          "boczek_len": 550,
+          "mocowanie_len": 260,
+          "prowadnica_len": 558
+        }
       }
     },
     {
       "id": "BLUM_ANTARO_KOSZ",
       "legacy_id": "KOSZ350",
-      "name": "Antaro kosz (wys. 350 mm)",
-      "corpus_height": 350.0,
-      "rail_height": 35.0,
-      "width": 27.0,
+      "name": "Antaro D+kosz",
+      "corpus_height": 350,
+      "back_height": 350,
+      "total_height": 361.5,
+      "min_space": 361.5,
+      "rail_height": 35,
+      "width": 27,
+      "profile": {
+        "b_h": 350,
+        "b_ph": 352.5,
+        "b_y": 361.5,
+        "b_tw": 12,
+        "kompensacja_plecow": 75,
+        "m_h": 60,
+        "m_w": 45
+      },
       "machining": {
         "front_holes": [
-          { "name": "Mocowanie_frontu_1", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 20.0, "object": "Cylinder" },
-          { "name": "Mocowanie_frontu_2", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 175.0, "object": "Cylinder" },
-          { "name": "Mocowanie_frontu_3", "dia": 3.0, "depth": 10.0, "edge_dist": 31.0, "z_from_bottom": 330.0, "object": "Cylinder" }
+          {
+            "name": "Mocowanie_frontu_L1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 20,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 175,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L3",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 330,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 20,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 175,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R3",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 330,
+            "side": "R",
+            "enabled": true
+          }
         ],
         "corpus_holes": [
-          { "name": "Prowadnica_otw_1", "dia": 3.0, "depth": 12.0, "front_dist": 37.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_2", "dia": 3.0, "depth": 12.0, "front_dist": 133.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_3", "dia": 3.0, "depth": 12.0, "front_dist": 261.0, "z_from_bottom": 33.0, "object": "Cylinder" },
-          { "name": "Prowadnica_otw_4", "dia": 3.0, "depth": 12.0, "front_dist": 453.0, "z_from_bottom": 33.0, "object": "Cylinder" }
+          {
+            "name": "Prowadnica_otw_1",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 37,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_2",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 133,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_3",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 261,
+            "z_from_bottom": 33
+          },
+          {
+            "name": "Prowadnica_otw_4",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 453,
+            "z_from_bottom": 33
+          }
         ]
       },
       "lengths": {
-        "300": { "z_offset": 33.0, "x_positions": [37, 133, 165, 261], "price_id": "BLUM_ANTARO_KOSZ_300" },
-        "350": { "z_offset": 33.0, "x_positions": [37, 133, 261, 325], "price_id": "BLUM_ANTARO_KOSZ_350" },
-        "400": { "z_offset": 33.0, "x_positions": [37, 133, 229, 325], "price_id": "BLUM_ANTARO_KOSZ_400" },
-        "450": { "z_offset": 33.0, "x_positions": [37, 133, 261, 357], "price_id": "BLUM_ANTARO_KOSZ_450" },
-        "500": { "z_offset": 33.0, "x_positions": [37, 133, 261, 453], "price_id": "BLUM_ANTARO_KOSZ_500" }
+        "300": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            165,
+            261
+          ],
+          "price_id": "BLUM_ANTARO_KOSZ_300",
+          "boczek_len": 300,
+          "mocowanie_len": 260,
+          "prowadnica_len": 308
+        },
+        "350": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            325
+          ],
+          "price_id": "BLUM_ANTARO_KOSZ_350",
+          "boczek_len": 350,
+          "mocowanie_len": 260,
+          "prowadnica_len": 358
+        },
+        "400": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            229,
+            325
+          ],
+          "price_id": "BLUM_ANTARO_KOSZ_400",
+          "boczek_len": 400,
+          "mocowanie_len": 290,
+          "prowadnica_len": 408
+        },
+        "450": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            357
+          ],
+          "price_id": "BLUM_ANTARO_KOSZ_450",
+          "boczek_len": 450,
+          "mocowanie_len": 290,
+          "prowadnica_len": 458
+        },
+        "500": {
+          "z_offset": 33,
+          "x_positions": [
+            37,
+            133,
+            261,
+            453
+          ],
+          "price_id": "BLUM_ANTARO_KOSZ_500",
+          "boczek_len": 500,
+          "mocowanie_len": 320,
+          "prowadnica_len": 508
+        }
       }
     }
   ]

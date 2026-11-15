@@ -16,6 +16,7 @@ export interface DoorsPlanParams {
     nalozenie_prawe_mm?: number;
     domyslny_zawias_id?: string;
     producent_zawiasow?: string;
+    typ_prowadnika?: string;
     uzyj_zawias_1?: boolean;
     uzyj_zawias_2?: boolean;
     uzyj_zawias_3?: boolean;
@@ -121,6 +122,7 @@ export interface SkosneDoorsPlanParams {
     nalozenie_prawe_mm?: number;
     domyslny_zawias_id?: string;
     producent_zawiasow?: string;
+    typ_prowadnika?: string;
     uzyj_zawias_1?: boolean;
     uzyj_zawias_2?: boolean;
     uzyj_zawias_3?: boolean;
@@ -213,6 +215,7 @@ export interface FlapsPlanParams {
     odsuniecie_zawiasu_prawe_mm?: number;
     zawias_srodkowy?: boolean;
     producent_zawiasow?: string;
+    typ_prowadnika?: string;
     szablon_zawiasu_domyslny?: string;
     szablon_zawiasu_lewy?: string;
     szablon_zawiasu_prawy?: string;
@@ -269,6 +272,9 @@ export interface ShelvesPlanParams {
     start_system32_z_mm?: number;
     liczba_otworow_system32?: number;
     podporka_id?: string;
+    srednica_podporki_mm?: number;
+    /** Indywidualne wysokości półek (spód półki od dołu strefy w mm). Gdy puste: równomierny podział. */
+    pozycje_polek_z_mm?: number[];
 }
 
 export interface CornerShelvesPlanParams {
@@ -309,6 +315,10 @@ export interface DividersPlanParams {
     grubosc_przegrody_mm?: number;
     tryb_rozstawu?: 'EQUAL' | 'CUSTOM';
     szerokosci_wnek_mm?: number[];
+    /** Kąt nachylenia skośnego wieńca górnego [°] (dla szafek skośnych lewy-prawy). */
+    dach_kat_deg?: number;
+    /** Przesunięcie środka strefy Bloku w osi X względem środka dachu korpusu [mm]. */
+    przesuniecie_strefy_x_mm?: number;
 }
 
 export type SidePanelMode = 'FULL' | 'KORPUS_BLENDA_G' | 'COKOL_KORPUS' | 'KORPUS';
@@ -402,7 +412,6 @@ export type BlokiModuleId =
     | 'LED_EXTERNAL'
     | 'HANDLES'
     | 'HANGERS'
-    | 'SINKS'
     | 'SLIDING_DOORS';
 
 export interface BlokiModuleTypeById {
@@ -421,7 +430,6 @@ export interface BlokiModuleTypeById {
     LED_EXTERNAL: 'blok_led_external';
     HANDLES: 'blok_handle';
     HANGERS: 'smartpart_hangers';
-    SINKS: 'blok_sink';
     SLIDING_DOORS: 'blok_sliding_doors';
 }
 
@@ -470,7 +478,6 @@ export interface BlokiModuleParamsById {
     LED_EXTERNAL: LedExternalPlanParams;
     HANDLES: HandlePlanParams;
     HANGERS: Record<string, unknown>;
-    SINKS: Record<string, unknown>;
     SLIDING_DOORS: SlidingDoorsPlanParams;
 }
 
@@ -509,7 +516,6 @@ const BLOKI_TYPE_BY_ID: BlokiModuleTypeById = {
     LED_EXTERNAL: 'blok_led_external',
     HANDLES: 'blok_handle',
     HANGERS: 'smartpart_hangers',
-    SINKS: 'blok_sink',
     SLIDING_DOORS: 'blok_sliding_doors'
 };
 

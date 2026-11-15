@@ -16,6 +16,11 @@ import {
     syncMachiningHoles,
 } from '../01_machining-sync.js';
 import { SyncDoorDrillingsCommand } from '../commands/sync-door-drillings-command.js';
+import { ProjectDocument } from '../../A1_core/project-document.js';
+import { MacroCommand } from '../../A1_core/commands/macro-command.js';
+import { ClearBlokiDrillingsCommand } from '../commands/clear-blok-drillings-command.js';
+import { ClearHandleDrillingsCommand } from '../handles/commands/clear-handle-drillings-command.js';
+import { ClearSmartPartFeaturesCommand } from '../hangers/commands/clear-smartpart-features-command.js';
 import { calculateDoorsPlan, normalizeDoorsParams } from '../05_doors-engine.js';
 import { calculateFlapsPlan, normalizeFlapsParams } from '../12_flaps-engine.js';
 import { calculateSkosneDoorsPlan, normalizeSkosneDoorsParams } from '../06_skosne-doors-engine.js';
@@ -533,6 +538,127 @@ describe('machining-sync — syncMachiningHoles', () => {
         restoreMachiningFeatures(doc, oldFeatures);
         expect(JSON.parse(JSON.stringify(pBNode.domainData.features))).toEqual(beforePb);
         expect(pBNode.domainData.features.some((f: any) => f.id === 'hinge_plate_r_1_h')).toBe(false);
+    });
+
+    it('does not emit feature updates when a later synchronization step rolls back', () => {
+        const document = new ProjectDocument();
+        const panel = document.createPanel({ width: 100, height: 100, thickness: 18 }) as any;
+        const panelNode = document.findNode(panel.id)!;
+        const originalFeatures = [{ id: 'existing', type: 'hole' }];
+        panel.features = originalFeatures;
+        const setFeatures = vi.fn();
+        panel.setFeatures = setFeatures;
+
+        expect(() => document.transaction(() => {
+            panel.features = [{ id: 'intermediate', type: 'hole' }];
+            emitMachiningFeatures([panelNode], new Set([panel.id]), document);
+            throw new Error('Later synchronization failed');
+        }, () => {
+            panel.features = originalFeatures;
+        })).toThrow('Later synchronization failed');
+
+        expect(panel.features).toBe(originalFeatures);
+        expect(setFeatures).not.toHaveBeenCalled();
+    });
+
+    it('does not emit restored feature updates when a later macro undo step fails', () => {
+        const document = new ProjectDocument();
+        const panel = document.createPanel({ width: 100, height: 100, thickness: 18 }) as any;
+        const panelNode = document.findNode(panel.id)!;
+        const restoredFeatures = [{ id: 'restored', type: 'hole' }];
+        const appliedFeatures = [{ id: 'applied', type: 'groove' }];
+        const setFeatures = vi.fn();
+        panel.setFeatures = setFeatures;
+        panel.features = restoredFeatures;
+
+        const restoreCommand = {
+            id: 'restore-features',
+            label: 'Restore features',
+            timestamp: 0,
+            affectedNodeIds: [panel.id],
+            execute: () => { panel.features = appliedFeatures; },
+            undo: (doc: ProjectDocument) => {
+                restoreMachiningFeatures(doc, new Map([[panel.id, restoredFeatures]]));
+            },
+            redo: () => { panel.features = appliedFeatures; },
+        };
+        const laterUndoFailure = {
+            id: 'later-undo-failure',
+            label: 'Fail undo',
+            timestamp: 0,
+            affectedNodeIds: [panel.id],
+            execute: () => {},
+            undo: () => { throw new Error('Later macro undo failed'); },
+        };
+        const macro = new MacroCommand([laterUndoFailure, restoreCommand]);
+        macro.execute(document);
+
+        expect(() => macro.undo(document)).toThrow('Later macro undo failed');
+
+        expect(panel.features).toBe(appliedFeatures);
+        expect(setFeatures).not.toHaveBeenCalled();
+        expect(panelNode.domainData).toBe(panel);
+    });
+
+    it('does not emit feature updates when Bloki cleanup is rolled back after a later macro step fails', () => {
+        const document = new ProjectDocument();
+        const panel = document.createPanel({ width: 100, height: 100, thickness: 18 }) as any;
+        const feature = {
+            id: 'auto-hole',
+            type: 'hole',
+            params: { sourceContainerId: 'blok-1', isShelfDrilling: true },
+        };
+        panel.features = [feature];
+        const setFeatures = vi.fn();
+        panel.setFeatures = setFeatures;
+        const cleanup = new ClearBlokiDrillingsCommand('blok-1');
+        const failure = {
+            id: 'fail-after-cleanup',
+            label: 'Fail',
+            timestamp: 0,
+            affectedNodeIds: [],
+            execute: () => { throw new Error('Later macro step failed'); },
+            undo: () => {},
+        };
+        const macro = new MacroCommand([cleanup, failure]);
+
+        expect(() => macro.execute(document)).toThrow('Later macro step failed');
+
+        expect(panel.features).toEqual([feature]);
+        expect(setFeatures).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        {
+            name: 'handle',
+            createCommand: (id: string) => new ClearHandleDrillingsCommand(id),
+            feature: { id: 'handle-hole', type: 'hole', params: { sourceContainerId: 'cleanup-source' } },
+        },
+        {
+            name: 'hanger',
+            createCommand: (id: string) => new ClearSmartPartFeaturesCommand(id),
+            feature: { id: 'hanger-hole', type: 'hole', params: { sourceContainerId: 'cleanup-source' } },
+        },
+    ])('does not emit $name cleanup feature updates after macro rollback', ({ createCommand, feature }) => {
+        const document = new ProjectDocument();
+        const panel = document.createPanel({ width: 100, height: 100, thickness: 18 }) as any;
+        panel.features = [feature];
+        const setFeatures = vi.spyOn(panel, 'setFeatures');
+        const cleanup = createCommand('cleanup-source');
+        const failure = {
+            id: `fail-after-${cleanup.id}`,
+            label: 'Fail',
+            timestamp: 0,
+            affectedNodeIds: [],
+            execute: () => { throw new Error('Later macro step failed'); },
+            undo: () => {},
+        };
+        const macro = new MacroCommand([cleanup, failure]);
+
+        expect(() => macro.execute(document)).toThrow('Later macro step failed');
+
+        expect(panel.features).toEqual([feature]);
+        expect(setFeatures).not.toHaveBeenCalled();
     });
 });
 

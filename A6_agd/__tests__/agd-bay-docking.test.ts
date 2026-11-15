@@ -3,7 +3,7 @@
  * Testy inteligentnego dokowania AGD we wnękach szafki (Cabinet Bay).
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
@@ -11,6 +11,14 @@ import { ContainerModel } from '../../A1_core/container-model.js';
 import { mmToNm, nmToMm } from '../../A1_core/cad-math/units.js';
 import { createSmartApplianceInDetectedBay } from '../agd-bay-docking.js';
 import type { DetectedBay } from '../../A2_bloki/02_bloki-bay-detector.js';
+import { CommandHistory } from '../../A1_core/commands/command-history.js';
+import { ContextManager } from '../../A1_core/context-manager.js';
+
+const originalCommandHistory = ContextManager.instance.commandHistory;
+
+afterEach(() => {
+    ContextManager.instance.commandHistory = originalCommandHistory;
+});
 
 describe('A6_agd — Smart Appliance Bay Docking', () => {
     function createMockCabinetWithBay(doc: ProjectDocument): { cabNode: CADNode; mockBay: DetectedBay } {
@@ -150,5 +158,26 @@ describe('A6_agd — Smart Appliance Bay Docking', () => {
 
         const corpus = agdNode!.children.find((c: any) => c.domainData?.role === 'APPLIANCE_CORPUS');
         expect(nmToMm(corpus!.domainData.height)).toBe(576); // 596 - 20 - 0 = 576 mm
+    });
+
+    it('obejmuje dokowanie, Undo i Redo jedną komendą historii', () => {
+        const doc = new ProjectDocument();
+        const history = new CommandHistory(doc);
+        ContextManager.instance.commandHistory = history;
+        const { cabNode, mockBay } = createMockCabinetWithBay(doc);
+        doc.setActiveEntity(cabNode.domainData);
+
+        const node = createSmartApplianceInDetectedBay(doc, mockBay)!;
+
+        expect(history.undoStack).toHaveLength(1);
+        expect(node.parent).toBe(cabNode);
+        expect(doc.activeEntity).toBe(node.domainData);
+        expect(history.undo()).toBe(true);
+        expect(doc.findNode(node.id)).toBeNull();
+        expect(doc.activeEntity).toBe(cabNode.domainData);
+        expect(history.redo()).toBe(true);
+        expect(doc.findNode(node.id)).toBe(node);
+        expect(node.children).toHaveLength(2);
+        expect(doc.activeEntity).toBe(node.domainData);
     });
 });

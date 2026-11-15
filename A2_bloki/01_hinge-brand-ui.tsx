@@ -53,6 +53,41 @@ export function HingeBrandFilter(props: {
     );
 }
 
+export const DEFAULT_HINGE_PLATE_ID = '173L6100';
+
+export const HINGE_PLATE_OPTIONS: Array<{ id: string; label: string; heightMm: number }> = [
+    { id: '173L6100', label: 'Krzyżowy 0mm (173L6100)', heightMm: 0 },
+    { id: '173L6130', label: 'Krzyżowy 3mm (173L6130)', heightMm: 3 },
+    { id: '175H3100', label: 'Prosty 0mm (175H3100)', heightMm: 0 }
+];
+
+export function HingePlateSelect(props: {
+    value: string;
+    label: string;
+    onChange: (plateId: string) => void;
+    style?: React.CSSProperties;
+}): React.ReactElement {
+    const current = HINGE_PLATE_OPTIONS.some((o) => o.id === props.value)
+        ? props.value
+        : DEFAULT_HINGE_PLATE_ID;
+    return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', ...(props.style || {}) }}>
+            <span style={{ color: '#d4d4d8', fontSize: '11px', flexShrink: 0 }}>{props.label}</span>
+            <select
+                value={current}
+                onChange={(e) => props.onChange(e.target.value)}
+                style={{ ...selectStyle, width: '140px', flexShrink: 0 }}
+            >
+                {HINGE_PLATE_OPTIONS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                        {o.label}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
+}
+
 export function hingeOptionsForBrand(brand: string, scope: HingeCatalogScope): HardwareItem[] {
     return listHingesByBrand(resolveHingeBrand(brand), scope);
 }

@@ -16,13 +16,16 @@ import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import flapsTekstRaw from './12_flaps_tekst.json';
 
-import flapsRules from './12_flaps_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const flapsRules = getModuleRules('12_flaps');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import type { FlapsPlanParams } from './01_bloki-module-types.js';
 import {
     DEFAULT_HINGE_BRAND,
+    DEFAULT_HINGE_PLATE_ID,
     firstHingeIdForBrand,
     HingeBrandFilter,
+    HingePlateSelect,
     renderHingeSelectOptions,
     resolveHingeBrand
 } from './01_hinge-brand-ui.js';
@@ -86,6 +89,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
     };
 
     const [hingeBrand, setHingeBrand] = useState<string>(() => resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
+    const [hingePlate, setHingePlate] = useState<string>(p.typ_prowadnika || DEFAULT_HINGE_PLATE_ID);
     const [useCenterHinge, setUseCenterHinge] = useState<boolean>(!!p.zawias_srodkowy);
     const [hingeLeftTemplate, setHingeLeftTemplate] = useState<string>(
         getPairedFlapHingeDefault('left', p.szablon_zawiasu_lewy)
@@ -106,6 +110,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
         setHingeLeftOffset(Number(p.odsuniecie_zawiasu_lewe_mm ?? 80));
         setHingeRightOffset(Number(p.odsuniecie_zawiasu_prawe_mm ?? 80));
         setHingeBrand(resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
+        setHingePlate(p.typ_prowadnika || DEFAULT_HINGE_PLATE_ID);
         setUseCenterHinge(!!p.zawias_srodkowy);
         setHingeLeftTemplate(getPairedFlapHingeDefault('left', p.szablon_zawiasu_lewy));
         setHingeRightTemplate(getPairedFlapHingeDefault('right', p.szablon_zawiasu_prawy));
@@ -159,7 +164,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>{tx(flapsTekst, 'ov_top.label', TX_NS)}</span>
                     <SmartNumericInput
                         value={ovTop}
-                        step={0.01} decimals={2}
+                        step={1} decimals={2}
                         unit="mm"
                         style={{ width: '100%', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => { setOvTop(val); pushUpdate({ nalozenie_gora_mm: val }); }}
@@ -169,7 +174,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>{tx(flapsTekst, 'ov_bottom.label', TX_NS)}</span>
                     <SmartNumericInput
                         value={ovBottom}
-                        step={0.01} decimals={2}
+                        step={1} decimals={2}
                         unit="mm"
                         style={{ width: '100%', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => { setOvBottom(val); pushUpdate({ nalozenie_dol_mm: val }); }}
@@ -179,7 +184,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>{tx(flapsTekst, 'ov_left.label', TX_NS)}</span>
                     <SmartNumericInput
                         value={ovLeft}
-                        step={0.01} decimals={2}
+                        step={1} decimals={2}
                         unit="mm"
                         style={{ width: '100%', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => { setOvLeft(val); pushUpdate({ nalozenie_lewe_mm: val }); }}
@@ -189,7 +194,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                     <span style={{ color: '#a1a1aa', fontSize: '11px' }}>{tx(flapsTekst, 'ov_right.label', TX_NS)}</span>
                     <SmartNumericInput
                         value={ovRight}
-                        step={0.01} decimals={2}
+                        step={1} decimals={2}
                         unit="mm"
                         style={{ width: '100%', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => { setOvRight(val); pushUpdate({ nalozenie_prawe_mm: val }); }}
@@ -253,13 +258,22 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                         });
                     }}
                 />
+
+                <HingePlateSelect
+                    value={hingePlate}
+                    label={tx(flapsTekst, 'hinge_plate.label', TX_NS)}
+                    onChange={(plateId) => {
+                        setHingePlate(plateId);
+                        pushUpdate({ typ_prowadnika: plateId });
+                    }}
+                />
                 
                 {/* Zawias lewy */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ color: '#e4e4e7', fontSize: '11px', width: '56px', flexShrink: 0 }}>{tx(flapsTekst, 'hinge_left.label', TX_NS)}</span>
                     <SmartNumericInput
                         value={hingeLeftOffset}
-                        step={0.01} decimals={2}
+                        step={1} decimals={2}
                         unit="mm"
                         min={MIN_HINGE_OFFSET}
                         style={{ width: '52px', padding: '2px 3px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right', fontSize: '11px', flexShrink: 0 }}
@@ -286,7 +300,7 @@ export function FlapsSubModule({ container, triggerUpdate }: { container: Contai
                     <span style={{ color: '#e4e4e7', fontSize: '11px', width: '56px', flexShrink: 0 }}>{tx(flapsTekst, 'hinge_right.label', TX_NS)}</span>
                     <SmartNumericInput
                         value={hingeRightOffset}
-                        step={0.01} decimals={2}
+                        step={1} decimals={2}
                         unit="mm"
                         min={MIN_HINGE_OFFSET}
                         style={{ width: '52px', padding: '2px 3px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right', fontSize: '11px', flexShrink: 0 }}

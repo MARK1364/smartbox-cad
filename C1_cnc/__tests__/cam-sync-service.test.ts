@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { CAMSyncService } from '../core/cam-sync-service.js';
 import { MachiningRuleEngine } from '../rules/machining-rule-engine.js';
 import { ToolLibrary, DEFAULT_CNC_TOOLS } from '../processor/tool-library.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
+import { ProjectDocument } from '../../A1_core/project-document.js';
 
 describe('C1_CNC: MachiningRuleEngine & CAMSyncService', () => {
     const toolLibrary = new ToolLibrary();
@@ -161,7 +162,7 @@ describe('C1_CNC: MachiningRuleEngine & CAMSyncService', () => {
             id: 'groove_led_999',
             type: 'groove',
             name: 'Rowek pod LED',
-            face: 'FACE_Z_MINUS',
+            face: 'FACE_Z_PLUS',
             params: {
                 u: 0,
                 v: 50,
@@ -188,6 +189,25 @@ describe('C1_CNC: MachiningRuleEngine & CAMSyncService', () => {
         const syncAfter = syncService.comparePanelWithProgram(panel, prog, toolLibrary);
         expect(syncAfter.isSynced).toBe(true);
         expect(syncAfter.missingInCam.length).toBe(0);
+    });
+
+    it('CAMSyncService: autoSynchronizeProgram nie dopisuje nowego programu poza historią komend', () => {
+        const panel: any = {
+            id: 'panel_no_program',
+            name: 'Formatka bez programu',
+            width: mmToNm(600),
+            height: mmToNm(500),
+            thickness: mmToNm(18),
+            features: [
+                { id: 'h1', type: 'hole', params: { x: 50, y: 50, diameter: 5, depth: 13 } }
+            ]
+        };
+
+        const prog = syncService.autoSynchronizeProgram(panel, null, toolLibrary);
+
+        // Program jest tylko zbudowany — formatka nie może zostać zmieniona po cichu.
+        expect(prog.features.length).toBe(1);
+        expect(panel.cncPrograms).toBeUndefined();
     });
 
     it('CAMSyncService: validateScope poprawnie weryfikuje zakres szafki i wykrywa formatki wymagające aktualizacji', () => {
@@ -239,5 +259,225 @@ describe('C1_CNC: MachiningRuleEngine & CAMSyncService', () => {
         const scopeRepAfter = syncService.validateScope({ type: 'PROJECT', id: 'ALL', name: 'Cały projekt' }, mockDoc, toolLibrary);
         expect(scopeRepAfter.hasDiscrepancies).toBe(false);
         expect(scopeRepAfter.totalDiscrepancyCount).toBe(0);
+    });
+
+    it('CAMSyncService: zakres korpusu jest liczony z aktualnego drzewa CAD po reparentNode', () => {
+        const doc = new ProjectDocument({ name: 'Reparent CAM' });
+        const cabA = doc.createAssembly({ name: 'Korpus A' }) as any;
+        const cabB = doc.createAssembly({ name: 'Korpus B' }) as any;
+        const panel = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Bok przenoszony'
+        }, cabA.id) as any;
+
+        const scopeA = { type: 'CONTAINER', id: cabA.id, name: 'Korpus A' };
+        const scopeB = { type: 'CONTAINER', id: cabB.id, name: 'Korpus B' };
+
+        // Pierwsze rozwiązanie zakresu nie może zapisywać przynależności w PanelModel.
+        expect(syncService.resolvePanelsForScope(scopeA, doc)).toContain(panel);
+        expect((panel as any).parent).toBeUndefined();
+
+        // Raport czyta aktualną nazwę korpusu, a nie zapamiętany wcześniej snapshot.
+        const program: any = { id: 'prog_reparent_test', features: [] };
+        expect(syncService.comparePanelWithProgram(panel, program, toolLibrary).containerName).toBe('Korpus A');
+        cabA.name = 'Korpus A po zmianie';
+        expect(syncService.comparePanelWithProgram(panel, program, toolLibrary).containerName).toBe('Korpus A po zmianie');
+
+        // Reparenting zmienia wyłącznie drzewo CAD — resolver ma to natychmiast uwzględnić.
+        doc.reparentNode(panel.id, cabB.id);
+
+        expect(syncService.resolvePanelsForScope(scopeA, doc)).not.toContain(panel);
+        expect(syncService.resolvePanelsForScope(scopeB, doc)).toContain(panel);
+        expect(syncService.comparePanelWithProgram(panel, program, toolLibrary).containerName).toBe('Korpus B');
+        expect((panel as any).parent).toBeUndefined();
+    });
+
+    it('CAMSyncService: raport pokazuje korpus nadrzędny, a nie pośrednie złożenie', () => {
+        const doc = new ProjectDocument({ name: 'Nested CAM' });
+        const cabinet = doc.createAssembly({ name: 'Korpus Główny' }) as any;
+        const nested = doc.createAssembly({ name: 'Złożenie pośrednie' }, cabinet.id) as any;
+        const panel = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Półka w złożeniu'
+        }, cabinet.id) as any;
+
+        doc.reparentNode(panel.id, nested.id);
+
+        const program: any = { id: 'prog_nested_test', features: [] };
+        panel.cncPrograms = [program];
+
+        const scope = { type: 'CONTAINER', id: cabinet.id, name: 'Korpus Główny' };
+        const validation = syncService.validateScope(scope, doc, toolLibrary);
+
+        expect(validation.panelReports).toHaveLength(1);
+        expect(validation.panelReports[0].containerName).toBe('Korpus Główny');
+        expect(syncService.comparePanelWithProgram(panel, program, toolLibrary).containerName).toBe('Korpus Główny');
+    });
+
+    it('CAMSyncService: autoSynchronizeScope rollbackuje zmiany i nie powiadamia przy błędzie', () => {
+        const doc = new ProjectDocument({ name: 'Rollback CAM' });
+        const cabinet = doc.createAssembly({ name: 'Korpus Rollback' }) as any;
+
+        const panel1 = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Formatka poprawna'
+        }, cabinet.id) as any;
+        panel1.features.push({
+            id: 'h1',
+            type: 'hole',
+            name: 'Otwór początkowy',
+            face: 'FACE_Z_PLUS',
+            params: { x: 50, y: 100, diameter: 15, depth: 13 }
+        });
+        const prog1 = syncService.autoSynchronizeProgram(panel1, null, toolLibrary);
+        const originalFeatures = prog1.features;
+        const originalToolAssignments = prog1.toolAssignments;
+        panel1.features.push({
+            id: 'h2',
+            type: 'hole',
+            name: 'Otwór dodany później',
+            face: 'FACE_Z_PLUS',
+            params: { x: 80, y: 100, diameter: 5, depth: 13 }
+        });
+
+        const panel2 = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Formatka z błędem'
+        }, cabinet.id) as any;
+        panel2.thickness = 0;
+        const prog2: any = { id: 'prog_invalid', features: [], toolAssignments: {}, isActive: true };
+        panel2.cncPrograms = [prog2];
+
+        const notifySpy = vi.spyOn(doc, 'notifyDocumentChanged');
+
+        expect(() => syncService.autoSynchronizeScope(
+            { type: 'PROJECT', id: 'ALL', name: 'Cały projekt' },
+            doc,
+            toolLibrary
+        )).toThrow(/poprawnych wymiarów/);
+
+        // Panel1 był już przetworzony przed błędem — musi wrócić do stanu początkowego.
+        expect(prog1.features).toBe(originalFeatures);
+        expect(prog1.features).toHaveLength(1);
+        expect(prog1.toolAssignments).toBe(originalToolAssignments);
+        expect(prog2.features).toEqual([]);
+        expect(notifySpy).not.toHaveBeenCalled();
+    });
+
+    it('MachiningRuleEngine: zwraca tool: null zamiast pierwszego narzędzia z biblioteki, gdy brak pasującego narzędzia', () => {
+        const sawOnlyLib = new ToolLibrary([
+            { id: 'tool_1_saw_150', name: 'Piła 150', diameter: 150, type: 'groove', allowedAxes: ['X'], parameters: { feedRate: 2000, spindleRpm: 4000 } } as any
+        ]);
+
+        const holeRes = ruleEngine.resolveFeatureMachining({
+            featureId: 'h_unmatched',
+            name: 'Otwór 35',
+            diameter: 35,
+            depth: 13,
+            position: { x: 50, y: 50, z: 0 },
+            objectName: 'Front'
+        } as any, sawOnlyLib);
+        expect(holeRes.tool).toBeNull();
+
+        // Frez palcowy nie może być po cichu przypisany jako wiertło (strategyId: 'drilling') do otworu
+        const millOnlyLib = new ToolLibrary([
+            { id: 'tool_mill_8', name: 'Frez 8mm', diameter: 8, type: 'mill', allowedAxes: ['X', 'Y', 'Z'], parameters: { feedRate: 2000, spindleRpm: 18000 } } as any
+        ]);
+        const holeWithMillLibRes = ruleEngine.resolveFeatureMachining({
+            featureId: 'h_no_drill_only_mill',
+            name: 'Otwór 15',
+            diameter: 15,
+            depth: 12,
+            position: { x: 50, y: 50, z: 0 },
+            objectName: 'Bok'
+        } as any, millOnlyLib);
+        expect(holeWithMillLibRes.tool).toBeNull();
+
+        // Wiertło pionowe (allowedAxes: ['Z']) nie może zostać przypisane do otworu poziomego (FACE_X / FACE_Y)
+        const verticalDrillOnlyLib = new ToolLibrary([
+            { id: 'tool_drill_8_v', name: 'Wiertło pionowe 8mm', diameter: 8, type: 'drill', allowedAxes: ['Z'], parameters: { feedRate: 1000, spindleRpm: 3000 } } as any
+        ]);
+        const horizHoleWithVerticalLibRes = ruleEngine.resolveFeatureMachining({
+            featureId: 'h_horiz_no_h_drill',
+            name: 'Otwór poziomy 8',
+            diameter: 8,
+            depth: 25,
+            face: 'FACE_X_PLUS',
+            position: { x: 300, y: 50, z: 0 },
+            axis: { x: -1, y: 0, z: 0 },
+            objectName: 'Wieniec'
+        } as any, verticalDrillOnlyLib);
+        expect(horizHoleWithVerticalLibRes.tool).toBeNull();
+        expect(horizHoleWithVerticalLibRes.warning).toBeDefined();
+
+        const grooveRes = ruleEngine.resolveFeatureMachining({
+            featureId: 'g_unmatched',
+            name: 'Kanał LED 14mm',
+            purpose: 'LED_CHANNEL',
+            width: 14,
+            depth: 9,
+            startPoint: { x: 0, y: 50, z: 0 },
+            endPoint: { x: 500, y: 50, z: 0 },
+            objectName: 'Wieniec'
+        } as any, sawOnlyLib);
+        expect(grooveRes.tool).toBeNull();
+
+        const contourRes = ruleEngine.resolveFeatureMachining({
+            featureId: 'c_unmatched',
+            name: 'Kontur',
+            depth: 18,
+            points: [{ x: 0, y: 0, z: 0 }, { x: 100, y: 0, z: 0 }],
+            objectName: 'Bok'
+        } as any, sawOnlyLib);
+        expect(contourRes.tool).toBeNull();
+    });
+
+    it('wykrywa modyfikację analitycznych segmentów łukowych (segments) w ContourFeature', () => {
+        const syncService = new CAMSyncService();
+
+        const camContour = {
+            featureId: 'contour_arc_1',
+            name: 'Profil z łukiem',
+            depth: 10,
+            points: [
+                { x: 50, y: 50, z: 0 },
+                { x: 150, y: 50, z: 0 }
+            ],
+            segments: [
+                {
+                    type: 'ARC' as const,
+                    start: { x: 50, y: 50, z: 0 },
+                    end: { x: 150, y: 50, z: 0 },
+                    center: { x: 100, y: 50, z: 0 },
+                    radius: 50,
+                    direction: 'CCW' as const,
+                    plane: 'XY' as const
+                }
+            ]
+        };
+
+        const cadContourModified = {
+            ...camContour,
+            segments: [
+                {
+                    ...camContour.segments[0],
+                    radius: 70 // <- zmiana promienia z 50 na 70
+                }
+            ]
+        };
+
+        const diffs = (syncService as any).getFeatureDifferences(cadContourModified, camContour, true);
+        expect(diffs).toContain('segments');
+
+        const identicalDiffs = (syncService as any).getFeatureDifferences(camContour, camContour, true);
+        expect(identicalDiffs).toEqual([]);
     });
 });

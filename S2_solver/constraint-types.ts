@@ -112,6 +112,29 @@ export function makeSolverConstraint(
     };
 }
 
+export function cloneSolverConstraint(constraint: SolverConstraint): SolverConstraint {
+    const cloneAnchor = (anchor: ConstraintAnchor | null): ConstraintAnchor | null =>
+        anchor
+            ? {
+                  ...anchor,
+                  localPointMm: anchor.localPointMm ? [...anchor.localPointMm] : undefined,
+                  localNormalMm: anchor.localNormalMm ? [...anchor.localNormalMm] : undefined,
+                  localUAxisMm: anchor.localUAxisMm ? [...anchor.localUAxisMm] : undefined,
+                  localVAxisMm: anchor.localVAxisMm ? [...anchor.localVAxisMm] : undefined,
+                  quadCenterMm: anchor.quadCenterMm ? [...anchor.quadCenterMm] : undefined,
+              }
+            : null;
+
+    return {
+        ...constraint,
+        anchorA: cloneAnchor(constraint.anchorA),
+        anchorB: cloneAnchor(constraint.anchorB),
+        groundPosMm: constraint.groundPosMm ? [...constraint.groundPosMm] : null,
+        groundNormal: constraint.groundNormal ? [...constraint.groundNormal] : null,
+        residual: { ...constraint.residual },
+    };
+}
+
 /** Kotwice uzupełnione — więz można rozwiązywać / odrzucić jako sprzeczny. */
 export function constraintHasGeometry(constraint: SolverConstraint): boolean {
     if (constraint.bindType === 'GROUND') {

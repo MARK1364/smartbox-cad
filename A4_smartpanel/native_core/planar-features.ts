@@ -317,8 +317,11 @@ export function mergeAdjacentPolygons(polys: number[][][]): number[][][] {
             if (!stuck && loop.length >= 3) {
                 const simplified = simplifyCollinear2D(loop, EPS);
                 if (simplified.length >= 3) {
+                    // Pętla CW (ujemne pole) oznacza wewnętrzny otwór otoczony przez `cleaned`.
+                    // Zbiór prostych wielokątów nie może reprezentować dziury przez jej odwrócenie —
+                    // zwracamy oryginalne rozłączne kawałki `cleaned`.
                     if (signedArea2D(simplified) < 0) {
-                        simplified.reverse();
+                        return cleaned;
                     }
                     mergedLoops.push(simplified);
                 }

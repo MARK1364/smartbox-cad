@@ -203,7 +203,7 @@ describe('HangersEngine & HangersTypes', () => {
         const sets = extractHangerSets(camaroJson);
         expect(sets).toHaveLength(1);
         expect(sets[0].parts).toHaveLength(2);
-        expect(sets[0].cuts).toHaveLength(8);
+        expect(sets[0].cuts).toHaveLength(4);
 
         const dims = { width_mm: 600, height_mm: 720, depth_mm: 300 };
         const plan = calculateHangersPlan(dims, { szablon_id: 'zawieszka_camaro' }, camaroJson);

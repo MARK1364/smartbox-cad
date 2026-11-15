@@ -45,6 +45,11 @@ vi.mock('../../S2_solver/constraint-geometry.js', () => ({
 
 import { buildConnectorDrillings } from '../connectors-drilling-builder.js';
 import type { ConnectorDrillingIntent } from '../connectors-drilling-intent.js';
+import { SyncConnectorDrillingsCommand } from '../commands/sync-connector-drillings-command.js';
+import { ProjectDocument } from '../../A1_core/project-document.js';
+import { CommandHistory } from '../../A1_core/commands/command-history.js';
+import { CADNode } from '../../A1_core/cad-node/cad-node.js';
+import { NodeType } from '../../A1_core/cad-node/node-type.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,6 +83,16 @@ function mockDocument(nodes: any[]) {
     return {
         findNode: (id: string) => nodeMap.get(id) || null,
         getPanels: () => nodes,
+        transaction: (operation: () => unknown, onRollback?: (error: unknown) => void) => {
+            try {
+                return operation();
+            } catch (error) {
+                onRollback?.(error);
+                throw error;
+            }
+        },
+        afterCommit: (effect: () => void) => effect(),
+        notifyDocumentChanged: () => {},
     } as any;
 }
 
@@ -360,5 +375,87 @@ describe('buildConnectorDrillings', () => {
 
         expect(() => buildConnectorDrillings(doc)).toThrow(/Nieprawidłowe wymiary formatki/);
     });
-});
 
+    it('Undo restores only panels changed by connector synchronization', () => {
+        const panelA = mockPanelNode('panelA');
+        const panelB = mockPanelNode('panelB');
+        const untouchedPanel = mockPanelNode('untouched');
+        const doc = mockDocument([panelA, panelB, untouchedPanel]);
+        const connector = makeConnectorInstance('kolki_d8x35', 0, [0, 0, 100]);
+        mockGroups.push(makeGroup('G12', 'panelA', 'panelB', [1, 0, 0], [connector]));
+
+        const command = new SyncConnectorDrillingsCommand();
+        command.execute(doc);
+
+        const externalFeature = { id: 'external-machining', type: 'groove' };
+        untouchedPanel.domainData.features.push(externalFeature);
+        command.undo(doc);
+
+        expect(untouchedPanel.domainData.features).toEqual([externalFeature]);
+        expect(panelA.domainData.features).toEqual([]);
+        expect(panelB.domainData.features).toEqual([]);
+    });
+
+    it('does not duplicate a frozen feature whose ID matches a connector intent', () => {
+        const panelA = mockPanelNode('panelA');
+        const panelB = mockPanelNode('panelB');
+        const doc = mockDocument([panelA, panelB]);
+        const connector = makeConnectorInstance('kolki_d8x35', 0, [0, 0, 100]);
+        mockGroups.push(makeGroup('G14', 'panelA', 'panelB', [1, 0, 0], [connector]));
+
+        const intent = buildConnectorDrillings(doc).find((item) => item.targetNodeId === 'panelA')!;
+        const frozenFeature = { ...intent.feature, frozen: true };
+        panelA.domainData.features.push(frozenFeature);
+
+        new SyncConnectorDrillingsCommand().execute(doc);
+
+        expect(panelA.domainData.features.filter((feature: any) => feature.id === intent.feature.id)).toEqual([
+            frozenFeature,
+        ]);
+        expect(panelA.domainData.features.find((feature: any) => feature.id === intent.feature.id)).toBe(frozenFeature);
+    });
+
+    it('commits feature changes to history before surfacing a failing feature listener', () => {
+        const document = new ProjectDocument();
+        const createPanelNode = (id: string) => {
+            const node = CADNode.create(NodeType.PART, id, id);
+            node.domainData = {
+                id,
+                type: 'panel',
+                width: 600_000_000,
+                height: 720_000_000,
+                thickness: 18_000_000,
+                features: [
+                    { id: `old-${id}`, type: 'hole', params: { isConnectorDrilling: true } },
+                    { id: `manual-${id}`, type: 'groove' },
+                ],
+                setFeatures() {
+                    throw new Error('Feature listener failed');
+                },
+            } as any;
+            document.addNode(document.rootNode.id, node);
+            return node;
+        };
+        const panelA = createPanelNode('history-panel-a');
+        const panelB = createPanelNode('history-panel-b');
+        const history = new CommandHistory(document);
+        const connector = makeConnectorInstance('kolki_d8x35', 0, [0, 0, 100]);
+        mockGroups.push(makeGroup('G13', panelA.id, panelB.id, [1, 0, 0], [connector]));
+        const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const command = new SyncConnectorDrillingsCommand();
+
+        try {
+            expect(() => history.execute(command)).not.toThrow();
+            expect(history.undoStack).toContain(command);
+            expect((panelA.domainData as any).features.some((feature: any) => feature.id === 'old-history-panel-a')).toBe(false);
+            expect((panelA.domainData as any).features.some((feature: any) => feature.params?.isConnectorDrilling)).toBe(true);
+
+            expect(history.undo()).toBe(true);
+            expect((panelA.domainData as any).features.map((feature: any) => feature.id)).toEqual([
+                'old-history-panel-a', 'manual-history-panel-a',
+            ]);
+        } finally {
+            logError.mockRestore();
+        }
+    });
+});

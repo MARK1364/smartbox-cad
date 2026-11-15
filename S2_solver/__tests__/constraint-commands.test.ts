@@ -5,8 +5,8 @@ import { MacroCommand } from '../../A1_core/commands/macro-command.js';
 import { RemoveNodeCommand } from '../../A1_core/commands/remove-node-command.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
 import { ConstraintStore } from '../constraint-store.js';
-import { AddConstraintCommand, RemoveConstraintCommand } from '../constraint-commands.js';
-import { makeAnchor, makeSolverConstraint } from '../constraint-types.js';
+import { AddConstraintCommand, RemoveConstraintCommand, UpdateConstraintCommand } from '../constraint-commands.js';
+import { cloneSolverConstraint, makeAnchor, makeSolverConstraint } from '../constraint-types.js';
 import { SolverController } from '../solver-controller.js';
 import { ConstraintHighlightOverlay } from '../constraint-highlight.js';
 import { Mat4 } from '../../A1_core/cad-math/mat4.js';
@@ -90,6 +90,42 @@ describe('S2_solver — Undo / Redo relacji (constraint-commands)', () => {
         expect(store.get(constraint.id)).toBe(singletonConstraintBefore);
     });
 
+    it('nie odświeża nakładki ani viewportu po AddConstraintCommand w makrze wycofanym przez błąd', () => {
+        const panel = CADNode.create(NodeType.PART, 'panel_macro_add', 'node_macro_constraint_add');
+        document.addNode(document.rootNode.id, panel);
+        const constraint = makeSolverConstraint({
+            id: 'cst_macro_add',
+            bindType: 'GROUND',
+            anchorA: makeAnchor({ nodeId: panel.id, kind: 'OBJECT' }),
+        });
+        const previousViewport = ContextManager.instance.viewport;
+        const requestRender = vi.fn();
+        ContextManager.instance.viewport = { requestRender };
+        const refresh = vi.spyOn(ConstraintHighlightOverlay.instance, 'refresh').mockImplementation(() => {});
+        const failingCommand = {
+            id: 'failing-add-constraint-macro-step',
+            label: 'Fail',
+            timestamp: Date.now(),
+            affectedNodeIds: [],
+            execute: () => { throw new Error('later add-constraint macro step failed'); },
+            undo: () => {},
+        };
+        const macro = new MacroCommand([
+            new AddConstraintCommand(constraint),
+            failingCommand,
+        ]);
+
+        try {
+            expect(() => history.execute(macro)).toThrow('later add-constraint macro step failed');
+            expect(store.get(constraint.id)).toBeNull();
+            expect(refresh).not.toHaveBeenCalled();
+            expect(requestRender).not.toHaveBeenCalled();
+        } finally {
+            refresh.mockRestore();
+            ContextManager.instance.viewport = previousViewport;
+        }
+    });
+
     it('RemoveConstraintCommand: Undo przywraca usuniętą relację, Redo ją usuwa', () => {
         const c = store.add({
             id: 'cst_remove_me',
@@ -113,6 +149,90 @@ describe('S2_solver — Undo / Redo relacji (constraint-commands)', () => {
         // REDO -> ponownie usunięto
         history.redo();
         expect(store.get('cst_remove_me')).toBeNull();
+    });
+
+    it('UpdateConstraintCommand: Undo przywraca poprzedni więz i transformację, Redo ponawia edycję', () => {
+        const panel = CADNode.create(NodeType.PART, 'panel_update', 'node_constraint_update');
+        document.addNode(document.rootNode.id, panel);
+        const constraint = store.add({
+            id: 'cst_update_me',
+            bindType: 'COPLANAR',
+            anchorA: makeAnchor({ nodeId: panel.id, kind: 'FACE', faceName: 'FACE_Z_PLUS', localPointMm: [1, 2, 3] }),
+            anchorB: makeAnchor({ nodeId: 'other', kind: 'FACE', faceName: 'FACE_Z_MINUS' }),
+            offsetMm: 5,
+        });
+        const before = cloneSolverConstraint(constraint);
+        const beforeMatrix = panel.localMatrix.clone();
+        const afterMatrix = beforeMatrix.clone();
+        afterMatrix.data[12] = 125;
+        const updatedAnchor = makeAnchor({
+            nodeId: panel.id,
+            kind: 'FACE',
+            faceName: 'FACE_X_PLUS',
+            localPointMm: [4, 5, 6],
+        });
+
+        store.update(constraint.id, { anchorA: updatedAnchor, offsetMm: 12 });
+        const after = store.get(constraint.id)!;
+        const command = new UpdateConstraintCommand(before, after, [{
+            nodeId: panel.id,
+            localBefore: beforeMatrix,
+            localAfter: afterMatrix,
+        }]);
+        history.execute(command);
+
+        expect(store.get(constraint.id)?.offsetMm).toBe(12);
+        expect(panel.localMatrix.data[12]).toBe(125);
+        expect(history.undo()).toBe(true);
+        expect(store.get(constraint.id)).toMatchObject({
+            offsetMm: 5,
+            anchorA: { faceName: 'FACE_Z_PLUS', localPointMm: [1, 2, 3] },
+        });
+        expect(panel.localMatrix.data[12]).toBe(beforeMatrix.data[12]);
+
+        expect(history.redo()).toBe(true);
+        expect(store.get(constraint.id)).toMatchObject({
+            offsetMm: 12,
+            anchorA: { faceName: 'FACE_X_PLUS', localPointMm: [4, 5, 6] },
+        });
+        expect(panel.localMatrix.data[12]).toBe(125);
+    });
+
+    it('UpdateConstraintCommand nie uruchamia opóźnionego solve po Undo ani Redo', () => {
+        vi.useFakeTimers();
+        const constraint = store.add({
+            id: 'cst_toggle_autosolve',
+            bindType: 'GROUND',
+            anchorA: makeAnchor({ nodeId: 'toggle_node', kind: 'OBJECT' }),
+        });
+        const before = cloneSolverConstraint(constraint);
+        const after = cloneSolverConstraint(constraint);
+        after.enabled = false;
+        const controller = new SolverController(store);
+        const detach = controller.attach(document, history);
+
+        try {
+            history.execute(new UpdateConstraintCommand(before, after, [], 'Zmiana aktywności relacji', store));
+            expect(store.get(constraint.id)?.enabled).toBe(false);
+            expect(history.undoStack).toHaveLength(1);
+            vi.advanceTimersByTime(200);
+            expect(history.undoStack).toHaveLength(1);
+
+            expect(history.undo()).toBe(true);
+            expect(store.get(constraint.id)?.enabled).toBe(true);
+            vi.advanceTimersByTime(200);
+            expect(history.redoStack).toHaveLength(1);
+            expect(history.undoStack).toHaveLength(0);
+
+            expect(history.redo()).toBe(true);
+            expect(store.get(constraint.id)?.enabled).toBe(false);
+            vi.advanceTimersByTime(200);
+            expect(history.undoStack).toHaveLength(1);
+            expect(history.redoStack).toHaveLength(0);
+        } finally {
+            detach();
+            vi.useRealTimers();
+        }
     });
 
     it('RemoveNodeCommand: Undo przywraca więzy usunięte z formatką, Redo usuwa je ponownie', () => {

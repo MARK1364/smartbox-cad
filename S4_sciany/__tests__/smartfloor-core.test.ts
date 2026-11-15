@@ -126,6 +126,103 @@ describe('S4 SmartFloor', () => {
         expect(Math.round(nmToMm((doc.getContainers()[0].domainData as any).width))).toBe(Math.round(before.floorWidth));
     });
 
+    it('rollbackuje parametry i przebudowę SmartFloor, gdy rebuild zawiedzie', () => {
+        const doc = new ProjectDocument();
+        new CreateSmartFloorCommand({ floorWidth: 4200 }).execute(doc);
+        const containerNode = doc.getContainers()[0];
+        const container = containerNode.domainData as any;
+        const extraPanel = doc.createPanel({
+            width: 900,
+            height: 600,
+            thickness: 18,
+            role: 'RIGHT_SIDE_PANEL',
+        }, container.id);
+        const extraPanelNode = doc.findNode(extraPanel.id)!;
+        const floorNode = containerNode.children[0];
+        const beforeChildren = [...containerNode.children];
+        const before = SetSmartFloorParamsCommand.snapshotFrom(container);
+        const beforeContainerDims = {
+            width: container.width,
+            height: container.height,
+            depth: container.depth,
+        };
+        const beforeFloor = {
+            width: (floorNode.domainData as any).width,
+            height: (floorNode.domainData as any).height,
+            thickness: (floorNode.domainData as any).thickness,
+            localMatrix: floorNode.localMatrix.clone(),
+        };
+        const dispatchEvent = vi.fn();
+        vi.stubGlobal('window', { document: { dispatchEvent } });
+        vi.stubGlobal('CustomEvent', class {
+            constructor(public type: string) {}
+        });
+
+        const rebuild = vi.spyOn(smartFloorCore, 'rebuildSmartFloor').mockImplementation((model, targetDoc) => {
+            rebuild.mockRestore();
+            smartFloorCore.rebuildSmartFloor(model, targetDoc);
+            throw new Error('test SmartFloor rebuild failure');
+        });
+        const history = new CommandHistory(doc);
+        const command = new SetSmartFloorParamsCommand(container.id, before, {
+            ...before,
+            floorWidth: 6100,
+        });
+
+        try {
+            expect(() => history.execute(command)).toThrow('test SmartFloor rebuild failure');
+            expect(history.canUndo).toBe(false);
+            expect(doc.findNode(container.id)).toBe(containerNode);
+            expect(container).toMatchObject(beforeContainerDims);
+            expect(SetSmartFloorParamsCommand.snapshotFrom(container)).toEqual(before);
+            expect(containerNode.children).toEqual(beforeChildren);
+            expect(doc.findNode(extraPanel.id)).toBe(extraPanelNode);
+            expect(floorNode.domainData).toMatchObject({
+                width: beforeFloor.width,
+                height: beforeFloor.height,
+                thickness: beforeFloor.thickness,
+            });
+            expect(floorNode.localMatrix.data).toEqual(beforeFloor.localMatrix.data);
+            expect(dispatchEvent).not.toHaveBeenCalled();
+        } finally {
+            rebuild.mockRestore();
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('rollbackuje stan po nieudanym Undo SmartFloor', () => {
+        const doc = new ProjectDocument();
+        new CreateSmartFloorCommand({ floorWidth: 4200 }).execute(doc);
+        const containerNode = doc.getContainers()[0];
+        const container = containerNode.domainData as any;
+        const history = new CommandHistory(doc);
+        const before = SetSmartFloorParamsCommand.snapshotFrom(container);
+        const command = new SetSmartFloorParamsCommand(container.id, before, {
+            ...before,
+            floorWidth: 6100,
+        });
+        history.execute(command);
+        const floorNode = containerNode.children[0];
+        const afterWidth = (floorNode.domainData as any).width;
+        const afterMatrix = floorNode.localMatrix.clone();
+        const rebuild = vi.spyOn(smartFloorCore, 'rebuildSmartFloor').mockImplementation((model, targetDoc) => {
+            rebuild.mockRestore();
+            smartFloorCore.rebuildSmartFloor(model, targetDoc);
+            throw new Error('test SmartFloor undo rebuild failure');
+        });
+
+        try {
+            expect(() => history.undo()).toThrow('test SmartFloor undo rebuild failure');
+            expect(history.canUndo).toBe(true);
+            expect(history.canRedo).toBe(false);
+            expect(SetSmartFloorParamsCommand.snapshotFrom(container).floorWidth).toBe(6100);
+            expect((floorNode.domainData as any).width).toBe(afterWidth);
+            expect(floorNode.localMatrix.data).toEqual(afterMatrix.data);
+        } finally {
+            rebuild.mockRestore();
+        }
+    });
+
     it('rebuild usuwa obce PART, szanuje panele ręczne', () => {
         const doc = new ProjectDocument();
         new CreateSmartFloorCommand({}).execute(doc);

@@ -31,11 +31,19 @@ import { nmToMm } from '../../A1_core/cad-math/units.js';
 
 import { CAMStateStore, CNCProgramState } from '../core/cam-state-store.js';
 import { CNCEngine } from '../core/cnc-engine.js';
-import { buildDefaultCncProgramForPanel, ensurePanelHasCncProgram } from '../core/cam-auto-program.js';
+import { buildDefaultCncProgramForPanel } from '../core/cam-auto-program.js';
+import { CreateCncProgramCommand } from '../commands/create-cnc-program-command.js';
+import { RemoveCncProgramCommand } from '../commands/remove-cnc-program-command.js';
+import { UpdateCncProgramCommand } from '../commands/update-cnc-program-command.js';
+import { executeCncCommand } from '../commands/execute-with-history.js';
+import { applyProgramActivation } from './cnc-program-activation.js';
+import { applyFeatureEdit } from './cnc-feature-edit.js';
+import { persistProgramInPanel, recalculateProgramWcsOrThrow } from './cnc-program-persistence.js';
+import type { Command } from '../../A1_core/commands/command.js';
 import { DrillingStrategy } from '../strategies/drilling-strategy.js';
 import { ProfilingStrategy } from '../strategies/profiling-strategy.js';
 import { PocketingStrategy } from '../strategies/pocketing-strategy.js';
-import { GCodeTab } from './tabs/GCodeTab.js';
+import { GCodeTab, resolvePostprocessor } from './tabs/GCodeTab.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import { useLocale } from '../../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
@@ -51,9 +59,9 @@ export const getPanelDimensionsMM = (panel: any) => {
     if (!panel) {
         throw new Error('[C1_cnc/CncPanel] Brak referencji do wybranej formatki (panel is null).');
     }
-    if (typeof panel.width !== 'number' || panel.width <= 0 ||
-        typeof panel.height !== 'number' || panel.height <= 0 ||
-        typeof panel.thickness !== 'number' || panel.thickness <= 0) {
+    if (typeof panel.width !== 'number' || !Number.isFinite(panel.width) || panel.width <= 0 ||
+        typeof panel.height !== 'number' || !Number.isFinite(panel.height) || panel.height <= 0 ||
+        typeof panel.thickness !== 'number' || !Number.isFinite(panel.thickness) || panel.thickness <= 0) {
         throw new Error(`[C1_cnc/CncPanel] Formatka "${panel.id}" nie posiada poprawnych wymiarów fizycznych (W=${panel.width}, H=${panel.height}, T=${panel.thickness}).`);
     }
     return {
@@ -200,7 +208,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     const [showWcsLayoutEdit, setShowWcsLayoutEdit] = useState(false);
     const [projectPath, setProjectPath] = useState('//');
     const [isSelectingProfile, setIsSelectingProfile] = useState<boolean>(false);
-    const [editingFeatureIndex, setEditingFeatureIndex] = useState<number | null>(null);
+    const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
     const [tempFeatureEdit, setTempFeatureEdit] = useState<any>(null);
     const [isPickingWcsCorner, setIsPickingWcsCorner] = useState<boolean>(false);
     const [toolsList, setToolsList] = useState<Tool[]>([]);
@@ -208,6 +216,19 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     const [selectedSegmentCount, setSelectedSegmentCount] = useState<number>(0);
     const [hoveredFeatureIdx, setHoveredFeatureIdx] = useState<number | null>(null);
     const [pinnedPreviewIdx, setPinnedPreviewIdx] = useState<number | null>(null);
+
+    // Identyfikatorem edytowanej operacji jest featureId; indeks wyliczamy
+    // z aktualnej listy, żeby zmiana kolejności nie podmieniła innej cechy.
+    const editingFeatureIndex = editingFeatureId === null
+        ? -1
+        : features.findIndex((f: any) => f.featureId === editingFeatureId);
+
+    useEffect(() => {
+        if (editingFeatureId !== null && editingFeatureIndex < 0) {
+            setEditingFeatureId(null);
+            setTempFeatureEdit(null);
+        }
+    }, [editingFeatureId, editingFeatureIndex]);
 
     const isSelectingProfileRef = useRef(false);
     useEffect(() => {
@@ -262,59 +283,80 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
 
     const updateProg = useCallback((updaterOrUpdates: Partial<CNCProgramState> | ((p: CNCProgramState) => CNCProgramState)) => {
         if (!activeProgIdRef.current) return;
-        store.updateActiveProgram(p => {
-            const updated = typeof updaterOrUpdates === 'function' ? updaterOrUpdates(p) : { ...p, ...updaterOrUpdates };
+        try {
+            store.updateActiveProgram(p => {
+                const draft = typeof updaterOrUpdates === 'function' ? updaterOrUpdates(p) : { ...p, ...updaterOrUpdates };
+                const persistPanel = lockedPanel || effectiveActivePanel;
+                const engine = CNCEngine.getInstance();
+                const updated = recalculateProgramWcsOrThrow(p, draft, persistPanel, engine.wcsManager);
 
-            // Rekalkulacja współrzędnych cech przy zmianie bazy WCS (naroża lub manualnych offsetów/rotacji)
-            const wcsChanged = updated.cornerIndex !== p.cornerIndex ||
-                updated.wcsOffsetX !== p.wcsOffsetX ||
-                updated.wcsOffsetY !== p.wcsOffsetY ||
-                updated.wcsOffsetZ !== p.wcsOffsetZ ||
-                updated.wcsRotX !== p.wcsRotX ||
-                updated.wcsRotY !== p.wcsRotY ||
-                updated.wcsRotZ !== p.wcsRotZ ||
-                updated.wcsName !== p.wcsName;
-
-            if (wcsChanged && lockedPanel && updated.features && updated.features.length > 0) {
-                try {
-                    const engine = CNCEngine.getInstance();
-                    const dims = getPanelDimensionsMM(lockedPanel);
-                    const panelRole = lockedPanel.role;
-                    const roleRule = WcsRulesMapper.getRuleForRole(panelRole);
-                    const rule = roleRule
-                        ? { ...roleRule, origin_corner: { ...roleRule.origin_corner }, directions: { ...roleRule.directions }, rotation: { ...roleRule.rotation } }
-                        : {
-                            origin_corner: { X: '-', Y: '-', Z: '-' },
-                            directions: { X: '+', Y: '+', Z: '+' },
-                            rotation: { X: 0, Y: 0, Z: 0 },
-                        };
-                    if (typeof updated.cornerIndex === 'number' && updated.cornerIndex >= 0) {
-                        rule.origin_corner = cornerIndexToOriginCorner(updated.cornerIndex);
-                    }
-                    engine.wcsManager.setRule(rule);
-                    engine.wcsManager.setWcsName(updated.wcsName || 'G55');
-                    engine.wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
-                    engine.wcsManager.setManualRotation({ x: updated.wcsRotX || 0, y: updated.wcsRotY || 0, z: updated.wcsRotZ || 0 });
-                    engine.wcsManager.setManualOffset({ x: updated.wcsOffsetX || 0, y: updated.wcsOffsetY || 0, z: updated.wcsOffsetZ || 0 });
-                    updated.features = retransformFeaturesToWcs(updated.features, engine.wcsManager);
-                } catch {
-                    // ignoruj błąd przeliczania jeśli panel jest w trakcie inicjalizacji
-                }
+                // Zapisujemy do formatki docelowej programu (a nie tylko do aktualnie
+                // zaznaczonej w drzewie), żeby edycja trafiła do PanelModel.toJSON().
+                persistProgramInPanel(persistPanel, updated);
+                return updated;
+            });
+            if (ContextManager.instance.document) {
+                ContextManager.instance.document.notifyDocumentChanged();
             }
-
-            if (effectiveActivePanel) {
-                if (!effectiveActivePanel.cncPrograms) effectiveActivePanel.cncPrograms = [];
-                const idx = effectiveActivePanel.cncPrograms.findIndex((x: any) => x.id === updated.id);
-                if (idx !== -1) {
-                    effectiveActivePanel.cncPrograms[idx] = updated;
-                }
-            }
-            return updated;
-        });
-        if (ContextManager.instance.document) {
-            ContextManager.instance.document.notifyDocumentChanged();
+        } catch (error) {
+            console.error('[CncPanel] Błąd aktualizacji bazy WCS programu:', error);
+            setWarningMessage(error instanceof Error ? error.message : String(error));
         }
-    }, [effectiveActivePanel, lockedPanel]);
+    }, [effectiveActivePanel, lockedPanel, setWarningMessage]);
+
+    // Synchronizacja UI po udanej komendzie: wybieramy program zgodnie z flagą isActive,
+    // czyli dokładnie tak samo, jak robi to walidacja zakresu.
+    const syncProgramsFromPanel = useCallback((panel: any) => {
+        const nextPrograms = Array.isArray(panel?.cncPrograms) ? panel.cncPrograms : [];
+        const active = nextPrograms.find((p: any) => p?.isActive);
+        // Jedno powiadomienie: lista i aktywne ID zmieniają się atomowo.
+        store.setProgramsAndActiveProgram([...nextPrograms], active?.id ?? nextPrograms[0]?.id ?? null);
+    }, [store]);
+
+    // Trwałe zmiany programów CNC wymagają historii komend — bez niej nie
+    // wykonujemy operacji po cichu, tylko pokazujemy komunikat.
+    const runHistoryCommand = useCallback((command: Command): boolean => {
+        const history = ContextManager.instance.commandHistory;
+        const document = ContextManager.instance.document;
+        if (!executeCncCommand(history, document, command)) {
+            setWarningMessage(tx(cncTekst, 'warnings.history_unavailable', TX_NS));
+            return false;
+        }
+        setWarningMessage(null);
+        return true;
+    }, []);
+
+    // Wspólna ścieżka tworzenia programu: zawsze przez komendę historii (Undo/Redo).
+    const executeCreateProgram = useCallback((targetPanel: any, newProg: CNCProgramState): boolean => {
+        const command = new CreateCncProgramCommand(targetPanel, newProg, {
+            onProgramsChanged: syncProgramsFromPanel
+        });
+        return runHistoryCommand(command);
+    }, [runHistoryCommand, syncProgramsFromPanel]);
+
+    const executeRemoveProgram = useCallback((targetPanel: any, programId: string): boolean => {
+        const command = new RemoveCncProgramCommand(targetPanel, programId, {
+            onProgramsChanged: syncProgramsFromPanel
+        });
+        return runHistoryCommand(command);
+    }, [runHistoryCommand, syncProgramsFromPanel]);
+
+    const updateProgramWithHistory = useCallback((
+        updater: (program: CNCProgramState) => CNCProgramState,
+    ): boolean => {
+        const activeProgram = store.getActiveProgram();
+        if (!activeProgram) return false;
+        const targetPanel = activeProgram.targetPanel || lockedPanel || effectiveActivePanel;
+        const storedProgram = targetPanel?.cncPrograms?.find((program: any) => program?.id === activeProgram.id);
+        const before = storedProgram || activeProgram;
+        const draft = { ...before };
+        const after = updater(draft);
+        if (after === draft) return true;
+        const command = new UpdateCncProgramCommand(targetPanel, before, after, {
+            onProgramsChanged: syncProgramsFromPanel
+        });
+        return runHistoryCommand(command);
+    }, [store, lockedPanel, effectiveActivePanel, runHistoryCommand, syncProgramsFromPanel]);
 
     // ─── INICJALIZACJA GLOBALNEGO SILNIKA 3D ─────────────────────────
     useEffect(() => {
@@ -329,24 +371,18 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     // Synchronizacja programu CNC z zaznaczoną w drzewie formatką (panel.cncPrograms)
     useEffect(() => {
         if (!effectiveActivePanel || effectiveActivePanel.type === 'container') return;
-        if (!effectiveActivePanel.cncPrograms) {
-            effectiveActivePanel.cncPrograms = [];
-        }
+
+        const panelProgs = Array.isArray(effectiveActivePanel.cncPrograms) ? effectiveActivePanel.cncPrograms : [];
         // Jeśli formatka posiada cechy obróbcze (otwory/wpusty), a nie ma jeszcze programu, utwórz go automatycznie!
-        if (effectiveActivePanel.cncPrograms.length === 0 && effectiveActivePanel.features && effectiveActivePanel.features.length > 0) {
-            ensurePanelHasCncProgram(effectiveActivePanel);
-        }
-        const panelProgs = effectiveActivePanel.cncPrograms;
-        store.setPrograms(panelProgs);
-        if (panelProgs.length > 0) {
-            const curActive = panelProgs.find((p: any) => p.id === activeProgramId);
-            if (!curActive) {
-                store.setActiveProgramId(panelProgs[0].id);
+        if (panelProgs.length === 0 && effectiveActivePanel.features && effectiveActivePanel.features.length > 0) {
+            const autoProg = buildDefaultCncProgramForPanel(effectiveActivePanel);
+            if (autoProg) {
+                executeCreateProgram(effectiveActivePanel, autoProg);
             }
-        } else {
-            store.setActiveProgramId(null);
         }
-    }, [effectiveActivePanel]);
+
+        syncProgramsFromPanel(effectiveActivePanel);
+    }, [effectiveActivePanel, executeCreateProgram, syncProgramsFromPanel]);
 
     // Ukrywanie gizmo przesuwania CAD podczas pracy w module CNC
     useEffect(() => {
@@ -391,12 +427,11 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         };
 
         // Zapis w CAMStateStore
-        const store = CAMStateStore.getInstance();
-        store.updateActiveProgram(p => ({ ...p, features: [...p.features, newContourFeat] }));
+        updateProgramWithHistory(p => ({ ...p, features: [...p.features, newContourFeat] }));
 
         setIsSelectingProfile(false);
         setSelectedSegmentCount(0);
-    }, [features, panelName]);
+    }, [features, panelName, updateProgramWithHistory]);
 
     // Otwarcie narzędzia do profilu (przycisk w UI)
     const handleStartSelectProfile = useCallback(() => {
@@ -486,8 +521,7 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
     }, [isPickingWcsCorner]);
 
     const moveFeature = useCallback((index: number, direction: number) => {
-        const store = CAMStateStore.getInstance();
-        store.updateActiveProgram(p => {
+        updateProgramWithHistory(p => {
             const newFeatures = [...p.features];
             const targetIndex = index + direction;
             if (targetIndex < 0 || targetIndex >= newFeatures.length) return p;
@@ -497,29 +531,45 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             newFeatures[targetIndex] = temp;
             return { ...p, features: newFeatures };
         });
-    }, []);
+    }, [updateProgramWithHistory]);
 
     const updateFeatureTool = useCallback((index: number, toolId: string) => {
-        const store = CAMStateStore.getInstance();
-        store.updateActiveProgram(p => {
+        updateProgramWithHistory(p => {
+            const targetFeat = p.features[index];
+            if (!targetFeat) return p;
+            const currentAssigned = targetFeat.toolId || (targetFeat.featureId ? p.toolAssignments?.[targetFeat.featureId] : undefined) || '';
+            if (currentAssigned === toolId && targetFeat.toolId === toolId) return p;
             const newFeatures = [...p.features];
-            newFeatures[index] = { ...newFeatures[index], toolId };
-            return { ...p, features: newFeatures };
+            newFeatures[index] = { ...targetFeat, toolId };
+            const nextAssignments = { ...(p.toolAssignments || {}) };
+            if (targetFeat.featureId) {
+                if (toolId) {
+                    nextAssignments[targetFeat.featureId] = toolId;
+                } else {
+                    delete nextAssignments[targetFeat.featureId];
+                }
+            }
+            return { ...p, features: newFeatures, toolAssignments: nextAssignments };
         });
-    }, []);
+    }, [updateProgramWithHistory]);
 
     const deleteFeature = useCallback((index: number) => {
-        const store = CAMStateStore.getInstance();
-        store.updateActiveProgram(p => {
+        const succeeded = updateProgramWithHistory(p => {
+            if (index < 0 || index >= p.features.length) return p;
+            const deletedFeatureId = p.features[index]?.featureId;
             const newFeatures = [...p.features];
             newFeatures.splice(index, 1);
-            return { ...p, features: newFeatures };
+            const nextAssignments = { ...(p.toolAssignments || {}) };
+            if (deletedFeatureId) {
+                delete nextAssignments[deletedFeatureId];
+            }
+            return { ...p, features: newFeatures, toolAssignments: nextAssignments };
         });
-        if (pinnedPreviewIdx === index) {
+        if (succeeded && pinnedPreviewIdx === index) {
             setPinnedPreviewIdx(null);
             CNCEngine.getInstance().visualizer?.clearHighlight();
         }
-    }, [pinnedPreviewIdx]);
+    }, [pinnedPreviewIdx, updateProgramWithHistory]);
 
     const resolveCurrentPanelView = useCallback(() => {
         const pvs = ContextManager.instance.panelViews as Map<any, any> | undefined;
@@ -634,9 +684,8 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         const engine = CNCEngine.getInstance();
         const res = engine.geometryExtractor.extractPanelFeatures(lockedPanel, engine.wcsManager, 'hole');
         const extracted = res?.features ?? [];
-        const currentFeats = store.getActiveProgram()?.features ?? [];
-        updateProg({ features: mergeExtractedFeatures(currentFeats, extracted) });
-    }, [lockedPanel, mergeExtractedFeatures, updateProg]);
+        updateProgramWithHistory(p => ({ ...p, features: mergeExtractedFeatures(p.features, extracted) }));
+    }, [lockedPanel, mergeExtractedFeatures, updateProgramWithHistory]);
 
     // Wykrywanie tylko wpustów
     const handleDetectGrooves = useCallback(() => {
@@ -644,9 +693,8 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         const engine = CNCEngine.getInstance();
         const res = engine.geometryExtractor.extractPanelFeatures(lockedPanel, engine.wcsManager, 'groove');
         const extracted = res?.features ?? [];
-        const currentFeats = store.getActiveProgram()?.features ?? [];
-        updateProg({ features: mergeExtractedFeatures(currentFeats, extracted) });
-    }, [lockedPanel, mergeExtractedFeatures, updateProg]);
+        updateProgramWithHistory(p => ({ ...p, features: mergeExtractedFeatures(p.features, extracted) }));
+    }, [lockedPanel, mergeExtractedFeatures, updateProgramWithHistory]);
 
     // Automatyczne ustawianie celności kamery (Camera Pivot Target) na wybraną formatkę
     const focusCameraOnFormatka = useCallback(() => {
@@ -671,12 +719,10 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
 
         setWarningMessage(null);
         const targetPanel = effectiveActivePanel;
-        if (!targetPanel.cncPrograms) {
-            targetPanel.cncPrograms = [];
-        }
+        const existingCount = Array.isArray(targetPanel.cncPrograms) ? targetPanel.cncPrograms.length : 0;
 
         const tName = targetPanel.name || tx(cncTekst, 'extractor.panel_default', TX_NS);
-        const progName = `Program_${tName}_${targetPanel.cncPrograms.length + 1}`;
+        const progName = `Program_${tName}_${existingCount + 1}`;
         const newId = `prog_${Date.now()}`;
         const defaultProg = buildDefaultCncProgramForPanel(targetPanel);
         const newProg: CNCProgramState = {
@@ -694,43 +740,32 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             toolAssignments: defaultProg?.toolAssignments || {}
         };
 
-        targetPanel.cncPrograms.push(newProg);
-        store.setPrograms([...targetPanel.cncPrograms]);
-        store.setActiveProgramId(newId);
-
-        if (ContextManager.instance.document) {
-            ContextManager.instance.document.notifyDocumentChanged();
-        }
+        executeCreateProgram(targetPanel, newProg);
     };
 
     const handleActivateProgram = (id: string) => {
-        store.setActiveProgramId(id);
+        // Utrzymujemy jeden aktywny program także w danych formatki,
+        // żeby walidacja zakresu i stan UI wskazywały ten sam program.
+        if (Array.isArray(effectiveActivePanel?.cncPrograms)) {
+            for (const prog of effectiveActivePanel.cncPrograms) {
+                prog.isActive = prog.id === id;
+            }
+            // Lista i aktywne ID w jednej atomowej aktualizacji store'u.
+            store.setProgramsAndActiveProgram([...effectiveActivePanel.cncPrograms], id);
+        } else {
+            store.setActiveProgramId(id);
+        }
+        activeProgIdRef.current = id;
         const p = programs.find(x => x.id === id);
         if (p) {
-            updateProg({ wcsName: p.wcsName || 'G55' });
-            updateProg({
-                cornerIndex: typeof p.cornerIndex === 'number' ? p.cornerIndex : -1,
-            });
-            updateProg({ postprocessor: p.postprocessor || 'Mach3' });
+            // Jedno wywołanie = jedna spójna rewizja dokumentu.
+            applyProgramActivation(updateProg, p);
         }
     };
 
     const handleDeleteProgram = (id: string) => {
-        if (effectiveActivePanel && effectiveActivePanel.cncPrograms) {
-            effectiveActivePanel.cncPrograms = effectiveActivePanel.cncPrograms.filter((p: any) => p.id !== id);
-            store.setPrograms([...effectiveActivePanel.cncPrograms]);
-            if (activeProgramId === id) {
-                const remaining = effectiveActivePanel.cncPrograms;
-                if (remaining.length > 0) {
-                    store.setActiveProgramId(remaining[0].id);
-                } else {
-                    store.setActiveProgramId(null);
-                }
-            }
-            if (ContextManager.instance.document) {
-                ContextManager.instance.document.notifyDocumentChanged();
-            }
-        }
+        if (!effectiveActivePanel) return;
+        executeRemoveProgram(effectiveActivePanel, id);
     };
 
     // Generowanie kodu NC z procesora
@@ -742,8 +777,17 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
             return;
         }
 
+        const engine = CNCEngine.getInstance();
+        const toolAssignments = currentProgram?.toolAssignments || {};
+        const preparedFeatures = features.map(f => {
+            const assignedId = f.toolId || (f.featureId ? toolAssignments[f.featureId] : undefined) || null;
+            return assignedId && f.toolId !== assignedId ? { ...f, toolId: assignedId } : f;
+        });
+
         // Sprawdź czy są operacje bez przypisanego narzędzia
-        const missingToolFeats = features.filter(f => !f.toolId);
+        const missingToolFeats = preparedFeatures.filter(
+            f => !f.toolId || !engine.toolLibrary.getTool(f.toolId)
+        );
         if (missingToolFeats.length > 0) {
             setWarningMessage(tx(cncTekst, 'warnings.no_tool_code', TX_NS, { n: missingToolFeats.length }));
             return;
@@ -753,26 +797,21 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         store.setWarningMessage(null);
 
         const dims = getPanelDimensionsMM(lockedPanel);
-        CNCEngine.getInstance().wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
+        engine.wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
 
-        const program = CNCEngine.getInstance().camProcessor.buildCLProgram({
+        const program = engine.camProcessor.buildCLProgram({
             projectName: projectName,
-            wcsOrigin: CNCEngine.getInstance().wcsManager.getOrigin(),
+            wcsOrigin: engine.wcsManager.getOrigin(),
             wcsName: wcsName,
-            features: features,
-            toolAssignments: {},
+            features: preparedFeatures,
+            toolAssignments: toolAssignments,
             postprocessor: postprocessorName,
             strategyId: currentProgram?.strategyId,
             strategyParams: currentProgram?.strategyParams,
             workpieceDimensions: dims
         });
 
-        let post: any;
-        if (postprocessorName === 'WoodWOP') post = new WoodWOPPostprocessor();
-        else if (postprocessorName === 'SCM') post = new SCMPostprocessor();
-        else if (postprocessorName === 'Biesse') post = new BiessePostprocessor();
-        else if (postprocessorName === 'Fanuc') post = new FanucPostprocessor();
-        else post = new Mach3Postprocessor();
+        const post = resolvePostprocessor(postprocessorName);
 
         const nc = post.generateNcCode(program);
         setGcodeOutput(nc);
@@ -780,15 +819,24 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
 
     // Kontrola Symulacji 3D
     const handleStartSim = () => {
-        if (!CNCEngine.getInstance().simulator || !lockedPanel) return;
+        const engine = CNCEngine.getInstance();
+        if (!engine.simulator || !lockedPanel) return;
 
         if (lockedPanel.frozen === true || lockedPanel.params?.frozen === true) {
             setWarningMessage(tx(cncTekst, 'warnings.panel_frozen_sim', TX_NS));
             return;
         }
 
+        const toolAssignments = currentProgram?.toolAssignments || {};
+        const preparedFeatures = features.map(f => {
+            const assignedId = f.toolId || (f.featureId ? toolAssignments[f.featureId] : undefined) || null;
+            return assignedId && f.toolId !== assignedId ? { ...f, toolId: assignedId } : f;
+        });
+
         // Sprawdź czy są operacje bez przypisanego narzędzia
-        const missingToolFeats = features.filter(f => !f.toolId);
+        const missingToolFeats = preparedFeatures.filter(
+            f => !f.toolId || !engine.toolLibrary.getTool(f.toolId)
+        );
         if (missingToolFeats.length > 0) {
             setWarningMessage(tx(cncTekst, 'warnings.no_tool_sim', TX_NS, { n: missingToolFeats.length }));
             return;
@@ -797,57 +845,28 @@ export const CncPanel: React.FC<CncPanelProps> = ({ activePanel, scene, onClose,
         setWarningMessage(null);
         store.setWarningMessage(null);
 
-        const dims = getPanelDimensionsMM(lockedPanel);
-        CNCEngine.getInstance().wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
-
-        const panelViews = ContextManager.instance.panelViews as Map<any, any> | undefined;
-        let targetViewRoot: any = null;
-        if (panelViews && lockedPanel) {
-            const view = panelViews.get(lockedPanel);
-            if (view && view.root) targetViewRoot = view.root;
-        }
-
-        // Rodzicem dla symulatora (i frezu) jest układ WCS przypięty do widoku 3D formatki
-        CNCEngine.getInstance().simulator.setWcsTransform(CNCEngine.getInstance().wcsManager, targetViewRoot);
-
-        const operations = CNCEngine.getInstance().camProcessor.processProject({
-            projectName: projectName,
-            wcsOrigin: CNCEngine.getInstance().wcsManager.getOrigin(),
-            wcsName: wcsName,
-            features: features,
-            toolAssignments: {},
-            postprocessor: postprocessorName,
-            strategyId: currentProgram?.strategyId,
-            strategyParams: currentProgram?.strategyParams
-        });
-
-        CNCEngine.getInstance().simulator.setSpeed(storeState.simulationSpeed);
-        CNCEngine.getInstance().simulator.loadOperations(operations);
-        CNCEngine.getInstance().simulator.start();
-        store.setSimulationState(true);
+        engine.startSimulation(storeState.simulationSpeed, lockedPanel);
     };
 
     const handlePauseSim = () => {
-        if (CNCEngine.getInstance().simulator) CNCEngine.getInstance().simulator.stop();
-        store.setSimulationState(false);
+        CNCEngine.getInstance().pauseSimulation();
     };
 
     const handleStopSim = () => {
-        if (CNCEngine.getInstance().simulator) CNCEngine.getInstance().simulator.stop();
-        store.setSimulationState(false);
+        CNCEngine.getInstance().stopSimulation();
     };
 
 
 
     const saveFeatureEdit = () => {
-        if (editingFeatureIndex === null || !tempFeatureEdit) return;
-        const store = CAMStateStore.getInstance();
-        store.updateActiveProgram(p => {
-            const updated = [...p.features];
-            updated[editingFeatureIndex] = tempFeatureEdit;
-            return { ...p, features: updated };
-        });
-        setEditingFeatureIndex(null);
+        if (editingFeatureId === null || !tempFeatureEdit) return;
+        // Edycja pojedynczej cechy trafia do dokumentu i historii Undo/Redo.
+        let updated = false;
+        applyFeatureEdit(updater => {
+            updated = updateProgramWithHistory(updater);
+        }, editingFeatureId, tempFeatureEdit);
+        if (!updated) return;
+        setEditingFeatureId(null);
         setTempFeatureEdit(null);
     };
     
@@ -1214,7 +1233,10 @@ title={tx(cncTekst, 'panel.delete', TX_NS)}
                                 <button onClick={handleStartSelectProfile} style={{ flex: 1, background: '#444', color: '#eee', border: 'none', borderRight: '1px solid #222', padding: '4px', fontSize: '11px', cursor: 'pointer', textAlign: 'center' }}>➕ Wybierz profil</button>
                                 <button
                                     type="button"
-                                    onClick={() => updateProg({ features: [] })}
+                                    onClick={() => updateProgramWithHistory(p => {
+                                        if (p.features.length === 0) return p;
+                                        return { ...p, features: [] };
+                                    })}
                                     title={tx(cncTekst, 'panel.clear_features', TX_NS) || 'Wyczyść wszystkie operacje'}
                                     style={{ background: '#444', color: '#eee', border: 'none', padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                 >
@@ -1249,7 +1271,8 @@ title={tx(cncTekst, 'panel.delete', TX_NS)}
                                     </div>
                                 )}
                                 {features.map((feat, idx) => {
-                                    const isComplete = !!feat.toolId;
+                                    const assignedToolId = feat.toolId || (feat.featureId ? currentProgram?.toolAssignments?.[feat.featureId] : undefined) || '';
+                                    const isComplete = !!assignedToolId;
                                     const isHovered = hoveredFeatureIdx === idx;
                                     const isPinned = pinnedPreviewIdx === idx;
                                     const isActiveHighlight = isHovered || isPinned;
@@ -1341,7 +1364,7 @@ title={tx(cncTekst, 'panel.delete', TX_NS)}
                                         </div>
                                         
                                         <select 
-                                            value={feat.toolId || ''} 
+                                            value={assignedToolId} 
                                             onChange={(e) => updateFeatureTool(idx, e.target.value)}
                                             style={{ background: isComplete ? '#052e16' : '#111', border: `1px solid ${isComplete ? '#166534' : '#333'}`, color: '#eee', padding: '2px', fontSize: '10px', borderRadius: '2px', width: '70px', outline: 'none' }}
                                         >
@@ -1356,7 +1379,7 @@ title={tx(cncTekst, 'panel.delete', TX_NS)}
                                             type="button"
                                             className="tree-action-btn"
                                             onClick={() => {
-                                                setEditingFeatureIndex(idx);
+                                                setEditingFeatureId(feat.featureId);
                                                 setTempFeatureEdit(JSON.parse(JSON.stringify(feat)));
                                             }}
                                             title={tx(cncTekst, 'operations.edit', TX_NS)}
@@ -1486,7 +1509,7 @@ title={tx(cncTekst, 'panel.delete', TX_NS)}
                 </div>
             </div>
 {/* MODAL EDYCJI PARAMETRÓW PROFILU / CECHY */}
-            {editingFeatureIndex !== null && tempFeatureEdit && (
+            {editingFeatureIndex >= 0 && tempFeatureEdit && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
                     <div style={{ background: '#1d1d1d', border: '1px solid #111', width: '380px', color: '#eee', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', borderRadius: '4px', overflow: 'hidden' }}>
                         
@@ -1604,7 +1627,7 @@ style={{ background: '#222', border: '1px solid #111', color: '#eee', padding: '
                                 {tx(cncTekst, 'operations.ok', TX_NS)}
                             </button>
                             <button 
-                                onClick={() => { setEditingFeatureIndex(null); setTempFeatureEdit(null); }} 
+                                onClick={() => { setEditingFeatureId(null); setTempFeatureEdit(null); }}
                                 style={{ flex: 1, background: '#444', color: '#eee', border: '1px solid #333', padding: '6px', fontSize: '11px', borderRadius: '3px', cursor: 'pointer' }}
                             >
                                 {tx(cncTekst, 'operations.cancel', TX_NS)}

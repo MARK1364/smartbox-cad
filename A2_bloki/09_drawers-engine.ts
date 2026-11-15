@@ -8,10 +8,18 @@
  *  - SSOT parametrów: A2_bloki/01_BLOKI_PARAMETERS.md
  */
 
-import drawersRules from './09_drawers_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const drawersRules = getModuleRules('09_drawers');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { toDimensionsMm, type ModuleDims } from './01_base-engine.js';
-import { getDrawerDrill, getHardware, listByType, DEFAULT_RAIL_ID, type HardwareItem } from '../B1_biblioteka/index.js';
+import {
+    getDrawerDrill,
+    getHardware,
+    listByType,
+    DEFAULT_RAIL_ID,
+    normalizeDrawerSideProfile,
+    type HardwareItem
+} from '../B1_biblioteka/index.js';
 import type {
     BlokiDimensions_mm,
     BlokiPlanResult,
@@ -24,6 +32,7 @@ import {
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
 import { buildHoleMachiningIntent } from './01_machining-intent.js';
+import { callDrawersPlanWasm, isDrawersWasmReady } from './drawers-wasm-bridge.js';
 
 export { assertCanonicalDrawersParams, LEGACY_DRAWERS_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -95,6 +104,12 @@ export function listRailLengthsForBrand(brand: string): string[] {
     return Array.from(lengths).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
 }
 
+export function listRailLengthsForSystem(systemId: string): string[] {
+    const item = getHardware(systemId);
+    const keys = Object.keys(item?.lengths || {});
+    return keys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+}
+
 // ─── Typy Domenowe Szuflad ─────────────────────────────────────────────────────
 
 export interface DrawerSlot {
@@ -105,12 +120,17 @@ export interface DrawerSlot {
     zFrontCenter: number;
     railId: string;
     lengthMm: number;
+    internal?: boolean;
     rail: {
         name: string;
         construction?: string;
         panels?: any;
+        profile?: Record<string, any>;
         railHeight: number;
         corpusHeight: number;
+        backHeight?: number;
+        totalHeight?: number;
+        minSpace?: number;
         width: number;
         lengths: Record<string, any>;
         frontHoles: any;
@@ -285,8 +305,12 @@ export function resolveDrawerLayout(
             name: railItem?.name || railId,
             construction: (railItem as any)?.construction || ((railItem as any)?.panels ? 'SYSTEM' : 'WOODEN'),
             panels: (railItem as any)?.panels,
+            profile: (railItem as any)?.profile,
             railHeight: Number(mount.rail_height ?? 35),
             corpusHeight: Number(mount.corpus_height ?? 84),
+            ...(mount.back_height !== undefined ? { backHeight: Number(mount.back_height) } : {}),
+            ...(mount.total_height !== undefined ? { totalHeight: Number(mount.total_height) } : {}),
+            ...(mount.min_space !== undefined ? { minSpace: Number(mount.min_space) } : {}),
             width: Number(mount.width ?? 27),
             lengths: railItem?.lengths || {},
             frontHoles: railItem?.front_holes || {},
@@ -313,6 +337,7 @@ export function resolveDrawerLayout(
             zFrontCenter,
             railId,
             lengthMm: Number.isFinite(lengthMm) ? lengthMm : 500,
+            internal: Boolean(cfg.internal),
             rail,
             frontOutOfPanel,
             corpusHolesOutOfPanel
@@ -339,42 +364,78 @@ export function resolveDrawerLayout(
 
 function buildFrontHoles(slot: DrawerSlot, frontW: number, frontH: number): any[] {
     const data = slot.rail.frontHoles || {};
-    const zFromBox: number[] = data.z_positions || [];
-    if (!zFromBox.length) return [];
-    const xOff = Number(data.x_offset ?? 31);
     const drill = getDrawerDrill(slot.railId);
-    const dia = Number(drill.front_hole?.dia ?? 3);
-    const depth = Number(drill.front_hole?.depth ?? 10);
+    const defaultDia = Number(drill.front_hole?.dia ?? 3);
+    const defaultDepth = Number(drill.front_hole?.depth ?? 10);
+    const baseXOffset = Number(data.x_offset ?? 31);
     const boxFromFrontBottom = slot.zInternalBottom - slot.zFrontBottom;
     const features: any[] = [];
 
-    zFromBox.forEach((zRaw, zIdx) => {
-        const v = boxFromFrontBottom + Number(zRaw ?? 0);
+    const pushHole = (opts: {
+        side: 'L' | 'R';
+        zRaw: number;
+        edgeDist?: number;
+        dia?: number;
+        depth?: number;
+        idx: number;
+    }) => {
+        const dia = Number(opts.dia ?? defaultDia);
+        const depth = Number(opts.depth ?? defaultDepth);
+        const v = boxFromFrontBottom + opts.zRaw;
         if (v < dia / 2 || v > frontH - dia / 2) return;
+        const xOff = Number(opts.edgeDist ?? baseXOffset);
+        const u = opts.side === 'L' ? xOff : (frontW - xOff);
+        const railNodeId = `drawer_${slot.index}_rail_${opts.side}`;
+        const intent = buildHoleMachiningIntent({
+            id: `drawer_${slot.index}_front_${opts.side}_${opts.idx}`,
+            name: `Otwór montażowy szuflady ${slot.index + 1} (${opts.side})`,
+            face: 'FACE_Z_PLUS',
+            u_mm: u,
+            v_mm: v,
+            diameter_mm: dia,
+            depth_mm: depth,
+            rule: 'screw',
+            drivenBy: { nodeId: railNodeId, role: 'HARDWARE', hardwareType: 'RAIL' },
+            sourcePartId: railNodeId,
+            generatedBy: 'blok_drawers',
+            extraParams: {
+                template_id: drill.id || 'STANDARD_DRAWER_DRILL',
+                isDrawerFrontHole: true,
+            },
+        });
+        features.push(intent.feature);
+    };
+
+    // Nowe dane: osobne wpisy dla lewej i prawej strony (z własną pozycją i flagą enabled).
+    const entries = Array.isArray((data as any).holes) ? (data as any).holes : null;
+    if (entries && entries.length) {
+        entries.forEach((entry: any, idx: number) => {
+            if (!entry || entry.enabled === false) return;
+            const zRaw = Number(entry.z_from_bottom ?? 0);
+            if (!Number.isFinite(zRaw)) return;
+            const side = entry.side === 'L' || entry.side === 'R' ? entry.side : null;
+            const sides: Array<'L' | 'R'> = side ? [side] : ['L', 'R'];
+            for (const s of sides) {
+                pushHole({
+                    side: s,
+                    zRaw,
+                    edgeDist: entry.edge_dist,
+                    dia: entry.dia,
+                    depth: entry.depth,
+                    idx,
+                });
+            }
+        });
+        return features;
+    }
+
+    // Wsteczna zgodność: stare dane mają tylko z_positions — wiercimy po obu stronach.
+    const zFromBox: number[] = data.z_positions || [];
+    zFromBox.forEach((zRaw, idx) => {
         for (const side of ['L', 'R'] as const) {
-            const u = side === 'L' ? xOff : (frontW - xOff);
-            const railNodeId = `drawer_${slot.index}_rail_${side}`;
-            const intent = buildHoleMachiningIntent({
-                id: `drawer_${slot.index}_front_${side}_${zIdx}`,
-                name: `Otwór montażowy szuflady ${slot.index + 1} (${side})`,
-                face: 'FACE_Z_PLUS',
-                u_mm: u,
-                v_mm: v,
-                diameter_mm: dia,
-                depth_mm: depth,
-                rule: 'screw',
-                drivenBy: { nodeId: railNodeId, role: 'HARDWARE', hardwareType: 'RAIL' },
-                sourcePartId: railNodeId,
-                generatedBy: 'blok_drawers',
-                extraParams: {
-                    template_id: drill.id || 'STANDARD_DRAWER_DRILL',
-                    isDrawerFrontHole: true
-                }
-            });
-            features.push(intent.feature);
+            pushHole({ side, zRaw: Number(zRaw ?? 0), idx });
         }
     });
-
     return features;
 }
 
@@ -397,26 +458,145 @@ export function calculateDrawersPlan(
     const roleBottom = (drawersRules as any).parameters?.smart_panel_integration?.role_overrides?.DRAWER_BOTTOM;
     const roleBack = (drawersRules as any).parameters?.smart_panel_integration?.role_overrides?.DRAWER_BACK;
 
+    // ─── WYWOŁANIE BINARNEGO SILNIKA WASM (RUST) ──────────────────────────────
+    const sideProfilesBySlot: Record<number, any> = {};
+    const slotSpecs = layout.slots.map((slot) => {
+        const isSystemDrawer = (slot.rail as any).construction === 'SYSTEM' ||
+            ((slot.rail as any).construction !== 'WOODEN' && (
+                Boolean((slot.rail as any).panels) ||
+                /antaro|slimbox|merivo|legrabox|^m\d+|^d\d+|^kosz/i.test(slot.railId) ||
+                /antaro|slimbox|merivo|legrabox/i.test(slot.rail.name)
+            ));
+        const panelConf = (slot.rail as any).panels;
+        const bottomThickness_mm = panelConf?.bottom?.thickness || 16;
+        const rawProfile = (slot.rail as any).profile || {};
+        const lengthEntry = (slot.rail as any).lengths?.[String(Math.round(slot.lengthMm))] ||
+            (slot.rail as any).lengths?.[String(slot.lengthMm)] || {};
+        const defaultKompensacja = panelConf?.back?.width_offset !== undefined
+            ? Math.round((Math.abs(Number(panelConf.back.width_offset)) / 2) * 100) / 100
+            : 21;
+        const defaultMocowanieLen = slot.lengthMm <= 350 ? 260 : (slot.lengthMm <= 450 ? 290 : 320);
+        const mocowanie_len = lengthEntry.mocowanie_len ?? rawProfile.mocowanie_len ?? defaultMocowanieLen;
+        const prowadnica_len = lengthEntry.prowadnica_len ?? rawProfile.prowadnica_len ?? (slot.lengthMm + 8);
+        const boczek_len = lengthEntry.boczek_len ?? rawProfile.boczek_len ?? slot.lengthMm;
+        const sideProfile = normalizeDrawerSideProfile({
+            ...rawProfile,
+            b_h: rawProfile.b_h ?? slot.rail.corpusHeight,
+            b_ph: rawProfile.b_ph ?? slot.rail.backHeight,
+            b_y: rawProfile.b_y ?? slot.rail.totalHeight,
+            m_h: rawProfile.m_h ?? 60,
+            kompensacja_plecow: rawProfile.kompensacja_plecow ?? defaultKompensacja,
+            p_th: bottomThickness_mm,
+            boczek_len,
+            mocowanie_len,
+            prowadnica_len
+        });
+        sideProfilesBySlot[slot.index] = sideProfile;
+
+        const backThickness = panelConf?.back?.thickness || 16;
+        const backH = panelConf?.back?.height ??
+            slot.rail.backHeight ??
+            sideProfile.b_ph ??
+            (panelConf?.back?.height_offset !== undefined
+                ? Math.max(10, slot.rail.corpusHeight + panelConf.back.height_offset)
+                : (slot.rail.corpusHeight ?? 84));
+        const frontHolesData = slot.rail.frontHoles || {};
+        const drill = getDrawerDrill(slot.railId);
+        const entries = Array.isArray((frontHolesData as any).holes) ? (frontHolesData as any).holes : null;
+
+        return {
+            index: slot.index,
+            front_h: slot.frontH,
+            z_front_bottom: slot.zFrontBottom,
+            z_internal_bottom: slot.zInternalBottom,
+            z_front_center: slot.zFrontCenter,
+            internal: Boolean(slot.internal),
+            length_mm: slot.lengthMm,
+            rail_id: slot.railId,
+            rail_name: slot.rail.name,
+            rail_width: slot.rail.width,
+            rail_height: slot.rail.railHeight,
+            corpus_height: slot.rail.corpusHeight,
+            is_system_drawer: isSystemDrawer,
+            bottom_thickness: bottomThickness_mm,
+            bottom_width_offset: panelConf?.bottom?.width_offset ?? -75,
+            bottom_length_offset: panelConf?.bottom?.length_offset ?? -24,
+            back_thickness: backThickness,
+            back_width_offset: panelConf?.back?.width_offset ?? -87,
+            back_height: backH,
+            shelf_y: sideProfile.shelfY,
+            art_no: slot.rail.lengths[String(Math.round(slot.lengthMm))]?.art_no ?? null,
+            front_holes_x_offset: Number(frontHolesData.x_offset ?? 31),
+            drill_id: drill.id || 'STANDARD_DRAWER_DRILL',
+            drill_dia: Number(drill.front_hole?.dia ?? 3),
+            drill_depth: Number(drill.front_hole?.depth ?? 10),
+            front_hole_entries: entries
+                ? entries.map((e: any) => ({
+                    side: e?.side === 'L' || e?.side === 'R' ? e.side : null,
+                    z_from_bottom: Number(e?.z_from_bottom ?? 0),
+                    edge_dist: e?.edge_dist !== undefined ? Number(e.edge_dist) : null,
+                    dia: e?.dia !== undefined ? Number(e.dia) : null,
+                    depth: e?.depth !== undefined ? Number(e.depth) : null,
+                    enabled: e?.enabled !== false,
+                }))
+                : null,
+            legacy_z_positions: Array.isArray(frontHolesData.z_positions)
+                ? frontHolesData.z_positions.map((z: any) => Number(z ?? 0))
+                : [],
+        };
+    });
+
+    const wasmResult = callDrawersPlanWasm(dims, params, {
+        edgeBandingByRole: {
+            FRONT: roleFront?.edge_banding,
+            SPACER: roleSpacer?.edge_banding,
+            DRAWER_BOTTOM: roleBottom?.edge_banding,
+            DRAWER_BACK: roleBack?.edge_banding,
+        },
+        frontLcs: FRONT_LCS,
+        shelfLcs: SHELF_LCS,
+        sideLLcs: SIDE_L_LCS,
+        sideRLcs: SIDE_R_LCS,
+        slotSpecs,
+        sideProfilesBySlot,
+    });
+    if (wasmResult) {
+        return { groups: wasmResult.groups, parts: wasmResult.parts, hardware: wasmResult.hardware };
+    }
+    if (isDrawersWasmReady()) {
+        throw new Error('[Rust Drawers Error] Moduł Rust WASM zwrócił błąd dla calculateDrawersPlan. Cichy fallback do TS jest wyłączony!');
+    }
+
     const frontY = -(layout.depth_mm / 2 + layout.grubosc_frontu_mm / 2);
     // Nałożenie L/P liczone od wewnętrznej ściany dystansu (nie od krawędzi Bloku).
     const frontW = Math.max(10, layout.swiatlo_wewnetrzne_mm + layout.nalozenie_lewe_mm + layout.nalozenie_prawe_mm);
     const frontX = layout.przesuniecie_x_mm + (layout.nalozenie_prawe_mm - layout.nalozenie_lewe_mm) / 2;
 
+    const groups = layout.slots.map((slot) => ({
+        key: `drawer_${slot.index}`,
+        name: `Szuflada ${slot.index}`,
+        role: 'DRAWER_GROUP',
+    }));
+
     for (const slot of layout.slots) {
-        parts.push({
-            name: `Front_${slot.index}`,
-            key: `DRAWER_${slot.index}_FRONT`,
-            role: 'FRONT',
-            nodeType: 'PART',
-            material: 'W1100_ST9_18',
-            materialName: 'Biały Alpejski',
-            materialCode: 'W1100 ST9',
-            dim: { x: frontW, y: layout.grubosc_frontu_mm, z: slot.frontH },
-            loc: { x: frontX, y: frontY, z: slot.zFrontCenter },
-            lcs: FRONT_LCS,
-            edge_banding: roleFront?.edge_banding,
-            features: buildFrontHoles(slot, frontW, slot.frontH)
-        });
+        const groupKey = `drawer_${slot.index}`;
+        if (!slot.internal) {
+            parts.push({
+                name: `Front_${slot.index}`,
+                key: `DRAWER_${slot.index}_FRONT`,
+                role: 'FRONT',
+                nodeType: 'PART',
+                groupKey,
+                material: 'W1100_ST9_18',
+                materialName: 'Biały Alpejski',
+                materialCode: 'W1100 ST9',
+                dim: { x: frontW, y: layout.grubosc_frontu_mm, z: slot.frontH },
+                loc: { x: frontX, y: frontY, z: slot.zFrontCenter },
+                lcs: FRONT_LCS,
+                edge_banding: roleFront?.edge_banding,
+                features: buildFrontHoles(slot, frontW, slot.frontH)
+            });
+        }
 
         const railLen = Math.min(slot.lengthMm, Math.max(10, layout.depth_mm - 2));
         const isSystemDrawer = (slot.rail as any).construction === 'SYSTEM' ||
@@ -427,10 +607,35 @@ export function calculateDrawersPlan(
             ));
 
         const panelConf = (slot.rail as any).panels;
+        const bottomThickness_mm = panelConf?.bottom?.thickness || 16;
+        const rawProfile = (slot.rail as any).profile || {};
+        const lengthEntry = (slot.rail as any).lengths?.[String(Math.round(slot.lengthMm))] ||
+            (slot.rail as any).lengths?.[String(slot.lengthMm)] || {};
+
+        const defaultKompensacja = panelConf?.back?.width_offset !== undefined
+            ? Math.round((Math.abs(Number(panelConf.back.width_offset)) / 2) * 100) / 100
+            : 21;
+
+        const defaultMocowanieLen = slot.lengthMm <= 350 ? 260 : (slot.lengthMm <= 450 ? 290 : 320);
+        const mocowanie_len = lengthEntry.mocowanie_len ?? rawProfile.mocowanie_len ?? defaultMocowanieLen;
+        const prowadnica_len = lengthEntry.prowadnica_len ?? rawProfile.prowadnica_len ?? (slot.lengthMm + 8);
+        const boczek_len = lengthEntry.boczek_len ?? rawProfile.boczek_len ?? slot.lengthMm;
+
+        const sideProfile = normalizeDrawerSideProfile({
+            ...rawProfile,
+            b_h: rawProfile.b_h ?? slot.rail.corpusHeight,
+            b_ph: rawProfile.b_ph ?? slot.rail.backHeight,
+            b_y: rawProfile.b_y ?? slot.rail.totalHeight,
+            m_h: rawProfile.m_h ?? 60,
+            kompensacja_plecow: rawProfile.kompensacja_plecow ?? defaultKompensacja,
+            p_th: bottomThickness_mm,
+            boczek_len,
+            mocowanie_len,
+            prowadnica_len
+        });
 
         if (isSystemDrawer) {
-            // Szuflada systemowa (np. Blum Antaro) — 2 formatki meblowe: Dno i Plecy
-            const bottomThickness = panelConf?.bottom?.thickness || 16;
+            // Szuflada systemowa (np. Blum Antaro / Sevroll SlimBox) — 2 formatki meblowe: Dno i Plecy
             const bottomW = Math.max(10, layout.swiatlo_wewnetrzne_mm + (panelConf?.bottom?.width_offset ?? -75));
             const bottomL = Math.max(10, slot.lengthMm + (panelConf?.bottom?.length_offset ?? -24));
 
@@ -439,14 +644,15 @@ export function calculateDrawersPlan(
                 key: `DRAWER_${slot.index}_BOTTOM`,
                 role: 'DRAWER_BOTTOM',
                 nodeType: 'PART',
+                groupKey,
                 material: 'W1100_ST9_16',
                 materialName: 'Biały Alpejski 16mm',
                 materialCode: 'W1100 ST9',
-                dim: { x: bottomW, y: bottomL, z: bottomThickness },
+                dim: { x: bottomW, y: bottomL, z: bottomThickness_mm },
                 loc: {
                     x: layout.przesuniecie_x_mm,
                     y: -(layout.depth_mm / 2) + bottomL / 2,
-                    z: slot.zInternalBottom + bottomThickness / 2
+                    z: slot.zInternalBottom + sideProfile.shelfY + bottomThickness_mm / 2
                 },
                 lcs: SHELF_LCS,
                 edge_banding: roleBottom?.edge_banding,
@@ -456,23 +662,26 @@ export function calculateDrawersPlan(
             const backThickness = panelConf?.back?.thickness || 16;
             const backW = Math.max(10, layout.swiatlo_wewnetrzne_mm + (panelConf?.back?.width_offset ?? -87));
             const backH = panelConf?.back?.height ??
+                slot.rail.backHeight ??
+                sideProfile.b_ph ??
                 (panelConf?.back?.height_offset !== undefined
                     ? Math.max(10, slot.rail.corpusHeight + panelConf.back.height_offset)
-                    : slot.rail.corpusHeight || 84);
+                    : (slot.rail.corpusHeight ?? 84));
 
             parts.push({
                 name: `Plecy_${slot.index}`,
                 key: `DRAWER_${slot.index}_BACK`,
                 role: 'DRAWER_BACK',
                 nodeType: 'PART',
+                groupKey,
                 material: 'W1100_ST9_16',
                 materialName: 'Biały Alpejski 16mm',
                 materialCode: 'W1100 ST9',
                 dim: { x: backW, y: backThickness, z: backH },
                 loc: {
                     x: layout.przesuniecie_x_mm,
-                    y: -(layout.depth_mm / 2) + bottomL - backThickness / 2,
-                    z: slot.zInternalBottom + backH / 2
+                    y: -(layout.depth_mm / 2) + bottomL + backThickness / 2,
+                    z: slot.zInternalBottom + sideProfile.shelfY + backH / 2
                 },
                 lcs: FRONT_LCS,
                 edge_banding: roleBack?.edge_banding,
@@ -502,10 +711,12 @@ export function calculateDrawersPlan(
 
         const railZ = slot.zInternalBottom;
         const railY = -(layout.depth_mm / 2);
-        const railXLeft = -layout.width_mm / 2 + layout.dystans_lewy_mm + slot.rail.width;
-        const railXRight = layout.width_mm / 2 - layout.dystans_prawy_mm - slot.rail.width;
+        // Baza 2D profilu mocowania (m_x = 0) leży bezpośrednio na wewnętrznej płaszczyźnie boku / dystansu
+        const railXLeft = -layout.width_mm / 2 + layout.dystans_lewy_mm;
+        const railXRight = layout.width_mm / 2 - layout.dystans_prawy_mm;
 
-        const hwModelId = 'BLUM_ANTARO_M_L';
+        const isMerivo = /^BLUM_MERIVO|^MR/i.test(slot.railId);
+        const hwModelId = isMerivo ? 'merivobox' : 'BLUM_ANTARO_M_L';
 
         hardware.push({
             id: `drawer_${slot.index}_rail_L`,
@@ -514,6 +725,7 @@ export function calculateDrawersPlan(
             hardwareType: 'RAIL',
             hardwareId: hwModelId,
             side: 'left',
+            groupKey,
             loc: { x: railXLeft, y: railY, z: railZ },
             dim: { x: slot.rail.width, y: railLen, z: slot.rail.railHeight },
             params: {
@@ -523,6 +735,8 @@ export function calculateDrawersPlan(
                 lengthMm: slot.lengthMm,
                 corpusHeight: slot.rail.corpusHeight,
                 zInternalBottom: slot.zInternalBottom,
+                internal: Boolean(slot.internal),
+                profile: sideProfile,
                 art_no: slot.rail.lengths[String(Math.round(slot.lengthMm))]?.art_no
             },
             customProperties: {
@@ -539,6 +753,7 @@ export function calculateDrawersPlan(
             hardwareType: 'RAIL',
             hardwareId: hwModelId,
             side: 'right',
+            groupKey,
             loc: { x: railXRight, y: railY, z: railZ },
             dim: { x: slot.rail.width, y: railLen, z: slot.rail.railHeight },
             params: {
@@ -548,6 +763,8 @@ export function calculateDrawersPlan(
                 lengthMm: slot.lengthMm,
                 corpusHeight: slot.rail.corpusHeight,
                 zInternalBottom: slot.zInternalBottom,
+                internal: Boolean(slot.internal),
+                profile: sideProfile,
                 art_no: slot.rail.lengths[String(Math.round(slot.lengthMm))]?.art_no
             },
             customProperties: {
@@ -591,5 +808,5 @@ export function calculateDrawersPlan(
         });
     }
 
-    return { parts, hardware };
+    return { groups, parts, hardware };
 }

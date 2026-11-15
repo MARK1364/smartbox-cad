@@ -27,6 +27,7 @@ export interface BelkaWidokowaProps {
   gridVisible: boolean;
   lcsVisible: boolean;
   pmiVisible?: boolean;
+  edgeBandingVisible?: boolean;
   isPanActive: boolean;
   isZoomWindowActive: boolean;
   hidePanZoom?: boolean;
@@ -45,6 +46,7 @@ export interface BelkaWidokowaProps {
   onToggleGrid: () => void;
   onToggleLcs: (next: boolean) => void;
   onTogglePmi?: (next: boolean) => void;
+  onToggleEdgeBanding?: (next: boolean) => void;
   onProjectionChange: (next: string) => void;
   onTogglePan: () => void;
   onToggleZoomWindow: () => void;
@@ -59,6 +61,7 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
     gridVisible,
     lcsVisible,
     pmiVisible = true,
+    edgeBandingVisible = false,
     isPanActive,
     isZoomWindowActive,
     hidePanZoom,
@@ -77,6 +80,7 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
     onToggleGrid,
     onToggleLcs,
     onTogglePmi,
+    onToggleEdgeBanding,
     onProjectionChange,
     onTogglePan,
     onToggleZoomWindow,
@@ -215,6 +219,26 @@ export function BelkaWidokowa(props: BelkaWidokowaProps) {
                 style={{ cursor: 'pointer' }}
               />
               PMI
+            </label>
+
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                color: '#e2e8f0',
+                fontSize: '0.8rem',
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={edgeBandingVisible}
+                onChange={() => onToggleEdgeBanding?.(!edgeBandingVisible)}
+                style={{ cursor: 'pointer' }}
+              />
+              {tx(srcTekst, 'app.view.edge_banding', TX_NS)}
             </label>
           </div>
         )}

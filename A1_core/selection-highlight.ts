@@ -12,6 +12,32 @@ import {
     shouldSuppressEntitySelectionHighlight,
 } from './selection-mode.js';
 
+declare const BABYLON: any;
+
+function setMeshSelectionOutline(mesh: any, isSelected: boolean, color: any, width: number, cascadeToChildren: boolean = true): void {
+    if (!mesh || mesh.isDisposed?.()) return;
+    if ('renderOutline' in mesh) {
+        mesh.renderOutline = isSelected;
+        if (isSelected) {
+            if (color) mesh.outlineColor = color;
+            mesh.outlineWidth = width;
+        }
+    }
+    if (cascadeToChildren) {
+        const children = typeof mesh.getChildMeshes === 'function' ? mesh.getChildMeshes() : [];
+        for (const child of children) {
+            if (!child || child.isDisposed?.()) continue;
+            if ('renderOutline' in child) {
+                child.renderOutline = isSelected;
+                if (isSelected) {
+                    if (color) child.outlineColor = color;
+                    child.outlineWidth = width;
+                }
+            }
+        }
+    }
+}
+
 export function syncSelectionHighlights(ctx: CadModuleContext): void {
     const active = ctx.document.activeEntity;
     const suppressed = ContextManager.instance.suppressSelectionHighlight;
@@ -34,6 +60,43 @@ export function syncSelectionHighlights(ctx: CadModuleContext): void {
                 ((active as any).smartId?.uid && (panel as any).smartId?.uid && (active as any).smartId.uid === (panel as any).smartId.uid)
             );
             view.setSelected(isMatch);
+        }
+    }
+
+    const hwViews = (ctx as any).hardwareViews || ContextManager.instance.hardwareViews;
+    if (hwViews) {
+        const outlineColor = typeof BABYLON !== 'undefined' && BABYLON.Color3
+            ? new BABYLON.Color3(0.2, 0.9, 1.0)
+            : null;
+        const activeSubtype = (active as any)?.subType;
+        const activeSubId = (active as any)?.id;
+
+        for (const [hwId, hwMesh] of hwViews) {
+            if (!hwMesh || hwMesh.isDisposed?.()) continue;
+            const hwNode = hwMesh.metadata?.cadNode;
+            const hwModel = hwNode?.domainData ?? hwNode;
+            const meshSubType = hwMesh.metadata?.subType;
+
+            let isMatch = false;
+            if (!suppressed && !!active) {
+                if (activeSubtype) {
+                    // Precyzyjne zaznaczenie sub-elementu okucia (boczek, mocowanie, prowadnica)
+                    isMatch = (hwMesh.metadata?.id === activeSubId) ||
+                              (hwId === activeSubId) ||
+                              (meshSubType === activeSubtype && hwMesh.metadata?.parentId === (active as any).parentId);
+                } else {
+                    // Zaznaczenie całego okucia
+                    isMatch = (
+                        active === hwModel ||
+                        active === hwNode ||
+                        (active.id && (active.id === hwId || active.id === hwMesh.metadata?.id)) ||
+                        ((active as any).nodeId && (active as any).nodeId === hwId)
+                    );
+                }
+            }
+            // Gdy aktywny jest sub-element lub operujemy na sub-siatce, nie kaskadujemy w dół
+            const cascade = !activeSubtype && !meshSubType;
+            setMeshSelectionOutline(hwMesh, isMatch, outlineColor, 0.04, cascade);
         }
     }
 }

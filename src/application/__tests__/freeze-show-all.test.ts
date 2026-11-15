@@ -114,5 +114,54 @@ describe('Tree Actions - Freeze and Show-All', () => {
     expect((hw2 as any).frozen).toBe(true);
     expect((hw2 as any).visible).toBe(false);
   });
+
+  it('zamrożenie półki automatycznie zamraża jej elementy potomne (podpórki)', () => {
+    const { doc, emit } = setupTest();
+
+    const shelf = new PanelModel({ width: 600, height: 18, thickness: 500, role: 'SHELF_PANEL' });
+    const shelfNode = CADNode.create(NodeType.PART, 'Polka_1', shelf.id);
+    shelfNode.domainData = shelf;
+    doc.addNode(doc.rootNode.id, shelfNode);
+
+    const pin1 = new HardwareModel({ id: 'shelf_1_pin_LF', name: 'Podpórka 1 (LF)', hardwareType: 'SHELF_PIN' });
+    const pinNode1 = CADNode.create(NodeType.HARDWARE, pin1.name, pin1.id);
+    pinNode1.domainData = pin1;
+    doc.addNode(shelfNode.id, pinNode1);
+
+    const pin2 = new HardwareModel({ id: 'shelf_1_pin_LB', name: 'Podpórka 1 (LB)', hardwareType: 'SHELF_PIN' });
+    const pinNode2 = CADNode.create(NodeType.HARDWARE, pin2.name, pin2.id);
+    pinNode2.domainData = pin2;
+    doc.addNode(shelfNode.id, pinNode2);
+
+    expect(shelf.frozen).toBeFalsy();
+    expect(pin1.frozen).toBeFalsy();
+    expect(pin2.frozen).toBeFalsy();
+
+    // Zamrażamy półkę
+    emit('toggle-freeze-part', { id: shelf.id });
+
+    expect(shelf.frozen).toBe(true);
+    expect(shelf.visible).toBe(false);
+    expect(shelfNode.frozen).toBe(true);
+
+    // Podpórki będące dziećmi półki muszą zostać zamrożone
+    expect(pin1.frozen).toBe(true);
+    expect(pin1.visible).toBe(false);
+    expect(pinNode1.frozen).toBe(true);
+
+    expect(pin2.frozen).toBe(true);
+    expect(pin2.visible).toBe(false);
+    expect(pinNode2.frozen).toBe(true);
+
+    // Odmrażamy półkę
+    emit('toggle-freeze-part', { id: shelf.id });
+
+    expect(shelf.frozen).toBe(false);
+    expect(shelf.visible).toBe(true);
+    expect(pin1.frozen).toBe(false);
+    expect(pin1.visible).toBe(true);
+    expect(pin2.frozen).toBe(false);
+    expect(pin2.visible).toBe(true);
+  });
 });
 

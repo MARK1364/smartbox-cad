@@ -55,8 +55,9 @@ function isPmiSelectableMesh(mesh: any): boolean {
     if (typeof mesh.isEnabled === 'function' && !mesh.isEnabled()) return false;
     if (mesh.isPickable === false) return false;
     if (mesh.metadata?.isPmiOverlay) return false;
-    if (!mesh.metadata?.panelModel) return false;
-    return true;
+    if (mesh.metadata?.panelModel) return true;
+    if (mesh.metadata?.type === 'hardware' || mesh.metadata?.parentHardwareMesh) return true;
+    return false;
 }
 
 /**
@@ -269,6 +270,33 @@ export class PMIGeometryHighlighter {
 
         if (edges.length === 0) {
             this.hoveredSegment = null;
+            if (result.hit) {
+                return result;
+            }
+            if (typeof this.scene.pick === 'function') {
+                const hwHit = this.scene.pick(
+                    pointerX,
+                    pointerY,
+                    (m: any) => isPmiSelectableMesh(m) && (m.metadata?.type === 'hardware' || m.metadata?.parentHardwareMesh)
+                );
+                if (hwHit?.hit && hwHit.pickedMesh) {
+                    const mesh = hwHit.pickedMesh;
+                    const norm = hwHit.getNormal ? (hwHit.getNormal(true) || new BABYLON.Vector3(0, 0, 1)) : new BABYLON.Vector3(0, 0, 1);
+                    const hwNode = mesh.metadata?.cadNode || mesh.metadata?.parentHardwareMesh?.metadata?.cadNode;
+                    return {
+                        hit: true,
+                        geometryType: GeometryType.OBJECT,
+                        pickedPoint: hwHit.pickedPoint ? { x: hwHit.pickedPoint.x, y: hwHit.pickedPoint.y, z: hwHit.pickedPoint.z } : null,
+                        normal: { x: norm.x, y: norm.y, z: norm.z },
+                        faceName: null,
+                        cornerIndex: -1,
+                        edgeKey: null,
+                        smartId: hwNode?.id || mesh.metadata?.id || null,
+                        panelModel: null,
+                        mesh: mesh,
+                    };
+                }
+            }
             return result;
         }
 
@@ -496,6 +524,17 @@ export class PMIGeometryHighlighter {
             if (result.pickedPoint) {
                 this.showVertexOverlay(result.pickedPoint);
             }
+            return;
+        }
+
+        if (result.geometryType === GeometryType.OBJECT) {
+            this.saved = { kind: GeometryType.OBJECT };
+            if (result.pickedPoint) {
+                this.showVertexOverlay(result.pickedPoint);
+            }
+            try {
+                ContextManager.instance?.viewport?.requestRender?.(2);
+            } catch { /* ignore */ }
             return;
         }
 

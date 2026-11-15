@@ -14,7 +14,6 @@ import { ContainerModel } from '../A1_core/container-model.js';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { Quat } from '../A1_core/cad-math/quat.js';
-import { ContextManager } from '../A1_core/context-manager.js';
 import type { DetectedBay } from '../A2_bloki/02_bloki-bay-detector.js';
 import {
     SMART_APPLIANCE_TYPE,
@@ -26,6 +25,7 @@ import {
     type ApplianceTemplateItem,
 } from './smart-appliance-types.js';
 import { rebuildSmartAppliance } from './smart-appliance-core.js';
+import { executeSmartApplianceCreation } from './create-smart-appliance-command.js';
 
 export interface DockApplianceOptions {
     kind?: ApplianceKind;
@@ -134,28 +134,12 @@ export function createSmartApplianceInDetectedBay(
 
     cntNode.setLocalTransform(localPosNm, Quat.IDENTITY);
 
-    // Podepnij kontener pod szafkę
-    document.addNode(targetParentId, cntNode);
-
-    // Zbuduj geometrię B-rep mikrofali / piekarnika
-    rebuildSmartAppliance(container, document);
-
-    document.setActiveEntity?.(container);
-    document.emitChange?.('all');
-
-    if (typeof window !== 'undefined') {
-        if (typeof window.document !== 'undefined') {
-            window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
-        }
-        window.dispatchEvent(new CustomEvent('bloki-project-changed'));
-        if (typeof (window as any).__rebuildGeometry === 'function') {
-            (window as any).__rebuildGeometry('Zadokowano AGD we wnęce');
-        }
-        ContextManager.instance.viewport?.requestRender?.(10);
-        window.dispatchEvent(new CustomEvent('bloki-properties-update', {
-            detail: { kind: 'container', containerId: container.id }
-        }));
-    }
-
-    return cntNode;
+    return executeSmartApplianceCreation(
+        document,
+        cntNode,
+        targetParentId,
+        (appliance, targetDocument) => rebuildSmartAppliance(appliance, targetDocument, { refresh: false }),
+        'Zadokowano AGD we wnęce',
+        'Usunięto AGD z wnęki',
+    );
 }

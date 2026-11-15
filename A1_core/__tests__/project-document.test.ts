@@ -189,6 +189,22 @@ describe('ProjectDocument', () => {
         }
     });
 
+    it('isolates an afterCommit effect that fails outside a transaction', () => {
+        const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const effect = vi.fn(() => { throw new Error('immediate post-commit failure'); });
+
+        try {
+            expect(() => doc.afterCommit(effect)).not.toThrow();
+            expect(effect).toHaveBeenCalledOnce();
+            expect(logError).toHaveBeenCalledWith(
+                'ProjectDocument afterCommit effect failed:',
+                expect.objectContaining({ message: 'immediate post-commit failure' })
+            );
+        } finally {
+            logError.mockRestore();
+        }
+    });
+
     it('runs nested rollback handlers in reverse order when the outer commit effect fails', () => {
         const rollbackOrder: string[] = [];
 

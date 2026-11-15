@@ -17,7 +17,19 @@ export interface HoleFeature2D {
     y: number;      // mm
     diameter: number;
     depth: number;
-    face: 'FRONT' | 'BACK' | 'EDGE_X_MINUS' | 'EDGE_X_PLUS' | 'EDGE_Y_MINUS' | 'EDGE_Y_PLUS';
+    face:
+        | 'FRONT'
+        | 'BACK'
+        | 'EDGE_X_MINUS'
+        | 'EDGE_X_PLUS'
+        | 'EDGE_Y_MINUS'
+        | 'EDGE_Y_PLUS'
+        | 'FACE_Z_PLUS'
+        | 'FACE_Z_MINUS'
+        | 'FACE_X_PLUS'
+        | 'FACE_X_MINUS'
+        | 'FACE_Y_PLUS'
+        | 'FACE_Y_MINUS';
     frozen?: boolean;
 }
 
@@ -50,20 +62,25 @@ export interface CADTreeNode {
     thickness?: number;
     material?: string;
     role?: string;
+    hardwareType?: string;
     partCount: number;
     children?: CADTreeNode[];
     holes?: HoleFeature2D[];
     grooves?: GrooveFeature2D[];
     visible?: boolean;
     visiblePlane?: boolean;
+    isDefault?: boolean;
     frozen?: boolean;
     isManual?: boolean;
     engineManaged?: boolean;
+    dataValid?: boolean;
     panelForm?: 'SOLID' | 'ALU_FRAME';
     frameTemplateId?: string;
     frameComponents?: any[];
     /** Parametry generatora (smartwall / bloki / korpus) — do UI drzewa. */
     generatorParams?: Record<string, any>;
+    /** Lista ukrytych sub-elementów okucia (np. 'boczek', 'mocowanie', 'prowadnica') */
+    hiddenSubparts?: string[];
 }
 
 export interface PartDrawingGeometry {
@@ -95,6 +112,14 @@ export interface ProjectDrawingTree {
     rootNode: CADTreeNode;
     containers: ContainerDrawingGeometry[];
     standaloneParts: PartDrawingGeometry[];
+    issues?: DrawingDataIssue[];
+}
+
+export interface DrawingDataIssue {
+    node_id: string;
+    node_name: string;
+    feature_id?: string;
+    reason: string;
 }
 
 export interface DrawingPMIDimension {

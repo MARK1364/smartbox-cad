@@ -105,15 +105,7 @@ export class ClearBlokiDrillingsCommand implements Command {
 
         // Odśwież widoki formatek tylko gdy włączone (pomijane gdy zaraz następuje syncDrillings)
         if (this.notifyViews) {
-            for (const panelNode of panels) {
-                if (!changedNodeIds.has(panelNode.id)) continue;
-                const data = panelNode.domainData as any;
-                if (typeof data.setFeatures === 'function') {
-                    data.setFeatures(data.features);
-                } else if (typeof data._emit === 'function') {
-                    data._emit('features', { features: data.features });
-                }
-            }
+            this.notifyFeatureViews(document, panels, changedNodeIds);
         }
 
         if (changedNodeIds.size > 0 && typeof document.notifyDocumentChanged === 'function') {
@@ -124,21 +116,38 @@ export class ClearBlokiDrillingsCommand implements Command {
     undo(document: ProjectDocument): void {
         if (!document) return;
 
+        const restoredPanels: CADNode[] = [];
         for (const [nodeId, oldFeats] of this.oldFeatures.entries()) {
             const node = document.findNode(nodeId);
             if (!node || !node.domainData) continue;
 
             const data = node.domainData as any;
             data.features = JSON.parse(JSON.stringify(oldFeats));
-            if (typeof data.setFeatures === 'function') {
-                data.setFeatures(data.features);
-            } else if (typeof data._emit === 'function') {
-                data._emit('features', { features: data.features });
-            }
+            restoredPanels.push(node);
         }
+        this.notifyFeatureViews(document, restoredPanels, new Set(restoredPanels.map((node) => node.id)));
 
         if (typeof document.notifyDocumentChanged === 'function') {
             document.notifyDocumentChanged();
         }
+    }
+
+    private notifyFeatureViews(
+        document: ProjectDocument,
+        panels: CADNode[],
+        changedNodeIds: Set<string>,
+    ): void {
+        const emit = () => {
+            for (const panelNode of panels) {
+                if (!changedNodeIds.has(panelNode.id)) continue;
+                const data = panelNode.domainData as any;
+                if (typeof data?.setFeatures === 'function') {
+                    data.setFeatures(data.features);
+                } else if (typeof data?._emit === 'function') {
+                    data._emit('features', { features: data.features });
+                }
+            }
+        };
+        document.afterCommit(emit);
     }
 }

@@ -109,7 +109,7 @@ export function buildFaceMeshWithFeatures(opts: {
         if (feat.type === 'hole') {
             appendFaceHoleMeshes(feat, { faceData, outerContour, t, mesh: faceResult, holes2D });
         } else if (feat.type === 'groove' || feat.type === 'pocket' || feat.type === 'cutout') {
-            buildAreaFeatureMeshes(feat, { faceData, outerContour, bottomContour, feats, lUnion, t, featureMeshes });
+            buildAreaFeatureMeshes(feat, { faceData, outerContour, bottomContour, feats, holes2D, lUnion, t, featureMeshes });
         } else {
             console.warn(`[cap-machining] Pominięto nieobsługiwany typ feature: "${feat?.type}" (id: ${feat?.id ?? 'brak'}). Dozwolone typy to 'hole' i 'groove'.`);
             continue;
@@ -151,7 +151,7 @@ export function appendFeatureEdges(
         if (feat.type === 'hole') {
             appendHoleEdges(featureEdges, feat, faceData, faceContour);
         } else if (feat.type === 'groove' || feat.type === 'pocket' || feat.type === 'cutout') {
-            appendAreaFeatureEdges(featureEdges, feat, { faceData, faceContour, bottomContour, lUnion, normFace, t });
+            appendAreaFeatureEdges(featureEdges, feat, { faceData, faceContour, bottomContour, lUnion, normFace, t, feats: features });
         } else {
             console.warn(`[cap-machining] Pominięto krawędzie dla nieobsługiwanego typu feature: "${feat?.type}" (id: ${feat?.id ?? 'brak'}).`);
             continue;

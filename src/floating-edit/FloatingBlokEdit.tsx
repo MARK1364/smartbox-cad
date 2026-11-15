@@ -17,8 +17,7 @@ import {
 import { SMARTPART_HANGERS_GROUP_TYPE } from '../../A2_bloki/hangers/hanger-types.js';
 import { SMARTPART_HANDLE_TYPE } from '../../A2_bloki/handles/handle-types.js';
 import { HandleEditPanel } from '../../A2_bloki/handles/handle-edit-panel.js';
-import { SMARTPART_SINK_TYPE } from '../../A2_bloki/sinks/sink-types.js';
-import { SinkEditPanel } from '../../A2_bloki/sinks/sink-edit-panel.js';
+import { SMARTPART_SINK_TYPE, SinkEditPanel } from '../../A6_agd/sinks/index.js';
 
 function isHangersGroup(model: any): boolean {
     if (!model) return false;

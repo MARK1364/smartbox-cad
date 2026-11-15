@@ -11,8 +11,12 @@ import { describe, it, expect } from 'vitest';
 import { GeometryDataExtractor } from '../geometry/geometry-extractor.js';
 import { CAMProcessor } from '../processor/cam-processor.js';
 import { WcsManager, retransformFeaturesToWcs } from '../wcs/wcs-manager.js';
-import { HoleFeature, GrooveFeature, ContourFeature, CAMProject } from '../dto/cam-dto.js';
+import { HoleFeature, GrooveFeature, ContourFeature, PocketFeature, CAMProject, CAMFeature } from '../dto/cam-dto.js';
 import { DrillingStrategy } from '../strategies/drilling-strategy.js';
+import { PocketingStrategy } from '../strategies/pocketing-strategy.js';
+import { generateEffectiveContourPath } from '../geometry/cnc-geometry-utils.js';
+import { CNCEngine } from '../core/cnc-engine.js';
+import { CAMStateStore } from '../core/cam-state-store.js';
 
 function mockPanelWithEdgeHole() {
     return {
@@ -350,6 +354,9 @@ describe('C1_cnc — Audyt Spójności Pipeline CAM', () => {
         const clProg = processor.buildCLProgram(projectWithStrategy);
         expect(clProg.commands.some(c => c.type === 'COMMENT' && c.comment?.includes('Głębokość: 25mm'))).toBe(true);
         expect(clProg.commands.some(c => c.type === 'CYCLE_DRILL')).toBe(true);
+        // Statystyki programu przy pełnym obsłużeniu cech przez strategię nie mogą być zerowe
+        expect(clProg.totalLengthMm).toBeGreaterThan(0);
+        expect(clProg.estimatedTimeSec).toBeGreaterThan(0);
     });
 
     it('9. DrillingStrategy generuje najazd i dno wzdłuż osi 3D dla wiercenia poziomego (oś X)', () => {
@@ -380,12 +387,386 @@ describe('C1_cnc — Audyt Spójności Pipeline CAM', () => {
         // Najazd przed ściankę: pt.x - dir.x * retractR = -300 - 1 * 5 = -305; Z pozostaje 0
         expect(gotoCmds[0].point.x).toBe(-305);
         expect(gotoCmds[0].point.z).toBe(0);
+        expect(gotoCmds[0].isRapid).toBe(true);
+        expect(gotoCmds[0].motion).toBe('RAPID');
 
-        // Dno otworu w głąb materiału: pt.x + dir.x * depth = -300 + 1 * 30 = -270; Z pozostaje 0
+        // Powrót do punktu bezpiecznego po cyklu wiercenia
+        expect(gotoCmds[1].point.x).toBe(-305);
+        expect(gotoCmds[1].point.z).toBe(0);
+        expect(gotoCmds[1].isRapid).toBe(true);
+        expect(gotoCmds[1].motion).toBe('RAPID');
+
+        // Punkt cyklu wiercenia leży na powierzchni wejściowej ścianki: pt.x = -300; Z pozostaje 0
         expect(drillCmd).toBeDefined();
-        expect(drillCmd.point.x).toBe(-270);
+        expect(drillCmd.point.x).toBe(-300);
         expect(drillCmd.point.z).toBe(0);
         expect(drillCmd.drillParams.axis.x).toBe(1);
+    });
+
+    it('9b. DrillingStrategy rzuca wyjątek fail-fast dla osi wiercenia o zerowej długości', () => {
+        const strategy = new DrillingStrategy();
+        const hole: HoleFeature = {
+            featureId: 'hole_zero_axis',
+            objectName: 'Formatka',
+            diameter: 8,
+            depth: 30,
+            position: { x: 0, y: 0, z: 0 },
+            positions: [{ x: 0, y: 0, z: 0 }],
+            axis: { x: 0, y: 0, z: 0 },
+            retractR: 5
+        };
+        const tool = {
+            id: 'tool_test',
+            name: 'Wiertło',
+            diameter: 8,
+            type: 'drill' as const,
+            parameters: { feedRate: 800, spindleRpm: 4500 }
+        };
+        expect(() => strategy.generateCLCommands(hole, tool, { x: 0, y: 0, z: 0 })).toThrow(/Oś wiercenia nie może być wektorem zerowym/);
+
+        // Oś zawierająca NaN musi rzucić wyjątek
+        const holeWithNaN: HoleFeature = {
+            ...hole,
+            featureId: 'hole_nan_axis',
+            axis: { x: NaN, y: 0, z: -1 }
+        };
+        expect(() => strategy.generateCLCommands(holeWithNaN, tool, { x: 0, y: 0, z: 0 })).toThrow(/Oś wiercenia musi mieć skończone współrzędne liczbowe/);
+
+        // Oś zawierająca Infinity musi rzucić wyjątek
+        const holeWithInf: HoleFeature = {
+            ...hole,
+            featureId: 'hole_inf_axis',
+            axis: { x: Infinity, y: 0, z: 0 }
+        };
+        expect(() => strategy.generateCLCommands(holeWithInf, tool, { x: 0, y: 0, z: 0 })).toThrow(/Oś wiercenia musi mieć skończone współrzędne liczbowe/);
+
+        // Głębokość NaN musi rzucić wyjątek
+        const holeWithNaNDepth: HoleFeature = {
+            ...hole,
+            featureId: 'hole_nan_depth',
+            depth: NaN
+        };
+        expect(() => strategy.generateCLCommands(holeWithNaNDepth, tool, { x: 0, y: 0, z: 0 })).toThrow(/Głębokość wiercenia musi być .*skończoną liczbą/);
+
+        // Pozycja z NaN musi rzucić wyjątek
+        const holeWithNaNPos: HoleFeature = {
+            ...hole,
+            featureId: 'hole_nan_pos',
+            position: { x: NaN, y: 0, z: 0 },
+            positions: [{ x: NaN, y: 0, z: 0 }]
+        };
+        expect(() => strategy.generateCLCommands(holeWithNaNPos, tool, { x: 0, y: 0, z: 0 })).toThrow(/Pozycja otworu musi mieć skończone współrzędne/);
+
+        const validHole: HoleFeature = {
+            ...hole,
+            axis: { x: 0, y: 0, z: -1 }
+        };
+
+        // Posuw Infinity
+        expect(() => strategy.generateCLCommands(validHole, tool, { x: 0, y: 0, z: 0 }, { feedRate: Infinity })).toThrow(/Posuw wiercenia musi być skończoną liczbą dodatnią/);
+
+        // Obroty Infinity
+        expect(() => strategy.generateCLCommands(validHole, tool, { x: 0, y: 0, z: 0 }, { spindleRpm: Infinity })).toThrow(/Obroty wrzeciona muszą być skończoną liczbą dodatnią/);
+
+        // Odskok Infinity
+        expect(() => strategy.generateCLCommands({ ...validHole, retractR: Infinity }, tool, { x: 0, y: 0, z: 0 })).toThrow(/Odskok bezpieczny .* musi być skończoną liczbą dodatnią/);
+
+        // Krok peckStep NaN
+        expect(() => strategy.generateCLCommands(validHole, tool, { x: 0, y: 0, z: 0 }, { peckStepMm: NaN })).toThrow(/Krok wiercenia .* musi być skończoną liczbą nieujemną/);
+    });
+
+    it('9c. CAMProcessor (domyślny eksport bez wybranej strategii) waliduje oś, głębokość i pozycję otworu fail-fast', () => {
+        const processor = new CAMProcessor();
+        const baseHole: HoleFeature = {
+            featureId: 'hole_default_nc',
+            objectName: 'Formatka',
+            diameter: 5,
+            depth: 12,
+            position: { x: 50, y: 100, z: 18 },
+            positions: [{ x: 50, y: 100, z: 18 }],
+            toolId: 'tool_7_drill_8_h'
+        };
+
+        const createProjectWithHole = (h: HoleFeature): CAMProject => ({
+            projectName: 'PROJ_DEFAULT',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [h],
+            toolAssignments: { [h.featureId]: h.toolId || '' },
+            postprocessor: 'Mach3',
+            // brak strategyId - symulacja cam-auto-program / domyślnego eksportu
+            strategyId: undefined
+        });
+
+        // 1. Zerowa oś wiercenia
+        const projZeroAxis = createProjectWithHole({
+            ...baseHole,
+            axis: { x: 0, y: 0, z: 0 }
+        });
+        expect(() => processor.buildCLProgram(projZeroAxis)).toThrow(/Oś wiercenia nie może być wektorem zerowym/);
+        expect(() => processor.processProject(projZeroAxis)).toThrow(/Oś wiercenia nie może być wektorem zerowym/);
+
+        // 2. Oś wiercenia z NaN
+        const projNaNAxis = createProjectWithHole({
+            ...baseHole,
+            axis: { x: NaN, y: 0, z: -1 }
+        });
+        expect(() => processor.buildCLProgram(projNaNAxis)).toThrow(/Oś wiercenia musi mieć skończone współrzędne liczbowe/);
+
+        // 3. Głębokość NaN
+        const projNaNDepth = createProjectWithHole({
+            ...baseHole,
+            depth: NaN
+        });
+        expect(() => processor.buildCLProgram(projNaNDepth)).toThrow(/Głębokość wiercenia musi być .*skończoną liczbą/);
+
+        // 4. Pozycja NaN
+        const projNaNPos = createProjectWithHole({
+            ...baseHole,
+            position: { x: NaN, y: 100, z: 18 },
+            positions: [{ x: NaN, y: 100, z: 18 }]
+        });
+        expect(() => processor.buildCLProgram(projNaNPos)).toThrow(/Pozycja otworu musi mieć skończone współrzędne/);
+
+        // 4b. Średnica otworu: 0, ujemna, NaN, Infinity
+        const projZeroDia = createProjectWithHole({
+            ...baseHole,
+            diameter: 0
+        });
+        expect(() => processor.buildCLProgram(projZeroDia)).toThrow(/Średnica otworu musi być skończoną liczbą dodatnią/);
+        expect(() => processor.processProject(projZeroDia)).toThrow(/Średnica otworu musi być skończoną liczbą dodatnią/);
+
+        const projNegDia = createProjectWithHole({
+            ...baseHole,
+            diameter: -5
+        });
+        expect(() => processor.buildCLProgram(projNegDia)).toThrow(/Średnica otworu musi być skończoną liczbą dodatnią/);
+
+        const projNaNDia = createProjectWithHole({
+            ...baseHole,
+            diameter: NaN
+        });
+        expect(() => processor.buildCLProgram(projNaNDia)).toThrow(/Średnica otworu musi być skończoną liczbą dodatnią/);
+
+        const projInfDia = createProjectWithHole({
+            ...baseHole,
+            diameter: Infinity
+        });
+        expect(() => processor.buildCLProgram(projInfDia)).toThrow(/Średnica otworu musi być skończoną liczbą dodatnią/);
+
+        // 5. Wpust z startPoint.x = NaN
+        const projNaNGroove: CAMProject = {
+            projectName: 'PROJ_DEFAULT',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [
+                {
+                    featureId: 'groove_nan',
+                    objectName: 'Formatka',
+                    width: 4,
+                    depth: 8,
+                    startPoint: { x: NaN, y: 0, z: 0 },
+                    endPoint: { x: 100, y: 0, z: 0 },
+                    toolId: 'tool_4_mill_8'
+                } as GrooveFeature
+            ],
+            toolAssignments: { 'groove_nan': 'tool_4_mill_8' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projNaNGroove)).toThrow(/Punkty końcowe wpustu muszą mieć skończone współrzędne/);
+        expect(() => processor.processProject(projNaNGroove)).toThrow(/Punkty końcowe wpustu muszą mieć skończone współrzędne/);
+
+        // 6. Kontur z punktem NaN
+        const projNaNContour: CAMProject = {
+            projectName: 'PROJ_DEFAULT',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [
+                {
+                    featureId: 'contour_nan',
+                    objectName: 'Formatka',
+                    points: [
+                        { x: NaN, y: 0, z: 0 },
+                        { x: 100, y: 0, z: 0 }
+                    ],
+                    toolId: 'tool_4_mill_8'
+                } as ContourFeature
+            ],
+            toolAssignments: { 'contour_nan': 'tool_4_mill_8' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projNaNContour)).toThrow(/Punkty konturu muszą mieć skończone współrzędne/);
+        expect(() => processor.processProject(projNaNContour)).toThrow(/Punkty konturu muszą mieć skończone współrzędne/);
+
+        // 7. Kieszeń z punktem NaN
+        const projNaNPocket: CAMProject = {
+            projectName: 'PROJ_DEFAULT',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [
+                {
+                    featureId: 'pocket_nan',
+                    objectName: 'Formatka',
+                    width: 50,
+                    length: 50,
+                    boundaryPoints: [
+                        { x: NaN, y: 0, z: 0 },
+                        { x: 50, y: 0, z: 0 },
+                        { x: 50, y: 50, z: 0 },
+                        { x: 0, y: 50, z: 0 }
+                    ],
+                    toolId: 'tool_4_mill_8'
+                } as PocketFeature
+            ],
+            toolAssignments: { 'pocket_nan': 'tool_4_mill_8' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projNaNPocket)).toThrow(/Punkty kieszeni muszą mieć skończone współrzędne/);
+        expect(() => processor.processProject(projNaNPocket)).toThrow(/Punkty kieszeni muszą mieć skończone współrzędne/);
+
+        // 7b. Kieszeń z 3 punktami obwiedni (wymagane min. 4)
+        const proj3PtPocket: CAMProject = {
+            projectName: 'PROJ_DEFAULT',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [
+                {
+                    featureId: 'pocket_3pt',
+                    objectName: 'Formatka',
+                    width: 50,
+                    length: 50,
+                    depth: 5,
+                    boundaryPoints: [
+                        { x: 0, y: 0, z: 0 },
+                        { x: 50, y: 0, z: 0 },
+                        { x: 50, y: 50, z: 0 }
+                    ],
+                    toolId: 'tool_4_mill_8'
+                } as PocketFeature
+            ],
+            toolAssignments: { 'pocket_3pt': 'tool_4_mill_8' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(proj3PtPocket)).toThrow(/Kieszeń musi posiadać co najmniej 4 punkty obwiedni/);
+        expect(() => processor.processProject(proj3PtPocket)).toThrow(/Kieszeń musi posiadać co najmniej 4 punkty obwiedni/);
+
+        // 8. Wpust z jawną zerową głębokością depth = 0
+        const projZeroDepthGroove: CAMProject = {
+            projectName: 'PROJ_DEFAULT',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [
+                {
+                    featureId: 'groove_zero_depth',
+                    objectName: 'Formatka',
+                    width: 4,
+                    depth: 0,
+                    startPoint: { x: 0, y: 0, z: 0 },
+                    endPoint: { x: 100, y: 0, z: 0 },
+                    toolId: 'tool_4_mill_8'
+                } as GrooveFeature
+            ],
+            toolAssignments: { 'groove_zero_depth': 'tool_4_mill_8' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projZeroDepthGroove)).toThrow(/Głębokość wpustu nie może być zerowa ani nieskończona/);
+        expect(() => processor.processProject(projZeroDepthGroove)).toThrow(/Głębokość wpustu nie może być zerowa ani nieskończona/);
+
+        // 9. Narzędzie z nieprawidłową średnicą (0, ujemna, NaN, Infinity) oraz nieprawidłowym posuwem
+        const toolLibrary = (processor as any).toolLibrary;
+        const origTool = toolLibrary.getTool('tool_4_mill_8');
+        expect(() => toolLibrary.addOrUpdateTool({ ...origTool, id: 'bad_dia_0', diameter: 0 })).toThrow(/Średnica narzędzia musi być skończoną liczbą dodatnią/);
+        expect(() => toolLibrary.addOrUpdateTool({ ...origTool, id: 'bad_dia_neg', diameter: -8 })).toThrow(/Średnica narzędzia musi być skończoną liczbą dodatnią/);
+        expect(() => toolLibrary.addOrUpdateTool({ ...origTool, id: 'bad_dia_nan', diameter: NaN })).toThrow(/Średnica narzędzia musi być skończoną liczbą dodatnią/);
+        expect(() => toolLibrary.addOrUpdateTool({ ...origTool, id: 'bad_dia_inf', diameter: Infinity })).toThrow(/Średnica narzędzia musi być skończoną liczbą dodatnią/);
+        expect(() => toolLibrary.addOrUpdateTool({ ...origTool, id: 'tool_nan_feed', parameters: { feedRate: NaN, spindleRpm: 3000 } })).toThrow(/Posuw narzędzia musi być skończoną liczbą dodatnią/);
+
+        // 10. Przypisane, ale nieznane narzędzie w projekcie (fail-fast zamiast cichego usunięcia operacji)
+        const projUnknownTool: CAMProject = {
+            projectName: 'PROJ_DEFAULT',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [
+                {
+                    ...baseHole,
+                    featureId: 'hole_with_unknown_tool',
+                    toolId: 'tool_does_not_exist'
+                }
+            ],
+            toolAssignments: { 'hole_with_unknown_tool': 'tool_does_not_exist' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projUnknownTool)).toThrow(/Narzędzie "tool_does_not_exist" przypisane do cechy "hole_with_unknown_tool" nie istnieje w bibliotece/);
+        expect(() => processor.processProject(projUnknownTool)).toThrow(/Narzędzie "tool_does_not_exist" przypisane do cechy "hole_with_unknown_tool" nie istnieje w bibliotece/);
+
+        // 11. Kieszeń z nieprawidłową głębokością (depth=0, depth=undefined, depth=NaN) fail-fast
+        const basePocket: PocketFeature = {
+            featureId: 'pocket_depth_test',
+            objectName: 'Formatka',
+            width: 50,
+            length: 50,
+            depth: 6,
+            boundaryPoints: [
+                { x: 0, y: 0, z: 0 },
+                { x: 50, y: 0, z: 0 },
+                { x: 50, y: 50, z: 0 },
+                { x: 0, y: 50, z: 0 }
+            ],
+            toolId: 'tool_4_mill_8'
+        };
+
+        const projZeroDepthPocket: CAMProject = {
+            projectName: 'PROJ_POCKET_ZERO',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [{ ...basePocket, depth: 0 }],
+            toolAssignments: { [basePocket.featureId]: 'tool_4_mill_8' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projZeroDepthPocket)).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
+        expect(() => processor.processProject(projZeroDepthPocket)).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
+
+        const projNoDepthPocket: CAMProject = {
+            projectName: 'PROJ_POCKET_NO_DEPTH',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [{ ...basePocket, depth: undefined as any }],
+            toolAssignments: { [basePocket.featureId]: 'tool_4_mill_8' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projNoDepthPocket)).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
+        expect(() => processor.processProject(projNoDepthPocket)).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
+
+        const projNaNDepthPocket: CAMProject = {
+            projectName: 'PROJ_POCKET_NAN_DEPTH',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [{ ...basePocket, depth: NaN }],
+            toolAssignments: { [basePocket.featureId]: 'tool_4_mill_8' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projNaNDepthPocket)).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
+        expect(() => processor.processProject(projNaNDepthPocket)).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
+
+        // PocketingStrategy bezpośrednio
+        const pocketStrategy = new PocketingStrategy();
+        const validTool = toolLibrary.getTool('tool_4_mill_8')!;
+        expect(() => pocketStrategy.generateCLCommands({ ...basePocket, depth: 0 }, validTool, { x: 0, y: 0, z: 0 })).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
+        expect(() => pocketStrategy.generateCLCommands({ ...basePocket, depth: undefined as any }, validTool, { x: 0, y: 0, z: 0 })).toThrow(/Głębokość kieszeni musi być niezerową skończoną liczbą/);
+
+        // 12. Nieznana strategia w buildCLProgram / processProject / createCncOperations (fail-fast zamiast cichego pominięcia)
+        const projValidForStrategy: CAMProject = {
+            projectName: 'PROJ_VALID',
+            wcsName: 'G55',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            features: [baseHole],
+            toolAssignments: { [baseHole.featureId]: baseHole.toolId || '' },
+            postprocessor: 'Mach3'
+        };
+        expect(() => processor.buildCLProgram(projValidForStrategy, 'non_existent_strategy_id')).toThrow(/Nieznana strategia "non_existent_strategy_id"/);
+        expect(() => processor.processProject(projValidForStrategy, 'non_existent_strategy_id')).toThrow(/Nieznana strategia "non_existent_strategy_id"/);
+        expect(() => processor.buildCLProgram({ ...projValidForStrategy, strategyId: 'ghost_strategy' })).toThrow(/Nieznana strategia "ghost_strategy"/);
+        expect(() => processor.processProject({ ...projValidForStrategy, strategyId: 'ghost_strategy' })).toThrow(/Nieznana strategia "ghost_strategy"/);
     });
 
     it('10. buildCLProgram przy wybranej strategii wiercenia zachowuje wpusty w programie (brak pomijania cech)', () => {
@@ -655,7 +1036,7 @@ describe('C1_cnc — Audyt Spójności Pipeline CAM', () => {
             objectName: 'Formatka',
             face: 'FACE_Z_PLUS',
             normal: { x: 0, y: 0, z: 1 },
-            width: 6,
+            width: 8,
             depth: 10,
             startPoint: { x: 100, y: 100, z: 18 },
             endPoint: { x: 300, y: 100, z: 18 },
@@ -825,5 +1206,313 @@ describe('C1_cnc — Audyt Spójności Pipeline CAM', () => {
         // Dla dirZ = -1 i depth = 15: endPos.z = 18 + (-1) * 15 = 3 (dokładnie dno otworu, brak podwojonej głębokości!)
         const simEndPosZ = op.position.z + (op.parameters.axis?.z ?? -1) * Math.abs(op.parameters.depth);
         expect(simEndPosZ).toBe(3);
+    });
+
+    it('23. FAIL-FAST: generateEffectiveContourPath odrzuca niefizyczne/niepoprawne leadIn, leadOut i toolRadius', () => {
+        const pts = [{ x: 0, y: 0, z: 0 }, { x: 100, y: 0, z: 0 }];
+
+        expect(() => generateEffectiveContourPath(pts, -1, 0)).toThrow(/leadIn/);
+        expect(() => generateEffectiveContourPath(pts, NaN, 0)).toThrow(/leadIn/);
+        expect(() => generateEffectiveContourPath(pts, Infinity, 0)).toThrow(/leadIn/);
+
+        expect(() => generateEffectiveContourPath(pts, 0, -1)).toThrow(/leadOut/);
+        expect(() => generateEffectiveContourPath(pts, 0, NaN)).toThrow(/leadOut/);
+        expect(() => generateEffectiveContourPath(pts, 0, Infinity)).toThrow(/leadOut/);
+
+        expect(() => generateEffectiveContourPath(pts, 0, 0, 'Center', -2)).toThrow(/toolRadius/);
+        expect(() => generateEffectiveContourPath(pts, 0, 0, 'Center', NaN)).toThrow(/toolRadius/);
+        expect(() => generateEffectiveContourPath(pts, 0, 0, 'Center', Infinity)).toThrow(/toolRadius/);
+    });
+
+    it('24. FAIL-FAST: CAMProcessor i DrillingStrategy ograniczają głębokość obróbki wymiarem formatki (z dopuszczalnym przebojem przelotowym)', () => {
+        const wpDims = { width: 600, height: 400, thickness: 18 };
+
+        const blindTooDeep: HoleFeature = {
+            featureId: 'hole_blind_over',
+            objectName: 'Formatka',
+            face: 'FACE_Z_PLUS',
+            diameter: 8,
+            depth: 20, // > 18 mm dla otworu nieprzelotowego
+            position: { x: 100, y: 100, z: 18 },
+            positions: [{ x: 100, y: 100, z: 18 }],
+            axis: { x: 0, y: 0, z: -1 },
+            toolId: 'tool_7_drill_8_h'
+        };
+
+        expect(() => processor.buildCLProgram({
+            projectName: 'Test_Depth_Limit',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            wcsName: 'G54',
+            features: [blindTooDeep],
+            toolAssignments: {},
+            postprocessor: 'Mach3',
+            workpieceDimensions: wpDims
+        })).toThrow(/przekracza dopuszczalny wymiar materiału/);
+
+        // Otwór nieprzelotowy (through: false) o głębokości równej grubości materiału (18 mm) -> błąd
+        const blindEqualThickness: HoleFeature = {
+            ...blindTooDeep,
+            featureId: 'hole_blind_equal_18',
+            depth: 18,
+            through: false
+        };
+        expect(() => processor.buildCLProgram({
+            projectName: 'Test_Depth_Blind_Equal_Thickness',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            wcsName: 'G54',
+            features: [blindEqualThickness],
+            toolAssignments: {},
+            postprocessor: 'Mach3',
+            workpieceDimensions: wpDims
+        })).toThrow(/przekracza dopuszczalny wymiar materiału/);
+
+        // Ten sam otwór 20 mm oznaczony jako przelotowy (through: true) mieści się w limicie 18 + 5 = 23 mm
+        const throughOk: HoleFeature = {
+            ...blindTooDeep,
+            featureId: 'hole_through_ok',
+            through: true
+        };
+        const progOk = processor.buildCLProgram({
+            projectName: 'Test_Depth_Through_Ok',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            wcsName: 'G54',
+            features: [throughOk],
+            toolAssignments: {},
+            postprocessor: 'Mach3',
+            strategyId: 'drilling_standard',
+            workpieceDimensions: wpDims
+        });
+        expect(progOk.commands.some(c => c.type === 'CYCLE_DRILL')).toBe(true);
+
+        // Otwór przelotowy 30 mm przekracza 18 + 5 = 23 mm -> błąd zarówno w CAMProcessor, jak i bezpośrednio w DrillingStrategy
+        const throughTooDeep: HoleFeature = {
+            ...blindTooDeep,
+            featureId: 'hole_through_over',
+            depth: 30,
+            through: true
+        };
+        expect(() => processor.buildCLProgram({
+            projectName: 'Test_Depth_Through_Over',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            wcsName: 'G54',
+            features: [throughTooDeep],
+            toolAssignments: {},
+            postprocessor: 'Mach3',
+            workpieceDimensions: wpDims
+        })).toThrow(/przekracza dopuszczalny wymiar materiału/);
+
+        const drillStrat = new DrillingStrategy();
+        const tool = {
+            id: 'tool_7_drill_8_h',
+            name: 'Wiertło 8',
+            diameter: 8,
+            type: 'drill' as const,
+            parameters: { feedRate: 800, spindleRpm: 4500 }
+        };
+        expect(() => drillStrat.generateCLCommands(
+            throughTooDeep,
+            tool,
+            { x: 0, y: 0, z: 0 },
+            { workpieceDimensions: wpDims }
+        )).toThrow(/przekracza dopuszczalny wymiar materiału/);
+
+        // Otwór oznaczony jako przelotowy (through: true) z głębokością mniejszą niż grubość materiału (8 mm < 18 mm) -> błąd
+        const throughTooShallow: HoleFeature = {
+            ...blindTooDeep,
+            featureId: 'hole_through_shallow',
+            depth: 8,
+            through: true
+        };
+        expect(() => processor.buildCLProgram({
+            projectName: 'Test_Depth_Through_Shallow',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            wcsName: 'G54',
+            features: [throughTooShallow],
+            toolAssignments: {},
+            postprocessor: 'Mach3',
+            workpieceDimensions: wpDims
+        })).toThrow(/Otwór przelotowy.*mniejszą niż wymiar materiału/);
+
+        expect(() => drillStrat.generateCLCommands(
+            throughTooShallow,
+            tool,
+            { x: 0, y: 0, z: 0 },
+            { workpieceDimensions: wpDims }
+        )).toThrow(/Otwór przelotowy.*mniejszą niż wymiar materiału/);
+    });
+
+    it('25. CNCEngine odświeża podgląd 3D po zmianie strategyId, strategyParams lub toolAssignments oraz obsługuje startSimulation z toolAssignments', () => {
+        const engine = CNCEngine.getInstance() as any;
+        let renderToolpathsCount = 0;
+        let lastRenderedOps: any[] = [];
+        let simStartedOps: any[] = [];
+
+        const prevVisualizer = engine.visualizer;
+        const prevSimulator = engine.simulator;
+        engine.visualizer = {
+            clear: () => {},
+            setToolpathsVisible: () => {},
+            renderFeatures: () => {},
+            renderToolpaths: (ops: any[]) => {
+                renderToolpathsCount++;
+                lastRenderedOps = ops;
+            }
+        };
+        engine.simulator = {
+            setWcsTransform: () => {},
+            setSpeed: () => {},
+            loadOperations: (ops: any[]) => {
+                simStartedOps = ops;
+            },
+            start: () => {},
+            pause: () => {},
+            stop: () => {}
+        };
+
+        try {
+            const sharedFeatures: CAMFeature[] = [
+                {
+                    featureId: 'contour_cache_1',
+                    objectName: 'Formatka',
+                    points: [
+                        { x: 0, y: 0, z: 10 },
+                        { x: 100, y: 0, z: 10 }
+                    ],
+                    depth: 0
+                } as ContourFeature
+            ];
+            const mockPanel = {
+                id: 'panel_cache_1',
+                width: 600 * 1_000_000,
+                height: 400 * 1_000_000,
+                thickness: 18 * 1_000_000
+            };
+
+            const baseProg: any = {
+                id: 'prog_cache_1',
+                projectName: 'Cache_Test',
+                targetPanel: mockPanel,
+                cornerIndex: 0,
+                wcsName: 'G54',
+                features: sharedFeatures, // ta sama referencja tablicy
+                toolAssignments: {},
+                strategyId: undefined,
+                strategyParams: undefined
+            };
+
+            const store = CAMStateStore.getInstance();
+
+            // 1. Pierwsze wywołanie bez przypisanego narzędzia -> 0 operacji
+            store.setProgramsAndActiveProgram([baseProg], 'prog_cache_1');
+            engine.handleStateChange(store.getState());
+            expect(renderToolpathsCount).toBe(1);
+            expect(lastRenderedOps).toHaveLength(0);
+
+            // 2. Zmiana samych toolAssignments (przy zachowaniu tej samej referencji tablicy features!) -> musi przeliczyć
+            store.setProgramsAndActiveProgram([{
+                ...baseProg,
+                toolAssignments: { contour_cache_1: 'tool_4_mill_8' }
+            }], 'prog_cache_1');
+            engine.handleStateChange(store.getState());
+            expect(renderToolpathsCount).toBe(2);
+            expect(lastRenderedOps).toHaveLength(1);
+            expect(lastRenderedOps[0].parameters.strategyId).toBeUndefined();
+
+            // 3. Zmiana strategyId na profiling_25d -> musi przeliczyć
+            store.setProgramsAndActiveProgram([{
+                ...baseProg,
+                toolAssignments: { contour_cache_1: 'tool_4_mill_8' },
+                strategyId: 'profiling_25d'
+            }], 'prog_cache_1');
+            engine.handleStateChange(store.getState());
+            expect(renderToolpathsCount).toBe(3);
+            expect(lastRenderedOps[0].parameters.strategyId).toBe('profiling_25d');
+            const movesWithoutStepdown = lastRenderedOps[0].parameters.moves?.length || 0;
+
+            // 4. Zmiana strategyParams (stepdownMm: 3) -> musi przeliczyć i wygenerować więcej przejść
+            store.setProgramsAndActiveProgram([{
+                ...baseProg,
+                toolAssignments: { contour_cache_1: 'tool_4_mill_8' },
+                strategyId: 'profiling_25d',
+                strategyParams: { stepdownMm: 3 }
+            }], 'prog_cache_1');
+            engine.handleStateChange(store.getState());
+            expect(renderToolpathsCount).toBe(4);
+            expect((lastRenderedOps[0].parameters.moves?.length || 0)).toBeGreaterThan(movesWithoutStepdown);
+
+            // 5. startSimulation dla programu, w którym przypisanie narzędzia jest tylko w toolAssignments
+            store.setWarningMessage(null);
+            engine.startSimulation(1);
+            expect(store.getState().warningMessage).toBeNull();
+            expect(simStartedOps).toHaveLength(1);
+            expect(simStartedOps[0].toolId).toBe('tool_4_mill_8');
+        } finally {
+            engine.visualizer = prevVisualizer;
+            engine.simulator = prevSimulator;
+        }
+    });
+
+    it('28. calculateCommandStats poprawnie oblicza obwód i czas dla pełnego okręgu (Arc 360°)', () => {
+        const processor = new CAMProcessor();
+        const r = 50;
+        const feed = 1200;
+        const commands: any[] = [
+            { type: 'FEDRAT', feedRate: feed },
+            // Dojazd do punktu na okręgu (np. x=50, y=0, z=0)
+            { type: 'GOTO', point: { x: r, y: 0, z: 0 }, isRapid: true, motion: 'RAPID' },
+            // Pełny obrót 360 stopni G03 powracający do tego samego punktu
+            {
+                type: 'ARC',
+                point: { x: r, y: 0, z: 0 },
+                arcParams: {
+                    center: { x: 0, y: 0, z: 0 },
+                    radius: r,
+                    plane: 'XY',
+                    direction: 'CCW'
+                }
+            }
+        ];
+
+        const stats = (processor as any).calculateCommandStats(commands);
+        const expectedCircumference = 2 * Math.PI * r;
+        expect(stats.totalLengthMm).toBeCloseTo(expectedCircumference, 1);
+        expect(stats.estimatedTimeSec).toBeCloseTo((expectedCircumference / feed) * 60, 2);
+    });
+
+    it('29. retransformFeaturesToWcs poprawnie przelicza głębokość konturu (panelDepth) w układzie WCS', () => {
+        const wcs = new WcsManager('G54');
+        wcs.setRule({
+            origin_corner: { X: "-", Y: "-", Z: "-" },
+            directions: { X: "+", Y: "+", Z: "+" },
+            rotation: { X: 0, Y: 0, Z: 0 }
+        });
+        // Płyta 600x800x18mm: w układzie lokalnym formatki z=9 (góra), z=-9 (dół).
+        // WCS origin na narożu (-300, -400, -9), więc w WCS z=0 to dół płyty, a z=18 to góra płyty.
+        wcs.updateForPanelDimensions(600, 800, 18);
+
+        const contour: ContourFeature = {
+            featureId: 'contour_trans_1',
+            objectName: 'Formatka',
+            points: [
+                { x: 50, y: 50, z: 9 },
+                { x: 150, y: 50, z: 9 }
+            ],
+            panelPoints: [
+                { x: 50, y: 50, z: 9 },
+                { x: 150, y: 50, z: 9 }
+            ],
+            panelNormal: { x: 0, y: 0, z: 1 },
+            normal: { x: 0, y: 0, z: 1 },
+            depth: 12,
+            panelDepth: 12 // Głębokość skrawania 12mm w dół z powierzchni Z=9
+        };
+
+        const retransformed = retransformFeaturesToWcs([contour], wcs);
+        const cf = retransformed[0] as ContourFeature;
+
+        // Powierzchnia formatki w WCS: Z = 9 - (-9) = 18
+        expect(cf.points[0].z).toBe(18);
+        // Docelowy poziom frezowania w WCS: Z = 18 - 12 = 6 (dokładnie 12 mm głębokości)
+        expect(cf.depth).toBe(6);
     });
 });

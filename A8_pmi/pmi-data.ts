@@ -277,6 +277,10 @@ export class PMIStore {
         return PMIStore._instance;
     }
 
+    static get existingInstance(): PMIStore | null {
+        return PMIStore._instance;
+    }
+
     private _generateId(): string {
         return `dim_${this._nextId++}`;
     }

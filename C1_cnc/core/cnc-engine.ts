@@ -178,9 +178,19 @@ export class CNCEngine {
             z: activeProg.wcsOffsetZ || 0 
         });
 
-        // Sprawdzenie czy zaszła realna zmiana geometrii formatki, cech obróbczych lub układu WCS.
+        // Sprawdzenie czy zaszła realna zmiana geometrii formatki, cech obróbczych, strategii, narzędzi lub układu WCS.
         // Jeśli zmiana w sklepie dotyczy wyłącznie odtwarzania symulacji (isSimulating, simProgressPercent, itp.),
         // pomijamy kosztowne niszczenie i ponowne budowanie w Babylon.js siatek 3D features i gizma WCS.
+        const strategyParamsKey = activeProg.strategyParams
+            ? JSON.stringify(activeProg.strategyParams)
+            : 'none';
+        const toolAssignmentsKey = activeProg.toolAssignments
+            ? JSON.stringify(activeProg.toolAssignments)
+            : 'none';
+        const featuresToolsKey = Array.isArray(activeProg.features)
+            ? activeProg.features.map((f: any) => `${f.featureId || ''}=${f.toolId || ''}`).join(',')
+            : '';
+
         const currentKey = [
             activeProg.id,
             panel?.id || (panel ? 'p_ref' : 'none'),
@@ -197,6 +207,10 @@ export class CNCEngine {
             activeProg.wcsRotY || 0,
             activeProg.wcsRotZ || 0,
             activeProg.features?.length || 0,
+            activeProg.strategyId || 'none',
+            strategyParamsKey,
+            toolAssignmentsKey,
+            featuresToolsKey,
             state.showToolpaths ? 'tp_on' : 'tp_off'
         ].join(':');
 
@@ -215,28 +229,32 @@ export class CNCEngine {
         // Renderowanie 3D z aktualnego stanu features
         this.visualizer.renderFeatures(activeProg.features || [], this.wcsManager, targetViewRoot);
 
-        // Renderowanie ścieżek narzędzia 3D (zawsze widoczne, zielone i przerywane)
-        const operations = this.camProcessor.processProject({
-            projectName: activeProg.projectName || 'Program',
-            wcsOrigin: this.wcsManager.getOrigin(),
-            wcsName: this.wcsManager.getWcsName(),
-            features: activeProg.features || [],
-            toolAssignments: activeProg.toolAssignments || {},
-            postprocessor: activeProg.postprocessor || 'Mach3',
-            strategyId: activeProg.strategyId,
-            strategyParams: activeProg.strategyParams,
-            workpieceDimensions: dims
-        });
-        this.visualizer.renderToolpaths(operations, this.wcsManager, targetViewRoot);
+        // Renderowanie ścieżek narzędzia 3D (respektuje flagę showToolpaths)
+        if (state.showToolpaths !== false) {
+            const operations = this.camProcessor.processProject({
+                projectName: activeProg.projectName || 'Program',
+                wcsOrigin: this.wcsManager.getOrigin(),
+                wcsName: this.wcsManager.getWcsName(),
+                features: activeProg.features || [],
+                toolAssignments: activeProg.toolAssignments || {},
+                postprocessor: activeProg.postprocessor || 'Mach3',
+                strategyId: activeProg.strategyId,
+                strategyParams: activeProg.strategyParams,
+                workpieceDimensions: dims
+            });
+            this.visualizer.renderToolpaths(operations, this.wcsManager, targetViewRoot);
+        } else {
+            this.visualizer.clearToolpaths();
+        }
     }
 
     public getDimensionsMM(panel: any): { width: number; height: number; thickness: number } {
         if (!panel) {
             throw new Error('[C1_cnc/CNCEngine] Brak referencji do formatki (panel is null/undefined).');
         }
-        if (typeof panel.width !== 'number' || panel.width <= 0 ||
-            typeof panel.height !== 'number' || panel.height <= 0 ||
-            typeof panel.thickness !== 'number' || panel.thickness <= 0) {
+        if (typeof panel.width !== 'number' || !Number.isFinite(panel.width) || panel.width <= 0 ||
+            typeof panel.height !== 'number' || !Number.isFinite(panel.height) || panel.height <= 0 ||
+            typeof panel.thickness !== 'number' || !Number.isFinite(panel.thickness) || panel.thickness <= 0) {
             throw new Error(`[C1_cnc/CNCEngine] Formatka "${panel.id}" nie posiada poprawnych wymiarów fizycznych (W=${panel.width}, H=${panel.height}, T=${panel.thickness}).`);
         }
         return {
@@ -246,14 +264,25 @@ export class CNCEngine {
         };
     }
 
-    public startSimulation(speed: number): void {
+    public startSimulation(speed: number, fallbackPanel?: any): void {
         if (!this.simulator) return;
         const store = CAMStateStore.getInstance();
         const prog = store.getActiveProgram();
-        if (!prog || !prog.targetPanel) return;
+        const targetPanel = prog?.targetPanel || fallbackPanel;
+        if (!prog || !targetPanel) return;
+
+        if (targetPanel.frozen === true || targetPanel.params?.frozen === true) {
+            store.setWarningMessage('Formatka jest zamrożona — symulacja obróbki jest zablokowana.');
+            return;
+        }
+
+        const preparedFeatures = (prog.features || []).map(f => {
+            const assignedId = f.toolId || prog.toolAssignments?.[f.featureId] || null;
+            return assignedId && f.toolId !== assignedId ? { ...f, toolId: assignedId } : f;
+        });
 
         // Sprawdź czy są operacje bez przypisanego narzędzia
-        const missingToolFeats = (prog.features || []).filter(f => !f.toolId);
+        const missingToolFeats = preparedFeatures.filter(f => !f.toolId || !this.toolLibrary.getTool(f.toolId));
         if (missingToolFeats.length > 0) {
             store.setWarningMessage(`Błąd: Brak przypisanego narzędzia dla ${missingToolFeats.length} operacji! Przypisz narzędzia przed uruchomieniem symulacji.`);
             return;
@@ -263,12 +292,23 @@ export class CNCEngine {
 
         const panelViews = ContextManager.instance.panelViews as Map<any, any> | undefined;
         let targetViewRoot: any = null;
-        if (panelViews && panelViews.has(prog.targetPanel)) {
-            const view = panelViews.get(prog.targetPanel);
-            if (view && view.root) targetViewRoot = view.root;
+        if (panelViews) {
+            for (const [keyPanel, view] of panelViews.entries()) {
+                const idMatch = keyPanel.id && targetPanel.id && keyPanel.id === targetPanel.id;
+                const refMatch = keyPanel === targetPanel;
+                if (idMatch || refMatch) {
+                    if (view && view.root) {
+                        targetViewRoot = view.root;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!targetViewRoot && targetPanel.meshNode) {
+            targetViewRoot = targetPanel.meshNode;
         }
 
-        const dims = this.getDimensionsMM(prog.targetPanel);
+        const dims = this.getDimensionsMM(targetPanel);
         this.wcsManager.updateForPanelDimensions(dims.width, dims.height, dims.thickness);
         this.simulator.setWcsTransform(this.wcsManager, targetViewRoot);
         
@@ -277,7 +317,7 @@ export class CNCEngine {
             projectName: prog.projectName || 'Program',
             wcsOrigin: this.wcsManager.getOrigin(),
             wcsName: this.wcsManager.getWcsName(),
-            features: prog.features,
+            features: preparedFeatures,
             toolAssignments: prog.toolAssignments || {},
             postprocessor: prog.postprocessor || 'Mach3',
             strategyId: prog.strategyId,

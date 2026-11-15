@@ -407,4 +407,72 @@ describe('KORPUS_SKOSNY_LR', () => {
         expect(top.dim.y).toBeCloseTo(582, 0);
         expect(top.loc.y).toBeCloseTo(-9, 0);
     });
+
+    it('wieniec górny w korpus_skosny_lr ma docięte końce (+X i -X) pionowo między bokami', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 1200,
+            wysokosc_mm: 2200,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_skosny_lr',
+            wysokosc_lewy_mm: 1000,
+            wysokosc_prawy_mm: 2200,
+            cofniecie_plecow_mm: 3
+        });
+
+        const innerW = 1200 - 18 - 18;
+        const betaRad = Math.atan2(2200 - 1000, innerW);
+        const betaDeg = (betaRad * 180) / Math.PI;
+        const left = plan.parts.find((p) => p.role === 'LEFT_SIDE_PANEL')!;
+        const right = plan.parts.find((p) => p.role === 'RIGHT_SIDE_PANEL')!;
+        const top = plan.parts.find((p) => p.role === 'TOP_PANEL')!;
+
+        expect(left.edge_banding?.['+Y']?.cutAngle).toBeCloseTo(betaDeg, 1);
+        expect(left.edge_banding?.['+Y']?.cutAnchor).toBe('Z_PLUS');
+        expect(right.edge_banding?.['+Y']?.cutAngle).toBeCloseTo(betaDeg, 1);
+        expect(right.edge_banding?.['+Y']?.cutAnchor).toBe('Z_MINUS');
+        expect(top.edge_banding?.['+X']?.cutAngle).toBeCloseTo(betaDeg, 1);
+        expect(top.edge_banding?.['-X']?.cutAngle).toBeCloseTo(-betaDeg, 1);
+        expect(top.edge_banding?.['+X']?.cutAnchor).toBe('Z_MINUS');
+        expect(top.edge_banding?.['-X']?.cutAnchor).toBe('Z_MINUS');
+    });
+
+    it('obsługuje odwrotny skos (wysokosc_lewy_mm > wysokosc_prawy_mm): boki i wieniec docięte tak jak przegrody', () => {
+        const plan = planCabinet({
+            szerokosc_mm: 1200,
+            wysokosc_mm: 2200,
+            glebokosc_mm: 600,
+            liczba_stref: 1,
+            typ_korpusu: 'korpus_skosny_lr_uc',
+            wysokosc_lewy_mm: 2200,
+            wysokosc_prawy_mm: 1000,
+            cofniecie_plecow_mm: 3
+        });
+
+        const W = 1200;
+        const t = 18;
+        const tanBeta = (1000 - 2200) / W; // -1.0
+        const absBetaDeg = (Math.atan(Math.abs(tanBeta)) * 180) / Math.PI; // +45
+        const rise = t * Math.abs(tanBeta); // 18
+
+        const left = plan.parts.find((p) => p.role === 'LEFT_SIDE_PANEL')!;
+        const right = plan.parts.find((p) => p.role === 'RIGHT_SIDE_PANEL')!;
+        const top = plan.parts.find((p) => p.role === 'TOP_PANEL')!;
+
+        // Lewy bok (wyższy): lico zewnętrzne Z_MINUS ma 2200 mm, wewnętrzne Z_PLUS opada do 2182 mm
+        expect(left.dim.x).toBeCloseTo(2200, 1);
+        expect(left.edge_banding?.['+Y']?.cutAngle).toBeCloseTo(absBetaDeg, 1);
+        expect(left.edge_banding?.['+Y']?.cutAnchor).toBe('Z_MINUS');
+
+        // Prawy bok (niższy): lico wewnętrzne Z_PLUS ma 1000 + 18 = 1018 mm, zewnętrzne Z_MINUS opada do 1000 mm
+        expect(right.dim.x).toBeCloseTo(1000 + rise, 1);
+        expect(right.edge_banding?.['+Y']?.cutAngle).toBeCloseTo(absBetaDeg, 1);
+        expect(right.edge_banding?.['+Y']?.cutAnchor).toBe('Z_PLUS');
+
+        // Wieniec: końce +X i -X docięte pionowo między bokami
+        expect(top.edge_banding?.['+X']?.cutAngle).toBeCloseTo(-absBetaDeg, 1);
+        expect(top.edge_banding?.['-X']?.cutAngle).toBeCloseTo(absBetaDeg, 1);
+        expect(top.edge_banding?.['+X']?.cutAnchor).toBe('Z_MINUS');
+        expect(top.edge_banding?.['-X']?.cutAnchor).toBe('Z_MINUS');
+    });
 });

@@ -17,13 +17,16 @@ import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import doorsTekstRaw from './05_doors_tekst.json';
 
-import doorsRules from './05_doors_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const doorsRules = getModuleRules('05_doors');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import type { DoorsPlanParams } from './01_bloki-module-types.js';
 import {
     DEFAULT_HINGE_BRAND,
+    DEFAULT_HINGE_PLATE_ID,
     firstHingeIdForBrand,
     HingeBrandFilter,
+    HingePlateSelect,
     renderHingeSelectOptions,
     resolveHingeBrand
 } from './01_hinge-brand-ui.js';
@@ -157,6 +160,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
     // Domyślny szablon zawiasów
     const defaultTemplate = p.domyslny_zawias_id || DEFAULT_HINGE_ID;
     const [hingeBrand, setHingeBrand] = useState<string>(() => resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
+    const [hingePlate, setHingePlate] = useState<string>(p.typ_prowadnika || DEFAULT_HINGE_PLATE_ID);
     const [hingeTemplate, setHingeTemplate] = useState<string>(defaultTemplate);
 
     const [useHinge1, setUseHinge1] = useState<boolean>(p.uzyj_zawias_1 !== false);
@@ -192,6 +196,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
         setOvLeft(p.nalozenie_lewe_mm ?? 16);
         setOvRight(p.nalozenie_prawe_mm ?? 16);
         setHingeBrand(resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
+        setHingePlate(p.typ_prowadnika || DEFAULT_HINGE_PLATE_ID);
         setHingeTemplate(defTpl);
         setUseHinge1(p.uzyj_zawias_1 !== false);
         setHinge1Pos(p.pozycja_zawias_1_mm ?? 120);
@@ -248,7 +253,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                     <span style={{ color: '#d4d4d8', fontSize: '12px' }}>{tx(doorsTekst, 'gap.label', TX_NS)}</span>
                     <SmartNumericInput 
                         value={gap}
-                        step={0.01} decimals={2}
+                        step={1} decimals={2}
                         unit="mm"
                         style={{ width: '80px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => {
@@ -270,7 +275,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                         <span style={{ color: '#d4d4d8', fontSize: '11px' }}>{tx(doorsTekst, 'ov_top.label', TX_NS)}</span>
                         <SmartNumericInput 
                             value={ovTop} 
-                            step={0.01} decimals={2}
+                            step={1} decimals={2}
                             unit="mm"
                             onChange={(val) => {
                                 setOvTop(val);
@@ -284,7 +289,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                         <span style={{ color: '#d4d4d8', fontSize: '11px' }}>{tx(doorsTekst, 'ov_bottom.label', TX_NS)}</span>
                         <SmartNumericInput 
                             value={ovBottom} 
-                            step={0.01} decimals={2}
+                            step={1} decimals={2}
                             unit="mm"
                             onChange={(val) => {
                                 setOvBottom(val);
@@ -298,7 +303,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                         <span style={{ color: '#d4d4d8', fontSize: '11px' }}>{tx(doorsTekst, 'ov_left.label', TX_NS)}</span>
                         <SmartNumericInput 
                             value={ovLeft} 
-                            step={0.01} decimals={2}
+                            step={1} decimals={2}
                             unit="mm"
                             onChange={(val) => {
                                 setOvLeft(val);
@@ -312,7 +317,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                         <span style={{ color: '#d4d4d8', fontSize: '11px' }}>{tx(doorsTekst, 'ov_right.label', TX_NS)}</span>
                         <SmartNumericInput 
                             value={ovRight} 
-                            step={0.01} decimals={2}
+                            step={1} decimals={2}
                             unit="mm"
                             onChange={(val) => {
                                 setOvRight(val);
@@ -396,6 +401,15 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                     }}
                 />
 
+                <HingePlateSelect
+                    value={hingePlate}
+                    label={tx(doorsTekst, 'hinge_plate.label', TX_NS)}
+                    onChange={(plateId) => {
+                        setHingePlate(plateId);
+                        triggerUpdate({ typ_prowadnika: plateId });
+                    }}
+                />
+
                 {/* Zawiasy 1 do 6 */}
                 {(() => {
                     const sbHeight = dimToMm(container?.height);
@@ -459,7 +473,7 @@ export function DoorsSubModule({ container, triggerUpdate }: { container: Contai
                                 <SmartNumericInput 
                                     value={h.val}
                                     disabled={!h.active}
-                                    step={0.01} decimals={2}
+                                    step={1} decimals={2}
                                     unit="mm"
                                     onChange={(v) => {
                                         h.setVal(v);

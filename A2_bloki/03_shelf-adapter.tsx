@@ -14,7 +14,8 @@ import type { BlokiPlanResult } from './01_bloki-types.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
-import shelfRules from './03_shelf_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const shelfRules = getModuleRules('03_shelf');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import type { ShelfPlanParams } from './01_bloki-module-types.js';
 import shelfTekstRaw from './03_shelf_tekst.json';
@@ -96,7 +97,7 @@ export function ShelfSubModule({ container, triggerUpdate }: { container: Contai
                 <SmartNumericInput 
                     id="sb-single-shelf-bottom-input"
                     value={offsetBottom} 
-                    min={0} step={0.01} decimals={2} unit="mm"
+                    min={0} step={1} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={handleBottomChange}
                 />
@@ -106,7 +107,7 @@ export function ShelfSubModule({ container, triggerUpdate }: { container: Contai
                 <SmartNumericInput 
                     id="sb-single-shelf-top-input"
                     value={offsetTop} 
-                    min={0} step={0.01} decimals={2} unit="mm"
+                    min={0} step={1} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={handleTopChange}
                 />

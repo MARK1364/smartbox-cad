@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { GlobalReportsEngineWeb } from '../R1_reports/global-reports-engine';
 import { HtmlReportsGeneratorWeb } from '../R1_reports/html-reports-generator';
+import { ReportDataNormalizer } from '../R1_reports/report-data-normalizer';
 import { ModuleSourceBar } from './module-data/ModuleSourceBar';
 import {
     readModuleSession,
@@ -33,7 +34,8 @@ installModulePageLifecycle('report');
 function buildReportHtml(payload: ReportModulePayload): string {
     const engine = new GlobalReportsEngineWeb();
     const generator = new HtmlReportsGeneratorWeb(engine);
-    const pricedPanels = payload.panels.map((p) => engine.calculatePartPricing(p));
+    const normalized = ReportDataNormalizer.validateCuttingPanelContracts(payload.panels);
+    const pricedPanels = normalized.panels.map((p) => engine.calculatePartPricing(p));
     const pricedAccessories = (payload.accessories || []).map((a) =>
         engine.calculateAccessoryPricing(a)
     );
@@ -42,7 +44,13 @@ function buildReportHtml(payload: ReportModulePayload): string {
         payload.scope?.type === 'PROJECT' || !payload.scope?.name
             ? payload.meta?.originLabel || 'Projekt CAD'
             : `Wycena: ${payload.scope.name}`;
-    return generator.generateFullProjectReport(title, summary, pricedPanels, pricedAccessories);
+    return generator.generateFullProjectReport(
+        title,
+        summary,
+        pricedPanels,
+        pricedAccessories,
+        [...(payload.issues || []), ...normalized.issues],
+    );
 }
 
 function parseReportJson(text: string, fileName: string): ReportModulePayload {
@@ -60,6 +68,7 @@ function parseReportJson(text: string, fileName: string): ReportModulePayload {
               accessories: data.accessories || [],
               furnitures: data.furnitures || [],
               containers: data.containers || [],
+              issues: data.issues || [],
           }
         : data;
     if (!next.panels) throw new Error(tx(srcTekst, 'entry.report_panels', TX_NS));

@@ -12,7 +12,8 @@
  *  - normalizePanelsParams(raw, dims)
  *  - calculatePanelsPlan(dims, params)
  */
-import panelsRules from './11_panels_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const panelsRules = getModuleRules('11_panels');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { type ModuleDims } from './01_base-engine.js';
 import type {
@@ -25,6 +26,7 @@ import {
     assertCanonicalPanelsParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callPanelsPlanWasm } from './panels-wasm-bridge.js';
 
 export { assertCanonicalPanelsParams, LEGACY_PANELS_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 export type { SidePanelMode } from './01_bloki-module-types.js';
@@ -159,6 +161,13 @@ export function calculatePanelsPlan(
     dims_mm: BlokiDimensions_mm,
     params: NormalizedPanelsParams
 ): BlokiPlanResult {
+    const wasmResult = callPanelsPlanWasm(dims_mm, params, {
+        edgeForRole: edgeFor
+    });
+    if (wasmResult) {
+        return wasmResult;
+    }
+
     const width_mm = dims_mm.width_mm;
     const height_mm = dims_mm.height_mm;
     const depth_mm = dims_mm.depth_mm;

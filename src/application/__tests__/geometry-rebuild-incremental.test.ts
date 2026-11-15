@@ -100,4 +100,28 @@ describe('geometry-rebuild incremental', () => {
         expect(buildSpy).toHaveBeenCalledWith(p1);
         expect(mockViewport.applyRenderModeToMeshes).toHaveBeenCalledTimes(1);
     });
+
+    it('może propagować błąd do transakcyjnej komendy bez zmiany domyślnego zachowania', () => {
+        const error = new Error('test geometry rebuild failure');
+        const ctx: any = {
+            document: { getContainers: () => { throw error; } },
+            viewport: {},
+            panelViews: new Map(),
+            containerViews: new Map(),
+            panelBuilder: {},
+            ui: { setStatus: vi.fn(), refreshFeatures: vi.fn() },
+        };
+        const rebuildGeometry = createRebuildGeometry({
+            getContext: () => ctx,
+            getGizmoController: () => null,
+        });
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        try {
+            expect(() => rebuildGeometry('SmartPart param')).not.toThrow();
+            expect(() => rebuildGeometry('SmartPart param', true)).toThrow(error);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
 });

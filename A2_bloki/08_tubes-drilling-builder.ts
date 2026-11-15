@@ -50,7 +50,7 @@ export function buildTubesDrillings(document: ProjectDocument, cabinetContainerI
     // 2. Znajdź wszystkie aktywne kontenery Bloki z drążkiem
     const sbContainers = containers.filter((c: any) => {
         const p = c.domainData?.generatorParams;
-        if (!p || !(p.type === 'blok_tubes' || p.boxType === 'TUBES') || c.domainData?.visible === false) return false;
+        if (!p || !(p.type === 'blok_tubes' || p.boxType === 'TUBES') || c.frozen || c.domainData?.frozen === true) return false;
         if (cabinetContainerId) {
             return p.parentContainerId === cabinetNode.id || c.parent?.id === cabinetNode.id || isChildOfCabinet(c);
         }

@@ -114,6 +114,11 @@
     "en": "Manufacturer:",
     "de": "Hersteller:"
   },
+  "hinge_plate.label": {
+    "pl": "Prowadnik:",
+    "en": "Mounting plate:",
+    "de": "Montageplatte:"
+  },
   "hinge_template.label": {
     "pl": "Szablon...",
     "en": "Template...",

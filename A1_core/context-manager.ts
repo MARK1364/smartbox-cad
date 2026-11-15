@@ -33,6 +33,7 @@ export interface IAppAPI {
     setStatus?: (status: string, highlight?: boolean, kind?: 'info' | 'error') => void;
     setLcsVisible?: (visible: boolean) => void;
     setPmiVisible?: (visible: boolean) => void;
+    setEdgeBandingVisible?: (visible: boolean) => void;
     [key: string]: any;
 }
 
@@ -116,6 +117,23 @@ export class ContextManager {
     public stateMachine: any = null;
     public pmiRenderer: any = null;
     public lcsVisible: boolean = false;
+    /** Przełącznik podświetlania oklejonych obrzeży w menu Podgląd -> Obrzeża. */
+    public edgeBandingVisible: boolean = false;
+
+    public setEdgeBandingVisible(visible: boolean): void {
+        this.edgeBandingVisible = visible;
+        if (this.panelViews && this.panelViews.size > 0) {
+            this.panelViews.forEach((pv: any) => {
+                if (typeof pv?._updateMaterialAppearance === 'function') {
+                    pv._updateMaterialAppearance();
+                }
+            });
+        }
+        this.viewport?.requestRender?.(3);
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('cad-edge-banding-visibility-changed', { detail: { visible } }));
+        }
+    }
     public activePanel: any = null;
     public selectedPanel: any = null;
     public korpusRules: any = null;

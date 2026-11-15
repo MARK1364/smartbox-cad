@@ -143,6 +143,7 @@ export function extractReportPayload(scope: ModuleScope, document?: any): Report
         accessories,
         furnitures: raw.furnitures,
         containers: raw.containers,
+        issues: raw.issues,
     };
 }
 
@@ -154,7 +155,7 @@ export function extractNestingPayload(scope: ModuleScope, document?: any): Nesti
             name: p.role || p.part_id || `panel_${idx}`,
             width: p.length_mm,
             height: p.width_mm,
-            thickness: p.thickness_mm || 18,
+            thickness: p.thickness_mm,
             quantity: p.qty || 1,
             canRotate: !p.rotate_grain,
             ...(p.rotate_grain ? { grain: 'horizontal' as const } : {}),
@@ -183,6 +184,7 @@ export function extractNestingPayload(scope: ModuleScope, document?: any): Nesti
         })),
         config: { width: 2070, height: 2800, kerf: 4, trimMargin: 10, thickness: 18, machineType: 'saw' },
         selectedMaterial: 'ALL',
+        issues: report.issues,
     };
 }
 

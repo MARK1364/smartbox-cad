@@ -10,8 +10,9 @@ import { ConstraintHighlightOverlay } from './constraint-highlight.js';
 import { beginConstraintSlotPick, expectedKindForBind, getActiveConstraintPick, SOLVER_PICK_EVENT } from './constraint-pick-flow.js';
 import { anchorPartLabel, anchorFullLabel } from './constraint-ui-labels.js';
 import { ADD_BUTTONS, BIND_TYPE_ICON, GROUND_MODE_OPTIONS } from './solver-ui-config.js';
-import { RemoveConstraintCommand } from './constraint-commands.js';
-import type { AnchorKind, ConstraintAnchor, SolverConstraint } from './constraint-types.js';
+import { RemoveConstraintCommand, UpdateConstraintCommand } from './constraint-commands.js';
+import { cloneSolverConstraint, type AnchorKind, type ConstraintAnchor, type SolverConstraint } from './constraint-types.js';
+import type { NodeTransformDelta } from './solve-constraints-command.js';
 import type { BindType, ConstraintResidual } from './core/contract.js';
 import { residualExceedsTolerance, RESIDUAL_TOLERANCE } from './core/solver-core.js';
 import type { ConstraintValidationIssue } from './constraint-validation.js';
@@ -117,6 +118,32 @@ export function ConstraintTreeRow({ constraint: c, document, highlighted, issues
         ConstraintHighlightOverlay.instance.setHighlighted([]);
     };
 
+    const updateConstraint = (patch: Partial<SolverConstraint>, label: string) => {
+        const store = ConstraintStore.instance;
+        const before = cloneSolverConstraint(c);
+        const hist = ContextManager.instance.commandHistory;
+        if (!hist) {
+            store.update(c.id, patch);
+            return;
+        }
+
+        if (!store.update(c.id, patch)) return;
+        let commandRecorded = false;
+        const solverController = (ContextManager.instance as any).solverController;
+        solverController?.solveNow?.({
+            onCommand: (deltas: NodeTransformDelta[]) => {
+                const updated = store.get(c.id);
+                if (!updated) return null;
+                commandRecorded = true;
+                return new UpdateConstraintCommand(before, updated, deltas, label, store);
+            },
+        });
+        const updated = store.get(c.id);
+        if (!commandRecorded && updated) {
+            hist.execute(new UpdateConstraintCommand(before, updated, [], label, store));
+        }
+    };
+
     const showOffset = c.enabled && (c.bindType === 'COPLANAR' || c.bindType === 'FLUSH' || c.bindType === 'VERTEX_DATUM');
 
     return (
@@ -135,7 +162,7 @@ export function ConstraintTreeRow({ constraint: c, document, highlighted, issues
                         type="button"
                         className="solver-constraint__icon-btn"
                         title={c.enabled ? 'Wyłącz relację' : 'Włącz relację'}
-                        onClick={() => ConstraintStore.instance.update(c.id, { enabled: !c.enabled })}
+                        onClick={() => updateConstraint({ enabled: !c.enabled }, 'Zmiana aktywności relacji')}
                     >
                         <EyeIcon hidden={!c.enabled} />
                     </button>
@@ -162,9 +189,38 @@ export function ConstraintTreeRow({ constraint: c, document, highlighted, issues
                                 debounceMs={80}
                                 onChange={(mm) => {
                                     if (Math.abs((c.offsetMm ?? 0) - mm) < 1e-9) return;
-                                    ConstraintStore.instance.update(c.id, { offsetMm: mm });
-                                    (ContextManager.instance as any).solverController?.solveNow?.();
-                                    ConstraintHighlightOverlay.instance.refresh();
+                                    const store = ConstraintStore.instance;
+                                    const before = cloneSolverConstraint(c);
+                                    if (!store.update(c.id, { offsetMm: mm })) return;
+                                    const history = ContextManager.instance.commandHistory;
+                                    let commandRecorded = false;
+                                    const solverController = (ContextManager.instance as any).solverController;
+                                    solverController?.solveNow?.({
+                                        onCommand: (deltas: NodeTransformDelta[]) => {
+                                            const after = store.get(c.id);
+                                            if (!after || !history) return null;
+                                            commandRecorded = true;
+                                            return new UpdateConstraintCommand(
+                                                before,
+                                                after,
+                                                deltas,
+                                                'Zmiana offsetu relacji',
+                                                store,
+                                            );
+                                        },
+                                    });
+                                    const after = store.get(c.id);
+                                    if (history && after && !commandRecorded) {
+                                        history.execute(new UpdateConstraintCommand(
+                                            before,
+                                            after,
+                                            [],
+                                            'Zmiana offsetu relacji',
+                                            store,
+                                        ));
+                                    } else {
+                                        ConstraintHighlightOverlay.instance.refresh();
+                                    }
                                 }}
                             />
                         </label>

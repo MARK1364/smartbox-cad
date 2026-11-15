@@ -5,9 +5,45 @@
  * Konwersja do jednostek domenowych (nm) następuje na brzegu przez mmToNm.
  */
 
+import type { SinkParamsMm } from './sinks/sink-types.js';
+
 export const SMART_APPLIANCE_TYPE = 'smart_appliance';
 
-export type ApplianceKind = 'MICROWAVE' | 'OVEN' | 'DISHWASHER' | 'HOB' | 'FRIDGE' | 'OTHER';
+export type ApplianceKind = 'MICROWAVE' | 'OVEN' | 'DISHWASHER' | 'HOB' | 'FRIDGE' | 'SINK' | 'SCENE_PROP' | 'OTHER';
+
+export interface ScenePropParamsMm {
+    /** Szerokość gabarytu obiektu [mm] */
+    width_mm: number;
+    /** Głębokość gabarytu obiektu [mm] */
+    depth_mm: number;
+    /** Wysokość gabarytu obiektu [mm] */
+    height_mm: number;
+    /** Id szablonu siatki 3D w HardwareLoader (.glb, .gltf, .obj, .stl) */
+    modelId?: string;
+    /** Format pliku 3D */
+    modelFormat?: 'glb' | 'gltf' | 'obj' | 'stl';
+    /** Kategoria wyposażenia sceny */
+    category?: 'BATHROOM' | 'LIGHTING' | 'DECOR' | 'APPLIANCE';
+    /** Opcjonalne bryły składowe B-rep (z definicji JSON B1_biblioteka/wyposazenie) */
+    parts?: Array<{
+        id: string;
+        name: string;
+        widthMm: number;
+        heightMm: number;
+        depthMm: number;
+        xMm: number;
+        yMm: number;
+        zMm: number;
+        colorHex?: string;
+    }>;
+    /** Kompatybilność wymiarów gabarytowych kontenera */
+    corpusWidth?: number;
+    corpusDepth?: number;
+    frontHeight?: number;
+    frontWidth?: number;
+    frontDepth?: number;
+    totalHeight?: number;
+}
 
 export interface MicrowaveParamsMm {
     /** Całkowita wysokość frontu szklanego [mm] (np. 380 mm) */
@@ -84,13 +120,15 @@ export interface FridgeParamsMm {
     nalDolne?: number;
 }
 
-export type ApplianceParamsMm = MicrowaveParamsMm | OvenParamsMm | FridgeParamsMm | Record<string, any>;
+export type ApplianceParamsMm = MicrowaveParamsMm | OvenParamsMm | FridgeParamsMm | SinkParamsMm | ScenePropParamsMm | Record<string, any>;
 
 export interface ApplianceTemplateItem {
     id: string;
     name: string;
     kind: ApplianceKind;
-    source: 'PARAMETRIC' | 'GLB';
+    source: 'PARAMETRIC' | 'GLB' | 'MESH_3D';
+    category?: 'APPLIANCE' | 'BATHROOM' | 'LIGHTING' | 'DECOR';
+    modelFormat?: 'glb' | 'gltf' | 'obj' | 'stl';
     description?: string;
     thumbnail?: string;
     glbPath?: string;

@@ -15,11 +15,12 @@ import {
     ContainerScopeInfo,
     getPartLabelLines,
 } from '../core/nesting-types';
-import { getDefaultKerf, getMaterialKey, getMaterialLabel, getMaterialInfo, resolveMaterialName, runNesting } from '../core/nesting-engine';
+import { getDefaultKerf, getMaterialKey, getMaterialLabel, getMaterialInfo, runNesting } from '../core/nesting-engine';
 import { NestingExporter } from '../export/nesting-exporter';
 import { resolveClampedMovePosition, isPositionColliding, getPartAABB } from '../core/nesting-snap';
 import { buildBoardCutPlan, releasedPartIds, partInstanceKey, BoardCutPlan } from '../core/cut-plan';
-import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer';
+import { extractNestingData, getNestingBlockReason } from '../core/nesting-data';
+import type { ReportDataIssue } from '../../R1_reports/report-data-normalizer';
 import { ContextManager } from '../../A1_core/context-manager';
 import './nesting.css';
 
@@ -68,6 +69,8 @@ interface NestingPanelProps {
     /** Etykieta zakresu z CAD (PPM) — tylko informacja, bez wyboru w UI. */
     scopeLabel?: string;
     isStandaloneWindow?: boolean;
+    initialIssues?: ReportDataIssue[];
+    demoMode?: boolean;
 }
 
 export const NestingPanel: React.FC<NestingPanelProps> = ({
@@ -75,12 +78,20 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     initialSelectedMaterial = 'ALL',
     scopeLabel,
     isStandaloneWindow = false,
+    initialIssues = [],
+    demoMode = false,
 }) => {
-    const [allProjectParts, setAllProjectParts] = useState<NestingPart[]>(() => {
-        if (initialParts && initialParts.length > 0) return initialParts;
-        if (isStandaloneWindow) return DEFAULT_PARTS;
-        return extractPartsFrom3DScene()?.parts || DEFAULT_PARTS;
+    const [initialSceneData] = useState(() => {
+        if (initialParts !== undefined) {
+            return { parts: initialParts, issues: initialIssues };
+        }
+        if (isStandaloneWindow) {
+            return { parts: demoMode ? DEFAULT_PARTS : [], issues: initialIssues };
+        }
+        return extractPartsFrom3DScene();
     });
+    const [allProjectParts, setAllProjectParts] = useState<NestingPart[]>(initialSceneData.parts);
+    const [dataIssues, setDataIssues] = useState<ReportDataIssue[]>(initialSceneData.issues);
 
     // Ustawienia maszyny
     const [machineType, setMachineType] = useState<MachineType>('saw');
@@ -500,9 +511,8 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         if (isStandaloneWindow) return;
         const handleAutoSync = () => {
             const sceneData = extractPartsFrom3DScene();
-            if (sceneData && sceneData.parts.length > 0) {
-                setAllProjectParts((prev) => preserveFrozen(prev, sceneData.parts));
-            }
+            setAllProjectParts((prev) => preserveFrozen(prev, sceneData.parts));
+            setDataIssues(sceneData.issues);
         };
 
         const doc = ContextManager.instance?.document || (window as any).CAD_APP?.document;
@@ -597,11 +607,16 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
 
     function handleSyncFromScene() {
         const sceneData = extractPartsFrom3DScene();
-        if (sceneData && sceneData.parts.length > 0) {
-            setAllProjectParts((prev) => preserveFrozen(prev, sceneData.parts));
+        setAllProjectParts((prev) => preserveFrozen(prev, sceneData.parts));
+        setDataIssues(sceneData.issues);
+        if (sceneData.issues.length > 0) {
+            setResult(null);
+            setStatusMsg({ text: 'Synchronizacja niekompletna — sprawdź przyczyny pominięcia formatek.', type: 'error' });
+        } else if (sceneData.parts.length > 0) {
             setStatusMsg({ text: `Zaimportowano ${sceneData.parts.length} formatek z projektu 3D.`, type: 'success' });
         } else {
-            setStatusMsg({ text: 'Brak wykrytych formatek w scenie 3D. Pozostawiono listę.', type: 'error' });
+            setResult(null);
+            setStatusMsg({ text: 'Brak formatek w projekcie 3D.', type: 'error' });
         }
     }
 
@@ -657,6 +672,12 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
     };
 
     const handleRunNesting = async () => {
+        const blockReason = getNestingBlockReason(dataIssues, activeParts.length);
+        if (blockReason) {
+            setResult(null);
+            setStatusMsg({ text: blockReason, type: 'error' });
+            return;
+        }
         setIsCalculating(true);
         setStatusMsg({ text: `Obliczanie rozkroju (${machineType === 'cnc' ? 'Frezarka CNC' : 'Piła'})...`, type: '' });
 
@@ -697,7 +718,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
         } else {
             setResult(null);
         }
-    }, [activeParts, machineType, selectedMaterialFilter, config.width, config.height, config.kerf, config.trimMargin]);
+    }, [activeParts, dataIssues, machineType, selectedMaterialFilter, config.width, config.height, config.kerf, config.trimMargin]);
 
     const handleExportHtml = () => {
         if (!result) return;
@@ -849,6 +870,24 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                         {activeParts.reduce((s, p) => s + (p.quantity || 0), 0)} szt.
                     </p>
                 </div>
+
+                {dataIssues.length > 0 && (
+                    <section role="alert" className="status-msg error">
+                        <strong>Rozkrój zablokowany — pominięto {dataIssues.length} {dataIssues.length === 1 ? 'formatkę' : 'formatek'} z niekompletnymi danymi:</strong>
+                        <ul>
+                            {dataIssues.map((issue, index) => (
+                                <li key={`${issue.node_id}-${index}`}>
+                                    {issue.panel_name} ({issue.node_id}): {issue.reason}
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
+                {dataIssues.length === 0 && allProjectParts.length === 0 && (
+                    <div className="status-msg">
+                        Brak formatek do rozkroju. Zaimportuj dane albo dodaj formatkę ręcznie.
+                    </div>
+                )}
 
                 <div className="panel">
                     <h3>Profil maszyny</h3>
@@ -1036,7 +1075,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                         id="runNestingBtn"
                         className="btn-primary"
                         onClick={handleRunNesting}
-                        disabled={isCalculating || activeParts.length === 0}
+                        disabled={isCalculating || activeParts.length === 0 || dataIssues.length > 0}
                     >
                         {isCalculating
                             ? 'Obliczanie...'
@@ -1079,7 +1118,7 @@ export const NestingPanel: React.FC<NestingPanelProps> = ({
                         )}
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn-secondary" onClick={handleRunNesting} title="Przywróć optymalne ułożenie">
+                        <button className="btn-secondary" onClick={handleRunNesting} disabled={dataIssues.length > 0 || activeParts.length === 0} title="Przywróć optymalne ułożenie">
                             Przywróć auto
                         </button>
                         <button
@@ -1378,28 +1417,7 @@ const CutPlanLayer: React.FC<{ plan: BoardCutPlan; step: number; sawT: number }>
     );
 };
 
-function extractPartsFrom3DScene(): { parts: NestingPart[]; containers: ContainerScopeInfo[] } | null {
-    try {
-        const doc = ContextManager.instance?.document || (window as any).CAD_APP?.document;
-        const data = ReportDataNormalizer.extractProjectData(doc);
-        if (data && data.panels && data.panels.length > 0) {
-            const parts: NestingPart[] = data.panels.map((p, idx) => ({
-                id: p.part_id || `part_${idx}`,
-                name: p.role || p.part_id || `part_${idx}`,
-                width: p.length_mm,
-                height: p.width_mm,
-                thickness: p.thickness_mm,
-                quantity: p.qty || 1,
-                canRotate: true,
-                material: resolveMaterialName(p.material),
-                containerId: p.container_id,
-                blokId: p.blok_id,
-                furnitureName: p.furniture_name
-            }));
-            return { parts, containers: data.containers || [] };
-        }
-    } catch (e) {
-        console.warn('Nesting sync from 3D scene warning:', e);
-    }
-    return null;
+function extractPartsFrom3DScene(): { parts: NestingPart[]; containers: ContainerScopeInfo[]; issues: ReportDataIssue[] } {
+    const doc = ContextManager.instance?.document || (window as any).CAD_APP?.document;
+    return extractNestingData(doc);
 }

@@ -10,10 +10,12 @@
  *  - collectCabinetGeometry (zgeometryzowane formatki korpusu)
  */
 
-import korpusRulesData from './korpus3_3_rules.json';
-import korpusRogowy1RulesData from './korpus_rogowy1_rules.json';
-import korpusRogowy90RulesData from './korpus_rogowy90_rules.json';
-import korpusSkosnyRulesData from './korpus_skosny_rules.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+
+const korpusRulesData = getModuleRules('korpus3');
+const korpusRogowy1RulesData = getModuleRules('korpus_rogowy1');
+const korpusRogowy90RulesData = getModuleRules('korpus_rogowy90');
+const korpusSkosnyRulesData = getModuleRules('korpus_skosny');
 
 export type {
     CabinetType,
@@ -45,6 +47,7 @@ import {
 import { rulesMToMm } from '../A1_core/cad-math/units.js';
 import { collectCabinetGeometry } from './geometry/subcomponents-builder.js';
 import { getRootSubcomponents } from './geometry/cabinet-thickness.js';
+import { callCabinetPlanWasm, isSmartFrameWasmReady } from './smartframe-wasm-bridge.js';
 
 export { collectCabinetGeometry } from './geometry/subcomponents-builder.js';
 
@@ -282,15 +285,28 @@ export function calculateCabinetPlan(
     rulesMap?: Record<string, any>
 ): CabinetPlanResult {
     const t = String(params.typ_korpusu || 'korpus3').toLowerCase();
+    // Główna ścieżka Rust WebAssembly — korpus standardowy (korpus3), narożne (korpus_rogowy1, korpus_rogowy90) oraz skośne (korpus_skosny*)
+    const wasmResult = callCabinetPlanWasm(dims, params);
+    if (wasmResult) {
+        return wasmResult;
+    }
+
+    if (isSmartFrameWasmReady()) {
+        throw new Error(`[Rust SmartFrame Error] Moduł Rust WASM zwrócił błąd dla typu "${params.typ_korpusu}". Cichy fallback do TS jest wyłączony!`);
+    }
+
     if (t.includes('skosny')) {
         return calculateSkosnyCabinetPlan(dims, params, rulesMap?.[params.typ_korpusu] ?? rulesMap?.korpus_skosny);
     }
+
     if (t.includes('rogowy90') || t.includes('rogowy_90')) {
         return calculateRogowy90CabinetPlan(dims, params, rulesMap?.[params.typ_korpusu] ?? rulesMap?.korpus_rogowy90);
     }
     if (t.includes('rogowy')) {
         return calculateRogowy1CabinetPlan(dims, params, rulesMap?.[params.typ_korpusu] ?? rulesMap?.korpus_rogowy1);
     }
+
+    // Wykonywane tylko przed asynchroniczną inicjalizacją WASM w środowisku testowym bez binary
     return calculateStandardCabinetPlan(dims, params, rulesMap?.[params.typ_korpusu] ?? rulesMap?.korpus3);
 }
 

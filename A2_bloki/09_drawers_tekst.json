@@ -29,6 +29,11 @@
     "en": "Front heights",
     "de": "Fronthöhen"
   },
+  "front_heights.mismatch_template": {
+    "pl": "Niedopasowanie: {diff} mm ({used} / {target} mm)",
+    "en": "Mismatch: {diff} mm ({used} / {target} mm)",
+    "de": "Abweichung: {diff} mm ({used} / {target} mm)"
+  },
   "front_height.label_template": {
     "pl": "Wys. frontu {n}:",
     "en": "Front height {n}:",
@@ -83,6 +88,11 @@
     "pl": "Szuflada {n}",
     "en": "Drawer {n}",
     "de": "Schublade {n}"
+  },
+  "drawer.internal_label": {
+    "pl": "Wewnętrzna",
+    "en": "Internal",
+    "de": "Innenschublade"
   },
   "rail_length.label": {
     "pl": "Długość:",

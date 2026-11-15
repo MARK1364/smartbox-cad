@@ -1,0 +1,53 @@
+{
+  "id": "sp:prysznic_kabina_90x90",
+  "name": "Kabina prysznicowa Walk-In 90x90",
+  "category": "BATHROOM",
+  "units": "mm",
+  "version": "1.0",
+  "type": "SCENE_PROP",
+  "mainContainer": {
+    "widthMm": 900,
+    "heightMm": 2000,
+    "depthMm": 900
+  },
+  "visual": {
+    "model": "models/Prysznic_Kabina_90x90.glb",
+    "units": "mm"
+  },
+  "parts": [
+    {
+      "id": "brodzik",
+      "name": "Brodzik niski",
+      "widthMm": 900,
+      "heightMm": 45,
+      "depthMm": 900,
+      "xMm": 0,
+      "yMm": 0,
+      "zMm": 22.5,
+      "colorHex": "#f1f5f9"
+    },
+    {
+      "id": "szyba_boczna",
+      "name": "Szyba prysznicowa hartowana",
+      "widthMm": 8,
+      "heightMm": 1955,
+      "depthMm": 880,
+      "xMm": 442,
+      "yMm": 0,
+      "zMm": 1022.5,
+      "colorHex": "#7dd3fc"
+    },
+    {
+      "id": "deszczownica_kolumna",
+      "name": "Kolumna prysznicowa z deszczownicą",
+      "widthMm": 260,
+      "heightMm": 1150,
+      "depthMm": 420,
+      "xMm": 0,
+      "yMm": 220,
+      "zMm": 1350,
+      "colorHex": "#94a3b8"
+    }
+  ]
+}
+

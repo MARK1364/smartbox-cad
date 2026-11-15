@@ -34,6 +34,8 @@ export {
 export {
     findPanelRootMesh,
     buildHandleParametricMesh,
+    syncHandleMeshesFromDocument,
+    purgeOrphanHandleMeshes,
     HANDLE_GLB_ORIENT,
     HANDLE_GLB_ROTATION_DEG,
     HANDLE_GLB_OUTWARD_FLIP_DEG,

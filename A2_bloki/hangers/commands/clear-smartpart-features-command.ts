@@ -140,8 +140,8 @@ export class ClearSmartPartFeaturesCommand implements Command {
                 return p.sourceContainerId !== this.sourceId
                     && !(p.isSmartPartFeature && p.smartPartId === this.sourceId);
             });
-            if (typeof panelModel.setFeatures === 'function') panelModel.setFeatures(remaining);
-            else panelModel.features = remaining;
+            panelModel.features = remaining;
+            document.afterCommit(() => this.emitFeatures(panelModel));
         }
         return true;
     }
@@ -152,9 +152,17 @@ export class ClearSmartPartFeaturesCommand implements Command {
             const pNode = document.findNode(panelId);
             const panelModel = pNode?.domainData as any;
             if (!panelModel) continue;
-            if (typeof panelModel.setFeatures === 'function') panelModel.setFeatures(feats);
-            else panelModel.features = feats;
+            panelModel.features = [...feats];
+            document.afterCommit(() => this.emitFeatures(panelModel));
         }
         return true;
+    }
+
+    private emitFeatures(panelModel: any): void {
+        if (typeof panelModel.setFeatures === 'function') {
+            panelModel.setFeatures(panelModel.features);
+        } else if (typeof panelModel._emit === 'function') {
+            panelModel._emit('features', { features: panelModel.features });
+        }
     }
 }

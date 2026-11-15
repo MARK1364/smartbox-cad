@@ -31,6 +31,12 @@ export function syncMachiningHoles(
     panels: any[],
     ownerTag: MachiningHoleOwnerTag,
     oldFeatures: Map<string, any[]>,
+    /**
+     * Opcjonalny filtr zakresu czyszczenia. Potrzebny, gdy dwa generatory dziela ten sam
+     * ownerTag (np. drzwi i drzwi skosne -> isDoorDrilling) - bez filtra jeden sync kasuje
+     * automaty drugiego, bo czyszczenie dziala po samym ownerTag.
+     */
+    ownsFeature: (feature: any) => boolean = () => true,
 ): Set<string> {
     void document;
     const changedNodeIds = new Set<string>();
@@ -40,7 +46,7 @@ export function syncMachiningHoles(
         const data = panelNode.domainData as any;
         if (!data || !Array.isArray(data.features) || data.features.length === 0) continue;
         const hasRemovable = data.features.some(
-            (f: any) => isOwnedHole(f, ownerTag) && !(f.frozen || f.params?.frozen),
+            (f: any) => isOwnedHole(f, ownerTag) && ownsFeature(f) && !(f.frozen || f.params?.frozen),
         );
         if (!hasRemovable) continue;
 
@@ -51,7 +57,7 @@ export function syncMachiningHoles(
         const initialLen = data.features.length;
         data.features = data.features.filter((f: any) => {
             if (f.frozen || f.params?.frozen) return true; // Zachowaj zamrożone
-            return !isOwnedHole(f, ownerTag);
+            return !(isOwnedHole(f, ownerTag) && ownsFeature(f));
         });
         if (data.features.length !== initialLen) {
             changedNodeIds.add(panelNode.id);
@@ -128,16 +134,25 @@ export function syncMachiningGroovePlans(
 export function emitMachiningFeatures(
     panels: any[],
     changedNodeIds: Set<string>,
+    document?: ProjectDocument,
 ): void {
-    for (const panelNode of panels) {
-        if (!panelNode || !changedNodeIds.has(panelNode.id)) continue;
-        const data = panelNode.domainData as any;
-        if (!data || panelNode.frozen || data.frozen) continue;
-        if (typeof data.setFeatures === 'function') {
-            data.setFeatures(data.features);
-        } else if (typeof data._emit === 'function') {
-            data._emit('features', { features: data.features });
+    const emit = () => {
+        for (const panelNode of panels) {
+            if (!panelNode || !changedNodeIds.has(panelNode.id)) continue;
+            const data = panelNode.domainData as any;
+            if (!data || panelNode.frozen || data.frozen) continue;
+            if (typeof data.setFeatures === 'function') {
+                data.setFeatures(data.features);
+            } else if (typeof data._emit === 'function') {
+                data._emit('features', { features: data.features });
+            }
         }
+    };
+
+    if (typeof document?.afterCommit === 'function') {
+        document.afterCommit(emit);
+    } else {
+        emit();
     }
 }
 
@@ -146,6 +161,7 @@ export function restoreMachiningFeatures(
     document: ProjectDocument,
     oldFeatures: Map<string, any[]>,
 ): void {
+    const restoredPanels: any[] = [];
     for (const [nodeId, oldFeats] of oldFeatures.entries()) {
         const node = typeof (document as any)?.findNode === 'function'
             ? (document as any).findNode(nodeId)
@@ -153,12 +169,25 @@ export function restoreMachiningFeatures(
         if (node && node.domainData) {
             const data = node.domainData as any;
             data.features = JSON.parse(JSON.stringify(oldFeats));
+            restoredPanels.push(node);
+        }
+    }
+
+    const emitRestoredFeatures = () => {
+        for (const panelNode of restoredPanels) {
+            const data = panelNode.domainData as any;
+            if (!data || panelNode.frozen || data.frozen) continue;
             if (typeof data.setFeatures === 'function') {
                 data.setFeatures(data.features);
             } else if (typeof data._emit === 'function') {
                 data._emit('features', { features: data.features });
             }
         }
+    };
+    if (typeof document?.afterCommit === 'function') {
+        document.afterCommit(emitRestoredFeatures);
+    } else {
+        emitRestoredFeatures();
     }
 
     if (typeof (document as any)?.notifyDocumentChanged === 'function') {

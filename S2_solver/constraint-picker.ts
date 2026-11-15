@@ -20,6 +20,7 @@ import {
     mapLocalDirToNode,
     mapLocalMmToNode,
     namedFaceFromPick,
+    resolveCornerLocalMm,
     resolveFaceQuadMm,
     snapPickToSmartFrame,
 } from './constraint-geometry.js';
@@ -528,8 +529,12 @@ export function handleConstraintPickEvent(type: string, data: any): boolean {
         const meta = data?.mesh?.metadata;
         if (meta?.isCornerGizmo && meta?.containerNode) {
             const containerNode = meta.containerNode as CADNode;
-            const cornerIndex = Number(meta.cornerIdx ?? 0);
-            const snapped = snapPickToSmartFrame(containerNode, 'VERTEX', [
+            let cornerIndex = Number(meta.cornerIdx ?? 0);
+            if (meta.isZoneGizmo) {
+                cornerIndex = meta.dividerType === 'BOTTOM' ? 8 : 16;
+            }
+            const localPoint = resolveCornerLocalMm(containerNode, cornerIndex);
+            const snapped = snapPickToSmartFrame(containerNode, 'VERTEX', localPoint ?? [
                 cornerIndex & 1 ? 1000 : -1000,
                 cornerIndex & 2 ? 1000 : -1000,
                 cornerIndex & 4 ? 1000 : 0,
@@ -540,7 +545,7 @@ export function handleConstraintPickEvent(type: string, data: any): boolean {
                     kind: 'VERTEX',
                     cornerIndex,
                     sourceNodeId: undefined,
-                    localPointMm: snapped?.localPointMm,
+                    localPointMm: snapped?.localPointMm ?? localPoint ?? undefined,
                 }),
             );
             return true;

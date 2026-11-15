@@ -589,6 +589,16 @@
     "en": "Close (Esc)",
     "de": "Schließen (Esc)"
   },
+  "float.done": {
+    "pl": "Gotowe",
+    "en": "Done",
+    "de": "Fertig"
+  },
+  "float.done_title": {
+    "pl": "Zatwierdź i zamknij okno edycji (Enter / Esc)",
+    "en": "Apply and close edit window (Enter / Esc)",
+    "de": "Übernehmen und Editor schließen (Enter / Esc)"
+  },
   "float.subtitle_dims": {
     "pl": "Relacje, wymiary i odniesienia gabarytu",
     "en": "Relations, dimensions and size references",
@@ -1509,6 +1519,16 @@
     "en": "Save cabinet to library...",
     "de": "Korpus in Bibliothek speichern..."
   },
+  "app.menu.furniture_platform": {
+    "pl": "Platforma mebli (Katalog CAD)...",
+    "en": "Furniture Platform (CAD Catalog)...",
+    "de": "Möbel-Plattform (CAD-Katalog)..."
+  },
+  "app.menu.import_3d": {
+    "pl": "Importuj model 3D (.glb, .obj, .stl)...",
+    "en": "Import 3D model (.glb, .obj, .stl)...",
+    "de": "3D-Modell importieren (.glb, .obj, .stl)..."
+  },
   "app.menu.export_step": {
     "pl": "Eksport do STEP",
     "en": "Export to STEP",
@@ -1558,6 +1578,11 @@
     "pl": "Cennik (edytor cen)...",
     "en": "Price list (price editor)...",
     "de": "Preisliste (Preis-Editor)..."
+  },
+  "app.menu.drilling": {
+    "pl": "Wiercenia okuć (edytor list)...",
+    "en": "Hardware drilling (pattern editor)...",
+    "de": "Beschläge-Bohrungen (Editor)..."
   },
   "app.menu.brand": {
     "pl": "Crevo",
@@ -1679,6 +1704,26 @@
     "en": "2D Drawing — open dedicated CAD subpage (new tab)",
     "de": "2D-Zeichnung — eigene CAD-Unterseite öffnen (neuer Tab)"
   },
+  "app.tab_groups.scene": {
+    "pl": "Scena",
+    "en": "Scene",
+    "de": "Szene"
+  },
+  "app.tab_groups.construction": {
+    "pl": "Konstrukcja",
+    "en": "Structure",
+    "de": "Konstruktion"
+  },
+  "app.tab_groups.tech": {
+    "pl": "Technologia",
+    "en": "Tech",
+    "de": "Technik"
+  },
+  "app.tab_groups.docs": {
+    "pl": "Wyjście",
+    "en": "Output",
+    "de": "Ausgabe"
+  },
   "app.tools.move": {
     "pl": "Przesuń",
     "en": "Move",
@@ -1739,15 +1784,20 @@
     "en": "Preview - toggle graphic elements",
     "de": "Vorschau - Grafikelemente ein-/ausblenden"
   },
+  "app.view.edge_banding": {
+    "pl": "Obrzeża",
+    "en": "Edge banding",
+    "de": "Kanten"
+  },
   "app.view.grid": {
     "pl": "Siatka i płaszczyzny",
     "en": "Grid and planes",
     "de": "Raster und Ebenen"
   },
   "app.view.pan": {
-    "pl": "Przesuwanie widoku (Pan) — możesz też przytrzymać mały boczny przycisk myszy lub kółko z Shift",
-    "en": "Pan view — or hold side mouse button or wheel with Shift",
-    "de": "Ansicht verschieben (Pan) — Seitentaste oder Rad mit Shift halten"
+    "pl": "Przesuń scenę (Pan) — możesz też przytrzymać mały boczny przycisk myszy lub kółko z Shift [Esc lub dwuklik w tło aby wyłączyć]",
+    "en": "Pan scene — or hold side mouse button or wheel with Shift [Esc or double-click background to exit]",
+    "de": "Szene verschieben (Pan) — Seitentaste oder Rad mit Shift halten [Esc oder Doppelklick zum Beenden]"
   },
   "app.view.pan_btn": {
     "pl": "Przesuń",
@@ -2439,6 +2489,16 @@
     "en": "Export panel to DXF",
     "de": "Platte nach DXF exportieren"
   },
+  "ctxmenu.export_dxf_container": {
+    "pl": "Eksport DXF & Karty (korpus)",
+    "en": "Export DXF & cards (cabinet)",
+    "de": "DXF & Karten exportieren (Korpus)"
+  },
+  "ctxmenu.export_dxf_project": {
+    "pl": "Eksport DXF & Karty (projekt)",
+    "en": "Export DXF & cards (project)",
+    "de": "DXF & Karten exportieren (Projekt)"
+  },
   "cncval.synced": {
     "pl": "Pomyślnie zsynchronizowano utworzone programy CNC z modelem CAD!",
     "en": "Successfully synced CNC programs with CAD model!",
@@ -3034,11 +3094,6 @@
     "en": "Enable type filters above or clear the search box",
     "de": "Typfilter oben aktivieren oder Suche löschen"
   },
-  "dag.frozen": {
-    "pl": "Zamrożony",
-    "en": "Frozen",
-    "de": "Eingefroren"
-  },
   "dag.joint_conflict": {
     "pl": "Konflikt więzu kinematycznego",
     "en": "Kinematic joint conflict",
@@ -3153,5 +3208,70 @@
     "pl": "na ekranie lub wskaż formatkę w CAD Meble.",
     "en": "on screen or pick a panel in Furniture CAD.",
     "de": "auf Bildschirm oder Platte in Möbel-CAD wählen."
+  },
+  "agd.title": {
+    "pl": "Sprzęt AGD i Wyposażenie Sceny",
+    "en": "Appliances & Scene Props",
+    "de": "Haushaltsgeräte & Szenenausstattung"
+  },
+  "agd.subtitle": {
+    "pl": "Modele B-rep (S2 Solver) oraz import 3D (.glb, .obj, .stl)",
+    "en": "B-rep models (S2 Solver) & 3D import (.glb, .obj, .stl)",
+    "de": "B-rep-Modelle (S2 Solver) & 3D-Import (.glb, .obj, .stl)"
+  },
+  "agd.catalog_appliances": {
+    "pl": "Katalog Urządzeń AGD",
+    "en": "Appliance Catalog",
+    "de": "Gerätekatalog"
+  },
+  "agd.catalog_scene_props": {
+    "pl": "Wyposażenie Sceny (Łazienka / Lampy / 3D)",
+    "en": "Scene Props (Bathroom / Lighting / 3D)",
+    "de": "Szenenausstattung (Bad / Lampen / 3D)"
+  },
+  "agd.import_section": {
+    "pl": "Import modelu 3D z dysku",
+    "en": "Import 3D model from disk",
+    "de": "3D-Modell von Festplatte importieren"
+  },
+  "agd.import_unit_label": {
+    "pl": "Jednostka w pliku (.obj / .stl):",
+    "en": "File unit (.obj / .stl):",
+    "de": "Dateieinheit (.obj / .stl):"
+  },
+  "agd.import_btn": {
+    "pl": "Wczytaj plik 3D (.glb, .obj, .stl)",
+    "en": "Load 3D file (.glb, .obj, .stl)",
+    "de": "3D-Datei laden (.glb, .obj, .stl)"
+  },
+  "agd.import_hint": {
+    "pl": "Obsługiwane formaty: .glb, .gltf, .obj, .stl. Obiekt otrzyma pełny gabaryt CAD (S2 Solver / PMI) i nie trafi do rozkroju płyt.",
+    "en": "Supported formats: .glb, .gltf, .obj, .stl. The object gets full CAD bounds (S2 Solver / PMI) and is excluded from cutting lists.",
+    "de": "Unterstützte Formate: .glb, .gltf, .obj, .stl. Das Objekt erhält volle CAD-Abmessungen (S2 Solver / PMI) und wird vom Zuschnitt ausgeschlossen."
+  },
+  "agd.card_tooltip": {
+    "pl": "Przeciągnij na scenę 3D lub kliknij, aby wstawić",
+    "en": "Drag onto 3D scene or click to insert",
+    "de": "In die 3D-Szene ziehen oder klicken zum Einfügen"
+  },
+  "app.apply_handle": {
+    "pl": "Zastosuj Uchwyt",
+    "en": "Apply Handle",
+    "de": "Griff anwenden"
+  },
+  "app.scope_single_front": {
+    "pl": "Tylko ta szuflada / front",
+    "en": "Only this drawer / front",
+    "de": "Nur diese Schublade / Front"
+  },
+  "app.scope_drawer_module": {
+    "pl": "Wszystkie szuflady w module",
+    "en": "All drawers in module",
+    "de": "Alle Schubladen im Modul"
+  },
+  "app.scope_all_project_drawers": {
+    "pl": "Wszystkie szuflady w projekcie",
+    "en": "All drawers in project",
+    "de": "Alle Schubladen im Projekt"
   }
 }

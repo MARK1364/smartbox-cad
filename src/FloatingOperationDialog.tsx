@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { isPanelModel } from '../A4_smartpanel/panel-model.js';
+import { findOwningContainer } from '../A1_core/panel-like.js';
 import { SmartNumericInput } from '../A1_core/ui/SmartNumericInput.js';
 import { SetDimensionsCommand } from '../A1_core/commands/set-dimensions-command.js';
 import { updateLibraryOperationParams, isLibraryOperation } from '../o1_operacji/operacje-apply.js';
@@ -165,6 +166,8 @@ export const FloatingOperationDialog: React.FC = () => {
         const node = doc.findNode(panelId);
         const panel = node?.domainData;
         if (!panel || !isPanelModel(panel)) return;
+        // Formatki natywne korpusu/bloku nie posiadają okna edycji formatki SmartPanel
+        if ((panel as any).engineManaged !== false && findOwningContainer(doc, panelId)) return;
 
         setPanelModel(panel);
         setPanelName(panel.name || 'Formatka');
@@ -200,6 +203,14 @@ export const FloatingOperationDialog: React.FC = () => {
         const handleOpenPanel = (e: any) => {
             const d = e.detail as FloatingPanelData;
             if (d && d.panelId) {
+                const doc = ContextManager.instance.document;
+                if (doc) {
+                    const node = doc.findNode(d.panelId);
+                    const panel = node?.domainData;
+                    if (panel && (panel as any).engineManaged !== false && findOwningContainer(doc, d.panelId)) {
+                        return;
+                    }
+                }
                 setDialogMode('panel');
                 loadPanelData(d.panelId);
                 setPos(computeFloatBesideEditPanel(PANEL_EDIT_WIDTH, 360));
@@ -614,6 +625,51 @@ export const FloatingOperationDialog: React.FC = () => {
                         )}
                     </>
                 )}
+            </div>
+
+            {/* Dolna belka akcji (Wersja 2 - Inspektor Live Edit z wyraźnym zakończeniem) */}
+            <div
+                style={{
+                    padding: '8px 10px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                }}
+            >
+                <button
+                    type="button"
+                    onClick={() => {
+                        setVisible(false);
+                        ConstraintHighlightOverlay.instance.clear();
+                    }}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        width: '100%',
+                        padding: '6px 12px',
+                        backgroundColor: '#10b981',
+                        border: '1px solid #059669',
+                        borderRadius: '5px',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#059669')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#10b981')}
+                    title={tx(srcTekst, 'float.done_title', TX_NS)}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span>{tx(srcTekst, 'float.done', TX_NS)}</span>
+                </button>
             </div>
         </div>
     );

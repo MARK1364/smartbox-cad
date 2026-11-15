@@ -15,6 +15,9 @@ import { parseFeatureFaceKey } from '../A4_smartpanel/native_core/cap-machining.
 import { openCadEditEntity } from '../src/floating-edit/cad-edit-entity.js';
 import { InteractiveGlcAxis } from '../S1_sketcher/interactive-glc-axis.js';
 import { UIController } from '../A1_core/ui-controller.js';
+import { PropertiesManager } from '../A1_core/properties.js';
+import { isPanelLike, isManualPanel, findOwningContainer } from '../A1_core/panel-like.js';
+import { syncSelectionHighlights } from '../A1_core/selection-highlight.js';
 
 declare const BABYLON: any;
 
@@ -49,6 +52,7 @@ export class Viewport {
     private _lastCubeBeta: number | null = null;
 
     isPanToolActive: boolean = false;
+    private _windowKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
     currentRenderMode: 'shaded' | 'edges' | 'wireframe' | 'xray' = 'edges';
     /** PMI / narzędzia: podwójny klik odwołuje narzędzie, nie zoomuje kamery. */
     suppressDoubleTapZoom = false;
@@ -178,7 +182,7 @@ export class Viewport {
         this.scene = new BABYLON.Scene(this.engine);
         this.scene.clearColor = new BABYLON.Color4(0.92, 0.93, 0.95, 1);
         this.scene.ambientColor = new BABYLON.Color3(0.15, 0.15, 0.15);
-        this.scene.doubleClickDelay = 450;
+        this.scene.doubleClickDelay = 600;
 
         // ─── Camera ──────────────────────────────────
         this.camera = new BABYLON.ArcRotateCamera(
@@ -195,8 +199,10 @@ export class Viewport {
         
         // Domyślny widok ortogonalny (ortho)
         this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+        this._updateCameraPlanes();
         this._updateOrthographicBounds();
         this._orthoZoomObserver = this.camera.onViewMatrixChangedObservable.add(() => {
+            this._updateCameraPlanes();
             this._updateOrthographicBounds();
             this._syncViewCube();
             this.requestRender(2);
@@ -222,6 +228,60 @@ export class Viewport {
         canvas.addEventListener('auxclick', preventSideNav);
         window.addEventListener('auxclick', preventSideNav);
 
+        canvas.addEventListener('dblclick', (evt) => {
+            if (this.suppressDoubleTapZoom) return;
+            const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) =>
+                m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.startsWith('faceGizmoSphere_') && m.name !== 'freeDragSphere'
+            );
+            if (pick && pick.hit && pick.pickedMesh) {
+                const meta = pick.pickedMesh.metadata || {};
+                let panelModel = meta.panelModel;
+                if (!panelModel && (meta.panelId || meta.nodeId)) {
+                    const pId = meta.panelId || meta.nodeId;
+                    const doc = ContextManager.instance.document;
+                    const node = doc?.findNode?.(pId);
+                    if (node?.domainData && (node.nodeType === 'PART' || isPanelLike(node.domainData))) {
+                        panelModel = node.domainData;
+                    }
+                }
+                if (!panelModel) {
+                    const doc = ContextManager.instance.document;
+                    if (doc) {
+                        const surf = probePanelSurfaceFromRay(this.scene, pick, doc);
+                        if (surf?.panelModel) panelModel = surf.panelModel;
+                    }
+                }
+                if (panelModel) {
+                    const doc = ContextManager.instance.document;
+                    if (doc) {
+                        doc.setActiveEntity(panelModel);
+                    }
+                    const facePicker = ContextManager.instance.facePicker;
+                    if (facePicker) {
+                        facePicker.clearSelection();
+                    }
+                    UIController.instance?.emitTree?.('select-part', { id: panelModel.id, uuid: panelModel.id });
+                    const panelViews = ContextManager.instance.panelViews;
+                    if (panelViews) {
+                        PropertiesManager.instance.inspectPanel(panelModel, panelViews, true);
+                    }
+                    syncSelectionHighlights({
+                        document: doc,
+                        panelViews,
+                        containerViews: ContextManager.instance.containerViews,
+                    } as any);
+                    const gizmoCtrl = ContextManager.instance.gizmoController;
+                    if (gizmoCtrl) {
+                        gizmoCtrl.updateFaceGizmo();
+                    }
+                }
+            } else {
+                if (this.isPanToolActive) {
+                    this.setPanToolActive(false);
+                }
+            }
+        });
+
         const rotationSensibility = 150; // Szybki obrót
         const panningSensibility = 0.15; // Prędkość przesuwania
         const zoomSensibility = 0.15; // Prędkość zooma
@@ -236,6 +296,15 @@ export class Viewport {
         let lastX = 0;
         let lastY = 0;
         let lastBayProbeTime = 0;
+
+        this._windowKeydownHandler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && this.isPanToolActive) {
+                this.setPanToolActive(false);
+            }
+        };
+        if (typeof window !== 'undefined') {
+            window.addEventListener('keydown', this._windowKeydownHandler);
+        }
 
         this.scene.onPointerObservable.add((pointerInfo) => {
             this.requestRender(2);
@@ -319,6 +388,13 @@ export class Viewport {
                         isPanning = true;
                         lastX = this.scene.pointerX;
                         lastY = this.scene.pointerY;
+                        if (this.scene) {
+                            this.scene.defaultCursor = 'grabbing';
+                            this.scene.hoverCursor = 'grabbing';
+                        }
+                        if (this.canvas) {
+                            this.canvas.style.cursor = 'grabbing';
+                        }
                         evt.preventDefault();
                     } else if (evt.altKey) { // Alt + LMB dla obrotu
                         isRotating = true;
@@ -345,7 +421,7 @@ export class Viewport {
                                 UIController.instance?.emitTree('contextmenu-tree-node', {
                                     type: 'glc',
                                     id: 'glc_origin',
-                                    name: 'Układ globalny (GLC)',
+                                    name: 'Podłoga bazowa',
                                     clientX: evt.clientX,
                                     clientY: evt.clientY,
                                 });
@@ -370,7 +446,18 @@ export class Viewport {
                 }
                 if (isRotating) this._endRotationSession();
                 isRotating = false;
-                isPanning = false;
+                if (isPanning) {
+                    isPanning = false;
+                    if (this.isPanToolActive) {
+                        if (this.scene) {
+                            this.scene.defaultCursor = 'all-scroll';
+                            this.scene.hoverCursor = 'all-scroll';
+                        }
+                        if (this.canvas) {
+                            this.canvas.style.cursor = 'all-scroll';
+                        }
+                    }
+                }
             } else if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERMOVE) {
                 const bayCtrl = ContextManager.instance.blokiBayController;
                 if (bayCtrl?.isPickerActive && !ContextManager.instance.activeReferencePicker) {
@@ -516,7 +603,10 @@ export class Viewport {
             } else if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOUBLETAP) {
                 if (this.suppressDoubleTapZoom) return;
                 const ray = this.scene.createPickingRay(this.scene.pointerX, this.scene.pointerY, BABYLON.Matrix.Identity(), this.camera);
-                const pickInfo = this.scene.pickWithRay(ray, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid'));
+                let pickInfo = this.scene.pickWithRay(ray, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.startsWith('faceGizmoSphere_') && m.name !== 'freeDragSphere');
+                if (!pickInfo || !pickInfo.hit || !pickInfo.pickedMesh) {
+                    pickInfo = this.scene.pick(this.scene.pointerX, this.scene.pointerY, (m: any) => m.isPickable && m.isVisible && !m.name?.includes('ground') && !m.name?.includes('grid') && !m.name?.startsWith('faceGizmoSphere_') && m.name !== 'freeDragSphere');
+                }
                 if (pickInfo && pickInfo.hit && pickInfo.pickedMesh) {
                     const mesh = pickInfo.pickedMesh;
                     const meta = mesh.metadata || {};
@@ -526,6 +616,23 @@ export class Viewport {
                     const parsed = parseFeatureFaceKey(name);
                     const featureId = meta.featureId || parsed?.featureId || (name.startsWith('feature_') ? name.substring(8) : null);
                     let panelModel = meta.panelModel;
+                    if (!panelModel && (meta.panelId || meta.nodeId)) {
+                        const pId = meta.panelId || meta.nodeId;
+                        const doc = ContextManager.instance.document;
+                        const node = doc?.findNode?.(pId);
+                        if (node?.domainData && (node.nodeType === 'PART' || isPanelLike(node.domainData))) {
+                            panelModel = node.domainData;
+                        }
+                    }
+                    if (!panelModel) {
+                        const doc = ContextManager.instance.document;
+                        if (doc) {
+                            const surf = probePanelSurfaceFromRay(this.scene, pickInfo, doc);
+                            if (surf?.panelModel) {
+                                panelModel = surf.panelModel;
+                            }
+                        }
+                    }
                     if (!panelModel && featureId) {
                         const doc = ContextManager.instance.document;
                         const panels = typeof (doc as any)?.getPanels === 'function' ? (doc as any).getPanels() : [];
@@ -546,8 +653,61 @@ export class Viewport {
                         return;
                     }
 
-                    // 2. Formatka / Płyta
+                    // 2. Formatka / Płyta (rozróżnienie: natywna formatka korpusu vs ręczna formatka SmartPanel)
                     if (panelModel) {
+                        const doc = ContextManager.instance.document;
+                        const isManual = isManualPanel(panelModel);
+                        const container = findOwningContainer(doc, panelModel);
+
+                        if (container && !isManual) {
+                            // Natywna formatka korpusu / bloku — dwuklik aktywuje formatkę, zielony obrys i jej gizma (push-pull offsetów).
+                            // Okno edycji korpusu NIE otwiera się z dwukliku (otwiera się wyłącznie po jednoznacznym PPM -> "Edytuj korpus").
+                            if (doc) {
+                                doc.setActiveEntity(panelModel);
+                            }
+                            const facePicker = ContextManager.instance.facePicker;
+                            if (facePicker) {
+                                facePicker.clearSelection();
+                            }
+                            UIController.instance?.emitTree?.('select-part', { id: panelModel.id, uuid: panelModel.id });
+                            const panelViews = ContextManager.instance.panelViews;
+                            if (panelViews) {
+                                PropertiesManager.instance.inspectPanel(panelModel, panelViews, true);
+                            }
+                            syncSelectionHighlights({
+                                document: doc,
+                                panelViews,
+                                containerViews: ContextManager.instance.containerViews,
+                            } as any);
+                            const gizmoCtrl = ContextManager.instance.gizmoController;
+                            if (gizmoCtrl) {
+                                gizmoCtrl.updateFaceGizmo();
+                            }
+                            return;
+                        }
+
+                        // Formatka ręczna / SmartPanel (lub swobodna formatka bez korpusu)
+                        if (doc) {
+                            doc.setActiveEntity(panelModel);
+                        }
+                        const facePicker = ContextManager.instance.facePicker;
+                        if (facePicker) {
+                            facePicker.clearSelection();
+                        }
+                        UIController.instance?.emitTree?.('select-part', { id: panelModel.id, uuid: panelModel.id });
+                        const panelViews = ContextManager.instance.panelViews;
+                        if (panelViews) {
+                            PropertiesManager.instance.inspectPanel(panelModel, panelViews, true);
+                        }
+                        syncSelectionHighlights({
+                            document: doc,
+                            panelViews,
+                            containerViews: ContextManager.instance.containerViews,
+                        } as any);
+                        const gizmoCtrl = ContextManager.instance.gizmoController;
+                        if (gizmoCtrl) {
+                            gizmoCtrl.updateFaceGizmo();
+                        }
                         openCadEditEntity({
                             entityId: panelModel.id,
                             kind: 'panel',
@@ -561,12 +721,28 @@ export class Viewport {
                     const containerId = meta.nodeId || meta.model?.id || meta.containerId;
                     if (containerId) {
                         const isHandle = meta.type === 'smartpart_handle';
-                        openCadEditEntity({
-                            entityId: containerId,
-                            kind: isHandle ? 'smartpart' : 'korpus',
-                            screenX: (evt as any)?.clientX ?? this.scene.pointerX,
-                            screenY: (evt as any)?.clientY ?? this.scene.pointerY,
-                        });
+                        if (isHandle) {
+                            openCadEditEntity({
+                                entityId: containerId,
+                                kind: 'smartpart',
+                                screenX: (evt as any)?.clientX ?? this.scene.pointerX,
+                                screenY: (evt as any)?.clientY ?? this.scene.pointerY,
+                            });
+                            return;
+                        }
+
+                        // Dla korpusu / kontenera meblowego dwuklik nie otwiera okna FloatingKorpusEdit —
+                        // okno edycji korpusu otwiera się wyłącznie po jednoznacznym PPM -> "Edytuj korpus".
+                        const doc = ContextManager.instance.document;
+                        const node = doc?.findNode?.(containerId);
+                        const containerModel = node?.domainData || meta.model;
+                        if (doc && containerModel) {
+                            doc.setActiveEntity(containerModel);
+                        }
+                        const gizmoCtrl = ContextManager.instance.gizmoController;
+                        if (gizmoCtrl) {
+                            gizmoCtrl.updateFaceGizmo();
+                        }
                         return;
                     }
 
@@ -578,6 +754,10 @@ export class Viewport {
                             Math.max(this.camera.radius * 0.5, 100),
                             pickInfo.pickedPoint
                         );
+                    }
+                } else {
+                    if (this.isPanToolActive) {
+                        this.setPanToolActive(false);
                     }
                 }
             }
@@ -600,9 +780,8 @@ export class Viewport {
             (window as any).logCamera = (window as any).getCamera;
         }
 
-        // Precyzja bufora głębokości (Z-Buffer): minZ = 10mm zapobiega przebijaniu krawędzi przez plecy 3mm z daleka
-        this.camera.minZ = this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA ? -5000 : 20.0;
-        this.camera.maxZ = 15000;
+        // Precyzja bufora głębokości (Z-Buffer): dynamiczne dopasowanie do centrum mebla
+        this._updateCameraPlanes();
         this.camera.lowerRadiusLimit = 0.5;
         this.camera.upperRadiusLimit = 20000;
         this.camera.inertia = 0; // CAD 1:1 - brak opóźnienia i bezwładności (SolidWorks style)
@@ -924,9 +1103,11 @@ export class Viewport {
                           name.startsWith('groove_') || 
                           name.startsWith('point_') ||
                           name.startsWith('feature_');
-        const isEdge = mesh.metadata?.type === 'edge' || 
+        const isEdgeBatch = mesh.metadata?.type === 'edge-batch';
+        const isEdge = !isEdgeBatch && (
+                       mesh.metadata?.type === 'edge' || 
                        name.startsWith('edge_') || 
-                       name.startsWith('lines_');
+                       name.startsWith('lines_'));
 
         if (isFace || isFeature) {
             if (currentMode === 'wireframe') {
@@ -944,10 +1125,19 @@ export class Viewport {
             }
         }
 
+        if (isEdgeBatch) {
+            mesh.setEnabled(true);
+            mesh.isVisible = true;
+            mesh.isPickable = false;
+        }
+
         if (isEdge) {
             mesh.setEnabled(true);
             mesh.isVisible = true;
             mesh.isPickable = true;
+            if (mesh.metadata?.pickOnly) {
+                mesh.visibility = 0;
+            }
         }
 
         const isConnectorSymbol = name.startsWith('c2_conn') || 
@@ -967,23 +1157,45 @@ export class Viewport {
     toggleCameraProjection() {
         if (this.camera.mode === BABYLON.Camera.PERSPECTIVE_CAMERA) {
             this.camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
-            this.camera.minZ = -5000;
-            this.camera.maxZ = 15000;
+            this._updateCameraPlanes();
             this._updateOrthographicBounds();
 
             this._orthoZoomObserver = this.camera.onViewMatrixChangedObservable.add(() => {
+                this._updateCameraPlanes();
                 this._updateOrthographicBounds();
             });
             return 'ortho';
         } else {
             this.camera.mode = BABYLON.Camera.PERSPECTIVE_CAMERA;
-            this.camera.minZ = 20.0;
-            this.camera.maxZ = 15000;
+            this._updateCameraPlanes();
             if (this._orthoZoomObserver) {
                 this.camera.onViewMatrixChangedObservable.remove(this._orthoZoomObserver);
                 this._orthoZoomObserver = null;
             }
             return 'perspective';
+        }
+    }
+
+    /**
+     * Ustawienia płaszczyzn odcinania kamery (minZ / maxZ).
+     * W rzucie ortogonalnym Z-buffer jest w 100% liniowy w całym zakresie,
+     * więc bezpieczny szeroki zakres w głąb sceny zapobiega ucinaniu siatki i otoczenia.
+     */
+    _updateCameraPlanes() {
+        if (!this.camera) return;
+        const radius = Math.max(this.camera.radius || 1500, 100);
+
+        if (this.camera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+            // W ortho głębokość jest w pełni liniowa — bezpieczny szeroki bufor
+            const span = Math.max(10000, radius * 2.5);
+            this.camera.minZ = -span;
+            this.camera.maxZ = span;
+        } else {
+            // W perspektywie minZ rośnie wraz z oddalaniem, a maxZ ma duży zapas
+            const near = Math.max(20.0, radius * 0.1);
+            const far = Math.max(30000, radius * 4.0);
+            this.camera.minZ = near;
+            this.camera.maxZ = far;
         }
     }
 
@@ -1127,8 +1339,15 @@ export class Viewport {
 
     setPanToolActive(active: boolean) {
         this.isPanToolActive = active;
+        if (this.scene) {
+            this.scene.defaultCursor = active ? 'all-scroll' : '';
+            this.scene.hoverCursor = active ? 'all-scroll' : 'pointer';
+        }
         if (this.canvas) {
-            this.canvas.style.cursor = active ? 'grab' : 'default';
+            this.canvas.style.cursor = active ? 'all-scroll' : 'default';
+        }
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('cad-pan-tool-changed', { detail: { active } }));
         }
     }
 
@@ -1140,6 +1359,10 @@ export class Viewport {
     dispose() {
         if (this._orthoZoomObserver && this.camera) {
             this.camera.onViewMatrixChangedObservable.remove(this._orthoZoomObserver);
+        }
+        if (this._windowKeydownHandler && typeof window !== 'undefined') {
+            window.removeEventListener('keydown', this._windowKeydownHandler);
+            this._windowKeydownHandler = null;
         }
         this.engine.dispose();
     }

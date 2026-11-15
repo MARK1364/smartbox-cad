@@ -1,12 +1,6 @@
 /**
  * A2_bloki / sinks — index.ts
+ * Zgodność wsteczna: moduł zlewu został przeniesiony do A6_agd/sinks.
  */
 
-export * from './sink-types.js';
-export * from './sink-cutout.js';
-export * from './sink-mesh.js';
-export * from './sink-commands.js';
-export * from './sink-apply.js';
-export * from './sink-visualizer.js';
-export * from './sink-edit-panel.js';
-export * from './sink-dim-gizmo.js';
+export * from '../../A6_agd/sinks/index.js';

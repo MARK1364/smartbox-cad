@@ -7,7 +7,8 @@
  * Kontakt na X/Z = czoło wieńca.
  */
 
-import rulesJson from './connectors_3_rules.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const rulesJson = getModuleRules('connectors_3_rules');
 import type { Vec3Tuple } from './connectors-types.js';
 
 export interface DrillSpec {

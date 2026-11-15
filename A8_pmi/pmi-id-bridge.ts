@@ -357,7 +357,7 @@ function currentLocalPoint(scene: any, ref: PMIAnchorRef): Vec3 | null {
 function readNodeId(mesh: any): string {
     const meta = mesh?.metadata;
     if (!meta) return '';
-    return meta.panelModel?.id || meta.containerModel?.id || meta.nodeId || '';
+    return meta.panelModel?.id || meta.containerModel?.id || meta.nodeId || meta.id || meta.cadNode?.id || '';
 }
 
 function readKindAndKey(mesh: any): { kind: PMIAnchorKind; subKey: string } {
@@ -367,6 +367,7 @@ function readKindAndKey(mesh: any): { kind: PMIAnchorKind; subKey: string } {
     if (meta.type === 'vertex') return { kind: 'VERTEX', subKey: String(meta.cornerIndex ?? '') };
     if (meta.type === 'edge') return { kind: 'EDGE', subKey: String(meta.edgeKey ?? '') };
     if (meta.type === 'feature') return { kind: 'FEATURE', subKey: String(meta.featureId ?? '') };
+    if (meta.type === 'hardware') return { kind: 'FEATURE', subKey: String(meta.hardwareId ?? meta.id ?? '') };
     if (meta.faceName) return { kind: 'FACE', subKey: String(meta.faceName) };
 
     return { kind: 'FREE', subKey: '' };

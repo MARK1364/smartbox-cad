@@ -33,9 +33,10 @@ function pushPlateHoles(
     contactWorldZ: number,
     hingeId: string,
     faceWidth?: number,
-    faceHeight?: number
+    faceHeight?: number,
+    plateId?: string
 ): void {
-    const corpusHoles = hingeCorpusHolesMm(hingeId);
+    const corpusHoles = hingeCorpusHolesMm(hingeId, plateId);
     const templateId = hingeTemplateId(hingeId);
 
     corpusHoles.forEach((hole, idx) => {
@@ -107,7 +108,7 @@ export function buildFlapsDrillings(document: ProjectDocument, cabinetContainerI
 
     const sbContainers = containers.filter((c: any) => {
         const p = c.domainData?.generatorParams;
-        if (!p || !(p.type === 'blok_flaps' || p.boxType === 'FLAPS') || c.domainData?.visible === false) return false;
+        if (!p || !(p.type === 'blok_flaps' || p.boxType === 'FLAPS') || c.frozen || c.domainData?.frozen === true) return false;
         if (cabinetContainerId) {
             return p.parentContainerId === cabinetNode.id || c.parent?.id === cabinetNode.id || isChildOfCabinet(c);
         }
@@ -235,7 +236,8 @@ export function buildFlapsDrillings(document: ProjectDocument, cabinetContainerI
                 contactWorldZ,
                 hingeId,
                 faceInfo.width,
-                faceInfo.height
+                faceInfo.height,
+                (p as any).typ_prowadnika
             );
         }
 

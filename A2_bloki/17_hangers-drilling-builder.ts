@@ -49,7 +49,7 @@ export function buildHangersDrillings(
         if (!gp) return false;
         const isHanger = gp.boxType === 'HANGERS' || gp.type === 'smartpart_hangers' || gp.partType === 'HANGERS';
         if (!isHanger) return false;
-        if (c.domainData?.visible === false) return false;
+        if (c.frozen || c.domainData?.frozen === true) return false;
         if (cabinetContainerId) {
             return gp.parentContainerId === cabinetContainerId || c.parent?.id === cabinetContainerId;
         }

@@ -78,7 +78,14 @@ import { bindOperationEdge } from '../o1_operacji/operacje-apply.js';
 import { validatePanelDimensionsNm } from './native_core/panel-dimensions.js';
 import { dimHandleUv, dragHandleAlongAxis, magnetEdgeIfAtBound, uvOnUEdge, uvOnVEdge, isUEdge, isVEdge } from '../o1_operacji/operacje-placement.js';
 import { HardwareLoader } from '../B1_biblioteka/hardware-loader.js';
-import { parseFeatureFaceKey, featureIdFromBrepEdgeKey } from './native_core/cap-machining.js';
+import { parseFeatureFaceKey, featureIdFromBrepEdgeKey, expandHoleCenters } from './native_core/cap-machining.js';
+import {
+    EDGE_BATCH_WIDTH,
+    EDGE_BATCH_WIDTH_SELECTED,
+    buildPanelEdgeBatch,
+    hasGreasedLineSupport,
+    setPanelEdgeBatchStyle,
+} from './batched-edges.js';
 
 // Centralny cache tekstur dla sceny Babylon (zapobiega duplikowaniu tekstur 4K w pamięci VRAM)
 const panelTextureCache = new Map<string, any>();
@@ -142,6 +149,10 @@ export class PanelView {
     faceMaterials: Record<string, any> = {};
     _featureMarkers: any[] = [];
     _edgeMeshes: any[] = [];
+    /** Jeden GreasedLine z widocznym obrysem B-rep (tryb wsadowy, patrz batched-edges.ts). */
+    _edgeBatchMesh: any = null;
+    /** Czy bieżąca geometria używa obrysu wsadowego (EdgesRenderer na ścianach głównych wyłączony). */
+    _useEdgeBatch = false;
     _vertexSpheres: any[] = [];
     _lcsNode: any = null;
     _modelChangeHandler: any = null;
@@ -150,6 +161,8 @@ export class PanelView {
     lastHeight: number = 0;
     lastThickness: number = 0;
     lastFeaturesFingerprint: string = '';
+    lastPanelForm: string = '';
+    lastFrameTemplateId: string = '';
     _dimHandleDragging: boolean = false;
     _isSelected: boolean = false;
 
@@ -188,6 +201,9 @@ export class PanelView {
                 this._updateTransform();
                 this._buildLCSNode();
             } else if (type === 'material' || type === 'edgeBanding') {
+                if (type === 'edgeBanding' && computePanelFeaturesFingerprint(this.model) !== this.lastFeaturesFingerprint) {
+                    this._rebuildMeshes();
+                }
                 this._updateMaterialAppearance();
             } else if (type === 'lcsVisibility') {
                 this.setLcsVisible(data?.visible ?? true);
@@ -251,6 +267,11 @@ export class PanelView {
      * Aktualizuje geometrię z natywnego buildera (ściany, krawędzie, wierzchołki).
      */
     updateMesh(meshData) {
+        if (typeof this.model?.isAluFrame === 'function' && this.model.isAluFrame()) {
+            this._rebuildAluFrame();
+            return;
+        }
+
         if (isCylindricalPart(this.model)) {
             const cyl = this.faceMeshes['cylinder_body'];
             if (!cyl || cyl.isDisposed()) {
@@ -262,6 +283,8 @@ export class PanelView {
         this._disposeCurrentMeshes();
 
         const isOutlinePanel = Object.keys(meshData).some((k) => k.startsWith('OUTLINE_SIDE_'));
+        this._useEdgeBatch = hasGreasedLineSupport()
+            && Array.isArray(meshData.edges) && meshData.edges.length > 0;
 
         for (const [faceName, dataRaw] of Object.entries(meshData)) {
             const data = dataRaw as any;
@@ -365,12 +388,14 @@ export class PanelView {
             mesh.parent = this.root;
             // Formatka L (outline): krawędzie B-rep (CreateLines) są SSOT —
             // Babylon enableEdgesRendering na kapach/ściankach dubluje obrys na rzucie z góry/dołu.
-            if (!isOutlinePanel && typeof mesh.enableEdgesRendering === 'function') {
+            // Tryb wsadowy: obrys B-rep pokrywa ściany główne oraz cechy (wpusty/kieszenie/wycięcia).
+            const edgesCoveredByBatch = this._useEdgeBatch;
+            if (!isOutlinePanel && !edgesCoveredByBatch && typeof mesh.enableEdgesRendering === 'function') {
                 mesh.enableEdgesRendering();
-                mesh.edgesWidth = 1.5;
+                mesh.edgesWidth = 1.0;
                 mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                 if (mesh.edgesRenderer?.lineShader) {
-                    mesh.edgesRenderer.lineShader.zOffset = -1.5;
+                    mesh.edgesRenderer.lineShader.zOffset = -0.2;
                 }
             }
 
@@ -397,7 +422,7 @@ export class PanelView {
                 mat.specularPower = 64;
                 mat.backFaceCulling = false;
                 mat.twoSidedLighting = true;
-                mat.zOffset = 1.0;
+                mat.zOffset = 0;
                 this.faceMaterials[faceName] = mat;
             }
             
@@ -467,6 +492,7 @@ export class PanelView {
         // Krawędzie B-rep (pick / PMI)
         if (meshData.edges && meshData.edges.length > 0) {
             this._edgeMeshes = [];
+            const batchLines: number[][][] = [];
             
             for (let i = 0; i < meshData.edges.length; i++) {
                 const edgeData = meshData.edges[i];
@@ -484,7 +510,7 @@ export class PanelView {
                     ? new BABYLON.Color3(0.2, 1.0, 0.4)
                     : (this.model?.frozen ? new BABYLON.Color3(0.2, 0.65, 0.95) : new BABYLON.Color3(0.08, 0.08, 0.08));
                 if (edgeMesh.material) {
-                    edgeMesh.material.zOffset = this._isSelected ? -2.5 : -1.5;
+                    edgeMesh.material.zOffset = this._isSelected ? -0.5 : -0.2;
                 }
                 edgeMesh.intersectionThreshold = 1.5; // Fizyczny margines 1.5mm (zostawia 15mm luzu na formatce 18mm)
 
@@ -498,10 +524,15 @@ export class PanelView {
                 }
                 
                 edgeMesh.isPickable = true;
-                // Obrys dołu kapu = ten sam XY co góra → na rzucie z góry/dołu podwójna krawędź.
-                // Zostaje do pick/PMI (visibility 0), widoczny jest outline_top_*.
-                if (String(edgeKey).startsWith('outline_bottom_')) {
+                // Tryb wsadowy: każda linia B-rep (wszystkie 12 krawędzi prostopadłościanu + cechy)
+                // trafia do batchLines, a pojedyncze CreateLines służą wyłącznie jako cele pickingu.
+                const pickOnly = this._useEdgeBatch;
+                if (pickOnly) {
                     edgeMesh.visibility = 0;
+                    edgeMesh.doNotSyncBoundingInfo = true;
+                }
+                if (this._useEdgeBatch) {
+                    batchLines.push(pts);
                 }
                 const featureId = featureIdFromBrepEdgeKey(String(edgeKey));
                 edgeMesh.metadata = { 
@@ -512,11 +543,32 @@ export class PanelView {
                     alias: edgeData.alias || null,
                     brepPoints: pts, // Dokładne matematyczne punkty B-rep z modelu CAD
                     ...(featureId ? { featureId } : {}),
+                    ...(pickOnly ? { pickOnly: true } : {}),
                     baseColor: new BABYLON.Color3(0.1, 0.1, 0.1),
                     baseDiffuse: new BABYLON.Color3(0.15, 0.1, 0.05)
                 };
                 
                 this._edgeMeshes.push(edgeMesh);
+            }
+
+            if (this._useEdgeBatch) {
+                this._edgeBatchMesh = buildPanelEdgeBatch(
+                    this.scene,
+                    `edge_batch_${this.model.id}`,
+                    batchLines,
+                    this._edgeLineColor(),
+                    this._isSelected ? EDGE_BATCH_WIDTH_SELECTED : EDGE_BATCH_WIDTH,
+                );
+                if (this._edgeBatchMesh) {
+                    this._edgeBatchMesh.parent = this.root;
+                    this._edgeBatchMesh.metadata = {
+                        ...(this._edgeBatchMesh.metadata || {}),
+                        panelModel: this.model,
+                    };
+                    if (this._isSelected) {
+                        setPanelEdgeBatchStyle(this._edgeBatchMesh, this._edgeLineColor(), EDGE_BATCH_WIDTH_SELECTED, -0.5);
+                    }
+                }
             }
         }
 
@@ -598,6 +650,8 @@ export class PanelView {
         (this as any).lastWidth = this.model?.width;
         (this as any).lastHeight = this.model?.height;
         (this as any).lastThickness = this.model?.thickness;
+        this.lastPanelForm = this.model?.panelForm || 'SOLID';
+        this.lastFrameTemplateId = this.model?.frameTemplateId || '';
 
         // === Zapisz dane B-rep (SSOT dla PMI) ===
         this._storeBrepGeometry(meshData);
@@ -699,7 +753,23 @@ export class PanelView {
             this._edgeMeshes.forEach((m) => m.dispose());
             this._edgeMeshes = [];
         }
+        this._disposeEdgeBatch();
         // _vertexSpheres są ponownie pozycjonowane w updateMesh, a niszczone tylko gdy zmienia się liczba wierzchołków lub w dispose()
+    }
+
+    _disposeEdgeBatch() {
+        if (this._edgeBatchMesh) {
+            this._edgeBatchMesh.dispose?.(false, false);
+            this._edgeBatchMesh = null;
+        }
+    }
+
+    /** Kolor obrysu: zaznaczona / zamrożona / zwykła formatka. */
+    _edgeLineColor() {
+        if (this._isSelected) return new BABYLON.Color3(0.2, 1.0, 0.4);
+        return this.model?.frozen
+            ? new BABYLON.Color3(0.2, 0.65, 0.95)
+            : new BABYLON.Color3(0.08, 0.08, 0.08);
     }
 
     _updateMaterialAppearance() {
@@ -739,6 +809,7 @@ export class PanelView {
         };
 
         const eb = this.model.edgeBanding || this.model.custom_properties?.edge_banding || {};
+        const showEdgeBanding = Boolean(ContextManager.instance?.edgeBandingVisible);
 
         for (const [faceName, mesh] of Object.entries<any>(this.faceMeshes)) {
             if (!mesh) continue;
@@ -750,6 +821,10 @@ export class PanelView {
             const outlineEdgeKey = mesh.metadata?.outlineEdgeKey as string | undefined;
             const edgeKey = edgeKeyMap[faceName] || outlineEdgeKey || null;
             const isEdgeFace = !!edgeKey || isOutlineEdgeFace;
+
+            mat.emissiveColor = this.model?.frozen
+                ? new BABYLON.Color3(0.03, 0.07, 0.14)
+                : BABYLON.Color3.Black();
 
             if (isFeature) {
                 if (isCnc || isArchWall || matData?.isTransparent) {
@@ -766,11 +841,11 @@ export class PanelView {
                 mesh.edgesWidth = 1.5;
                 if (mat.diffuseTexture) mat.diffuseTexture = null;
             } else if (isEdgeFace) {
-                const edgeSlot = edgeKey ? eb[edgeKey] : null;
-                const isEdgeBanded = edgeKey && (
+                const edgeSlot = edgeKey ? (eb[edgeKey] || eb[faceName]) : null;
+                const isEdgeBanded = Boolean(edgeKey && (
                     edgeSlot?.active === true ||
                     (edgeSlot?.active !== false && edgeSlot?.type_id && edgeSlot.type_id !== 'none')
-                );
+                ));
                 
                 if (isCnc || isArchWall || String(this.model?.role || '').toUpperCase().startsWith('APPLIANCE') || this.model?.custom_properties?.domain === 'appliance_part') {
                     // CNC / ściany architektoniczne: jednolity kolor (bez ciemnego rdzenia)
@@ -780,19 +855,33 @@ export class PanelView {
                     mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                     mesh.edgesWidth = 1.5;
                     if (mat.diffuseTexture) mat.diffuseTexture = null;
+                } else if (showEdgeBanding && isEdgeBanded) {
+                    // Tryb "Podgląd -> Obrzeża": wyraźne podświetlenie wyłącznie oklejonych krawędzi (PVC/ABS)
+                    mat.diffuseColor = new BABYLON.Color3(0.96, 0.42, 0.08);
+                    mat.emissiveColor = new BABYLON.Color3(0.24, 0.09, 0.01);
+                    mat.alpha = alpha;
+                    mat.specularPower = 56;
+                    mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+                    if (mat.diffuseTexture) mat.diffuseTexture = null;
                 } else if (isEdgeBanded) {
-                    // Krawędź oklejona (PVC/ABS) — kolor dekoru płyty / obrzeża
-                    const edgeColor = edgeSlot.color || baseColor;
+                    // Krawędź oklejona (poza podglądem obrzeży): kolor obrzeża lub kolor bazowy formatki
+                    const edgeColor = edgeSlot?.color || baseColor;
                     mat.diffuseColor = new BABYLON.Color3(edgeColor.r, edgeColor.g, edgeColor.b);
                     mat.alpha = alpha;
                     mat.specularPower = 56;
                     mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                     if (mat.diffuseTexture) mat.diffuseTexture = null;
                 } else {
-                    // Krawędź nieoklejona w trybie meblowym CAD — ciemny brązowy surowy rdzeń płyty wiórowej
-                    mat.diffuseColor = new BABYLON.Color3(0.32, 0.20, 0.12);
-                    mat.alpha = 1.0;
-                    mat.specularPower = 4;
+                    // Krawędź bez obrzeża: surowy brązowy rdzeń płyty (jak w realu, identyczny jak rdzeń we wpustach/otworach)
+                    if (matData?.isTransparent) {
+                        mat.diffuseColor = new BABYLON.Color3(baseColor.r, baseColor.g, baseColor.b);
+                        mat.alpha = alpha;
+                        mat.specularPower = specularPower;
+                    } else {
+                        mat.diffuseColor = new BABYLON.Color3(0.32, 0.20, 0.12);
+                        mat.alpha = 1.0;
+                        mat.specularPower = 4;
+                    }
                     mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                     if (mat.diffuseTexture) mat.diffuseTexture = null;
                 }
@@ -830,6 +919,7 @@ export class PanelView {
                 mesh.edgesRenderer.lineShader.zOffset = this._isSelected ? -2.5 : -1.5;
             }
             if (mesh.metadata) {
+                mesh.metadata.baseColor = mat.emissiveColor.clone();
                 mesh.metadata.baseDiffuse = mat.diffuseColor.clone();
             }
         }
@@ -1057,6 +1147,12 @@ export class PanelView {
 
         this.renderFeatures();
         this._storeBrepGeometry(meshData);
+        this.lastPanelForm = this.model?.panelForm || 'ALU_FRAME';
+        this.lastFrameTemplateId = this.model?.frameTemplateId || '';
+        this.lastWidth = this.model?.width;
+        this.lastHeight = this.model?.height;
+        this.lastThickness = this.model?.thickness;
+        this.lastFeaturesFingerprint = computePanelFeaturesFingerprint(this.model);
     }
 
     /**
@@ -1223,24 +1319,27 @@ export class PanelView {
             if (matches) {
                 matchCount++;
                 if (m.color !== undefined) {
-                    m.color = highlight ? highlightColor : defaultLineColor;
+                    const isBottomRing = String(m.name || '').startsWith('hole_bottom_ring_');
+                    const baseRingColor = isBottomRing
+                        ? (isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.08, 0.08, 0.1))
+                        : defaultLineColor;
+                    m.color = highlight ? highlightColor : baseRingColor;
                 }
-                if (m.material) {
+                if (m.material && String(m.name || '').startsWith('hole_cyl_')) {
                     if (highlight) {
-                        m.material.emissiveColor = highlightColor;
-                        m.material.diffuseColor = highlightColor;
+                        const hlMat = this._getSharedHoleHighlightMaterial();
+                        m.material = hlMat;
                     } else {
-                        m.material.emissiveColor = BABYLON.Color3.Black();
-                        m.material.diffuseColor = isCnc ? new BABYLON.Color3(0.12, 0.12, 0.12) : new BABYLON.Color3(0.2, 0.2, 0.25);
+                        m.material = this._getSharedHoleMaterial(isCnc);
                     }
                 }
-                if (typeof m.enableEdgesRendering === 'function') {
+                if (typeof m.enableEdgesRendering === 'function' && String(m.name || '').startsWith('hole_cyl_')) {
                     if (highlight) {
                         m.edgesColor = new BABYLON.Color4(0.0, 0.85, 1.0, 1.0);
                         m.edgesWidth = 2.5;
                     } else {
                         m.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
-                        m.edgesWidth = 1.0;
+                        m.edgesWidth = 1.2;
                     }
                 }
             }
@@ -1260,15 +1359,20 @@ export class PanelView {
         for (const m of (this._featureMarkers || [])) {
             if (!m || m.isDisposed()) continue;
             if (m.color !== undefined) {
-                m.color = defaultLineColor;
+                const isBottomRing = String(m.name || '').startsWith('hole_bottom_ring_');
+                const isCross = String(m.name || '').startsWith('hole_cross');
+                m.color = isBottomRing
+                    ? (isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.08, 0.08, 0.1))
+                    : isCross
+                        ? (isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(1, 0.5, 0.1))
+                        : defaultLineColor;
             }
-            if (m.material) {
-                m.material.emissiveColor = BABYLON.Color3.Black();
-                m.material.diffuseColor = isCnc ? new BABYLON.Color3(0.12, 0.12, 0.12) : new BABYLON.Color3(0.2, 0.2, 0.25);
+            if (m.material && String(m.name || '').startsWith('hole_cyl_')) {
+                m.material = this._getSharedHoleMaterial(isCnc);
             }
-            if (typeof m.enableEdgesRendering === 'function') {
+            if (typeof m.enableEdgesRendering === 'function' && String(m.name || '').startsWith('hole_cyl_')) {
                 m.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
-                m.edgesWidth = 1.0;
+                m.edgesWidth = 1.2;
             }
         }
 
@@ -1277,16 +1381,38 @@ export class PanelView {
 
     // ─── Feature visualization ───────────────────────
 
+    _getSharedHoleHighlightMaterial(): any {
+        const key = '__sharedHoleMatHighlight';
+        let mat = this.scene?.getMaterialByName ? this.scene.getMaterialByName(key) : null;
+        if (!mat) {
+            mat = new BABYLON.StandardMaterial(key, this.scene);
+            mat.diffuseColor = new BABYLON.Color3(0.0, 0.85, 1.0);
+            mat.emissiveColor = new BABYLON.Color3(0.0, 0.65, 0.85);
+            mat.alpha = 1.0;
+            mat.backFaceCulling = true;
+            mat.twoSidedLighting = true;
+            mat.isSharedMaterial = true;
+            mat.zOffset = -2.0;
+        }
+        return mat;
+    }
+
     _getSharedHoleMaterial(isCnc: boolean): any {
         const key = isCnc ? '__sharedHoleMatCnc' : '__sharedHoleMatNormal';
         let mat = this.scene?.getMaterialByName ? this.scene.getMaterialByName(key) : null;
         if (!mat) {
             mat = new BABYLON.StandardMaterial(key, this.scene);
-            mat.diffuseColor = isCnc ? new BABYLON.Color3(0.12, 0.12, 0.12) : new BABYLON.Color3(0.2, 0.2, 0.25);
-            mat.emissiveColor = BABYLON.Color3.Black();
-            mat.alpha = 0.95;
-            mat.backFaceCulling = false;
+            mat.diffuseColor = isCnc ? new BABYLON.Color3(0.14, 0.14, 0.14) : new BABYLON.Color3(0.22, 0.24, 0.28);
+            mat.specularColor = new BABYLON.Color3(0.12, 0.12, 0.15);
+            mat.specularPower = 32;
+            mat.emissiveColor = isCnc ? new BABYLON.Color3(0.03, 0.03, 0.03) : new BABYLON.Color3(0.05, 0.05, 0.07);
+            mat.alpha = 1.0;
+            // sideOrientation: DOUBLESIDE na walcu posiada już duplikaty ścian z odwróconymi normalnymi;
+            // backFaceCulling = true eliminuje nakładanie ścian zewnętrznych (czarnych od wewnątrz) na wewnętrzne.
+            mat.backFaceCulling = true;
+            mat.twoSidedLighting = true;
             mat.isSharedMaterial = true;
+            mat.zOffset = -2.0;
         }
         return mat;
     }
@@ -1393,8 +1519,10 @@ export class PanelView {
             }
 
             const hwLoader = HardwareLoader.instance;
+            const plateHeight = Number(params.plate_height_mm ?? params.plateHeight ?? 0);
+            const plateId = typeof params.plate_id === 'string' ? params.plate_id : undefined;
             if (hwLoader.hasTemplate(hingeId)) {
-                const hingeMesh = hwLoader.createHingeInstance(hingeId, this.scene);
+                const hingeMesh = hwLoader.createHingeInstance(hingeId, this.scene, { plateHeight, plateId, side: orientation });
                 if (hingeMesh) {
                     hingeMesh.position = this._facePoint(faceData, u, v, 0);
                     hwLoader.alignHinge(hingeMesh, faceData, orientation);
@@ -1462,65 +1590,108 @@ export class PanelView {
             depth: holeDepth
         };
 
-        // Okrąg — cienka, czysta linia wektorowa CAD (CreateLines) zamiast grubej bryły 3D Torus
-        const circlePts: any[] = [];
+        const panelThicknessMm = this.model?.thickness ? nmToMm(this.model.thickness) : 18;
+        const isHoleThrough = params.through === true
+            || params.kind === 'THROUGH'
+            || (String(faceName || '').includes('FACE_Z') && holeDepth >= panelThicknessMm - 0.05);
+
+        // Delikatny luz promieniowy (98.5% < cos(pi/24) = 99.14%) i osiowy (-0.08 mm) gwarantuje,
+        // że ciemny walec symbolu 3D jest zawsze bliżej kamery niż jasne ścianki/denko B-rep w FACE_Z_PLUS.
+        const cylDia = Math.max(0.5, holeDia * 0.985);
+        const cylRadius = cylDia / 2;
+        const cylDepth = isHoleThrough ? holeDepth : Math.max(0.5, holeDepth - 0.08);
+        const hasUV = hasFeatureParamsUV(feature.params);
+        const holeCenters = hasUV ? expandHoleCenters(params) : [{ cx: u, cy: v, suffix: '' }];
         const segCount = 24;
-        for (let i = 0; i <= segCount; i++) {
-            const angle = (i / segCount) * Math.PI * 2;
-            const uPt = u + Math.cos(angle) * radius;
-            const vPt = v + Math.sin(angle) * radius;
-            circlePts.push(this._facePoint(faceData, uPt, vPt, 0.1 + clearance));
-        }
-        const circle = BABYLON.MeshBuilder.CreateLines(`hole_ring_${feature.id}`, {
-            points: circlePts
-        }, this.scene);
-        circle.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.95, 0.3, 0.1);
-        circle.isPickable = true;
-        circle.parent = this.root;
-        circle.metadata = holeMeta;
-        this._featureMarkers.push(circle);
 
-        // Cylinder reprezentujący czarny walec otworu (symbole walce CAD)
-        const cyl = BABYLON.MeshBuilder.CreateCylinder(`hole_cyl_${feature.id}`, {
-            diameter: holeDia,
-            height: holeDepth,
-            tessellation: 16
-        }, this.scene);
-        
-        if (hasFeatureParamsUV(feature.params)) {
-            // W głąb płyty (−normal), jak mesh_builder.localTo3D. +normal wystawiał walec
-            // na zewnątrz (np. z boczka w stronę wieńca).
-            cyl.position = this._facePoint(faceData, u, v, -(holeDepth / 2) + clearance);
-            this._orientToFace(cyl, faceData);
-        } else {
-            cyl.position = pos;
-        }
+        for (const { cx, cy, suffix } of holeCenters) {
+            // Okrąg górny — cienka, czysta linia wektorowa CAD (CreateLines)
+            const circlePts: any[] = [];
+            for (let i = 0; i <= segCount; i++) {
+                const angle = (i / segCount) * Math.PI * 2;
+                const uPt = cx + Math.cos(angle) * radius;
+                const vPt = cy + Math.sin(angle) * radius;
+                circlePts.push(this._facePoint(faceData, uPt, vPt, 0.1 + clearance));
+            }
+            const circle = BABYLON.MeshBuilder.CreateLines(`hole_ring_${feature.id}${suffix}`, {
+                points: circlePts
+            }, this.scene);
+            circle.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.95, 0.3, 0.1);
+            circle.isPickable = true;
+            circle.parent = this.root;
+            circle.metadata = holeMeta;
+            this._featureMarkers.push(circle);
 
-        cyl.material = this._getSharedHoleMaterial(isCnc);
-        cyl.metadata = { ...holeMeta, isSharedMaterial: true };
-        cyl.isPickable = true;
-        cyl.parent = this.root;
-        this._featureMarkers.push(cyl);
+            // Okrąg denka otworu nieprzelotowego — wizualizuje zamknięty koniec walca i głębokość otworu
+            if (!isHoleThrough && hasUV) {
+                const bottomPts: any[] = [];
+                for (let i = 0; i <= segCount; i++) {
+                    const angle = (i / segCount) * Math.PI * 2;
+                    const uPt = cx + Math.cos(angle) * cylRadius;
+                    const vPt = cy + Math.sin(angle) * cylRadius;
+                    bottomPts.push(this._facePoint(faceData, uPt, vPt, -cylDepth + clearance));
+                }
+                const bottomRing = BABYLON.MeshBuilder.CreateLines(`hole_bottom_ring_${feature.id}${suffix}`, {
+                    points: bottomPts
+                }, this.scene);
+                bottomRing.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(0.08, 0.08, 0.1);
+                bottomRing.isPickable = false;
+                bottomRing.parent = this.root;
+                bottomRing.metadata = holeMeta;
+                this._featureMarkers.push(bottomRing);
+            }
 
-        // Krzyżyk w środku otworu — cienkie linie wektorowe CAD
-        const crossSize = Math.max(1, radius * 0.7);
-        const l1 = [
-            this._facePoint(faceData, u - crossSize, v, 0.15 + clearance),
-            this._facePoint(faceData, u + crossSize, v, 0.15 + clearance)
-        ];
-        const l2 = [
-            this._facePoint(faceData, u, v - crossSize, 0.15 + clearance),
-            this._facePoint(faceData, u, v + crossSize, 0.15 + clearance)
-        ];
-        if (allCrossLines) {
-            allCrossLines.push(l1, l2);
-        } else {
-            const cross = BABYLON.MeshBuilder.CreateLineSystem(`hole_cross_${feature.id}`, { lines: [l1, l2] }, this.scene);
-            cross.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(1, 0.5, 0.1);
-            cross.isPickable = false;
-            cross.parent = this.root;
-            cross.metadata = holeMeta;
-            this._featureMarkers.push(cross);
+            // Cylinder reprezentujący walec otworu (symbole walce CAD z jednym końcem / denkiem).
+            // BACKSIDE + backFaceCulling=true: ścianka przednia (bliższa kamerze) jest odrzucana sprzętowo,
+            // a wewnętrzna ścianka tylna oraz denko (CAP_START) mają normalne skierowane w stronę obserwatora.
+            const cyl = BABYLON.MeshBuilder.CreateCylinder(`hole_cyl_${feature.id}${suffix}`, {
+                diameter: cylDia,
+                height: cylDepth,
+                tessellation: 24,
+                cap: isHoleThrough ? (BABYLON.Mesh?.NO_CAP ?? 0) : (BABYLON.Mesh?.CAP_START ?? 1),
+                sideOrientation: BABYLON.Mesh?.BACKSIDE ?? 1
+            }, this.scene);
+
+            if (hasUV) {
+                // W głąb płyty (−normal), jak mesh_builder.localTo3D. +normal wystawiał walec
+                // na zewnątrz (np. z boczka w stronę wieńca).
+                cyl.position = this._facePoint(faceData, cx, cy, -(cylDepth / 2) + clearance);
+                this._orientToFace(cyl, faceData);
+            } else {
+                cyl.position = pos;
+            }
+
+            cyl.material = this._getSharedHoleMaterial(isCnc);
+            cyl.metadata = { ...holeMeta, isSharedMaterial: true };
+            cyl.isPickable = true;
+            if (typeof cyl.enableEdgesRendering === 'function') {
+                cyl.enableEdgesRendering();
+                cyl.edgesWidth = 1.2;
+                cyl.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
+            }
+            cyl.parent = this.root;
+            this._featureMarkers.push(cyl);
+
+            // Krzyżyk w środku otworu — cienkie linie wektorowe CAD
+            const crossSize = Math.max(1, radius * 0.7);
+            const l1 = [
+                this._facePoint(faceData, cx - crossSize, cy, 0.15 + clearance),
+                this._facePoint(faceData, cx + crossSize, cy, 0.15 + clearance)
+            ];
+            const l2 = [
+                this._facePoint(faceData, cx, cy - crossSize, 0.15 + clearance),
+                this._facePoint(faceData, cx, cy + crossSize, 0.15 + clearance)
+            ];
+            if (allCrossLines) {
+                allCrossLines.push(l1, l2);
+            } else {
+                const cross = BABYLON.MeshBuilder.CreateLineSystem(`hole_cross_${feature.id}${suffix}`, { lines: [l1, l2] }, this.scene);
+                cross.color = isCnc ? new BABYLON.Color3(0.05, 0.05, 0.05) : new BABYLON.Color3(1, 0.5, 0.1);
+                cross.isPickable = false;
+                cross.parent = this.root;
+                cross.metadata = holeMeta;
+                this._featureMarkers.push(cross);
+            }
         }
     }
 
@@ -2049,13 +2220,21 @@ export class PanelView {
                 if (!em || em.isDisposed()) continue;
                 em.color = isSelected ? selColor3 : defaultLineColor;
                 if (em.material) {
-                    em.material.zOffset = isSelected ? -2.5 : -1.5;
+                    em.material.zOffset = isSelected ? -0.5 : -0.2;
                 }
             }
         }
+        setPanelEdgeBatchStyle(
+            this._edgeBatchMesh,
+            this._edgeLineColor(),
+            isSelected ? EDGE_BATCH_WIDTH_SELECTED : EDGE_BATCH_WIDTH,
+            isSelected ? -0.5 : -0.2,
+        );
 
         // 2. Krawędzie pod-siatek (enableEdgesRendering) oraz bezwzględne wyłączenie renderOutline
+        // Tryb wsadowy: obrys ścian głównych rysuje batch — EdgesRenderer nie jest włączany ponownie.
         const isOutlinePanel = Object.keys(this.faceMeshes).some((k) => k.startsWith('OUTLINE_SIDE_'));
+        const edgesRendererAllowed = !isOutlinePanel && !this._useEdgeBatch;
         const seen = new Set();
         for (const faceName in this.faceMeshes) {
             if (faceName.startsWith('feature_')) continue;
@@ -2066,20 +2245,20 @@ export class PanelView {
             mesh.renderOutline = false;
 
             if (isSelected) {
-                if (!isOutlinePanel && typeof mesh.enableEdgesRendering === 'function') {
+                if (edgesRendererAllowed && typeof mesh.enableEdgesRendering === 'function') {
                     mesh.enableEdgesRendering();
                     mesh.edgesColor = selColor4;
                     mesh.edgesWidth = 2.5;
                     if (mesh.edgesRenderer?.lineShader) {
-                        mesh.edgesRenderer.lineShader.zOffset = -2.5;
+                        mesh.edgesRenderer.lineShader.zOffset = -0.5;
                     }
                 }
             } else {
-                if (!isOutlinePanel && typeof mesh.enableEdgesRendering === 'function') {
+                if (edgesRendererAllowed && typeof mesh.enableEdgesRendering === 'function') {
                     mesh.edgesWidth = 1.5;
                     mesh.edgesColor = new BABYLON.Color4(0.05, 0.05, 0.05, 1.0);
                     if (mesh.edgesRenderer?.lineShader) {
-                        mesh.edgesRenderer.lineShader.zOffset = -1.5;
+                        mesh.edgesRenderer.lineShader.zOffset = -0.2;
                     }
                 }
             }
@@ -2103,17 +2282,37 @@ export class PanelView {
         if (this.faceMeshes) {
             for (const key in this.faceMeshes) {
                 const m = this.faceMeshes[key];
-                if (m) m.setEnabled(visible);
+                if (m) {
+                    m.setEnabled(visible);
+                    m.isVisible = visible;
+                    m.isPickable = visible;
+                    if (m.metadata) m.metadata.visible = visible;
+                }
             }
         }
         if (this._edgeMeshes) {
             for (const m of this._edgeMeshes) {
-                if (m) m.setEnabled(visible);
+                if (m) {
+                    m.setEnabled(visible);
+                    m.isVisible = visible;
+                    m.isPickable = visible;
+                    if (m.metadata) m.metadata.visible = visible;
+                }
             }
+        }
+        if (this._edgeBatchMesh) {
+            this._edgeBatchMesh.setEnabled(visible);
+            this._edgeBatchMesh.isVisible = visible;
+            this._edgeBatchMesh.isPickable = visible;
+            if (this._edgeBatchMesh.metadata) this._edgeBatchMesh.metadata.visible = visible;
         }
         if (this._vertexSpheres) {
             for (const s of this._vertexSpheres) {
-                if (s) s.setEnabled(visible);
+                if (s) {
+                    s.setEnabled(visible);
+                    s.isPickable = visible;
+                    if (s.metadata) s.metadata.visible = visible;
+                }
             }
         }
         if (this._featureMarkers) {
@@ -2124,6 +2323,9 @@ export class PanelView {
                 const isHw = m.metadata?.type === 'hardware';
                 if (!isHw) {
                     m.setEnabled(visible);
+                    m.isVisible = visible;
+                    m.isPickable = visible;
+                    if (m.metadata) m.metadata.visible = visible;
                 }
             }
         }

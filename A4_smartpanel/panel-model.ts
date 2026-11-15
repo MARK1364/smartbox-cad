@@ -480,7 +480,10 @@ export class PanelModel {
      */
     setEdgeBanding(edgeBandingMap: Record<string, any>) {
         if (!edgeBandingMap || typeof edgeBandingMap !== 'object') return;
-        this.edgeBanding = { ...edgeBandingMap };
+        const normalized = edgeBandingMap instanceof Map
+            ? Object.fromEntries(edgeBandingMap.entries())
+            : edgeBandingMap;
+        this.edgeBanding = { ...normalized };
         if (this.custom_properties) {
             this.custom_properties.edge_banding = { ...this.edgeBanding };
         }
@@ -835,5 +838,21 @@ export function computePanelFeaturesFingerprint(panel: any): string {
         ? `_o:${outline.map((pt: any) => Array.isArray(pt) ? `${pt[0]},${pt[1]}` : `${pt?.x},${pt?.y}`).join(';')}`
         : '';
     const grainPart = (panel?.rotate_grain || panel?.custom_properties?.rotate_grain) ? '_g1' : '';
-    return featPart + outlinePart + grainPart;
+    const eb = panel?.edgeBanding || panel?.custom_properties?.edge_banding;
+    let bevelPart = '';
+    if (eb && typeof eb === 'object') {
+        const keys = ['+X', '-X', '+Y', '-Y'] as const;
+        const cuts: string[] = [];
+        for (const k of keys) {
+            const entry = eb instanceof Map ? eb.get(k) : eb[k];
+            const ang = Number(entry?.cutAngle);
+            if (Number.isFinite(ang) && Math.abs(ang) > 0.01) {
+                cuts.push(`${k}:${ang.toFixed(3)}:${entry?.cutAnchor || 'Z_PLUS'}`);
+            }
+        }
+        if (cuts.length > 0) {
+            bevelPart = `_b:${cuts.join(',')}`;
+        }
+    }
+    return featPart + outlinePart + grainPart + bevelPart;
 }

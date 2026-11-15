@@ -18,7 +18,7 @@ import { CADNode } from './cad-node/cad-node.js';
 import { NodeType } from './cad-node/node-type.js';
 import { Vec3 } from './cad-math/vec3.js';
 import { Quat } from './cad-math/quat.js';
-import { mmToNm } from './cad-math/units.js';
+import { mmToNm, nmToMm } from './cad-math/units.js';
 import type { DomainData } from './domain-data.js';
 import { isContainerModel } from './domain-data.js';
 import {
@@ -27,7 +27,7 @@ import {
     type DomainHydrator,
 } from './domain-registry.js';
 import { HardwareModel } from './hardware-model.js';
-import { DatumLevelModel, GlcDomainModel } from '../S1_sketcher/datum-types.js';
+import { DatumLevelModel, GlcDomainModel, isDefaultDatumNode } from '../S1_sketcher/datum-types.js';
 import { deduplicateName } from './naming.js';
 import appPackage from '../package.json';
 import {
@@ -324,6 +324,12 @@ export class ProjectDocument {
             throw new Error('ProjectDocument.removeNode: cannot remove the root ROOM node.');
         }
 
+        // Domyślne elementy bazowe sceny (Układ globalny GLC, Płaszczyzna 1, Góra osi Z) nie podlegają usunięciu
+        if (isDefaultDatumNode(node)) {
+            console.warn(`ProjectDocument.removeNode: Domyślny element bazowy "${node.name}" (${node.id}) nie podlega usunięciu.`);
+            return null;
+        }
+
         const parent = node.parent;
         const parentId = parent?.id;
 
@@ -437,18 +443,37 @@ export class ProjectDocument {
     }
 
     /**
-     * Zwraca węzeł GLC (globalny układ odniesienia sceny) lub tworzy go na początku drzewa rootNode.
+     * Zwraca węzeł Układu poziomów Z / Podłogi bazowej (globalny układ odniesienia sceny)
+     * lub tworzy go na samej górze drzewa rootNode (indeks 0, nad ścianami).
      * Domyślnie tworzy 2 poziomy odniesienia (każda sfera na osi Z reprezentowana 1:1 w drzewie):
-     * 1. datum_level_1 (z = 100 mm, "Płaszczyzna 1", visiblePlane: false)
-     * 2. datum_level_top (z = 2400 mm, "Góra osi Z", visiblePlane: false)
+     * 1. datum_level_1 (z = 100 mm, "Poziom 1", visiblePlane: false)
+     * 2. datum_level_top (z = 2400 mm, "Poziom 2", visiblePlane: false)
      */
-    ensureGlcNode(name = 'Układ globalny (GLC)'): CADNode {
+    ensureGlcNode(name = 'Poziomy Z', parentId?: string): CADNode {
         const existing = this.getGlcNode();
         if (existing) {
+            const targetParentId = parentId ?? this._rootNode.id;
+            if (targetParentId === this._rootNode.id) {
+                if (existing.parent === this._rootNode) {
+                    const childrenArr = (this._rootNode as any)._children as CADNode[];
+                    if (childrenArr) {
+                        const curIdx = childrenArr.indexOf(existing);
+                        if (curIdx > 0) {
+                            childrenArr.splice(curIdx, 1);
+                            childrenArr.unshift(existing);
+                        }
+                    }
+                } else if (existing.parent) {
+                    this.reparentNode(existing.id, this._rootNode.id, { index: 0, mode: 'keepLocal' });
+                }
+            }
+            if (name && (existing.name === 'Grot Z' || existing.name === 'Układ globalny (GLC)' || existing.name === 'Podłoga bazowa')) {
+                existing.name = name;
+            }
             const hasLevels = existing.children.filter(c => c.nodeType === NodeType.DATUM_LEVEL);
             if (hasLevels.length === 0) {
                 const defaultLevelId = 'datum_level_1';
-                const defaultLevelName = 'Płaszczyzna 1';
+                const defaultLevelName = 'Poziom 1';
                 const z_nm = mmToNm(100);
                 const levelNode = new CADNode(defaultLevelId, defaultLevelName, NodeType.DATUM_LEVEL);
                 levelNode.setLocalTransform(new Vec3(0, 0, z_nm), Quat.IDENTITY);
@@ -459,11 +484,12 @@ export class ProjectDocument {
                     isLocked: false,
                     visiblePlane: false,
                     visible: true,
+                    isDefault: true,
                 }) as any;
                 this.addNode(existing.id, levelNode);
 
                 const topLevelId = 'datum_level_top';
-                const topLevelName = 'Góra osi Z';
+                const topLevelName = 'Poziom 2';
                 const top_z_nm = mmToNm(2400);
                 const topLevelNode = new CADNode(topLevelId, topLevelName, NodeType.DATUM_LEVEL);
                 topLevelNode.setLocalTransform(new Vec3(0, 0, top_z_nm), Quat.IDENTITY);
@@ -474,11 +500,12 @@ export class ProjectDocument {
                     isLocked: false,
                     visiblePlane: false,
                     visible: true,
+                    isDefault: true,
                 }) as any;
                 this.addNode(existing.id, topLevelNode);
             } else if (hasLevels.length === 1 && hasLevels[0].id === 'datum_level_1') {
                 const topLevelId = 'datum_level_top';
-                const topLevelName = 'Góra osi Z';
+                const topLevelName = 'Poziom 2';
                 const top_z_nm = mmToNm(2400);
                 const topLevelNode = new CADNode(topLevelId, topLevelName, NodeType.DATUM_LEVEL);
                 topLevelNode.setLocalTransform(new Vec3(0, 0, top_z_nm), Quat.IDENTITY);
@@ -489,6 +516,7 @@ export class ProjectDocument {
                     isLocked: false,
                     visiblePlane: false,
                     visible: true,
+                    isDefault: true,
                 }) as any;
                 this.addNode(existing.id, topLevelNode);
             }
@@ -502,14 +530,20 @@ export class ProjectDocument {
             showPlanes: true,
             showAxisZ: true,
             axisZHeight_nm: mmToNm(2400),
+            isDefault: true,
         }) as any;
 
-        this.addNode(this._rootNode.id, glcNode, 0);
+        const targetParentId = parentId ?? this._rootNode.id;
+        if (targetParentId === this._rootNode.id) {
+            this.addNode(targetParentId, glcNode, 0);
+        } else {
+            this.addNode(targetParentId, glcNode);
+        }
 
         // Domyślnie dodane dwa poziomy odniesienia (dół i czubek osi Z):
-        // 1. Dół (100 mm, "Płaszczyzna 1")
+        // 1. Dół (100 mm, "Poziom 1")
         const defaultLevelId = 'datum_level_1';
-        const defaultLevelName = 'Płaszczyzna 1';
+        const defaultLevelName = 'Poziom 1';
         const z_nm = mmToNm(100);
         const levelNode = new CADNode(defaultLevelId, defaultLevelName, NodeType.DATUM_LEVEL);
         levelNode.setLocalTransform(new Vec3(0, 0, z_nm), Quat.IDENTITY);
@@ -520,12 +554,13 @@ export class ProjectDocument {
             isLocked: false,
             visiblePlane: false,
             visible: true,
+            isDefault: true,
         }) as any;
         this.addNode(glcNode.id, levelNode);
 
-        // 2. Czubek osi Z (2400 mm, "Góra osi Z")
+        // 2. Czubek osi Z (2400 mm, "Poziom 2")
         const topLevelId = 'datum_level_top';
-        const topLevelName = 'Góra osi Z';
+        const topLevelName = 'Poziom 2';
         const top_z_nm = mmToNm(2400);
         const topLevelNode = new CADNode(topLevelId, topLevelName, NodeType.DATUM_LEVEL);
         topLevelNode.setLocalTransform(new Vec3(0, 0, top_z_nm), Quat.IDENTITY);
@@ -536,6 +571,7 @@ export class ProjectDocument {
             isLocked: false,
             visiblePlane: false,
             visible: true,
+            isDefault: true,
         }) as any;
         this.addNode(glcNode.id, topLevelNode);
 
@@ -546,27 +582,69 @@ export class ProjectDocument {
      * Wyszukuje pierwszy węzeł GLC_FRAME w dokumencie.
      */
     getGlcNode(): CADNode | null {
+        const byId = this.findNode('glc_origin');
+        if (byId) return byId;
         for (const child of this._rootNode.children) {
             if (child.nodeType === NodeType.GLC_FRAME) {
                 return child;
             }
         }
-        return this.findNode('glc_origin');
+        for (const node of this._nodeIndex.values()) {
+            if (node.nodeType === NodeType.GLC_FRAME) {
+                return node;
+            }
+        }
+        return null;
     }
 
     /**
-     * Dodaje poziom odniesienia (Datum Level / Sferę Z) pod układem globalnym GLC.
-     * @param z_mm Wysokość poziomu w milimetrach (UI)
-     * @param name Opcjonalna nazwa (np. "Wierzch blatu")
+     * Dodaje poziom odniesienia (Datum Level / Sferę Z) pod Podłogą bazową.
+     * Automatycznie numeruje poziomy: "Poziom 3", "Poziom 4", ...
+     * @param z_mm Opcjonalna wysokość poziomu w milimetrach (UI)
+     * @param name Opcjonalna nazwa (np. "Poziom 3")
      */
-    addDatumLevel(z_mm: number, name?: string): CADNode {
+    addDatumLevel(z_mm?: number, name?: string): CADNode {
         const glc = this.ensureGlcNode();
         const levelId = `level_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-        const rawName = name ?? `Poziom Z = ${z_mm} mm`;
-        const levelName = this.ensureUniqueNodeName(rawName);
-        const levelNode = new CADNode(levelId, levelName, NodeType.DATUM_LEVEL);
 
-        const z_nm = mmToNm(z_mm);
+        let finalName = name;
+        if (!finalName) {
+            let maxIndex = 0;
+            for (const child of glc.children) {
+                if (child.nodeType === NodeType.DATUM_LEVEL) {
+                    const match = child.name.match(/Poziom\s*(\d+)/i);
+                    if (match) {
+                        const idx = parseInt(match[1], 10);
+                        if (!isNaN(idx) && idx > maxIndex) {
+                            maxIndex = idx;
+                        }
+                    }
+                }
+            }
+            const nextIndex = maxIndex > 0 ? maxIndex + 1 : glc.children.filter(c => c.nodeType === NodeType.DATUM_LEVEL).length + 1;
+            finalName = `Poziom ${nextIndex}`;
+        }
+        const levelName = this.ensureUniqueNodeName(finalName);
+
+        let finalZ_mm = z_mm;
+        if (finalZ_mm === undefined || !isFinite(finalZ_mm)) {
+            const existingZs = glc.children
+                .filter(c => c.nodeType === NodeType.DATUM_LEVEL)
+                .map(c => Math.round(nmToMm((c.domainData as any)?.z_nm ?? 0)))
+                .filter(z => z > 0)
+                .sort((a, b) => a - b);
+            if (!existingZs.includes(860)) {
+                finalZ_mm = 860;
+            } else if (!existingZs.includes(1400)) {
+                finalZ_mm = 1400;
+            } else {
+                const maxZ = existingZs.length > 0 ? existingZs[existingZs.length - 1] : 0;
+                finalZ_mm = maxZ > 0 ? maxZ + 200 : 500;
+            }
+        }
+
+        const levelNode = new CADNode(levelId, levelName, NodeType.DATUM_LEVEL);
+        const z_nm = mmToNm(finalZ_mm);
         levelNode.setLocalTransform(new Vec3(0, 0, z_nm), Quat.IDENTITY);
         levelNode.domainData = new DatumLevelModel({
             id: levelId,
@@ -575,6 +653,7 @@ export class ProjectDocument {
             isLocked: false,
             visiblePlane: false,
             visible: true,
+            isDefault: false,
         }) as any;
 
         this.addNode(glc.id, levelNode);
@@ -781,8 +860,15 @@ export class ProjectDocument {
         const transaction = this._changeTransactions[this._changeTransactions.length - 1];
         if (transaction) {
             transaction.afterCommitEffects.push(effect);
-        } else {
+            return;
+        }
+        // Poza transakcją efekt działa natychmiast, ale błąd listenera UI nie może
+        // przerwać operacji ani odebrać jej wpisu Undo. Izolujemy go tak samo,
+        // jak robi to flushAfterCommitEffects() po transakcji.
+        try {
             effect();
+        } catch (error) {
+            console.error('ProjectDocument afterCommit effect failed:', error);
         }
     }
 
@@ -998,6 +1084,7 @@ export class ProjectDocument {
             this.name = normalized.name || this.name;
             this.metadata = normalized.metadata ? { ...normalized.metadata } : {};
             this._rootNode = this._deserializeNode(normalized.rootNode);
+            this.healTreeHierarchy(this._rootNode);
 
             this.activeEntity = null;
             this._revision = 0;
@@ -1091,5 +1178,63 @@ export class ProjectDocument {
         }
 
         return node;
+    }
+
+    /**
+     * Naprawia hierarchię drzewa CAD (np. dla wczytywanych starszych projektów lub po przebudowie):
+     * podpórki półek (SHELF_PIN) będące bezpośrednimi dziećmi kontenera przepina jako dzieci odpowiednich półek (SHELF_PANEL / SHELF).
+     */
+    healTreeHierarchy(rootNode: CADNode = this._rootNode): void {
+        if (!rootNode) return;
+        const visit = (node: CADNode) => {
+            if (node.nodeType === NodeType.ASSEMBLY || node.nodeType === NodeType.ROOM) {
+                const shelfPanels = node.children.filter((c: CADNode) =>
+                    c.nodeType === NodeType.PART &&
+                    ((c.domainData as any)?.role === 'SHELF_PANEL' || (c.domainData as any)?.role === 'SHELF')
+                );
+                const pinsToReparent = node.children.filter((c: CADNode) =>
+                    c.nodeType === NodeType.HARDWARE &&
+                    ((c.domainData as any)?.hardwareType === 'SHELF_PIN' ||
+                     (c.domainData as any)?.params?.shelfIndex !== undefined ||
+                     (c.domainData as any)?.params?.shelfKey !== undefined ||
+                     /shelf_\d+_pin/i.test(c.id))
+                );
+
+                if (shelfPanels.length > 0 && pinsToReparent.length > 0) {
+                    for (const pin of pinsToReparent) {
+                        const sIdx = (pin.domainData as any)?.params?.shelfIndex ?? (
+                            typeof pin.id === 'string'
+                                ? parseInt(pin.id.match(/(?:shelf|polk[ai]|polka)_?(\d+)/i)?.[1] || '0', 10)
+                                : 0
+                        );
+                        const targetKey = (pin.domainData as any)?.params?.shelfKey || (sIdx > 0 ? `shelf_${sIdx}` : undefined);
+                        const targetKeyLower = targetKey ? String(targetKey).toLowerCase() : undefined;
+
+                        const foundShelf = shelfPanels.find((shelf: CADNode) => {
+                            const cKey = String((shelf.domainData as any)?.key || '').toLowerCase();
+                            if (targetKeyLower && cKey) {
+                                if (cKey === targetKeyLower) return true;
+                                if (cKey === `corner_${targetKeyLower}`) return true;
+                                if (cKey.replace(/^corner_/, '') === targetKeyLower.replace(/^corner_/, '')) return true;
+                            }
+                            if (sIdx > 0) {
+                                if ((shelf.domainData as any)?.shelfIndex === sIdx || (shelf.domainData as any)?.params?.shelfIndex === sIdx) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }) || (sIdx > 0 && shelfPanels.length >= sIdx ? shelfPanels[sIdx - 1] : undefined);
+
+                        if (foundShelf && pin.parent?.id !== foundShelf.id) {
+                            foundShelf.addChild(pin);
+                        }
+                    }
+                }
+            }
+            for (const child of [...node.children]) {
+                visit(child);
+            }
+        };
+        visit(rootNode);
     }
 }

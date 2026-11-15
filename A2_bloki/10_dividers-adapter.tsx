@@ -17,7 +17,8 @@ import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import dividersTekstRaw from './10_dividers_tekst.json';
 import type { DividersPlanParams } from './01_bloki-module-types.js';
 
-import dividersRules from './10_dividers_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const dividersRules = getModuleRules('10_dividers');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 
 const dividersTekst = dividersTekstRaw as unknown as ModuleTexts;
@@ -110,7 +111,9 @@ export function DividersSubModule({ container, triggerUpdate }: { container: Con
         liczba_przegrod: count,
         tryb_rozstawu: spacingMode,
         szerokosci_wnek_mm: sectionWidths,
-        grubosc_przegrody_mm: DEFAULT_DIVIDER_THICKNESS
+        grubosc_przegrody_mm: DEFAULT_DIVIDER_THICKNESS,
+        dach_kat_deg: toNum(p.dach_kat_deg, 0),
+        przesuniecie_strefy_x_mm: toNum(p.przesuniecie_strefy_x_mm, 0)
     }, dims);
 
     return (
@@ -168,7 +171,7 @@ export function DividersSubModule({ container, triggerUpdate }: { container: Con
                             <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(dividersTekst, 'section.label_template', TX_NS, { n: i + 1 })}</span>
                             <SmartNumericInput
                                 value={sectionWidths[i] !== undefined ? Math.round(sectionWidths[i] * 100) / 100 : 200}
-                                min={10} step={0.01} decimals={2} unit="mm"
+                                min={10} step={1} decimals={2} unit="mm"
                                 style={{ ...inputStyle, width: '80px', fontSize: '11px' }}
                                 onChange={(val) => {
                                     const next = [...sectionWidths];
@@ -186,7 +189,7 @@ export function DividersSubModule({ container, triggerUpdate }: { container: Con
                         <span style={{ ...labelStyle, fontSize: '11px' }}>{tx(dividersTekst, 'section.label_template', TX_NS, { n: count + 1 })}</span>
                         <SmartNumericInput
                             value={Math.round(layout.ostatnia_wneka_mm * 100) / 100}
-                            step={0.01} decimals={2} unit="mm"
+                            step={1} decimals={2} unit="mm"
                             readOnly
                             style={{
                                 ...inputStyle,

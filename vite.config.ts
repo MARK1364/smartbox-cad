@@ -79,15 +79,77 @@ function serveKitchenDemoPlugin() {
   };
 }
 
+function serveB1BibliotekaPlugin() {
+  const B1_ROOT = path.resolve(process.cwd(), 'B1_biblioteka');
+  const STATIC_EXTS: Record<string, string> = {
+    '.glb': 'model/gltf-binary',
+    '.gltf': 'model/gltf+json',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.obj': 'text/plain',
+    '.stl': 'model/stl',
+    '.bin': 'application/octet-stream'
+  };
+
+  return {
+    name: 'serve-b1-biblioteka',
+    configureServer(server: any) {
+      server.middlewares.use((req: any, res: any, next: any) => {
+        const rawUrl = req.url ? req.url.split('?')[0] : '';
+        if (rawUrl.startsWith('/B1_biblioteka/') || rawUrl.startsWith('./B1_biblioteka/')) {
+          const ext = path.extname(rawUrl).toLowerCase();
+          // Bezwzględnie przepuszczaj moduły TypeScript/JS oraz żądania Vite (?import, ?t= itp.)
+          if (!STATIC_EXTS[ext] || req.url.includes('?import') || req.url.includes('?t=') || req.url.includes('?v=')) {
+            return next();
+          }
+
+          const subPath = decodeURIComponent(rawUrl.replace(/^\.?\/B1_biblioteka\//, ''));
+          let fullPath = path.resolve(B1_ROOT, subPath);
+          if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+            const targetBase = path.basename(subPath).toLowerCase();
+            const targetDir = path.resolve(B1_ROOT, path.dirname(subPath));
+            if (fs.existsSync(targetDir)) {
+              try {
+                const files = fs.readdirSync(targetDir);
+                const match = files.find(f => f.toLowerCase() === targetBase);
+                if (match) {
+                  fullPath = path.join(targetDir, match);
+                }
+              } catch {}
+            }
+          }
+          if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+            const mime = STATIC_EXTS[ext] || 'application/octet-stream';
+            res.setHeader('Content-Type', mime);
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+            return fs.createReadStream(fullPath).pipe(res);
+          }
+          // Kluczowe: jeśli zasobu statycznego nie ma w B1, zwróć 404 zamiast index.html (zapobiega próbie parsowania HTML przez Babylon)
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'text/plain');
+          res.end('404 Not Found in B1_biblioteka');
+          return;
+        }
+        next();
+      });
+    }
+  };
+}
+
 import { fileURLToPath } from 'node:url';
+import wasm from 'vite-plugin-wasm';
 import { b1ZawieszkiPlugin } from './vite-plugin-b1-zawieszki.ts';
 import { pricesApiPlugin } from './vite-plugin-prices-api.ts';
+import { hardwareApiPlugin } from './vite-plugin-hardware-api.ts';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   base: './',
   assetsInclude: ['**/*.glb'],
-  plugins: [react(), serveEggerTexturesPlugin(), serveKitchenDemoPlugin(), b1ZawieszkiPlugin(), pricesApiPlugin()],
+  plugins: [wasm(), react(), serveB1BibliotekaPlugin(), serveEggerTexturesPlugin(), serveKitchenDemoPlugin(), b1ZawieszkiPlugin(), pricesApiPlugin(), hardwareApiPlugin()],
   server: {
     port: 8085
   },
@@ -104,7 +166,9 @@ export default defineConfig({
         dag: fileURLToPath(new URL('dag.html', import.meta.url)),
         studio: fileURLToPath(new URL('studio.html', import.meta.url)),
         cennik: fileURLToPath(new URL('cennik.html', import.meta.url)),
-        instrukcja: fileURLToPath(new URL('instrukcja.html', import.meta.url))
+        wiercenia: fileURLToPath(new URL('wiercenia.html', import.meta.url)),
+        instrukcja: fileURLToPath(new URL('instrukcja.html', import.meta.url)),
+        platforma: fileURLToPath(new URL('platforma.html', import.meta.url))
       }
     }
   },

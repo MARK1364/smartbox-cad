@@ -156,7 +156,16 @@ export function collectCabinetGeometry(
     const thicknessLookup: CabinetThicknessLookupContext = {
         rules,
         baseRules,
-        thicknessOverrides,
+        thicknessOverrides: {
+            ...(thicknessOverrides || {}),
+            ...(params.grubosc_plecow_mm !== undefined ? {
+                BACK_PANEL: params.grubosc_plecow_mm,
+                PLECY: params.grubosc_plecow_mm,
+                BACK: params.grubosc_plecow_mm,
+                PLECY_X: params.grubosc_plecow_mm,
+                PLECY_Y: params.grubosc_plecow_mm,
+            } : {})
+        },
         targetContainer: params.container
     };
 

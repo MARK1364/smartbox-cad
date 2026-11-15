@@ -1,7 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { buildProfileFrameMesh } from '../native_core/alu-frame-profile.js';
 import { buildMeshFromPanel } from '../native_core/mesh_builder.js';
+import { NativePanelBuilder } from '../native-panel-builder.js';
+import { ensurePanelBrepWasmInitialized } from '../panel-brep-wasm-bridge.js';
 import { mmToNm } from '../../A1_core/cad-math/units.js';
+
+beforeAll(async () => {
+    await ensurePanelBrepWasmInitialized();
+});
 
 describe('Ramka / Witryna z Jednolitego Profilu 2D (outline2d z zaokrągleniami r)', () => {
     it('generuje ramiak z profilem 2D i promieniami r (fillet) na zewnątrz i wewnątrz', () => {
@@ -94,5 +100,25 @@ describe('Ramka / Witryna z Jednolitego Profilu 2D (outline2d z zaokrągleniami 
         expect(meshData.alu_prof_top).toBeDefined();
         expect(meshData.alu_prof_bottom).toBeDefined();
         expect(meshData.alu_glass).toBeDefined();
+    });
+
+    it('NativePanelBuilder buduje profilową ramkę ALU_FRAME natywnie przez Rust WASM', () => {
+        const panel = {
+            id: 'alu_wasm_test',
+            width: mmToNm(500),
+            height: mmToNm(700),
+            thickness: mmToNm(20),
+            role: 'FRONT',
+            panelForm: 'ALU_FRAME',
+            fillet_mm: 15,
+            inner_fillet_mm: 6
+        };
+
+        const meshData = new NativePanelBuilder().build(panel);
+
+        expect(meshData.alu_frame.positions).toBeInstanceOf(Float32Array);
+        expect(meshData.alu_frame.indices).toBeInstanceOf(Uint32Array);
+        expect(meshData.alu_glass.positions).toBeInstanceOf(Float32Array);
+        expect(meshData.alu_frame.positions.length / 3).toBeGreaterThan(40);
     });
 });

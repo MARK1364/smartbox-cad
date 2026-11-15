@@ -11,7 +11,13 @@ import {
     hingeFrontHolesNm,
     listByType
 } from '../../B1_biblioteka/index.js';
+import { listRailBrands } from '../09_drawers-engine.js';
 describe('Biblioteka okuć', () => {
+    it('lists rail brands including Sevroll and Blum', () => {
+        const brands = listRailBrands();
+        expect(brands).toContain('Blum');
+        expect(brands).toContain('Sevroll');
+    });
     it('resolves Blum hinge from catalog', () => {
         const hw = getHardware(DEFAULT_HINGE_ID);
         expect(hw?.type).toBe('HINGE');
@@ -22,7 +28,7 @@ describe('Biblioteka okuć', () => {
     it('resolves Blum hinge 71T3550 without brake from catalog', () => {
         const hw = getHardware('BLUM_71T3550');
         expect(hw?.type).toBe('HINGE');
-        expect(hw?.art_no).toBe('71T3550');
+        expect(hw?.art_no).toBe('70T3550.TL');
         expect(hw?.id).toBe('BLUM_71T3550');
         expect(hw?.price_id).toBe('HINGE_BLUM_71T3550');
     });
@@ -53,18 +59,26 @@ describe('Biblioteka okuć', () => {
         expect(cupNm?.edgeDist).toBe(22_500_000);
     });
 
-    it('lists rails from shared szuflady.json (all hardware in mm)', () => {
+    it('lists rails from modular catalog files (all hardware in mm)', () => {
         const rails = listByType('RAIL');
         expect(rails.map((r) => r.id)).toEqual(
-            expect.arrayContaining(['D214', 'KOSZ350', 'M94', 'MR100', 'MR150', 'MR200', 'S114', 'S162', 'T108', 'T158', 'BLUM_ANTARO_M'])
+            expect.arrayContaining([
+                'BLUM_ANTARO_M', 'BLUM_ANTARO_D', 'BLUM_ANTARO_KOSZ',
+                'BLUM_MERIVO_100', 'BLUM_MERIVO_150', 'BLUM_MERIVO_200',
+                'SEVROLLBOX_SLIM_3D_90', 'SEVROLLBOX_SLIM_3D_131', 'SEVROLLBOX_SLIM_3D_178', 'SEVROLLBOX_SLIM_3D_214',
+                'BLUM_TANDEM_T108', 'BLUM_TANDEM_T158'
+            ])
         );
+        // Pobieranie przez legacy_id (alias)
+        expect(getHardware('M94')?.id).toBe('BLUM_ANTARO_M');
+        expect(getHardware('D214')?.id).toBe('BLUM_ANTARO_D');
         expect(Object.keys(getHardware('M94')?.lengths || {})).toEqual(
             expect.arrayContaining(['300', '350', '400', '450', '500'])
         );
         expect(getDrawerDrill().corpus_hole.dia).toBeCloseTo(3);
         expect(getDrawerDrill().corpus_hole.depth).toBeCloseTo(12);
-        expect(getHardware('M94')?.mount?.corpus_height).toBeCloseTo(94);
-        expect(getHardware('D214')?.mount?.corpus_height).toBeCloseTo(214);
+        expect(getHardware('M94')?.mount?.corpus_height).toBeCloseTo(84);
+        expect(getHardware('D214')?.mount?.corpus_height).toBeCloseTo(199);
         expect(getHardware('M94')?.drill?.dia).toBeCloseTo(3);
         expect(getHardware('M94')?.lengths?.['450']?.x_positions).toEqual([37, 133, 261, 357]);
         expect(getHardware('M94')?.lengths?.['500']?.x_positions).toEqual([37, 133, 261, 453]);
@@ -146,6 +160,27 @@ describe('buildDrawersPlan reads rail catalog', () => {
         expect(box).toBeDefined();
         const bottom = plan.parts.find((p: any) => p.role === 'DRAWER_BOTTOM');
         expect(bottom).toBeUndefined();
+    });
+
+    it('builds Merivo system drawer with merivobox 3D hardwareId and aligned shelfY', () => {
+        const plan = buildDrawersPlan({ liczba_szuflad: 1, konfiguracje_prowadnic: { 1: { system: 'BLUM_MERIVO_100', length: '500' } } }, { width_mm: 600, height_mm: 720, depth_mm: 500 });
+        const railL = (plan.hardware || []).find((p: any) => p.hardwareType === 'RAIL' && p.side === 'left');
+        const railR = (plan.hardware || []).find((p: any) => p.hardwareType === 'RAIL' && p.side === 'right');
+        expect(railL).toBeDefined();
+        expect(railR).toBeDefined();
+        expect(railL.hardwareId).toBe('merivobox');
+        expect(railR.hardwareId).toBe('merivobox');
+        expect(railL.params.profile.shelfY).toBe(20);
+
+        const bottom = plan.parts.find((p: any) => p.role === 'DRAWER_BOTTOM');
+        expect(bottom).toBeDefined();
+        expect(bottom.dim.x).toBe(600 - 51);
+        expect(bottom.dim.y).toBe(500 - 26);
+
+        const back = plan.parts.find((p: any) => p.role === 'DRAWER_BACK');
+        expect(back).toBeDefined();
+        expect(back.dim.x).toBe(600 - 51);
+        expect(back.dim.z).toBe(83);
     });
 });
 

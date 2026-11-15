@@ -4,7 +4,8 @@
  * loc części = środek panelu; LCS ustawia pion.
  */
 
-import wallsRules from './walls_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const wallsRules = getModuleRules('walls');
 import { rulesMToMm } from '../A1_core/cad-math/units.js';
 import { FLOOR_DEFAULT_COLOR } from './smartfloor-types.js';
 import type { SmartWallPartPlanMm, SmartWallPreset } from './smartwall-types.js';

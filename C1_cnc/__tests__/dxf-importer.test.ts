@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parseDxf, parseLayerParams, importDxfToWorkpiece, inspectDxf } from '../inputs/dxf-importer.js';
+import { parseDxf, parseDxfAscii, parseLayerParams, importDxfToWorkpiece, inspectDxf } from '../inputs/dxf-importer.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
 
 describe('DXF Importer - parser i konwersja technologiczna', () => {
@@ -345,6 +345,202 @@ EOF
             expect(nmToMm(wp.height)).toBe(700);
             // 4 linie obrysu zewnętrznego nie powinny zostać zamienione na wpusty
             expect(wp.features).toHaveLength(0);
+        });
+
+        it('importuje samodzielny ARC jako ContourFeature z segmentem analitycznym i punktami', () => {
+            const dxfWithArc = `
+0
+SECTION
+2
+ENTITIES
+0
+LWPOLYLINE
+8
+OBRYS
+90
+4
+70
+1
+10
+0.0
+20
+0.0
+10
+500.0
+20
+0.0
+10
+500.0
+20
+500.0
+10
+0.0
+20
+500.0
+0
+ARC
+8
+CONTOUR_Z12
+10
+250.0
+20
+250.0
+40
+50.0
+50
+0.0
+51
+180.0
+0
+ENDSEC
+0
+EOF
+`;
+            const summary = inspectDxf(dxfWithArc);
+            expect(summary.contoursCount).toBe(1);
+
+            const payload = importDxfToWorkpiece(dxfWithArc, 'test_arc.dxf', { defaultThicknessMm: 18 });
+            const feat = payload.workpiece.features.find(f => f.type === 'contour');
+            expect(feat).toBeDefined();
+            expect(feat?.params.depth).toBe(12);
+            expect(feat?.params.segments).toBeDefined();
+            expect(feat?.params.segments[0].type).toBe('ARC');
+            expect(feat?.params.segments[0].radius).toBe(50);
+            expect(feat?.params.segments[0].center).toEqual({ x: 250, y: 250, z: 0 });
+            expect(feat?.params.points.length).toBeGreaterThan(4);
+        });
+
+        it('importuje LWPOLYLINE z wybrzuszeniem (bulge) zachowując analityczny łuk ARC', () => {
+            const dxfWithBulge = `
+0
+SECTION
+2
+ENTITIES
+0
+LWPOLYLINE
+8
+OBRYS
+90
+4
+70
+1
+10
+0.0
+20
+0.0
+10
+400.0
+20
+0.0
+10
+400.0
+20
+400.0
+10
+0.0
+20
+400.0
+0
+LWPOLYLINE
+8
+CONTOUR_Z8
+90
+2
+70
+0
+10
+50.0
+20
+50.0
+42
+1.0
+10
+150.0
+20
+50.0
+0
+ENDSEC
+0
+EOF
+`;
+            const payload = importDxfToWorkpiece(dxfWithBulge, 'test_bulge.dxf', { defaultThicknessMm: 18 });
+            const feat = payload.workpiece.features.find(f => f.type === 'contour');
+            expect(feat).toBeDefined();
+            expect(feat?.params.depth).toBe(8);
+            expect(feat?.params.segments).toBeDefined();
+            expect(feat?.params.segments[0].type).toBe('ARC');
+            expect(feat?.params.segments[0].direction).toBe('CCW');
+            expect(feat?.params.points.length).toBeGreaterThan(2);
+        });
+
+        it('3DFACE zachowuje sekwencyjny obwód wierzchołków bez zamiany po przekątnej', () => {
+            const dxf3dFace = `
+0
+SECTION
+2
+ENTITIES
+0
+3DFACE
+8
+OBRYS
+10
+0.0
+20
+0.0
+11
+100.0
+21
+0.0
+12
+100.0
+22
+50.0
+13
+0.0
+23
+50.0
+0
+ENDSEC
+0
+EOF
+`;
+            const res = parseDxfAscii(dxf3dFace);
+            expect(res.entities.length).toBe(1);
+            const ent = res.entities[0];
+            expect(ent.type).toBe('LWPOLYLINE');
+            // Wierzchołki muszą iść po obwodzie prostokąta: (0,0) -> (100,0) -> (100,50) -> (0,50)
+            const poly = ent as any;
+            expect(poly.vertices[0]).toEqual({ x: 0, y: 0 });
+            expect(poly.vertices[1]).toEqual({ x: 100, y: 0 });
+            expect(poly.vertices[2]).toEqual({ x: 100, y: 50 });
+            expect(poly.vertices[3]).toEqual({ x: 0, y: 50 });
+        });
+
+        it('FAIL-FAST: odrzuca niepoprawne defaultDrillDepthMm, defaultGrooveWidthMm i defaultGrooveDepthMm (ujemne lub NaN)', () => {
+            const minDxf = `
+0
+SECTION
+2
+ENTITIES
+0
+CIRCLE
+8
+0
+10
+10.0
+20
+10.0
+40
+2.5
+0
+ENDSEC
+0
+EOF
+`;
+            expect(() => importDxfToWorkpiece(minDxf, 't.dxf', { defaultThicknessMm: 18, defaultDrillDepthMm: -5 })).toThrow(/defaultDrillDepthMm/);
+            expect(() => importDxfToWorkpiece(minDxf, 't.dxf', { defaultThicknessMm: 18, defaultDrillDepthMm: NaN })).toThrow(/defaultDrillDepthMm/);
+            expect(() => importDxfToWorkpiece(minDxf, 't.dxf', { defaultThicknessMm: 18, defaultGrooveWidthMm: 0 })).toThrow(/defaultGrooveWidthMm/);
+            expect(() => importDxfToWorkpiece(minDxf, 't.dxf', { defaultThicknessMm: 18, defaultGrooveDepthMm: -1 })).toThrow(/defaultGrooveDepthMm/);
         });
     });
 });

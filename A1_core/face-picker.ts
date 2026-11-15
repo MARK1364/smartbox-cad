@@ -15,6 +15,10 @@ import type { QuickPickCandidate } from './quick-pick/quick-pick-types.js';
 import { getGrooveParamsMm } from './groove-params.js';
 import { normalizeFaceName } from './face-name.js';
 import { PropertiesManager } from './properties.js';
+import { findOwningContainer, isPanelLike } from './panel-like.js';
+import { isContainerModel } from './domain-data.js';
+import { syncSelectionHighlights } from './selection-highlight.js';
+import { UIController } from './ui-controller.js';
 
 declare const BABYLON: any;
 
@@ -85,7 +89,16 @@ export class FacePicker {
     private scene: any;
     private canvas: any;
     private panelViews: Map<any, any>;
-    private document: any;
+    private _document: any;
+
+    public get document(): any {
+        return ContextManager.instance.document || this._document;
+    }
+
+    public set document(doc: any) {
+        this._document = doc;
+    }
+
     private _listeners: Set<Function>;
 
     public enabled: boolean;
@@ -112,6 +125,8 @@ export class FacePicker {
     private _longPressTimer: any = null;
     private _pointerDownPos: { x: number; y: number } | null = null;
     private _longPressTriggered = false;
+    private _lastClickTime: number = 0;
+    private _lastClickPos: { x: number; y: number } = { x: -999, y: -999 };
 
     constructor(scene: any, canvas: any, panelViews: Map<any, any>, document: any) {
         this.scene = scene;
@@ -358,7 +373,16 @@ export class FacePicker {
         if (gizmoPick && gizmoPick.hit && gizmoPick.pickedMesh) {
             return;
         }
-        const directPick = this.scene.pick(pointerX, pointerY);
+        const isMeshVisible = (mesh: any) => {
+            if (!mesh) return false;
+            if (typeof mesh.isEnabled === 'function' && !mesh.isEnabled()) return false;
+            if (mesh.isVisible === false) return false;
+            if (mesh.metadata?.visible === false) return false;
+            const pm = mesh.metadata?.panelModel || mesh.metadata?.model;
+            if (pm && pm.visible === false) return false;
+            return true;
+        };
+        const directPick = this.scene.pick(pointerX, pointerY, isMeshVisible);
         if (directPick && directPick.hit && directPick.pickedMesh) {
             const name = directPick.pickedMesh.name || "";
             if (name.startsWith('faceGizmoSphere_') || name === 'freeDragSphere' || name.startsWith('freeDragCenterSphere') || name.startsWith('positionGizmo') || name.includes('Gizmo') || name.includes('gizmo') || name.startsWith('groove_dim_handle_') || directPick.pickedMesh.metadata?.type === 'edge-dim-handle') {
@@ -367,26 +391,87 @@ export class FacePicker {
         }
 
         const isMulti = Boolean(evt && (evt.ctrlKey || evt.metaKey));
+        const now = Date.now();
+        const dt = now - this._lastClickTime;
+        const dx = Math.abs(pointerX - this._lastClickPos.x);
+        const dy = Math.abs(pointerY - this._lastClickPos.y);
+        const isDoubleClick = Boolean(
+            (evt && (evt.detail >= 2 || evt.isDoubleClick)) ||
+            (dt < 450 && dx < 10 && dy < 10)
+        );
+        this._lastClickTime = now;
+        this._lastClickPos = { x: pointerX, y: pointerY };
 
-        // Uchwyty SmartPart: mesh parametryczny (type=smartpart_handle) nie ma faceName —
-        // face multiPick go pomija, więc w trybie object wybieramy go z directPick.
+        // Okucia (hardware np. boczki szuflad, prowadnice, zawiasy) oraz uchwyty SmartPart:
+        // siatki parametryczne nie mają faceName — wybieramy je z directPick (zarówno w trybie object jak i bloki/subgeometry).
         if (
-            this.selectionMode === 'object' &&
             !isPickingReference() &&
             !ContextManager.instance.activeConstraintPicker &&
-            directPick?.hit &&
-            directPick.pickedMesh?.metadata?.type === 'smartpart_handle'
+            !this.targetSubgeometryType &&
+            directPick?.hit
         ) {
-            const nodeId = directPick.pickedMesh.metadata.nodeId as string | undefined;
-            const node = nodeId ? this.document?.findNode?.(nodeId) : null;
-            const handleModel = node?.domainData ?? directPick.pickedMesh.metadata.model;
-            if (handleModel && shouldPromotePickToActiveEntity()) {
-                this._clearSelectionExcept(null);
-                this.selectedFace = null;
-                this.selectedFaces.clear();
-                this.document.setActiveEntity(handleModel);
+            const pickedMeta = directPick.pickedMesh?.metadata;
+            if (pickedMeta?.type === 'smartpart_handle' || pickedMeta?.isSceneProp) {
+                const nodeId = pickedMeta.nodeId as string | undefined;
+                const node = nodeId ? this.document?.findNode?.(nodeId) : null;
+                const handleModel = node?.domainData ?? pickedMeta.model;
+                if (handleModel && shouldPromotePickToActiveEntity()) {
+                    this._clearSelectionExcept(null);
+                    this.selectedFace = null;
+                    this.selectedFaces.clear();
+                    this.document.setActiveEntity(handleModel);
+                }
+                return;
             }
-            return;
+
+            if (pickedMeta?.type === 'hardware' || pickedMeta?.parentHardwareMesh) {
+                const hwNode = pickedMeta.cadNode || pickedMeta.parentHardwareMesh?.metadata?.cadNode;
+                const hwModel = hwNode?.domainData ?? hwNode;
+                if (hwModel && shouldPromotePickToActiveEntity()) {
+                    this._clearSelectionExcept(null);
+                    this.selectedFace = null;
+                    this.selectedFaces.clear();
+                    this.selectedFeature = null;
+                    this.selectedFeatures.clear();
+
+                    const subType = pickedMeta?.subType;
+                    const subId = pickedMeta?.id;
+                    const subName = pickedMeta?.subName || hwNode?.name || 'Okucie';
+
+                    const activeEntity = subType ? {
+                        id: subId,
+                        name: subName,
+                        subType,
+                        lengthMm: pickedMeta?.lengthMm,
+                        parentId: hwNode?.id,
+                        cadNode: hwNode,
+                        domainData: hwModel,
+                        mesh: directPick.pickedMesh,
+                        type: 'hardware_subpart',
+                    } : hwModel;
+
+                    this.document.setActiveEntity(activeEntity);
+                    const hwId = subId || hwNode?.id || hwModel?.id || pickedMeta?.id || pickedMeta?.hardwareId;
+                    const hwName = subName || hwNode?.name || hwModel?.name || pickedMeta?.name || 'Okucie';
+                    UIController.instance?.emitTree?.('select-hardware', {
+                        id: hwId,
+                        parentId: hwNode?.id,
+                        subType,
+                        name: hwName,
+                    });
+                    PropertiesManager.instance.inspectHardware?.(activeEntity, true);
+                    syncSelectionHighlights({
+                        document: this.document,
+                        panelViews: this.panelViews,
+                        containerViews: ContextManager.instance.containerViews,
+                    } as any);
+
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('cad-close-floating-operation'));
+                    }
+                }
+                return;
+            }
         }
 
         // Priorytet 1: Narożniki, krawędzie, cechy CAM (z tolerancją próbkowania ekranowego 18px)
@@ -499,8 +584,39 @@ export class FacePicker {
                     this.selectedFaces.clear();
                     this.selectedFeature = null;
                     this.selectedFeatures.clear();
-                    this.document.setActiveEntity(targetModel);
-                    PropertiesManager.instance.inspectPanel(targetModel, this.panelViews, true);
+
+                    const container = isContainerModel(targetModel) ? targetModel : findOwningContainer(this.document, targetModel);
+
+                    if (isDoubleClick || !container) {
+                        // Podwójne kliknięcie (lub formatka wolnostojąca bez korpusu) — bezpośrednia aktywacja formatki
+                        this.document.setActiveEntity(targetModel);
+                        this._clearSelectionExcept(null);
+                        this.selectedFace = null;
+                        this.selectedFaces.clear();
+                        if (targetModel.type === 'panel' || targetModel.type === 'part' || isPanelLike(targetModel)) {
+                            PropertiesManager.instance.inspectPanel(targetModel, this.panelViews, true);
+                            UIController.instance?.emitTree?.('select-part', { id: targetModel.id, uuid: targetModel.id });
+                            syncSelectionHighlights({
+                                document: this.document,
+                                panelViews: this.panelViews,
+                                containerViews: ContextManager.instance.containerViews,
+                            } as any);
+                            const gizmoCtrl = ContextManager.instance.gizmoController;
+                            if (gizmoCtrl) {
+                                gizmoCtrl.updateFaceGizmo();
+                            }
+                        }
+                    } else {
+                        // Pierwszy pojedynczy wybór kontenera jako bryły zewnętrznej (smartframe)
+                        this.document.setActiveEntity(container);
+                        PropertiesManager.instance.inspectContainer(container, true);
+                        UIController.instance?.emitTree?.('select-container', { id: container.id });
+                        syncSelectionHighlights({
+                            document: this.document,
+                            panelViews: this.panelViews,
+                            containerViews: ContextManager.instance.containerViews,
+                        } as any);
+                    }
                     if (typeof window !== 'undefined') {
                         window.dispatchEvent(new CustomEvent('cad-close-floating-operation'));
                     }
@@ -546,6 +662,7 @@ export class FacePicker {
                             panelModel,
                             isMulti,
                             worldNormal,
+                            isDoubleClick,
                         );
                     }
                 }
@@ -692,6 +809,9 @@ export class FacePicker {
                     edge.material.emissiveColor = edge.metadata?.baseColor || BABYLON.Color3.Black();
                     edge.material.diffuseColor = edge.metadata?.baseDiffuse || new BABYLON.Color3(0.2, 0.2, 0.2);
                 }
+                if (edge.metadata?.pickOnly) {
+                    edge.visibility = 0;
+                }
             }
             this.selectedEdges.clear();
             this.selectedEdge = null;
@@ -728,6 +848,7 @@ export class FacePicker {
         panelModel: any = null,
         multiSelect: boolean = false,
         worldNormal: any = null,
+        isDoubleClick: boolean = false,
     ): void {
         const isPickingRef = !!ContextManager.instance.activeReferencePicker;
         const isPickingConstraint = !!ContextManager.instance.activeConstraintPicker;
@@ -763,7 +884,7 @@ export class FacePicker {
             }
             this.selectedFace = this.selectedFaces.size > 0 ? Array.from(this.selectedFaces)[this.selectedFaces.size - 1] : null;
         } else {
-            if (this.selectedFace === mesh && this.selectedFaces.size <= 1) {
+            if (!isDoubleClick && this.selectedFace === mesh && this.selectedFaces.size <= 1) {
                 this.clearSelection();
                 return;
             }
@@ -776,11 +897,36 @@ export class FacePicker {
 
         const panel = panelModel || this.document.activeEntity;
         if (panel && shouldPromotePickToActiveEntity()) {
-            if (this.document.activeEntity !== panel) {
+            const container = findOwningContainer(this.document, panel);
+
+            if (isDoubleClick || !container) {
                 this.document.setActiveEntity(panel);
+                this._clearSelectionExcept(null);
+                this.selectedFace = null;
+                this.selectedFaces.clear();
+                if (panel.type === 'panel' || panel.type === 'part' || isPanelLike(panel)) {
+                    PropertiesManager.instance.inspectPanel(panel, this.panelViews, true);
+                    UIController.instance?.emitTree?.('select-part', { id: panel.id, uuid: panel.id });
+                }
+                syncSelectionHighlights({
+                    document: this.document,
+                    panelViews: this.panelViews,
+                    containerViews: ContextManager.instance.containerViews,
+                } as any);
+                const gizmoCtrl = ContextManager.instance.gizmoController;
+                if (gizmoCtrl) {
+                    gizmoCtrl.updateFaceGizmo();
+                }
             } else {
-                if (ContextManager.instance.showGizmos) {
-                    ContextManager.instance.showGizmos();
+                if (container) {
+                    this.document.setActiveEntity(container);
+                    PropertiesManager.instance.inspectContainer(container, true);
+                    UIController.instance?.emitTree?.('select-container', { id: container.id });
+                    syncSelectionHighlights({
+                        document: this.document,
+                        panelViews: this.panelViews,
+                        containerViews: ContextManager.instance.containerViews,
+                    } as any);
                 }
             }
         }
@@ -796,6 +942,7 @@ export class FacePicker {
             faceData: null,
             panelModel: panel,
             mesh,
+            isDoubleClick,
         });
     }
 
@@ -812,6 +959,9 @@ export class FacePicker {
                         mesh.material.emissiveColor = mesh.metadata.baseColor || BABYLON.Color3.Black();
                         mesh.material.diffuseColor = mesh.metadata.baseDiffuse || new BABYLON.Color3(0.2, 0.2, 0.2);
                     }
+                    if (mesh.metadata.pickOnly) {
+                        mesh.visibility = 0;
+                    }
                 }
             } else {
                 this.selectedEdges.add(mesh);
@@ -820,6 +970,9 @@ export class FacePicker {
                 } else if (mesh.material) {
                     mesh.material.emissiveColor = new BABYLON.Color3(0.0, 1.0, 0.8);
                     mesh.material.diffuseColor = new BABYLON.Color3(0.0, 1.0, 0.8);
+                }
+                if (mesh.metadata?.pickOnly) {
+                    mesh.visibility = 1;
                 }
             }
             this.selectedEdge = this.selectedEdges.size > 0 ? Array.from(this.selectedEdges)[this.selectedEdges.size - 1] : null;
@@ -837,6 +990,9 @@ export class FacePicker {
             } else if (this.selectedEdge.material) {
                 this.selectedEdge.material.emissiveColor = new BABYLON.Color3(0.0, 1.0, 0.8);
                 this.selectedEdge.material.diffuseColor = new BABYLON.Color3(0.0, 1.0, 0.8);
+            }
+            if (this.selectedEdge.metadata?.pickOnly) {
+                this.selectedEdge.visibility = 1;
             }
         }
 
@@ -1060,6 +1216,9 @@ export class FacePicker {
     private _multiPickFacesWithTolerance(pointerX: number, pointerY: number, pickingDatumFace: boolean): any[] {
         const predicate = (mesh: any) => {
             if (!mesh || !isMeshHierarchicallyEnabled(mesh) || !mesh.metadata) return false;
+            if (typeof mesh.isEnabled === 'function' && !mesh.isEnabled()) return false;
+            if (mesh.isVisible === false) return false;
+            if (mesh.metadata.visible === false) return false;
             if (isPickingReference() && mesh.metadata.type === 'feature') return false;
             if (pickingDatumFace && mesh.metadata.type === 'datum_plane') {
                 return mesh.isPickable !== false;

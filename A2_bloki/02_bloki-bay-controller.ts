@@ -10,7 +10,7 @@ import { type DetectedBay, probeBayFromSceneRay } from './02_bloki-bay-detector.
 import { highlightBayInScene, clearBayHighlight } from './02_bloki-bay-visualizer.js';
 import { probePanelSurfaceFromRay, type DetectedPanelSurface } from './handles/handle-detector.js';
 import { highlightPanelSurface, clearPanelHighlight } from './handles/handle-visualizer.js';
-import { highlightSinkSurface, clearSinkHighlight } from './sinks/sink-visualizer.js';
+import { highlightSinkSurface, clearSinkHighlight } from '../A6_agd/sinks/sink-visualizer.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import type { ProjectDocument } from '../A1_core/project-document.js';
 import { PerformanceConfigManager } from '../A1_core/performance-config.js';
@@ -77,7 +77,7 @@ export class BlokiBayController {
         this._isPickerActive = true;
         if (mode) {
             this._pickerMode = mode;
-        } else if (pendingType === 'HANDLES' || pendingType === 'SINKS') {
+        } else if (pendingType === 'HANDLES' || pendingType === 'SINKS' || pendingType === 'SINK') {
             this._pickerMode = 'panel';
         } else if (pendingType === 'PANELS') {
             this._pickerMode = 'external';
@@ -153,7 +153,7 @@ export class BlokiBayController {
         this._draggedBlokType = blokType;
         if (mode) {
             this._pickerMode = mode;
-        } else if (blokType === 'HANDLES' || blokType === 'SINKS') {
+        } else if (blokType === 'HANDLES' || blokType === 'SINKS' || blokType === 'SINK') {
             this._pickerMode = 'panel';
         } else if (blokType === 'PANELS') {
             this._pickerMode = 'external';
@@ -194,7 +194,7 @@ export class BlokiBayController {
         }
         this._lastPointerMoveTime = now;
 
-        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS' || this._pickerMode === 'panel';
+        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS' || this._draggedBlokType === 'SINK' || this._pendingBlokType === 'SINK' || this._pickerMode === 'panel';
 
         if (isPanelMode) {
             const pick = scene.pick(pointerX, pointerY, (m: any) => {
@@ -207,7 +207,7 @@ export class BlokiBayController {
             if (pick && pick.hit && pick.pickedMesh) {
                 const surface = probePanelSurfaceFromRay(scene, pick, doc);
                 if (surface) {
-                    const isSink = this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS';
+                    const isSink = this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS' || this._draggedBlokType === 'SINK' || this._pendingBlokType === 'SINK';
                     if (isSink) {
                         clearPanelHighlight(scene);
                         highlightSinkSurface(scene, surface);
@@ -244,7 +244,7 @@ export class BlokiBayController {
     }
 
     onDropOnScene(): void {
-        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS' || this._pickerMode === 'panel';
+        const isPanelMode = this._draggedBlokType === 'HANDLES' || this._pendingBlokType === 'HANDLES' || this._draggedBlokType === 'SINKS' || this._pendingBlokType === 'SINKS' || this._draggedBlokType === 'SINK' || this._pendingBlokType === 'SINK' || this._pickerMode === 'panel';
         if (isPanelMode) {
             if (this._lastDetectedSurface) {
                 this.notifyPanelDetected(this._lastDetectedSurface);

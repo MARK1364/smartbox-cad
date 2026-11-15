@@ -62,12 +62,14 @@ export class SyncDoorDrillingsCommand implements Command {
             panels,
             'isDoorDrilling',
             this.oldFeatures,
+            // Drzwi skosne dziela ownerTag isDoorDrilling - nie kasuj ich automatow
+            (f: any) => !String(f?.id ?? '').startsWith('hinge_plate_skosne_'),
         );
 
         this.affectedNodeIds.push(...Array.from(changedNodeIds));
 
         // 5. Powiadom panele o zmianie features, by Babylon PanelView od razu odrysował otwory
-        emitMachiningFeatures(panels, changedNodeIds);
+        emitMachiningFeatures(panels, changedNodeIds, document);
 
         // 6. Powiadom o zmianie dokumentu
         if (typeof document.notifyDocumentChanged === 'function') {

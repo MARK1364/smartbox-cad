@@ -9,15 +9,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    NestingPart,
     MachineType,
-    ContainerScopeInfo,
     SheetConfig
 } from '../core/nesting-types';
-import { getDefaultKerf, getMaterialKey, getMaterialLabel, getMaterialInfo, resolveMaterialName, runNesting } from '../core/nesting-engine';
-import { ReportDataNormalizer } from '../../R1_reports/report-data-normalizer';
+import { getDefaultKerf, getMaterialKey, getMaterialLabel, getMaterialInfo } from '../core/nesting-engine';
+import type { ReportDataIssue } from '../../R1_reports/report-data-normalizer';
 import { ContextManager } from '../../A1_core/context-manager';
 import { UIController } from '../../A1_core/ui-controller';
+import { extractNestingData } from '../core/nesting-data';
 
 interface NestingSidebarTabProps {
     projectModel?: any;
@@ -34,6 +33,7 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
     const [selectedTarget, setSelectedTarget] = useState<SelectedTarget | null>(null);
     const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now());
     const [isDragOver, setIsDragOver] = useState(false);
+    const [nestingError, setNestingError] = useState<string | null>(null);
 
     // ─── Automatyczne Odświeżanie w Czasie Rzeczywistym ─────────────
     useEffect(() => {
@@ -77,25 +77,11 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
     // Pobranie znormalizowanych danych ze sceny 3D
     const sceneData = useMemo(() => {
         const doc = projectModel || ContextManager.instance?.document || (window as any).CAD_APP?.document;
-        const data = ReportDataNormalizer.extractProjectData(doc);
-        
-        const parts: NestingPart[] = (data?.panels || []).map((p, idx) => ({
-            id: p.part_id || `part_${idx}`,
-            name: p.role ? `${p.furniture_name} - ${p.role}` : p.part_id,
-            width: p.length_mm,
-            height: p.width_mm,
-            thickness: p.thickness_mm,
-            quantity: p.qty || 1,
-            canRotate: true,
-            material: resolveMaterialName(p.material),
-            containerId: p.container_id,
-            blokId: p.blok_id,
-            furnitureName: p.furniture_name
-        }));
-
-        const containers: ContainerScopeInfo[] = data?.containers || [];
-        return { parts, containers };
+        return extractNestingData(doc);
     }, [projectModel, lastSyncTime]);
+    useEffect(() => {
+        if (sceneData.issues.length === 0) setNestingError(null);
+    }, [sceneData.issues]);
 
     // Aplikowanie upuszczonego węzła CAD
     const applyDroppedNode = (nodeData: any) => {
@@ -230,7 +216,12 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
 
     // Otwarcie podstrony rozkroju w nowej karcie
     const handleOpenNestingSubpage = (materialKey: string = 'ALL') => {
+        if (sceneData.issues.length > 0) {
+            setNestingError('Nie można uruchomić rozkroju, dopóki projekt zawiera formatki z niekompletnymi danymi.');
+            return;
+        }
         if (!selectedTarget || scopedParts.length === 0) return;
+        setNestingError(null);
 
         const kerf = getDefaultKerf(machineType);
         const activeGroup = materialGroups.find(m => m.key === materialKey) || materialGroups[0];
@@ -322,6 +313,24 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
                     </span>
                 </div>
             </div>
+
+            {sceneData.issues.length > 0 && (
+                <section role="alert" style={{ border: '1px solid #f59e0b', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '6px', padding: '8px 10px', color: '#fef3c7', fontSize: '0.78rem' }}>
+                    <strong>Rozkrój zablokowany — pominięto {sceneData.issues.length} {sceneData.issues.length === 1 ? 'formatkę' : 'formatek'}:</strong>
+                    <ul style={{ margin: '6px 0 0', paddingLeft: '20px' }}>
+                        {sceneData.issues.map((issue: ReportDataIssue, index: number) => (
+                            <li key={`${issue.node_id}-${index}`}>
+                                {issue.panel_name} ({issue.node_id}): {issue.reason}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+            {nestingError && (
+                <div role="alert" style={{ color: '#fecaca', fontSize: '0.78rem' }}>
+                    {nestingError}
+                </div>
+            )}
 
             {/* 1. Profil Maszyny (Piła vs CNC) */}
             <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid #2d3142', borderRadius: '6px', padding: '8px' }}>
@@ -515,6 +524,7 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
                                 </div>
 
                                 <button
+                                    disabled={sceneData.issues.length > 0}
                                     onClick={() => handleOpenNestingSubpage(mat.key)}
                                     title={`Otwórz rozkrój w nowej karcie tylko dla: ${mat.label}`}
                                     style={{
@@ -526,6 +536,7 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
                                         fontSize: '0.75rem',
                                         fontWeight: 600,
                                         cursor: 'pointer',
+                                        opacity: sceneData.issues.length > 0 ? 0.5 : 1,
                                         whiteSpace: 'nowrap',
                                         boxShadow: '0 1px 4px rgba(0,0,0,0.2)'
                                     }}
@@ -540,18 +551,18 @@ export const NestingSidebarTab: React.FC<NestingSidebarTabProps> = ({ projectMod
 
             {/* 4. Główny przycisk na dole: Otwórz Rozkrój */}
             <button
-                disabled={!selectedTarget || scopedParts.length === 0}
+                disabled={!selectedTarget || scopedParts.length === 0 || sceneData.issues.length > 0}
                 onClick={() => handleOpenNestingSubpage('ALL')}
                 style={{
                     width: '100%',
                     padding: '11px',
                     borderRadius: '6px',
                     border: 'none',
-                    background: (!selectedTarget || scopedParts.length === 0) ? '#3f3f46' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    background: (!selectedTarget || scopedParts.length === 0 || sceneData.issues.length > 0) ? '#3f3f46' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
                     color: '#ffffff',
                     fontWeight: 700,
                     fontSize: '0.88rem',
-                    cursor: (!selectedTarget || scopedParts.length === 0) ? 'not-allowed' : 'pointer',
+                    cursor: (!selectedTarget || scopedParts.length === 0 || sceneData.issues.length > 0) ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

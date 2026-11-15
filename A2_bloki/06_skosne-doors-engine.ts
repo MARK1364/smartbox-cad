@@ -17,7 +17,8 @@
  * Jednostki: mm (zgodnie z .agents/AGENTS.md — planowanie Bloki w milimetrach).
  */
 
-import skosneDoorsRules from './06_skosne-doors_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const skosneDoorsRules = getModuleRules('06_skosne-doors');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import type {
     BlokiDimensions_mm,
@@ -39,6 +40,7 @@ import {
     isHingeEnabled,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callSkosneDoorsPlanWasm } from './skosne-doors-wasm-bridge.js';
 
 export { assertCanonicalSkosneDoorsParams, LEGACY_SKOSNE_DOORS_PARAM_ALIASES }
     from './01_bloki-module-param-guards.js';
@@ -497,6 +499,17 @@ export function calculateSkosneDoorsPlan(
         }
         return features;
     };
+
+    const wasmResult = callSkosneDoorsPlanWasm(dims_mm, params, {
+        doorRuleLcs: doorRule?.lcs || DEFAULT_LCS,
+        edgeBanding: buildEdgeBanding(),
+        buildHingeFeatures: buildHingeFeaturesForSide,
+        wnetkaLewaMm: wnetka_lewa_mm,
+        wnetkaPrawaMm: wnetka_prawa_mm
+    });
+    if (wasmResult) {
+        return wasmResult;
+    }
 
     const generateHardwareForSide = (
         side: 'left' | 'right',

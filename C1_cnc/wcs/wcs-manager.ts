@@ -6,7 +6,7 @@
  * transformacje układu oraz punkt zerowy. Obsługuje też ręczne modyfikacje użytkownika.
  */
 
-import { Vector3D, CAMFeature, HoleFeature, GrooveFeature, ContourFeature } from '../dto/cam-dto.js';
+import { Vector3D, CAMFeature, HoleFeature, GrooveFeature, ContourFeature, ContourSegment, PocketFeature } from '../dto/cam-dto.js';
 import { createVector3D } from '../geometry/cnc-geometry-utils.js';
 import { WcsRule } from './wcs-rules-mapper.js';
 import { Mat4 } from '../../A1_core/cad-math/mat4.js';
@@ -22,6 +22,7 @@ export class WcsManager {
         directions: { X: "+", Y: "+", Z: "+" },
         rotation: { X: 0, Y: 0, Z: 0 }
     };
+    private ruleConfigured: boolean = false;
 
     // Wymiary formatki dla przeliczenia origin_corner
     private panelDimensions = { width: 0, height: 0, thickness: 0 };
@@ -47,6 +48,33 @@ export class WcsManager {
      */
     public setRule(rule: WcsRule): void {
         this.rule = { ...rule };
+        this.ruleConfigured = true;
+    }
+
+    public isRuleConfigured(): boolean {
+        return this.ruleConfigured;
+    }
+
+    /**
+     * Kopiuje pełny stan bazy z innej instancji WcsManager.
+     */
+    public copyFrom(other: WcsManager): void {
+        this.wcsName = other.wcsName;
+        this.rule = {
+            origin_corner: { ...other.rule.origin_corner },
+            directions: { ...other.rule.directions },
+            rotation: { ...other.rule.rotation }
+        };
+        this.ruleConfigured = other.ruleConfigured;
+        this.panelDimensions = { ...other.panelDimensions };
+        this.manualOffset = { ...other.manualOffset };
+        this.manualRotation = { ...other.manualRotation };
+    }
+
+    public clone(): WcsManager {
+        const copy = new WcsManager(this.wcsName);
+        copy.copyFrom(this);
+        return copy;
     }
 
     /**
@@ -267,10 +295,70 @@ export function retransformFeaturesToWcs(features: CAMFeature[], wcsManager: Wcs
         if ('points' in f) {
             const cf = f as ContourFeature;
             const basePoints = cf.panelPoints && cf.panelPoints.length > 0 ? cf.panelPoints : cf.points;
+            const baseNormal = cf.panelNormal || cf.normal;
+            const rawPanelDepth = cf.panelDepth !== undefined ? cf.panelDepth : cf.depth;
+            let targetWcsDepth = cf.depth;
+            if (typeof rawPanelDepth === 'number' && Number.isFinite(rawPanelDepth) && basePoints.length > 0) {
+                const p0z = basePoints[0].z;
+                const nz = baseNormal ? (baseNormal.z >= 0 ? 1 : -1) : 1;
+                const dirCheck = (rawPanelDepth - p0z) * nz;
+                const targetZ_panel = (dirCheck < -1e-4)
+                    ? rawPanelDepth
+                    : p0z - nz * Math.abs(rawPanelDepth);
+                const pTargetLocal = { x: basePoints[0].x, y: basePoints[0].y, z: targetZ_panel };
+                targetWcsDepth = wcsManager.toWcsCoordinates(pTargetLocal).z;
+            }
             return {
                 ...cf,
                 panelPoints: basePoints.map(p => ({ ...p })),
-                points: basePoints.map(p => wcsManager.toWcsCoordinates(p))
+                panelNormal: baseNormal ? { ...baseNormal } : undefined,
+                points: basePoints.map(p => wcsManager.toWcsCoordinates(p)),
+                panelDepth: rawPanelDepth,
+                depth: targetWcsDepth,
+                panelSegments: Array.isArray(cf.panelSegments && cf.panelSegments.length > 0 ? cf.panelSegments : cf.segments)
+                    ? (cf.panelSegments && cf.panelSegments.length > 0 ? cf.panelSegments : cf.segments)!.map(seg =>
+                        seg.type === 'ARC'
+                            ? { ...seg, start: { ...seg.start }, end: { ...seg.end }, center: { ...seg.center } }
+                            : { ...seg, start: { ...seg.start }, end: { ...seg.end } }
+                    )
+                    : undefined,
+                segments: Array.isArray(cf.panelSegments && cf.panelSegments.length > 0 ? cf.panelSegments : cf.segments)
+                    ? (cf.panelSegments && cf.panelSegments.length > 0 ? cf.panelSegments : cf.segments)!.map(seg => {
+                        if (seg.type === 'ARC') {
+                            const s1 = wcsManager.toWcsCoordinates(seg.start);
+                            const e1 = wcsManager.toWcsCoordinates(seg.end);
+                            const c1 = wcsManager.toWcsCoordinates(seg.center);
+                            const cross0 = (seg.start.x - seg.center.x) * (seg.end.y - seg.center.y) - (seg.start.y - seg.center.y) * (seg.end.x - seg.center.x);
+                            const cross1 = (s1.x - c1.x) * (e1.y - c1.y) - (s1.y - c1.y) * (e1.x - c1.x);
+                            const flippedXY = Math.abs(cross0) > 1e-6 && Math.abs(cross1) > 1e-6 && (cross0 * cross1 < 0);
+                            return {
+                                ...seg,
+                                start: s1,
+                                end: e1,
+                                center: c1,
+                                direction: flippedXY ? (seg.direction === 'CW' ? 'CCW' : 'CW') : seg.direction
+                            };
+                        }
+                        return {
+                            ...seg,
+                            start: wcsManager.toWcsCoordinates(seg.start),
+                            end: wcsManager.toWcsCoordinates(seg.end)
+                        };
+                    })
+                    : undefined,
+                normal: baseNormal ? wcsManager.transformVector(baseNormal) : undefined
+            };
+        }
+        if ('boundaryPoints' in f) {
+            const pf = f as PocketFeature;
+            const basePoints = pf.panelBoundaryPoints && pf.panelBoundaryPoints.length > 0 ? pf.panelBoundaryPoints : pf.boundaryPoints;
+            const baseNormal = pf.panelNormal || pf.normal;
+            return {
+                ...pf,
+                panelBoundaryPoints: basePoints.map(p => ({ ...p })),
+                panelNormal: baseNormal ? { ...baseNormal } : undefined,
+                boundaryPoints: basePoints.map(p => wcsManager.toWcsCoordinates(p)),
+                normal: baseNormal ? wcsManager.transformVector(baseNormal) : undefined
             };
         }
         return f;

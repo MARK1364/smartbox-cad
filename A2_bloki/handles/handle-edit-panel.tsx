@@ -35,7 +35,6 @@ import {
 } from './handle-engine.js';
 import { HandleDimGizmo } from './handle-dim-gizmo.js';
 import { ContextManager } from '../../A1_core/context-manager.js';
-import { SmartNumericInput } from '../../A1_core/ui/SmartNumericInput.js';
 import { nmToMm, mmToNm } from '../../A1_core/cad-math/units.js';
 import { Vec3 } from '../../A1_core/cad-math/vec3.js';
 import { Quat } from '../../A1_core/cad-math/quat.js';
@@ -417,26 +416,33 @@ export function HandleEditPanel({ container }: { container: any }): React.JSX.El
                     >
                         {params.uEdge === 'FACE_X_MINUS' ? '◀' : '▶'}
                     </button>
-                    <span className="smartparts-uv-axis-label">X:</span>
-                    <SmartNumericInput
-                        value={params.uMm ?? 0}
+                    <span className="smartparts-uv-axis-label" style={{ color: lockU ? '#64748b' : '#38bdf8' }}>
+                        X:{lockU ? ' 🔒' : ''}
+                    </span>
+                    <input
+                        type="number"
+                        className={`smartparts-edit-num${lockU ? ' is-locked' : ''}`}
+                        style={{ flex: 1, textAlign: 'left', padding: '0 6px', height: '24px' }}
+                        value={params.uMm !== undefined ? Math.round(params.uMm) : 0}
                         disabled={lockU}
+                        title={lockU ? 'Oś X zablokowana (wyśrodkowana)' : undefined}
                         min={0}
                         max={Math.max(resolveTargetPanelSizeMm().widthMm, params.uMm ?? 0)}
                         step={1}
-                        decimals={1}
-                        unit="mm"
-                        style={{ flex: 1 }}
-                        onChange={(val) =>
-                            applyUpdatedParams({
-                                ...params,
-                                uMm: val,
-                                ...(lockV
-                                    ? { placementPreset: 'CENTER_VERTICAL' as HandlePlacementPreset, placementLocked: true }
-                                    : { placementPreset: 'CUSTOM' as HandlePlacementPreset, placementLocked: false }),
-                            })
-                        }
+                        onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) {
+                                applyUpdatedParams({
+                                    ...params,
+                                    uMm: val,
+                                    ...(lockV
+                                        ? { placementPreset: 'CENTER_VERTICAL' as HandlePlacementPreset, placementLocked: true }
+                                        : { placementPreset: 'CUSTOM' as HandlePlacementPreset, placementLocked: false }),
+                                });
+                            }
+                        }}
                     />
+                    <span className="smartparts-edit-unit">mm</span>
                 </div>
 
                 <div className="smartparts-edit-uv-row">
@@ -449,26 +455,33 @@ export function HandleEditPanel({ container }: { container: any }): React.JSX.El
                     >
                         {params.vEdge === 'FACE_Y_PLUS' ? '▲' : '▼'}
                     </button>
-                    <span className="smartparts-uv-axis-label">Y:</span>
-                    <SmartNumericInput
-                        value={params.vMm ?? 0}
+                    <span className="smartparts-uv-axis-label" style={{ color: lockV ? '#64748b' : '#38bdf8' }}>
+                        Y:{lockV ? ' 🔒' : ''}
+                    </span>
+                    <input
+                        type="number"
+                        className={`smartparts-edit-num${lockV ? ' is-locked' : ''}`}
+                        style={{ flex: 1, textAlign: 'left', padding: '0 6px', height: '24px' }}
+                        value={params.vMm !== undefined ? Math.round(params.vMm) : 0}
                         disabled={lockV}
+                        title={lockV ? 'Oś Y zablokowana (wyśrodkowana)' : undefined}
                         min={0}
                         max={Math.max(resolveTargetPanelSizeMm().heightMm, params.vMm ?? 0)}
                         step={1}
-                        decimals={1}
-                        unit="mm"
-                        style={{ flex: 1 }}
-                        onChange={(val) =>
-                            applyUpdatedParams({
-                                ...params,
-                                vMm: val,
-                                ...(lockU
-                                    ? { placementPreset: 'CENTER_HORIZONTAL' as HandlePlacementPreset, placementLocked: true }
-                                    : { placementPreset: 'CUSTOM' as HandlePlacementPreset, placementLocked: false }),
-                            })
-                        }
+                        onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            if (!isNaN(val)) {
+                                applyUpdatedParams({
+                                    ...params,
+                                    vMm: val,
+                                    ...(lockU
+                                        ? { placementPreset: 'CENTER_HORIZONTAL' as HandlePlacementPreset, placementLocked: true }
+                                        : { placementPreset: 'CUSTOM' as HandlePlacementPreset, placementLocked: false }),
+                                });
+                            }
+                        }}
                     />
+                    <span className="smartparts-edit-unit">mm</span>
                 </div>
             </div>
 

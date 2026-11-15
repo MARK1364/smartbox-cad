@@ -13,6 +13,7 @@ import { buildSelectionChain, resolveFeatureId } from '../A1_core/selection-path
 import { featureOperationLabel } from '../o1_operacji';
 import { CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
 import { openCadEditEntity } from './floating-edit/cad-edit-entity.js';
+import { isManualPanel, findOwningContainer } from '../A1_core/panel-like.js';
 import { PropertiesManager } from '../A1_core/properties.js';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
@@ -374,7 +375,19 @@ export const BelkaHierarchyBar: React.FC<BelkaHierarchyBarProps> = ({ projectMod
                                         kind: 'operation',
                                     });
                                 } else if (crumb.kind === 'panel') {
-                                    openCadEditEntity({ entityId: crumb.id, kind: 'panel' });
+                                    const doc = ContextManager.instance.document;
+                                    const node = doc?.findNode?.(crumb.id);
+                                    const panel = node?.domainData;
+                                    const isManual = isManualPanel(panel);
+                                    if (isManual) {
+                                        openCadEditEntity({ entityId: crumb.id, kind: 'panel' });
+                                    } else {
+                                        // Natywna formatka korpusu: aktywuj formatkę i jej gizma push-pull (bez otwierania okien)
+                                        if (panel && doc) {
+                                            doc.setActiveEntity(panel);
+                                            ContextManager.instance.gizmoController?.updateFaceGizmo();
+                                        }
+                                    }
                                 } else if (crumb.kind === 'assembly') {
                                     openCadEditEntity({ entityId: crumb.id, kind: 'korpus' });
                                 }

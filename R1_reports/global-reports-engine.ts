@@ -1,4 +1,5 @@
-import smartPanelV1 from '../A4_smartpanel/smart_panel_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const smartPanelV1 = getModuleRules('smart_panel_V1');
 import { CuttingPanelContract, AccessoryItem } from './report-data-normalizer';
 import { priceStore } from './price-store';
 import type { PriceDatabase } from './prices-validate';

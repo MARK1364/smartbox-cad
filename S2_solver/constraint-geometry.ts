@@ -66,11 +66,29 @@ export function getLocalBoxMm(node: CADNode | null): LocalBoxMm | null {
 
 /** Punkt narożnika bryły w układzie lokalnym [mm]. Numeracja: patrz constraint-types.ts. */
 export function resolveCornerLocalMm(node: CADNode | null, cornerIndex: number): SolverVec3 | null {
-    if (cornerIndex < 0 || cornerIndex >= CORNER_COUNT) {
+    if (cornerIndex < 0) {
         return null;
     }
     const box = getLocalBoxMm(node);
     if (!box) {
+        return null;
+    }
+
+    if (node?.nodeType === NodeType.ASSEMBLY) {
+        const gp = (node?.domainData as any)?.generatorParams || {};
+        const zoneCount = Number(gp.liczba_stref ?? 1);
+        if (cornerIndex === 8 && (zoneCount === 2 || zoneCount === 3)) {
+            const bH = Number(gp.wysokosc_strefy_dolnej_mm ?? 500);
+            return [0, 0, bH];
+        }
+        if (cornerIndex === 16 && zoneCount === 3) {
+            const bH = Number(gp.wysokosc_strefy_dolnej_mm ?? 500);
+            const mH = Number(gp.wysokosc_strefy_srodkowej_mm ?? 500);
+            return [0, 0, bH + mH];
+        }
+    }
+
+    if (cornerIndex >= CORNER_COUNT) {
         return null;
     }
     return [
@@ -396,7 +414,7 @@ export function nearestSmartFrameFace(
     return bestName;
 }
 
-export function nearestSmartFrameCorner(box: LocalBoxMm, point: SolverVec3): number {
+export function nearestSmartFrameCorner(box: LocalBoxMm, point: SolverVec3, node?: CADNode | null): number {
     let best = 0;
     let bestDist = Infinity;
     for (let i = 0; i < CORNER_COUNT; i++) {
@@ -410,6 +428,27 @@ export function nearestSmartFrameCorner(box: LocalBoxMm, point: SolverVec3): num
         if (d < bestDist) {
             bestDist = d;
             best = i;
+        }
+    }
+
+    if (node && node.nodeType === NodeType.ASSEMBLY) {
+        const gp = (node.domainData as any)?.generatorParams || {};
+        const zoneCount = Number(gp.liczba_stref ?? 1);
+        if (zoneCount === 2 || zoneCount === 3) {
+            const bH = Number(gp.wysokosc_strefy_dolnej_mm ?? 500);
+            const dz8 = point[2] - bH;
+            const bestCornerZ = best & 4 ? box.max[2] : box.min[2];
+            if (Math.abs(dz8) < Math.abs(point[2] - bestCornerZ) && Math.abs(dz8) < 150) {
+                best = 8;
+            }
+            if (zoneCount === 3) {
+                const mH = Number(gp.wysokosc_strefy_srodkowej_mm ?? 500);
+                const dz16 = point[2] - (bH + mH);
+                const curBestZ = best === 8 ? bH : (best & 4 ? box.max[2] : box.min[2]);
+                if (Math.abs(dz16) < Math.abs(point[2] - curBestZ) && Math.abs(dz16) < 150) {
+                    best = 16;
+                }
+            }
         }
     }
     return best;
@@ -437,12 +476,13 @@ export function snapPickToSmartFrame(
     }
 
     if (kind === 'VERTEX') {
-        const cornerIndex = nearestSmartFrameCorner(box, localPointMm);
-        const point = [
+        const cornerIndex = nearestSmartFrameCorner(box, localPointMm, node);
+        const resolved = resolveCornerLocalMm(node, cornerIndex);
+        const point = resolved ?? ([
             cornerIndex & 1 ? box.max[0] : box.min[0],
             cornerIndex & 2 ? box.max[1] : box.min[1],
             cornerIndex & 4 ? box.max[2] : box.min[2],
-        ] as SolverVec3;
+        ] as SolverVec3);
         return { faceName: '', cornerIndex, localPointMm: point };
     }
 

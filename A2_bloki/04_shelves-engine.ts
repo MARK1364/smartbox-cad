@@ -8,7 +8,8 @@
  *  - SSOT parametrów: A2_bloki/01_BLOKI_PARAMETERS.md
  */
 
-import shelvesRules from './04_shelves_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const shelvesRules = getModuleRules('04_shelves');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import type {
     BlokiDimensions_mm,
@@ -23,6 +24,7 @@ import {
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
 import { buildHoleMachiningIntent } from './01_machining-intent.js';
+import { callShelvesPlanWasm } from './shelves-wasm-bridge.js';
 
 export { assertCanonicalShelvesParams, LEGACY_SHELVES_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -47,6 +49,8 @@ export interface NormalizedShelvesParams {
     start_system32_z_mm: number;
     liczba_otworow_system32: number;
     podporka_id: string;
+    srednica_podporki_mm: number;
+    pozycje_polek_z_mm?: number[];
 }
 
 // ─── Czyste Funkcje Matematyczne ──────────────────────────────────────────────
@@ -61,6 +65,17 @@ export function equalShelfBay(
     return (wysokosc_strefy_mm - liczba_polek * grubosc_polki_mm) / (liczba_polek + 1);
 }
 
+/** Spód i-tej półki (1-based), Z=0 to spód strefy Bloku. */
+export function equalShelfBottomZ(
+    wysokosc_strefy_mm: number,
+    liczba_polek: number,
+    grubosc_polki_mm: number,
+    indeks_polki: number
+): number {
+    const bay_mm = equalShelfBay(wysokosc_strefy_mm, liczba_polek, grubosc_polki_mm);
+    return indeks_polki * bay_mm + (indeks_polki - 1) * grubosc_polki_mm;
+}
+
 /** Środek i-tej półki (1-based), Z=0 to spód strefy Bloku. */
 export function equalShelfCenterZ(
     wysokosc_strefy_mm: number,
@@ -68,8 +83,7 @@ export function equalShelfCenterZ(
     grubosc_polki_mm: number,
     indeks_polki: number
 ): number {
-    const bay_mm = equalShelfBay(wysokosc_strefy_mm, liczba_polek, grubosc_polki_mm);
-    return indeks_polki * bay_mm + (indeks_polki - 1) * grubosc_polki_mm + grubosc_polki_mm / 2;
+    return equalShelfBottomZ(wysokosc_strefy_mm, liczba_polek, grubosc_polki_mm, indeks_polki) + grubosc_polki_mm / 2;
 }
 
 /**
@@ -102,6 +116,16 @@ export function normalizeShelvesParams(
     const start_system32_z_mm = readOptionalNumber(input, 'start_system32_z_mm') ?? 150;
     const liczba_otworow_system32 = readOptionalNumber(input, 'liczba_otworow_system32') ?? 10;
     const podporka_id = typeof input.podporka_id === 'string' && input.podporka_id ? input.podporka_id : DEFAULT_SHELF_PIN_ID;
+    const pinItem = getShelfPinOrDefault(podporka_id);
+    const defaultDia = pinItem.machining?.corpus_holes?.[0]?.dia ?? 5;
+    const srednica_podporki_mm = readOptionalNumber(input, 'srednica_podporki_mm') ?? defaultDia;
+
+    let pozycje_polek_z_mm: number[] | undefined = undefined;
+    if (Array.isArray(input.pozycje_polek_z_mm)) {
+        pozycje_polek_z_mm = input.pozycje_polek_z_mm
+            .map((v: unknown) => Number(v))
+            .filter((v: number) => Number.isFinite(v));
+    }
 
     return {
         liczba_polek,
@@ -119,7 +143,9 @@ export function normalizeShelvesParams(
         rozstaw_system32_mm,
         start_system32_z_mm,
         liczba_otworow_system32,
-        podporka_id
+        podporka_id,
+        srednica_podporki_mm,
+        pozycje_polek_z_mm
     };
 }
 
@@ -133,6 +159,26 @@ export function calculateShelvesPlan(
     dims: BlokiDimensions_mm,
     params: NormalizedShelvesParams
 ): BlokiPlanResult {
+    const shelfOverride = (shelvesRules as any).parameters?.smart_panel_integration?.role_overrides?.SHELF_PANEL ||
+                          (shelvesRules as any).parameters?.smart_panel_integration?.role_overrides?.SHELF;
+    const edgeBanding = shelfOverride?.edge_banding || {
+        "+Y": { active: true, type_id: "0.008x0.022" },
+        "-Y": { active: false, type_id: "none" },
+        "+X": { active: false, type_id: "none" },
+        "-X": { active: false, type_id: "none" }
+    };
+    const shelf1Rule = (shelvesRules as any).model_tree?.root_assembly?.subcomponents?.['SHELF_1'];
+
+    // ─── WYWOŁANIE BINARNEGO SILNIKA WASM (RUST) ──────────────────────────────
+    const wasmResult = callShelvesPlanWasm(dims, params, {
+        edgeBanding,
+        lcs: shelf1Rule?.lcs
+    });
+
+    if (wasmResult) {
+        return wasmResult;
+    }
+
     const parts: BlokiPart[] = [];
     const hardware: BlokiHardware[] = [];
 
@@ -155,7 +201,8 @@ export function calculateShelvesPlan(
         otwory_tyl_aktywne,
         przesuniecie_otworow_tyl_x_mm,
         rozstaw_potrojny_z_mm,
-        podporka_id
+        podporka_id,
+        srednica_podporki_mm
     } = params;
 
     const efektywna_szerokosc_mm = szerokosc_strefy_mm - 2 * luz_boczny_mm;
@@ -163,7 +210,7 @@ export function calculateShelvesPlan(
 
     const pinItem = getShelfPinOrDefault(podporka_id);
     const firstCorpusHole = pinItem.machining?.corpus_holes?.[0];
-    const srednica_otworu_mm = firstCorpusHole?.dia ?? 5;
+    const srednica_otworu_mm = srednica_podporki_mm ?? firstCorpusHole?.dia ?? 5;
     const glebokosc_otworu_mm = firstCorpusHole?.depth ?? 11;
     const promien_otworu_mm = srednica_otworu_mm / 2;
 
@@ -261,7 +308,16 @@ export function calculateShelvesPlan(
 
         if (liczba_polek > 0) {
             for (let i = 1; i <= liczba_polek; i++) {
-                const srodek_z_mm = equalShelfCenterZ(wysokosc_strefy_mm, liczba_polek, grubosc_polki_mm, i);
+                let srodek_z_mm: number;
+                if (
+                    params.pozycje_polek_z_mm &&
+                    params.pozycje_polek_z_mm[i - 1] !== undefined &&
+                    Number.isFinite(params.pozycje_polek_z_mm[i - 1])
+                ) {
+                    srodek_z_mm = params.pozycje_polek_z_mm[i - 1] + grubosc_polki_mm / 2;
+                } else {
+                    srodek_z_mm = equalShelfCenterZ(wysokosc_strefy_mm, liczba_polek, grubosc_polki_mm, i);
+                }
 
                 let shelfRule = (shelvesRules as any).model_tree?.root_assembly?.subcomponents?.[`SHELF_${i}`];
                 if (!shelfRule) {
@@ -270,6 +326,7 @@ export function calculateShelvesPlan(
 
                 parts.push({
                     name: `Polka_${i}`,
+                    key: `shelf_${i}`,
                     role: 'SHELF_PANEL',
                     nodeType: 'PART',
                     material: 'W1100_ST9_18',
@@ -303,7 +360,7 @@ export function calculateShelvesPlan(
                         hardwareId: podporka_id,
                         side: 'left',
                         loc: { x: xLeft, y: yFront, z: pinCenterZ },
-                        params: { shelfIndex: i, position: 'LF', side: 'left' }
+                        params: { shelfIndex: i, shelfKey: `shelf_${i}`, shelfName: `Polka_${i}`, position: 'LF', side: 'left', diameter_mm: srednica_otworu_mm }
                     },
                     {
                         id: `shelf_${i}_pin_LB`,
@@ -312,7 +369,7 @@ export function calculateShelvesPlan(
                         hardwareId: podporka_id,
                         side: 'left',
                         loc: { x: xLeft, y: yBack, z: pinCenterZ },
-                        params: { shelfIndex: i, position: 'LB', side: 'left' }
+                        params: { shelfIndex: i, shelfKey: `shelf_${i}`, shelfName: `Polka_${i}`, position: 'LB', side: 'left', diameter_mm: srednica_otworu_mm }
                     },
                     {
                         id: `shelf_${i}_pin_RF`,
@@ -321,7 +378,7 @@ export function calculateShelvesPlan(
                         hardwareId: podporka_id,
                         side: 'right',
                         loc: { x: xRight, y: yFront, z: pinCenterZ },
-                        params: { shelfIndex: i, position: 'RF', side: 'right' }
+                        params: { shelfIndex: i, shelfKey: `shelf_${i}`, shelfName: `Polka_${i}`, position: 'RF', side: 'right', diameter_mm: srednica_otworu_mm }
                     },
                     {
                         id: `shelf_${i}_pin_RB`,
@@ -330,7 +387,7 @@ export function calculateShelvesPlan(
                         hardwareId: podporka_id,
                         side: 'right',
                         loc: { x: xRight, y: yBack, z: pinCenterZ },
-                        params: { shelfIndex: i, position: 'RB', side: 'right' }
+                        params: { shelfIndex: i, shelfKey: `shelf_${i}`, shelfName: `Polka_${i}`, position: 'RB', side: 'right', diameter_mm: srednica_otworu_mm }
                     }
                 );
             }

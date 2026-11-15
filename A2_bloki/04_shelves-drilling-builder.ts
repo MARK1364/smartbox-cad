@@ -46,7 +46,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
     // 2. Znajdź wszystkie aktywne kontenery Bloki z półkami
     const sbContainers = containers.filter((c: any) => {
         const p = c.domainData?.generatorParams;
-        if (!p || p.type !== 'blok_shelves' || c.domainData?.visible === false) return false;
+        if (!p || p.type !== 'blok_shelves' || c.frozen || c.domainData?.frozen === true) return false;
         if (cabinetContainerId) {
             return p.parentContainerId === cabinetNode.id || c.parent?.id === cabinetNode.id || isChildOfCabinet(c);
         }
@@ -157,7 +157,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
 
         if (ref?.panelId) {
             const node = document.findNode(ref.panelId);
-            if (node) {
+            if (node && node.domainData && node.domainData.type !== 'container') {
                 return { node, suggestedFace: ref.face };
             }
         }
@@ -165,7 +165,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
         const boundaryRef = side === 'left' ? p.boundary?.left : p.boundary?.right;
         if (boundaryRef?.nodeId) {
             const node = document.findNode(boundaryRef.nodeId);
-            if (node) {
+            if (node && node.domainData && node.domainData.type !== 'container') {
                 return { node, suggestedFace: boundaryRef.face };
             }
         }
@@ -280,7 +280,7 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
 
         const pinItem = getShelfPinOrDefault(norm.podporka_id);
         const firstCorpusHole = pinItem.machining?.corpus_holes?.[0];
-        const holeDiameter = firstCorpusHole?.dia ?? 5;
+        const holeDiameter = norm.srednica_podporki_mm ?? firstCorpusHole?.dia ?? 5;
         const holeDepth = firstCorpusHole?.depth ?? 11;
         const shelfThickness = norm.grubosc_polki_mm;
         const radius = holeDiameter / 2;
@@ -366,16 +366,23 @@ export function buildShelvesDrillings(document: ProjectDocument, cabinetContaine
                 let shelfWorldZ: number;
                 let actualShelfThickness = shelfThickness;
 
-                if (shelfNode) {
+                if (shelfNode?.domainData?.thickness) {
+                    actualShelfThickness = nmToMm(shelfNode.domainData.thickness);
+                }
+
+                if (
+                    norm.pozycje_polek_z_mm &&
+                    norm.pozycje_polek_z_mm[i - 1] !== undefined &&
+                    Number.isFinite(norm.pozycje_polek_z_mm[i - 1])
+                ) {
+                    shelfWorldZ = sbBottomZ + norm.pozycje_polek_z_mm[i - 1] + actualShelfThickness / 2;
+                } else if (shelfNode) {
                     const rawShelfWorldZ = getPanelWorldZ(shelfNode);
                     if (rawShelfWorldZ > 0.1) {
                         shelfWorldZ = rawShelfWorldZ;
                     } else {
                         const shelfCenterZ = equalShelfCenterZ(sbHeight, count, shelfThickness, i);
                         shelfWorldZ = sbBottomZ + shelfCenterZ;
-                    }
-                    if (shelfNode.domainData?.thickness) {
-                        actualShelfThickness = nmToMm(shelfNode.domainData.thickness);
                     }
                 } else {
                     const shelfCenterZ = equalShelfCenterZ(sbHeight, count, shelfThickness, i);

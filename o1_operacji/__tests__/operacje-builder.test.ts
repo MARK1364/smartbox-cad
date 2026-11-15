@@ -247,7 +247,7 @@ describe('wpust silnika vs operacja Smart', () => {
             type: 'groove',
             name: 'Wpust',
             face: 'FACE_Z_PLUS',
-            params: { isBackGroove: true, width: 4, length: 700, depth: 8 },
+            params: { isBackGroove: true, u: 0, v: 10, width: 4, length: 700, depth: 8 },
         });
 
         const tree = DrawingProjectExtractor.instance.extractProjectTree();

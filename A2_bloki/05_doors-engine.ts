@@ -7,10 +7,11 @@
  *  - Zgodność z .agents/AGENTS.md (role 'FRONT', nodeType 'PART', jednostki mm w planowaniu).
  */
 
-import doorsRules from './05_doors_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const doorsRules = getModuleRules('05_doors');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { type ModuleDims } from './01_base-engine.js';
-import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId } from '../B1_biblioteka/index.js';
+import { DEFAULT_HINGE_CUP_EDGE_DIST_MM, DEFAULT_HINGE_ID, hingeFrontHolesMm, hingeTemplateId, resolveHingeMounting } from '../B1_biblioteka/index.js';
 import { buildHoleMachiningIntent } from './01_machining-intent.js';
 import type {
     BlokiDimensions_mm,
@@ -24,6 +25,7 @@ import {
     isHingeEnabled,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callDoorsPlanWasm, isDoorsWasmReady } from './doors-wasm-bridge.js';
 
 export { assertCanonicalDoorsParams, LEGACY_DOORS_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -46,6 +48,7 @@ export interface NormalizedDoorsParams {
     nalozenie_lewe_mm: number;
     nalozenie_prawe_mm: number;
     domyslny_zawias_id: string;
+    typ_prowadnika?: string;
     szablony_zawiasow: Record<number, string>;
     aktywne_zawiasy: ActiveHingeConfig[];
 }
@@ -109,6 +112,7 @@ export function normalizeDoorsParams(
     const nalozenie_prawe_mm = readOptionalNumber(raw, 'nalozenie_prawe_mm') ?? 16;
 
     const domyslny_zawias_id = String(raw.domyslny_zawias_id ?? DEFAULT_HINGE_ID);
+    const typ_prowadnika = typeof raw.typ_prowadnika === 'string' && raw.typ_prowadnika ? raw.typ_prowadnika : undefined;
 
     const szablony_zawiasow: Record<number, string> = {};
     for (let i = 1; i <= 6; i++) {
@@ -127,6 +131,7 @@ export function normalizeDoorsParams(
         nalozenie_lewe_mm,
         nalozenie_prawe_mm,
         domyslny_zawias_id,
+        typ_prowadnika,
         szablony_zawiasow,
         aktywne_zawiasy
     };
@@ -182,6 +187,7 @@ export function calculateDoorsPlan(
         nalozenie_lewe_mm,
         nalozenie_prawe_mm,
         domyslny_zawias_id,
+        typ_prowadnika,
         szablony_zawiasow,
         aktywne_zawiasy
     } = params;
@@ -212,18 +218,40 @@ export function calculateDoorsPlan(
         "-Y": { active: true, type_id: "0.008x0.022" }
     };
 
+    // ─── WYWOŁANIE BINARNEGO SILNIKA WASM (RUST) ──────────────────────────────
+    // Jeśli moduł WASM jest zainicjalizowany, plan formatek i nawierceń
+    // obliczany jest bezpośrednio w kodzie maszynowym WASM.
+    const wasmResult = callDoorsPlanWasm(dims, params, {
+        edgeBanding,
+        defaultLcs,
+        doorLRuleLcs: doorLRule?.lcs,
+        doorRRuleLcs: doorRRule?.lcs
+    });
+
+    if (wasmResult) {
+        return wasmResult;
+    }
+
+    if (isDoorsWasmReady()) {
+        throw new Error(`[Rust Doors Error] Moduł Rust WASM dla drzwi zwrócił błąd. Cichy fallback do TS jest wyłączony!`);
+    }
+
+    // ─── REZERWOWY FALLBACK TS (wyłącznie przed asynchroniczną inicjalizacją WASM w testach) ───────
     // Budowanie nawierceń pod puszkę i wkręty zawiasu na froncie
     const buildHingeFeatures = (side: 'left' | 'right', szerokosc_drzwi_mm: number): any[] => {
         const features: any[] = [];
+        const overlay_mm = side === 'left' ? nalozenie_lewe_mm : nalozenie_prawe_mm;
 
         for (const hinge of aktywne_zawiasy) {
             const hingeId = resolveHingeId(hinge.index, domyslny_zawias_id, szablony_zawiasow);
+            const mountInfo = resolveHingeMounting({ hingeId, overlay_mm });
             const frontHoles = hingeFrontHolesMm(hingeId);
             const templateId = hingeTemplateId(hingeId);
             const vCenter = hinge.pozycja_lokalna_z_mm + nalozenie_dol_mm;
 
             for (const hole of frontHoles) {
-                const u = side === 'left' ? hole.edgeDist : (szerokosc_drzwi_mm - hole.edgeDist);
+                const edgeDist = hole.isCup ? mountInfo.cup_center_from_edge_mm : hole.edgeDist;
+                const u = side === 'left' ? edgeDist : (szerokosc_drzwi_mm - edgeDist);
                 const kind = hole.isCup ? 'cup' : 'screw';
                 const suffix = hole.isCup ? '' : `_${hole.name || 's'}`;
                 const intent = buildHoleMachiningIntent({
@@ -252,6 +280,9 @@ export function calculateDoorsPlan(
                         hingeIndex: hinge.index,
                         side: side,
                         hardwareId: `hinge_${side}_${hinge.index}`,
+                        plate_height_mm: typ_prowadnika === '173L6130' ? 3 : (typ_prowadnika ? 0 : mountInfo.plate_height_mm),
+                        plate_part_name: typ_prowadnika || mountInfo.plate_part_name,
+                        plate_id: typ_prowadnika,
                     },
                 });
                 features.push(intent.feature);
@@ -267,12 +298,14 @@ export function calculateDoorsPlan(
         szerokosc_drzwi_mm: number,
         pozycja_drzwi_x_mm: number
     ) => {
+        const overlay_mm = side === 'left' ? nalozenie_lewe_mm : nalozenie_prawe_mm;
         for (const hinge of aktywne_zawiasy) {
             const hingeId = resolveHingeId(hinge.index, domyslny_zawias_id, szablony_zawiasow);
+            const mountInfo = resolveHingeMounting({ hingeId, overlay_mm });
             const vCenter = hinge.pozycja_lokalna_z_mm + nalozenie_dol_mm;
             const frontHoles = hingeFrontHolesMm(hingeId);
             const cupHole = frontHoles.find(h => h.isCup);
-            const cupEdgeDist = cupHole?.edgeDist ?? DEFAULT_HINGE_CUP_EDGE_DIST_MM;
+            const cupEdgeDist = mountInfo.cup_center_from_edge_mm ?? cupHole?.edgeDist ?? DEFAULT_HINGE_CUP_EDGE_DIST_MM;
             const u = side === 'left' ? cupEdgeDist : (szerokosc_drzwi_mm - cupEdgeDist);
 
             const hwX = pozycja_drzwi_x_mm - szerokosc_drzwi_mm / 2 + u;
@@ -280,7 +313,7 @@ export function calculateDoorsPlan(
 
             hardware.push({
                 id: `hinge_${side}_${hinge.index}`,
-                name: `Zawias ${hinge.index} (${side === 'left' ? 'Lewy' : 'Prawy'}) [${hingeId}]`,
+                name: `Zawias ${hinge.index} (${side === 'left' ? 'Lewy' : 'Prawy'}) [${hingeId}] + [${mountInfo.plate_part_name}]`,
                 hardwareType: 'HINGE',
                 hardwareId: hingeId,
                 side: side,
@@ -288,7 +321,12 @@ export function calculateDoorsPlan(
                 params: {
                     hingeIndex: hinge.index,
                     localZ: hinge.pozycja_lokalna_z_mm,
-                    side
+                    side,
+                    plateHeightMm: typ_prowadnika === '173L6130' ? 3 : (typ_prowadnika ? 0 : mountInfo.plate_height_mm),
+                    cupKMm: mountInfo.cup_k_mm,
+                    platePartName: typ_prowadnika || mountInfo.plate_part_name,
+                    plateId: typ_prowadnika,
+                    armPartName: mountInfo.arm_part_name
                 }
             });
         }

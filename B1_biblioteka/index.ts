@@ -4,9 +4,24 @@
  * Każde okucie posiada swój pojedynczy plik JSON (np. BLUM_71B3550.json) w katalogu B1_biblioteka/zawiasy/.
  * Konwersja do jednostek domenowych (nm) następuje wyłącznie na brzegu przez mmToNm.
  */
-import szufladyKonfig from './szuflady/szuflady.json';
 import { mmToNm, nmToMm } from '../A1_core/cad-math/units.js';
-import { DEFAULT_RAIL_ID, railsFromKonfig } from './szuflady/szuflady-from-konfig.js';
+import { getHardwareFileModules } from '../A1_core/rules-vault.js';
+
+export const DEFAULT_RAIL_ID = 'M94';
+export {
+    normalizeDrawerSideProfile,
+    buildBoczekLoop2D,
+    buildMocowanieLoop2D,
+    buildProwadnicaLoop2D,
+    buildDrawerSideLoops2D,
+    loop2DToSvgPath,
+    extrudeLoop2DToBabylonMesh,
+    createParametricDrawerSideMesh,
+    type DrawerSideProfileInput,
+    type NormalizedDrawerSideProfile,
+    type DrawerSideLoops2DResult,
+    type CreateParametricDrawerSideMeshOptions
+} from './szuflady/parametric-drawer-side.js';
 import {
     handlesFromCatalog,
     handleGlbTemplateId,
@@ -17,6 +32,13 @@ import {
     hangerGlbTemplateId,
     type HangerHardwareItem,
 } from './zawieszki/hangers-from-catalog.js';
+export {
+    loadScenePropsFromCatalog,
+    parseScenePropDefinition,
+    type ScenePropCatalogEntry,
+    type ScenePropCategory,
+    type ScenePropPartMm,
+} from './wyposazenie/scene-props-from-catalog.js';
 
 export type HardwareType = 'HINGE' | 'RAIL' | 'HANDLE' | 'HANGER' | 'SHELF_PIN' | 'TUBE_SOCKET';
 export type { HandleHardwareItem, HangerHardwareItem };
@@ -31,6 +53,10 @@ export interface MachiningHole {
     front_dist?: number;
     z_offset?: number;
     z_from_bottom?: number;
+    /** Strona dla otworów montażu frontu szuflady; brak = obie strony (L+R). */
+    side?: 'L' | 'R';
+    /** false = otwór wyłączony (nie jest wiercony). */
+    enabled?: boolean;
     object?: string;
 }
 
@@ -65,6 +91,8 @@ export interface HardwareItem {
     lengths?: Record<string, {
         z_offset?: number;
         x_positions?: number[];
+        /** false = otwór wyłączony (pozycja zostaje, ale nie jest wiercona) */
+        holes_enabled?: boolean[];
         price_id?: string;
         art_no?: string;
     }>;
@@ -76,6 +104,7 @@ export interface HardwareItem {
         bottom?: { width_offset?: number; length_offset?: number; thickness?: number };
         back?: { width_offset?: number; height?: number; height_offset?: number; thickness?: number };
     };
+    profile?: Record<string, any>;
 }
 
 export interface DrawerDrill {
@@ -87,20 +116,38 @@ export interface DrawerDrill {
 export const DEFAULT_HINGE_ID = 'BLUM_71B3550';
 /** Odległość środka puszki Ø35 od krawędzi zawiasowej frontu [mm] — SSOT katalogu zawiasów. */
 export const DEFAULT_HINGE_CUP_EDGE_DIST_MM = 22.5;
-export { DEFAULT_RAIL_ID };
 
-// Wykrycie wszystkich fizycznych modeli .glb w katalogu zawiasy/
-const glbModules = (import.meta as any).glob('./zawiasy/*.glb', { query: '?url', eager: true });
+// Wykrycie wszystkich fizycznych modeli .glb w katalogu zawiasy/ (w tym podfoldery producentów: Blum, Gtv, Hettich)
+const glbModules = (import.meta as any).glob('./zawiasy/**/*.glb', { query: '?url', eager: true });
 const existingGlbIds = new Set<string>(
     Object.keys(glbModules).map((filePath) => filePath.replace(/^.*[\\/]/, '').replace(/\.glb.*$/i, ''))
 );
 
 // Ładowanie definicji zawiasów z twardym wymogiem pary: {ID}.json + {ID}.glb
-const hingeModules = (import.meta as any).glob('./zawiasy/*.json', { eager: true, import: 'default' }) as Record<string, HardwareItem>;
-const HINGE_ITEMS: HardwareItem[] = Object.values(hingeModules).filter((item) => {
+// Dla zawiasów Blum dopuszcza się wspólny plik blum_zawiasy.json + blum_zawiasy.glb (z tablicą variants)
+const hingeModules = getHardwareFileModules('./zawiasy/') as Record<string, any>;
+const hasBlumSharedGlb = existingGlbIds.has('blum_zawiasy') || existingGlbIds.has('blum zawiasy3glb') || existingGlbIds.has('blum zawiasy');
+const rawHingeMap = new Map<string, HardwareItem>();
+
+for (const raw of Object.values(hingeModules)) {
+    if (!raw) continue;
+    if (Array.isArray(raw.variants)) {
+        for (const variant of raw.variants) {
+            if (variant?.id) {
+                rawHingeMap.set(variant.id, variant as HardwareItem);
+            }
+        }
+    } else if (raw.id) {
+        if (!rawHingeMap.has(raw.id)) {
+            rawHingeMap.set(raw.id, raw as HardwareItem);
+        }
+    }
+}
+
+const HINGE_ITEMS: HardwareItem[] = Array.from(rawHingeMap.values()).filter((item) => {
     if (!item || !item.id) return false;
     const glbRef = item.visual?.glb ? item.visual.glb.replace(/^.*[\\/]/, '').replace(/\.glb.*$/i, '') : item.id;
-    const hasGlb = existingGlbIds.has(item.id) || existingGlbIds.has(glbRef);
+    const hasGlb = existingGlbIds.has(item.id) || existingGlbIds.has(glbRef) || (item.brand?.toLowerCase() === 'blum' && hasBlumSharedGlb);
     if (!hasGlb) {
         console.warn(`[B1_biblioteka] Pomięto zawias "${item.id}" — brak wymaganego pliku ${item.id}.glb (wymóg pary JSON+GLB).`);
         return false;
@@ -109,10 +156,7 @@ const HINGE_ITEMS: HardwareItem[] = Object.values(hingeModules).filter((item) =>
 });
 
 // Ładowanie definicji szuflad z katalogu szuflady/** (struktura Producent / Marka)
-const drawerFileModules = (import.meta as any).glob(
-    ['./szuflady/**/*.json', '!./szuflady/szuflady.json', '!./szuflady/**/catalog.json'],
-    { eager: true, import: 'default' }
-) as Record<string, any>;
+const drawerFileModules = getHardwareFileModules('./szuflady/') as Record<string, any>;
 
 const DRAWER_ITEMS: HardwareItem[] = [];
 const DRAWER_ALIASES = new Map<string, HardwareItem>();
@@ -127,11 +171,28 @@ for (const raw of Object.values(drawerFileModules)) {
             const frontHoles = frontHolesArr.length
                 ? {
                     x_offset: Number(frontHolesArr[0]?.edge_dist ?? 31),
-                    z_positions: frontHolesArr
-                        .map((h) => Number(h.z_from_bottom))
-                        .filter((z) => Number.isFinite(z)),
-                    depth: Number(frontHolesArr[0]?.depth ?? 10)
+                    // Unikalne wysokości (z_positions to pole zgodności wstecznej;
+                    // po rozdzieleniu na L/P te same wysokości występują dwa razy).
+                    z_positions: Array.from(new Set(
+                        frontHolesArr
+                            .map((h) => Number(h.z_from_bottom))
+                            .filter((z) => Number.isFinite(z))
+                    )),
+                    depth: Number(frontHolesArr[0]?.depth ?? 10),
+                    // Pełne definicje — pozwalają rozróżnić lewą/prawą stronę i wyłączać otwory.
+                    holes: frontHolesArr.map((h) => ({
+                        name: h.name,
+                        side: h.side === 'L' || h.side === 'R' ? h.side : undefined,
+                        z_from_bottom: Number(h.z_from_bottom ?? 0),
+                        edge_dist: h.edge_dist !== undefined ? Number(h.edge_dist) : undefined,
+                        dia: h.dia !== undefined ? Number(h.dia) : undefined,
+                        depth: h.depth !== undefined ? Number(h.depth) : undefined,
+                        enabled: h.enabled !== false,
+                    })),
                 }
+                : undefined;
+            const mergedProfile = (raw.profile || v.profile)
+                ? { ...(raw.profile || {}), ...(v.profile || {}) }
                 : undefined;
             const item: HardwareItem = {
                 id: v.id,
@@ -142,10 +203,18 @@ for (const raw of Object.values(drawerFileModules)) {
                 usable_in: ['DRAWERS'],
                 construction: v.construction || raw.construction || 'SYSTEM',
                 panels: v.panels || raw.panels,
+                ...(mergedProfile ? { profile: mergedProfile } : {}),
                 mount: {
                     rail_height: v.rail_height ?? 35.0,
                     corpus_height: v.corpus_height ?? 94.0,
+                    ...(v.back_height !== undefined ? { back_height: Number(v.back_height) } : {}),
+                    ...(v.total_height !== undefined ? { total_height: Number(v.total_height) } : {}),
+                    ...(v.min_space !== undefined ? { min_space: Number(v.min_space) } : {}),
                     width: v.width ?? 27.0
+                },
+                drill: {
+                    dia: (Number(v.promien ?? 1.5)) * 2,
+                    depth: Number(v.glebokosc ?? 12)
                 },
                 machining: v.machining,
                 ...(frontHoles ? { front_holes: frontHoles } : {}),
@@ -162,10 +231,7 @@ for (const raw of Object.values(drawerFileModules)) {
 }
 
 // Uchwyty: pliki producenta (Rejs/Rejs.json). catalog.json pomijamy (duplikat indeksu).
-const handleFileModules = (import.meta as any).glob(
-    ['./uchwyty/**/*.json', '!./uchwyty/catalog.json', '!./uchwyty/**/catalog.json'],
-    { eager: true, import: 'default' }
-) as Record<string, any>;
+const handleFileModules = getHardwareFileModules('./uchwyty/');
 
 const HANDLE_ITEMS: HardwareItem[] = [];
 for (const raw of Object.values(handleFileModules)) {
@@ -187,10 +253,7 @@ for (const raw of Object.values(handleFileModules)) {
 }
 
 // Zawieszki: Camaro/*.json + własne SmartParts (catalog.json pomijamy — duplikat indeksu).
-const hangerFileModules = (import.meta as any).glob(
-    ['./zawieszki/**/*.json', '!./zawieszki/catalog.json', '!./zawieszki/**/catalog.json'],
-    { eager: true, import: 'default' }
-) as Record<string, any>;
+const hangerFileModules = getHardwareFileModules('./zawieszki/');
 
 const hangerImageModules = (import.meta as any).glob(
     ['./zawieszki/**/*.png', './zawieszki/**/*.jpg', './zawieszki/**/*.webp'],
@@ -248,10 +311,7 @@ for (const [filePath, raw] of Object.entries(hangerFileModules)) {
 }
 
 // Podpórki i złącza półek: polki_akcesoria/**/*.json (catalog.json pomijamy)
-const shelfPinFileModules = (import.meta as any).glob(
-    ['./polki_akcesoria/**/*.json', '!./polki_akcesoria/catalog.json', '!./polki_akcesoria/**/catalog.json'],
-    { eager: true, import: 'default' }
-) as Record<string, any>;
+const shelfPinFileModules = getHardwareFileModules('./polki_akcesoria/');
 
 const SHELF_PIN_ITEMS: HardwareItem[] = [];
 for (const raw of Object.values(shelfPinFileModules)) {
@@ -272,10 +332,7 @@ for (const raw of Object.values(shelfPinFileModules)) {
 }
 
 // Rozetki i akcesoria drążków: drazki/**/*.json (catalog.json pomijamy)
-const tubeSocketFileModules = (import.meta as any).glob(
-    ['./drazki/**/*.json', '!./drazki/catalog.json', '!./drazki/**/catalog.json'],
-    { eager: true, import: 'default' }
-) as Record<string, any>;
+const tubeSocketFileModules = getHardwareFileModules('./drazki/');
 
 const TUBE_SOCKET_ITEMS: HardwareItem[] = [];
 for (const raw of Object.values(tubeSocketFileModules)) {
@@ -297,7 +354,6 @@ for (const raw of Object.values(tubeSocketFileModules)) {
 
 const ALL_ITEMS: HardwareItem[] = [
     ...HINGE_ITEMS,
-    ...railsFromKonfig(szufladyKonfig as { szuflady?: any[] }),
     ...DRAWER_ITEMS,
     ...HANDLE_ITEMS,
     ...HANGER_ITEMS,
@@ -551,7 +607,13 @@ export function hingeFrontHolesMm(id?: string | null): HingeFrontHoleMm[] {
     }));
 }
 
-export function hingeCorpusHolesMm(id?: string | null): HingeCorpusHoleMm[] {
+export function hingeCorpusHolesMm(id?: string | null, plateId?: string | null): HingeCorpusHoleMm[] {
+    if (plateId && /175h3100|prosty/i.test(plateId)) {
+        return [
+            { name: 'Prowadnik_prosty_P', dia: 5, depth: 12, frontDist: 20, zOffset: 0 },
+            { name: 'Prowadnik_prosty_T', dia: 5, depth: 12, frontDist: 52, zOffset: 0 }
+        ];
+    }
     return hingeCorpusHolesNm(id).map((h) => ({
         ...h,
         dia: nmToMm(h.dia),
@@ -559,4 +621,76 @@ export function hingeCorpusHolesMm(id?: string | null): HingeCorpusHoleMm[] {
         frontDist: nmToMm(h.frontDist),
         zOffset: nmToMm(h.zOffset)
     }));
+}
+
+export interface HingeMountCalculationParams {
+    hingeId?: string | null;
+    overlay_mm?: number;
+    cup_k_mm?: number;
+    forced_plate_h?: number;
+    available_plates?: number[];
+}
+
+export interface HingeMountResult {
+    plate_height_mm: number;
+    cup_k_mm: number;
+    cup_center_from_edge_mm: number;
+    adjustment_screw_mm: number;
+    plate_part_name: string;
+    arm_part_name: string;
+}
+
+/**
+ * Rozwiązuje dobór prowadnika (H = 0, 3, 6, 9) i pozycję puszki (K)
+ * na bazie wzoru katalogowego Bluma: H = K + A - FA
+ */
+export function resolveHingeMounting(
+    params: HingeMountCalculationParams
+): HingeMountResult {
+    const hw = getHingeOrDefault(params.hingeId);
+    const K = params.cup_k_mm ?? (hw.mount?.cup_x_from_inner_side ? hw.mount.cup_x_from_inner_side - 17.5 : 4.5);
+    const armA = (hw.mount as any)?.arm_constant_A ?? (isParallelHinge(params.hingeId) ? 0 : 11.5);
+    const available = params.available_plates ?? (hw.mount as any)?.supported_plate_heights ?? [0, 3, 6, 9];
+    const forced = params.forced_plate_h ?? (hw.mount as any)?.forced_plate_height;
+
+    // 1. Wymuszony prowadnik (np. zawias specjalny lub równoległy wymagający H=3)
+    if (forced !== undefined && forced !== null) {
+        const H = Number(forced);
+        const idealOverlay = K + armA - H;
+        const adjustment = (params.overlay_mm ?? idealOverlay) - idealOverlay;
+
+        return {
+            plate_height_mm: H,
+            cup_k_mm: K,
+            cup_center_from_edge_mm: K + 17.5,
+            adjustment_screw_mm: Math.round(adjustment * 10) / 10,
+            plate_part_name: `prowadnik_krzyzowy_h${H}`,
+            arm_part_name: hw.id
+        };
+    }
+
+    // 2. Automatyczny dobór z nałożenia frontu H = K + A - FA
+    const overlay = params.overlay_mm ?? 15;
+    const theoreticalH = K + armA - overlay;
+
+    let bestH = available[0];
+    let minDiff = Infinity;
+    for (const h of available) {
+        const diff = Math.abs(h - theoreticalH);
+        if (diff < minDiff) {
+            minDiff = diff;
+            bestH = h;
+        }
+    }
+
+    const adjustment = theoreticalH - bestH;
+
+    return {
+        plate_height_mm: bestH,
+        cup_k_mm: K,
+        cup_center_from_edge_mm: K + 17.5,
+        adjustment_screw_mm: Math.round(adjustment * 10) / 10,
+        plate_part_name: `prowadnik_krzyzowy_h${bestH}`,
+        arm_part_name: hw.id
+    };
 }

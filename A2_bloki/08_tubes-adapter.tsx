@@ -43,7 +43,7 @@ export function TubesSubModule({ container, triggerUpdate }: { container: Contai
                 <SmartNumericInput 
                     id="sb-tube-offset-top-input"
                     value={offsetTop} 
-                    min={10} max={300} step={0.01} decimals={2} unit="mm"
+                    min={10} max={300} step={1} decimals={2} unit="mm"
                     style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                     onChange={(val) => {
                         setOffsetTop(val);
@@ -71,7 +71,7 @@ export function TubesSubModule({ container, triggerUpdate }: { container: Contai
                     <SmartNumericInput 
                         id="sb-tube-space-above-shelf-input"
                         value={spaceAboveShelf} 
-                        min={10} max={500} step={0.01} decimals={2} unit="mm"
+                        min={10} max={500} step={1} decimals={2} unit="mm"
                         style={{ width: '90px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right' }}
                         onChange={(val) => {
                             setSpaceAboveShelf(val);

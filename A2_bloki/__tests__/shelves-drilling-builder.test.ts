@@ -376,4 +376,44 @@ describe('Shelves Drilling Builder (buildShelvesDrillings)', () => {
             });
         }
     });
+
+    it('generuje otwory na bokach korpusu zgodnie z indywidualnymi pozycje_polek_z_mm', () => {
+        const cabinet = doc.createAssembly({ name: 'Korpus' }) as ContainerModel;
+        cabinet.generatorParams = { type: 'korpus3_2', liczba_stref: 1 };
+        runEngineAndApply(cabinet, 800, 2000, 600, 1, 0, 0, 0);
+
+        const cabinetNode = doc.findNode(cabinet.id)!;
+        const leftSide = findCabinetPanel(cabinetNode, { role: 'LEFT_SIDE_PANEL' }).node!;
+        expect(leftSide).toBeDefined();
+
+        const sb = doc.createAssembly({
+            name: 'Polki_Custom',
+            width: mmToNm(764),
+            height: mmToNm(1964),
+            depth: mmToNm(560)
+        }, cabinet.id) as ContainerModel;
+        sb.generatorParams = {
+            type: 'blok_shelves',
+            liczba_polek: 2,
+            wzor_nawiercen: 'SINGLE',
+            grubosc_polki_mm: 18,
+            srednica_podporki_mm: 5,
+            pozycje_polek_z_mm: [300, 595], // np. półka 2 przesunięta o 20mm (575+20)
+            targetZone: 'B'
+        };
+
+        const intents = buildShelvesDrillings(doc, cabinet.id);
+        const leftIntents = intents.filter(i => i.targetNodeId === leftSide.id);
+
+        // Otwory dla półki 1 i 2 powinny istnieć
+        const shelf1Holes = leftIntents.filter(i => i.feature.id.startsWith('shelf_1_'));
+        const shelf2Holes = leftIntents.filter(i => i.feature.id.startsWith('shelf_2_'));
+        expect(shelf1Holes.length).toBeGreaterThan(0);
+        expect(shelf2Holes.length).toBeGreaterThan(0);
+
+        // Wysokość otworu półki 2 powinna być dokładnie wyższa od półki 1 o 595 - 300 = 295 mm
+        const v1 = shelf1Holes[0].feature.params.v;
+        const v2 = shelf2Holes[0].feature.params.v;
+        expect(v2 - v1).toBeCloseTo(295, 1);
+    });
 });

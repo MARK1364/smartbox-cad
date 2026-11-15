@@ -1,8 +1,9 @@
 /**
  * Test: updateCustomSmartPartParams przebudowuje features po zmianie offsetu.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ProjectDocument } from '../../A1_core/project-document.js';
+import { CommandHistory } from '../../A1_core/commands/command-history.js';
 import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { PanelModel } from '../../A4_smartpanel/panel-model.js';
@@ -13,6 +14,7 @@ import {
     SMARTPART_CUSTOM_TYPE,
     type SmartPartPackageDefinition,
 } from '../index.js';
+import { UpdateCustomSmartPartParamsCommand } from '../update-custom-smartpart-params-command.js';
 
 function nozkaPkg(): SmartPartPackageDefinition {
     const part = (id: string, refX: 'LEFT' | 'RIGHT', refY: 'FRONT' | 'BACK') => ({
@@ -123,5 +125,89 @@ describe('A5_smartparts — panel SMARTPART (nóżki)', () => {
         // part abs X: -300+80 = -220; cut lokalnie 0 → u = 300 + (-220)
         expect(after.params.u).toBe(300 - 220);
         expect(after.params.u).not.toBe(before.params.u);
+    });
+
+    it('parametry SmartPart są cofane i ponawiane razem z wymiarami i cechami', () => {
+        const node = applyCustomSmartPartToPanel(doc, {
+            definition: nozkaPkg(),
+            targetPanelNode: panelNode,
+            pickUvMm: { u: 300, v: 280 },
+        })!;
+        const container = node.domainData as any;
+        const panel = panelNode.domainData as PanelModel;
+        const beforeValues = { ...container.generatorParams.paramValues };
+        const beforeFeatures = panel.features.map((feature) => ({ ...feature, params: { ...feature.params } }));
+        const beforeWidth = container.width;
+        const history = new CommandHistory(doc);
+
+        history.execute(new UpdateCustomSmartPartParamsCommand(
+            container,
+            beforeValues,
+            { ...beforeValues, offset_lewy_mm: 80 },
+        ));
+        expect(container.generatorParams.paramValues.offset_lewy_mm).toBe(80);
+        expect(panel.features).not.toEqual(beforeFeatures);
+
+        expect(history.undo()).toBe(true);
+        expect(container.generatorParams.paramValues).toEqual(beforeValues);
+        expect(container.width).toBe(beforeWidth);
+        expect(panel.features).toEqual(beforeFeatures);
+
+        expect(history.redo()).toBe(true);
+        expect(container.generatorParams.paramValues.offset_lewy_mm).toBe(80);
+        expect(panel.features).not.toEqual(beforeFeatures);
+    });
+
+    it('rollbackuje parametry i cechy, gdy aktualizacja cech zawiedzie', () => {
+        const node = applyCustomSmartPartToPanel(doc, {
+            definition: nozkaPkg(),
+            targetPanelNode: panelNode,
+            pickUvMm: { u: 300, v: 280 },
+        })!;
+        const container = node.domainData as any;
+        const panel = panelNode.domainData as PanelModel;
+        const beforeParams = JSON.parse(JSON.stringify(container.generatorParams));
+        const beforeDimensions = [container.width, container.height, container.depth];
+        const beforeFeatures = panel.features.map((feature) => ({ ...feature, params: { ...feature.params } }));
+        const setFeatures = vi.spyOn(panel, 'setFeatures').mockImplementationOnce(() => {
+            throw new Error('test SmartPart feature update failure');
+        });
+        const history = new CommandHistory(doc);
+
+        expect(() => history.execute(new UpdateCustomSmartPartParamsCommand(
+            container,
+            { ...beforeParams.paramValues },
+            { ...beforeParams.paramValues, offset_lewy_mm: 80 },
+        ))).toThrow('test SmartPart feature update failure');
+
+        expect(history.canUndo).toBe(false);
+        expect(container.generatorParams).toEqual(beforeParams);
+        expect([container.width, container.height, container.depth]).toEqual(beforeDimensions);
+        expect(panel.features).toEqual(beforeFeatures);
+        setFeatures.mockRestore();
+    });
+
+    it('rollbackuje zmianę, gdy przebudowa geometrii po aktualizacji zawiedzie', () => {
+        const node = applyCustomSmartPartToPanel(doc, {
+            definition: nozkaPkg(),
+            targetPanelNode: panelNode,
+            pickUvMm: { u: 300, v: 280 },
+        })!;
+        const container = node.domainData as any;
+        const panel = panelNode.domainData as PanelModel;
+        const beforeParams = JSON.parse(JSON.stringify(container.generatorParams));
+        const beforeFeatures = panel.features.map((feature) => ({ ...feature, params: { ...feature.params } }));
+        const history = new CommandHistory(doc);
+
+        expect(() => history.execute(new UpdateCustomSmartPartParamsCommand(
+            container,
+            { ...beforeParams.paramValues },
+            { ...beforeParams.paramValues, offset_lewy_mm: 80 },
+            () => { throw new Error('test SmartPart geometry rebuild failure'); },
+        ))).toThrow('test SmartPart geometry rebuild failure');
+
+        expect(history.canUndo).toBe(false);
+        expect(container.generatorParams).toEqual(beforeParams);
+        expect(panel.features).toEqual(beforeFeatures);
     });
 });

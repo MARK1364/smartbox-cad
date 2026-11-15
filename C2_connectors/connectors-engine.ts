@@ -4,7 +4,8 @@
  * Bez klas — reguły z JSON (opcjonalnie nadpisane argumentem `rules`).
  */
 
-import rulesJson from './connectors_3_rules.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const rulesJson = getModuleRules('connectors_3_rules');
 import { Quat } from '../A1_core/cad-math/quat.js';
 import { Vec3 } from '../A1_core/cad-math/vec3.js';
 import { rulesMToMm } from '../A1_core/cad-math/units.js';

@@ -8,7 +8,8 @@
  *  - SSOT parametrów: A2_bloki/01_BLOKI_PARAMETERS.md
  */
 
-import dividersRules from './10_dividers_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const dividersRules = getModuleRules('10_dividers');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { toDimensionsMm, type ModuleDims } from './01_base-engine.js';
 import type {
@@ -21,6 +22,7 @@ import {
     assertCanonicalDividersParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callDividersPlanWasm } from './dividers-wasm-bridge.js';
 
 export { assertCanonicalDividersParams, LEGACY_DIVIDERS_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -43,6 +45,8 @@ export interface DividerSlot {
     index: number;
     xCenter: number;
     bayBefore: number;
+    height_mm?: number;
+    locZ_mm?: number;
 }
 
 export interface DividerLayout {
@@ -55,6 +59,8 @@ export interface DividerLayout {
     szerokosci_wnek_mm: number[];
     ostatnia_wneka_mm: number;
     ostatnia_wneka_poza_panelem: boolean;
+    dach_kat_deg: number;
+    przesuniecie_strefy_x_mm: number;
     slots: DividerSlot[];
 }
 
@@ -63,6 +69,8 @@ export interface NormalizedDividersParams {
     grubosc_przegrody_mm: number;
     tryb_rozstawu: 'EQUAL' | 'CUSTOM';
     szerokosci_wnek_mm: number[];
+    dach_kat_deg: number;
+    przesuniecie_strefy_x_mm: number;
 }
 
 // ─── Czyste Funkcje Matematyczne ──────────────────────────────────────────────
@@ -107,12 +115,69 @@ export function normalizeDividersParams(
     const tryb_rozstawu: 'EQUAL' | 'CUSTOM' = rawMode === 'CUSTOM' ? 'CUSTOM' : 'EQUAL';
 
     const szerokosci_wnek_mm = readSectionWidths(input, liczba_przegrod);
+    const dach_kat_deg = readOptionalNumber(input, 'dach_kat_deg') ?? 0;
+    const przesuniecie_strefy_x_mm = readOptionalNumber(input, 'przesuniecie_strefy_x_mm') ?? 0;
 
     return {
         liczba_przegrod,
         grubosc_przegrody_mm,
         tryb_rozstawu,
-        szerokosci_wnek_mm
+        szerokosci_wnek_mm,
+        dach_kat_deg,
+        przesuniecie_strefy_x_mm
+    };
+}
+
+/**
+ * Wylicza wysokość pojedynczej przegrody w punkcie xCenter (wraz z naddatkiem na ucios pod skośny wieniec górny).
+ * Dla dach_kat_deg = 0 zwraca wysokosc_strefy_mm.
+ */
+export function dividerSlopedHeightAtX(
+    xCenter_mm: number,
+    wysokosc_strefy_mm: number,
+    grubosc_przegrody_mm: number,
+    dach_kat_deg: number,
+    przesuniecie_strefy_x_mm: number = 0
+): number {
+    if (!Number.isFinite(dach_kat_deg) || Math.abs(dach_kat_deg) < 0.05) {
+        return wysokosc_strefy_mm;
+    }
+    const betaRad = (dach_kat_deg * Math.PI) / 180;
+    const tanBeta = Math.tan(betaRad);
+    const xCab_mm = xCenter_mm + przesuniecie_strefy_x_mm;
+    const centerRoofZ_mm = wysokosc_strefy_mm + xCab_mm * tanBeta;
+    const halfThickRise_mm = (grubosc_przegrody_mm / 2) * Math.abs(tanBeta);
+    return Math.max(10, centerRoofZ_mm + halfThickRise_mm);
+}
+
+/**
+ * Buduje konfigurację obrzeży dla pojedynczej przegrody z uwzględnieniem uciosu górnej krawędzi (+X)
+ * pod skośny wieniec górny (lewy-prawy).
+ */
+export function buildDividerEdgeBanding(
+    baseEdgeBanding: Record<string, any>,
+    dach_kat_deg: number
+): Record<string, any> {
+    const cutAngle = Number.isFinite(dach_kat_deg) && Math.abs(dach_kat_deg) >= 0.05
+        ? Math.abs(dach_kat_deg)
+        : 0;
+    if (cutAngle === 0) {
+        return baseEdgeBanding;
+    }
+    // W DIVIDER_LCS (rotation [90, 0, 90]):
+    // +X = górna krawędź przegrody (styk z wieńcem górnym)
+    // FACE_Z_PLUS = lewa ściana przegrody (-X w CAD)
+    // FACE_Z_MINUS = prawa ściana przegrody (+X w CAD)
+    // Gdy dach_kat_deg > 0 (dach rośnie w prawo), wyższa jest prawa ściana (Z_MINUS).
+    // Gdy dach_kat_deg < 0 (dach rośnie w lewo), wyższa jest lewa ściana (Z_PLUS).
+    const cutAnchor: 'Z_PLUS' | 'Z_MINUS' = dach_kat_deg >= 0 ? 'Z_MINUS' : 'Z_PLUS';
+    return {
+        ...baseEdgeBanding,
+        '+X': {
+            ...(baseEdgeBanding['+X'] || { active: false, type_id: 'none' }),
+            cutAngle,
+            cutAnchor
+        }
     };
 }
 
@@ -152,7 +217,20 @@ export function resolveDividerLayout(
     for (let i = 0; i < p.liczba_przegrod; i++) {
         currentX += bays[i];
         const xCenter = currentX + p.grubosc_przegrody_mm / 2;
-        slots.push({ index: i + 1, xCenter, bayBefore: bays[i] });
+        const slotHeight_mm = dividerSlopedHeightAtX(
+            xCenter,
+            wysokosc_mm,
+            p.grubosc_przegrody_mm,
+            p.dach_kat_deg,
+            p.przesuniecie_strefy_x_mm
+        );
+        slots.push({
+            index: i + 1,
+            xCenter,
+            bayBefore: bays[i],
+            height_mm: slotHeight_mm,
+            locZ_mm: slotHeight_mm / 2
+        });
         currentX += p.grubosc_przegrody_mm;
     }
 
@@ -166,6 +244,8 @@ export function resolveDividerLayout(
         szerokosci_wnek_mm: bays,
         ostatnia_wneka_mm: lastBay_mm,
         ostatnia_wneka_poza_panelem: p.liczba_przegrod > 0 && lastBay_mm < 10,
+        dach_kat_deg: p.dach_kat_deg,
+        przesuniecie_strefy_x_mm: p.przesuniecie_strefy_x_mm,
         slots
     };
 }
@@ -180,31 +260,47 @@ export function calculateDividersPlan(
     dims: BlokiDimensions_mm,
     params: NormalizedDividersParams
 ): BlokiPlanResult {
-    const layout = resolveDividerLayout(params, dims);
     const roleOverride = (dividersRules as any).parameters?.smart_panel_integration?.role_overrides?.DIVIDER_PLATE;
 
     // FRONT w orientacji LCS formatki to +Y (identycznie jak w półkach — skierowane do przodu szafy)
-    const edgeBanding = {
+    const baseEdgeBanding = {
         "+X": { active: false, type_id: "none" },
         "-X": { active: false, type_id: "none" },
         "+Y": { active: true, type_id: roleOverride?.edge_banding?.["-X"]?.type_id || "0.008x0.022" },
         "-Y": { active: false, type_id: "none" }
     };
+    const edgeBanding = buildDividerEdgeBanding(baseEdgeBanding, params.dach_kat_deg);
 
-    const parts: BlokiPart[] = layout.slots.map((slot) => ({
-        name: `Przegroda_${slot.index}`,
-        key: `DIVIDERS_${slot.index}`,
-        role: 'DIVIDER_PLATE',
-        nodeType: 'PART',
-        material: 'W1100_ST9_18',
-        materialName: 'Biały Alpejski',
-        materialCode: 'W1100 ST9',
-        dim: { x: layout.height_mm, y: layout.depth_mm, z: layout.grubosc_przegrody_mm },
-        loc: { x: slot.xCenter, y: 0, z: layout.height_mm / 2 },
-        lcs: DIVIDER_LCS,
-        edge_banding: edgeBanding,
-        features: []
-    }));
+    // ─── WYWOŁANIE BINARNEGO SILNIKA WASM (RUST) ──────────────────────────────
+    const wasmResult = callDividersPlanWasm(dims, params, {
+        edgeBanding,
+        lcs: DIVIDER_LCS
+    });
+
+    if (wasmResult) {
+        return wasmResult;
+    }
+
+    const layout = resolveDividerLayout(params, dims);
+
+    const parts: BlokiPart[] = layout.slots.map((slot) => {
+        const h_mm = slot.height_mm ?? layout.height_mm;
+        const z_mm = slot.locZ_mm ?? (h_mm / 2);
+        return {
+            name: `Przegroda_${slot.index}`,
+            key: `DIVIDERS_${slot.index}`,
+            role: 'DIVIDER_PLATE',
+            nodeType: 'PART',
+            material: 'W1100_ST9_18',
+            materialName: 'Biały Alpejski',
+            materialCode: 'W1100 ST9',
+            dim: { x: h_mm, y: layout.depth_mm, z: layout.grubosc_przegrody_mm },
+            loc: { x: slot.xCenter, y: 0, z: z_mm },
+            lcs: DIVIDER_LCS,
+            edge_banding: edgeBanding,
+            features: []
+        };
+    });
 
     return { parts };
 }

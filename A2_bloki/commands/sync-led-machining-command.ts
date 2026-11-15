@@ -26,18 +26,19 @@ function findBlokContainers(
     ownerId?: string,
 ): any[] {
     const containers = typeof document.getContainers === 'function' ? document.getContainers() : [];
-    const matched = containers.filter((c: any) => {
+    return containers.filter((c: any) => {
         const p = c.domainData?.generatorParams;
-        if (c.domainData?.visible === false) return false;
+        if (c.frozen || c.domainData?.frozen === true) return false;
+        const isLed = p?.type === 'blok_led_internal' || p?.boxType === 'LED_INTERNAL';
+        if (!isLed) return false;
         if (ownerId) {
             return c.id === ownerId
                 || c.domainData?.id === ownerId
                 || p?.parentContainerId === ownerId
                 || p?.sourceContainerId === ownerId;
         }
-        return p?.type === 'blok_led_internal' || p?.boxType === 'LED_INTERNAL';
+        return true;
     });
-    return matched;
 }
 
 export class SyncLedMachiningCommand implements Command {
@@ -79,7 +80,7 @@ export class SyncLedMachiningCommand implements Command {
         const changedPanels = Array.from(changedNodeIds)
             .map(id => document.findNode(id))
             .filter(Boolean);
-        emitMachiningFeatures(changedPanels, changedNodeIds);
+        emitMachiningFeatures(changedPanels, changedNodeIds, document);
 
         // 4. Powiadom o zmianie dokumentu
         if (changedNodeIds.size > 0 && typeof document.notifyDocumentChanged === 'function') {

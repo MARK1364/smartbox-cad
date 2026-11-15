@@ -30,10 +30,18 @@ export function isVEdge(face: string | null | undefined): face is EdgeV {
     return n === 'FACE_Y_MINUS' || n === 'FACE_Y_PLUS';
 }
 
-export function parseSideToken(raw: string | undefined, axis: 'u' | 'v'): EdgeU | EdgeV {
+export function parseSideToken(raw: string | undefined, axis: 'u' | 'v', panelRole?: string): EdgeU | EdgeV {
     const key = String(raw || '').toLowerCase();
+    const roleUpper = String(panelRole || '').toUpperCase();
+    const isLeftSide = roleUpper.includes('LEFT') || roleUpper.includes('BOK_L');
     if (axis === 'u') {
         if (key === 'r' || key === 'right' || key === 'prawo' || key.includes('x_plus')) return 'FACE_X_PLUS';
+        if (key === 'przod' || key === 'front') {
+            return isLeftSide ? 'FACE_X_PLUS' : 'FACE_X_MINUS';
+        }
+        if (key === 'tyl' || key === 'back' || key === 'plecy') {
+            return isLeftSide ? 'FACE_X_MINUS' : 'FACE_X_PLUS';
+        }
         return 'FACE_X_MINUS';
     }
     if (key === 't' || key === 'top' || key === 'gora' || key === 'góra' || key.includes('y_plus')) return 'FACE_Y_PLUS';
@@ -53,16 +61,25 @@ export function edgeShortLabel(face: string): string {
 export function edgeKeyToPanelFace(
     edgeKey: string | null | undefined,
     slot?: 'u' | 'v' | 'auto',
+    panelRole?: string,
 ): FaceName | null {
     const k = String(edgeKey || '').toLowerCase();
     if (!k) return null;
+    const roleUpper = String(panelRole || '').toUpperCase();
+    const isLeftSide = roleUpper.includes('LEFT') || roleUpper.includes('BOK_L');
+
     const hasL = k.includes('lewo');
     const hasR = k.includes('prawo');
+    const hasFront = k.includes('przod') || k.includes('front');
+    const hasBack = k.includes('tyl') || k.includes('back') || k.includes('plecy');
     const hasB = k.includes('dol');
     const hasT = k.includes('gora') || k.includes('góra');
     const preferV = slot === 'v';
     const preferU = slot === 'u' || slot === 'auto' || !slot;
+
     if (preferU) {
+        if (hasFront && !hasBack) return isLeftSide ? 'FACE_X_PLUS' : 'FACE_X_MINUS';
+        if (hasBack && !hasFront) return isLeftSide ? 'FACE_X_MINUS' : 'FACE_X_PLUS';
         if (hasL && !hasR) return 'FACE_X_MINUS';
         if (hasR && !hasL) return 'FACE_X_PLUS';
         if (slot === 'u') return null;
@@ -72,6 +89,8 @@ export function edgeKeyToPanelFace(
         if (hasT && !hasB) return 'FACE_Y_PLUS';
     }
     if (!preferU) {
+        if (hasFront && !hasBack) return isLeftSide ? 'FACE_X_PLUS' : 'FACE_X_MINUS';
+        if (hasBack && !hasFront) return isLeftSide ? 'FACE_X_MINUS' : 'FACE_X_PLUS';
         if (hasL && !hasR) return 'FACE_X_MINUS';
         if (hasR && !hasL) return 'FACE_X_PLUS';
     }
@@ -96,20 +115,25 @@ export function pocketFromEdgeDims(
     const du = Math.max(0, place.uMm);
     const dv = Math.max(0, place.vMm);
     const zPlus = normalizeFaceName(opFace) === 'FACE_Z_PLUS';
+    const halfW = width / 2;
+    const halfH = length / 2;
 
-    let u: number;
+    let uCenter: number;
     if (uEdge === 'FACE_X_MINUS') {
-        u = zPlus ? du : faceW - width - du;
+        uCenter = zPlus ? du : faceW - du;
     } else {
-        u = zPlus ? faceW - width - du : du;
+        uCenter = zPlus ? faceW - du : du;
     }
 
-    let v: number;
+    let vCenter: number;
     if (vEdge === 'FACE_Y_MINUS') {
-        v = dv;
+        vCenter = dv;
     } else {
-        v = faceH - length - dv;
+        vCenter = faceH - dv;
     }
+
+    let u = uCenter - halfW;
+    let v = vCenter - halfH;
 
     u = Math.max(0, Math.min(u, faceW - width));
     v = Math.max(0, Math.min(v, faceH - length));
@@ -124,10 +148,11 @@ export function distanceToUEdge(
     faceW: number,
 ): number {
     const zPlus = normalizeFaceName(opFace) === 'FACE_Z_PLUS';
+    const uCenter = u + width / 2;
     if (uEdge === 'FACE_X_MINUS') {
-        return zPlus ? u : faceW - width - u;
+        return zPlus ? uCenter : faceW - uCenter;
     }
-    return zPlus ? faceW - width - u : u;
+    return zPlus ? faceW - uCenter : uCenter;
 }
 
 export function distanceToVEdge(
@@ -136,8 +161,9 @@ export function distanceToVEdge(
     length: number,
     faceH: number,
 ): number {
-    if (vEdge === 'FACE_Y_MINUS') return v;
-    return faceH - length - v;
+    const vCenter = v + length / 2;
+    if (vEdge === 'FACE_Y_MINUS') return vCenter;
+    return faceH - vCenter;
 }
 
 export function rebindUEdge(

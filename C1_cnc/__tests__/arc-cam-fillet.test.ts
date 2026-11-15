@@ -8,6 +8,7 @@ import { Mach3Postprocessor } from '../postprocessors/mach3-postprocessor.js';
 import { BiessePostprocessor } from '../postprocessors/biesse-postprocessor.js';
 import { SCMPostprocessor } from '../postprocessors/scm-postprocessor.js';
 import { WoodWOPPostprocessor } from '../postprocessors/woodwop-postprocessor.js';
+import { CAMProcessor } from '../processor/cam-processor.js';
 import { CLDataProgram } from '../core/cl-data.js';
 
 describe('Faza 5: Analityczne Łuki CAM (Fillet / Chamfer) i generowanie G02/G03', () => {
@@ -114,5 +115,34 @@ describe('Faza 5: Analityczne Łuki CAM (Fillet / Chamfer) i generowanie G02/G03
         const woodwopCode = woodwop.generateNcCode(program);
         expect(woodwopCode).toContain('<102 \\RoutingArc');
         expect(woodwopCode).toContain('R=50.00');
+
+        // 6. CAMProcessor.processProject zachowuje ruchy typu 'arc' w CNCOperation.parameters.moves
+        const processor = new CAMProcessor();
+        const ops = processor.processProject({
+            projectName: 'Blat_Zaokraglony',
+            wcsName: 'G54',
+            wcsOrigin,
+            features: [{ ...contour, toolId: 'tool_4_mill_8' }],
+            toolAssignments: {},
+            postprocessor: 'Fanuc',
+            strategyId: 'profiling_25d'
+        });
+        expect(ops).toHaveLength(1);
+        const arcMoves = (ops[0].parameters.moves || []).filter(m => m.type === 'arc');
+        expect(arcMoves).toHaveLength(4);
+        expect(arcMoves[0].arcParams?.radius).toBeCloseTo(50, 1);
+
+        // 7. Kompensacja promienia na segmentach analitycznych przesuwa promień łuku bez emitowania podwójnego G41/G42
+        const cmdsComp = strategy.generateCLCommands(
+            { ...contour, compensation: 'Right' },
+            tool,
+            wcsOrigin,
+            { leadInMm: 5, leadOutMm: 5 }
+        );
+        expect(cmdsComp.some(c => c.type === 'COMPENSATION')).toBe(false);
+        const compArcs = cmdsComp.filter(c => c.type === 'ARC');
+        expect(compArcs).toHaveLength(4);
+        // Dla obrysu CCW i compensation='Right' (offsetSign=+1) promień wewnętrzny 50 zmniejsza się o toolRadius=5 do 45
+        expect(compArcs[0].arcParams?.radius).toBeCloseTo(45, 1);
     });
 });

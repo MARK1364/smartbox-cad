@@ -116,6 +116,10 @@ export class CreateSmartWallCommand implements Command {
             // Bezpośrednio pod ROOM (root)
             document.addNode(document.rootNode.id, node);
             rebuildSmartWall(model, document);
+
+            // Układ poziomów Z umieszczony na samej górze (root) nad ścianami
+            document.ensureGlcNode('Poziomy Z', document.rootNode.id);
+
             document.setActiveEntity(model);
             document.afterCommit(() => this.dispatchProjectChanged());
         }, () => {

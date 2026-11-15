@@ -93,6 +93,7 @@ export class TooltipManager {
      * Zeruje aktywną podpowiedź.
      */
     public clearActiveHint(): void {
+        if (this._activeHint === null) return;
         this._activeHint = null;
         this._emitChange();
     }

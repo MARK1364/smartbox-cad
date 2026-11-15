@@ -23,10 +23,28 @@ function uiTx(key: string, vars?: Record<string, string | number>): string {
 export const PANEL_DIM_MIN_MM = 0.1;
 export const PANEL_DIM_MAX_MM = 3000;
 
+export interface UIState {
+    statusText: string;
+    statusBarActive: boolean;
+    /** Wizualny wariant paska statusu — logika czyta TYLKO to, nigdy statusText. */
+    statusKind: 'info' | 'error' | 'warning';
+    consoleText: string;
+    faceInfoHtml: string;
+    /** Strukturalny rodzaj selekcji — logika czyta TYLKO to, nigdy faceInfoHtml. */
+    faceKind: 'none' | 'face' | 'edge' | 'corner' | 'feature';
+    coordsInfoText: string;
+    inputWidthValue: string;
+    inputHeightValue: string;
+    inputThicknessValue: string;
+    inputThicknessLabel: string;
+    inputsDisabled: boolean;
+}
+
 export class UIController {
     document: ProjectDocument;
     viewport: any;
     static instance: UIController | null = null;
+    private static _globalListeners: Set<() => void> = new Set();
 
     /** Kody ścian -> klucze tekstów (display tłumaczony, kody stabilne). */
     private static FACE_LABEL_KEYS: Record<string, string> = {
@@ -40,32 +58,51 @@ export class UIController {
     _treeListeners: Set<any>;
     _addFilletListeners: Set<any>;
     _resetListeners: Set<any>;
+    private _stateListeners: Set<(state: UIState) => void>;
 
     // State object that React components will observe
-    state: {
-        statusText: string;
-        statusBarActive: boolean;
-        /** Wizualny wariant paska statusu — logika czyta TYLKO to, nigdy statusText. */
-        statusKind: 'info' | 'error' | 'warning';
-        consoleText: string;
-        faceInfoHtml: string;
-        /** Strukturalny rodzaj selekcji — logika czyta TYLKO to, nigdy faceInfoHtml. */
-        faceKind: 'none' | 'face' | 'edge' | 'corner' | 'feature';
-        coordsInfoText: string;
-        inputWidthValue: string;
-        inputHeightValue: string;
-        inputThicknessValue: string;
-        inputThicknessLabel: string;
-        inputsDisabled: boolean;
-    };
+    state: UIState;
 
     onStateChange: (() => void) | null = null;
+
+    /**
+     * Subskrypcja statyczna (obejmuje utworzenie/podmianę `UIController.instance`
+     * oraz każdą zmianę `state` aktywnej instancji). Idealna pod `useSyncExternalStore`.
+     */
+    static subscribe(listener: () => void): () => void {
+        UIController._globalListeners.add(listener);
+        return () => {
+            UIController._globalListeners.delete(listener);
+        };
+    }
+
+    /** Subskrypcja zmian stanu tej instancji `UIController`. */
+    subscribe(listener: (state: UIState) => void): () => void {
+        this._stateListeners.add(listener);
+        return () => {
+            this._stateListeners.delete(listener);
+        };
+    }
+
+    private _notifyStateChange(): void {
+        this.state = { ...this.state };
+        if (this.onStateChange) this.onStateChange();
+        for (const fn of this._stateListeners) {
+            try { fn(this.state); } catch (e) { console.error(e); }
+        }
+        if (UIController.instance === this) {
+            for (const fn of UIController._globalListeners) {
+                try { fn(); } catch (e) { console.error(e); }
+            }
+        }
+    }
 
     constructor(document: ProjectDocument) {
         this.document = document;
         this._treeListeners = new Set();
         this._addFilletListeners = new Set();
         this._resetListeners = new Set();
+        this._stateListeners = new Set();
 
         this.state = {
             statusText: uiTx('app.status_default'),
@@ -87,9 +124,10 @@ export class UIController {
         // Sync inputs when active entity changes
         this.document.onDocumentChanged(() => {
             this._syncInputsFromActive();
-            if (this.onStateChange) this.onStateChange();
+            this._notifyStateChange();
         });
         this._syncInputsFromActive();
+        this._notifyStateChange();
     }
 
     _syncInputsFromActive() {
@@ -153,10 +191,17 @@ export class UIController {
     }
 
     setStatus(text: string, active = false, kind: 'info' | 'error' | 'warning' = 'info') {
+        if (
+            this.state.statusText === text &&
+            this.state.statusBarActive === active &&
+            this.state.statusKind === kind
+        ) {
+            return;
+        }
         this.state.statusText = text;
         this.state.statusBarActive = active;
         this.state.statusKind = kind;
-        if (this.onStateChange) this.onStateChange();
+        this._notifyStateChange();
     }
 
     setConsole(msg: string) {
@@ -168,7 +213,7 @@ export class UIController {
             this.state.faceInfoHtml = `<span class="face-none">${uiTx('app.face_none')}</span>`;
             this.state.faceKind = 'none';
             this.state.coordsInfoText = '';
-            if (this.onStateChange) this.onStateChange();
+            this._notifyStateChange();
             return;
         }
         this.state.faceKind = kind;
@@ -189,7 +234,7 @@ export class UIController {
         } else {
             this.state.coordsInfoText = '';
         }
-        if (this.onStateChange) this.onStateChange();
+        this._notifyStateChange();
     }
 
     private static faceDisplayName(faceName: string, kind: string): string {
@@ -209,25 +254,22 @@ export class UIController {
     }
 
     showSketchMode(_face?: any) {
-        if (this.onStateChange) this.onStateChange();
+        this._notifyStateChange();
     }
 
     hideSketchMode() {
-        if (this.onStateChange) this.onStateChange();
+        this._notifyStateChange();
     }
 
     updateCursorCoords(uv: any) {
-        if (!uv) {
-            this.state.coordsInfoText = '';
-            if (this.onStateChange) this.onStateChange();
-            return;
-        }
-        this.state.coordsInfoText = `U: ${uv.u.toFixed(1)} mm  |  V: ${uv.v.toFixed(1)} mm`;
-        if (this.onStateChange) this.onStateChange();
+        const nextText = uv ? `U: ${uv.u.toFixed(1)} mm  |  V: ${uv.v.toFixed(1)} mm` : '';
+        if (this.state.coordsInfoText === nextText) return;
+        this.state.coordsInfoText = nextText;
+        this._notifyStateChange();
     }
 
     refreshFeatures() {
-        if (this.onStateChange) this.onStateChange();
+        this._notifyStateChange();
     }
 
     onAddFillet(fn: () => void) { this._addFilletListeners.add(fn); }

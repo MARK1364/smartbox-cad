@@ -535,6 +535,207 @@ function mergeOverlappingRectHoles(holes: number[][][]): number[][][] {
     return result;
 }
 
+function pointToSegmentDistSq(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1e-12) return (px - ax) * (px - ax) + (py - ay) * (py - ay);
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+    const cx = ax + t * dx;
+    const cy = ay + t * dy;
+    return (px - cx) * (px - cx) + (py - cy) * (py - cy);
+}
+
+/** Sprawdza, czy wielokąt `inner` leży ściśle wewnątrz `outer` (bez dotykania krawędzi ani wierzchołków). */
+export function isPolygonStrictlyInside(
+    inner: number[][],
+    outer: [number, number][],
+    tol = 0.05
+): boolean {
+    if (inner.length < 3 || outer.length < 3) return false;
+    const tolSq = tol * tol;
+    for (const [px, py] of inner) {
+        if (!isPointInPolygon2D(px, py, outer)) return false;
+        for (let i = 0; i < outer.length; i++) {
+            const [ax, ay] = outer[i];
+            const [bx, by] = outer[(i + 1) % outer.length];
+            if (pointToSegmentDistSq(px, py, ax, ay, bx, by) <= tolSq) return false;
+        }
+    }
+    const innerTyped = inner as [number, number][];
+    for (const [ox, oy] of outer) {
+        if (isPointInPolygon2D(ox, oy, innerTyped)) return false;
+    }
+    return true;
+}
+
+function isHoleContainedIn(inner: number[][], outer: number[][], tol = 0.05): boolean {
+    if (inner.length < 3 || outer.length < 3) return false;
+    const areaInner = Math.abs(signedArea2D(inner));
+    const areaOuter = Math.abs(signedArea2D(outer));
+    if (areaOuter + tol < areaInner) return false;
+
+    let iMinU = Infinity, iMaxU = -Infinity, iMinV = Infinity, iMaxV = -Infinity;
+    for (const [u, v] of inner) {
+        if (u < iMinU) iMinU = u;
+        if (u > iMaxU) iMaxU = u;
+        if (v < iMinV) iMinV = v;
+        if (v > iMaxV) iMaxV = v;
+    }
+    let oMinU = Infinity, oMaxU = -Infinity, oMinV = Infinity, oMaxV = -Infinity;
+    for (const [u, v] of outer) {
+        if (u < oMinU) oMinU = u;
+        if (u > oMaxU) oMaxU = u;
+        if (v < oMinV) oMinV = v;
+        if (v > oMaxV) oMaxV = v;
+    }
+    if (iMinU < oMinU - tol || iMaxU > oMaxU + tol || iMinV < oMinV - tol || iMaxV > oMaxV + tol) {
+        return false;
+    }
+
+    const outerTyped = outer as [number, number][];
+    const tolSq = tol * tol;
+    for (const [px, py] of inner) {
+        if (isPointInPolygon2D(px, py, outerTyped)) continue;
+        let onEdge = false;
+        for (let i = 0; i < outer.length; i++) {
+            const [ax, ay] = outer[i];
+            const [bx, by] = outer[(i + 1) % outer.length];
+            if (pointToSegmentDistSq(px, py, ax, ay, bx, by) <= tolSq) {
+                onEdge = true;
+                break;
+            }
+        }
+        if (!onEdge) return false;
+    }
+    const cx = inner.reduce((s, p) => s + p[0], 0) / inner.length;
+    const cy = inner.reduce((s, p) => s + p[1], 0) / inner.length;
+    return isPointInPolygon2D(cx, cy, outerTyped);
+}
+
+function holesOverlap2D(a: number[][], b: number[][], tol = 0.05): boolean {
+    let aMinU = Infinity, aMaxU = -Infinity, aMinV = Infinity, aMaxV = -Infinity;
+    for (const [u, v] of a) {
+        if (u < aMinU) aMinU = u;
+        if (u > aMaxU) aMaxU = u;
+        if (v < aMinV) aMinV = v;
+        if (v > aMaxV) aMaxV = v;
+    }
+    let bMinU = Infinity, bMaxU = -Infinity, bMinV = Infinity, bMaxV = -Infinity;
+    for (const [u, v] of b) {
+        if (u < bMinU) bMinU = u;
+        if (u > bMaxU) bMaxU = u;
+        if (v < bMinV) bMinV = v;
+        if (v > bMaxV) bMaxV = v;
+    }
+    if (aMaxU <= bMinU + tol || bMaxU <= aMinU + tol || aMaxV <= bMinV + tol || bMaxV <= aMinV + tol) {
+        return false;
+    }
+    const aTyped = a as [number, number][];
+    const bTyped = b as [number, number][];
+    for (const [px, py] of a) {
+        if (isPointInPolygon2D(px, py, bTyped)) return true;
+    }
+    for (const [px, py] of b) {
+        if (isPointInPolygon2D(px, py, aTyped)) return true;
+    }
+    return false;
+}
+
+/**
+ * Trianguluje listę wielokątów z otworami na głębokości `depth` (w układzie `faceData`),
+ * usuwając zagnieżdżone otwory i rozcinając wielokąty w razie nakładania lub styku z brzegiem.
+ */
+export function triangulatePolygonsWithHoles(
+    initialPolys: number[][][],
+    candidateHoles: number[][][],
+    faceData: ReturnType<typeof computeFaceData>,
+    depth: number,
+    target: FaceMeshData
+): void {
+    const TOL = 0.05;
+    // 1. Usuń otwory całkowicie zawarte wewnątrz innego otworu (earcut nie obsługuje zagnieżdżonych dziur)
+    const filteredHoles = candidateHoles.filter((hA, idxA) => {
+        for (let idxB = 0; idxB < candidateHoles.length; idxB++) {
+            if (idxA === idxB) continue;
+            const hB = candidateHoles[idxB];
+            if (isHoleContainedIn(hA, hB, TOL)) {
+                const areaA = Math.abs(signedArea2D(hA));
+                const areaB = Math.abs(signedArea2D(hB));
+                if (areaB > areaA + TOL || idxB < idxA) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    });
+
+    // 2. Jeśli dwa otwory częściowo się nakładają (lub otwór nie leży ściśle wewnątrz poligonu),
+    // rozetnij poligon prostokątem otworu zamiast przekazywać kolidujące dziury do earcut.
+    let polys = initialPolys;
+    const earcutHoles: number[][][] = [];
+    /** Czy otwór należy przypiąć do tego poligonu? Okrąg styczny do obrysu przechodzi testem środka. */
+    const holeBelongsToPoly = (hole: number[][], poly: number[][]): boolean => {
+        if (isPolygonStrictlyInside(hole, poly as [number, number][], TOL)) return true;
+        if (hole.length === 4) return false;
+        const cx = hole.reduce((s, q) => s + q[0], 0) / hole.length;
+        const cy = hole.reduce((s, q) => s + q[1], 0) / hole.length;
+        return isPointInPolygon2D(cx, cy, poly as [number, number][]);
+    };
+    for (let i = 0; i < filteredHoles.length; i++) {
+        const hole = filteredHoles[i];
+        const overlapsOther = filteredHoles.some((other, j) => j !== i && holesOverlap2D(hole, other, TOL));
+        // Okrągły otwór styczny do obrysu nie jest „ściśle wewnątrz", ale earcut potrafi go
+        // pomostkować, o ile jego środek leży w materiale. Bez tego otwór na krawędzi gubił czapkę.
+        const belongsToSomePoly = polys.some(p => holeBelongsToPoly(hole, p));
+        if (!overlapsOther && belongsToSomePoly) {
+            earcutHoles.push(hole);
+        } else if (hole.length === 4) {
+            const u0 = Math.min(hole[0][0], hole[1][0], hole[2][0], hole[3][0]);
+            const u1 = Math.max(hole[0][0], hole[1][0], hole[2][0], hole[3][0]);
+            const v0 = Math.min(hole[0][1], hole[1][1], hole[2][1], hole[3][1]);
+            const v1 = Math.max(hole[0][1], hole[1][1], hole[2][1], hole[3][1]);
+            const nextPolys: number[][][] = [];
+            for (const p of polys) {
+                const cutResult = cutBoxFromPolygon(p, u0, u1, v0, v1);
+                if (cutResult) nextPolys.push(...cutResult);
+                else nextPolys.push(...subtractBoxFromPolygon(p, u0, u1, v0, v1));
+            }
+            polys = nextPolys;
+        }
+    }
+
+    for (const poly of polys) {
+        const flatVertices: number[] = [];
+        const holeIndices: number[] = [];
+
+        for (const [u, v] of poly) {
+            flatVertices.push(u, v);
+        }
+
+        for (const hole of earcutHoles) {
+            if (holeBelongsToPoly(hole, poly)) {
+                holeIndices.push(flatVertices.length / 2);
+                for (const [hu, hv] of hole) {
+                    flatVertices.push(hu, hv);
+                }
+            }
+        }
+
+        const triangles = earcut(flatVertices, holeIndices, 2);
+        const offset = target.positions.length / 3;
+        for (let i = 0; i < flatVertices.length; i += 2) {
+            const u = flatVertices[i];
+            const v = flatVertices[i + 1];
+            target.positions.push(...localTo3D(faceData, u, v, depth));
+        }
+
+        for (const idx of triangles) {
+            target.indices.push(idx + offset);
+        }
+    }
+}
+
 /**
  * Czapka lica: dzieli obrys na rozłączne wielokąty materiału (cechy przecinające brzeg),
  * dodaje otwory wewnętrzne i trianguluje earcut → dopisuje do `faceResult`.
@@ -563,18 +764,14 @@ export function triangulateFaceCap(opts: {
             ? feat.params.polygon
             : undefined;
 
+        let forceNotInner = false;
         if (customPoly) {
-            const isInnerPolyNominal = customPoly.every(([pu, pv]) =>
-                pu > EDGE_TOL && pu < faceData.width - EDGE_TOL &&
-                pv > EDGE_TOL && pv < faceData.height - EDGE_TOL
-            );
-            const isInnerPoly = isInnerPolyNominal && customPoly.every(([pu, pv]) =>
-                isPointInPolygon2D(pu, pv, outerContour as [number, number][])
-            );
+            const isInnerPoly = isPolygonStrictlyInside(customPoly, outerContour as [number, number][], EDGE_TOL);
             if (isInnerPoly) {
                 innerHoles.push(customPoly);
                 continue;
             }
+            forceNotInner = true;
         }
 
         let cMinU = Infinity, cMaxU = -Infinity;
@@ -612,7 +809,7 @@ export function triangulateFaceCap(opts: {
             [u0 + EDGE_TOL, v1 - EDGE_TOL],
             [(u0 + u1) / 2, (v0 + v1) / 2]
         ];
-        const isInner = isInnerNominal && testPoints.every(([px, py]) =>
+        const isInner = !forceNotInner && isInnerNominal && testPoints.every(([px, py]) =>
             isPointInPolygon2D(px, py, outerContour as [number, number][])
         );
 
@@ -649,8 +846,15 @@ export function triangulateFaceCap(opts: {
             const v1 = Math.max(h[0][1], h[1][1], h[2][1], h[3][1]);
             if (u1 - u0 <= EDGE_TOL || v1 - v0 <= EDGE_TOL) continue;
 
+            const rectHole = [
+                [u0, v0],
+                [u0, v1],
+                [u1, v1],
+                [u1, v0]
+            ];
             const isInner = u0 > EDGE_TOL && u1 < faceData.width - EDGE_TOL &&
-                            v0 > EDGE_TOL && v1 < faceData.height - EDGE_TOL;
+                            v0 > EDGE_TOL && v1 < faceData.height - EDGE_TOL &&
+                            isPolygonStrictlyInside(rectHole, outerContour as [number, number][], EDGE_TOL);
 
             if (isInner) {
                 const alreadyAdded = innerHoles.some(ih =>
@@ -689,35 +893,5 @@ export function triangulateFaceCap(opts: {
     }
     allHoles.push(...innerHoles);
 
-    for (const poly of facePolygons) {
-        const flatVertices: number[] = [];
-        const holeIndices: number[] = [];
-
-        for (const [u, v] of poly) {
-            flatVertices.push(u, v);
-        }
-
-        for (const hole of allHoles) {
-            const cx = hole.reduce((s, p) => s + p[0], 0) / hole.length;
-            const cy = hole.reduce((s, p) => s + p[1], 0) / hole.length;
-            if (isPointInPolygon2D(cx, cy, poly as [number, number][])) {
-                holeIndices.push(flatVertices.length / 2);
-                for (const [hu, hv] of hole) {
-                    flatVertices.push(hu, hv);
-                }
-            }
-        }
-
-        const triangles = earcut(flatVertices, holeIndices, 2);
-        const offset = faceResult.positions.length / 3;
-        for (let i = 0; i < flatVertices.length; i += 2) {
-            const u = flatVertices[i];
-            const v = flatVertices[i + 1];
-            faceResult.positions.push(...localTo3D(faceData, u, v, 0));
-        }
-
-        for (const idx of triangles) {
-            faceResult.indices.push(idx + offset);
-        }
-    }
+    triangulatePolygonsWithHoles(facePolygons, allHoles, faceData, 0, faceResult);
 }

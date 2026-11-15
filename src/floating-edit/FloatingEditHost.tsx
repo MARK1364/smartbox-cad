@@ -13,9 +13,7 @@ import {
 } from '../../A2_bloki/handles/handle-types.js';
 import { HandleEditPanel } from '../../A2_bloki/handles/handle-edit-panel.js';
 import { HandleDimGizmo } from '../../A2_bloki/handles/handle-dim-gizmo.js';
-import { SinkDimGizmo } from '../../A2_bloki/sinks/sink-dim-gizmo.js';
-import { SinkEditPanel } from '../../A2_bloki/sinks/sink-edit-panel.js';
-import { SMARTPART_SINK_TYPE } from '../../A2_bloki/sinks/sink-types.js';
+import { SinkDimGizmo, SinkEditPanel, SMARTPART_SINK_TYPE } from '../../A6_agd/sinks/index.js';
 import {
     isCustomSmartPartModel,
     SmartPartEditPanel,
@@ -36,6 +34,7 @@ import {
     openCadEditEntity,
 } from './cad-edit-entity.js';
 import { isPanelModel } from '../../A4_smartpanel/panel-model.js';
+import { findOwningContainer } from '../../A1_core/panel-like.js';
 import { FloatingEditShell } from './FloatingEditShell.js';
 import { FloatingBlokEdit } from './FloatingBlokEdit.js';
 import { FloatingAgdEdit } from './FloatingAgdEdit.js';
@@ -219,7 +218,7 @@ export function shouldKeepSessionForTab(sessionKind: HostKind, newTab: string | 
     if (sessionKind === 'blok' && newTab === 'tab-a2-bloki') return true;
     if (sessionKind === 'agd' && newTab === 'tab-agd') return true;
     if (sessionKind === 'smartpart' && newTab === 'tab-a5-smartparts') return true;
-    if (sessionKind === 'korpus' && (newTab === 'tab-a3-smartframe' || newTab === 'tab-b1-biblioteka')) return true;
+    if (sessionKind === 'korpus' && newTab === 'tab-a3-smartframe') return true;
     if (sessionKind === 'wall' && newTab === 'tab-s4-sciany') return true;
     return false;
 }
@@ -287,8 +286,21 @@ export function FloatingEditHost({ projectModel }: { projectModel?: any }): Reac
             // panel / operation → istniejący FloatingOperationDialog
             if (detail.kind === 'panel') {
                 close();
+                const pId = detail.entityId || detail.panelId;
+                const doc = ContextManager.instance.document;
+                if (doc && pId) {
+                    const node = doc.findNode(pId);
+                    const panel = node?.domainData;
+                    // Formatki natywne tworzone przez silnik korpusu/bloku nie posiadają okna edycji formatki SmartPanel
+                    if (panel && (panel as any).engineManaged !== false) {
+                        const owner = findOwningContainer(doc, pId);
+                        if (owner) {
+                            return;
+                        }
+                    }
+                }
                 window.dispatchEvent(new CustomEvent(CAD_OPEN_FLOATING_PANEL_EDIT, {
-                    detail: { panelId: detail.entityId || detail.panelId },
+                    detail: { panelId: pId },
                 }));
                 return;
             }

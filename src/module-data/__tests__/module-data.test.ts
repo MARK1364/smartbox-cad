@@ -386,7 +386,7 @@ describe('tree-context-menu', () => {
         }
     });
 
-    it('shows "Edytuj korpus" for a panel node belonging to a korpus (unified 3D and tree context menu)', async () => {
+    it('shows context menu with "Narzędzia formatki" without edit tool for a native panel in korpus', async () => {
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
         const { CADNode } = await import('../../../A1_core/cad-node/cad-node.js');
         const { NodeType } = await import('../../../A1_core/cad-node/node-type.js');
@@ -419,9 +419,57 @@ describe('tree-context-menu', () => {
                 clientY: 20,
             });
             const labels = labelsOf(shownItems);
-            expect(labels).toContain('Edytuj korpus');
+            expect(labels).not.toContain('Edytuj korpus');
             expect(labels).not.toContain('Edytuj formatkę');
             expect(labels).toContain('Obróć usłojenie o 90° (poprzeczne)');
+            const sections = shownItems.map((it: any) => it.section).filter(Boolean);
+            expect(sections).toContain('Narzędzia formatki');
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+        }
+    });
+
+    it('excludes edit tool for a native panel in korpus and names section "Narzędzia formatki"', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu');
+        const { CADNode } = await import('../../../A1_core/cad-node/cad-node.js');
+        const { NodeType } = await import('../../../A1_core/cad-node/node-type.js');
+        const doc = new ProjectDocument();
+        registerProjectDomain(doc);
+        const korpus = doc.createAssembly({ name: 'Szafka_Dolna' }) as any;
+        korpus.generatorParams = { type: 'korpus_standard' };
+        korpus.type = 'container';
+
+        const panelModel = { id: 'bok_l_active', name: 'Bok_L', role: 'PART', engineManaged: true };
+        const panelNode = CADNode.create(NodeType.PART, 'Bok_L', 'bok_l_active');
+        panelNode.domainData = panelModel;
+        doc.addNode(korpus.id, panelNode);
+        doc.setActiveEntity(panelModel as any);
+        ContextManager.instance.document = doc;
+
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        let shownItems: any[] = [];
+        let shownTitle: string | undefined;
+        const originalShow = ContextMenu.prototype.show;
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[], title?: string) {
+            shownItems = items;
+            shownTitle = title;
+        };
+
+        try {
+            showCadTreeContextMenu({
+                type: 'part',
+                id: 'bok_l_active',
+                name: 'Bok_L',
+                isManual: false,
+                clientX: 20,
+                clientY: 20,
+            });
+            const labels = labelsOf(shownItems);
+            expect(labels).not.toContain('Edytuj formatkę');
+            expect(labels).not.toContain('Edytuj korpus');
+            const sections = shownItems.map((it: any) => it.section).filter(Boolean);
+            expect(sections).toContain('Narzędzia formatki');
+            expect(shownTitle).toBe('Narzędzia formatki');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
@@ -447,6 +495,8 @@ describe('tree-context-menu', () => {
             });
             const labels = labelsOf(shownItems);
             expect(labels.some(l => l.includes('Wybierz zakrytą'))).toBe(true);
+            expect(shownItems[0]?.section).toBe('Widok');
+            expect(shownItems[0]?.toolbar?.[0]?.action).toBe('open-quick-pick');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
@@ -694,25 +744,27 @@ describe('tree-context-menu', () => {
         }
     });
 
-    it('extracts default plane "Płaszczyzna 1" at 100mm under GLC in DrawingProjectExtractor and shows tree context menu', async () => {
+    it('extracts default level "Poziom 1" at 100mm under Base Floor in DrawingProjectExtractor and shows tree context menu', async () => {
         const { DrawingProjectExtractor } = await import('../../../R2_rys/drawing-project-extractor');
         const { showCadTreeContextMenu } = await import('../tree-context-menu');
         const { ContextMenu } = await import('../../../A1_core/context-menu.js');
         const doc = new ProjectDocument({ name: 'Projekt Testowy' });
         registerProjectDomain(doc);
+        doc.ensureGlcNode('Poziomy Z');
         ContextManager.instance.document = doc;
 
         const tree = DrawingProjectExtractor.instance.extractProjectTree();
         expect(tree.rootNode).toBeDefined();
 
-        // Pierwszym dzieckiem projektu jest Układ globalny (GLC)
+        // Dzieckiem projektu jest Poziomy Z (GLC)
         const glcNode = tree.rootNode.children?.find((c: any) => c.type === 'GLC' || c.id === 'glc_origin');
         expect(glcNode).toBeDefined();
+        expect(glcNode!.name).toBe('Poziomy Z');
         expect(glcNode!.children).toBeDefined();
         expect(glcNode!.children!.length).toBeGreaterThanOrEqual(1);
 
-        // Domyślna płaszczyzna ma nazwę "Płaszczyzna 1", wysokość 100 mm i typ DATUM_LEVEL
-        const defaultPlane = glcNode!.children!.find((c: any) => c.name === 'Płaszczyzna 1');
+        // Domyślny poziom ma nazwę "Poziom 1", wysokość 100 mm i typ DATUM_LEVEL
+        const defaultPlane = glcNode!.children!.find((c: any) => c.name === 'Poziom 1');
         expect(defaultPlane).toBeDefined();
         expect(defaultPlane!.type).toBe('DATUM_LEVEL');
         expect(defaultPlane!.height).toBe(100);
@@ -737,7 +789,20 @@ describe('tree-context-menu', () => {
             expect(labels).toContain('Edytuj');
             expect(labels).toContain('Ukryj');
             expect(labels).toContain('Zmień nazwę');
-            expect(labels).toContain('Usuń poziom');
+            // Domyślny "Poziom 1" nie podlega usunięciu (brak opcji "Usuń poziom")
+            expect(labels).not.toContain('Usuń poziom');
+
+            // Nowo dodany poziom odniesienia MOŻE być usunięty (posiada opcję "Usuń poziom")
+            const customLevel = doc.addDatumLevel(500, 'Poziom 3');
+            showCadTreeContextMenu({
+                type: 'datum_level',
+                id: customLevel.id,
+                name: customLevel.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            const customLabels = labelsOf(shownItems);
+            expect(customLabels).toContain('Usuń poziom');
         } finally {
             ContextMenu.prototype.show = originalShow;
         }
@@ -782,8 +847,8 @@ describe('tree-context-menu', () => {
                 clientY: 20,
             });
 
-            // Sprawdzenie obecności sekcji Obiekt z toolbar
-            const objectSection = shownItems.find((i) => i.section === 'Obiekt');
+            // Sprawdzenie obecności sekcji Narzędzia formatki z toolbar
+            const objectSection = shownItems.find((i) => i.section === 'Narzędzia formatki');
             expect(objectSection).toBeDefined();
             expect(Array.isArray(objectSection.toolbar)).toBe(true);
 
@@ -813,6 +878,84 @@ describe('tree-context-menu', () => {
             // Kolejne wywołanie przywraca wzdłużne
             actionCallback!('toggle-grain-direction', {});
             expect(panelModel.rotate_grain).toBe(false);
+        } finally {
+            ContextMenu.prototype.show = originalShow;
+            ContextMenu.prototype.onAction = originalOnAction;
+        }
+    });
+
+    it('shows top panel conversion buttons (2× Poziome, 2× Pionowe, Pojedynczy) under PPM for TOP_PANEL', async () => {
+        const { showCadTreeContextMenu } = await import('../tree-context-menu.js');
+        const { ContextMenu } = await import('../../../A1_core/context-menu.js');
+        const { ContextManager } = await import('../../../A1_core/context-manager.js');
+        const { ProjectDocument } = await import('../../../A1_core/project-document.js');
+        await import('../../application/project-domain.js');
+
+        let shownItems: any[] = [];
+        let actionCallback: ((action: string, data: any) => void) | null = null;
+        const originalShow = ContextMenu.prototype.show;
+        const originalOnAction = ContextMenu.prototype.onAction;
+
+        ContextMenu.prototype.show = function (_x: number, _y: number, items: any[]) {
+            shownItems = items;
+        };
+        ContextMenu.prototype.onAction = function (cb: (action: string, data: any) => void) {
+            actionCallback = cb;
+        };
+
+        try {
+            const doc = new ProjectDocument();
+            ContextManager.instance.document = doc;
+
+            const containerModel = doc.createAssembly({ name: 'Szafka_Test' }) as any;
+            containerModel.generatorParams = { type: 'korpus3', topPanelMode: 'FULL', traverseWidth: 80 };
+            const topPanelModel = doc.createPanel({
+                name: 'Wieniec_G',
+                width: 564_000_000,
+                height: 500_000_000,
+                thickness: 18_000_000,
+                role: 'TOP_PANEL',
+                engineManaged: true,
+            }, containerModel.id) as any;
+
+            // 1. Gdy FULL -> w osobnej kategorii "Konwertuj" widać Ramka ALU, 2× Poziome i 2× Pionowe
+            showCadTreeContextMenu({
+                type: 'part',
+                id: topPanelModel.id,
+                name: topPanelModel.name,
+                clientX: 10,
+                clientY: 10,
+            });
+
+            let convertSection = shownItems.find((i) => i.section === 'Konwertuj');
+            expect(convertSection).toBeDefined();
+            let captions = convertSection.toolbar.map((t: any) => t.caption);
+            expect(captions).toContain('Ramka ALU');
+            expect(captions).toContain('2× Poziome');
+            expect(captions).toContain('2× Pionowe');
+            expect(captions).not.toContain('Pojedynczy');
+
+            // 2. Kliknięcie 2× Poziome -> zmienia na TRAVERSE_H, a w "Konwertuj" pojawia się Pojedynczy i 2× Pionowe
+            actionCallback!('top-panel-traverse-h', {});
+            expect(containerModel.generatorParams.topPanelMode).toBe('TRAVERSE_H');
+
+            showCadTreeContextMenu({
+                type: 'part',
+                id: topPanelModel.id,
+                name: topPanelModel.name,
+                clientX: 10,
+                clientY: 10,
+            });
+            convertSection = shownItems.find((i) => i.section === 'Konwertuj');
+            expect(convertSection).toBeDefined();
+            captions = convertSection.toolbar.map((t: any) => t.caption);
+            expect(captions).toContain('Ramka ALU');
+            expect(captions).toContain('Pojedynczy');
+            expect(captions).toContain('2× Pionowe');
+
+            // 3. Kliknięcie Pojedynczy -> wraca na FULL
+            actionCallback!('top-panel-full', {});
+            expect(containerModel.generatorParams.topPanelMode).toBe('FULL');
         } finally {
             ContextMenu.prototype.show = originalShow;
             ContextMenu.prototype.onAction = originalOnAction;

@@ -3,7 +3,7 @@
  * Testy silnika parametrycznej kuchenki mikrofalowej B-rep.
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { planMicrowave } from '../microwave-engine.js';
 import {
     DEFAULT_MICROWAVE_PARAMS,
@@ -13,6 +13,19 @@ import {
 import { createSmartAppliance, rebuildSmartAppliance } from '../smart-appliance-core.js';
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { nmToMm } from '../../A1_core/cad-math/units.js';
+import { CommandHistory } from '../../A1_core/commands/command-history.js';
+import { ContextManager } from '../../A1_core/context-manager.js';
+import { CADNode } from '../../A1_core/cad-node/cad-node.js';
+import { NodeType } from '../../A1_core/cad-node/node-type.js';
+import { ContainerModel } from '../../A1_core/container-model.js';
+import { CreateSmartApplianceCommand } from '../create-smart-appliance-command.js';
+
+const originalCommandHistory = ContextManager.instance.commandHistory;
+
+afterEach(() => {
+    ContextManager.instance.commandHistory = originalCommandHistory;
+    vi.restoreAllMocks();
+});
 
 describe('A6_agd — Microwave Engine & B-rep Structure', () => {
     it('oblicza wysokość korpusu według reguły z piekarnikowa.html (frontHeight - nalGora - nalDol)', () => {
@@ -113,6 +126,49 @@ describe('A6_agd — Microwave Engine & B-rep Structure', () => {
 
         expect(nmToMm(frontChild!.domainData.height)).toBe(380);
         expect(nmToMm(corpusChild!.domainData.height)).toBe(352);
+    });
+
+    it('obejmuje wstawienie, Undo i Redo jedną komendą historii', () => {
+        const doc = new ProjectDocument();
+        const previousContainer = new ContainerModel({ name: 'Poprzedni aktywny' });
+        const previousNode = CADNode.create(NodeType.ASSEMBLY, previousContainer.name, previousContainer.id);
+        previousNode.domainData = previousContainer;
+        doc.addNode(doc.rootNode.id, previousNode);
+        doc.setActiveEntity(previousContainer);
+        const history = new CommandHistory(doc);
+        ContextManager.instance.commandHistory = history;
+
+        const node = createSmartAppliance({}, doc)!;
+
+        expect(history.undoStack).toHaveLength(1);
+        expect(doc.findNode(node.id)).toBe(node);
+        expect(doc.activeEntity).toBe(node.domainData);
+
+        expect(history.undo()).toBe(true);
+        expect(doc.findNode(node.id)).toBeNull();
+        expect(doc.activeEntity).toBe(previousContainer);
+
+        expect(history.redo()).toBe(true);
+        expect(doc.findNode(node.id)).toBe(node);
+        expect(node.children).toHaveLength(2);
+        expect(doc.activeEntity).toBe(node.domainData);
+    });
+
+    it('wycofuje dodanie kontenera, gdy przebudowa AGD nie powiedzie się', () => {
+        const doc = new ProjectDocument();
+        const previousActive = doc.rootNode.domainData;
+        doc.setActiveEntity(previousActive);
+        const history = new CommandHistory(doc);
+        ContextManager.instance.commandHistory = history;
+        const container = new ContainerModel({ name: 'AGD' });
+        const node = CADNode.create(NodeType.ASSEMBLY, container.name, container.id);
+        node.domainData = container;
+        const command = new CreateSmartApplianceCommand(node, doc.rootNode.id, () => false, 'Wstawiono AGD');
+
+        expect(() => history.execute(command)).toThrow(/failed to build appliance/);
+        expect(doc.getContainers()).toHaveLength(0);
+        expect(doc.activeEntity).toBe(previousActive);
+        expect(history.undoStack).toHaveLength(0);
     });
 
     it('reaguje na dynamiczną zmianę parametrów i aktualizuje wysokość korpusu', () => {

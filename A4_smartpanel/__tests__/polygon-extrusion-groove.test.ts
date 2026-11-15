@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { buildMeshFromPanel } from '../native_core/mesh_builder';
 import { buildPolygonPanelTopology } from '../native_core/polygon-extrusion';
 import { computeOutlineCapVertices } from '../native_core/polygon-extrusion';
 import { NativePanelBuilder } from '../native-panel-builder';
+import { ensurePanelBrepWasmInitialized } from '../panel-brep-wasm-bridge';
 import { mmToNm } from '../../A1_core/cad-math/units';
+
+beforeAll(async () => {
+    await ensurePanelBrepWasmInitialized();
+});
 
 const plateW = 882;
 const plateD = 882;

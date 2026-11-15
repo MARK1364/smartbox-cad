@@ -338,6 +338,75 @@ describe('CommandHistory and CAD Commands', () => {
         expect(panel.features[0].id).toBe('hole_1');
     });
 
+    it('AddFeatureCommand undo removes the added feature by ID after external list changes', () => {
+        const panel: any = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Panel z operacjami',
+        });
+        panel.features = [
+            { id: 'existing', type: 'hole' },
+            { id: 'another', type: 'groove' },
+        ];
+        const command = new AddFeatureCommand(panel.id, { id: 'added', type: 'hole' }, 1);
+
+        history.execute(command);
+        panel.features.unshift({ id: 'synced', type: 'hole' });
+        history.undo();
+
+        expect(panel.features.map((feature: any) => feature.id)).toEqual([
+            'synced', 'existing', 'another',
+        ]);
+    });
+
+    it('restores a removed feature relative to neighboring IDs after external list changes', () => {
+        const panel: any = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Panel z operacjami',
+        });
+        panel.features = [
+            { id: 'before', type: 'hole' },
+            { id: 'removed', type: 'groove' },
+            { id: 'after', type: 'hole' },
+        ];
+        const command = new RemoveFeatureCommand(doc, panel.id, 'removed');
+
+        history.execute(command);
+        panel.features.unshift({ id: 'synced-before', type: 'hole' });
+        history.undo();
+
+        expect(panel.features.map((feature: any) => feature.id)).toEqual([
+            'synced-before', 'before', 'removed', 'after',
+        ]);
+    });
+
+    it('redo removes the feature by ID, not its stale original index', () => {
+        const panel: any = doc.createPanel({
+            width: mmToNm(600),
+            height: mmToNm(720),
+            thickness: mmToNm(18),
+            name: 'Panel z operacjami',
+        });
+        panel.features = [
+            { id: 'before', type: 'hole' },
+            { id: 'removed', type: 'groove' },
+            { id: 'after', type: 'hole' },
+        ];
+        const command = new RemoveFeatureCommand(doc, panel.id, 'removed');
+
+        history.execute(command);
+        history.undo();
+        panel.features.unshift({ id: 'synced-before', type: 'hole' });
+        history.redo();
+
+        expect(panel.features.map((feature: any) => feature.id)).toEqual([
+            'synced-before', 'before', 'after',
+        ]);
+    });
+
     it('cofa różne typy edycji w jednej chronologicznej kolejności (LIFO)', () => {
         // 1) Dodaj korpus
         const cabinet = doc.createAssembly({ name: 'Korpus', width: mmToNm(600), height: mmToNm(720), depth: mmToNm(500) });

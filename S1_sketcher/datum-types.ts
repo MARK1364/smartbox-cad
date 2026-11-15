@@ -114,8 +114,9 @@ export class DatumLevelModel {
     visiblePlane: boolean;
     visible: boolean;
     color?: string;
+    isDefault?: boolean;
 
-    constructor(data: { id: string; name: string; z_nm: number; isLocked?: boolean; visiblePlane?: boolean; visible?: boolean; color?: string }) {
+    constructor(data: { id: string; name: string; z_nm: number; isLocked?: boolean; visiblePlane?: boolean; visible?: boolean; color?: string; isDefault?: boolean }) {
         this.id = data.id;
         this.name = data.name;
         this.z_nm = data.z_nm;
@@ -123,6 +124,7 @@ export class DatumLevelModel {
         this.visiblePlane = Boolean(data.visiblePlane);
         this.visible = data.visible !== false;
         this.color = data.color;
+        this.isDefault = Boolean(data.isDefault || data.id === 'datum_level_1' || data.id === 'datum_level_top');
     }
 
     static fromJSON(raw: any): DatumLevelModel {
@@ -134,6 +136,7 @@ export class DatumLevelModel {
             visiblePlane: Boolean(raw.visiblePlane),
             visible: raw.visible !== false,
             color: raw.color,
+            isDefault: Boolean(raw.isDefault || raw.id === 'datum_level_1' || raw.id === 'datum_level_top'),
         });
     }
 
@@ -147,6 +150,7 @@ export class DatumLevelModel {
             visiblePlane: this.visiblePlane,
             visible: this.visible,
             color: this.color,
+            isDefault: this.isDefault,
         };
     }
 }
@@ -159,14 +163,16 @@ export class GlcDomainModel {
     showAxisZ: boolean;
     axisZHeight_nm: number;
     visible: boolean;
+    isDefault?: boolean;
 
-    constructor(data: { id: string; name: string; showPlanes?: boolean; showAxisZ?: boolean; axisZHeight_nm?: number; visible?: boolean }) {
+    constructor(data: { id: string; name: string; showPlanes?: boolean; showAxisZ?: boolean; axisZHeight_nm?: number; visible?: boolean; isDefault?: boolean }) {
         this.id = data.id;
         this.name = data.name;
         this.showPlanes = data.showPlanes !== false;
         this.showAxisZ = data.showAxisZ !== false;
         this.axisZHeight_nm = data.axisZHeight_nm ?? mmToNm(2500);
         this.visible = data.visible !== false;
+        this.isDefault = Boolean(data.isDefault || data.id === 'glc_origin');
     }
 
     static fromJSON(raw: any): GlcDomainModel {
@@ -177,6 +183,7 @@ export class GlcDomainModel {
             showAxisZ: raw.showAxisZ,
             axisZHeight_nm: raw.axisZHeight_nm,
             visible: raw.visible !== false,
+            isDefault: Boolean(raw.isDefault || raw.id === 'glc_origin'),
         });
     }
 
@@ -189,8 +196,28 @@ export class GlcDomainModel {
             showAxisZ: this.showAxisZ,
             axisZHeight_nm: this.axisZHeight_nm,
             visible: this.visible,
+            isDefault: this.isDefault,
         };
     }
+}
+
+/**
+ * Sprawdza, czy węzeł sceny lub model domenowy jest domyślnym elementem bazowym sceny
+ * (Układ globalny GLC_FRAME / glc_origin, Płaszczyzna 1 datum_level_1, Góra osi Z datum_level_top).
+ * Elementy te nie podlegają usunięciu przez użytkownika.
+ */
+export function isDefaultDatumNode(idOrNode: { id?: string; domainData?: any; isDefault?: boolean; nodeType?: string } | string | null | undefined): boolean {
+    if (!idOrNode) return false;
+    const id = typeof idOrNode === 'string' ? idOrNode : idOrNode.id;
+    if (id === 'glc_origin' || id === 'datum_level_1' || id === 'datum_level_top') {
+        return true;
+    }
+    if (typeof idOrNode === 'object') {
+        if (idOrNode.isDefault) return true;
+        if ((idOrNode as any).domainData?.isDefault) return true;
+        if (idOrNode.nodeType === 'GLC_FRAME') return true;
+    }
+    return false;
 }
 
 /** Standardowy zestaw poziomów kuchennych (wysokości w mm) */

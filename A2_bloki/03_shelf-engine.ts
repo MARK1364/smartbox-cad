@@ -8,7 +8,8 @@
  *  - SSOT parametrów: A2_bloki/01_BLOKI_PARAMETERS.md
  */
 
-import shelfRules from './03_shelf_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const shelfRules = getModuleRules('03_shelf');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import { type ModuleDims } from './01_base-engine.js';
 import type {
@@ -21,6 +22,7 @@ import {
     assertCanonicalShelfParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callShelfPlanWasm } from './shelf-wasm-bridge.js';
 
 export { assertCanonicalShelfParams, LEGACY_SHELF_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -85,6 +87,27 @@ export function calculateShelfPlan(
 ): BlokiPlanResult {
     const parts: BlokiPart[] = [];
     const shelfRule = (shelfRules as any).model_tree?.root_assembly?.subcomponents?.SHELF;
+    const roleOverride = (shelfRules as any).parameters?.smart_panel_integration?.role_overrides?.SHELF_BOARD;
+    const edgeBanding = roleOverride?.edge_banding || {
+        '+Y': { active: true, type_id: '0.008x0.022' },
+        '-Y': { active: false, type_id: 'none' },
+        '+X': { active: false, type_id: 'none' },
+        '-X': { active: false, type_id: 'none' }
+    };
+
+    const wasmResult = callShelfPlanWasm(dims, params, {
+        shelfName: shelfRule?.name || 'Wieniec',
+        shelfRole: shelfRule?.role || 'SHELF_BOARD',
+        shelfLcs: shelfRule?.lcs || {
+            mapping: { X: 'x', Y: 'y', Z: 'z' },
+            rotation: [90, 0, 0],
+            faces: { INNER: 'FACE_Z_PLUS', OUTER: 'FACE_Z_MINUS' }
+        },
+        edgeBanding
+    });
+    if (wasmResult) {
+        return wasmResult;
+    }
 
     const {
         width_mm: szerokosc_strefy_mm,
@@ -115,14 +138,6 @@ export function calculateShelfPlan(
     const efektywna_szerokosc_mm = Math.max(10, szerokosc_strefy_mm - 2 * luz_boczny_mm);
     const efektywna_glebokosc_mm = Math.max(10, glebokosc_strefy_mm - (odsuniecie_przod_mm + odsuniecie_tyl_mm));
     const srodek_y_mm = (odsuniecie_przod_mm - odsuniecie_tyl_mm) / 2.0;
-
-    const roleOverride = (shelfRules as any).parameters?.smart_panel_integration?.role_overrides?.SHELF_BOARD;
-    const edgeBanding = roleOverride?.edge_banding || {
-        '+Y': { active: true, type_id: '0.008x0.022' },
-        '-Y': { active: false, type_id: 'none' },
-        '+X': { active: false, type_id: 'none' },
-        '-X': { active: false, type_id: 'none' }
-    };
 
     parts.push({
         name: shelfRule?.name || 'Wieniec',

@@ -1,0 +1,12 @@
+C:\Users\ADM\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons\CAD\web\A3_smartframe\smartframe_rust\target\debug\deps\serde-cc52b10080f38695.d: C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A3_smartframe\smartframe_rust\target\debug\build\serde-94d19e0df0307ef8\out/private.rs
+
+C:\Users\ADM\AppData\Roaming\Blender Foundation\Blender\5.0\scripts\addons\CAD\web\A3_smartframe\smartframe_rust\target\debug\deps\libserde-cc52b10080f38695.rmeta: C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A3_smartframe\smartframe_rust\target\debug\build\serde-94d19e0df0307ef8\out/private.rs
+
+C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs:
+C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs:
+C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs:
+C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs:
+C:\Users\ADM\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs:
+C:\Users\ADM\AppData\Roaming\Blender\ Foundation\Blender\5.0\scripts\addons\CAD\web\A3_smartframe\smartframe_rust\target\debug\build\serde-94d19e0df0307ef8\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\ADM\\AppData\\Roaming\\Blender Foundation\\Blender\\5.0\\scripts\\addons\\CAD\\web\\A3_smartframe\\smartframe_rust\\target\\debug\\build\\serde-94d19e0df0307ef8\\out

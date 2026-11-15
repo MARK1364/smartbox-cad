@@ -12,11 +12,14 @@ import {
     GrooveFeature2D,
     ProjectionAngle,
     DrawingPMIDimension,
+    DrawingDataIssue,
 } from './drawing-types';
 import { ContextManager } from '../A1_core/context-manager';
 import { NodeType } from '../A1_core/cad-node/node-type';
 import { CADNode } from '../A1_core/cad-node/cad-node';
+import { isDefaultDatumNode } from '../S1_sketcher/datum-types';
 import { PMIStore } from '../A8_pmi/pmi-data';
+import { ReportDataNormalizer } from '../R1_reports/report-data-normalizer';
 
 export const LIVE_PROJECT_STORAGE_KEY = 'bloki_cad_live_project_v1';
 /**
@@ -48,15 +51,96 @@ function modelNmToMm(val: any, defaultVal: number = 0): number {
     return Math.round(num / 1_000_000);
 }
 
-function mapGrooveFeature(f: any, fallbackHeight: number, fallbackIdx = 0): GrooveFeature2D {
+function requiredFeatureValue(value: unknown): number | null {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+    return value;
+}
+
+function mapHoleFeature(
+    feature: any,
+    fallbackIdx: number,
+    nodeId: string,
+    nodeName: string,
+    issues: DrawingDataIssue[],
+): HoleFeature2D | null {
+    const params = feature?.params || {};
+    const x = requiredFeatureValue(params.u ?? params.x ?? feature?.u ?? feature?.x);
+    const y = requiredFeatureValue(params.v ?? params.y ?? feature?.v ?? feature?.y);
+    const diameter = requiredFeatureValue(params.diameter ?? feature?.diameter);
+    const depth = requiredFeatureValue(params.depth ?? feature?.depth);
+    const face = feature?.face ?? params.face;
+    const validFaces = [
+        'FRONT', 'BACK',
+        'EDGE_X_MINUS', 'EDGE_X_PLUS', 'EDGE_Y_MINUS', 'EDGE_Y_PLUS',
+        'FACE_Z_PLUS', 'FACE_Z_MINUS', 'FACE_X_PLUS', 'FACE_X_MINUS', 'FACE_Y_PLUS', 'FACE_Y_MINUS',
+    ];
+    const missing = [
+        ...(x === null ? ['pozycja U/X'] : []),
+        ...(y === null ? ['pozycja V/Y'] : []),
+        ...(diameter === null || diameter <= 0 ? ['średnica'] : []),
+        ...(depth === null || depth <= 0 ? ['głębokość'] : []),
+        ...(typeof face !== 'string' || !validFaces.includes(face) ? ['ściana'] : []),
+    ];
+    if (missing.length > 0) {
+        issues.push({
+            node_id: nodeId,
+            node_name: nodeName,
+            feature_id: feature?.id ? String(feature.id) : undefined,
+            reason: `Brak lub nieprawidłowe parametry otworu: ${missing.join(', ')}.`,
+        });
+        return null;
+    }
+    if (x === null || y === null || diameter === null || depth === null || typeof face !== 'string') return null;
+
+    return {
+        id: String(feature.id || `h_${fallbackIdx}`),
+        x,
+        y,
+        diameter,
+        depth,
+        face: face as HoleFeature2D['face'],
+        frozen: !!(feature.frozen || params.frozen),
+    };
+}
+
+function mapGrooveFeature(
+    f: any,
+    fallbackIdx: number,
+    nodeId: string,
+    nodeName: string,
+    issues: DrawingDataIssue[],
+): GrooveFeature2D | null {
     const library = f?.params?.source === 'library' && !!f?.params?.library_id;
+    const x = requiredFeatureValue(f?.params?.u ?? f?.params?.x ?? f?.x);
+    const y = requiredFeatureValue(f?.params?.v ?? f?.params?.y ?? f?.y);
+    const width = requiredFeatureValue(f?.params?.width ?? f?.width);
+    const height = requiredFeatureValue(f?.params?.length ?? f?.params?.height ?? f?.height);
+    const depth = requiredFeatureValue(f?.params?.depth ?? f?.depth);
+    const missing = [
+        ...(x === null ? ['pozycja X'] : []),
+        ...(y === null ? ['pozycja Y'] : []),
+        ...(width === null || width <= 0 ? ['szerokość'] : []),
+        ...(height === null || height <= 0 ? ['wysokość/długość'] : []),
+        ...(depth === null || depth <= 0 ? ['głębokość'] : []),
+    ];
+    if (missing.length > 0) {
+        issues.push({
+            node_id: nodeId,
+            node_name: nodeName,
+            feature_id: f?.id ? String(f.id) : undefined,
+            reason: `Brak lub nieprawidłowe parametry rowka: ${missing.join(', ')}.`,
+        });
+        return null;
+    }
+    if (x === null || y === null || width === null || height === null || depth === null) return null;
+
     return {
         id: String(f.id || `g_${fallbackIdx}`),
-        x: mmVal(f.params?.u ?? f.params?.x ?? f.x, 0),
-        y: mmVal(f.params?.v ?? f.params?.y ?? f.y, 0),
-        width: mmVal(f.params?.width ?? f.width, 4),
-        height: mmVal(f.params?.length ?? f.params?.height ?? f.height, fallbackHeight),
-        depth: mmVal(f.params?.depth ?? f.depth, 8),
+        x,
+        y,
+        width,
+        height,
+        depth,
         name: library ? (f.name || f.params.library_id || 'Operacja') : (f.name || 'Wpust'),
         source: library ? 'library' : 'engine',
         libraryId: library ? String(f.params.library_id) : undefined,
@@ -103,11 +187,13 @@ export class DrawingProjectExtractor {
      */
     public extractPMIDimensions(): DrawingPMIDimension[] {
         const pmiList: DrawingPMIDimension[] = [];
+        let storeAvailable = false;
 
         try {
-            const store = PMIStore.instance;
-            if (store) {
-                const annotations = (store.annotations || []).filter((a) => a.visible !== false);
+            const store = PMIStore.existingInstance;
+            if (store && Array.isArray(store.annotations)) {
+                storeAvailable = true;
+                const annotations = store.annotations.filter((a) => a.visible !== false);
                 for (const ann of annotations) {
                     const text = ann.text || (ann.distanceMM ? `${ann.distanceMM.toFixed(1)} mm` : '');
                     pmiList.push({
@@ -135,8 +221,19 @@ export class DrawingProjectExtractor {
             console.warn('Błąd podczas odczytu PMIStore:', e);
         }
 
-        // Fallback do localStorage
-        if (pmiList.length === 0 && typeof localStorage !== 'undefined') {
+        if (storeAvailable) {
+            if (pmiList.length === 0 && typeof localStorage !== 'undefined') {
+                try {
+                    localStorage.removeItem(LIVE_PMI_STORAGE_KEY);
+                } catch (e) {
+                    console.warn('Nie udało się wyczyścić nieaktualnego cache PMI:', e);
+                }
+            }
+            return pmiList;
+        }
+
+        // Cache jest źródłem tylko wtedy, gdy bieżący store PMI nie jest dostępny.
+        if (typeof localStorage !== 'undefined') {
             try {
                 const raw = localStorage.getItem(LIVE_PMI_STORAGE_KEY);
                 if (raw) {
@@ -154,16 +251,19 @@ export class DrawingProjectExtractor {
     public extractProjectTree(): ProjectDrawingTree {
         const cm = ContextManager.instance;
         const doc = cm?.document;
+        const issues: DrawingDataIssue[] = [];
 
         // 1. Odczyt z natywnego ProjectDocument
         if (doc && doc.rootNode) {
-            doc.ensureGlcNode();
+            if (typeof (doc as any).healTreeHierarchy === 'function') {
+                (doc as any).healTreeHierarchy(doc.rootNode);
+            }
             const projectName = doc.name || 'Projekt WebCAD';
 
             const childNodes: CADTreeNode[] = [];
             if (doc.rootNode.children && doc.rootNode.children.length > 0) {
                 for (const child of doc.rootNode.children) {
-                    childNodes.push(this._mapCadNodeToTreeNode(child));
+                    childNodes.push(this._mapCadNodeToTreeNode(child, issues));
                 }
             }
 
@@ -197,18 +297,20 @@ export class DrawingProjectExtractor {
                 rootNode,
                 containers,
                 standaloneParts,
+                issues,
             };
         }
 
         // 2. Odczyt z containerViews i panelViews w ContextManager
         if (cm && ((cm.containerViews && cm.containerViews.size > 0) || (cm.panelViews && cm.panelViews.size > 0))) {
-            const rootNode = this._extractFromViews(cm);
+            const rootNode = this._extractFromViews(cm, issues);
             const { containers, standaloneParts } = this._flattenContainersAndParts(rootNode);
             return {
                 projectName: 'Projekt WebCAD',
                 rootNode,
                 containers,
                 standaloneParts,
+                issues,
             };
         }
 
@@ -245,60 +347,81 @@ export class DrawingProjectExtractor {
             rootNode: emptyRoot,
             containers: [],
             standaloneParts: [],
+            issues: [],
         };
     }
 
-    private _mapCadNodeToTreeNode(cadNode: CADNode): CADTreeNode {
+    private _mapCadNodeToTreeNode(cadNode: CADNode, issues: DrawingDataIssue[]): CADTreeNode {
         const domainData = cadNode.domainData as any;
-        const rawName = domainData?.name || cadNode.name || 'Obiekt CAD';
+        let rawName = domainData?.name || cadNode.name || 'Obiekt CAD';
+        const isPart = cadNode.nodeType === NodeType.PART || domainData?.type === 'panel';
 
         let width = 0;
         let height = 0;
         let depth = 0;
-        let thickness = 18;
-        let material = 'Płyta Laminowana 18mm';
+        let thickness = 0;
+        let material: string | undefined;
         let role = '';
+        let dataValid = true;
         const holes: HoleFeature2D[] = [];
         const grooves: GrooveFeature2D[] = [];
 
         if (domainData) {
-            width = modelNmToMm(domainData.width ?? domainData.dimX, 0);
-            height = modelNmToMm(domainData.height ?? domainData.dimY, 0);
-            depth = modelNmToMm(domainData.depth ?? domainData.dimZ, 0);
-            thickness = modelNmToMm(domainData.thickness ?? domainData.dimZ, 18);
-            if (domainData.material) material = domainData.material;
+            width = modelNmToMm(domainData.width ?? (isPart ? undefined : domainData.dimX), 0);
+            height = modelNmToMm(domainData.height ?? (isPart ? undefined : domainData.dimY), 0);
+            depth = modelNmToMm(domainData.depth ?? (isPart ? undefined : domainData.dimZ), 0);
+            thickness = modelNmToMm(domainData.thickness ?? (isPart ? undefined : domainData.dimZ), 0);
+            if (isPart) {
+                const normalizedPanel = ReportDataNormalizer.buildContractFromPanel(domainData, rawName, undefined, undefined, cadNode.id);
+                const panelWidth = ReportDataNormalizer.nmValToMm(domainData.width);
+                const panelHeight = ReportDataNormalizer.nmValToMm(domainData.height);
+                const panelThickness = ReportDataNormalizer.nmValToMm(domainData.thickness);
+                const missing = [
+                    ...(panelWidth === null || panelWidth <= 0 ? ['width'] : []),
+                    ...(panelHeight === null || panelHeight <= 0 ? ['height'] : []),
+                    ...(panelThickness === null || panelThickness <= 0 ? ['thickness'] : []),
+                    ...(typeof domainData.materialId !== 'string' || !domainData.materialId.trim() ? ['materialId'] : []),
+                ];
+                dataValid = normalizedPanel !== null && missing.length === 0;
+                if (!dataValid) {
+                    issues.push({
+                        node_id: cadNode.id,
+                        node_name: rawName,
+                        reason: missing.length > 0
+                            ? `Brak wymaganych dodatnich danych PanelModel: ${missing.join(', ')}.`
+                            : 'Dane PanelModel nie przechodzą walidacji kontraktu raportowego.',
+                    });
+                    width = 0;
+                    height = 0;
+                    thickness = 0;
+                    depth = 0;
+                } else {
+                    width = panelWidth ?? 0;
+                    height = panelHeight ?? 0;
+                    thickness = panelThickness ?? 0;
+                    depth = thickness;
+                    material = String(domainData.materialName || domainData.materialId).trim();
+                }
+            }
             if (domainData.role) role = domainData.role;
 
             const rawFeatures = domainData.features || [];
             rawFeatures.forEach((f: any, idx: number) => {
                 const isHole = f.type?.toLowerCase() === 'hole' || f.type === 'drill';
                 if (isHole) {
-                    holes.push({
-                        id: f.id || `h_${idx}`,
-                        x: mmVal(f.params?.x ?? f.x, 0),
-                        y: mmVal(f.params?.y ?? f.y, 0),
-                        diameter: mmVal(f.params?.diameter ?? f.diameter, 5),
-                        depth: mmVal(f.params?.depth ?? f.depth, 12),
-                        face: f.params?.face || 'FRONT',
-                        frozen: !!(f.frozen || f.params?.frozen),
-                    });
+                    const hole = mapHoleFeature(f, idx, cadNode.id, rawName, issues);
+                    if (hole) holes.push(hole);
                 } else if (f.type?.toLowerCase() === 'groove' || f.type?.toLowerCase() === 'pocket' || f.type?.toLowerCase() === 'cutout') {
-                    grooves.push(mapGrooveFeature(f, height || 720, idx));
+                    const groove = mapGrooveFeature(f, idx, cadNode.id, rawName, issues);
+                    if (groove) grooves.push(groove);
                 }
             });
 
             if (domainData.holes && Array.isArray(domainData.holes)) {
                 for (const h of domainData.holes) {
                     if (!holes.some((ex) => ex.id === h.id)) {
-                        holes.push({
-                            id: h.id || `h_${Math.random()}`,
-                            x: mmVal(h.x, 0),
-                            y: mmVal(h.y, 0),
-                            diameter: mmVal(h.diameter, 5),
-                            depth: mmVal(h.depth, 12),
-                            face: h.face || 'FRONT',
-                            frozen: !!(h.frozen || h.params?.frozen),
-                        });
+                        const hole = mapHoleFeature(h, holes.length, cadNode.id, rawName, issues);
+                        if (hole) holes.push(hole);
                     }
                 }
             }
@@ -306,13 +429,21 @@ export class DrawingProjectExtractor {
             if (domainData.grooves && Array.isArray(domainData.grooves)) {
                 for (const g of domainData.grooves) {
                     if (!grooves.some((ex) => ex.id === g.id)) {
-                        grooves.push(mapGrooveFeature(g, height || 720));
+                        const groove = mapGrooveFeature(g, grooves.length, cadNode.id, rawName, issues);
+                        if (groove) grooves.push(groove);
                     }
                 }
             }
         }
+        if (isPart && !domainData) {
+            dataValid = false;
+            issues.push({
+                node_id: cadNode.id,
+                node_name: rawName,
+                reason: 'Brak danych PanelModel w CADNode.domainData.',
+            });
+        }
 
-        const isPart = cadNode.nodeType === NodeType.PART || domainData?.type === 'panel';
         const isHardware = cadNode.nodeType === NodeType.HARDWARE || domainData?.type === 'hardware';
         const isSmartPartCut =
             cadNode.nodeType === NodeType.FEATURE ||
@@ -327,8 +458,11 @@ export class DrawingProjectExtractor {
         let type: CADTreeNode['type'] = 'CONTAINER';
 
         if (isGlc) {
-            icon = '🌐';
+            icon = '🏁';
             type = 'GLC';
+            if (!rawName || rawName === 'Układ globalny (GLC)' || rawName === 'Obiekt CAD') {
+                rawName = 'Podłoga bazowa';
+            }
         } else if (isDatumLevel) {
             icon = '⚪';
             type = 'DATUM_LEVEL';
@@ -385,11 +519,11 @@ export class DrawingProjectExtractor {
         }
 
         const children: CADTreeNode[] = [];
-        let totalPartCount = isPart ? 1 : 0;
+        let totalPartCount = isPart && dataValid ? 1 : 0;
 
         if (cadNode.children && cadNode.children.length > 0) {
             for (const child of cadNode.children) {
-                const mappedChild = this._mapCadNodeToTreeNode(child);
+                const mappedChild = this._mapCadNodeToTreeNode(child, issues);
                 children.push(mappedChild);
                 totalPartCount += mappedChild.partCount;
 
@@ -408,10 +542,10 @@ export class DrawingProjectExtractor {
                 height = 0;
                 depth = 0;
             }
-        } else {
+        } else if (!isPart) {
             if (width === 0) width = 600;
             if (height === 0) height = 720;
-            if (depth === 0) depth = isPart ? thickness : 560;
+            if (depth === 0) depth = 560;
         }
 
         return {
@@ -424,13 +558,16 @@ export class DrawingProjectExtractor {
             depth,
             thickness: isPart ? thickness : undefined,
             material: isPart ? material : undefined,
+            dataValid: isPart ? dataValid : undefined,
             role: domainData?.role || (isPart ? role : undefined) || role || undefined,
+            hardwareType: domainData?.hardwareType,
             partCount: totalPartCount,
             children: children.length > 0 ? children : undefined,
             holes: holes.length > 0 ? holes : undefined,
             grooves: grooves.length > 0 ? grooves : undefined,
             visible: domainData?.visible !== false,
             visiblePlane: Boolean(domainData?.visiblePlane),
+            isDefault: isDefaultDatumNode(cadNode),
             frozen: !!(domainData?.frozen || (cadNode as any).frozen),
             isManual: domainData?.engineManaged === false,
             engineManaged: domainData?.engineManaged !== false,
@@ -438,11 +575,14 @@ export class DrawingProjectExtractor {
             frameTemplateId: domainData?.frameTemplateId,
             frameComponents: typeof domainData?.getFrameComponents === 'function' ? domainData.getFrameComponents() : undefined,
             generatorParams: domainData?.generatorParams ? { ...domainData.generatorParams } : undefined,
+            hiddenSubparts: Array.isArray(domainData?.hiddenSubparts)
+                ? [...domainData.hiddenSubparts]
+                : (Array.isArray(domainData?.params?.hiddenSubparts) ? [...domainData.params.hiddenSubparts] : undefined),
             ...(isSmartPartCut ? { cutType: domainData?.cutType || domainData?.generatorParams?.cut?.type } : {}),
         } as CADTreeNode;
     }
 
-    private _extractFromViews(cm: ContextManager): CADTreeNode {
+    private _extractFromViews(cm: ContextManager, issues: DrawingDataIssue[]): CADTreeNode {
         const containerNodes: CADTreeNode[] = [];
         const standalonePartNodes: CADTreeNode[] = [];
 
@@ -459,7 +599,7 @@ export class DrawingProjectExtractor {
                 if (cm.panelViews) {
                     cm.panelViews.forEach((pView: any, pModel: any) => {
                         if (pModel && (pModel.containerId === cId || pModel.parentContainerId === cId)) {
-                            partsForContainer.push(this._mapPanelModelToTreeNode(pModel));
+                            partsForContainer.push(this._mapPanelModelToTreeNode(pModel, issues));
                         }
                     });
                 }
@@ -483,7 +623,7 @@ export class DrawingProjectExtractor {
             cm.panelViews.forEach((pView: any, pModel: any) => {
                 const hasParent = containerNodes.some((c) => c.children?.some((p) => p.id === pModel?.id));
                 if (!hasParent && pModel) {
-                    standalonePartNodes.push(this._mapPanelModelToTreeNode(pModel));
+                    standalonePartNodes.push(this._mapPanelModelToTreeNode(pModel, issues));
                 }
             });
         }
@@ -504,12 +644,33 @@ export class DrawingProjectExtractor {
         };
     }
 
-    private _mapPanelModelToTreeNode(pModel: any): CADTreeNode {
-        const width = modelNmToMm(pModel.width ?? pModel.dimX, 560);
-        const height = modelNmToMm(pModel.height ?? pModel.dimY, 720);
-        const thickness = modelNmToMm(pModel.thickness ?? pModel.dimZ, 18);
+    private _mapPanelModelToTreeNode(pModel: any, issues: DrawingDataIssue[]): CADTreeNode {
         const name = pModel.name || 'Formatka';
-        const material = pModel.material || 'Płyta Laminowana 18mm';
+        const id = String(pModel.id || 'panel');
+        const normalizedPanel = ReportDataNormalizer.buildContractFromPanel(pModel, name, undefined, undefined, id);
+        const panelWidth = ReportDataNormalizer.nmValToMm(pModel.width);
+        const panelHeight = ReportDataNormalizer.nmValToMm(pModel.height);
+        const panelThickness = ReportDataNormalizer.nmValToMm(pModel.thickness);
+        const missing = [
+            ...(panelWidth === null || panelWidth <= 0 ? ['width'] : []),
+            ...(panelHeight === null || panelHeight <= 0 ? ['height'] : []),
+            ...(panelThickness === null || panelThickness <= 0 ? ['thickness'] : []),
+            ...(typeof pModel.materialId !== 'string' || !pModel.materialId.trim() ? ['materialId'] : []),
+        ];
+        const dataValid = normalizedPanel !== null && missing.length === 0;
+        if (!dataValid) {
+            issues.push({
+                node_id: id,
+                node_name: name,
+                reason: missing.length > 0
+                    ? `Brak wymaganych dodatnich danych PanelModel: ${missing.join(', ')}.`
+                    : 'Dane PanelModel nie przechodzą walidacji kontraktu raportowego.',
+            });
+        }
+        const width = dataValid ? (panelWidth ?? 0) : 0;
+        const height = dataValid ? (panelHeight ?? 0) : 0;
+        const thickness = dataValid ? (panelThickness ?? 0) : 0;
+        const material = dataValid ? String(pModel.materialName || pModel.materialId).trim() : undefined;
         const role = pModel.role || '';
 
         const holes: HoleFeature2D[] = [];
@@ -518,45 +679,33 @@ export class DrawingProjectExtractor {
         rawFeatures.forEach((f: any, idx: number) => {
             const isHole = f.type?.toLowerCase() === 'hole' || f.type === 'drill';
             if (isHole) {
-                holes.push({
-                    id: f.id || `h_${idx}`,
-                    x: mmVal(f.params?.x ?? f.x, 0),
-                    y: mmVal(f.params?.y ?? f.y, 0),
-                    diameter: mmVal(f.params?.diameter ?? f.diameter, 5),
-                    depth: mmVal(f.params?.depth ?? f.depth, 12),
-                    face: f.params?.face || 'FRONT',
-                    frozen: !!(f.frozen || f.params?.frozen),
-                });
+                const hole = mapHoleFeature(f, idx, id, name, issues);
+                if (hole) holes.push(hole);
             } else if (f.type?.toLowerCase() === 'groove' || f.type?.toLowerCase() === 'pocket' || f.type?.toLowerCase() === 'cutout') {
-                grooves.push(mapGrooveFeature(f, height, idx));
+                const groove = mapGrooveFeature(f, idx, id, name, issues);
+                if (groove) grooves.push(groove);
             }
         });
         if (pModel.holes && Array.isArray(pModel.holes)) {
             for (const h of pModel.holes) {
                 if (!holes.some((ex) => ex.id === h.id)) {
-                    holes.push({
-                        id: h.id || `h_${Math.random()}`,
-                        x: mmVal(h.x, 0),
-                        y: mmVal(h.y, 0),
-                        diameter: mmVal(h.diameter, 5),
-                        depth: mmVal(h.depth, 12),
-                        face: h.face || 'FRONT',
-                        frozen: !!(h.frozen || h.params?.frozen),
-                    });
+                    const hole = mapHoleFeature(h, holes.length, id, name, issues);
+                    if (hole) holes.push(hole);
                 }
             }
         }
         if (pModel.grooves && Array.isArray(pModel.grooves)) {
             for (const g of pModel.grooves) {
                 if (!grooves.some((ex) => ex.id === g.id)) {
-                    grooves.push(mapGrooveFeature(g, height));
+                    const groove = mapGrooveFeature(g, grooves.length, id, name, issues);
+                    if (groove) grooves.push(groove);
                 }
             }
         }
 
         const isAlu = pModel.panelForm === 'ALU_FRAME' || (typeof pModel.isAluFrame === 'function' && pModel.isAluFrame());
         return {
-            id: pModel.id || `part_${Date.now()}_${Math.random()}`,
+            id,
             name,
             type: 'PART',
             icon: isAlu ? '🔲' : '🪵',
@@ -565,8 +714,9 @@ export class DrawingProjectExtractor {
             depth: thickness,
             thickness,
             material,
+            dataValid,
             role,
-            partCount: 1,
+            partCount: dataValid ? 1 : 0,
             holes,
             grooves,
             visible: pModel.visible !== false,
@@ -588,15 +738,15 @@ export class DrawingProjectExtractor {
                 const parts: PartDrawingGeometry[] = [];
                 if (node.children) {
                     for (const ch of node.children) {
-                        if (ch.type === 'PART' && !ch.frozen) {
+                        if (ch.type === 'PART' && !ch.frozen && ch.dataValid !== false) {
                             parts.push({
                                 id: ch.id,
                                 name: ch.name,
                                 role: ch.role,
-                                material: ch.material || 'Płyta 18mm',
+                                material: ch.material || '',
                                 width: ch.width,
                                 height: ch.height,
-                                thickness: ch.thickness || 18,
+                                thickness: ch.thickness ?? 0,
                                 holes: ch.holes || [],
                                 grooves: ch.grooves || [],
                             });
@@ -611,15 +761,15 @@ export class DrawingProjectExtractor {
                     depth: node.depth,
                     parts,
                 });
-            } else if (node.type === 'PART') {
+            } else if (node.type === 'PART' && node.dataValid !== false) {
                 standaloneParts.push({
                     id: node.id,
                     name: node.name,
                     role: node.role,
-                    material: node.material || 'Płyta 18mm',
+                    material: node.material || '',
                     width: node.width,
                     height: node.height,
-                    thickness: node.thickness || 18,
+                    thickness: node.thickness ?? 0,
                     holes: node.holes || [],
                     grooves: node.grooves || [],
                 });

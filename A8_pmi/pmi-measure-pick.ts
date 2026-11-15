@@ -143,6 +143,22 @@ export function findMeasureElementPick(ctx: MeasurePickContext): MeasureElementP
         if (lastDetection.geometryType === GeometryType.EDGE && hoveredSegment) {
             return edgePickToMeasure(hoveredSegment);
         }
+
+        if (lastDetection.geometryType === GeometryType.OBJECT && lastDetection.pickedPoint && lastDetection.mesh) {
+            const worldPos = v3(
+                lastDetection.pickedPoint.x,
+                lastDetection.pickedPoint.y,
+                lastDetection.pickedPoint.z,
+            );
+            return {
+                worldPos,
+                anchor: buildAnchorRef(lastDetection.mesh, worldPos),
+                mesh: lastDetection.mesh,
+                kind: 'point',
+                edge: null,
+                planeNormal: lastDetection.normal ? v3(lastDetection.normal.x, lastDetection.normal.y, lastDetection.normal.z) : null,
+            };
+        }
     }
 
     // Brak podświetlonej geometrii: nie wybieramy niczego.

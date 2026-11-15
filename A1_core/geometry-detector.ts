@@ -139,6 +139,35 @@ export class GeometryDetector {
             }
         }
 
+        // 3. Fallback dla zaimportowanych modeli 3D i wyposażenia sceny (SCENE_PROP / appliance)
+        const scenePropHits = this.scene.multiPick(
+            pointerX,
+            pointerY,
+            (mesh: any) => mesh && mesh.isEnabled() && mesh.isPickable !== false && mesh.metadata && (mesh.metadata.isSceneProp || mesh.metadata.type === 'appliance')
+        );
+
+        if (scenePropHits && scenePropHits.length > 0) {
+            const validHits = scenePropHits.filter((h: any) => h.hit && h.pickedMesh);
+            if (validHits.length > 0) {
+                validHits.sort((a: any, b: any) => a.distance - b.distance);
+                const propHit = validHits[0];
+                const mesh = propHit.pickedMesh;
+                const norm = propHit.getNormal ? (propHit.getNormal(true) || new BABYLON.Vector3(0, 1, 0)) : new BABYLON.Vector3(0, 1, 0);
+                return {
+                    hit: true,
+                    geometryType: GeometryType.OBJECT,
+                    pickedPoint: propHit.pickedPoint ? { x: propHit.pickedPoint.x, y: propHit.pickedPoint.y, z: propHit.pickedPoint.z } : null,
+                    normal: { x: norm.x, y: norm.y, z: norm.z },
+                    faceName: null,
+                    cornerIndex: -1,
+                    edgeKey: null,
+                    smartId: mesh.metadata?.smartId || mesh.metadata?.nodeId || null,
+                    panelModel: null,
+                    mesh: mesh
+                };
+            }
+        }
+
         return this.createEmptyResult();
     }
 

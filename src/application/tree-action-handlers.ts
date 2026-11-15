@@ -8,6 +8,7 @@ import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { HardwareModel } from '../../A1_core/hardware-model.js';
 import { RemoveNodeCommand } from '../../A1_core/commands/remove-node-command.js';
 import { collectNodeCleanupCommands } from '../../A1_core/node-cleanup-port.js';
+import { notifyKorpusRebuilt } from '../../A1_core/cabinet-port.js';
 import { isManualPanel } from '../../A4_smartpanel/panel-model.js';
 import { showCadTreeContextMenu } from '../module-data/tree-context-menu.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
@@ -21,6 +22,7 @@ import { PMIStore } from '../../A8_pmi/pmi-data.js';
 import { LedChannelStore } from '../../A2_bloki/15_led-external-channel-store.js';
 import { DrawingProjectExtractor } from '../../R2_rys/drawing-project-extractor.js';
 import { closeCadFloatingEdit } from '../floating-edit/cad-edit-entity.js';
+import { syncSelectionHighlights } from '../../A1_core/selection-highlight.js';
 
 const srcTekst = srcTekstRaw as unknown as ModuleTexts;
 const TX_NS = 'src';
@@ -92,22 +94,50 @@ export function registerTreeActionHandlers(
       if (panel) {
         ctx.document.setActiveEntity(panel);
         ctx.facePicker.clearSelection();
+        syncSelectionHighlights(ctx);
+        const gizmoCtrl = ContextManager.instance.gizmoController;
+        if (gizmoCtrl) {
+          gizmoCtrl.updateFaceGizmo();
+        }
       }
     } else if (action === 'select-container') {
       const container = getAllContainers(ctx.document).find((c: any) => c.id === data.id);
       if (container) {
         ctx.document.setActiveEntity(container);
         ctx.facePicker.clearSelection();
+        syncSelectionHighlights(ctx);
+        const gizmoCtrl = ContextManager.instance.gizmoController;
+        if (gizmoCtrl) {
+          gizmoCtrl.updateFaceGizmo();
+        }
       }
     } else if (action === 'select-hardware') {
+      const targetId = data.parentId || data.id;
       const hwNode =
-        ctx.document.findNode(data.id) ||
+        ctx.document.findNode(targetId) ||
         (ctx.document.getNodesByType
-          ? ctx.document.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === data.id)
+          ? ctx.document.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === targetId)
           : null);
       if (hwNode) {
-        ctx.document.setActiveEntity(hwNode.domainData || (hwNode as any));
+        if (data.subType) {
+          const hwMesh = ContextManager.instance.hardwareViews?.get(data.id);
+          const activeEntity = {
+            id: data.id,
+            name: data.name || `${hwNode.name} - ${data.subType}`,
+            subType: data.subType,
+            lengthMm: data.lengthMm || (hwMesh?.metadata?.lengthMm),
+            parentId: hwNode.id,
+            cadNode: hwNode,
+            domainData: hwNode.domainData,
+            mesh: hwMesh,
+            type: 'hardware_subpart',
+          };
+          ctx.document.setActiveEntity(activeEntity);
+        } else {
+          ctx.document.setActiveEntity(hwNode.domainData || (hwNode as any));
+        }
         ctx.facePicker.clearSelection();
+        syncSelectionHighlights(ctx);
       }
     } else if (action === 'select-feature') {
       const panels = getAllPanels(ctx.document);
@@ -135,7 +165,22 @@ export function registerTreeActionHandlers(
           ctx.ui.setStatus?.(tx(srcTekst, 'tree.unfreeze_op', TX_NS) || 'Element jest zamrozony. Odmroz go, aby pokazac.', true);
           return;
         }
-        entity.visible = entity.visible === false ? true : false;
+        const newVisible = entity.visible === false ? true : false;
+        entity.visible = newVisible;
+        const node = ctx.document.findNode(entity.id || data.id);
+        if (node) {
+          (node as any).visible = newVisible;
+          const syncDescendantVisibility = (n: any) => {
+            for (const child of n.children || []) {
+              if (child.domainData && !child.domainData.frozen && !child.domainData.params?.frozen) {
+                child.domainData.visible = newVisible;
+                child.visible = newVisible;
+              }
+              syncDescendantVisibility(child);
+            }
+          };
+          syncDescendantVisibility(node);
+        }
         rebuildGeometry();
         ctx.document.emitChange('all');
       }
@@ -268,6 +313,10 @@ export function registerTreeActionHandlers(
         const isFrozen = Boolean(hw.frozen || (hw.domainData as any)?.frozen);
         if (!isFrozen) {
           (hw.domainData as any).visible = true;
+          (hw.domainData as any).hiddenSubparts = [];
+          if ((hw.domainData as any).params?.hiddenSubparts) {
+            (hw.domainData as any).params.hiddenSubparts = [];
+          }
         } else {
           (hw.domainData as any).visible = false;
         }
@@ -359,17 +408,6 @@ export function registerTreeActionHandlers(
         const nextVis = action === 'show-hardware';
         (hwNode.domainData as any).visible = nextVis;
 
-        const panels = getAllPanels(doc);
-        for (const panel of panels) {
-          if (panel.features) {
-            for (const feat of panel.features) {
-              if (matchesHardware(feat, data.id, hwNode.domainData)) {
-                feat.visible = nextVis;
-                if (feat.params) feat.params.visible = nextVis;
-              }
-            }
-          }
-        }
         rebuildGeometry(nextVis ? 'Pokazano okucie' : 'Ukryto okucie');
         ctx.document.emitChange('all');
       }
@@ -395,19 +433,41 @@ export function registerTreeActionHandlers(
         const nextVis = !curVis;
         (hwNode.domainData as any).visible = nextVis;
 
-        const panels = getAllPanels(doc);
-        for (const panel of panels) {
-          if (panel.features) {
-            for (const feat of panel.features) {
-              if (matchesHardware(feat, data.id, hwNode.domainData)) {
-                feat.visible = nextVis;
-                if (feat.params) feat.params.visible = nextVis;
-              }
-            }
-          }
-        }
         rebuildGeometry(nextVis ? 'Pokazano okucie' : 'Ukryto okucie');
         ctx.document.emitChange('all');
+      }
+    } else if (action === 'toggle-hardware-subpart' || action === 'hide-hardware-subpart' || action === 'show-hardware-subpart') {
+      const targetId = data.parentId || data.id;
+      const doc = ctx.document;
+      const hwNode =
+        doc.findNode(targetId) ||
+        (doc.getNodesByType
+          ? doc.getNodesByType(NodeType.HARDWARE).find((n: any) => n.id === targetId)
+          : null);
+      if (hwNode && hwNode.domainData) {
+        const hw = hwNode.domainData as any;
+        const subType = data.subType || (data.id?.endsWith('_boczek') ? 'boczek' : data.id?.endsWith('_mocowanie') ? 'mocowanie' : data.id?.endsWith('_prowadnica') ? 'prowadnica' : null);
+        if (subType) {
+          if (!Array.isArray(hw.hiddenSubparts)) hw.hiddenSubparts = [];
+          const isCurrentlyHidden = hw.hiddenSubparts.includes(subType);
+          let nextHidden: boolean;
+          if (action === 'hide-hardware-subpart') nextHidden = true;
+          else if (action === 'show-hardware-subpart') nextHidden = false;
+          else nextHidden = typeof data.visible === 'boolean' ? !data.visible : !isCurrentlyHidden;
+
+          if (nextHidden) {
+            if (!hw.hiddenSubparts.includes(subType)) hw.hiddenSubparts.push(subType);
+          } else {
+            hw.hiddenSubparts = hw.hiddenSubparts.filter((s: string) => s !== subType);
+          }
+          if (hw.params) {
+            hw.params.hiddenSubparts = [...hw.hiddenSubparts];
+          }
+          const subLabel = subType === 'boczek' ? 'Boczek' : subType === 'mocowanie' ? 'Mocowanie' : 'Prowadnica';
+          rebuildGeometry(nextHidden ? `Ukryto: ${subLabel}` : `Pokazano: ${subLabel}`);
+          doc.emitChange('all');
+          ctx.ui?.setStatus?.(nextHidden ? `Ukryto: ${subLabel}` : `Pokazano: ${subLabel}`, true);
+        }
       }
     } else if (action === 'toggle-freeze-hardware') {
       const doc = ctx.document;
@@ -458,6 +518,47 @@ export function registerTreeActionHandlers(
         const panelNode = doc.findNode(panel.id);
         if (panelNode) {
           panelNode.frozen = newFrozen;
+          const freezeDescendants = (n: any) => {
+            for (const child of n.children || []) {
+              child.frozen = newFrozen;
+              if (child.domainData) {
+                (child.domainData as any).frozen = newFrozen;
+                (child.domainData as any).visible = !newFrozen;
+              }
+              freezeDescendants(child);
+            }
+          };
+          freezeDescendants(panelNode);
+        }
+        rebuildGeometry(
+          newFrozen
+            ? tx(srcTekst, 'cadapp.freeze_panel', TX_NS)
+            : tx(srcTekst, 'cadapp.unfreeze_panel', TX_NS),
+        );
+        ctx.document.emitChange('all');
+      }
+    } else if (action === 'toggle-freeze-container') {
+      const doc = ctx.document;
+      const container = getAllContainers(doc).find((c: any) => c.id === data.id);
+      if (container) {
+        const newFrozen = !container.frozen;
+        container.frozen = newFrozen;
+        container.visible = !newFrozen;
+        const cNode = doc.findNode(container.id);
+        if (cNode) {
+          cNode.frozen = newFrozen;
+          for (const child of cNode.children) {
+            child.frozen = newFrozen;
+            if (child.domainData) {
+              (child.domainData as any).frozen = newFrozen;
+              (child.domainData as any).visible = !newFrozen;
+            }
+          }
+        }
+        const gp = container.generatorParams;
+        const parentCabinetId = gp?.parentContainerId || cNode?.parent?.id || container.id;
+        if (doc && parentCabinetId) {
+          notifyKorpusRebuilt(doc, parentCabinetId);
         }
         rebuildGeometry(
           newFrozen

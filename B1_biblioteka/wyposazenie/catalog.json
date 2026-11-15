@@ -1,0 +1,45 @@
+{
+  "units": "mm",
+  "type": "SCENE_PROP",
+  "version": "1.0.0",
+  "description": "Wyposażenie sceny i wnętrz (łazienka, oświetlenie, armatura, dekoracje). Jednostki w mm; modele 3D (.glb, .obj, .stl) tylko dla viewportu.",
+  "items": {
+    "PRYSZNIC_KABINA_90X90": {
+      "id": "PRYSZNIC_KABINA_90X90",
+      "name": "Kabina prysznicowa Walk-In 90x90",
+      "category": "BATHROOM",
+      "width_mm": 900,
+      "depth_mm": 900,
+      "height_mm": 2000,
+      "visual": {
+        "model": "models/Prysznic_Kabina_90x90.glb",
+        "units": "mm"
+      }
+    },
+    "LAMPA_WISZACA_SUFITOWA": {
+      "id": "LAMPA_WISZACA_SUFITOWA",
+      "name": "Lampa wisząca sufitowa",
+      "category": "LIGHTING",
+      "width_mm": 380,
+      "depth_mm": 380,
+      "height_mm": 900,
+      "visual": {
+        "model": "models/Lampa_Wiszaca.glb",
+        "units": "mm"
+      }
+    },
+    "UMYWALKA_NABLATOWA_60": {
+      "id": "UMYWALKA_NABLATOWA_60",
+      "name": "Umywalka nablatowa 60x40",
+      "category": "BATHROOM",
+      "width_mm": 600,
+      "depth_mm": 400,
+      "height_mm": 140,
+      "visual": {
+        "model": "models/Umywalka_Nablatowa.glb",
+        "units": "mm"
+      }
+    }
+  }
+}
+

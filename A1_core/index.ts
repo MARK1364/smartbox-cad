@@ -17,6 +17,7 @@ export type { ProjectDocumentJSON, ProjectMetadataJSON, DocumentExtension, Seria
 export { ProjectFileIO, stampProjectFileMetadata, suggestedProjectFileName } from './project-file-io.js';
 export { FacePicker } from './face-picker.js';
 export { UIController } from './ui-controller.js';
+export type { UIState } from './ui-controller.js';
 export { unit } from './unit-system.js';
 export { TRANSLATIONS as translations } from './translations.js';
 export { PropertiesManager } from './properties.js';

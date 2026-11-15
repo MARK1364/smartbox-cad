@@ -1,6 +1,7 @@
 /**
  * Baza orientacji zawiasu na licu frontu (bez Babylon).
- * Model GLB: +X w głąb płyty, ramię prowadnika wzdłuż −Z ku krawędzi zawiasu.
+ * Model GLB (blum zawiasy.glb w przestrzeni instancji):
+ *  +Z = w głąb płyty frontu (puszka), −Z = ramię w głąb korpusu, −X = w stronę boczku (prowadnik na płaszczyźnie YZ).
  */
 
 export type HingeAlignOrientation = 'left' | 'right' | 'top' | 'bottom';
@@ -27,9 +28,14 @@ function dot(a: [number, number, number], b: [number, number, number]): number {
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-/** Kierunek ramienia w przestrzeni lica (= −zDir modelu). */
+/** Kierunek do krawędzi boczku / wieńca w przestrzeni lica (= −xDir modelu). */
 export function hingeArmDir(axes: HingeAlignAxes): [number, number, number] {
-    return neg(axes.zDir);
+    return neg(axes.xDir);
+}
+
+/** Kierunek osi puszki w głąb płyty frontu (= +zDir modelu). */
+export function hingeCupDir(axes: HingeAlignAxes): [number, number, number] {
+    return axes.zDir;
 }
 
 export function resolveHingeAlignAxes(
@@ -38,22 +44,22 @@ export function resolveHingeAlignAxes(
     normal: [number, number, number],
     orientation: HingeAlignOrientation | boolean
 ): HingeAlignAxes {
-    const xDir = neg(normal);
+    const zDir = neg(normal);
+    let xDir: [number, number, number];
     let yDir: [number, number, number];
-    let zDir: [number, number, number];
 
     if (orientation === 'top') {
-        yDir = [...uAxis];
-        zDir = neg(vAxis);
-    } else if (orientation === 'bottom') {
+        xDir = neg(vAxis);
         yDir = neg(uAxis);
-        zDir = [...vAxis];
+    } else if (orientation === 'bottom') {
+        xDir = [...vAxis];
+        yDir = [...uAxis];
     } else if (orientation === 'left' || orientation === true) {
-        yDir = [...vAxis];
-        zDir = [...uAxis];
-    } else {
+        xDir = [...uAxis];
         yDir = neg(vAxis);
-        zDir = neg(uAxis);
+    } else {
+        xDir = neg(uAxis);
+        yDir = [...vAxis];
     }
 
     return { xDir, yDir, zDir };

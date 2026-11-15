@@ -48,7 +48,7 @@ export function buildDrawersDrillings(document: ProjectDocument, cabinetContaine
 
     const sbContainers = containers.filter((c: any) => {
         const p = c.domainData?.generatorParams;
-        if (!p || (p.type !== 'blok_drawers' && p.boxType !== 'DRAWERS') || c.domainData?.visible === false) return false;
+        if (!p || (p.type !== 'blok_drawers' && p.boxType !== 'DRAWERS') || c.frozen || c.domainData?.frozen === true) return false;
         if (cabinetContainerId) {
             return p.parentContainerId === cabinetNode.id || c.parent?.id === cabinetNode.id || isChildOfCabinet(c);
         }
@@ -56,29 +56,66 @@ export function buildDrawersDrillings(document: ProjectDocument, cabinetContaine
     });
     if (sbContainers.length === 0) return intents;
 
-    const getPanelWorldZ = (node: any): number => {
-        const pos = node.getWorldMatrix().decompose().translation;
-        return nmToMm(pos.z);
+    // Zbierz wszystkie formatki korpusu (wykluczając sam kontener korpusu)
+    const allCabinetPanels: any[] = [];
+    const collectCabinetPanels = (node: any) => {
+        if (!node) return;
+        const data = node.domainData;
+        const gp = data?.generatorParams;
+        if (gp && (String(gp.type || '').startsWith('bloki') || gp.boxType)) return;
+
+        if (data && (data.type === 'panel' || data.type === 'part' || data.role)) {
+            allCabinetPanels.push(node);
+        }
+        if (node.children) {
+            for (const child of node.children) {
+                collectCabinetPanels(child);
+            }
+        }
     };
+    collectCabinetPanels(cabinetNode);
+
+    const getNodeCabinetPosMm = (node: any): { x: number; y: number; z: number } => {
+        if (cabinetNode && typeof cabinetNode.getWorldMatrix === 'function' && typeof node?.getWorldMatrix === 'function') {
+            const relPos = cabinetNode.getWorldMatrix().invert().multiply(node.getWorldMatrix()).decompose().translation;
+            return { x: nmToMm(relPos.x), y: nmToMm(relPos.y), z: nmToMm(relPos.z) };
+        }
+        const worldPos = node.getWorldMatrix().decompose().translation;
+        return { x: nmToMm(worldPos.x), y: nmToMm(worldPos.y), z: nmToMm(worldPos.z) };
+    };
+
+    const getPanelWorldZ = (node: any): number => getNodeCabinetPosMm(node).z;
+    const getPanelCabinetX = (node: any): number => getNodeCabinetPosMm(node).x;
 
     const getVForPanel = (targetNode: any, worldZ: number): number => {
         if (!targetNode) return worldZ;
-        const rawH = targetNode.domainData?.length ?? targetNode.domainData?.height ?? targetNode.domainData?.width ?? 0;
+        const rawH = targetNode.domainData?.height ?? targetNode.domainData?.length ?? targetNode.domainData?.width ?? 0;
         const targetHeight = nmToMm(rawH);
         const targetBottomZ = getPanelWorldZ(targetNode) - targetHeight / 2;
         return worldZ - targetBottomZ;
     };
 
+    const isVerticalSidePanel = (pNode: any) => {
+        const role = (pNode.domainData?.role || '').toUpperCase();
+        if (role.includes('SIDE') || role.includes('PARTITION') || role.includes('BOK') || role.includes('PRZEGRODA')) return true;
+        if (pNode.localMatrix) {
+            const dirY = Math.abs(pNode.localMatrix.transformDirection(new Vec3(1, 0, 0)).y);
+            return dirY > 0.5;
+        }
+        return true;
+    };
+
     const resolveSidePanel = (
         sbNode: any,
-        side: 'left' | 'right'
+        side: 'left' | 'right',
+        worldZ?: number
     ): { node: any; suggestedFace?: string | null } | null => {
         const p = sbNode.domainData?.generatorParams || {};
         const ref = side === 'left' ? p.customReferences?.xMin : p.customReferences?.xMax;
 
         if (ref?.panelId) {
             const node = document.findNode(ref.panelId);
-            if (node) {
+            if (node && node.domainData && node.domainData.type !== 'container') {
                 return { node, suggestedFace: ref.face };
             }
         }
@@ -86,8 +123,39 @@ export function buildDrawersDrillings(document: ProjectDocument, cabinetContaine
         const boundaryRef = side === 'left' ? p.boundary?.left : p.boundary?.right;
         if (boundaryRef?.nodeId) {
             const node = document.findNode(boundaryRef.nodeId);
-            if (node) {
+            if (node && node.domainData && node.domainData.type !== 'container') {
                 return { node, suggestedFace: boundaryRef.face };
+            }
+        }
+
+        // Priorytet 3: Fallback geometryczny po panelach korpusu
+        if (allCabinetPanels.length > 0) {
+            const sbWidth = nmToMm(sbNode.domainData?.width || 0);
+            const sbCenterX = getPanelCabinetX(sbNode);
+            const sbLeftX = sbCenterX - sbWidth / 2;
+            const sbRightX = sbCenterX + sbWidth / 2;
+
+            const candidates = allCabinetPanels.filter((pNode) => {
+                if (!isVerticalSidePanel(pNode)) return false;
+                const rawH = pNode.domainData?.height ?? pNode.domainData?.length ?? pNode.domainData?.width ?? 0;
+                const h = nmToMm(rawH);
+                const centerZ = getPanelWorldZ(pNode);
+                const pZMin = centerZ - h / 2;
+                const pZMax = centerZ + h / 2;
+                if (h > 0 && (worldZ !== undefined && (worldZ < pZMin - 10 || worldZ > pZMax + 10))) return false;
+
+                const panelX = getPanelCabinetX(pNode);
+                return side === 'left' ? (panelX <= sbCenterX + 5) : (panelX >= sbCenterX - 5);
+            });
+
+            if (candidates.length > 0) {
+                const targetRefX = side === 'left' ? sbLeftX : sbRightX;
+                candidates.sort((a, b) => {
+                    const distA = Math.abs(getPanelCabinetX(a) - targetRefX);
+                    const distB = Math.abs(getPanelCabinetX(b) - targetRefX);
+                    return distA - distB;
+                });
+                return { node: candidates[0], suggestedFace: 'FACE_Z_PLUS' };
             }
         }
 
@@ -127,29 +195,50 @@ export function buildDrawersDrillings(document: ProjectDocument, cabinetContaine
         const sbWidth = dimToMm(sbData.width, 600);
         const sbHeight = dimToMm(sbData.height, 720);
         const sbDepth = dimToMm(sbData.depth, 500);
-        const sbPosZ = getPanelWorldZ(sbNode);
+
+        const sbNodeResolved = typeof document.findNode === 'function' ? document.findNode(sbNode.id) : sbNode;
+        let sbBottomZ = getPanelWorldZ(sbNodeResolved || sbNode) - sbHeight / 2;
+        const zMinRef = p.customReferences?.zMin || p.boundary?.bottom;
+        if (zMinRef?.planeCoordMm !== undefined) {
+            sbBottomZ = zMinRef.planeCoordMm;
+        } else if (zMinRef?.panelId || zMinRef?.nodeId) {
+            const bottomPanel = document.findNode(zMinRef.panelId || zMinRef.nodeId);
+            if (bottomPanel) {
+                const bpCenterZ = getPanelWorldZ(bottomPanel);
+                const bpData = (bottomPanel.domainData as any) || {};
+                const bpRawTh = bpData.custom_properties?.thickness_mm !== undefined
+                    ? Number(bpData.custom_properties.thickness_mm)
+                    : (bpData.thickness !== undefined ? nmToMm(bpData.thickness) : (bpData.dim?.z ? nmToMm(bpData.dim.z) : undefined));
+                const bpThickness = (bpRawTh !== undefined && !isNaN(bpRawTh)) ? bpRawTh : 18;
+                sbBottomZ = bpCenterZ + bpThickness / 2;
+            }
+        }
 
         const layout = resolveDrawerLayout(p, { width_mm: sbWidth, height_mm: sbHeight, depth_mm: sbDepth });
 
         for (const slot of layout.slots) {
             const lengthKey = String(Math.round(slot.lengthMm));
             const holeData = slot.rail.lengths[lengthKey] || slot.rail.lengths[String(slot.lengthMm)] || {};
-            const xPositions: number[] = holeData.x_positions || [];
+            const xPositions: number[] = (holeData.x_positions && holeData.x_positions.length)
+                ? holeData.x_positions
+                : ((slot.rail as any).machining?.corpus_holes?.map((h: any) => h.front_dist) || []);
             if (!xPositions.length) continue;
 
             const holeDiameter = Number(slot.rail.drill?.dia ?? 3);
             const holeDepth = Number(slot.rail.drill?.depth ?? 12);
 
             const zOff = Number(holeData.z_offset ?? 33);
-            const worldZ = sbPosZ + slot.zInternalBottom + zOff;
+            const worldZ = sbBottomZ + slot.zInternalBottom + zOff;
+            const holesEnabled: boolean[] = Array.isArray(holeData.holes_enabled) ? holeData.holes_enabled : [];
 
-            const leftTarget = resolveSidePanel(sbNode, 'left');
-            const rightTarget = resolveSidePanel(sbNode, 'right');
+            const leftTarget = resolveSidePanel(sbNode, 'left', worldZ);
+            const rightTarget = resolveSidePanel(sbNode, 'right', worldZ);
 
             const leftFaceInfo = leftTarget?.node ? findTargetSideFace(leftTarget.node, leftTarget.suggestedFace) : null;
             const rightFaceInfo = rightTarget?.node ? findTargetSideFace(rightTarget.node, rightTarget.suggestedFace) : null;
 
             xPositions.forEach((xRaw, idx) => {
+                if (holesEnabled[idx] === false) return;
                 const fromFront = Number(xRaw ?? 37);
 
                 if (leftTarget?.node && leftFaceInfo) {

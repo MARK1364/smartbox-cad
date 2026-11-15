@@ -4,7 +4,8 @@
  * Odpowiada za odczyt reguł JSON bazy obróbczej (WCS) z korpus3_3_rules.json.
  */
 
-import korpusRules from '../../A3_smartframe/korpus3_3_rules.json';
+import { getModuleRules } from '../../A1_core/rules-vault.js';
+const korpusRules = getModuleRules('korpus3');
 
 export interface WcsRule {
     origin_corner: { X: string, Y: string, Z: string };
@@ -18,7 +19,9 @@ export interface WcsRule {
      * 0: tyl_dol_lewo (−X −Y −Z) … 6: przod_gora_prawo (+X +Y +Z)
      */
 export function cornerIndexToOriginCorner(cornerIndex: number): { X: string; Y: string; Z: string } {
-    const i = Math.max(0, Math.min(7, Math.floor(Number(cornerIndex) || 0)));
+    if (typeof cornerIndex !== 'number' || !Number.isInteger(cornerIndex) || cornerIndex < 0 || cornerIndex > 7) {
+        throw new Error(`[C1_cnc/wcs-rules-mapper] Nieprawidłowy indeks naroża WCS (${cornerIndex}). Wymagana liczba całkowita 0-7.`);
+    }
     // Zgodnie z mesh_builder / NAROZNIK_WSPOLRZEDNE (środek formatki = 0)
     const table: Array<{ X: string; Y: string; Z: string }> = [
         { X: '-', Y: '-', Z: '-' }, // 0 tyl_dol_lewo
@@ -30,7 +33,7 @@ export function cornerIndexToOriginCorner(cornerIndex: number): { X: string; Y: 
         { X: '+', Y: '+', Z: '+' }, // 6 przod_gora_prawo
         { X: '-', Y: '+', Z: '+' }, // 7 przod_gora_lewo
     ];
-    return { ...table[i] };
+    return { ...table[cornerIndex] };
 }
 
 export class WcsRulesMapper {

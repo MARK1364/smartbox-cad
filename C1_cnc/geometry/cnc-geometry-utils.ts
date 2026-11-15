@@ -194,6 +194,15 @@ export function generateEffectiveContourPath(
     toolRadius: number = 0,
     reverseDirection: boolean = false
 ): Vector3D[] {
+    if (typeof leadIn !== 'number' || !Number.isFinite(leadIn) || leadIn < 0) {
+        throw new Error(`[generateEffectiveContourPath] Parametr najazdu leadIn musi być skończoną liczbą nieujemną (leadIn=${leadIn}).`);
+    }
+    if (typeof leadOut !== 'number' || !Number.isFinite(leadOut) || leadOut < 0) {
+        throw new Error(`[generateEffectiveContourPath] Parametr wyjazdu leadOut musi być skończoną liczbą nieujemną (leadOut=${leadOut}).`);
+    }
+    if (typeof toolRadius !== 'number' || !Number.isFinite(toolRadius) || toolRadius < 0) {
+        throw new Error(`[generateEffectiveContourPath] Promień narzędzia toolRadius musi być skończoną liczbą nieujemną (toolRadius=${toolRadius}).`);
+    }
     if (!rawPoints || rawPoints.length < 2) return rawPoints || [];
 
     // 1. Kierunek ścieżki
@@ -203,16 +212,29 @@ export function generateEffectiveContourPath(
     if (compensation !== 'Center' && toolRadius > 0.001) {
         const offsetSign = compensation === 'Left' ? -1 : 1;
         const offsetPts: Vector3D[] = [];
+        const n = pts.length;
+        const isClosed = n >= 3 && Math.hypot(pts[0].x - pts[n - 1].x, pts[0].y - pts[n - 1].y, pts[0].z - pts[n - 1].z) < 0.005;
 
-        for (let i = 0; i < pts.length; i++) {
+        for (let i = 0; i < n; i++) {
             let dx = 0, dy = 0;
-            if (i < pts.length - 1) {
-                dx += pts[i + 1].x - pts[i].x;
-                dy += pts[i + 1].y - pts[i].y;
-            }
-            if (i > 0) {
-                dx += pts[i].x - pts[i - 1].x;
-                dy += pts[i].y - pts[i - 1].y;
+            if (isClosed) {
+                if (i === n - 1) {
+                    offsetPts.push({ ...offsetPts[0] });
+                    continue;
+                }
+                const prev = i === 0 ? pts[n - 2] : pts[i - 1];
+                const next = pts[i + 1];
+                dx = (next.x - pts[i].x) + (pts[i].x - prev.x);
+                dy = (next.y - pts[i].y) + (pts[i].y - prev.y);
+            } else {
+                if (i < n - 1) {
+                    dx += pts[i + 1].x - pts[i].x;
+                    dy += pts[i + 1].y - pts[i].y;
+                }
+                if (i > 0) {
+                    dx += pts[i].x - pts[i - 1].x;
+                    dy += pts[i].y - pts[i - 1].y;
+                }
             }
             const len = Math.hypot(dx, dy) || 1;
             const nx = (-dy / len) * offsetSign * toolRadius;

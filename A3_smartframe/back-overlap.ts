@@ -2,7 +2,8 @@
  * Zakładka pleców — JSON (metry). UI/gizmo: mm. Silnik: nm.
  */
 
-import korpusRules from './korpus3_3_rules.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const korpusRules = getModuleRules('korpus3');
 import { rulesMToMm, rulesMToNm } from '../A1_core/cad-math/units.js';
 
 const BACK_EDGE_SUFFIX = /_(?:\+X|-X|\+Y|-Y)$/;

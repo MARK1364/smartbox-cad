@@ -7,6 +7,7 @@
 
 import { ProjectDocument } from '../../A1_core/project-document.js';
 import { Command } from '../../A1_core/commands/command.js';
+import { CADNode } from '../../A1_core/cad-node/cad-node.js';
 import { buildConnectorDrillings } from '../connectors-drilling-builder.js';
 
 export class SyncConnectorDrillingsCommand implements Command {
@@ -29,77 +30,114 @@ export class SyncConnectorDrillingsCommand implements Command {
         const intents = buildConnectorDrillings(document);
         const panels = typeof document.getPanels === 'function' ? document.getPanels() : [];
         const changedNodeIds = new Set<string>();
+        const snapshots = new Map<string, any[]>();
 
-        for (const panelNode of panels) {
-            const data = panelNode.domainData as any;
-            if (data && data.features && Array.isArray(data.features)) {
-                if (!this.oldFeatures.has(panelNode.id)) {
-                    this.oldFeatures.set(panelNode.id, JSON.parse(JSON.stringify(data.features)));
-                }
+        document.transaction(() => {
+            for (const panelNode of panels) {
+                const data = panelNode.domainData as any;
+                if (!data || !Array.isArray(data.features)) continue;
 
                 const initialLen = data.features.length;
-                data.features = data.features.filter((f: any) => {
-                    if (f.frozen || f.params?.frozen) return true;
-                    return !(f.type === 'hole' && f.params?.isConnectorDrilling);
+                const remainingFeatures = data.features.filter((feature: any) => {
+                    if (feature.frozen || feature.params?.frozen) return true;
+                    return !(feature.type === 'hole' && feature.params?.isConnectorDrilling);
                 });
-
-                if (data.features.length !== initialLen) {
+                if (remainingFeatures.length !== initialLen) {
+                    this.snapshotFeatures(snapshots, panelNode.id, data.features);
+                    data.features = remainingFeatures;
                     changedNodeIds.add(panelNode.id);
                 }
             }
-        }
 
-        for (const intent of intents) {
-            const targetNode = document.findNode(intent.targetNodeId);
-            if (!targetNode || !targetNode.domainData) continue;
+            for (const intent of intents) {
+                const targetNode = document.findNode(intent.targetNodeId);
+                if (!targetNode || !targetNode.domainData) continue;
 
-            const data = targetNode.domainData as any;
-            if (!data.features) data.features = [];
+                const data = targetNode.domainData as any;
+                const features = Array.isArray(data.features) ? data.features : [];
+                if (features.some((feature: any) => feature?.id === intent.feature.id)) continue;
 
-            if (!this.oldFeatures.has(targetNode.id)) {
-                this.oldFeatures.set(targetNode.id, JSON.parse(JSON.stringify(data.features)));
+                this.snapshotFeatures(snapshots, targetNode.id, features);
+                data.features = features;
+                data.features.push(intent.feature);
+                changedNodeIds.add(targetNode.id);
             }
 
-            data.features.push(intent.feature);
-            changedNodeIds.add(targetNode.id);
-        }
+            this.emitAfterCommit(document, panels, changedNodeIds);
+            if (typeof document.notifyDocumentChanged === 'function') {
+                document.notifyDocumentChanged();
+            }
+        }, () => {
+            this.restoreSnapshotData(document, snapshots);
+        });
 
         this.affectedNodeIds.push(...Array.from(changedNodeIds));
-
-        for (const panelNode of panels) {
-            if (changedNodeIds.has(panelNode.id)) {
-                const data = panelNode.domainData as any;
-                if (typeof data.setFeatures === 'function') {
-                    data.setFeatures(data.features);
-                } else if (typeof data._emit === 'function') {
-                    data._emit('features', { features: data.features });
-                }
+        for (const [panelId, features] of snapshots) {
+            if (!this.oldFeatures.has(panelId)) {
+                this.oldFeatures.set(panelId, features);
             }
-        }
-
-        if (typeof document.notifyDocumentChanged === 'function') {
-            document.notifyDocumentChanged();
         }
     }
 
     undo(document: ProjectDocument): void {
         if (!document) return;
+        const currentFeatures = new Map<string, any[]>();
 
-        for (const [nodeId, oldFeats] of this.oldFeatures.entries()) {
+        document.transaction(() => {
+            for (const [nodeId, oldFeats] of this.oldFeatures.entries()) {
+                const node = document.findNode(nodeId);
+                if (node && node.domainData) {
+                    const data = node.domainData as any;
+                    currentFeatures.set(nodeId, JSON.parse(JSON.stringify(data.features || [])));
+                    data.features = JSON.parse(JSON.stringify(oldFeats));
+                }
+            }
+
+            this.emitAfterCommit(
+                document,
+                Array.from(this.oldFeatures.keys())
+                    .map((nodeId) => document.findNode(nodeId))
+                    .filter((node): node is CADNode => node !== null),
+                new Set(this.oldFeatures.keys()),
+            );
+            if (typeof document.notifyDocumentChanged === 'function') {
+                document.notifyDocumentChanged();
+            }
+        }, () => {
+            this.restoreSnapshotData(document, currentFeatures);
+        });
+    }
+
+    private snapshotFeatures(target: Map<string, any[]>, panelId: string, features: any[]): void {
+        if (!target.has(panelId)) {
+            target.set(panelId, JSON.parse(JSON.stringify(features)));
+        }
+    }
+
+    private restoreSnapshotData(document: ProjectDocument, snapshots: Map<string, any[]>): void {
+        for (const [nodeId, features] of snapshots) {
             const node = document.findNode(nodeId);
-            if (node && node.domainData) {
-                const data = node.domainData as any;
-                data.features = JSON.parse(JSON.stringify(oldFeats));
-                if (typeof data.setFeatures === 'function') {
+            if (node?.domainData) {
+                (node.domainData as any).features = JSON.parse(JSON.stringify(features));
+            }
+        }
+    }
+
+    private emitAfterCommit(
+        document: ProjectDocument,
+        panels: Array<CADNode | null>,
+        changedNodeIds: Set<string>,
+    ): void {
+        document.afterCommit(() => {
+            for (const panelNode of panels) {
+                if (!panelNode || !changedNodeIds.has(panelNode.id)) continue;
+                const data = panelNode.domainData as any;
+                if (typeof data?.setFeatures === 'function') {
                     data.setFeatures(data.features);
-                } else if (typeof data._emit === 'function') {
+                } else if (typeof data?._emit === 'function') {
                     data._emit('features', { features: data.features });
                 }
             }
-        }
-
-        if (typeof document.notifyDocumentChanged === 'function') {
-            document.notifyDocumentChanged();
-        }
+        });
     }
 }

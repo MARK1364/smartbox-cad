@@ -21,6 +21,7 @@ export class CommandHistory {
     private _maxEntries: number;
     private _subscribers: Set<HistoryChangeSubscriber> = new Set();
     private _isExecuting: boolean = false;
+    private _currentCommand: Command | null = null;
 
     constructor(document: ProjectDocument, options: CommandHistoryOptions = {}) {
         this._document = document;
@@ -39,6 +40,10 @@ export class CommandHistory {
      */
     get isExecuting(): boolean {
         return this._isExecuting;
+    }
+
+    get currentCommand(): Command | null {
+        return this._currentCommand;
     }
 
     get canUndo(): boolean {
@@ -72,9 +77,11 @@ export class CommandHistory {
     execute(command: Command): void {
         if (this._isExecuting) return;
         this._isExecuting = true;
+        this._currentCommand = command;
 
         try {
             command.execute(this._document);
+            this._currentCommand = null;
             this._undoStack.push(command);
 
             if (this._undoStack.length > this._maxEntries) {
@@ -84,6 +91,7 @@ export class CommandHistory {
             this._redoStack = [];
             this._notify();
         } finally {
+            this._currentCommand = null;
             this._isExecuting = false;
         }
     }
@@ -95,14 +103,17 @@ export class CommandHistory {
         if (!this.canUndo || this._isExecuting) return false;
         const command = this._undoStack[this._undoStack.length - 1];
         this._isExecuting = true;
+        this._currentCommand = command;
 
         try {
             command.undo(this._document);
+            this._currentCommand = null;
             this._undoStack.pop();
             this._redoStack.push(command);
             this._notify();
             return true;
         } finally {
+            this._currentCommand = null;
             this._isExecuting = false;
         }
     }
@@ -114,6 +125,7 @@ export class CommandHistory {
         if (!this.canRedo || this._isExecuting) return false;
         const command = this._redoStack[this._redoStack.length - 1];
         this._isExecuting = true;
+        this._currentCommand = command;
 
         try {
             if (typeof command.redo === 'function') {
@@ -121,11 +133,13 @@ export class CommandHistory {
             } else {
                 command.execute(this._document);
             }
+            this._currentCommand = null;
             this._redoStack.pop();
             this._undoStack.push(command);
             this._notify();
             return true;
         } finally {
+            this._currentCommand = null;
             this._isExecuting = false;
         }
     }

@@ -19,15 +19,18 @@ import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
 import skosneDoorsTekstRaw from './06_skosne-doors_tekst.json';
-import skosneDoorsRules from './06_skosne-doors_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const skosneDoorsRules = getModuleRules('06_skosne-doors');
 import { resolveRuleThicknessMm } from './01_bloki-rules-helper.js';
 import type { ContainerModel } from '../A1_core/container-model.js';
 import type { SkosneDoorType, SkosneDoorsPlanParams } from './01_bloki-module-types.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import {
     DEFAULT_HINGE_BRAND,
+    DEFAULT_HINGE_PLATE_ID,
     firstHingeIdForBrand,
     HingeBrandFilter,
+    HingePlateSelect,
     renderHingeSelectOptions,
     resolveHingeBrand
 } from './01_hinge-brand-ui.js';
@@ -138,6 +141,7 @@ export function SkosneDoorsSubModule({ container, triggerUpdate }: {
 
     const defaultTemplate = p.domyslny_zawias_id || DEFAULT_HINGE_ID;
     const [hingeBrand, setHingeBrand] = useState<string>(() => resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
+    const [hingePlate, setHingePlate] = useState<string>(p.typ_prowadnika || DEFAULT_HINGE_PLATE_ID);
     const [hingeTemplate, setHingeTemplate] = useState<string>(defaultTemplate);
 
     const [activeHingeTab, setActiveHingeTab] = useState<'left' | 'right'>('left');
@@ -235,6 +239,7 @@ export function SkosneDoorsSubModule({ container, triggerUpdate }: {
         setOvRight(p.nalozenie_prawe_mm ?? 16);
         setGap(p.szczelina_mm ?? 4);
         setHingeBrand(resolveHingeBrand(p.producent_zawiasow || DEFAULT_HINGE_BRAND));
+        setHingePlate(p.typ_prowadnika || DEFAULT_HINGE_PLATE_ID);
         setHingeTemplate(defTpl);
 
         // Pojedyncze
@@ -364,7 +369,7 @@ export function SkosneDoorsSubModule({ container, triggerUpdate }: {
                     <span style={{ color: '#d4d4d8', fontSize: '12px' }}>{tx(skosneTekst, 'gap.label', TX_NS)}</span>
                     <SmartNumericInput
                         value={gap}
-                        step={0.01} decimals={2}
+                        step={1} decimals={2}
                         unit="mm"
                         style={{ width: '80px', padding: '3px 6px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right', fontSize: '11px' }}
                         onChange={(val) => {
@@ -414,7 +419,7 @@ export function SkosneDoorsSubModule({ container, triggerUpdate }: {
                             <span style={{ color: '#d4d4d8', fontSize: '11px' }}>{tx(skosneTekst, row.key, TX_NS)}</span>
                             <SmartNumericInput
                                 value={row.val}
-                                step={0.01} decimals={2} unit="mm"
+                                step={1} decimals={2} unit="mm"
                                 onChange={(val) => { row.set(val); triggerUpdate({ [row.param]: val } as Partial<SkosneDoorsPlanParams>); }}
                                 style={{ width: '70px', padding: '2px 4px', background: '#18181b', border: '1px solid #3f3f46', color: '#fff', borderRadius: '3px', textAlign: 'right', fontSize: '11px' }}
                             />
@@ -599,6 +604,15 @@ export function SkosneDoorsSubModule({ container, triggerUpdate }: {
                     }}
                 />
 
+                <HingePlateSelect
+                    value={hingePlate}
+                    label={tx(skosneTekst, 'hinge_plate.label', TX_NS)}
+                    onChange={(plateId) => {
+                        setHingePlate(plateId);
+                        triggerUpdate({ typ_prowadnika: plateId });
+                    }}
+                />
+
                 {(() => {
                     const betaRad = roofAngleDeg !== undefined ? (roofAngleDeg * Math.PI) / 180 : 0;
                     const tanBeta = Math.tan(betaRad);
@@ -706,7 +720,7 @@ export function SkosneDoorsSubModule({ container, triggerUpdate }: {
                                 <SmartNumericInput
                                     value={h.val}
                                     disabled={!h.active}
-                                    step={0.01} decimals={2} unit="mm"
+                                    step={1} decimals={2} unit="mm"
                                     onChange={(v) => {
                                         h.setVal(v);
                                         const updateObj: Partial<SkosneDoorsPlanParams> = {

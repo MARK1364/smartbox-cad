@@ -2,7 +2,8 @@
  * led-external-engine.ts — moduł Bloku LED ZEWNĘTRZNY (kanał) (blok_led_external) — mostek na rdzeń led-external-channel-*
  * Silnik obliczeniowy planu brył 3D profilu LED na spodzie szafek oraz frezowań wpustów przelotowych.
  */
-import ledExtRules from './14_led_external_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const ledExtRules = getModuleRules('14_led-external');
 import { applyLedChannelToDocument } from './15_led-external-channel-engine.js';
 import type { LedChannelDefinition } from './15_led-external-channel-types.js';
 import { detectCabinetOuterHull } from './02_bloki-bay-detector.js';
@@ -13,6 +14,7 @@ import {
     assertCanonicalLedExternalParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callLedExternalPlanWasm } from './led-wasm-bridge.js';
 
 export { assertCanonicalLedExternalParams, LEGACY_LED_EXTERNAL_PARAM_ALIASES } from './01_bloki-module-param-guards.js';
 
@@ -43,6 +45,15 @@ export function calculateLedExternalPlan(
     dims_mm: BlokiDimensions_mm,
     params: NormalizedLedExternalParams
 ): BlokiPlanResult {
+    const extTree = (ledExtRules as any).model_tree?.root_assembly?.subcomponents?.LED_PROFILE_BAR || {};
+    const wasmResult = callLedExternalPlanWasm(dims_mm, params, {
+        name: extTree.name || 'Profil_LED_Podszafkowy',
+        libraryId: extTree.library_id || 'LED_PROFILE_WPUSZCZANY'
+    });
+    if (wasmResult) {
+        return wasmResult;
+    }
+
     const parts: any[] = [];
     const width = dims_mm.width_mm;
     const depth = dims_mm.depth_mm;
@@ -51,7 +62,6 @@ export function calculateLedExternalPlan(
     const grooveW = params.szerokosc_wpustu_mm;
     const grooveD = params.glebokosc_wpustu_mm;
 
-    const extTree = (ledExtRules as any).model_tree?.root_assembly?.subcomponents?.LED_PROFILE_BAR || {};
     const yPos = -depth / 2 + offsetFront + grooveW / 2;
     const zPos = grooveD / 2;
 

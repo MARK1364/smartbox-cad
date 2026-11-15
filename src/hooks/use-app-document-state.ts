@@ -1,88 +1,136 @@
 /**
  * Hooki stanu App — obserwatory ContextManager / UIController / TooltipManager.
  * Wyciągnięte z App.tsx, żeby ekran główny nie trzymał boilerplate'u subskrypcji.
+ * Oparte na `useSyncExternalStore` (React 18) i selektorach — bez pollingu `setTimeout`.
  */
 
-import { useEffect, useState } from 'react';
-import { UIController } from '../../A1_core/ui-controller';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { UIController, type UIState } from '../../A1_core/ui-controller';
 import { ContextManager } from '../../A1_core/context-manager';
-import { TooltipManager } from '../../A1_core/tooltip-manager';
+import { TooltipManager, type ToolHint } from '../../A1_core/tooltip-manager';
 import { ModalTransformManager, type ModalTransformMode } from '../../A1_core/modal-transform';
+import type { ProjectDocument } from '../../A1_core/project-document';
+
+function shallowEqual<T>(a: T, b: T): boolean {
+  if (Object.is(a, b)) return true;
+  if (
+    typeof a !== 'object' ||
+    a === null ||
+    typeof b !== 'object' ||
+    b === null
+  ) {
+    return false;
+  }
+  const keysA = Object.keys(a as Record<string, unknown>);
+  const keysB = Object.keys(b as Record<string, unknown>);
+  if (keysA.length !== keysB.length) return false;
+  for (let i = 0; i < keysA.length; i++) {
+    const key = keysA[i];
+    if (
+      !Object.prototype.hasOwnProperty.call(b, key) ||
+      !Object.is((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const subscribeModalTransform = (onStoreChange: () => void) =>
+  ModalTransformManager.instance.subscribe(() => onStoreChange());
+const getModalTransformSnapshot = (): ModalTransformMode =>
+  ModalTransformManager.instance.activeMode;
 
 export function useModalTransformState(): ModalTransformMode {
-  const [mode, setMode] = useState<ModalTransformMode>(() => ModalTransformManager.instance.activeMode);
-
-  useEffect(() => {
-    const unsub = ModalTransformManager.instance.subscribe((currentMode) => {
-      setMode(currentMode);
-    });
-    return () => {
-      unsub();
-    };
-  }, []);
-
-  return mode;
+  return useSyncExternalStore(subscribeModalTransform, getModalTransformSnapshot, getModalTransformSnapshot);
 }
 
-export function useToolHint() {
-  const [activeHint, setActiveHint] = useState<any>(null);
+const subscribeToolHint = (onStoreChange: () => void) =>
+  TooltipManager.instance.onChange(() => onStoreChange());
+const getToolHintSnapshot = (): ToolHint | null =>
+  TooltipManager.instance.activeHint;
 
-  useEffect(() => {
-    setActiveHint(TooltipManager.instance.activeHint);
-    const unsubscribe = TooltipManager.instance.onChange((hint) => {
-      setActiveHint(hint ? { ...hint } : null);
-    });
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  return activeHint;
+export function useToolHint(): ToolHint | null {
+  return useSyncExternalStore(subscribeToolHint, getToolHintSnapshot, getToolHintSnapshot);
 }
 
-/** Re-render przy zmianach ProjectDocument (podpięcie przez UIController). */
-export function useProjectDocument() {
+/** Re-render przy zmianach ProjectDocument (reaktywne podpięcie bez pollingu). */
+export function useProjectDocument(): any {
   const [, setTick] = useState(0);
-  const [projectModel, setProjectModel] = useState<any>(null);
+  const [projectModel, setProjectModel] = useState<ProjectDocument | null>(
+    () => UIController.instance?.document ?? ContextManager.instance.document ?? null
+  );
 
   useEffect(() => {
-    const checkInstance = () => {
-      const model = UIController.instance?.document;
-      if (model) {
-        setProjectModel(model);
-        ContextManager.instance.document = model;
-        const listener = () => setTick((t) => t + 1);
-        const unsubscribe = model.onDocumentChanged(listener);
-        setTick((t) => t + 1);
-        return () => {
-          if (typeof unsubscribe === 'function') unsubscribe();
-        };
+    let docUnsub: (() => void) | null = null;
+    let currentDoc: ProjectDocument | null = null;
+
+    const bindDoc = (nextDoc: ProjectDocument | null) => {
+      if (nextDoc === currentDoc) return;
+      if (docUnsub) {
+        docUnsub();
+        docUnsub = null;
       }
-      setTimeout(checkInstance, 50);
+      currentDoc = nextDoc;
+      if (nextDoc) {
+        ContextManager.instance.document = nextDoc;
+        setProjectModel(nextDoc);
+        docUnsub = nextDoc.onDocumentChanged(() => {
+          setTick((t) => t + 1);
+        });
+        setTick((t) => t + 1);
+      }
     };
-    checkInstance();
+
+    bindDoc(UIController.instance?.document ?? ContextManager.instance.document ?? null);
+
+    const uiUnsub = UIController.subscribe(() => {
+      const candidate = UIController.instance?.document ?? ContextManager.instance.document ?? null;
+      if (candidate !== currentDoc) {
+        bindDoc(candidate);
+      }
+    });
+
+    return () => {
+      uiUnsub();
+      if (docUnsub) {
+        docUnsub();
+      }
+    };
   }, []);
 
   return projectModel;
 }
 
-export function useUIState() {
-  const [uiState, setUiState] = useState<any>(null);
+const getUIStateSnapshot = (): UIState | null => UIController.instance?.state ?? null;
 
-  useEffect(() => {
-    const checkInstance = () => {
-      const controller = UIController.instance;
-      if (controller) {
-        setUiState({ ...controller.state });
-        controller.onStateChange = () => {
-          setUiState({ ...controller.state });
-        };
-      } else {
-        setTimeout(checkInstance, 50);
-      }
-    };
-    checkInstance();
-  }, []);
+/** Pełny obiekt stanu `UIController` (dla komponentów potrzebujących całości). */
+export function useUIState(): UIState | null {
+  return useSyncExternalStore(UIController.subscribe, getUIStateSnapshot, getUIStateSnapshot);
+}
 
-  return uiState;
+/**
+ * Selektor wycinka stanu `UIController` z porównaniem płytkim (`shallowEqual`).
+ * Pozwala komponentowi re-renderować się wyłącznie wtedy, gdy zmieniły się wybrane pola
+ * (np. wymiary wejściowe bez re-renderu przy zmianie tekstu statusu lub kursora UV).
+ */
+export function useUISelector<T>(
+  selector: (state: UIState | null) => T,
+  isEqual: (a: T, b: T) => boolean = shallowEqual
+): T {
+  const cacheRef = useRef<{ hasValue: boolean; value: T }>({
+    hasValue: false,
+    value: undefined as unknown as T,
+  });
+
+  const getSnapshot = (): T => {
+    const next = selector(UIController.instance?.state ?? null);
+    if (cacheRef.current.hasValue && isEqual(cacheRef.current.value, next)) {
+      return cacheRef.current.value;
+    }
+    cacheRef.current = { hasValue: true, value: next };
+    return next;
+  };
+
+  return useSyncExternalStore(UIController.subscribe, getSnapshot, getSnapshot);
 }

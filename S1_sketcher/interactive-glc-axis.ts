@@ -466,12 +466,34 @@ export class InteractiveGlcAxis {
         const glcNode = doc.getGlcNode();
         if (!glcNode) {
             this._clearAllLevels();
+            if (this.rootNode) {
+                this.rootNode.setEnabled(false);
+            }
+            if (this.viewport && this.viewport.axes) {
+                this.viewport.axes.forEach((axis: any) => {
+                    if (axis) {
+                        axis.setEnabled(false);
+                        axis.isVisible = false;
+                    }
+                });
+            }
+            this.viewport?.requestRender?.();
             return;
         }
 
         const isGlcVisible = (glcNode.domainData as any)?.visible !== false;
         if (this.rootNode) {
             this.rootNode.setEnabled(isGlcVisible);
+            if (glcNode.parent && glcNode.parent !== doc.rootNode) {
+                const parentTrans = glcNode.parent.getWorldMatrix().getTranslation();
+                this.rootNode.position.x = nmToMm(parentTrans.x);
+                this.rootNode.position.z = nmToMm(parentTrans.y);
+                this.rootNode.position.y = nmToMm(parentTrans.z);
+            } else {
+                this.rootNode.position.x = 0;
+                this.rootNode.position.y = 0;
+                this.rootNode.position.z = 0;
+            }
         }
         if (this.viewport && this.viewport.axes) {
             this.viewport.axes.forEach((axis: any) => {
@@ -716,7 +738,7 @@ export class InteractiveGlcAxis {
             }
         ));
         sphere.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
-            BABYLON.ActionManager.OnPickTrigger,
+            BABYLON.ActionManager.OnLeftPickTrigger,
             () => {
                 if (ContextManager.instance?.activeConstraintPicker) {
                     if (handleConstraintPickEvent('select', { mesh: sphere, datumLevelNode: node })) {

@@ -1159,7 +1159,7 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         if (!refConfig) return null;
 
         const panelNode = findPanelNodeByRef(refConfig, foundCabinetNode, doc);
-        const isPanelFrozenOrHidden = !!(panelNode?.domainData?.frozen === true || panelNode?.domainData?.visible === false);
+        const isPanelFrozen = !!(panelNode?.frozen === true || panelNode?.domainData?.frozen === true);
         const isCabinetSelf =
             !!foundCabinetNode &&
             (panelNode?.id === foundCabinetNode.id || refConfig.panelId === foundCabinetNode.id || refConfig.partKey === 'SmartFrame');
@@ -1168,51 +1168,56 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
             panelNode.domainData &&
             panelNode.domainData.type !== 'container' &&
             !isCabinetSelf &&
-            !isPanelFrozenOrHidden;
+            !isPanelFrozen;
 
-        // Gdy dana strona ma prawdziwa sciane (BOK_L, przegroda, wieniec...) i nie jest zamrozona/ukryta - lico tej sciany.
+        // Gdy dana strona ma prawdziwa sciane (BOK_L, przegroda, wieniec...) i nie jest zamrozona - lico tej sciany.
         if (isRealWallPanel) {
             const coord = getPanelFaceCoordinate(
                 panelNode.domainData, panelNode, foundCabinetNode,
                 refConfig.face, axis, null, isMax
             );
-            return isMax ? (coord - offsetVal) : (coord + offsetVal);
-        }
-
-        // Gdy brak fizycznej sciany (panel nie istnieje, jest zamrozony/ukryty lub referencja wskazuje na SmartFrame)
-        // -> kaskadowe dziedziczenie referencji: idziemy POZIOM W HIERARCHII DO GORY i bierzemy plaszczyzne obwiedni SmartFrame (OUTER)
-        const cabWidth = nmToMm(cabinet.width) || (cabinet.generatorParams?.szerokosc_mm ?? 600);
-        const cabDepth = nmToMm(cabinet.depth) || (cabinet.generatorParams?.glebokosc_mm ?? 600);
-        const cabHeight = nmToMm(cabinet.height) || (cabinet.generatorParams?.wysokosc_mm ?? 720);
-
-        if (sideKey === 'zMin') {
-            return 0 + offsetVal;
-        }
-
-        if (sideKey === 'zMax') {
-            return cabHeight - offsetVal;
-        }
-
-        if (sideKey === 'xMin') {
-            return -cabWidth / 2 + offsetVal;
-        }
-
-        if (sideKey === 'xMax') {
-            return cabWidth / 2 - offsetVal;
-        }
-
-        if (sideKey === 'yMin') {
-            if (axis === 'x') {
-                return cabWidth / 2 - offsetVal;
+            if (coord !== null && !Number.isNaN(coord)) {
+                return isMax ? (coord - offsetVal) : (coord + offsetVal);
             }
-            return -cabDepth / 2 + offsetVal;
+            return null;
         }
 
-        if (sideKey === 'yMax') {
-            if (axis === 'x') {
+        // Kaskadowe dziedziczenie referencji: tylko gdy referencja jawnie wskazuje na obwiednię korpusu SmartFrame
+        // lub gdy istniejący panel korpusu został zamrożony przez użytkownika
+        if (isCabinetSelf || (panelNode && isPanelFrozen)) {
+            const cabWidth = nmToMm(cabinet.width) || (cabinet.generatorParams?.szerokosc_mm ?? 600);
+            const cabDepth = nmToMm(cabinet.depth) || (cabinet.generatorParams?.glebokosc_mm ?? 600);
+            const cabHeight = nmToMm(cabinet.height) || (cabinet.generatorParams?.wysokosc_mm ?? 720);
+
+            if (sideKey === 'zMin') {
+                return 0 + offsetVal;
+            }
+
+            if (sideKey === 'zMax') {
+                return cabHeight - offsetVal;
+            }
+
+            if (sideKey === 'xMin') {
                 return -cabWidth / 2 + offsetVal;
             }
-            return cabDepth / 2 - offsetVal;
+
+            if (sideKey === 'xMax') {
+                return cabWidth / 2 - offsetVal;
+            }
+
+            if (sideKey === 'yMin') {
+                if (axis === 'x') {
+                    return cabWidth / 2 - offsetVal;
+                }
+                return -cabDepth / 2 + offsetVal;
+            }
+
+            if (sideKey === 'yMax') {
+                if (axis === 'x') {
+                    return -cabWidth / 2 + offsetVal;
+                }
+                return cabDepth / 2 - offsetVal;
+            }
         }
 
         return null;
@@ -1429,6 +1434,34 @@ export function update_bloki_core(container: any, docTarget: any): boolean {
         const rotZ = (topPanel?.domainData as any)?.lcs?.rotation?.[2];
         if (rotZ !== undefined && Number.isFinite(Number(rotZ))) {
             params.dach_kat_deg = -Number(rotZ);
+        }
+    }
+
+    if (boxType === 'DIVIDERS' && foundCabinetNode) {
+        const zMaxRefCfg = customRefs?.zMax;
+        const zMaxNode = isZMaxActive && zMaxRefCfg
+            ? findPanelNodeByRef(zMaxRefCfg, foundCabinetNode, doc)
+            : foundCabinetNode.children.find(
+                (c: any) => String(c.domainData?.role || '').toUpperCase() === 'TOP_PANEL'
+            );
+        const zMaxRole = String(zMaxNode?.domainData?.role || '').toUpperCase();
+        const rotZ = (zMaxNode?.domainData as any)?.lcs?.rotation?.[2];
+        if (
+            isZMaxActive &&
+            (zMaxRole === 'TOP_PANEL' || zMaxRole === 'WIENIEC_G') &&
+            rotZ !== undefined &&
+            Number.isFinite(Number(rotZ)) &&
+            Math.abs(Number(rotZ)) >= 0.05
+        ) {
+            params.dach_kat_deg = -Number(rotZ);
+            params.przesuniecie_strefy_x_mm = (xMinVal + xMaxVal) / 2;
+            container.generatorParams.dach_kat_deg = params.dach_kat_deg;
+            container.generatorParams.przesuniecie_strefy_x_mm = params.przesuniecie_strefy_x_mm;
+        } else {
+            params.dach_kat_deg = 0;
+            params.przesuniecie_strefy_x_mm = 0;
+            delete container.generatorParams.dach_kat_deg;
+            delete container.generatorParams.przesuniecie_strefy_x_mm;
         }
     }
 

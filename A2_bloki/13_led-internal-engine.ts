@@ -13,8 +13,10 @@
  * Silniki nie są wymienne — różne mechanizmy wykrywania geometrii i różne role montażowe.
  */
 
-import ledIntRules from './13_led_internal_3_rules_V1.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const ledIntRules = getModuleRules('13_led-internal');
 import { nmToMm } from '../A1_core/cad-math/units.js';
+import { normalizeFaceName } from '../A1_core/face-name.js';
 import { ContextManager } from '../A1_core/context-manager.js';
 import { NativePanelBuilder } from '../A4_smartpanel/native-panel-builder.js';
 
@@ -29,9 +31,11 @@ import {
     assertCanonicalLedInternalParams,
     readOptionalNumber
 } from './01_bloki-module-param-guards.js';
+import { callLedInternalPlanWasm } from './led-wasm-bridge.js';
 import {
     buildGrooveMachiningIntent,
     isOwnedGroove,
+    type MachiningFace,
     type MachiningGrooveFeature,
     type MachiningIntent,
 } from './01_machining-intent.js';
@@ -97,6 +101,14 @@ export function calculateLedInternalPlan(
     dims_mm: BlokiDimensions_mm,
     params: NormalizedLedInternalParams
 ): BlokiPlanResult {
+    const intTree = (ledIntRules as any).model_tree?.root_assembly?.subcomponents?.LED_STRIP || {};
+    const wasmResult = callLedInternalPlanWasm(dims_mm, params, {
+        libraryId: intTree.library_id || 'LED_PROFILE_WPUSZCZANY'
+    });
+    if (wasmResult) {
+        return wasmResult;
+    }
+
     const parts: any[] = [];
     const width = dims_mm.width_mm;
     const height = dims_mm.height_mm;
@@ -109,19 +121,21 @@ export function calculateLedInternalPlan(
     const grooveW = params.szerokosc_wpustu_mm;
     const grooveD = params.glebokosc_wpustu_mm;
 
-    const intTree = (ledIntRules as any).model_tree?.root_assembly?.subcomponents?.LED_STRIP || {};
     const stripH = Math.max(10, height - params.odstep_gora_mm - params.odstep_dol_mm);
     const zCenter = params.odstep_dol_mm + stripH / 2;
 
     if (params.profil_lewy) {
+        // Profil pionowy LEWY — wpuszczony w wewnętrzne lico lewego boczka
+        // dim: x=grooveD (głębokość wpustu), y=grooveW (szerokość), z=stripH (długość pionowa)
+        // loc.x: przy licu wewnętrznym = -(width/2 - grooveD/2)
         const yPosLeft = -depth / 2 + offsetLeft + grooveW / 2;
         parts.push({
             name: 'Profil_LED_Pionowy_Lewy',
             role: 'LED',
             report_type: 'akcesoria',
             library_id: intTree.library_id || 'LED_PROFILE_WPUSZCZANY',
-            dim: { x: grooveD, y: stripH, z: grooveW },
-            loc: { x: -width / 2 - grooveD / 2, y: yPosLeft, z: zCenter },
+            dim: { x: grooveD, y: grooveW, z: stripH },
+            loc: { x: -(width / 2 - grooveD / 2), y: yPosLeft, z: zCenter },
             custom_properties: {
                 material: 'Aluminium_Czarny_Mat_Opal',
                 shape: 'BOX',
@@ -133,14 +147,15 @@ export function calculateLedInternalPlan(
     }
 
     if (params.profil_prawy) {
+        // Profil pionowy PRAWY — wpuszczony w wewnętrzne lico prawego boczka
         const yPosRight = -depth / 2 + offsetRight + grooveW / 2;
         parts.push({
             name: 'Profil_LED_Pionowy_Prawy',
             role: 'LED',
             report_type: 'akcesoria',
             library_id: intTree.library_id || 'LED_PROFILE_WPUSZCZANY',
-            dim: { x: grooveD, y: stripH, z: grooveW },
-            loc: { x: width / 2 + grooveD / 2, y: yPosRight, z: zCenter },
+            dim: { x: grooveD, y: grooveW, z: stripH },
+            loc: { x: width / 2 - grooveD / 2, y: yPosRight, z: zCenter },
             custom_properties: {
                 material: 'Aluminium_Czarny_Mat_Opal',
                 shape: 'BOX',
@@ -152,13 +167,15 @@ export function calculateLedInternalPlan(
     }
 
     if (params.profil_tyl) {
-        const yPosBack = depth / 2 + grooveD / 2;
+        // Profil pionowy TYŁ (plecy) — wpuszczony w wewnętrzne lico ściany tylnej
+        // loc.y: przy licu wewnętrznym pleców = +(depth/2 - grooveD/2)
+        const yPosBack = depth / 2 - grooveD / 2;
         parts.push({
             name: 'Profil_LED_Pionowy_Plecy',
             role: 'LED',
             report_type: 'akcesoria',
             library_id: intTree.library_id || 'LED_PROFILE_WPUSZCZANY',
-            dim: { x: grooveW, y: stripH, z: grooveD },
+            dim: { x: grooveW, y: grooveD, z: stripH },
             loc: { x: offsetBack, y: yPosBack, z: zCenter },
             custom_properties: {
                 material: 'Aluminium_Czarny_Mat_Opal',
@@ -171,13 +188,16 @@ export function calculateLedInternalPlan(
     }
 
     if (params.wariant_led === 'HORIZONTAL_TOP') {
+        // Profil poziomy GÓRA — wpuszczony w dolne lico wieńca górnego
+        // dim: x=length (szerokość wnęki), y=grooveW (szerokość ~14mm), z=grooveD (głębokość ~9mm)
+        // loc.z: przy dolnym licu wieńca = height - grooveD/2
         const yPosTop = -depth / 2 + offsetFront + grooveW / 2;
         parts.push({
             name: 'Profil_LED_Poziomy_Gora',
             role: 'LED',
             report_type: 'akcesoria',
             library_id: intTree.library_id || 'LED_PROFILE_WPUSZCZANY',
-            dim: { x: Math.max(10, width - 4), y: grooveD, z: grooveW },
+            dim: { x: Math.max(10, width - 4), y: grooveW, z: grooveD },
             loc: { x: 0, y: yPosTop, z: height - grooveD / 2 },
             custom_properties: {
                 material: 'Aluminium_Czarny_Mat_Opal',
@@ -287,6 +307,7 @@ function buildSideGrooveIntent(
     grooveW: number,
     stripH: number,
     grooveD: number,
+    face: MachiningFace = 'FACE_Z_PLUS',
 ): MachiningIntent<MachiningGrooveFeature> {
     return buildGrooveMachiningIntent({
         targetNodeId,
@@ -294,7 +315,7 @@ function buildSideGrooveIntent(
         source: 'BLOKI_LED',
         channelId: containerId,
         sourceContainerId: containerId,
-        face: 'FACE_Z_PLUS',
+        face,
         name: 'Wpust pod profil LED',
         u: uPos,
         v: vPos,
@@ -312,6 +333,7 @@ function buildBackGrooveIntent(
     grooveW: number,
     stripH: number,
     grooveD: number,
+    face: MachiningFace = 'FACE_Z_PLUS',
 ): MachiningIntent<MachiningGrooveFeature> {
     return buildGrooveMachiningIntent({
         targetNodeId,
@@ -319,7 +341,7 @@ function buildBackGrooveIntent(
         source: 'BLOKI_LED',
         channelId: containerId,
         sourceContainerId: containerId,
-        face: 'FACE_Z_PLUS',
+        face,
         name: 'Wpust pod profil LED (Plecy)',
         u: uPos,
         v: vPos,
@@ -347,8 +369,12 @@ export function buildBlokiLedInternalGroovePlan(
     const grooveW = norm.szerokosc_wpustu_mm;
     const grooveD = norm.glebokosc_wpustu_mm;
 
-    const leftPanelId = p.customReferences?.xMin?.panelId;
-    const rightPanelId = p.customReferences?.xMax?.panelId;
+    const leftRef = p.customReferences?.xMin || p.boundary?.left;
+    const rightRef = p.customReferences?.xMax || p.boundary?.right;
+    const leftPanelId = leftRef?.panelId || leftRef?.nodeId;
+    const rightPanelId = rightRef?.panelId || rightRef?.nodeId;
+    const leftFace: MachiningFace = leftRef?.face ? (normalizeFaceName(leftRef.face) as MachiningFace) : 'FACE_Z_PLUS';
+    const rightFace: MachiningFace = rightRef?.face ? (normalizeFaceName(rightRef.face) as MachiningFace) : 'FACE_Z_PLUS';
     const insetBottom = norm.odstep_dol_mm;
     const insetTop = norm.odstep_gora_mm;
     const height = container.height ? nmToMm(container.height) : 720;
@@ -360,7 +386,7 @@ export function buildBlokiLedInternalGroovePlan(
 
     const panels: BlokiLedInternalPanelPlan[] = [];
 
-    const sidePlan = (panelId: string | undefined, active: boolean, offsetVal: number, key: 'l' | 'r') => {
+    const sidePlan = (panelId: string | undefined, active: boolean, offsetVal: number, key: 'l' | 'r', targetFace: MachiningFace) => {
         if (!panelId) return;
         const node = doc.findNode(panelId);
         if (!node) return;
@@ -372,19 +398,21 @@ export function buildBlokiLedInternalGroovePlan(
             // Aktywny profil boczny = pełny replace (stary sync usuwał WSZYSTKIE wpusty ownera na tej formatce).
             plan.scope = 'all';
             const panelDepth = panel.width ? nmToMm(panel.width) : (container.depth ? nmToMm(container.depth) : 500);
-            const uCenter = calcFaceUFromFront(node, 'FACE_Z_PLUS', panelDepth, offsetVal + grooveW / 2, key === 'l' ? 'left' : 'right');
+            const uCenter = calcFaceUFromFront(node, targetFace, panelDepth, offsetVal + grooveW / 2, key === 'l' ? 'left' : 'right');
             const uPos = Math.max(0, uCenter - grooveW / 2);
             const zOffset = getContainerZOffsetOnPanel(containerNode, node);
             plan.upsert = buildSideGrooveIntent(
-                container.id, key, panelId, uPos, zOffset + insetBottom, grooveW, stripH, grooveD,
+                container.id, key, panelId, uPos, zOffset + insetBottom, grooveW, stripH, grooveD, targetFace,
             );
         }
         panels.push(plan);
     };
 
+    const backRef = p.customReferences?.yMax || p.boundary?.back;
+    const backFace: MachiningFace = backRef?.face ? (normalizeFaceName(backRef.face) as MachiningFace) : 'FACE_Z_PLUS';
     const backPanelNodeId = (() => {
-        const ref = p.customReferences?.yMax?.panelId;
-        if (ref) return ref;
+        if (backRef?.panelId) return backRef.panelId;
+        if (backRef?.nodeId) return backRef.nodeId;
         if (doc.rootNode) {
             const allPanels = typeof doc.getPanels === 'function' ? doc.getPanels() : [];
             const found = allPanels.find((n: any) => {
@@ -396,11 +424,11 @@ export function buildBlokiLedInternalGroovePlan(
         return undefined;
     })();
 
-    if (hasLeft) sidePlan(leftPanelId, true, offsetLeft, 'l');
-    else if (leftPanelId) sidePlan(leftPanelId, false, offsetLeft, 'l');
+    if (hasLeft) sidePlan(leftPanelId, true, offsetLeft, 'l', leftFace);
+    else if (leftPanelId) sidePlan(leftPanelId, false, offsetLeft, 'l', leftFace);
 
-    if (hasRight) sidePlan(rightPanelId, true, offsetRight, 'r');
-    else if (rightPanelId) sidePlan(rightPanelId, false, offsetRight, 'r');
+    if (hasRight) sidePlan(rightPanelId, true, offsetRight, 'r', rightFace);
+    else if (rightPanelId) sidePlan(rightPanelId, false, offsetRight, 'r', rightFace);
 
     if (hasBack && backPanelNodeId) {
         const node = doc.findNode(backPanelNodeId);
@@ -413,7 +441,7 @@ export function buildBlokiLedInternalGroovePlan(
                 targetNodeId: backPanelNodeId,
                 scope: 'back',
                 upsert: buildBackGrooveIntent(
-                    container.id, backPanelNodeId, uPos, zOffset + insetBottom, grooveW, stripH, grooveD,
+                    container.id, backPanelNodeId, uPos, zOffset + insetBottom, grooveW, stripH, grooveD, backFace,
                 ),
             });
         }

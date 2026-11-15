@@ -10,9 +10,11 @@ import { NodeType } from '../../A1_core/cad-node/node-type.js';
 import { isCylindricalPart } from '../../A1_core/cad-node/part-shape.js';
 import { computePanelFeaturesFingerprint } from '../../A4_smartpanel/panel-view.js';
 import { syncSelectionHighlights } from '../../A1_core/selection-highlight.js';
-import { HardwareLoader } from '../../B1_biblioteka/hardware-loader.js';
+import { HardwareLoader, resolveDrawerGlbTemplateId } from '../../B1_biblioteka/hardware-loader.js';
 import { syncHangerMeshesFromDocument } from '../../A2_bloki/hangers/hanger-mesh.js';
-import { syncSinkMeshesFromDocument } from '../../A2_bloki/sinks/sink-mesh.js';
+import { syncHandleMeshesFromDocument } from '../../A2_bloki/handles/handle-mesh.js';
+import { syncSinkMeshesFromDocument } from '../../A6_agd/sinks/sink-mesh.js';
+import { syncScenePropMeshesFromDocument } from '../../A6_agd/scene-prop-mesh.js';
 import { tx } from '../../T1_tlumaczenia/core.js';
 import type { ModuleTexts } from '../../T1_tlumaczenia/types.js';
 import srcTekstRaw from '../src_tekst.json';
@@ -28,7 +30,7 @@ export interface GeometryRebuildDeps {
 }
 
 export function createRebuildGeometry(deps: GeometryRebuildDeps) {
-  const rebuildGeometry = (successMessage = 'Gotowy') => {
+  const rebuildGeometry = (successMessage = 'Gotowy', rethrowErrors = false) => {
     const ctx = deps.getContext();
     if (!ctx) return;
     const gizmoCtrl = deps.getGizmoController();
@@ -129,15 +131,20 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
         const fp = fCount === 0
           ? '0'
           : `${fCount}_` + f.map((feat: any) => {
-              const p = feat.params;
-              return p
-                ? `${feat.id}_${p.u ?? p.x}_${p.v ?? p.y}_${p.width}_${p.length ?? p.height}_${p.depth}_${p.diameter}`
-                : feat.id;
-            }).join(';');
+            const p = feat.params;
+            return p
+              ? `${feat.id}_${p.u ?? p.x}_${p.v ?? p.y}_${p.width}_${p.length ?? p.height}_${p.depth}_${p.diameter}`
+              : feat.id;
+          }).join(';');
         const isDimsDirty =
           view.lastWidth !== panel.width ||
           view.lastHeight !== panel.height ||
           view.lastThickness !== panel.thickness;
+        const currentPanelForm = panel.panelForm || 'SOLID';
+        const currentTemplateId = panel.frameTemplateId || '';
+        const isFormDirty =
+          ((view as any).lastPanelForm || 'SOLID') !== currentPanelForm ||
+          ((view as any).lastFrameTemplateId || '') !== currentTemplateId;
         const fullFp = computePanelFeaturesFingerprint(panel);
         const isFeaturesDirty = view.lastFeaturesFingerprint !== fullFp;
 
@@ -146,7 +153,7 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           : (panel.materialId || panel.material || '');
         const isColorDirty = (view as any).lastColorKey !== colorKey;
 
-        if (isNewView || isDimsDirty || isFeaturesDirty) {
+        if (isNewView || isDimsDirty || isFeaturesDirty || isFormDirty) {
           anyGeometryRebuilt = true;
           if (!isCylindricalPart(panel)) {
             if (panel.width <= 0 || panel.height <= 0 || panel.thickness <= 0) {
@@ -161,6 +168,8 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           view.lastHeight = panel.height;
           view.lastThickness = panel.thickness;
           view.lastFeaturesFingerprint = fullFp;
+          (view as any).lastPanelForm = currentPanelForm;
+          (view as any).lastFrameTemplateId = currentTemplateId;
           (view as any).lastColorKey = colorKey;
 
           if (isCylindricalPart(panel) && typeof (view as any).renderFeatures === 'function') (view as any).renderFeatures();
@@ -173,7 +182,8 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
 
         if (view._updateTransform) view._updateTransform();
 
-        const isPanelVis = panel.visible !== false && !isPanelFrozen;
+        const isMeshProxy = Boolean(panel.custom_properties?.isMeshProxy);
+        const isPanelVis = panel.visible !== false && !isPanelFrozen && !isMeshProxy;
         if (typeof (view as any).setPanelVisible === 'function') {
           (view as any).setPanelVisible(isPanelVis);
         } else if (view.root) {
@@ -207,7 +217,11 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
         if (!isRail && !isShelfPin && !isTube) continue;
 
         activeHwIds.add(hwNode.id);
-        const parentContainer = hwNode.parent?.domainData;
+        let containerNode: any = hwNode.parent;
+        while (containerNode && containerNode.nodeType !== NodeType.ASSEMBLY && containerNode.nodeType !== NodeType.ROOM) {
+          containerNode = containerNode.parent;
+        }
+        const parentContainer = containerNode?.domainData;
         const containerView = parentContainer ? containerViews.get(parentContainer) : null;
         if (!containerView || !containerView.rootNode) continue;
 
@@ -218,6 +232,26 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
         if (hwMesh && isTube && hw.role === 'TUBE_ROD') {
           const lenMm = hw.dim?.x || hw.params?.length_mm || 500;
           if (hwMesh.metadata?.lengthMm !== lenMm) {
+            try { hwMesh.dispose(); } catch { /* ignore */ }
+            hwMesh = null;
+            hardwareViews.delete(hwNode.id);
+          }
+        } else if (hwMesh && isRail) {
+          const lenMm = hw.dim?.y || hw.params?.lengthMm || 500;
+          const corpusHeightMm = hw.params?.corpusHeight || hw.dim?.z || 178;
+          const side = hw.side || (hwNode.id?.toLowerCase().includes('_r') ? 'right' : 'left');
+          const railId = hw.params?.railId || hw.custom_properties?.library_id || hwId;
+          const glbTemplateId = resolveDrawerGlbTemplateId(`${railId} ${hwId}`);
+          const expectsGlbDrawerSide = Boolean(glbTemplateId && hwLoader.hasTemplate(glbTemplateId));
+          if (
+            hwMesh.metadata?.lengthMm !== lenMm ||
+            hwMesh.metadata?.corpusHeightMm !== corpusHeightMm ||
+            hwMesh.metadata?.side !== side ||
+            (hwMesh.metadata?.railId && hwMesh.metadata?.railId !== railId) ||
+            Boolean(hwMesh.metadata?.isGlbDrawerSide) !== expectsGlbDrawerSide ||
+            (expectsGlbDrawerSide && hwMesh.metadata?.glbTemplateId !== glbTemplateId) ||
+            Boolean(hwMesh.metadata?.isInternal) !== Boolean(hw.params?.internal)
+          ) {
             try { hwMesh.dispose(); } catch { /* ignore */ }
             hwMesh = null;
             hardwareViews.delete(hwNode.id);
@@ -239,7 +273,7 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
                   rebuildGeometry();
                   viewport.requestRender(10);
                 })
-                .catch(() => {});
+                .catch(() => { });
             }
           } else if (isTube) {
             const side = hw.side || (hwNode.id?.toLowerCase().includes('_r') ? 'right' : 'left');
@@ -256,12 +290,34 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
               hwMesh.parent = containerView.rootNode;
               hardwareViews.set(hwNode.id, hwMesh);
             }
-          } else if (
-            hwLoader.hasTemplate(hwId) ||
-            hwLoader.hasTemplate('BLUM_ANTARO_M_L') ||
-            hwLoader.hasTemplate('Antaro M 500')
-          ) {
-            hwMesh = hwLoader.createDrawerSideInstance(hwId, viewport.scene, hw.side);
+          } else if (isRail) {
+            const side = hw.side || (hwNode.id?.toLowerCase().includes('_r') ? 'right' : 'left');
+            const lenMm = hw.dim?.y || hw.params?.lengthMm || 500;
+            const corpusHeightMm = hw.params?.corpusHeight || hw.dim?.z || 178;
+            const railId = hw.params?.railId || hw.custom_properties?.library_id || hwId;
+            const glbTemplateId = resolveDrawerGlbTemplateId(`${railId} ${hwId}`);
+            if (glbTemplateId && !hwLoader.hasTemplate(glbTemplateId)) {
+              hwLoader
+                .loadTemplate(glbTemplateId, viewport.scene)
+                .then(() => {
+                  rebuildGeometry();
+                  viewport.requestRender(10);
+                })
+                .catch(() => { });
+            }
+            hwMesh = hwLoader.createDrawerSideInstance(
+              hwId,
+              viewport.scene,
+              side,
+              lenMm,
+              corpusHeightMm,
+              hw.params?.profile,
+              undefined,
+              undefined,
+              undefined,
+              railId,
+              Boolean(hw.params?.internal)
+            );
             if (hwMesh) {
               hwMesh.parent = containerView.rootNode;
               hardwareViews.set(hwNode.id, hwMesh);
@@ -290,28 +346,48 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
           }
 
           if (isRail) {
-            const lenMm = hw.params?.lengthMm || 500;
-            const baseScale = hwMesh.metadata?.baseScale || Math.abs(hwMesh.scaling?.y || 1);
-            hwMesh.rotation.set(0, Math.PI, 0);
+            if (hwMesh.metadata?.isParametricDrawerSide || hwMesh.metadata?.isGlbDrawerSide) {
+              hwMesh.rotation.set(0, 0, 0);
+              hwMesh.scaling.set(1, 1, 1);
+            } else {
+              const lenMm = hw.params?.lengthMm || 500;
+              const baseScale = hwMesh.metadata?.baseScale || Math.abs(hwMesh.scaling?.y || 1);
+              hwMesh.rotation.set(0, Math.PI, 0);
 
-            const scaleX = side === 'right' ? -baseScale : baseScale;
-            const scaleZ = lenMm > 0 ? baseScale * (lenMm / 500) : baseScale;
-            hwMesh.scaling.set(scaleX, baseScale, scaleZ);
+              const scaleX = side === 'right' ? -baseScale : baseScale;
+              const scaleZ = lenMm > 0 ? baseScale * (lenMm / 500) : baseScale;
+              hwMesh.scaling.set(scaleX, baseScale, scaleZ);
+            }
           } else if (isShelfPin) {
             if (hw.rotation) {
               hwMesh.rotation.set(hw.rotation.x, hw.rotation.y, hw.rotation.z);
             } else {
               hwMesh.rotation.set(0, 0, Math.PI / 2);
             }
+            const pinDia = Number(hw.params?.diameter_mm || hw.params?.srednica_podporki_mm || 5);
+            const pinScale = pinDia > 0 ? pinDia / 5 : 1;
+            if (hwMesh.scaling) {
+              const signX = hw.side === 'right' ? -1 : 1;
+              hwMesh.scaling.set(signX * pinScale, pinScale, pinScale);
+            }
           } else if (isTube) {
             hwMesh.rotation.set(0, 0, Math.PI / 2);
           }
 
-          const isHwFrozen = Boolean(hw.frozen || hwNode.frozen);
-          const isVisible = hw.visible !== false && parentContainer.visible !== false && !isHwFrozen;
+          const isParentFrozen = Boolean(hwNode.parent?.frozen || (hwNode.parent?.domainData as any)?.frozen);
+          const isHwFrozen = Boolean(hw.frozen || hwNode.frozen || isParentFrozen);
+          const isParentVisible = hwNode.parent ? (hwNode.parent.domainData as any)?.visible !== false && hwNode.parent.visible !== false : true;
+          const isVisible = hw.visible !== false && parentContainer.visible !== false && !isHwFrozen && isParentVisible;
           hwMesh.setEnabled(isVisible);
-          hwLoader.setHardwareFrozen(hwMesh, !!hw.frozen);
+          hwLoader.setHardwareFrozen(hwMesh, isHwFrozen);
+
+          const hiddenSubparts: string[] = [
+            ...(Array.isArray(hw.hiddenSubparts) ? hw.hiddenSubparts : []),
+            ...(Array.isArray(hw.params?.hiddenSubparts) ? hw.params.hiddenSubparts : []),
+          ];
+
           hwMesh.metadata = {
+            ...(hwMesh.metadata || {}),
             type: 'hardware',
             hardwareType: hw.hardwareType || (isRail ? 'RAIL' : isShelfPin ? 'SHELF_PIN' : 'TUBE'),
             hardwareId: hwId,
@@ -320,7 +396,36 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
             side: side,
             frozen: !!hw.frozen,
             visible: isVisible,
+            hiddenSubparts,
           };
+          if (typeof hwMesh.getChildMeshes === 'function') {
+            for (const child of hwMesh.getChildMeshes()) {
+              const subType = child.metadata?.subType;
+              const subName = child.metadata?.subName;
+              const subId = subType ? `${hwNode.id}_${subType}` : hwNode.id;
+              const isSubHidden = Boolean(subType && hiddenSubparts.includes(subType));
+              const isChildVisible = isVisible && !isSubHidden;
+
+              child.setEnabled(isChildVisible);
+              child.isVisible = isChildVisible;
+              child.metadata = {
+                ...(child.metadata || {}),
+                type: 'hardware',
+                subType,
+                subName: subName ? `${subName} [${hw.name || hwNode.name}]` : hwNode.name,
+                parentHardwareMesh: hwMesh,
+                hardwareId: hwId,
+                cadNode: hwNode,
+                id: subId,
+                parentId: hwNode.id,
+                visible: isChildVisible,
+              };
+              if (subType) {
+                hardwareViews.set(subId, child);
+                activeHwIds.add(subId);
+              }
+            }
+          }
         }
       }
 
@@ -342,11 +447,25 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
         console.warn('[rebuildGeometry] syncHangerMeshes:', err);
       }
 
+      // Uchwyty SmartPart (GLB z B1 / parametryczne)
+      try {
+        syncHandleMeshesFromDocument(document);
+      } catch (err) {
+        console.warn('[rebuildGeometry] syncHandleMeshes:', err);
+      }
+
       // Zlewy SmartPart — kołnierz + komora
       try {
         syncSinkMeshesFromDocument(document);
       } catch (err) {
         console.warn('[rebuildGeometry] syncSinkMeshes:', err);
+      }
+
+      // Obiekty wyposażenia sceny 3D (.glb, .obj, .stl)
+      try {
+        syncScenePropMeshesFromDocument(document);
+      } catch (err) {
+        console.warn('[rebuildGeometry] syncScenePropMeshes:', err);
       }
 
       syncSelectionHighlights(ctx);
@@ -420,6 +539,9 @@ export function createRebuildGeometry(deps: GeometryRebuildDeps) {
     } catch (e: any) {
       console.error(e);
       ui.setStatus(tx(srcTekst, 'cadapp.geom_error', TX_NS), true, 'error');
+      if (rethrowErrors) {
+        throw e;
+      }
     }
   };
 

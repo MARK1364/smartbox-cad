@@ -1,6 +1,8 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { PMIRenderer } from '../pmi-renderer.js';
 import { v3 } from '../dimension-solver.js';
+import { PMIStore } from '../pmi-data.js';
+import { freeAnchorRef } from '../pmi-id-bridge.js';
 
 declare const BABYLON: any;
 
@@ -42,6 +44,7 @@ function fakeMesh() {
         dispose() { /* noop */ },
         isEnabled: true,
         setEnabled(v: boolean) { (this as any).isEnabled = v; },
+        lookAt() { /* noop */ },
     };
 }
 
@@ -257,5 +260,144 @@ describe('PMIRenderer — reużywanie siatek w miejscu (brak churnu pamięci)', 
         // Widoczność zatwierdzonego pomiaru zostaje przywrócona
         expect(fakePlane.isEnabled).toBe(true);
         expect(fakePart.isEnabled).toBe(true);
+    });
+
+    it('brak sprzężenia magnetycznego: przesunięcie lub edycja jednego wymiaru nie zmienia pozycji tekstu sąsiedniego wymiaru', () => {
+        const scene = {
+            activeCamera: null,
+        };
+        const renderer = new PMIRenderer(scene);
+        const store = new PMIStore();
+
+        const ann1 = store.addAnnotation({
+            anchor1: freeAnchorRef(v3(0, 0, 0)),
+            anchor2: freeAnchorRef(v3(100, 0, 0)),
+            offset: v3(0, 50, 0),
+            offsetSpace: 'WORLD',
+            axisSpace: 'GLOBAL',
+            measureAxisKey: 'AUTO',
+        });
+        const ann2 = store.addAnnotation({
+            anchor1: freeAnchorRef(v3(100, 0, 0)),
+            anchor2: freeAnchorRef(v3(200, 0, 0)),
+            offset: v3(0, 50, 0),
+            offsetSpace: 'WORLD',
+            axisSpace: 'GLOBAL',
+            measureAxisKey: 'AUTO',
+        });
+
+        renderer.renderAll(store);
+        const vis2 = (renderer as any).visuals.get(ann2.id);
+        expect(vis2).toBeDefined();
+        const initialPos2 = {
+            x: vis2.textPlane.position.x,
+            y: vis2.textPlane.position.y,
+            z: vis2.textPlane.position.z,
+        };
+
+        // Przeciągamy ann1 (zmieniamy offset i shift tekstu blisko ann2)
+        ann1.offset = v3(0, 52, 0);
+        ann1.textShiftMM = 40;
+        renderer.renderAll(store);
+
+        // Pozycja tekstu wymiaru 2 pozostaje nienaruszona
+        expect(vis2.textPlane.position.x).toBe(initialPos2.x);
+        expect(vis2.textPlane.position.y).toBe(initialPos2.y);
+        expect(vis2.textPlane.position.z).toBe(initialPos2.z);
+    });
+
+    it('widoczne linie mają pełną emisję (1.0x), alfę 1.0 i backFaceCulling=false, a niewidoczne hitboxy mają disableDepthWrite=true', () => {
+        const scene = { activeCamera: null };
+        const renderer = new PMIRenderer(scene);
+        const store = new PMIStore();
+
+        const ann = store.addAnnotation({
+            anchor1: freeAnchorRef(v3(0, 0, 0)),
+            anchor2: freeAnchorRef(v3(100, 0, 0)),
+            offset: v3(0, 50, 0),
+            offsetSpace: 'WORLD',
+            axisSpace: 'GLOBAL',
+            measureAxisKey: 'AUTO',
+        });
+
+        renderer.renderAll(store);
+        const vis = (renderer as any).visuals.get(ann.id);
+        expect(vis).toBeDefined();
+
+        // Główna linia wymiarowa: indeks 0 = widoczna linia, indeks 1 = hitbox
+        const dimLine = vis.dimLineParts[0];
+        const dimHitbox = vis.dimLineParts[1];
+        expect(dimLine.visibility).toBe(1);
+        expect(dimLine.material.alpha).toBe(1.0);
+        expect(dimLine.material.backFaceCulling).toBe(false);
+        expect(dimLine.material.disableDepthWrite).toBe(false);
+        expect(dimLine.material.emissiveColor.r).toBeCloseTo(store.dimColor[0], 5);
+        expect(dimLine.material.emissiveColor.g).toBeCloseTo(store.dimColor[1], 5);
+        expect(dimLine.material.emissiveColor.b).toBeCloseTo(store.dimColor[2], 5);
+
+        expect(dimHitbox.visibility).toBe(0);
+        expect(dimHitbox.isPickable).toBe(true);
+        expect(dimHitbox.material.disableDepthWrite).toBe(true);
+
+        // Linie pomocnicze: pełne krycie (alfa 1.0) + osobny niewidoczny hitbox bez zapisu Z
+        const helperLine = vis.helperLineParts[0];
+        const helperHitbox = vis.helperLineParts[1];
+        expect(helperLine.visibility).toBe(1);
+        expect(helperLine.material.alpha).toBe(1.0);
+        expect(helperLine.material.backFaceCulling).toBe(false);
+        expect(helperLine.material.emissiveColor.r).toBeCloseTo(0.15, 5);
+        expect(helperHitbox.visibility).toBe(0);
+        expect(helperHitbox.isPickable).toBe(true);
+        expect(helperHitbox.material.disableDepthWrite).toBe(true);
+    });
+
+    it('używa GreasedLine (sizeAttenuation: true) dla widocznych linii wymiarowych i pomocniczych, zachowując cylindryczne hitboxy', () => {
+        const greasedCalls: Array<{ name: string; options: any; matOptions: any }> = [];
+        (globalThis as any).BABYLON.CreateGreasedLine = (name: string, options: any, matOptions: any) => {
+            greasedCalls.push({ name, options, matOptions });
+            const mesh: any = fakeMesh();
+            mesh.material = new (globalThis as any).BABYLON.StandardMaterial();
+            mesh.greasedLineMaterial = {
+                color: matOptions.color,
+                width: matOptions.width,
+            };
+            return mesh;
+        };
+
+        const scene = { activeCamera: null };
+        const renderer = new PMIRenderer(scene);
+        const store = new PMIStore();
+
+        const ann = store.addAnnotation({
+            anchor1: freeAnchorRef(v3(0, 0, 0)),
+            anchor2: freeAnchorRef(v3(100, 0, 0)),
+            offset: v3(0, 50, 0),
+            offsetSpace: 'WORLD',
+            axisSpace: 'GLOBAL',
+            measureAxisKey: 'AUTO',
+        });
+
+        renderer.renderAll(store);
+        expect(greasedCalls.length).toBeGreaterThanOrEqual(3); // 1 linia wymiarowa + 2 linie pomocnicze
+        for (const call of greasedCalls) {
+            expect(call.matOptions.sizeAttenuation).toBe(true);
+            expect(call.matOptions.width).toBeGreaterThan(1.0);
+        }
+
+        const vis = (renderer as any).visuals.get(ann.id);
+        const dimLine = vis.dimLineParts[0];
+        const dimHitbox = vis.dimLineParts[1];
+        expect(dimLine._isGreasedLine).toBe(true);
+        expect(dimLine.isPickable).toBe(false);
+        expect(dimHitbox._isGreasedLine).toBeUndefined();
+        expect(dimHitbox.isPickable).toBe(true);
+        expect(dimHitbox.visibility).toBe(0);
+        expect(dimHitbox.material.disableDepthWrite).toBe(true);
+
+        // Kolejna klatka (ruch/edycja) reużywa istniejące instancje GreasedLine bez tworzenia nowych
+        const initialGreasedCount = greasedCalls.length;
+        ann.offset = v3(0, 80, 0);
+        renderer.renderAll(store);
+        expect(greasedCalls.length).toBe(initialGreasedCount);
     });
 });

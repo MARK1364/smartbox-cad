@@ -12,6 +12,7 @@ export interface Command {
     readonly label: string;
     readonly timestamp: number;
     readonly affectedNodeIds: string[];
+    readonly suppressConstraintAutoSolve?: boolean;
 
     /** Wykonuje zmianę w dokumencie */
     execute(document: ProjectDocument): void;

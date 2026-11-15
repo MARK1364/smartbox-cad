@@ -4,7 +4,6 @@ import { UIController, PANEL_DIM_MAX_MM, PANEL_DIM_MIN_MM } from '../A1_core/ui-
 import { SmartFrameUI } from '../A3_smartframe/smartframe-ui';
 import { ScianyUI } from '../S4_sciany/sciany-ui';
 import { BlokiUI } from '../A2_bloki/01_bloki-ui';
-import { CabinetLibraryPanel } from './CabinetLibraryPanel';
 import { SaveCabinetModal } from './SaveCabinetModal';
 import { SSOTUI } from './ssot-ui';
 import { PerformanceOptionsModal } from './PerformanceOptionsModal';
@@ -52,11 +51,19 @@ import { OperacjeUI, OPERACJE_PANEL_TITLE, OPERACJE_DRAG_MIME, applyLibraryOpera
 import { HandleDragController } from '../A2_bloki/handles/handle-controller.js';
 import { HangerDragController } from '../A2_bloki/hangers/hanger-controller.js';
 import { createSmartPartHandle } from '../A2_bloki/handles/handle-engine.js';
-import { createSmartPartSink } from '../A2_bloki/sinks/sink-apply.js';
+import {
+  detectDrawerFrontScope,
+  applySmartPartHandleWithScope,
+  type HandleApplyScope,
+  type DrawerFrontScopeInfo
+} from '../A2_bloki/handles/handle-multi-front.js';
+import { createSmartPartSink } from '../A6_agd/sinks/sink-apply.js';
 import { FloatingEditHost, openCadEditEntity, closeCadFloatingEdit } from './floating-edit';
 import { AgdPanel } from './agd/AgdPanel';
 import { createSmartAppliance, createSmartApplianceInDetectedBay } from '../A6_agd';
 import { ConnectorVisualizer } from '../C2_connectors/connector-visualizer';
+import { instantiateCabinetTemplate } from '../B1_biblioteka/korpusy/cabinet-instantiator.js';
+import { nmToMm } from '../A1_core/cad-math/units.js';
 import { isSolverSmartFrameIsolationActive, applyPanelViewSolverVisibility, isSolverTabActive } from '../S2_solver/solver-visibility';
 import { ExportUI, ExportEngine } from '../E1_export';
 import { Vec3 } from '../A1_core/cad-math/vec3';
@@ -150,7 +157,43 @@ export default function App({
     window.addEventListener('cad-pmi-visibility-changed', onPmiVisChange);
     return () => window.removeEventListener('cad-pmi-visibility-changed', onPmiVisChange);
   }, []);
+  const [edgeBandingVisible, setEdgeBandingVisible] = useState(() => ContextManager.instance.edgeBandingVisible);
+  useEffect(() => {
+    const onEdgeBandingVisChange = (e: Event) => {
+      const vis = (e as CustomEvent)?.detail?.visible;
+      if (typeof vis === 'boolean') setEdgeBandingVisible(vis);
+    };
+    window.addEventListener('cad-edge-banding-visibility-changed', onEdgeBandingVisChange);
+    return () => window.removeEventListener('cad-edge-banding-visibility-changed', onEdgeBandingVisChange);
+  }, []);
   const [isPanActive, setIsPanActive] = useState(false);
+  useEffect(() => {
+    const onPanToolChanged = (e: Event) => {
+      const active = (e as CustomEvent)?.detail?.active;
+      if (typeof active === 'boolean') {
+        setIsPanActive(active);
+        if (!active) {
+          UIController.instance?.setStatus('Gotowe');
+        }
+      }
+    };
+    window.addEventListener('cad-pan-tool-changed', onPanToolChanged);
+    return () => window.removeEventListener('cad-pan-tool-changed', onPanToolChanged);
+  }, []);
+
+  useEffect(() => {
+    if (!isPanActive) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        const vp = ContextManager.instance.viewport;
+        vp?.setPanToolActive(false);
+        setIsPanActive(false);
+        UIController.instance?.setStatus('Gotowe');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isPanActive]);
   const [isZoomWindowActive, setIsZoomWindowActive] = useState(false);
   const [zoomBox, setZoomBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const zoomStartRef = useRef<{ startX: number; startY: number } | null>(null);
@@ -203,11 +246,47 @@ export default function App({
     setDropModal(null);
   };
 
+  const [handleDropModal, setHandleDropModal] = useState<{
+    surface: any;
+    customParams: any;
+    scopeInfo: DrawerFrontScopeInfo;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleApplyHandleScope = (scope: HandleApplyScope) => {
+    if (!handleDropModal) return;
+    const doc = ContextManager.instance.document || projectModel;
+    if (!doc) return;
+
+    const { surface, customParams, scopeInfo } = handleDropModal;
+    const created = applySmartPartHandleWithScope(doc, scopeInfo.targetNode, customParams, surface, scope);
+    setHandleDropModal(null);
+
+    if (created.length > 0) {
+      const firstHandle = created[0];
+      const model = firstHandle.domainData || firstHandle;
+      doc.setActiveEntity(model);
+      const id = model?.id || firstHandle.id;
+      if (id) openCadEditEntity({ entityId: id, kind: 'smartpart' });
+      window.document.dispatchEvent(new CustomEvent('bloki-project-changed'));
+      window.document.dispatchEvent(new CustomEvent('bloki-properties-update', {
+        detail: { kind: 'container', containerId: id }
+      }));
+      ContextManager.instance.viewport?.requestRender(2);
+    }
+  };
+
   const togglePanMode = () => {
     const vp = ContextManager.instance.viewport;
     if (vp) {
       const nextState = vp.togglePanTool();
       setIsPanActive(nextState);
+      if (nextState) {
+        UIController.instance?.setStatus(tx(srcTekst, 'app.view.pan', TX_NS));
+      } else {
+        UIController.instance?.setStatus('Gotowe');
+      }
     }
   };
 
@@ -262,6 +341,66 @@ export default function App({
   useEffect(() => {
     void restoreLicense();
   }, []);
+
+  // Most Platformy Mebli -> Scena Crevo CAD (obsługa przycisku "Dodaj do sceny Crevo")
+  useEffect(() => {
+    const handleInsertPayload = (payload: any) => {
+      if (!payload || payload.action !== 'insert_cabinet' || !payload.template) return;
+      const doc = projectModel?.document || ContextManager.instance.document;
+      if (!doc) return;
+      const template = payload.template;
+      const containers = typeof doc.getContainers === 'function' ? doc.getContainers() : [];
+      let nextX = 0;
+      if (containers.length > 0) {
+        const last = containers[containers.length - 1];
+        const lastNode = doc.findNode(last.id);
+        if (lastNode?.transform?.position) {
+          const posX = Math.round(nmToMm(lastNode.transform.position.x));
+          const lastW = Math.round(nmToMm(last.width));
+          nextX = posX + lastW + 50;
+        }
+      }
+      const node = instantiateCabinetTemplate({ template, position: { x: nextX, y: 0, z: 0 } }, doc);
+      if (node) {
+        ContextManager.instance.viewport?.requestRender(3);
+        UIController.instance?.setStatus(`Wstawiono mebel z platformy: ${template.name}`);
+      }
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('crevo_platform_channel');
+        bc.onmessage = (e) => handleInsertPayload(e.data);
+      }
+    } catch { /* ignore */ }
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'crevo_import_to_scene' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          handleInsertPayload(data);
+        } catch { /* ignore */ }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    try {
+      const raw = localStorage.getItem('crevo_import_to_scene');
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data && Date.now() - (data.timestamp || 0) < 15000) {
+          localStorage.removeItem('crevo_import_to_scene');
+          setTimeout(() => handleInsertPayload(data), 600);
+        }
+      }
+    } catch { /* ignore */ }
+
+    return () => {
+      if (bc) bc.close();
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [projectModel]);
 
   const handleNewProjectClick = () => {
     const doc = ContextManager.instance.document || projectModel;
@@ -970,7 +1109,26 @@ export default function App({
         const optId = ctrl?.pendingBlokType || ctrl?.draggedBlokType || 'HANDLES';
         if (optId === 'HANDLES') {
           const customParams = evt?.detail?.handleParams || ctrl?.activeHandleTemplate || {};
-          const handleNode = createSmartPartHandle(doc, surface.panelNode, customParams, surface);
+          const scopeInfo = detectDrawerFrontScope(doc, surface.panelNode);
+          if (scopeInfo.isMulti) {
+            const clientX = (window as any).__lastPointerClientX ?? (window.innerWidth / 2);
+            const clientY = (window as any).__lastPointerClientY ?? (window.innerHeight / 2);
+            setHandleDropModal({
+              surface,
+              customParams,
+              scopeInfo,
+              x: Math.min(clientX, window.innerWidth - 330),
+              y: Math.min(clientY, window.innerHeight - 300)
+            });
+            if (ctrl) {
+              ctrl.setPendingBlokType(null);
+              ctrl.endDrag();
+            }
+            return;
+          }
+
+          const created = applySmartPartHandleWithScope(doc, surface.panelNode, customParams, surface, 'SINGLE');
+          const handleNode = created[0];
           if (handleNode) {
             if (ctrl) {
               ctrl.setPendingBlokType(null);
@@ -1056,6 +1214,23 @@ export default function App({
                 <a href="#" id="menuSaveCabinet" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); setSaveCabinetModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#60a5fa' }}>
                   {tx(srcTekst, 'app.menu.save_cabinet', TX_NS)}
                 </a>
+                <a
+                  href="platforma.html"
+                  id="menuOpenPlatform"
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => setFileMenuOpen(false)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8' }}
+                  title="Otwórz Platformę modeli mebli w nowej karcie"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                  </svg>
+                  {tx(srcTekst, 'app.menu.furniture_platform', TX_NS)}
+                </a>
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
                 <a href="#" id="menuExportStep" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStep'); }}>{tx(srcTekst, 'app.menu.export_step', TX_NS)}</a>
                 <a href="#" id="menuExportStl" onClick={(e) => { e.preventDefault(); setFileMenuOpen(false); callAPI('exportStl'); }}>{tx(srcTekst, 'app.menu.export_stl', TX_NS)}</a>
@@ -1084,6 +1259,9 @@ export default function App({
                 <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '4px 0' }}></div>
                 <a href="cennik.html" target="_blank" id="menuCennik" onClick={() => setFileMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34d399' }}>
                   {tx(srcTekst, 'app.menu.prices', TX_NS)}
+                </a>
+                <a href="wiercenia.html" target="_blank" id="menuWiercenia" onClick={() => setFileMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a78bfa' }}>
+                  {tx(srcTekst, 'app.menu.drilling', TX_NS)}
                 </a>
                 <a href="landing.html" target="_blank" id="menuLanding" onClick={() => setFileMenuOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fbbf24' }}>
                   {tx(srcTekst, 'app.menu.landing', TX_NS)}
@@ -1120,201 +1298,217 @@ export default function App({
 
           <div style={{ width: '1px', height: '18px', background: 'rgba(255,255,255,0.12)', margin: '0 10px' }}></div>
 
-          {/* ─── Pasek Narzędzi CAD ─── */}
+          {/* ─── Pasek Narzędzi CAD (Opcja 1: zgrupowane kapsuły na wspólnej belce) ─── */}
           <div id="topbar-main-tabs" className="topbar-tools">
-            <button 
-              id="tab-btn-smartframe"
-              data-tab="tab-a3-smartframe"
-              className={`topbar-tool-btn ${activeTab === 'tab-a3-smartframe' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-a3-smartframe')}
-              title={tx(srcTekst, 'app.tabs.frame_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
-                <rect x="6" y="4.5" width="12" height="14" rx="0.5" fill="currentColor" fillOpacity="0.08" />
-                <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.frame', TX_NS)}</span>
-            </button>
-
-            <button 
-              id="tab-btn-bloki"
-              data-tab="tab-a2-bloki"
-              className={`topbar-tool-btn ${activeTab === 'tab-a2-bloki' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-a2-bloki')}
-              title={tx(srcTekst, 'app.tabs.box_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
-                <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
-                <line x1="6" y1="8.5" x2="18" y2="8.5" />
-                <line x1="6" y1="13.5" x2="18" y2="13.5" />
-                <line x1="12" y1="8.5" x2="12" y2="18.5" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.box', TX_NS)}</span>
-            </button>
-
-            <button 
-              id="tab-btn-smartpanel"
-              data-tab="tab-a4-smartpanel"
-              className={`topbar-tool-btn ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-a4-smartpanel')}
-              title={tx(srcTekst, 'app.tabs.panel_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 6L21 11L12 16L3 11Z" fill="currentColor" fillOpacity="0.2" />
-                <path d="M3 11v3.5l9 5v-3.5z" fill="currentColor" fillOpacity="0.1" />
-                <path d="M12 16v3.5l9-5V11z" fill="currentColor" fillOpacity="0.3" />
-                <path d="M12 6l9 5v3.5l-9 5-9-5V11z" />
-              </svg>
-              <span>Panel</span>
-            </button>
-
-            <button 
-              id="tab-btn-material"
-              data-tab="tab-a7-material"
-              className={`topbar-tool-btn ${activeTab === 'tab-a7-material' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-a7-material')}
-              title={tx(srcTekst, 'app.tabs.materials_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.materials', TX_NS)}</span>
-            </button>
-
-            <button 
-              id="tab-btn-biblioteka"
-              data-tab="tab-b1-biblioteka"
-              className={`topbar-tool-btn ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-b1-biblioteka')}
-              title={tx(srcTekst, 'app.tabs.library_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                <line x1="9" y1="6" x2="16" y2="6" />
-                <line x1="9" y1="10" x2="16" y2="10" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.library', TX_NS)}</span>
-            </button>
-
-            <button
-              id="tab-btn-sciany"
-              data-tab="tab-s4-sciany"
-              className={`topbar-tool-btn ${activeTab === 'tab-s4-sciany' ? 'active' : ''}`}
-              onClick={() => setActiveTab('tab-s4-sciany')}
-              title={tx(srcTekst, 'app.tabs.walls_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 20V6h4v14H4z" />
-                <path d="M10 20V4h4v16h-4z" />
-                <path d="M16 20v-8h4v8h-4z" />
-                <line x1="3" y1="20" x2="21" y2="20" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.walls', TX_NS)}</span>
-            </button>
-
-            <button
-              id="tab-btn-agd"
-              data-tab="tab-agd"
-              className={`topbar-tool-btn ${activeTab === 'tab-agd' ? 'active' : ''}`}
-              onClick={() => setActiveTab('tab-agd')}
-              title="Sprzęt AGD (mikrofale, piekarniki)"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <rect x="4" y="7" width="11" height="10" rx="1" fill="currentColor" fillOpacity="0.15" />
-                <circle cx="18" cy="9" r="1.5" fill="currentColor" />
-                <circle cx="18" cy="14" r="1.5" fill="currentColor" />
-                <line x1="6" y1="16" x2="13" y2="16" />
-              </svg>
-              <span>AGD</span>
-            </button>
-
-            <button 
-              id="tab-btn-solver"
-              data-tab="tab-s2-solver"
-              className={`topbar-tool-btn ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-s2-solver')}
-              title={tx(srcTekst, 'app.tabs.relations_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.relations', TX_NS)}</span>
-            </button>
-
-            <button
-              id="tab-btn-connectors"
-              data-tab="tab-c2-connectors"
-              className={`topbar-tool-btn ${activeTab === 'tab-c2-connectors' ? 'active' : ''}`}
-              onClick={() => setActiveTab('tab-c2-connectors')}
-              title={tx(srcTekst, 'app.tabs.joints_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="6" height="16" rx="0.5" />
-                <rect x="13" y="14" width="8" height="6" rx="0.5" />
-                <line x1="9" y1="8" x2="17" y2="8" />
-                <circle cx="13" cy="8" r="1.4" fill="currentColor" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.joints', TX_NS)}</span>
-            </button>
-
-            <button
-              id="tab-btn-operacji"
-              data-tab="tab-o1-operacji"
-              className={`topbar-tool-btn ${activeTab === 'tab-o1-operacji' ? 'active' : ''}`}
-              onClick={() => setActiveTab('tab-o1-operacji')}
-              title={tx(srcTekst, 'app.tabs.ops_title', TX_NS)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="3" width="16" height="18" rx="1" />
-                <rect x="7.5" y="6.5" width="9" height="11" rx="0.5" fill="currentColor" fillOpacity="0.2" />
-              </svg>
-              <span>{tx(srcTekst, 'app.tabs.ops', TX_NS)}</span>
-            </button>
-
-            <PmiTopbarDropdown
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-            />
-
-            {isInstruction && (
+            {/* 1. Scena / Wnętrze */}
+            <div className="topbar-group topbar-group--scene" data-group="scene" title={tx(srcTekst, 'app.tab_groups.scene', TX_NS)}>
+              <span className="topbar-group-label">{tx(srcTekst, 'app.tab_groups.scene', TX_NS)}</span>
               <button
-                id="tab-btn-instrukcja"
-                data-tab="tab-i1-instrukcja"
-                className={`topbar-tool-btn ${activeTab === 'tab-i1-instrukcja' ? 'active' : ''}`}
-                onClick={() => setActiveTab('tab-i1-instrukcja')}
-                title="Instrukcja montażu — kroki, animacja, TTS"
+                id="tab-btn-sciany"
+                data-tab="tab-s4-sciany"
+                className={`topbar-tool-btn ${activeTab === 'tab-s4-sciany' ? 'active' : ''}`}
+                onClick={() => setActiveTab('tab-s4-sciany')}
+                title={tx(srcTekst, 'app.tabs.walls_title', TX_NS)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 20V6h4v14H4z" />
+                  <path d="M10 20V4h4v16h-4z" />
+                  <path d="M16 20v-8h4v8h-4z" />
+                  <line x1="3" y1="20" x2="21" y2="20" />
+                </svg>
+                <span>{tx(srcTekst, 'app.tabs.walls', TX_NS)}</span>
+              </button>
+
+              <button 
+                id="tab-btn-biblioteka"
+                data-tab="tab-b1-biblioteka"
+                className="topbar-tool-btn"
+                onClick={() => window.open('platforma.html', 'crevo_platforma')}
+                title="Platforma modeli mebli 3D (otwiera w osobnej karcie i wstawia do sceny)"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  <line x1="9" y1="6" x2="16" y2="6" />
+                  <line x1="9" y1="10" x2="16" y2="10" />
                 </svg>
-                <span>Instrukcja</span>
+                <span>{tx(srcTekst, 'app.tabs.library', TX_NS)}</span>
               </button>
-            )}
 
-            <button 
-              id="tab-btn-export"
-              data-tab="tab-e1-export"
-              className={`topbar-tool-btn ${activeTab === 'tab-e1-export' ? 'active' : ''}`} 
-              onClick={() => setActiveTab('tab-e1-export')}
-              title="Eksport — Rysunki techniczne CAD, formaty A4/A3/A2, rzuty ISO 7200 i arkusze SVG"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-              <span>Eksport</span>
-            </button>
+              <button
+                id="tab-btn-agd"
+                data-tab="tab-agd"
+                className={`topbar-tool-btn ${activeTab === 'tab-agd' ? 'active' : ''}`}
+                onClick={() => setActiveTab('tab-agd')}
+                title="Sprzęt AGD (mikrofale, piekarniki)"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <rect x="4" y="7" width="11" height="10" rx="1" fill="currentColor" fillOpacity="0.15" />
+                  <circle cx="18" cy="9" r="1.5" fill="currentColor" />
+                  <circle cx="18" cy="14" r="1.5" fill="currentColor" />
+                  <line x1="6" y1="16" x2="13" y2="16" />
+                </svg>
+                <span>AGD</span>
+              </button>
+            </div>
+
+            {/* 2. Konstrukcja */}
+            <div className="topbar-group topbar-group--construction" data-group="construction" title={tx(srcTekst, 'app.tab_groups.construction', TX_NS)}>
+              <span className="topbar-group-label">{tx(srcTekst, 'app.tab_groups.construction', TX_NS)}</span>
+              <button 
+                id="tab-btn-smartframe"
+                data-tab="tab-a3-smartframe"
+                className={`topbar-tool-btn ${activeTab === 'tab-a3-smartframe' ? 'active' : ''}`} 
+                onClick={() => setActiveTab('tab-a3-smartframe')}
+                title={tx(srcTekst, 'app.tabs.frame_title', TX_NS)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
+                  <rect x="6" y="4.5" width="12" height="14" rx="0.5" fill="currentColor" fillOpacity="0.08" />
+                  <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
+                </svg>
+                <span>{tx(srcTekst, 'app.tabs.frame', TX_NS)}</span>
+              </button>
+
+              <button 
+                id="tab-btn-bloki"
+                data-tab="tab-a2-bloki"
+                className={`topbar-tool-btn ${activeTab === 'tab-a2-bloki' ? 'active' : ''}`} 
+                onClick={() => setActiveTab('tab-a2-bloki')}
+                title={tx(srcTekst, 'app.tabs.box_title', TX_NS)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3.5" y="2.5" width="17" height="19" rx="1" />
+                  <line x1="3.5" y1="18.5" x2="20.5" y2="18.5" />
+                  <line x1="6" y1="8.5" x2="18" y2="8.5" />
+                  <line x1="6" y1="13.5" x2="18" y2="13.5" />
+                  <line x1="12" y1="8.5" x2="12" y2="18.5" />
+                </svg>
+                <span>{tx(srcTekst, 'app.tabs.box', TX_NS)}</span>
+              </button>
+
+              <button 
+                id="tab-btn-smartpanel"
+                data-tab="tab-a4-smartpanel"
+                className={`topbar-tool-btn ${activeTab === 'tab-a4-smartpanel' ? 'active' : ''}`} 
+                onClick={() => setActiveTab('tab-a4-smartpanel')}
+                title={tx(srcTekst, 'app.tabs.panel_title', TX_NS)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 6L21 11L12 16L3 11Z" fill="currentColor" fillOpacity="0.2" />
+                  <path d="M3 11v3.5l9 5v-3.5z" fill="currentColor" fillOpacity="0.1" />
+                  <path d="M12 16v3.5l9-5V11z" fill="currentColor" fillOpacity="0.3" />
+                  <path d="M12 6l9 5v3.5l-9 5-9-5V11z" />
+                </svg>
+                <span>Panel</span>
+              </button>
+
+              <button 
+                id="tab-btn-solver"
+                data-tab="tab-s2-solver"
+                className={`topbar-tool-btn ${activeTab === 'tab-s2-solver' ? 'active' : ''}`} 
+                onClick={() => setActiveTab('tab-s2-solver')}
+                title={tx(srcTekst, 'app.tabs.relations_title', TX_NS)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                <span>{tx(srcTekst, 'app.tabs.relations', TX_NS)}</span>
+              </button>
+            </div>
+
+            {/* 3. Technologia i Materiały */}
+            <div className="topbar-group topbar-group--tech" data-group="tech" title={tx(srcTekst, 'app.tab_groups.tech', TX_NS)}>
+              <span className="topbar-group-label">{tx(srcTekst, 'app.tab_groups.tech', TX_NS)}</span>
+              <button 
+                id="tab-btn-material"
+                data-tab="tab-a7-material"
+                className={`topbar-tool-btn ${activeTab === 'tab-a7-material' ? 'active' : ''}`} 
+                onClick={() => setActiveTab('tab-a7-material')}
+                title={tx(srcTekst, 'app.tabs.materials_title', TX_NS)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                  <path d="M2 17l10 5 10-5" />
+                  <path d="M2 12l10 5 10-5" />
+                </svg>
+                <span>{tx(srcTekst, 'app.tabs.materials', TX_NS)}</span>
+              </button>
+
+              <button
+                id="tab-btn-connectors"
+                data-tab="tab-c2-connectors"
+                className={`topbar-tool-btn ${activeTab === 'tab-c2-connectors' ? 'active' : ''}`}
+                onClick={() => setActiveTab('tab-c2-connectors')}
+                title={tx(srcTekst, 'app.tabs.joints_title', TX_NS)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="6" height="16" rx="0.5" />
+                  <rect x="13" y="14" width="8" height="6" rx="0.5" />
+                  <line x1="9" y1="8" x2="17" y2="8" />
+                  <circle cx="13" cy="8" r="1.4" fill="currentColor" />
+                </svg>
+                <span>{tx(srcTekst, 'app.tabs.joints', TX_NS)}</span>
+              </button>
+
+              <button
+                id="tab-btn-operacji"
+                data-tab="tab-o1-operacji"
+                className={`topbar-tool-btn ${activeTab === 'tab-o1-operacji' ? 'active' : ''}`}
+                onClick={() => setActiveTab('tab-o1-operacji')}
+                title={tx(srcTekst, 'app.tabs.ops_title', TX_NS)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="3" width="16" height="18" rx="1" />
+                  <rect x="7.5" y="6.5" width="9" height="11" rx="0.5" fill="currentColor" fillOpacity="0.2" />
+                </svg>
+                <span>{tx(srcTekst, 'app.tabs.ops', TX_NS)}</span>
+              </button>
+            </div>
+
+            {/* 4. Wymiary i Eksport */}
+            <div className="topbar-group topbar-group--docs" data-group="docs" title={tx(srcTekst, 'app.tab_groups.docs', TX_NS)}>
+              <span className="topbar-group-label">{tx(srcTekst, 'app.tab_groups.docs', TX_NS)}</span>
+              <PmiTopbarDropdown
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+              />
+
+              {isInstruction && (
+                <button
+                  id="tab-btn-instrukcja"
+                  data-tab="tab-i1-instrukcja"
+                  className={`topbar-tool-btn ${activeTab === 'tab-i1-instrukcja' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('tab-i1-instrukcja')}
+                  title="Instrukcja montażu — kroki, animacja, TTS"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                  <span>Instrukcja</span>
+                </button>
+              )}
+
+              <button 
+                id="tab-btn-export"
+                data-tab="tab-e1-export"
+                className={`topbar-tool-btn ${activeTab === 'tab-e1-export' ? 'active' : ''}`} 
+                onClick={() => setActiveTab('tab-e1-export')}
+                title="Eksport — Rysunki techniczne CAD, formaty A4/A3/A2, rzuty ISO 7200 i arkusze SVG"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+                <span>Eksport</span>
+              </button>
+            </div>
           </div>
 
           {/* ─── Narzędzia transformacji 3D (G i R) z brązowym tłem ─── */}
@@ -1379,6 +1573,7 @@ export default function App({
         gridVisible={gridVisible}
         lcsVisible={lcsVisible}
         pmiVisible={pmiVisible}
+        edgeBandingVisible={edgeBandingVisible}
         isPanActive={isPanActive}
         isZoomWindowActive={isZoomWindowActive}
         activeTab={activeTab}
@@ -1403,6 +1598,10 @@ export default function App({
         onTogglePmi={(nextVal) => {
           setPmiVisible(nextVal);
           ContextManager.instance.setPmiVisible(nextVal);
+        }}
+        onToggleEdgeBanding={(nextVal) => {
+          setEdgeBandingVisible(nextVal);
+          ContextManager.instance.setEdgeBandingVisible(nextVal);
         }}
         onProjectionChange={setProjection}
         onTogglePan={togglePanMode}
@@ -1498,14 +1697,6 @@ export default function App({
           <AgdPanel projectModel={projectModel} />
         </div>
 
-        {/* Tab: B1 Biblioteka Korpusów */}
-        <div className={`tab-content ${activeTab === 'tab-b1-biblioteka' ? 'active' : ''}`} id="tab-b1-biblioteka" style={{ height: 'auto', display: activeTab === 'tab-b1-biblioteka' ? 'flex' : 'none', flexDirection: 'column' }}>
-          <CabinetLibraryPanel 
-            projectModel={projectModel} 
-            onOpenSaveModal={() => setSaveCabinetModalOpen(true)}
-          />
-        </div>
-
         {/* Tab 3: A3 SmartFrame */}
         <div className={`tab-content ${activeTab === 'tab-a3-smartframe' ? 'active' : ''}`} id="tab-a3-smartframe">
           <SmartFrameUI projectModel={projectModel} />
@@ -1587,10 +1778,12 @@ export default function App({
       {/* ─── 3D Canvas ─────────────────────────────────── */}
       <canvas 
         id="renderCanvas" 
-        style={{ width: '100%', height: '100%', display: 'block' }}
+        style={{ width: '100%', height: '100%', display: 'block', cursor: isPanActive ? 'all-scroll' : undefined }}
         onDragOver={(e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
+          (window as any).__lastPointerClientX = e.clientX;
+          (window as any).__lastPointerClientY = e.clientY;
           const bayCtrl = ContextManager.instance.blokiBayController;
           if (bayCtrl && (bayCtrl.isDragging || bayCtrl.isBayDrag())) {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -1718,6 +1911,43 @@ export default function App({
           const handleDragCtrl = HandleDragController.instance;
           if (handleDragCtrl && handleDragCtrl.isDragging) {
             const doc = ContextManager.instance.document || projectModel;
+            const surface = handleDragCtrl.lastDetectedSurface;
+            const tpl = handleDragCtrl.activeTemplate;
+            if (surface && doc) {
+              const scopeInfo = detectDrawerFrontScope(doc, surface.panelNode);
+              if (scopeInfo.isMulti) {
+                const seriesId = tpl?.type === 'BAR'
+                  ? (tpl.defaultSeriesId || 'easy')
+                  : tpl?.defaultSeriesId;
+                const params = tpl ? {
+                  totalLengthMm: tpl.totalLengthMm,
+                  holeDistanceMm: tpl.holeDistanceMm ?? 0,
+                  depthMm: tpl.depthMm,
+                  thicknessMm: tpl.thicknessMm,
+                  orientation: tpl.defaultOrientation,
+                  placementPreset: surface.suggestedPreset,
+                  offsetEdgeYMm: tpl.defaultOffsetYMm,
+                  glbModelPath: tpl.glbModelPath,
+                  handleType: tpl.type,
+                  producerId: tpl.producerId,
+                  seriesId,
+                  drillingEnabled: true,
+                  drillDiameterMm: 4,
+                  placementLocked: false,
+                  ...(tpl.colorId ? { colorId: tpl.colorId } : {}),
+                  ...(tpl.color ? { color: tpl.color } : {}),
+                } : {};
+                setHandleDropModal({
+                  surface,
+                  customParams: params,
+                  scopeInfo,
+                  x: Math.min(e.clientX, window.innerWidth - 330),
+                  y: Math.min(e.clientY, window.innerHeight - 300)
+                });
+                handleDragCtrl.endDrag();
+                return;
+              }
+            }
             const created = handleDragCtrl.onDropOnScene(doc);
             if (created) {
               const model = created.domainData || created;
@@ -2273,6 +2503,123 @@ export default function App({
               <span>{tx(srcTekst, 'app.scope_project', TX_NS)}</span>
               <span style={{ opacity: 0.75, fontSize: '10px', background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: '3px' }}>[4]</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Okno Kontekstowe Wyboru Zasięgu Uchwytów (Handle Multi-Front Scope Modal) ─── */}
+      {handleDropModal && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${handleDropModal.x}px`,
+            top: `${handleDropModal.y}px`,
+            backgroundColor: '#18181b',
+            border: '1px solid #3b82f6',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.85), 0 0 20px rgba(59,130,246,0.35)',
+            borderRadius: '8px',
+            padding: '12px',
+            zIndex: 100000,
+            width: '310px',
+            color: '#fff',
+            fontFamily: 'Inter, Segoe UI, sans-serif'
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setHandleDropModal(null);
+            if (e.key === '1') handleApplyHandleScope('SINGLE');
+            if (e.key === '2') handleApplyHandleScope('MODULE');
+            if (e.key === '3') handleApplyHandleScope('PROJECT');
+          }}
+          tabIndex={0}
+          autoFocus
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', borderBottom: '1px solid #27272a', paddingBottom: '6px' }}>
+            <div style={{ fontWeight: 'bold', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', color: '#60a5fa' }}>
+              <span>{tx(srcTekst, 'app.apply_handle', TX_NS)}</span>
+            </div>
+            <button
+              onClick={() => setHandleDropModal(null)}
+              style={{ background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Info Card */}
+          <div style={{ background: '#222225', padding: '8px', borderRadius: '6px', marginBottom: '10px', fontSize: '11px', color: '#93c5fd' }}>
+            <div>Wykryto moduł szuflad: <strong>{handleDropModal.scopeInfo.siblingFronts.length} szt.</strong> w tej szafce</div>
+            {handleDropModal.scopeInfo.projectFronts.length > handleDropModal.scopeInfo.siblingFronts.length && (
+              <div style={{ color: '#a1a1aa', marginTop: '3px' }}>
+                Łącznie w projekcie: {handleDropModal.scopeInfo.projectFronts.length} szuflad
+              </div>
+            )}
+          </div>
+
+          {/* Scope Options */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <button
+              onClick={() => handleApplyHandleScope('SINGLE')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '7px 10px',
+                background: '#27272a',
+                color: '#e4e4e7',
+                border: '1px solid #3f3f46',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                textAlign: 'left'
+              }}
+            >
+              <span>🎯 {tx(srcTekst, 'app.scope_single_front', TX_NS)} (1)</span>
+              <span style={{ opacity: 0.75, fontSize: '10px', background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: '3px' }}>[1]</span>
+            </button>
+
+            <button
+              onClick={() => handleApplyHandleScope('MODULE')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '7px 10px',
+                background: '#2563eb',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '11px',
+                textAlign: 'left'
+              }}
+            >
+              <span>🗄️ {tx(srcTekst, 'app.scope_drawer_module', TX_NS)} ({handleDropModal.scopeInfo.siblingFronts.length})</span>
+              <span style={{ opacity: 0.75, fontSize: '10px', background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: '3px' }}>[2]</span>
+            </button>
+
+            {handleDropModal.scopeInfo.projectFronts.length > handleDropModal.scopeInfo.siblingFronts.length && (
+              <button
+                onClick={() => handleApplyHandleScope('PROJECT')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '7px 10px',
+                  background: '#27272a',
+                  color: '#e4e4e7',
+                  border: '1px solid #3f3f46',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  textAlign: 'left'
+                }}
+              >
+                <span>🌐 {tx(srcTekst, 'app.scope_all_project_drawers', TX_NS)} ({handleDropModal.scopeInfo.projectFronts.length})</span>
+                <span style={{ opacity: 0.75, fontSize: '10px', background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: '3px' }}>[3]</span>
+              </button>
+            )}
           </div>
         </div>
       )}

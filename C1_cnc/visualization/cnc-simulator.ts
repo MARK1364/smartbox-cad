@@ -238,7 +238,7 @@ export class CNCSimulator {
                     id: toolId || 'tool_4_mill_8',
                     name: 'Frez fi 8 mm',
                     diameter: op.parameters?.diameter || 8.0,
-                    type: op.type === 'groove' ? 'groove' : (op.type === 'contour' ? 'mill' : 'drill'),
+                    type: op.type === 'groove' ? 'groove' : (op.type === 'contour' || op.type === 'pocket' ? 'mill' : 'drill'),
                     parameters: { feedRate: op.parameters?.feedRate || 1200, spindleRpm: 6000 }
                 };
             }
@@ -252,7 +252,7 @@ export class CNCSimulator {
         this.currentMoveIndex = 0;
         const pos = this.toSimPoint(op.position);
 
-        if (op.type === 'groove' || op.type === 'contour') {
+        if (op.type === 'groove' || op.type === 'contour' || op.type === 'pocket') {
             const moves = op.parameters?.moves;
             if (moves && moves.length > 0) {
                 const endP = this.toSimPoint(moves[0].endPoint);
@@ -319,7 +319,7 @@ export class CNCSimulator {
             this.currentPos = this.approachPos.clone();
             this.initialMoveDist = 1.0;
         }
-        if (op.type === 'groove' || op.type === 'contour') {
+        if (op.type === 'groove' || op.type === 'contour' || op.type === 'pocket') {
             this.currentMoveTotalDist = Math.max(0.001, BABYLON.Vector3.Distance(this.startPos, this.endPos));
         }
     }
@@ -410,7 +410,9 @@ export class CNCSimulator {
             // --- STAN 3: PRZEJAZD ROBOCZY FREZEM / PIŁĄ (G1) wzdłuż odcinków ścieżki ---
             const moves = targetOp.parameters?.moves || [];
             const moveCount = moves.length || 1;
-            statusText = `Frezowanie po ścieżce (Odcinek ${this.currentMoveIndex + 1}/${moveCount}): Op ${this.currentOpIndex + 1}`;
+            statusText = (targetOp.type === 'pocket')
+                ? `Wybieranie kieszeni (Odcinek ${this.currentMoveIndex + 1}/${moveCount}): Op ${this.currentOpIndex + 1}`
+                : `Frezowanie po ścieżce (Odcinek ${this.currentMoveIndex + 1}/${moveCount}): Op ${this.currentOpIndex + 1}`;
 
             const cutTargetPos = new BABYLON.Vector3(this.endPos.x, this.endPos.y, this.endPos.z);
 

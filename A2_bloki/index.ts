@@ -131,6 +131,19 @@ export { buildDrawersDrillings } from './09_drawers-drilling-builder.js';
 export { buildFlapsDrillings } from './12_flaps-drilling-builder.js';
 export { buildTubesDrillings } from './08_tubes-drilling-builder.js';
 
+// Handles (Uchwyty)
+export * from './handles/handle-types.js';
+export {
+    createSmartPartHandle,
+} from './handles/handle-apply.js';
+export {
+    buildHandleParametricMesh,
+    syncHandleMeshesFromDocument,
+    purgeOrphanHandleMeshes,
+    findPanelRootMesh,
+} from './handles/handle-mesh.js';
+export { HandleDragController } from './handles/handle-controller.js';
+
 // Hangers (Zawieszki)
 export * from './hangers/hanger-types.js';
 export { computeHangerCornerPoses, createSmartPartHangersInBay, updateSmartPartHangersGroup, syncHangerDefinitionFromParams, resolveHangersReferenceBoxMm } from './hangers/hanger-apply.js';

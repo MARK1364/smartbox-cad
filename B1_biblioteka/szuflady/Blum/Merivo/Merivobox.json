@@ -1,0 +1,443 @@
+{
+  "id": "merivo",
+  "brand": "Blum",
+  "series": "Merivo",
+  "units": "mm",
+  "construction": "SYSTEM",
+  "panels": {
+    "bottom": {
+      "role": "DRAWER_BOTTOM",
+      "name": "Dno szuflady",
+      "thickness": 16,
+      "width_offset": -51,
+      "length_offset": -26
+    },
+    "back": {
+      "role": "DRAWER_BACK",
+      "name": "Plecy szuflady",
+      "thickness": 16,
+      "width_offset": -51
+    }
+  },
+  "variants": [
+    {
+      "id": "BLUM_MERIVO_100",
+      "legacy_id": "MR100",
+      "name": "Merivo M",
+      "corpus_height": 100,
+      "back_height": 83,
+      "total_height": 103,
+      "min_space": 108,
+      "rail_height": 35,
+      "width": 27,
+      "profile": {
+        "b_h": 91,
+        "b_ph": 83,
+        "b_y": 103,
+        "kompensacja_plecow": 51
+      },
+      "machining": {
+        "front_holes_formula": "(nał+33.5)+32",
+        "front_holes": [
+          {
+            "name": "Mocowanie_frontu_L1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 33.5,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 65.5,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 33.5,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 65.5,
+            "side": "R",
+            "enabled": true
+          }
+        ],
+        "corpus_holes": [
+          {
+            "name": "Prowadnica_otw_1",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 37,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_2",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 69,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_3",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 261,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_4",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 293,
+            "z_from_bottom": 54
+          }
+        ]
+      },
+      "lengths": {
+        "270": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            197,
+            229
+          ],
+          "price_id": "BLUM_MERIVO_100_270"
+        },
+        "300": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            197,
+            229
+          ],
+          "price_id": "BLUM_MERIVO_100_300"
+        },
+        "350": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            197,
+            229
+          ],
+          "price_id": "BLUM_MERIVO_100_350"
+        },
+        "400": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_100_400"
+        },
+        "450": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_100_450"
+        },
+        "500": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_100_500"
+        },
+        "550": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_100_550"
+        },
+        "600": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_100_600"
+        }
+      }
+    },
+    {
+      "id": "BLUM_MERIVO_200",
+      "legacy_id": "MR200",
+      "name": "Merivo E",
+      "corpus_height": 200,
+      "back_height": 184,
+      "total_height": 204,
+      "min_space": 209,
+      "rail_height": 35,
+      "width": 27,
+      "profile": {
+        "b_h": 192,
+        "b_ph": 184,
+        "b_y": 204,
+        "kompensacja_plecow": 51
+      },
+      "machining": {
+        "front_holes": [
+          {
+            "name": "Mocowanie_frontu_L1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 33.5,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 65.5,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_L3",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 180,
+            "side": "L",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R1",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 33.5,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R2",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 65.5,
+            "side": "R",
+            "enabled": true
+          },
+          {
+            "name": "Mocowanie_frontu_R3",
+            "dia": 3,
+            "depth": 10,
+            "edge_dist": 31,
+            "z_from_bottom": 180,
+            "side": "R",
+            "enabled": true
+          }
+        ],
+        "corpus_holes": [
+          {
+            "name": "Prowadnica_otw_1",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 37,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_2",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 69,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_3",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 261,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_4",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 293,
+            "z_from_bottom": 54
+          }
+        ]
+      },
+      "lengths": {
+        "270": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            197,
+            229
+          ],
+          "price_id": "BLUM_MERIVO_200_270"
+        },
+        "300": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            197,
+            229
+          ],
+          "price_id": "BLUM_MERIVO_200_300"
+        },
+        "350": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            197,
+            229
+          ],
+          "price_id": "BLUM_MERIVO_200_350"
+        },
+        "400": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_200_400"
+        },
+        "450": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_200_450"
+        },
+        "500": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_200_500"
+        },
+        "550": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_200_550"
+        },
+        "600": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_200_600"
+        }
+      }
+    },
+    {
+      "id": "BLUM_MERIVO_KOSZ",
+      "legacy_id": "MR_KOSZ",
+      "name": "Merivo kosz",
+      "corpus_height": 200,
+      "rail_height": 35,
+      "width": 27,
+      "machining": {
+        "corpus_holes": [
+          {
+            "name": "Prowadnica_otw_1",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 37,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_2",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 69,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_3",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 261,
+            "z_from_bottom": 54
+          },
+          {
+            "name": "Prowadnica_otw_4",
+            "dia": 3,
+            "depth": 12,
+            "front_dist": 293,
+            "z_from_bottom": 54
+          }
+        ]
+      },
+      "lengths": {
+        "450": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_KOSZ_450"
+        },
+        "500": {
+          "z_offset": 54,
+          "x_positions": [
+            37,
+            69,
+            261,
+            293
+          ],
+          "price_id": "BLUM_MERIVO_KOSZ_500"
+        }
+      }
+    }
+  ]
+}

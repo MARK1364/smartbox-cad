@@ -9,7 +9,9 @@ describe('S4 SmartWall production filters', () => {
     it('WALL + FLOOR PART nie trafiają do extractProjectData (raport / nest)', () => {
         const doc = new ProjectDocument();
         new CreateSmartWallCommand({ preset: 'rect', name: 'Pokój' }).execute(doc);
-        const parts = doc.getContainers()[0].children.map((c) => c.domainData);
+        const parts = doc.getContainers()[0].children
+            .filter((c) => c.nodeType === 'PART')
+            .map((c) => c.domainData);
         expect(parts.length).toBe(5);
         expect(parts.every((p) => isExcludedFromProduction(p))).toBe(true);
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Testy jednostkowe postprocesorów meblarskich (WoodWOP, SCM Maestro, Biesse)
  * oraz walidacji wymiarów formatki w C1_cnc.
  */
@@ -68,6 +68,35 @@ describe('C1_cnc Postprocessors: CLDataProgram jako jedyne wejście', () => {
             const project = dummyProgram({ width: 500, height: 400, thickness: 0 });
             expect(() => post.generateNcCode(project)).toThrow(/brak zdefiniowanych poprawnych wymiarów formatki/i);
         });
+
+        it('rozróżnia szybkie pozycjonowanie <103 \\Positioning od frezowania <101 \\Routing z posuwem F', () => {
+            const prog: CLDataProgram = {
+                projectName: 'WoodWOP_Rapid_Test',
+                wcsOrigin: { x: 0, y: 0, z: 0 },
+                wcsName: 'G55',
+                commands: [
+                    { type: 'TOOL_SELECT', toolId: 'tool_101' },
+                    { type: 'FEDRAT', feedRate: 2100 },
+                    { type: 'GOTO', point: { x: 15, y: 25, z: 10 }, isRapid: true, motion: 'RAPID' },
+                    { type: 'GOTO', point: { x: 15, y: 25, z: -8 }, isRapid: false, motion: 'FEED' }
+                ],
+                totalLengthMm: 50,
+                estimatedTimeSec: 2,
+                toolIdsUsed: ['tool_101'],
+                workpieceDimensions: { width: 500, height: 400, thickness: 18 }
+            };
+            const nc = post.generateNcCode(prog);
+            expect(nc).toContain('<103 \\Positioning');
+            expect(nc).toContain('X=15.00');
+            expect(nc).toContain('Y=25.00');
+            expect(nc).toContain('Z=10.00');
+
+            expect(nc).toContain('<101 \\Routing');
+            expect(nc).toContain('X=15.00');
+            expect(nc).toContain('Y=25.00');
+            expect(nc).toContain('Z=8.00');
+            expect(nc).toContain('F=2100');
+        });
     });
 
     describe('SCMPostprocessor', () => {
@@ -92,6 +121,29 @@ describe('C1_cnc Postprocessors: CLDataProgram jako jedyne wejście', () => {
             const project = dummyProgram(undefined);
             expect(() => post.generateNcCode(project)).toThrow(/brak zdefiniowanych poprawnych wymiarów formatki/i);
         });
+
+        it('uwzględnia posuw z komend FEDRAT oraz rozróżnia szybkie pozycjonowanie FAST od frezowania ROUT', () => {
+            const prog: CLDataProgram = {
+                projectName: 'SCM_Feed_Rapid_Test',
+                wcsOrigin: { x: 0, y: 0, z: 0 },
+                wcsName: 'G55',
+                commands: [
+                    { type: 'TOOL_SELECT', toolId: 'tool_1' },
+                    { type: 'FEDRAT', feedRate: 2400 },
+                    { type: 'GOTO', point: { x: 10, y: 10, z: 10 }, isRapid: true, motion: 'RAPID' },
+                    { type: 'GOTO', point: { x: 10, y: 10, z: -5 }, isRapid: false, motion: 'FEED' },
+                    { type: 'CYCLE_DRILL', point: { x: 50, y: 50, z: 0 }, drillParams: { depth: -12, retractR: 5, type: 'STANDARD' } }
+                ],
+                totalLengthMm: 50,
+                estimatedTimeSec: 2,
+                toolIdsUsed: ['tool_1'],
+                workpieceDimensions: { width: 600, height: 720, thickness: 18 }
+            };
+            const nc = post.generateNcCode(prog);
+            expect(nc).toContain('FAST X=10.000 Y=10.000 Z=10.000');
+            expect(nc).toContain('ROUT X=10.000 Y=10.000 Z=5.000 T=1 V=2400');
+            expect(nc).toContain('BORE X=50.000 Y=50.000 Z=12.000 T=1 V=2400');
+        });
     });
 
     describe('BiessePostprocessor', () => {
@@ -104,6 +156,27 @@ describe('C1_cnc Postprocessors: CLDataProgram jako jedyne wejście', () => {
             expect(nc).toContain('LPX=800.0');
             expect(nc).toContain('LPY=400.0');
             expect(nc).toContain('LPZ=22.0');
+        });
+
+        it('rozróżnia szybkie pozycjonowanie FAST od frezowania ROUT z posuwem', () => {
+            const prog: CLDataProgram = {
+                projectName: 'Biesse_Rapid_Test',
+                wcsOrigin: { x: 0, y: 0, z: 0 },
+                wcsName: 'G55',
+                commands: [
+                    { type: 'TOOL_SELECT', toolId: 'tool_2' },
+                    { type: 'FEDRAT', feedRate: 1800 },
+                    { type: 'GOTO', point: { x: 10, y: 10, z: 10 }, isRapid: true, motion: 'RAPID' },
+                    { type: 'GOTO', point: { x: 10, y: 10, z: -5 }, isRapid: false, motion: 'FEED' }
+                ],
+                totalLengthMm: 50,
+                estimatedTimeSec: 2,
+                toolIdsUsed: ['tool_2'],
+                workpieceDimensions: { width: 800, height: 400, thickness: 22 }
+            };
+            const nc = post.generateNcCode(prog);
+            expect(nc).toContain('FAST X=10.000 Y=10.000 Z=10.000');
+            expect(nc).toContain('ROUT X=10.000 Y=10.000 Z=5.000 T=2 V=1800');
         });
 
         it('rzuca błąd Fail-Fast przy braku workpieceDimensions', () => {
@@ -186,10 +259,10 @@ describe('C1_cnc Postprocessors: CLDataProgram jako jedyne wejście', () => {
 
             expect((nc.match(/M6 T/g) || []).length).toBe(2);
             expect((nc.match(/G81/g) || []).length).toBe(2);
-            expect(nc).toContain('G81 X10.000 Y20.000 Z0.000 R5');
+            expect(nc).toContain('G81 X10.000 Y20.000 Z-10.000 R5.000');
             expect(nc).toMatch(/N\d+ X30\.000 Y20\.000/);
             expect(nc).toMatch(/N\d+ X50\.000 Y20\.000/);
-            expect(nc).toContain('G81 X100.000 Y100.000 Z0.000 R5');
+            expect(nc).toContain('G81 X100.000 Y100.000 Z-12.000 R5.000');
             expect(nc).toMatch(/N\d+ X120\.000 Y100\.000/);
             expect(nc).toContain('G80');
             expect(nc.trimEnd().endsWith('M2')).toBe(true);
@@ -330,5 +403,185 @@ describe('C1_cnc Fail-Fast walidacja wymiarów płyty', () => {
         expect(dims.width).toBe(600);
         expect(dims.height).toBe(720);
         expect(dims.thickness).toBe(16);
+    });
+
+    it('resolvePostprocessor używa domyślnego Mach3 tylko przy pustym polu, a odrzuca nieznaną nazwę', async () => {
+        const { resolvePostprocessor } = await import('../ui/tabs/GCodeTab.js');
+        expect(resolvePostprocessor(undefined)).toBeInstanceOf(Mach3Postprocessor);
+        expect(resolvePostprocessor('')).toBeInstanceOf(Mach3Postprocessor);
+        expect(resolvePostprocessor('WoodWOP')).toBeInstanceOf(WoodWOPPostprocessor);
+        expect(() => resolvePostprocessor('UnknownCNC')).toThrow(/Nieobsługiwany postprocesor "UnknownCNC"/);
+    });
+
+    it('FAIL-FAST: postprocesory odrzucają workpieceDimensions zawierające NaN lub Infinity', () => {
+        const posts = [
+            new WoodWOPPostprocessor(),
+            new SCMPostprocessor(),
+            new BiessePostprocessor(),
+            new Mach3Postprocessor(),
+            new FanucPostprocessor()
+        ];
+
+        const invalidDimsList = [
+            { width: NaN, height: 600, thickness: 18 },
+            { width: 600, height: Infinity, thickness: 18 },
+            { width: 600, height: 600, thickness: NaN },
+            { width: 600, height: 600, thickness: Infinity },
+            { width: -Infinity, height: 600, thickness: 18 }
+        ];
+
+        for (const post of posts) {
+            for (const badDims of invalidDimsList) {
+                const prog: CLDataProgram = {
+                    projectName: 'Bad_Dims',
+                    wcsOrigin: { x: 0, y: 0, z: 0 },
+                    wcsName: 'G55',
+                    commands: [{ type: 'STOP' }],
+                    totalLengthMm: 0,
+                    estimatedTimeSec: 0,
+                    toolIdsUsed: [],
+                    workpieceDimensions: badDims
+                };
+                expect(() => post.generateNcCode(prog)).toThrow(/wymiarów formatki/);
+            }
+        }
+    });
+
+    it('FAIL-FAST: postprocesory odrzucają jawnie niepoprawne spindleRpm, feedRate oraz parametry CYCLE_DRILL zamiast maskować je wartościami domyślnymi', () => {
+        const posts = [
+            new Mach3Postprocessor(),
+            new FanucPostprocessor(),
+            new WoodWOPPostprocessor(),
+            new SCMPostprocessor(),
+            new BiessePostprocessor()
+        ];
+        const validDims = { width: 600, height: 400, thickness: 18 };
+
+        const makeProg = (commands: any[]): CLDataProgram => ({
+            projectName: 'Bad_Params_CL',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            wcsName: 'G55',
+            commands,
+            totalLengthMm: 10,
+            estimatedTimeSec: 1,
+            toolIdsUsed: ['tool_1'],
+            workpieceDimensions: validDims
+        });
+
+        for (const post of posts) {
+            // Nieprawidłowe spindleRpm: 0, NaN, -500, Infinity
+            for (const badRpm of [0, NaN, -500, Infinity]) {
+                expect(() => post.generateNcCode(makeProg([
+                    { type: 'SPINDL', spindleRpm: badRpm, spindleDirection: 'CW' }
+                ]))).toThrow(/spindleRpm/);
+            }
+
+            // Nieprawidłowy feedRate: 0, NaN, -100, Infinity
+            for (const badFeed of [0, NaN, -100, Infinity]) {
+                expect(() => post.generateNcCode(makeProg([
+                    { type: 'FEDRAT', feedRate: badFeed }
+                ]))).toThrow(/feedRate/);
+            }
+
+            // Nieprawidłowe parametry CYCLE_DRILL: depth=0/NaN, retractR=0/NaN, PECK bez dodatniego peckStep, toolDiameter=0
+            expect(() => post.generateNcCode(makeProg([
+                { type: 'CYCLE_DRILL', point: { x: 10, y: 10, z: 0 }, drillParams: { depth: 0, retractR: 5, type: 'STANDARD' } }
+            ]))).toThrow(/depth/);
+
+            expect(() => post.generateNcCode(makeProg([
+                { type: 'CYCLE_DRILL', point: { x: 10, y: 10, z: 0 }, drillParams: { depth: NaN, retractR: 5, type: 'STANDARD' } }
+            ]))).toThrow(/depth/);
+
+            expect(() => post.generateNcCode(makeProg([
+                { type: 'CYCLE_DRILL', point: { x: 10, y: 10, z: 0 }, drillParams: { depth: -12, retractR: 0, type: 'STANDARD' } }
+            ]))).toThrow(/retractR/);
+
+            expect(() => post.generateNcCode(makeProg([
+                { type: 'CYCLE_DRILL', point: { x: 10, y: 10, z: 0 }, drillParams: { depth: -12, retractR: NaN, type: 'STANDARD' } }
+            ]))).toThrow(/retractR/);
+
+            expect(() => post.generateNcCode(makeProg([
+                { type: 'CYCLE_DRILL', point: { x: 10, y: 10, z: 0 }, drillParams: { depth: -12, retractR: 5, peckStep: 0, type: 'PECK' } }
+            ]))).toThrow(/peckStep/);
+
+            expect(() => post.generateNcCode(makeProg([
+                { type: 'CYCLE_DRILL', point: { x: 10, y: 10, z: 0 }, drillParams: { depth: -12, retractR: 5, type: 'STANDARD' }, toolDiameter: 0 }
+            ]))).toThrow(/toolDiameter/);
+
+            // Nieprawidłowy lub brakujący promień łuku w komendzie ARC (np. radius: undefined, 0, NaN)
+            for (const badRadius of [undefined, 0, -5, NaN, Infinity]) {
+                expect(() => post.generateNcCode(makeProg([
+                    {
+                        type: 'ARC',
+                        point: { x: 20, y: 20, z: -5 },
+                        arcParams: { center: { x: 10, y: 10, z: -5 }, radius: badRadius as any, plane: 'XY', direction: 'CW' }
+                    }
+                ]))).toThrow(/radius/);
+            }
+        }
+
+        // BiessePostprocessor nie podstawia domyślnej średnicy 8 mm, gdy brakuje toolDiameter zarówno w TOOL_SELECT, jak i w CYCLE_DRILL
+        const biesse = new BiessePostprocessor();
+        expect(() => biesse.generateNcCode(makeProg([
+            { type: 'TOOL_SELECT', toolId: 'tool_1' },
+            { type: 'CYCLE_DRILL', point: { x: 10, y: 10, z: 0 }, drillParams: { depth: -12, retractR: 5, type: 'STANDARD' } }
+        ]))).toThrow(/toolDiameter/);
+    });
+
+    it('WoodWOP, SCM i Biesse rozróżniają wiercenie poziome od pionowego oraz nie sklejają +Z i -Z przez Math.abs', () => {
+        const horizProg: CLDataProgram = {
+            projectName: 'Horiz_And_SignedZ_Test',
+            wcsOrigin: { x: 0, y: 0, z: 0 },
+            wcsName: 'G55',
+            workpieceDimensions: { width: 600, height: 400, thickness: 18 },
+            totalLengthMm: 100,
+            estimatedTimeSec: 5,
+            toolIdsUsed: ['tool_1'],
+            commands: [
+                { type: 'TOOL_SELECT', toolId: 'tool_1', toolDiameter: 8 },
+                { type: 'FEDRAT', feedRate: 1500 },
+                {
+                    type: 'CYCLE_DRILL',
+                    point: { x: 0, y: 100, z: -9 },
+                    drillParams: { depth: -30, retractR: 5, type: 'STANDARD', axis: { x: 1, y: 0, z: 0 }, face: 'FACE_X_MINUS' },
+                    toolDiameter: 8
+                },
+                { type: 'GOTO', point: { x: 20, y: 20, z: -15 }, isRapid: true, motion: 'RAPID' },
+                { type: 'GOTO', point: { x: 20, y: 20, z: 10 }, isRapid: false, motion: 'FEED' },
+                { type: 'GOTO', point: { x: 20, y: 20, z: -10 }, isRapid: false, motion: 'FEED' }
+            ]
+        };
+
+        const woodwopNc = new WoodWOPPostprocessor().generateNcCode(horizProg);
+        expect(woodwopNc).toContain('<104 \\DrillingHorizontal');
+        expect(woodwopNc).toContain('SIDE=FACE_X_MINUS');
+        expect(woodwopNc).toContain('Z=-15.00');
+        expect(woodwopNc).toContain('Z=-10.00');
+        expect(woodwopNc).toContain('Z=10.00');
+
+        const scmNc = new SCMPostprocessor().generateNcCode(horizProg);
+        expect(scmNc).toContain('HBORE X=0.000 Y=100.000 Z=-9.000 DEPTH=30.000 SIDE=FACE_X_MINUS');
+        expect(scmNc).toContain('FAST X=20.000 Y=20.000 Z=-15.000');
+        expect(scmNc).toContain('ROUT X=20.000 Y=20.000 Z=-10.000');
+        expect(scmNc).toContain('ROUT X=20.000 Y=20.000 Z=10.000');
+
+        const biesseNc = new BiessePostprocessor().generateNcCode(horizProg);
+        expect(biesseNc).toContain('BH X=0.000 Y=100.000 Z=-9.000 DEPTH=30.000 SIDE=FACE_X_MINUS DIA=8');
+        expect(biesseNc).toContain('FAST X=20.000 Y=20.000 Z=-15.000');
+        expect(biesseNc).toContain('ROUT X=20.000 Y=20.000 Z=-10.000');
+        expect(biesseNc).toContain('ROUT X=20.000 Y=20.000 Z=10.000');
+
+        // Postprocesory 3-osiowe (Mach3, Fanuc) bez agregatu kątowego rzucają Fail-Fast przy wierceniu poziomym
+        expect(() => new Mach3Postprocessor().generateNcCode(horizProg)).toThrowError(/Wiercenie poziome/);
+        expect(() => new FanucPostprocessor().generateNcCode(horizProg)).toThrowError(/Wiercenie poziome/);
+    });
+
+    it('sanitizeFileName czyści znaki niedozwolone w nazwach plików OS', async () => {
+        const { sanitizeFileName } = await import('../ui/tabs/GCodeTab.js');
+        expect(sanitizeFileName('Bok Lewy / Szafa 1')).toBe('Bok Lewy _ Szafa 1');
+        expect(sanitizeFileName('Półka: 600x400 *nowa*?')).toBe('Półka_ 600x400 _nowa__');
+        expect(sanitizeFileName('Element <1> | "Test"')).toBe('Element _1_ _ _Test_');
+        expect(sanitizeFileName('   ')).toBe('program');
+        expect(sanitizeFileName('')).toBe('program');
     });
 });

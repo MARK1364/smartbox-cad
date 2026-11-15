@@ -68,6 +68,7 @@ export class CreateKorpusCommand implements Command {
             wysokosc_strefy_dolnej_mm: zoneCount > 1 ? (bHeight ?? hMm) : undefined,
             wysokosc_strefy_srodkowej_mm: zoneCount === 3 ? mHeight : undefined,
             cofniecie_plecow_mm: bOffset,
+            ...(p.grubosc_plecow_mm !== undefined ? { grubosc_plecow_mm: p.grubosc_plecow_mm } : {}),
             offsets: p.offsets,
             ...(isRogowy1
                 ? { szerokosc_blendy_mm: p.szerokosc_blendy_mm ?? 400, strona_blendy: p.strona_blendy ?? 'LEFT' as const }
@@ -110,6 +111,7 @@ export class CreateKorpusCommand implements Command {
             wysokosc_strefy_dolnej_mm: (isCorner || isSkosny) ? skosH : (bHeight ?? hMm),
             wysokosc_strefy_srodkowej_mm: (isCorner || isSkosny) ? 0 : mHeight,
             cofniecie_plecow_mm: bOffset,
+            ...(p.grubosc_plecow_mm !== undefined ? { grubosc_plecow_mm: p.grubosc_plecow_mm } : {}),
             offsets: { ...(p.offsets || {}) },
             ...(isSkosny && !isSkosnyLr
                 ? { wysokosc_przod_mm: hFront, wysokosc_tyl_mm: hBack }

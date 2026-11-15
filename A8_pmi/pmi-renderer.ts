@@ -24,7 +24,6 @@ import {
     MEASURE_MIN_PX,
     pixelsPerMMAtScene,
 } from './pmi-screen-scale';
-import { LABEL_OVERLAP_PAD_PX, resolveLabelOverlaps, ScreenLabel } from './pmi-label-layout';
 
 // ============================================================================
 // RENDER CONFIG — CAD Black Theme (Wysoki Kontrast)
@@ -33,7 +32,7 @@ import { LABEL_OVERLAP_PAD_PX, resolveLabelOverlaps, ScreenLabel } from './pmi-l
 type Rgba = [number, number, number, number];
 
 const DIM_COLOR_PREVIEW: Rgba = [0.05, 0.45, 0.95, 1.0];   // Niebieski CAD dla podglądu na żywo
-const HELPER_COLOR: Rgba = [0.15, 0.15, 0.15, 0.95];     // Linie pomocnicze — ciemne, widoczne
+const HELPER_COLOR: Rgba = [0.15, 0.15, 0.15, 1.0];        // Linie pomocnicze — pełne krycie (alfa 1.0)
 const TEXT_COLOR_PREVIEW = '#0284C7';
 
 const PREVIEW_ID = '__pmi_preview__';
@@ -323,8 +322,6 @@ export class PMIRenderer {
             }
 
             if (frame.derivedChanged) store.notifyDerivedChanged();
-
-            this.resolveOverlappingLabels();
         } finally {
             endResolveBatch();
         }
@@ -352,7 +349,6 @@ export class PMIRenderer {
             TEXT_COLOR_PREVIEW,
             null,
         );
-        this.resolveOverlappingLabels();
     }
 
     public clearPreview(): void {
@@ -379,8 +375,6 @@ export class PMIRenderer {
         for (const vis of this.measureVisuals.values()) {
             this.setMeasureVisualVisible(vis, false);
         }
-
-        this.resolveOverlappingLabels();
     }
 
     public clearMeasurePreview(): void {
@@ -498,7 +492,8 @@ export class PMIRenderer {
     ): void {
         const parts = vis[partsKey];
         const isDimLine = partsKey === 'dimLineParts';
-        const hasHitbox = isDimLine && !!annotationId;
+        const targetPart: 'line' | 'helper' = isDimLine ? 'line' : 'helper';
+        const hasHitbox = !!annotationId;
 
         let partIdx = 0;
         for (let i = 0; i < segments.length; i++) {
@@ -512,7 +507,7 @@ export class PMIRenderer {
                 tubeDiam,
                 color,
                 annotationId,
-                isDimLine ? 'line' : 'helper',
+                targetPart,
                 false,
             );
             if (tube) {
@@ -520,17 +515,17 @@ export class PMIRenderer {
                 partIdx++;
             }
 
-            // Dla linii wymiarowej tworzymy niewidoczny, wygodny hitbox ułatwiający chwytanie myszą w 3D
+            // Osobny przestrzenny hitbox do klikania/przeciągania (niewidoczny, bez zapisu do Z-bufora)
             if (hasHitbox) {
                 const hitbox = this.updateOrCreateTubeSegment(
                     parts[partIdx] ?? null,
-                    `pmi_${vis.id}_hitbox_${i}`,
+                    `pmi_${vis.id}_${partsKey}_hitbox_${i}`,
                     a,
                     b,
-                    18, // 18mm średnicy — łatwe chwytanie
+                    isDimLine ? 18 : 12,
                     [0, 0, 0, 0],
                     annotationId,
-                    'line',
+                    targetPart,
                     true,
                 );
                 if (hitbox) {
@@ -569,23 +564,67 @@ export class PMIRenderer {
             return existingTube;
         }
 
-        const diameter = Math.max(diameterMM, isHitbox ? 18 : 0.55);
+        const diameter = Math.max(diameterMM, isHitbox ? 12 : 0.55);
+        const screenWidthPx = targetPart === 'helper'
+            ? Math.max(diameterMM * 2, 1.25)
+            : Math.max(diameterMM * 1.5, 1.75);
+        const babylonColor = new BABYLON.Color3(color[0], color[1], color[2]);
+        const createGreasedLine = !isHitbox
+            ? (BABYLON.CreateGreasedLine ?? BABYLON.MeshBuilder?.CreateGreasedLine)
+            : null;
+
         let tube = existingTube;
+        if (tube && !tube.isDisposed?.() && Boolean(tube._isHitbox) !== isHitbox) {
+            this.disposeMeshAndMaterial(tube);
+            tube = null;
+        }
         if (!tube || tube.isDisposed?.()) {
-            tube = BABYLON.MeshBuilder.CreateCylinder(name, {
-                height: 1,
-                diameter: 1,
-                tessellation: 8,
-            }, this.scene);
-            const mat = new BABYLON.StandardMaterial(`${name}_mat`, this.scene);
-            mat.disableLighting = true;
-            tube.material = mat;
+            if (typeof createGreasedLine === 'function') {
+                tube = createGreasedLine(
+                    name,
+                    {
+                        points: [
+                            new BABYLON.Vector3(0, -0.5, 0),
+                            new BABYLON.Vector3(0, 0.5, 0),
+                        ],
+                    },
+                    {
+                        color: babylonColor,
+                        width: screenWidthPx,
+                        sizeAttenuation: true,
+                        ...(BABYLON.GreasedLineMeshColorMode?.COLOR_MODE_SET !== undefined
+                            ? { colorMode: BABYLON.GreasedLineMeshColorMode.COLOR_MODE_SET }
+                            : {}),
+                    },
+                    this.scene,
+                );
+                tube._isGreasedLine = true;
+                if (tube.material) {
+                    tube.material.disableLighting = true;
+                    tube.material.backFaceCulling = false;
+                }
+            } else {
+                tube = BABYLON.MeshBuilder.CreateCylinder(name, {
+                    height: 1,
+                    diameter: 1,
+                    tessellation: 8,
+                }, this.scene);
+                const mat = new BABYLON.StandardMaterial(`${name}_mat`, this.scene);
+                mat.disableLighting = true;
+                mat.backFaceCulling = false;
+                if (isHitbox) {
+                    mat.disableDepthWrite = true;
+                }
+                tube.material = mat;
+            }
+            tube._isHitbox = isHitbox;
             tube.renderingGroupId = 2;
         }
 
         tube.isVisible = true;
         tube.position = BABYLON.Vector3.Lerp(aB, bB, 0.5);
-        tube.scaling = new BABYLON.Vector3(diameter, len, diameter);
+        const xzScale = tube._isGreasedLine ? 1 : diameter;
+        tube.scaling = new BABYLON.Vector3(xzScale, len, xzScale);
 
         const dir = diff.normalize();
         const yAxis = new BABYLON.Vector3(0, 1, 0);
@@ -599,10 +638,17 @@ export class PMIRenderer {
             tube.rotationQuaternion = BABYLON.Quaternion.RotationAxis(axis, angle);
         }
 
+        if (tube.greasedLineMaterial) {
+            tube.greasedLineMaterial.color = babylonColor;
+            tube.greasedLineMaterial.width = screenWidthPx;
+        }
+
         if (tube.material) {
-            tube.material.diffuseColor = new BABYLON.Color3(color[0], color[1], color[2]);
-            tube.material.emissiveColor = new BABYLON.Color3(color[0] * 0.35, color[1] * 0.35, color[2] * 0.35);
-            tube.material.alpha = color[3];
+            tube.material.diffuseColor = babylonColor;
+            tube.material.emissiveColor = babylonColor;
+            tube.material.alpha = isHitbox ? 0 : 1.0;
+            tube.material.backFaceCulling = false;
+            tube.material.disableDepthWrite = isHitbox;
         }
 
         if (isHitbox) {
@@ -610,7 +656,7 @@ export class PMIRenderer {
             tube.isPickable = true;
         } else {
             tube.visibility = 1;
-            tube.isPickable = !!annotationId;
+            tube.isPickable = tube._isGreasedLine ? false : !!annotationId;
         }
 
         tube.metadata = {
@@ -964,11 +1010,31 @@ export class PMIRenderer {
             );
             if (tube) {
                 if (pickId) {
-                    tube.isPickable = true;
+                    tube.isPickable = !tube._isGreasedLine;
                     tube.metadata = { ...(tube.metadata || {}), isPmiOverlay: true, pmiMeasurementId: pickId };
                 }
                 parts[partIdx] = tube;
                 partIdx++;
+            }
+
+            if (pickId) {
+                const hitbox = this.updateOrCreateTubeSegment(
+                    parts[partIdx] ?? null,
+                    `pmi_msr_${vis.id}_hitbox_${i}`,
+                    path[i],
+                    path[i + 1],
+                    18,
+                    [0, 0, 0, 0],
+                    pickId,
+                    'line',
+                    true,
+                );
+                if (hitbox) {
+                    hitbox.isPickable = true;
+                    hitbox.metadata = { ...(hitbox.metadata || {}), isPmiOverlay: true, pmiMeasurementId: pickId };
+                    parts[partIdx] = hitbox;
+                    partIdx++;
+                }
             }
         }
 
@@ -1125,139 +1191,6 @@ export class PMIRenderer {
             dist,
             camera.fov,
         );
-    }
-
-    /**
-     * Nakładające się billboardy rozsuwamy na ekranie, potem wracamy do świata.
-     * Zawsze start od pozycji preferowanej — bez dryfu klatka po klatce.
-     */
-    private resolveOverlappingLabels(): void {
-        const camera = this.scene?.activeCamera;
-        const engine = this.scene?.getEngine?.();
-        if (!camera || !engine) return;
-
-        const slots = this.collectLabelSlots();
-        if (slots.length < 2) return;
-
-        const renderW = engine.getRenderWidth();
-        const renderH = engine.getRenderHeight();
-        const viewport = camera.viewport.toGlobal(renderW, renderH);
-        const transform = this.scene.getTransformMatrix();
-        const identity = BABYLON.Matrix.Identity();
-        const camRight = this.cameraAxis(camera, 'right');
-        const camUp = this.cameraAxis(camera, 'up');
-
-        const projected: ScreenLabel[] = [];
-        const worldById = new Map<string, { preferred: Vec3; mmPerPx: number }>();
-
-        for (const slot of slots) {
-            const screen = this.projectWorldToScreen(slot.preferred, identity, transform, viewport);
-            if (!screen) continue;
-            const pxPerMM = this.pixelsPerWorldMM(slot.preferred, camRight, identity, transform, viewport);
-            if (pxPerMM < 1e-6) continue;
-            worldById.set(slot.id, { preferred: slot.preferred, mmPerPx: 1 / pxPerMM });
-            projected.push({
-                id: slot.id,
-                x: screen.x,
-                y: screen.y,
-                w: slot.w * pxPerMM,
-                h: slot.h * pxPerMM,
-            });
-        }
-
-        if (projected.length < 2) return;
-
-        const resolved = resolveLabelOverlaps(projected, LABEL_OVERLAP_PAD_PX);
-        const slotById = new Map(slots.map(s => [s.id, s]));
-
-        for (const label of resolved) {
-            const slot = slotById.get(label.id);
-            const world = worldById.get(label.id);
-            const original = projected.find(p => p.id === label.id);
-            if (!slot?.plane || !world || !original) continue;
-
-            const dxPx = label.x - original.x;
-            const dyPx = label.y - original.y;
-            if (Math.abs(dxPx) < 0.5 && Math.abs(dyPx) < 0.5) continue;
-
-            const pos = v3Add(
-                world.preferred,
-                v3Add(
-                    v3Scale(camRight, dxPx * world.mmPerPx),
-                    v3Scale(camUp, -dyPx * world.mmPerPx),
-                ),
-            );
-            slot.plane.position = new BABYLON.Vector3(pos.x, pos.y, pos.z);
-        }
-    }
-
-    private collectLabelSlots(): Array<{
-        id: string;
-        plane: any;
-        preferred: Vec3;
-        w: number;
-        h: number;
-    }> {
-        const slots: Array<{ id: string; plane: any; preferred: Vec3; w: number; h: number }> = [];
-        const add = (vis: DimVisual | MeasureVisual | null) => {
-            if (!vis?.textPlane || vis.textPlane.isDisposed?.()) return;
-            if (vis.textPlane.isEnabled && vis.textPlane.isEnabled() === false) return;
-            if (!vis.labelPreferredWorld || vis.labelWidth <= 0 || vis.labelHeight <= 0) return;
-            slots.push({
-                id: vis.id,
-                plane: vis.textPlane,
-                preferred: vis.labelPreferredWorld,
-                w: vis.labelWidth,
-                h: vis.labelHeight,
-            });
-        };
-        for (const vis of this.visuals.values()) add(vis);
-        add(this.previewVisual);
-        for (const vis of this.measureVisuals.values()) add(vis);
-        add(this.measurePreview);
-        return slots;
-    }
-
-    private cameraAxis(camera: any, which: 'right' | 'up'): Vec3 {
-        const local = which === 'right'
-            ? new BABYLON.Vector3(1, 0, 0)
-            : new BABYLON.Vector3(0, 1, 0);
-        const dir = camera.getDirection ? camera.getDirection(local) : local;
-        return v3(dir.x, dir.y, dir.z);
-    }
-
-    private projectWorldToScreen(
-        world: Vec3,
-        worldMatrix: any,
-        transform: any,
-        viewport: any,
-    ): { x: number; y: number } | null {
-        const projected = BABYLON.Vector3.Project(
-            new BABYLON.Vector3(world.x, world.y, world.z),
-            worldMatrix,
-            transform,
-            viewport,
-        );
-        if (!projected || projected.z < 0 || projected.z > 1) return null;
-        return { x: projected.x, y: projected.y };
-    }
-
-    private pixelsPerWorldMM(
-        world: Vec3,
-        camRight: Vec3,
-        worldMatrix: any,
-        transform: any,
-        viewport: any,
-    ): number {
-        const a = this.projectWorldToScreen(world, worldMatrix, transform, viewport);
-        const b = this.projectWorldToScreen(
-            v3Add(world, camRight),
-            worldMatrix,
-            transform,
-            viewport,
-        );
-        if (!a || !b) return 0;
-        return Math.hypot(b.x - a.x, b.y - a.y);
     }
 
     /**

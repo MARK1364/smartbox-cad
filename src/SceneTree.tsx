@@ -4,13 +4,16 @@
  * Działa identycznie w Scenie Głównej oraz w podstronach Eksport 2 (E2) i Eksport 3 (E3).
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ProjectDocument } from '../A1_core/project-document';
 import { UIController } from '../A1_core/ui-controller';
 import { ContextManager } from '../A1_core/context-manager';
+import { PropertiesManager } from '../A1_core/properties.js';
+import { findOwningContainer } from '../A1_core/panel-like.js';
+import { syncSelectionHighlights } from '../A1_core/selection-highlight.js';
 import { CAMStateStore } from '../C1_cnc/core/cam-state-store';
 import { DrawingProjectExtractor } from '../R2_rys/drawing-project-extractor';
-import { CADTreeNode, GrooveFeature2D } from '../R2_rys/drawing-types';
+import { CADTreeNode, DrawingDataIssue, GrooveFeature2D } from '../R2_rys/drawing-types';
 import { CAD_TREE_START_RENAME } from './module-data/tree-context-menu';
 import { PMIStore } from '../A8_pmi/pmi-data';
 import {
@@ -31,7 +34,7 @@ import { CAD_OPEN_FLOATING_OPERATION } from './FloatingOperationDialog';
 import { openCadEditEntity } from './floating-edit/cad-edit-entity.js';
 import { isWallPart } from '../S4_sciany/smartwall-types.js';
 import { LedChannelStore, type LedChannelDefinition } from '../A2_bloki';
-import { getLevelColorTheme } from '../S1_sketcher/datum-types';
+import { getLevelColorTheme, isDefaultDatumNode } from '../S1_sketcher/datum-types';
 import { tx } from '../T1_tlumaczenia/core.js';
 import { useLocale } from '../T1_tlumaczenia/react.js';
 import type { ModuleTexts } from '../T1_tlumaczenia/types.js';
@@ -94,10 +97,22 @@ export const TREE_ICONS = {
       <line x1="1" y1="1" x2="23" y2="23"></line>
     </svg>
   ),
+  plus: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="12" y1="5" x2="12" y2="19"></line>
+      <line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+  ),
   trash: (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <polyline points="3 6 5 6 21 6"></polyline>
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    </svg>
+  ),
+  editCircle: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="9.5"></circle>
+      <path d="M14.5 8.5H9.5v7h5M9.5 12h4" strokeLinecap="round" strokeLinejoin="round"></path>
     </svg>
   ),
   freeze: (
@@ -163,7 +178,9 @@ export const isSinkTreeItem = (node: CADTreeNode): boolean => {
     (node as any).type === 'smartpart_sink' ||
     (node as any).generatorParams?.type === 'smartpart_sink' ||
     (node as any).generatorParams?.partType === 'SINK' ||
-    (node as any).generatorParams?.boxType === 'SINKS'
+    (node as any).generatorParams?.boxType === 'SINKS' ||
+    (node as any).generatorParams?.boxType === 'SINK' ||
+    (node as any).kind === 'SINK'
   );
 };
 
@@ -184,7 +201,11 @@ export const isCustomSmartPartTreeItem = (node: CADTreeNode): boolean => {
 };
 
 export const isHardwareNode = (node: CADTreeNode): boolean => {
-  return node.type === 'HARDWARE' || (node as any).hardwareType !== undefined || /zawias|okucie|hinge|prowadnica|rail|boczek/i.test(node.name || '');
+  return (
+    node.type === 'HARDWARE' ||
+    (node as any).hardwareType !== undefined ||
+    /zawias|okucie|hinge|prowadnica|rail|boczek|podpórka|podporka|shelf_pin/i.test(node.name || '')
+  );
 };
 
 /** Cecha cut SmartParta (walec / kieszeń) — nie okucie, nie kontener. */
@@ -257,6 +278,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
       return null;
     }
   });
+  const [drawingIssues, setDrawingIssues] = useState<DrawingDataIssue[]>([]);
 
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [editingNode, setEditingNode] = useState<{ type: string; id: string; panelId?: string } | null>(null);
@@ -273,26 +295,39 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     try {
       const tree = DrawingProjectExtractor.instance.extractProjectTree();
       setTreeRoot(tree.rootNode);
+      setDrawingIssues(tree.issues || []);
     } catch (e) {
       console.warn('SceneTree: błąd odświeżania drzewa:', e);
     }
   }, []);
 
   useEffect(() => {
-    const doc = propModel || ContextManager.instance.document;
+    const getDoc = () => propModel || ContextManager.instance.document;
 
     const syncTreeAndSelection = () => {
       refreshTree();
+      const doc = getDoc();
       const active = doc?.activeEntity;
-      if (active) {
-        setSelectedNodeId(active.id || (active as any).smartId?.uid || null);
-      } else {
-        setSelectedNodeId(null);
+      const id = active?.id || (active as any)?.smartId?.uid || (active as any)?.nodeId || null;
+      setSelectedNodeId(id);
+      if (id && doc) {
+        let curr = doc.findNode ? doc.findNode(id)?.parent : null;
+        const toExpand: Record<string, boolean> = {};
+        while (curr && curr !== doc.rootNode) {
+          if (curr.id) toExpand[curr.id] = false;
+          curr = curr.parent;
+        }
+        const container = findOwningContainer(doc, id);
+        if (container?.id) toExpand[container.id] = false;
+        if (Object.keys(toExpand).length > 0) {
+          setCollapsedNodes((prev) => ({ ...prev, ...toExpand }));
+        }
       }
     };
 
     syncTreeAndSelection();
 
+    const doc = getDoc();
     let unsubDoc: (() => void) | null = null;
     if (doc) {
       unsubDoc = doc.onDocumentChanged(syncTreeAndSelection);
@@ -327,9 +362,24 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const handlePropsUpdate = (e: any) => {
       if (e.detail && e.detail.featureId) {
         setSelectedFeatureId(e.detail.featureId);
-      } else if (e.detail && (e.detail.kind === 'panel' || e.detail.kind === 'container')) {
+      } else if (e.detail && (e.detail.kind === 'panel' || e.detail.kind === 'container' || e.detail.objectType === 'Okucie (Hardware)')) {
         setSelectedFeatureId(null);
-        setSelectedNodeId(e.detail.panelId || e.detail.containerId || null);
+        const nextId = e.detail.panelId || e.detail.containerId || null;
+        setSelectedNodeId(nextId);
+        const curDoc = getDoc();
+        if (nextId && curDoc) {
+          let curr = curDoc.findNode ? curDoc.findNode(nextId)?.parent : null;
+          const toExpand: Record<string, boolean> = {};
+          while (curr && curr !== curDoc.rootNode) {
+            if (curr.id) toExpand[curr.id] = false;
+            curr = curr.parent;
+          }
+          const container = findOwningContainer(curDoc, nextId);
+          if (container?.id) toExpand[container.id] = false;
+          if (Object.keys(toExpand).length > 0) {
+            setCollapsedNodes((prev) => ({ ...prev, ...toExpand }));
+          }
+        }
       }
     };
     document.addEventListener('bloki-properties-update', handlePropsUpdate);
@@ -419,6 +469,43 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   };
 
   const cadDocument = propModel || ContextManager.instance.document;
+  const activeEntity = cadDocument?.activeEntity;
+  const activeEntityId = activeEntity?.id || (activeEntity as any)?.smartId?.uid || (activeEntity as any)?.nodeId || null;
+  const effectiveSelectedId = selectedNodeId || activeEntityId;
+
+  const activeOwningContainerId = useMemo(() => {
+    if (!effectiveSelectedId || !cadDocument) return null;
+    const container = findOwningContainer(cadDocument, effectiveSelectedId);
+    return container?.id || null;
+  }, [effectiveSelectedId, cadDocument]);
+
+  useEffect(() => {
+    const active = cadDocument?.activeEntity;
+    const id = active?.id || (active as any)?.smartId?.uid || (active as any)?.nodeId || null;
+    if (id) {
+      setSelectedNodeId(id);
+      if (cadDocument) {
+        const container = findOwningContainer(cadDocument, id);
+        if (container?.id) {
+          setCollapsedNodes((prev) => ({ ...prev, [container.id]: false }));
+        }
+      }
+    } else {
+      setSelectedNodeId(null);
+    }
+  }, [cadDocument?.activeEntity, cadDocument]);
+
+  useEffect(() => {
+    if (!effectiveSelectedId) return;
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`.drzewo-obiektow .tree-node.selected`);
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [effectiveSelectedId]);
+
   void listTick;
 
   const readDraggedCadNode = () => (window as any).__draggedCadNode as { type?: string; id?: string } | null;
@@ -560,6 +647,26 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               </div>
               {!isDrawMode && (
                 <div className="tree-node-actions">
+                  {h.id && (
+                    <button
+                      type="button"
+                      className="tree-action-btn btn-edit-node"
+                      title={tx(srcTekst, 'tree.edit_hole', TX_NS) || 'Edytuj otwór'}
+                      style={{ opacity: 0.8 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCadEditEntity({
+                          entityId: panel.id,
+                          panelId: panel.id,
+                          featureId: h.id,
+                          kind: 'operation',
+                          face: h.face,
+                        });
+                      }}
+                    >
+                      {TREE_ICONS.editCircle}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="tree-action-btn btn-freeze"
@@ -643,36 +750,53 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               </div>
               {!isDrawMode && (
                 <div className="tree-node-actions">
-                  {isSmart ? (
-                    <button
-                      type="button"
-                      className="tree-action-btn btn-delete"
-                      title={tx(srcTekst, 'tree.delete_op', TX_NS)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        UIController.instance?.emitTree('delete-feature', { id: g.id, panelId: panel.id });
-                      }}
-                    >
-                      {TREE_ICONS.trash}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="tree-action-btn btn-freeze"
-                      title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
-                      style={{ color: isFrozen ? '#38bdf8' : undefined }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        UIController.instance?.emitTree('toggle-freeze-feature', {
-                          id: g.id,
-                          featureId: g.id,
-                          panelId: panel.id,
-                        });
-                      }}
-                    >
-                      {TREE_ICONS.freeze}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="tree-action-btn btn-edit-node"
+                    title={tx(srcTekst, 'tree.edit_op', TX_NS) || 'Edytuj operację'}
+                    style={{ opacity: 0.8 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openCadEditEntity({
+                        entityId: panel.id,
+                        panelId: panel.id,
+                        featureId: g.id,
+                        kind: 'operation',
+                        libraryId: g.libraryId,
+                        face: g.face,
+                      });
+                    }}
+                  >
+                    {TREE_ICONS.editCircle}
+                  </button>
+                  <button
+                    type="button"
+                    className={`tree-action-btn btn-freeze ${isFrozen ? 'is-frozen' : ''}`}
+                    title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
+                    style={{ color: isFrozen ? '#38bdf8' : undefined, opacity: isFrozen ? 1 : 0.75 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      UIController.instance?.emitTree('toggle-freeze-feature', {
+                        id: g.id,
+                        featureId: g.id,
+                        panelId: panel.id,
+                      });
+                    }}
+                  >
+                    {TREE_ICONS.freeze}
+                  </button>
+                  <button
+                    type="button"
+                    className="tree-action-btn btn-delete"
+                    title={tx(srcTekst, 'tree.delete_op', TX_NS)}
+                    style={{ opacity: 0.75 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      UIController.instance?.emitTree('delete-feature', { id: g.id, panelId: panel.id });
+                    }}
+                  >
+                    {TREE_ICONS.trash}
+                  </button>
                 </div>
               )}
             </div>
@@ -683,10 +807,9 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   };
 
   const renderPanelNode = (panel: CADTreeNode) => {
-    const hasChildren = Boolean(panel.children && panel.children.length > 0);
-    const isPanelCollapsed = isNodeCollapsed(panel.id, !hasChildren);
+    const isPanelCollapsed = isNodeCollapsed(panel.id, true);
     const isEditing = editingNode?.type === 'part' && editingNode?.id === panel.id;
-    const isSelected = selectedNodeId === panel.id ? 'selected' : '';
+    const isSelected = effectiveSelectedId === panel.id ? 'selected' : '';
     const isManual = panel.isManual === true;
     const isFrozen = panel.frozen === true;
     const isSmartPartPart = isHandleTreeItem(panel) || isCustomSmartPartTreeItem(panel);
@@ -729,7 +852,28 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               setSelectedNodeId(panel.id);
               onSelectNode?.(panel);
               if (!isDrawMode) {
+                const doc = ContextManager.instance.document;
+                if (doc) {
+                  doc.setActiveEntity(panel as any);
+                }
+                const facePicker = ContextManager.instance.facePicker;
+                if (facePicker) {
+                  facePicker.clearSelection();
+                }
+                const panelViews = ContextManager.instance.panelViews;
+                if (panelViews) {
+                  PropertiesManager.instance.inspectPanel(panel as any, panelViews, true);
+                }
+                syncSelectionHighlights({
+                  document: doc,
+                  panelViews,
+                  containerViews: ContextManager.instance.containerViews,
+                } as any);
                 UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.id });
+                const gizmoCtrl = ContextManager.instance.gizmoController;
+                if (gizmoCtrl) {
+                  gizmoCtrl.updateFaceGizmo();
+                }
               }
             }}
             onContextMenu={(e) => {
@@ -748,10 +892,31 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 clientY: e.clientY,
               });
             }}
-            onDoubleClick={() => {
+            onDoubleClick={(e) => {
               if (isDrawMode) return;
-              setEditingNode({ type: 'part', id: panel.id });
-              setEditValue(panel.name || 'Formatka');
+              e.stopPropagation();
+              const doc = ContextManager.instance.document;
+              if (doc) {
+                doc.setActiveEntity(panel as any);
+              }
+              const facePicker = ContextManager.instance.facePicker;
+              if (facePicker) {
+                facePicker.clearSelection();
+              }
+              const panelViews = ContextManager.instance.panelViews;
+              if (panelViews) {
+                PropertiesManager.instance.inspectPanel(panel as any, panelViews, true);
+              }
+              syncSelectionHighlights({
+                document: doc,
+                panelViews,
+                containerViews: ContextManager.instance.containerViews,
+              } as any);
+              UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.id });
+              const gizmoCtrl = ContextManager.instance.gizmoController;
+              if (gizmoCtrl) {
+                gizmoCtrl.updateFaceGizmo();
+              }
             }}
           >
             <span className="tree-chevron" onClick={(e) => toggleCollapse(panel.id, e)}>
@@ -783,9 +948,29 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
           </div>
           {!isDrawMode && (
             <div className="tree-node-actions">
+              {isManual && (
+                <button
+                  type="button"
+                  className="tree-action-btn btn-edit-node"
+                  title={tx(srcTekst, 'ctxmenu.edit_panel', TX_NS) || 'Edytuj formatkę'}
+                  style={{ opacity: 0.8 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const doc = ContextManager.instance.document;
+                    const node = doc?.findNode?.(panel.id);
+                    if (node?.domainData) doc.setActiveEntity(node.domainData);
+                    UIController.instance?.emitTree('select-part', { id: panel.id, uuid: panel.id });
+                    openCadEditEntity({ entityId: panel.id, kind: 'panel' });
+                  }}
+                >
+                  {TREE_ICONS.editCircle}
+                </button>
+              )}
               <button
-                className="tree-action-btn btn-toggle-part-vis"
-                title={tx(srcTekst, 'tree.toggle', TX_NS)}
+                type="button"
+                className={`tree-action-btn btn-toggle-part-vis ${panel.visible === false ? 'is-hidden' : ''}`}
+                title={panel.visible === false ? tx(srcTekst, 'tree.show_part', TX_NS) : tx(srcTekst, 'tree.toggle', TX_NS)}
+                style={{ opacity: panel.visible === false ? 1 : 0.75, color: panel.visible === false ? '#94a3b8' : undefined }}
                 onClick={(e) => {
                   e.stopPropagation();
                   UIController.instance?.emitTree('toggle-part-visibility', { id: panel.id, uuid: panel.id });
@@ -793,30 +978,30 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               >
                 {panel.visible === false ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
               </button>
-              {isManual ? (
-                <button
-                  className="tree-action-btn btn-delete"
-                  title={tx(srcTekst, 'tree.delete_panel', TX_NS)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    UIController.instance?.emitTree('delete-part', { id: panel.id, uuid: panel.id });
-                  }}
-                >
-                  {TREE_ICONS.trash}
-                </button>
-              ) : (
-                <button
-                  className="tree-action-btn btn-freeze-part"
-                  title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
-                  style={{ color: isFrozen ? '#38bdf8' : undefined }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    UIController.instance?.emitTree('toggle-freeze-part', { id: panel.id, uuid: panel.id });
-                  }}
-                >
-                  {TREE_ICONS.freeze}
-                </button>
-              )}
+              <button
+                type="button"
+                className={`tree-action-btn btn-freeze-part ${isFrozen ? 'is-frozen' : ''}`}
+                title={isFrozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
+                style={{ color: isFrozen ? '#38bdf8' : undefined, opacity: isFrozen ? 1 : 0.75 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  UIController.instance?.emitTree('toggle-freeze-part', { id: panel.id, uuid: panel.id });
+                }}
+              >
+                {TREE_ICONS.freeze}
+              </button>
+              <button
+                type="button"
+                className="tree-action-btn btn-delete"
+                title={tx(srcTekst, 'tree.delete_panel', TX_NS)}
+                style={{ opacity: 0.75 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  UIController.instance?.emitTree('delete-part', { id: panel.id, uuid: panel.id });
+                }}
+              >
+                {TREE_ICONS.trash}
+              </button>
             </div>
           )}
         </div>
@@ -891,7 +1076,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   };
 
   const renderFeatureNode = (featNode: CADTreeNode) => {
-    const isSelected = selectedNodeId === featNode.id ? 'selected' : '';
+    const isSelected = (selectedFeatureId === featNode.id || effectiveSelectedId === featNode.id) ? 'selected' : '';
     const cutType = String(
       (featNode as any).generatorParams?.cut?.type
       || (featNode as any).cutType
@@ -935,9 +1120,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   };
 
   const renderHardwareNode = (hwNode: CADTreeNode) => {
-    const isSelected = selectedNodeId === hwNode.id ? 'selected' : '';
-    const isFrozen = hwNode.frozen === true;
-    const isVisible = hwNode.visible !== false;
+    const hwAny = hwNode as any;
+    const isSelected = effectiveSelectedId === hwNode.id ? 'selected' : '';
+    const isParentFrozen = Boolean(hwAny.parent?.frozen || hwAny.parent?.domainData?.frozen);
+    const isFrozen = hwNode.frozen === true || hwAny.domainData?.frozen === true || isParentFrozen;
+    const isParentVisible = hwAny.parent ? hwAny.parent?.visible !== false && hwAny.parent?.domainData?.visible !== false : true;
+    const isVisible = hwNode.visible !== false && hwAny.domainData?.visible !== false && isParentVisible;
 
     return (
       <div key={hwNode.id} className="tree-children" style={{ marginLeft: '12px' }}>
@@ -956,6 +1144,18 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               if (!isDrawMode) {
                 UIController.instance?.emitTree('select-hardware', { id: hwNode.id, name: hwNode.name });
               }
+            }}
+            onContextMenu={(e) => {
+              if (isDrawMode) return;
+              e.preventDefault();
+              e.stopPropagation();
+              UIController.instance?.emitTree('contextmenu-tree-node', {
+                type: 'hardware',
+                id: hwNode.id,
+                name: hwNode.name || 'Okucie',
+                clientX: e.clientX,
+                clientY: e.clientY,
+              });
             }}
           >
             <span style={{ width: '8px', display: 'inline-block', flexShrink: 0 }} />
@@ -998,7 +1198,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   };
 
   const renderLedChannelNode = (ch: LedChannelDefinition) => {
-    const isSelected = selectedNodeId === ch.id ? 'selected' : '';
+    const isSelected = effectiveSelectedId === ch.id ? 'selected' : '';
     const isFrozen = ch.frozen === true;
     const isVisible = ch.visible !== false && ch.enabled !== false;
     const widthInfo = ch.detectedWidthMm ? ` (${Math.round(ch.detectedWidthMm)} mm)` : '';
@@ -1033,6 +1233,21 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
           {!isDrawMode && (
             <div className="tree-node-actions">
+              <button
+                type="button"
+                className="tree-action-btn btn-edit-node"
+                title="Edytuj profil LED"
+                style={{ opacity: 0.8 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedNodeId(ch.id);
+                  LedChannelStore.instance.setActiveChannelId(ch.id);
+                  const smartpartsBtn = document.getElementById('tab-btn-smartparts');
+                  smartpartsBtn?.click();
+                }}
+              >
+                {TREE_ICONS.editCircle}
+              </button>
               <button
                 type="button"
                 className="tree-action-btn btn-toggle-led-vis"
@@ -1075,11 +1290,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   };
 
   const renderDatumLevelNode = (levelNode: CADTreeNode, index: number = 0) => {
-    const isSelected = selectedNodeId === levelNode.id ? 'selected' : '';
+    const isSelected = effectiveSelectedId === levelNode.id ? 'selected' : '';
     const isEditing = editingNode?.type === 'datum_level' && editingNode.id === levelNode.id;
     const isVisible = levelNode.visible !== false;
     const isPlaneVisible = Boolean((levelNode as any).visiblePlane);
     const theme = getLevelColorTheme(index);
+    const isDefault = isDefaultDatumNode(levelNode);
 
     return (
       <div
@@ -1168,24 +1384,26 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             >
               {!isPlaneVisible ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
             </button>
-            <button
-              type="button"
-              className="tree-action-btn btn-delete"
-              title="Usuń poziom"
-              onClick={(e) => {
-                e.stopPropagation();
-                const doc = ContextManager.instance?.document as ProjectDocument | null;
-                if (doc) {
-                  doc.removeNode(levelNode.id);
-                  const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
-                  glcAxis?.syncFromDocument?.();
-                  (doc as any).markDirty?.();
-                  doc.notifyDocumentChanged();
-                }
-              }}
-            >
-              {TREE_ICONS.trash}
-            </button>
+            {!isDefault && (
+              <button
+                type="button"
+                className="tree-action-btn btn-delete"
+                title="Usuń poziom"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const doc = ContextManager.instance?.document as ProjectDocument | null;
+                  if (doc) {
+                    doc.removeNode(levelNode.id);
+                    const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+                    glcAxis?.syncFromDocument?.();
+                    (doc as any).markDirty?.();
+                    doc.notifyDocumentChanged();
+                  }
+                }}
+              >
+                {TREE_ICONS.trash}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1193,11 +1411,14 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
   };
 
   const renderGlcNode = (glcNode: CADTreeNode) => {
-    const isSelected = selectedNodeId === glcNode.id ? 'selected' : '';
+    const isSelected = effectiveSelectedId === glcNode.id ? 'selected' : '';
     const isCollapsed = isNodeCollapsed(glcNode.id, false);
     const hasChildren = glcNode.children && glcNode.children.length > 0;
     const isEditing = editingNode?.type === 'glc' && editingNode.id === glcNode.id;
     const isVisible = glcNode.visible !== false;
+    const displayName = (glcNode.name === 'Układ globalny (GLC)' || glcNode.name === 'Podłoga bazowa' || glcNode.name === 'Grot Z')
+      ? 'Poziomy Z'
+      : (glcNode.name || 'Poziomy Z');
 
     return (
       <div key={glcNode.id} className="tree-node-group">
@@ -1222,7 +1443,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               UIController.instance?.emitTree('contextmenu-tree-node', {
                 type: 'glc',
                 id: glcNode.id,
-                name: glcNode.name,
+                name: displayName,
                 clientX: e.clientX,
                 clientY: e.clientY,
               });
@@ -1230,7 +1451,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
             onDoubleClick={() => {
               if (isDrawMode) return;
               setEditingNode({ type: 'wcs', id: glcNode.id });
-              setEditValue(glcNode.name || 'Układ globalny (GLC)');
+              setEditValue(displayName);
             }}
           >
             <span
@@ -1241,7 +1462,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               {isCollapsed ? TREE_ICONS.chevronRight : TREE_ICONS.chevronDown}
             </span>
             <span style={{ color: isVisible ? '#38bdf8' : '#94a3b8', display: 'inline-flex', alignItems: 'center', fontSize: '14px', marginRight: '4px' }}>
-              🌐
+              📏
             </span>
             {isEditing ? (
               <input
@@ -1259,9 +1480,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               />
             ) : (
               <strong className="node-name-text" style={{ color: isVisible ? '#38bdf8' : '#94a3b8' }}>
-                {glcNode.name || 'Układ globalny (GLC)'}
+                {displayName}
               </strong>
             )}
+            <span style={{ color: '#38bdf8', fontSize: '11px', marginLeft: '6px', fontWeight: 600, opacity: isVisible ? 1 : 0.6 }}>
+              Z: 0 mm
+            </span>
             {hasChildren && (
               <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '6px' }}>
                 ({glcNode.children!.length} {glcNode.children!.length === 1 ? 'poziom' : 'poziomy'})
@@ -1274,7 +1498,30 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               <button
                 type="button"
                 className="tree-action-btn"
-                title={isVisible ? 'Ukryj układ GLC' : 'Pokaż układ GLC'}
+                title="Dodaj poziom Z"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const doc = ContextManager.instance?.document as ProjectDocument | null;
+                  if (doc) {
+                    const newLevel = doc.addDatumLevel();
+                    const glcAxis = (ContextManager.instance?.viewport as any)?.glcAxis;
+                    glcAxis?.syncFromDocument?.();
+                    (doc as any).markDirty?.();
+                    doc.notifyDocumentChanged();
+                    setCollapsedNodes((prev) => ({
+                      ...prev,
+                      [glcNode.id]: false,
+                    }));
+                    setSelectedNodeId(newLevel.id);
+                  }
+                }}
+              >
+                {TREE_ICONS.plus}
+              </button>
+              <button
+                type="button"
+                className="tree-action-btn"
+                title={isVisible ? 'Ukryj podłogę bazową' : 'Pokaż podłogę bazową'}
                 style={{ color: isVisible ? '#38bdf8' : undefined }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1316,21 +1563,25 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
     const isAgd = isApplianceTreeItem(container);
     const isBlok = isBlokiTreeItem(container);
     const isWall = isSmartWallTreeItem(container);
-    // SmartWall domyślnie rozwinięty — widać ściany-dzieci; uchwyt / zlew / custom SP domyślnie zwinięty
-    const defaultCollapsed = isSmartPartLike ? true : !isSmartWallTreeItem(container);
+    const isEmptyGroup = (container as any).role === 'DRAWER_GROUP' || Boolean((container as any).generatorParams?.isEmptyGroup);
+    // SmartWall i grupy szuflad domyślnie rozwinięte; uchwyt / zlew / custom SP domyślnie zwinięty
+    const defaultCollapsed = isSmartPartLike ? true : (!isSmartWallTreeItem(container) && !isEmptyGroup);
     const isContainerCollapsed = isNodeCollapsed(container.id, defaultCollapsed);
-    const isSelected = selectedNodeId === container.id ? 'selected' : '';
+    const isSelected = effectiveSelectedId === container.id ? 'selected' : '';
+    const hasSelectedChild = activeOwningContainerId === container.id ? 'has-selected-child' : '';
     const isEditing = editingNode?.type === 'container' && editingNode?.id === container.id;
-    const treeTypeLabel = isSink
-      ? 'Zlew'
-      : (isHandle
-        ? 'Uchwyt'
-        : (isCustomSp ? 'SmartPart' : (isAgd ? 'AGD' : (isBlok ? 'Bloki' : (isWall ? 'Ściana' : 'Korpus')))));
+    const treeTypeLabel = isEmptyGroup
+      ? 'Szuflada'
+      : (isSink
+        ? 'Zlew'
+        : (isHandle
+          ? 'Uchwyt'
+          : (isCustomSp ? 'SmartPart' : (isAgd ? 'AGD' : (isBlok ? 'Bloki' : (isWall ? 'Ściana' : 'Korpus'))))));
 
     return (
       <div key={container.id} className="tree-children">
         <div
-          className={`tree-node ${isSelected}`}
+          className={`tree-node ${isSelected} ${hasSelectedChild}`.trim()}
           style={{
             cursor: 'grab',
             opacity: container.visible === false ? 0.45 : 1,
@@ -1432,15 +1683,47 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 {container.name || (isSink ? 'Zlew' : (isHandle ? 'Uchwyt' : (isCustomSp ? 'SmartPart' : 'Kontener')))}
               </strong>
             )}
-            <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>
-              ({container.width}x{container.height}x{container.depth})
-            </span>
+            {!isEmptyGroup && (
+              <span style={{ opacity: 0.5, fontSize: '11px', marginLeft: '4px' }}>
+                ({container.width}x{container.height}x{container.depth})
+              </span>
+            )}
           </div>
           {!isDrawMode && (
             <div className="tree-node-actions">
+              {!isEmptyGroup && (
               <button
-                className="tree-action-btn btn-toggle-part-vis"
+                type="button"
+                className="tree-action-btn btn-edit-node"
+                title={isSmartPartLike ? 'Edytuj SmartPart' : (isAgd ? 'Edytuj AGD' : (isWall ? 'Edytuj ścianę' : (isBlok ? 'Edytuj blok' : 'Edytuj korpus')))}
+                style={{ opacity: 0.8 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const doc = ContextManager.instance.document;
+                  const node = doc?.findNode?.(container.id);
+                  if (node?.domainData) doc.setActiveEntity(node.domainData);
+                  UIController.instance?.emitTree('select-container', { id: container.id });
+                  if (isSmartPartLike) {
+                    openCadEditEntity({ entityId: container.id, kind: 'smartpart' });
+                  } else if (isAgd) {
+                    openCadEditEntity({ entityId: container.id, kind: 'agd' });
+                  } else if (isWall) {
+                    openCadEditEntity({ entityId: container.id, kind: 'wall' });
+                  } else if (isBlok) {
+                    openCadEditEntity({ entityId: container.id, kind: 'blok' });
+                  } else {
+                    openCadEditEntity({ entityId: container.id, kind: 'korpus' });
+                  }
+                }}
+              >
+                {TREE_ICONS.editCircle}
+              </button>
+              )}
+              <button
+                type="button"
+                className={`tree-action-btn btn-toggle-part-vis ${container.visible === false ? 'is-hidden' : ''}`}
                 title={tx(srcTekst, 'tree.toggle', TX_NS)}
+                style={{ opacity: container.visible === false ? 1 : 0.75, color: container.visible === false ? '#94a3b8' : undefined }}
                 onClick={(e) => {
                   e.stopPropagation();
                   UIController.instance?.emitTree('toggle-container-visibility', { id: container.id });
@@ -1449,8 +1732,23 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
                 {container.visible === false ? TREE_ICONS.eyeHide : TREE_ICONS.eyeShow}
               </button>
               <button
+                type="button"
+                className={`tree-action-btn btn-freeze-part ${(container as any).frozen ? 'is-frozen' : ''}`}
+                title={(container as any).frozen ? tx(srcTekst, 'tree.unfreeze_op', TX_NS) : tx(srcTekst, 'tree.freeze_op', TX_NS)}
+                style={{ color: (container as any).frozen ? '#38bdf8' : undefined, opacity: (container as any).frozen ? 1 : 0.75 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  UIController.instance?.emitTree('toggle-freeze-container', { id: container.id });
+                }}
+              >
+                {TREE_ICONS.freeze}
+              </button>
+              {!isEmptyGroup && (
+              <button
+                type="button"
                 className="tree-action-btn btn-delete"
                 title={isHandle ? 'Usuń uchwyt' : tx(srcTekst, 'tree.delete_box', TX_NS)}
+                style={{ opacity: 0.75 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   UIController.instance?.emitTree('delete-container', { id: container.id });
@@ -1458,6 +1756,7 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
               >
                 {TREE_ICONS.trash}
               </button>
+              )}
             </div>
           )}
         </div>
@@ -1465,6 +1764,12 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
         {!isContainerCollapsed &&
           container.children &&
           container.children.map((child: CADTreeNode) => {
+            if (isGlcTreeItem(child)) {
+              return renderGlcNode(child);
+            }
+            if (isDatumLevelTreeItem(child)) {
+              return renderDatumLevelNode(child);
+            }
             if (isFeatureNode(child)) {
               return renderFeatureNode(child);
             }
@@ -1615,6 +1920,18 @@ export const SceneTree: React.FC<SceneTreeProps> = ({
 
   return (
     <div className="scene-tree" style={{ height: '100%', overflowY: 'auto' }}>
+      {drawingIssues.length > 0 && (
+        <section role="alert" style={{ margin: '8px', padding: '8px 10px', border: '1px solid #f59e0b', borderRadius: '6px', background: 'rgba(245, 158, 11, 0.1)', color: '#fef3c7', fontSize: '0.78rem' }}>
+          <strong>Rysunek pomija dane niekompletnych formatek lub rowków ({drawingIssues.length}):</strong>
+          <ul style={{ margin: '6px 0 0', paddingLeft: '20px' }}>
+            {drawingIssues.map((issue, index) => (
+              <li key={`${issue.node_id}-${issue.feature_id || index}`}>
+                {issue.node_name} ({issue.node_id}): {issue.reason}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {!isDrawMode && (
         <div className="drzewo-tabs" role="tablist" aria-label="Listy drzewa">
           <button

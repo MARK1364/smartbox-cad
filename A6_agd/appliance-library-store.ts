@@ -9,8 +9,35 @@ import {
     DEFAULT_FRIDGE_PARAMS,
     DEFAULT_FREESTANDING_FRIDGE_PARAMS,
 } from './smart-appliance-types.js';
+import { DEFAULT_SINK_PARAMS } from './sinks/sink-types.js';
 import { createSmartAppliance } from './smart-appliance-core.js';
 import { ContextManager } from '../A1_core/context-manager.js';
+import { loadScenePropsFromCatalog } from '../B1_biblioteka/wyposazenie/scene-props-from-catalog.js';
+
+const CATALOG_SCENE_PROP_TEMPLATES: ApplianceTemplateItem[] = loadScenePropsFromCatalog().map((entry) => {
+    const stem = entry.modelPath
+        ? entry.modelPath.replace(/^.*[\\/]/, '').replace(/\.(glb|gltf|obj|stl)$/i, '')
+        : undefined;
+    return {
+        id: entry.id,
+        name: entry.name,
+        kind: 'SCENE_PROP',
+        source: 'PARAMETRIC',
+        category: entry.category,
+        modelFormat: entry.modelFormat,
+        glbPath: entry.modelPath,
+        thumbnail: entry.pngPath,
+        defaultParams: {
+            width_mm: entry.width_mm,
+            depth_mm: entry.depth_mm,
+            height_mm: entry.height_mm,
+            modelId: stem,
+            modelFormat: entry.modelFormat,
+            category: entry.category,
+            parts: entry.parts,
+        },
+    };
+});
 
 export const DEFAULT_APPLIANCE_TEMPLATES: ApplianceTemplateItem[] = [
     {
@@ -18,6 +45,7 @@ export const DEFAULT_APPLIANCE_TEMPLATES: ApplianceTemplateItem[] = [
         name: 'Mikrofala',
         kind: 'MICROWAVE',
         source: 'PARAMETRIC',
+        category: 'APPLIANCE',
         defaultParams: {
             frontHeight: 380,
             nalGoraMicro: 20,
@@ -33,6 +61,7 @@ export const DEFAULT_APPLIANCE_TEMPLATES: ApplianceTemplateItem[] = [
         name: 'Piekarnik',
         kind: 'OVEN',
         source: 'PARAMETRIC',
+        category: 'APPLIANCE',
         defaultParams: {
             frontHeight: 596,
             nalGoraMicro: 20,
@@ -48,6 +77,7 @@ export const DEFAULT_APPLIANCE_TEMPLATES: ApplianceTemplateItem[] = [
         name: 'Lodówka do zabudowy',
         kind: 'FRIDGE',
         source: 'PARAMETRIC',
+        category: 'APPLIANCE',
         defaultParams: DEFAULT_FRIDGE_PARAMS,
     },
     {
@@ -55,8 +85,18 @@ export const DEFAULT_APPLIANCE_TEMPLATES: ApplianceTemplateItem[] = [
         name: 'Lodówka wolnostojąca (Side-by-Side)',
         kind: 'FRIDGE',
         source: 'PARAMETRIC',
+        category: 'APPLIANCE',
         defaultParams: DEFAULT_FREESTANDING_FRIDGE_PARAMS,
     },
+    {
+        id: 'param_sink_standard_1k',
+        name: 'Zlew nakładany jednokomorowy',
+        kind: 'SINK',
+        source: 'PARAMETRIC',
+        category: 'APPLIANCE',
+        defaultParams: DEFAULT_SINK_PARAMS,
+    },
+    ...CATALOG_SCENE_PROP_TEMPLATES,
 ];
 
 export class ApplianceLibraryStore {
@@ -109,17 +149,12 @@ export class ApplianceLibraryStore {
         const doc = docTarget || ContextManager.instance.document;
         if (!doc) return null;
 
-        if (template.source === 'PARAMETRIC') {
-            return createSmartAppliance({
-                kind: template.kind,
-                name: template.name,
-                position: position || { x: 0, y: 0, z: 0 },
-                params: template.defaultParams as any,
-            }, doc);
-        }
-
-        console.warn(`[ApplianceLibraryStore] Obsługa modeli GLB będzie rozszerzona dla ${template.id}`);
-        return null;
+        return createSmartAppliance({
+            kind: template.kind,
+            name: template.name,
+            position: position || { x: 0, y: 0, z: undefined },
+            params: template.defaultParams as any,
+        }, doc);
     }
 }
 

@@ -5,11 +5,11 @@
 import { ContextManager } from '../A1_core/context-manager.js';
 import { ConstraintStore } from './constraint-store.js';
 import { startConstraintPick, stopConstraintPick } from './constraint-picker.js';
-import { constraintHasGeometry, type AnchorKind, type SolverConstraint } from './constraint-types.js';
+import { cloneSolverConstraint, constraintHasGeometry, type AnchorKind, type SolverConstraint } from './constraint-types.js';
 import { ConstraintHighlightOverlay } from './constraint-highlight.js';
 import { BIND_TYPE_ICON, CONFLICT_REJECT_MESSAGE } from './solver-ui-config.js';
 import type { BindType } from './core/contract.js';
-import { AddConstraintCommand } from './constraint-commands.js';
+import { AddConstraintCommand, RemoveConstraintCommand, UpdateConstraintCommand } from './constraint-commands.js';
 import type { NodeTransformDelta } from './solve-constraints-command.js';
 
 export const DRZEWO_TAB_EVENT = 'cad-drzewo-tab';
@@ -48,6 +48,21 @@ function warnConflict(): void {
     window.dispatchEvent(
         new CustomEvent('solver-conflict', { detail: { message: CONFLICT_REJECT_MESSAGE } }),
     );
+}
+
+function removePendingDraft(constraintId: string): void {
+    const store = ConstraintStore.instance;
+    const draft = store.get(constraintId);
+    if (!draft || constraintHasGeometry(draft)) {
+        return;
+    }
+
+    const history = ContextManager.instance.commandHistory;
+    if (history) {
+        history.execute(new RemoveConstraintCommand(draft, 'Anulowanie szkicu relacji', store));
+    } else {
+        store.remove(constraintId);
+    }
 }
 
 export function beginConstraintSlotPick(opts: {
@@ -104,12 +119,7 @@ export function beginConstraintSlotPick(opts: {
                 }
             }
 
-            const previous = {
-                anchorA: live.anchorA,
-                anchorB: live.anchorB,
-                groundPosMm: live.groundPosMm,
-                groundNormal: live.groundNormal,
-            };
+            const previous = cloneSolverConstraint(live);
             const wasReady = constraintHasGeometry(live);
 
             const patch: Partial<SolverConstraint> =
@@ -124,21 +134,39 @@ export function beginConstraintSlotPick(opts: {
 
             const isFinalSlot = (live.bindType === 'GROUND' && opts.slot === 'A') || opts.slot === 'B';
             const solverCtrl = (ContextManager.instance as any).solverController;
+            const history = ContextManager.instance.commandHistory;
+            let historyCommandHandled = false;
 
-            if (isFinalSlot) {
+            if (isFinalSlot || wasReady) {
                 solverCtrl?.solveNow?.({
                     onCommand: (deltas: NodeTransformDelta[]) => {
+                        historyCommandHandled = true;
                         const finalC = store.get(opts.constraintId);
                         if (!finalC || finalC.conflict) return null;
-                        return new AddConstraintCommand(finalC, deltas, 'Dodanie relacji', store);
+                        return wasReady
+                            ? new UpdateConstraintCommand(previous, finalC, deltas, 'Edycja relacji', store)
+                            : new AddConstraintCommand(finalC, deltas, 'Dodanie relacji', store);
                     },
                 });
+                if (!historyCommandHandled) {
+                    const finalC = store.get(opts.constraintId);
+                    if (finalC && history) {
+                        history.execute(
+                            wasReady
+                                ? new UpdateConstraintCommand(previous, finalC, [], 'Edycja relacji', store)
+                                : new AddConstraintCommand(finalC, [], 'Dodanie relacji', store),
+                        );
+                    }
+                }
+            } else {
+                solverCtrl?.solveNow?.();
+            }
+
+            if (isFinalSlot) {
                 ContextManager.instance.appAPI?.setStatus?.(
                     `Relacja ${BIND_TYPE_ICON[live.bindType]} została pomyślnie złączona i przeliczona.`,
                     false,
                 );
-            } else {
-                solverCtrl?.solveNow?.();
             }
 
             const after = store.get(opts.constraintId);
@@ -147,10 +175,7 @@ export function beginConstraintSlotPick(opts: {
                     store.remove(opts.constraintId);
                     warnConflict();
                 } else {
-                    store.update(opts.constraintId, {
-                        ...previous,
-                        conflict: false,
-                    });
+                    store.update(opts.constraintId, previous);
                     (ContextManager.instance as any).solverController?.solveNow?.();
                     warnConflict();
                 }
@@ -177,6 +202,7 @@ export function beginConstraintSlotPick(opts: {
         },
         onCancel: () => {
             ConstraintHighlightOverlay.instance.stopVertexRubberBand();
+            removePendingDraft(opts.constraintId);
             ConstraintHighlightOverlay.instance.clear();
             activePick = null;
             notifyPickChanged();

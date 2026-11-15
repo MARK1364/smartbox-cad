@@ -275,9 +275,25 @@ export class ContainerView {
 
     private _isSelected: boolean = false;
 
+    _isEmptyGroup(): boolean {
+        return this.model?.role === 'DRAWER_GROUP' || Boolean(this.model?.generatorParams?.isEmptyGroup);
+    }
+
     _buildWireframe() {
         const B = typeof BABYLON !== 'undefined' ? BABYLON : (globalThis as any).BABYLON;
         if (!this.scene || !B) return;
+
+        if (this._isEmptyGroup()) {
+            if (!this.rootNode) {
+                this.rootNode = new B.TransformNode(this.model.name || 'Group', this.scene);
+                this.rootNode.metadata = {
+                    type: 'group',
+                    nodeId: this.model.id,
+                    model: this.model,
+                };
+            }
+            return;
+        }
 
         const width = unit.toBabylon(this.model.width);
         const height = unit.toBabylon(this.model.height);
@@ -402,6 +418,18 @@ export class ContainerView {
 
     /** Aktualizuje siatkę i pozycję. Adapter zadba o synchronizację _cadNode → mesh. */
     update() {
+        if (this._isEmptyGroup()) {
+            const doc = ContextManager.instance.document;
+            const cadNode = doc?.findNode(this.model.id);
+            if (cadNode) {
+                if (this.rootNode && !this._syncAdapter.getMeshForNodeId(cadNode.id)) {
+                    this._syncAdapter.bind(cadNode, this.rootNode);
+                }
+                cadNode.getWorldMatrix();
+            }
+            return;
+        }
+
         const width = unit.toBabylon(this.model.width);
         const height = unit.toBabylon(this.model.height);
         const depth = unit.toBabylon(this.model.depth);

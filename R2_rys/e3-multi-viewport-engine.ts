@@ -13,7 +13,7 @@ import {
     E3SavedSheet,
     E3SavedModelSnapshot,
 } from './e3-library-types';
-import { LIVE_PMI_STORAGE_KEY, DrawingProjectExtractor } from './drawing-project-extractor';
+import { DrawingProjectExtractor } from './drawing-project-extractor';
 import type { DrawingPMIDimension } from './drawing-types';
 import { resolveGeometrySnapshot, type E3PartPose } from './e3-geometry-snapshot';
 
@@ -878,13 +878,6 @@ export class E3MultiViewportEngine {
             list = DrawingProjectExtractor.instance.extractPMIDimensions();
         } catch {
             list = [];
-        }
-
-        if (list.length === 0 && typeof localStorage !== 'undefined') {
-            try {
-                const raw = localStorage.getItem(LIVE_PMI_STORAGE_KEY);
-                if (raw) list = JSON.parse(raw);
-            } catch {}
         }
 
         const withNode = list.filter((dim) => dim.nodeId && nodeIds.has(dim.nodeId));

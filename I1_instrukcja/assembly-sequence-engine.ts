@@ -10,7 +10,8 @@
  */
 
 import type { ExportNodeVisibility } from '../E1_export/export-view-state.js';
-import rulesJson from './assembly-sequence-rules.json';
+import { getModuleRules } from '../A1_core/rules-vault.js';
+const rulesJson = getModuleRules('assembly_sequence_rules');
 
 // ─── Wejście ───
 

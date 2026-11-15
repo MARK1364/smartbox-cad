@@ -33,6 +33,11 @@
     "en": "Back holes offset:",
     "de": "Lochabstand hinten:"
   },
+  "pin_diameter.label": {
+    "pl": "Średnica podpórki:",
+    "en": "Support pin diameter:",
+    "de": "Bodenträger-Durchmesser:"
+  },
   "hole_pattern.label": {
     "pl": "Wzór otworów:",
     "en": "Hole pattern:",
@@ -82,6 +87,31 @@
     "pl": "Otwory przód / plecy",
     "en": "Front / back holes",
     "de": "Löcher vorne / hinten"
+  },
+  "shelf_positions_bar.label": {
+    "pl": "Rozkład półek",
+    "en": "Shelf layout",
+    "de": "Regalaufteilung"
+  },
+  "params_bar.label": {
+    "pl": "Parametry i nawiercenia",
+    "en": "Parameters & drillings",
+    "de": "Parameter & Bohrungen"
+  },
+  "shelf_positions.mode_equal": {
+    "pl": "Równy podział",
+    "en": "Equal spacing",
+    "de": "Gleichmäßig"
+  },
+  "shelf_positions.mode_manual": {
+    "pl": "Ręcznie",
+    "en": "Manual",
+    "de": "Manuell"
+  },
+  "shelf_positions.shelf_n": {
+    "pl": "Półka {n}:",
+    "en": "Shelf {n}:",
+    "de": "Regal {n}:"
   },
   "front_holes.label": {
     "pl": "Otwory przód",

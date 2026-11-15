@@ -20,9 +20,9 @@ const TX_NS = 'cnc';
 
 export function buildDefaultCncProgramForPanel(panel: any, toolLib?: ToolLibrary): CNCProgramState | null {
     if (!panel || panel.frozen === true || panel.params?.frozen === true) return null;
-    if (typeof panel.width !== 'number' || panel.width <= 0 ||
-        typeof panel.height !== 'number' || panel.height <= 0 ||
-        typeof panel.thickness !== 'number' || panel.thickness <= 0) {
+    if (typeof panel.width !== 'number' || !Number.isFinite(panel.width) || panel.width <= 0 ||
+        typeof panel.height !== 'number' || !Number.isFinite(panel.height) || panel.height <= 0 ||
+        typeof panel.thickness !== 'number' || !Number.isFinite(panel.thickness) || panel.thickness <= 0) {
         return null;
     }
 
@@ -58,6 +58,19 @@ export function buildDefaultCncProgramForPanel(panel: any, toolLib?: ToolLibrary
                 f.toolId = matched.id;
                 toolAssignments[f.featureId] = matched.id;
             }
+        } else if ('boundaryPoints' in f && !f.toolId) {
+            const minDim = Math.min((f as any).width || 0, (f as any).length || 0);
+            const matched = effectiveToolLib.findBestMillTool(minDim > 0 ? minDim : undefined);
+            if (matched) {
+                f.toolId = matched.id;
+                toolAssignments[f.featureId] = matched.id;
+            }
+        } else if ('points' in f && !f.toolId) {
+            const matched = effectiveToolLib.findBestMillTool();
+            if (matched) {
+                f.toolId = matched.id;
+                toolAssignments[f.featureId] = matched.id;
+            }
         }
     }
 
@@ -79,6 +92,13 @@ export function buildDefaultCncProgramForPanel(panel: any, toolLib?: ToolLibrary
     return newProg;
 }
 
+/**
+ * Niskopoziomowy helper do wsadowego generowania programów poza historią komend.
+ *
+ * UWAGA: Ta funkcja dopisuje program bezpośrednio do `panel.cncPrograms`, więc
+ * NIE jest cofalna. W interaktywnym UI (CncPanel) trwałe zmiany programów muszą
+ * przechodzić przez `CreateCncProgramCommand` / `RemoveCncProgramCommand`.
+ */
 export function ensurePanelHasCncProgram(panel: any, toolLib?: ToolLibrary): CNCProgramState | null {
     if (!panel) return null;
     if (!panel.cncPrograms) {

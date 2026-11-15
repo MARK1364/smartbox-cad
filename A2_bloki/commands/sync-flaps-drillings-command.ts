@@ -59,7 +59,7 @@ export class SyncFlapsDrillingsCommand implements Command {
         this.affectedNodeIds.push(...Array.from(changedNodeIds));
 
         // 5. Powiadom panele o zmianie features (Babylon PanelView)
-        emitMachiningFeatures(panels, changedNodeIds);
+        emitMachiningFeatures(panels, changedNodeIds, document);
 
         // 6. Powiadom o zmianie dokumentu
         if (typeof document.notifyDocumentChanged === 'function') {

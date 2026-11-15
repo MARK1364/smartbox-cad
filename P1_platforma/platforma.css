@@ -1,0 +1,466 @@
+/* P1_platforma — Styl platformy modeli mebli CAD */
+
+:root {
+    --plat-bg: #0b0f19;
+    --plat-surface: #111827;
+    --plat-surface-alt: #1f2937;
+    --plat-card: #131b2e;
+    --plat-card-hover: #1e293b;
+    --plat-border: #1f2937;
+    --plat-border-light: #374151;
+    --plat-primary: #3b82f6;
+    --plat-primary-hover: #2563eb;
+    --plat-primary-light: rgba(59, 130, 246, 0.15);
+    --plat-accent: #f59e0b;
+    --plat-text: #f9fafb;
+    --plat-text-muted: #9ca3af;
+    --plat-text-dim: #6b7280;
+    --plat-radius: 10px;
+    --plat-radius-sm: 6px;
+    --plat-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body.platforma-page {
+    margin: 0;
+    padding: 0;
+    background: var(--plat-bg);
+    color: var(--plat-text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.plat-header {
+    height: 64px;
+    background: var(--plat-surface);
+    border-bottom: 1px solid var(--plat-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+.plat-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: var(--plat-text);
+}
+
+.plat-logo-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 800;
+    font-size: 18px;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+.plat-logo-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+}
+
+.plat-logo-badge {
+    background: var(--plat-primary-light);
+    color: var(--plat-primary);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 9999px;
+}
+
+.plat-header-search {
+    flex: 1;
+    max-width: 520px;
+    margin: 0 32px;
+    position: relative;
+}
+
+.plat-header-search input {
+    width: 100%;
+    background: var(--plat-surface-alt);
+    border: 1px solid var(--plat-border-light);
+    color: var(--plat-text);
+    border-radius: 8px;
+    padding: 9px 14px 9px 38px;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.plat-header-search input:focus {
+    border-color: var(--plat-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.plat-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--plat-text-dim);
+    pointer-events: none;
+}
+
+.plat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.plat-btn-cad-link {
+    background: var(--plat-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--plat-radius-sm);
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+}
+
+.plat-btn-cad-link:hover {
+    background: var(--plat-primary-hover);
+}
+
+/* Layout */
+.plat-layout {
+    display: flex;
+    flex: 1;
+    min-height: calc(100vh - 64px);
+}
+
+/* Sidebar Filtry */
+.plat-sidebar {
+    width: 280px;
+    background: var(--plat-surface);
+    border-right: 1px solid var(--plat-border);
+    padding: 24px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+}
+
+.plat-filter-group-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--plat-text-dim);
+    letter-spacing: 0.6px;
+    margin-bottom: 10px;
+}
+
+.plat-category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.plat-category-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: transparent;
+    border: none;
+    border-radius: var(--plat-radius-sm);
+    padding: 8px 12px;
+    color: var(--plat-text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+}
+
+.plat-category-btn:hover {
+    background: var(--plat-surface-alt);
+    color: var(--plat-text);
+}
+
+.plat-category-btn.active {
+    background: var(--plat-primary-light);
+    color: var(--plat-primary);
+    font-weight: 600;
+}
+
+.plat-category-count {
+    font-size: 11px;
+    color: var(--plat-text-dim);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 6px;
+    border-radius: 9999px;
+}
+
+/* Main Content */
+.plat-main {
+    flex: 1;
+    padding: 28px 36px;
+    overflow-y: auto;
+}
+
+.plat-main-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.plat-main-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.plat-stats-label {
+    font-size: 13px;
+    color: var(--plat-text-muted);
+}
+
+/* Grid mebli */
+.plat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 22px;
+}
+
+/* Card */
+.plat-card {
+    background: var(--plat-card);
+    border: 1px solid var(--plat-border);
+    border-radius: var(--plat-radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+}
+
+.plat-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--plat-border-light);
+    box-shadow: var(--plat-shadow);
+}
+
+.plat-card-thumb-wrap {
+    height: 170px;
+    background: linear-gradient(180deg, #182234 0%, #0d1524 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    border-bottom: 1px solid var(--plat-border);
+    cursor: pointer;
+}
+
+.plat-card-code {
+    position: absolute;
+    bottom: 8px;
+    right: 10px;
+    font-size: 11px;
+    color: var(--plat-text-dim);
+    font-family: monospace;
+}
+
+.plat-card-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.plat-card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--plat-text);
+    margin-bottom: 6px;
+    cursor: pointer;
+}
+
+.plat-card-name:hover {
+    color: var(--plat-primary);
+}
+
+.plat-card-dims {
+    font-size: 12px;
+    color: var(--plat-text-muted);
+    font-family: monospace;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.plat-card-desc {
+    font-size: 12px;
+    color: var(--plat-text-dim);
+    line-height: 1.45;
+    margin-bottom: 14px;
+    flex: 1;
+}
+
+.plat-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.plat-btn-secondary {
+    flex: 1;
+    background: var(--plat-surface-alt);
+    border: 1px solid var(--plat-border-light);
+    color: var(--plat-text);
+    border-radius: var(--plat-radius-sm);
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s;
+}
+
+.plat-btn-secondary:hover {
+    background: #374151;
+}
+
+.plat-btn-add-scene {
+    flex: 1;
+    background: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #fff;
+    border-radius: var(--plat-radius-sm);
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.plat-btn-add-scene:hover {
+    background: #10b981;
+}
+
+.plat-btn-add-scene.added {
+    background: #047857;
+}
+
+/* Modal */
+.plat-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+}
+
+.plat-modal-content {
+    background: var(--plat-surface);
+    border: 1px solid var(--plat-border-light);
+    border-radius: var(--plat-radius);
+    width: 900px;
+    max-width: 96vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+.plat-modal-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--plat-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.plat-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.plat-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--plat-text-muted);
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.plat-modal-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.plat-modal-3d-pane {
+    flex: 1.4;
+    background: #090d16;
+    border-right: 1px solid var(--plat-border);
+    position: relative;
+    min-height: 380px;
+}
+
+.plat-modal-details-pane {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.plat-spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.plat-spec-table td {
+    padding: 8px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.plat-spec-label {
+    color: var(--plat-text-dim);
+    width: 40%;
+}
+
+.plat-spec-val {
+    color: var(--plat-text);
+    font-weight: 500;
+}

@@ -1,0 +1,75 @@
+{
+  "id": "BLUM_79T9550",
+  "type": "HINGE",
+  "units": "mm",
+  "name": "rownolegly_wpuszczany_79T9550",
+  "brand": "Blum",
+  "art_no": "79T9550",
+  "price_id": "HINGE_BLUM_79T9550",
+  "machining_template_id": "BLUM_PARALLEL",
+  "usable_in": [
+    "DOORS"
+  ],
+  "mount_type": "PARALLEL_FACE",
+  "mount": {
+    "cup_x_from_inner_side": 22.5,
+    "corpus_y_from_front": 37,
+    "arm_constant_A": 0,
+    "default_plate_height": 3,
+    "supported_plate_heights": [
+      0,
+      3
+    ]
+  },
+  "machining": {
+    "front_holes": [
+      {
+        "name": "Puszka_35",
+        "dia": 35,
+        "depth": 15,
+        "edge_dist": 22.5,
+        "object": "Cylinder"
+      },
+      {
+        "name": "Wkret_1",
+        "dia": 3,
+        "depth": 10,
+        "edge_dist": 31,
+        "y_offset": 22.5,
+        "object": "Cylinder"
+      },
+      {
+        "name": "Wkret_2",
+        "dia": 3,
+        "depth": 10,
+        "edge_dist": 31,
+        "y_offset": -22.5,
+        "object": "Cylinder"
+      }
+    ],
+    "corpus_holes": [
+      {
+        "name": "Prowadnik_otw_G",
+        "dia": 5,
+        "depth": 12,
+        "front_dist": 37,
+        "z_offset": 16,
+        "object": "Cylinder"
+      },
+      {
+        "name": "Prowadnik_otw_D",
+        "dia": 5,
+        "depth": 12,
+        "front_dist": 37,
+        "z_offset": -16,
+        "object": "Cylinder"
+      }
+    ]
+  },
+  "visual": {
+    "glb": "blum zawiasy.glb",
+    "glb_node": "rownolegly_wpuszczany_79T9550",
+    "origin": "PLATE_ARM_INTERFACE",
+    "units": "mm"
+  }
+}
